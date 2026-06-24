@@ -19,6 +19,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 
+/// Matches debug-mode status display delay in VoiceCommandAI (5s + buffer).
+const _statusSettleDelay = Duration(milliseconds: 5050);
+
 /// Sends a speech recognition result via the method channel (platform -> Dart).
 Future<void> _sendSpeechResult(
   WidgetTester tester,
@@ -358,9 +361,9 @@ void main() {
       expect(
           find.text('Command not recognized \u2014 please try again.'),
           findsOneWidget);
-      expect(find.text('Status: Not recognized'), findsOneWidget);
+      expect(find.text('Status: Command not recognized'), findsOneWidget);
 
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
 
       await _tearDown(tester);
@@ -421,7 +424,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me home', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       await tester.pump();
 
       expect(find.text('Home Page'), findsOneWidget);
@@ -444,7 +447,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       await tester.pump();
 
       expect(find.text('Telehealth Page'), findsOneWidget);
@@ -467,7 +470,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me to my tracker', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       await tester.pump();
 
       expect(find.text('Symptom Tracker Page'), findsOneWidget);
@@ -489,7 +492,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'TAKE ME TO CALENDAR', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       await tester.pump();
 
       expect(find.text('Telehealth Page'), findsOneWidget);
@@ -513,7 +516,7 @@ void main() {
 
       await _sendSpeechResult(
           tester, 'please take me to my tracker now', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       await tester.pump();
 
       expect(find.text('Tracker Page'), findsOneWidget);
@@ -636,7 +639,7 @@ void main() {
 
       // Advance past the 12-second timeout and error display delay
       await tester.pump(const Duration(seconds: 13));
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
 
       expect(find.text('Listening timed out.'), findsOneWidget);
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
@@ -734,7 +737,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'random words', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
 
       expect(find.byIcon(Icons.mic_none), findsOneWidget);
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
@@ -755,7 +758,7 @@ void main() {
       speechMethodCalls.clear();
 
       await _sendSpeechResult(tester, 'random words', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
 
       expect(speechMethodCalls, contains('stop'));
 
@@ -857,7 +860,7 @@ void main() {
       await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Status: Recognized'), findsOneWidget);
+      expect(find.text('Status: Command recognized'), findsOneWidget);
       expect(find.text('Heard: "take me to calendar"'), findsOneWidget);
       expect(
         find.text('Recognized: "take me to calendar" — opening calendar'),
@@ -880,7 +883,7 @@ void main() {
       await _sendSpeechResult(tester, 'do something random', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Status: Not recognized'), findsOneWidget);
+      expect(find.text('Status: Command not recognized'), findsOneWidget);
       expect(find.text('Heard: "do something random"'), findsOneWidget);
       expect(
         find.text(
@@ -932,7 +935,7 @@ void main() {
       var sawFallbackStatus = false;
       for (var i = 0; i < 140; i++) {
         await tester.pump(const Duration(milliseconds: 100));
-        if (find.text('Status: Not recognized').evaluate().isNotEmpty) {
+        if (find.text('Status: Command not recognized').evaluate().isNotEmpty) {
           sawFallbackStatus = true;
           break;
         }
@@ -975,11 +978,11 @@ void main() {
       await _sendSpeechResult(tester, 'call my doctor', isFinal: true);
       await tester.pump();
 
-      expect(find.text('Status: Recognized'), findsOneWidget);
+      expect(find.text('Status: Captured'), findsOneWidget);
       expect(find.text('Heard: "call my doctor"'), findsOneWidget);
-      expect(find.text('Recognized: "call my doctor"'), findsOneWidget);
+      expect(find.text('Speech captured: "call my doctor"'), findsOneWidget);
 
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(_statusSettleDelay);
 
       expect(poppedResult, equals('call my doctor'));
 
@@ -1018,7 +1021,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'random words', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump(_statusSettleDelay);
       await tester.pump();
 
       expect(find.text('Status: Ready'), findsOneWidget);

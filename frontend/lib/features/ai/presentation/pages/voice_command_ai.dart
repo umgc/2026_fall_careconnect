@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:porcupine_flutter/porcupine_manager.dart';
 import 'package:porcupine_flutter/porcupine_error.dart';
 import 'package:porcupine_flutter/porcupine.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-enum _VoiceStatus { idle, listening, processing, success, fallback, error }
+enum _VoiceStatus { idle, listening, processing, success, captured, fallback, error }
 
 class VoiceCommandAI extends StatefulWidget {
   final bool singleShot;
@@ -35,7 +35,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   _VoiceStatus _voiceStatus = _VoiceStatus.idle;
   String _statusDetail = '';
 
-  static const _statusDisplayDelay = Duration(milliseconds: 300);
+  Duration get _statusDisplayDelay =>
+      kDebugMode ? const Duration(seconds: 5) : const Duration(milliseconds: 300);
 
   @override
   void initState() {
@@ -115,9 +116,11 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       case _VoiceStatus.processing:
         return 'Status: Processing';
       case _VoiceStatus.success:
-        return 'Status: Recognized';
+        return 'Status: Command recognized';
+      case _VoiceStatus.captured:
+        return 'Status: Captured';
       case _VoiceStatus.fallback:
-        return 'Status: Not recognized';
+        return 'Status: Command not recognized';
       case _VoiceStatus.error:
         return 'Status: Error';
     }
@@ -131,6 +134,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       case _VoiceStatus.processing:
         return Colors.blue.shade700;
       case _VoiceStatus.success:
+      case _VoiceStatus.captured:
         return Colors.green.shade700;
       case _VoiceStatus.fallback:
         return Colors.orange.shade800;
@@ -222,15 +226,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (widget.singleShot) {
       _speech.stop();
       _setStatus(
-        status: _VoiceStatus.success,
+        status: _VoiceStatus.captured,
         recognizedText: words,
-        detail: 'Recognized: "$words"',
+        detail: 'Speech captured: "$words"',
       );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pop<String>(words);
-        }
-      });
+      await Future.delayed(_statusDisplayDelay);
+      if (!mounted) return;
+      Navigator.of(context).pop<String>(words);
       return;
     }
 
