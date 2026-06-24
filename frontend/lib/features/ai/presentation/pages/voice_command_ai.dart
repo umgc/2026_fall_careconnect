@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:go_router/go_router.dart';
 import 'package:porcupine_flutter/porcupine_manager.dart';
 import 'package:porcupine_flutter/porcupine_error.dart';
 import 'package:porcupine_flutter/porcupine.dart';
@@ -237,15 +238,19 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     }
 
     String? successDetail;
+    String? destination;
     if (cmd.contains('take me home')) {
       successDetail = 'Recognized: "$words" — opening home';
+      destination = '/dashboard';
     } else if (cmd.contains('take me to calendar')) {
       successDetail = 'Recognized: "$words" — opening calendar';
+      destination = '/calendar';
     } else if (cmd.contains('take me to my tracker')) {
       successDetail = 'Recognized: "$words" — opening symptom tracker';
+      destination = '/symptoms';
     }
 
-    if (successDetail != null) {
+    if (successDetail != null && destination != null) {
       _setStatus(
         status: _VoiceStatus.success,
         recognizedText: words,
@@ -254,13 +259,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       await Future.delayed(_statusDisplayDelay);
       if (!mounted) return;
 
-      if (cmd.contains('take me home')) {
-        Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
-      } else if (cmd.contains('take me to calendar')) {
-        Navigator.pushNamed(context, '/telehealth');
-      } else if (cmd.contains('take me to my tracker')) {
-        Navigator.pushNamed(context, '/symptomTracker');
-      }
+      context.go(destination);
       _reset();
       return;
     }

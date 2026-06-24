@@ -17,10 +17,38 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 
 /// Matches debug-mode status display delay in VoiceCommandAI (5s + buffer).
 const _statusSettleDelay = Duration(milliseconds: 5050);
+
+/// Builds a GoRouter-backed app hosting VoiceCommandAI plus stub destination
+/// pages, so navigation commands (context.go) resolve in widget tests.
+Widget _buildVoiceRouterApp({bool singleShot = false}) {
+  final router = GoRouter(
+    initialLocation: '/voice',
+    routes: [
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) => VoiceCommandAI(singleShot: singleShot),
+      ),
+      GoRoute(
+        path: '/dashboard',
+        builder: (_, __) => const Scaffold(body: Text('Dashboard Page')),
+      ),
+      GoRoute(
+        path: '/calendar',
+        builder: (_, __) => const Scaffold(body: Text('Calendar Page')),
+      ),
+      GoRoute(
+        path: '/symptoms',
+        builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
+      ),
+    ],
+  );
+  return MaterialApp.router(routerConfig: router);
+}
 
 /// Sends a speech recognition result via the method channel (platform -> Dart).
 Future<void> _sendSpeechResult(
@@ -409,15 +437,9 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('"take me home" navigates via pushNamedAndRemoveUntil',
+    testWidgets('"take me home" navigates to /dashboard',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        initialRoute: '/voice',
-        routes: {
-          '/': (context) => const Scaffold(body: Text('Home Page')),
-          '/voice': (context) => const VoiceCommandAI(),
-        },
-      ));
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -427,20 +449,14 @@ void main() {
       await tester.pump(_statusSettleDelay);
       await tester.pump();
 
-      expect(find.text('Home Page'), findsOneWidget);
+      expect(find.text('Dashboard Page'), findsOneWidget);
 
       await _flush(tester);
     });
 
-    testWidgets('"take me to calendar" navigates to /telehealth',
+    testWidgets('"take me to calendar" navigates to /calendar',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: const VoiceCommandAI(),
-        routes: {
-          '/telehealth': (context) =>
-              const Scaffold(body: Text('Telehealth Page')),
-        },
-      ));
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -450,20 +466,14 @@ void main() {
       await tester.pump(_statusSettleDelay);
       await tester.pump();
 
-      expect(find.text('Telehealth Page'), findsOneWidget);
+      expect(find.text('Calendar Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
 
-    testWidgets('"take me to my tracker" navigates to /symptomTracker',
+    testWidgets('"take me to my tracker" navigates to /symptoms',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: const VoiceCommandAI(),
-        routes: {
-          '/symptomTracker': (context) =>
-              const Scaffold(body: Text('Symptom Tracker Page')),
-        },
-      ));
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -473,19 +483,13 @@ void main() {
       await tester.pump(_statusSettleDelay);
       await tester.pump();
 
-      expect(find.text('Symptom Tracker Page'), findsOneWidget);
+      expect(find.text('Symptoms Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
 
     testWidgets('commands are case-insensitive', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: const VoiceCommandAI(),
-        routes: {
-          '/telehealth': (context) =>
-              const Scaffold(body: Text('Telehealth Page')),
-        },
-      ));
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -495,20 +499,14 @@ void main() {
       await tester.pump(_statusSettleDelay);
       await tester.pump();
 
-      expect(find.text('Telehealth Page'), findsOneWidget);
+      expect(find.text('Calendar Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
 
     testWidgets('command with extra words matches via contains',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: const VoiceCommandAI(),
-        routes: {
-          '/symptomTracker': (context) =>
-              const Scaffold(body: Text('Tracker Page')),
-        },
-      ));
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -519,7 +517,7 @@ void main() {
       await tester.pump(_statusSettleDelay);
       await tester.pump();
 
-      expect(find.text('Tracker Page'), findsOneWidget);
+      expect(find.text('Symptoms Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -845,13 +843,7 @@ void main() {
     // TC-S1-VC-001
     testWidgets('recognized navigate command shows heard text and success status',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: const VoiceCommandAI(),
-        routes: {
-          '/telehealth': (context) =>
-              const Scaffold(body: Text('Telehealth Page')),
-        },
-      ));
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));

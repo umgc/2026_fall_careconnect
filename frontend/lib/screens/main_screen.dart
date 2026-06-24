@@ -768,6 +768,33 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// Global voice control entry point, available across all logged-in tabs.
+  /// Opens the full (non-singleShot) voice command page for navigation commands.
+  Widget _buildGlobalVoiceFab() {
+    return FloatingActionButton(
+      heroTag: 'globalVoiceFab',
+      tooltip: 'Voice commands',
+      onPressed: () => context.push('/voice'),
+      child: const Icon(Icons.mic),
+    );
+  }
+
+  /// Combines the global voice FAB with the optional call FAB into a stacked
+  /// column so both can be shown without overlapping.
+  Widget _buildGlobalFabs() {
+    final callFab = _buildGlobalCallFab();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (callFab != null) ...[
+          callFab,
+          const SizedBox(height: 12),
+        ],
+        _buildGlobalVoiceFab(),
+      ],
+    );
+  }
+
   Widget? _buildGlobalCallFab() {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
@@ -857,7 +884,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          floatingActionButton: _buildGlobalCallFab(),
+          floatingActionButton: _buildGlobalFabs(),
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           bottomNavigationBar: _buildBottomNavigationBar(),
         );
