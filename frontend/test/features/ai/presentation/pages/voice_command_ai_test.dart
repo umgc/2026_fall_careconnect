@@ -26,7 +26,7 @@ Future<void> _sendSpeechResult(
   bool isFinal = true,
 }) async {
   final resultJson = jsonEncode({
-    'finalResult': isFinal,
+    'resultType': isFinal ? 2 : 0,
     'alternates': [
       {
         'recognizedWords': words,
@@ -239,7 +239,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(Center), findsWidgets);
-      expect(find.byType(Column), findsOneWidget);
+      expect(find.byType(Column), findsWidgets);
     });
   });
 
@@ -358,6 +358,9 @@ void main() {
       expect(
           find.text('Command not recognized \u2014 please try again.'),
           findsOneWidget);
+      expect(find.text('Status: Not recognized'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
 
       await _tearDown(tester);
@@ -418,7 +421,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me home', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
 
       expect(find.text('Home Page'), findsOneWidget);
 
@@ -440,7 +444,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
 
       expect(find.text('Telehealth Page'), findsOneWidget);
 
@@ -462,7 +467,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me to my tracker', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
 
       expect(find.text('Symptom Tracker Page'), findsOneWidget);
 
@@ -483,7 +489,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'TAKE ME TO CALENDAR', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
 
       expect(find.text('Telehealth Page'), findsOneWidget);
 
@@ -506,7 +513,8 @@ void main() {
 
       await _sendSpeechResult(
           tester, 'please take me to my tracker now', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
 
       expect(find.text('Tracker Page'), findsOneWidget);
 
@@ -626,8 +634,9 @@ void main() {
 
       expect(find.text('Listening...'), findsOneWidget);
 
-      // Advance past the 12-second timeout
+      // Advance past the 12-second timeout and error display delay
       await tester.pump(const Duration(seconds: 13));
+      await tester.pump(const Duration(milliseconds: 350));
 
       expect(find.text('Listening timed out.'), findsOneWidget);
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
@@ -725,7 +734,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'random words', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 350));
 
       expect(find.byIcon(Icons.mic_none), findsOneWidget);
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
@@ -746,7 +755,7 @@ void main() {
       speechMethodCalls.clear();
 
       await _sendSpeechResult(tester, 'random words', isFinal: true);
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 350));
 
       expect(speechMethodCalls, contains('stop'));
 
@@ -821,6 +830,200 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.text('Listening...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+  });
+
+  group('VoiceCommandAI status feedback', () {
+    setUp(setupDefaultMocks);
+    tearDown(clearMocks);
+
+    // TC-S1-VC-001
+    testWidgets('recognized navigate command shows heard text and success status',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: const VoiceCommandAI(),
+        routes: {
+          '/telehealth': (context) =>
+              const Scaffold(body: Text('Telehealth Page')),
+        },
+      ));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Recognized'), findsOneWidget);
+      expect(find.text('Heard: "take me to calendar"'), findsOneWidget);
+      expect(
+        find.text('Recognized: "take me to calendar" — opening calendar'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-002
+    testWidgets('unknown command shows heard text and fallback status',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'do something random', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Not recognized'), findsOneWidget);
+      expect(find.text('Heard: "do something random"'), findsOneWidget);
+      expect(
+        find.text(
+            'Recognized: "do something random" — command not recognized'),
+        findsOneWidget,
+      );
+      expect(find.text('Command not recognized \u2014 please try again.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-003
+    testWidgets('timeout with no speech shows error status', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      var sawErrorStatus = false;
+      for (var i = 0; i < 140; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Status: Error').evaluate().isNotEmpty) {
+          sawErrorStatus = true;
+          break;
+        }
+      }
+
+      expect(sawErrorStatus, isTrue);
+      expect(find.text('Listening timed out.'), findsNWidgets(2));
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-004
+    testWidgets('timeout with buffered text shows fallback status',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'some unknown command', isFinal: false);
+
+      var sawFallbackStatus = false;
+      for (var i = 0; i < 140; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Status: Not recognized').evaluate().isNotEmpty) {
+          sawFallbackStatus = true;
+          break;
+        }
+      }
+
+      expect(sawFallbackStatus, isTrue);
+      expect(find.text('Heard: "some unknown command"'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-005
+    testWidgets('singleShot pops caller with recognized words and shows status',
+        (tester) async {
+      String? poppedResult;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () async {
+                poppedResult = await Navigator.of(ctx).push<String>(
+                  MaterialPageRoute(
+                    builder: (_) => const VoiceCommandAI(singleShot: true),
+                  ),
+                );
+              },
+              child: const Text('Open Voice'),
+            ),
+          ),
+        ),
+      ));
+
+      await tester.tap(find.text('Open Voice'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'call my doctor', isFinal: true);
+      await tester.pump();
+
+      expect(find.text('Status: Recognized'), findsOneWidget);
+      expect(find.text('Heard: "call my doctor"'), findsOneWidget);
+      expect(find.text('Recognized: "call my doctor"'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(poppedResult, equals('call my doctor'));
+
+      await _flush(tester);
+    });
+
+    // TC-S1-VC-006
+    testWidgets('partial STT result updates heard text while listening',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me', isFinal: false);
+
+      expect(find.text('Status: Listening'), findsOneWidget);
+      expect(find.text('Heard: "take me"'), findsOneWidget);
+      expect(find.text('Listening...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-007
+    testWidgets('after reset, status area returns to idle', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Ready'), findsOneWidget);
+      expect(find.byKey(const Key('voice_status_heard')), findsNothing);
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'random words', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      expect(find.text('Status: Ready'), findsOneWidget);
+      expect(find.byKey(const Key('voice_status_heard')), findsNothing);
+      expect(find.byKey(const Key('voice_status_detail')), findsNothing);
 
       await _tearDown(tester);
     });
