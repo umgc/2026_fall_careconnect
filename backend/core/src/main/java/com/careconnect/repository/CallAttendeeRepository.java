@@ -34,4 +34,12 @@ public interface CallAttendeeRepository extends JpaRepository<CallAttendee, Long
      * @return attendee rows for the call
      */
     List<CallAttendee> findByCallId(String callId);
+
+    /**
+     * Returns attendee rows still active on the call (not marked left).
+     *
+     * @param callId call identifier
+     * @return active attendee rows
+     */
+    List<CallAttendee> findByCallIdAndLeftAtIsNull(String callId);
 }

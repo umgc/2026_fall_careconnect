@@ -246,6 +246,13 @@ public class CallController {
             }
           }
         }
+        try {
+          callRecordingService.startKvsPipeline(callId);
+        } catch (Exception e) {
+          if (log.isWarnEnabled()) {
+            log.warn("KVS pipeline start failed for call {}: {}", callId, e.getMessage());
+          }
+        }
         return ResponseEntity.ok(response);
       } catch (Exception joinFailure) {
         if (joinedDurably) {

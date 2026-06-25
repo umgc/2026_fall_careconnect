@@ -188,6 +188,8 @@ class CallControllerTest {
         when(callSummaryService.getLatestSummary(anyString())).thenReturn(Optional.empty());
         when(callRecordingService.startRecording(anyString(), anyLong()))
                 .thenReturn(Map.of("status", "STARTED"));
+        when(callRecordingService.startKvsPipeline(anyString()))
+                .thenReturn(Map.of("status", "STARTED"));
         when(callRecordingService.stopRecording(anyString()))
                 .thenReturn(Map.of("status", "STOPPED"));
         when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
@@ -470,6 +472,40 @@ class CallControllerTest {
 
             verify(callAttendeeService)
                     .recordJoin(eq(CALL_ID), eq("att-456"), eq(2L), eq("CAREGIVER"));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-038: POST /join first participant does not start recording or KVS")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker038_firstJoinDoesNotStartCapture() throws Exception {
+            mockCurrentCaregiver();
+            when(chimeService.isMeetingActive(CALL_ID)).thenReturn(false);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callRecordingService, never()).startRecording(eq(CALL_ID), isNull());
+            verify(callRecordingService, never()).startKvsPipeline(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-037: POST /join on active meeting starts recording and KVS pipeline")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker037_secondJoinStartsRecordingAndKvs() throws Exception {
+            mockCurrentCaregiver();
+            when(chimeService.isMeetingActive(CALL_ID)).thenReturn(true);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callRecordingService).startRecording(CALL_ID, null);
+            verify(callRecordingService).startKvsPipeline(CALL_ID);
         }
 
         @Test
