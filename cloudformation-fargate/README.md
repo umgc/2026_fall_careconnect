@@ -386,9 +386,16 @@ After deploying `03-platform.yaml`, the stack provides:
 
 - **10** pre-provisioned Kinesis Video Streams (`careconnect-{env}-kvs-01` … `10`)
 - SSM parameter `/careconnect/{env}/kvs-stream-arns` (comma-separated ARNs)
+- SSM parameter `/careconnect/{env}/chime-media-insights-config-arn` (Media Insights configuration ARN)
 - Task-role KVS + Media Insights actions (see [ECS task role permissions](#ecs-task-role-permissions) above)
 
-For ECS, set `CARECONNECT_KVS_ENABLED=true` and load `CARECONNECT_KVS_STREAM_ARNS` from the SSM parameter (wired in service stack when speaker capture ships). Local dev uses IAM user credentials from `.env`, not the ECS task role.
+**One-time per account/env:** Create the Chime Media Insights pipeline configuration in AWS, then update the platform stack with `MediaInsightsConfigArn=<arn>` (or `aws ssm put-parameter` on the SSM path).
+
+**ECS (`04-service.yaml`):** The service stack sets `CARECONNECT_KVS_ENABLED=true` and loads `CARECONNECT_KVS_STREAM_ARNS` and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN` from SSM via dynamic references. Redeploy `04-service.yaml` after updating the platform stack or SSM values.
+
+**Local dev:** Use your IAM user credentials from `.env` (not `EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED`, `CARECONNECT_KVS_STREAM_ARNS`, and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN` manually when testing speaker capture.
+
+**Prod Spring profile:** `SsmPropertySourceInitializer` also maps `/careconnect/prod/chime-media-insights-config-arn` and `/careconnect/prod/kvs-stream-arns` into Spring properties when those SSM parameters exist.
 
 ### Parameter files
 

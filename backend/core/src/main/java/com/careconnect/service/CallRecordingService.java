@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.config.MediaInsightsConfig;
 import com.careconnect.model.CallRecording;
 import com.careconnect.model.RecordingLifecycleStatus;
 import com.careconnect.model.RecordingPurgeState;
@@ -142,6 +143,10 @@ public class CallRecordingService {
 
   @Autowired(required = false)
   private PostCallTranscriptionJobRepository transcriptionJobRepository;
+
+  @Autowired private MediaInsightsConfig mediaInsightsConfig;
+
+  @Autowired private KvsStreamPoolService kvsStreamPoolService;
 
   @Value("${careconnect.recording.enabled:false}")
   private boolean recordingEnabled;
@@ -532,6 +537,40 @@ public class CallRecordingService {
     finalizeRecordingInDb(recording);
     result.put("status", STATUS_STOPPED);
     return result;
+  }
+
+  // ================================================================
+  // KVS / MEDIA INSIGHTS (speaker identification — pipeline in F5)
+  // ================================================================
+
+  /**
+   * Validates prerequisites for starting a per-attendee KVS Media Insights pipeline.
+   * Pipeline creation is implemented in F5; F4 wires configuration and fail-fast checks.
+   */
+  public Map<String, Object> startKvsPipeline(final String callId) {
+    if (!kvsStreamPoolService.isEnabled()) {
+      return Map.of(
+          "status", "DISABLED",
+          "message", "KVS stream pool is not enabled in this environment");
+    }
+
+    try {
+      final String configArn = mediaInsightsConfig.requireMediaInsightsConfigArn();
+      return Map.of(
+          "status",
+          "READY",
+          "message",
+          "Media Insights configuration resolved; pipeline start deferred to capture hook",
+          "configArn",
+          configArn,
+          "callId",
+          callId);
+    } catch (IllegalStateException e) {
+      if (log.isWarnEnabled()) {
+        log.warn("Cannot start KVS pipeline for call {}: {}", callId, e.getMessage());
+      }
+      return Map.of("status", "ERROR", "message", e.getMessage(), "callId", callId);
+    }
   }
 
   // ================================================================

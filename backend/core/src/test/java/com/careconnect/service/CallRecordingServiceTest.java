@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.config.MediaInsightsConfig;
 import com.careconnect.model.CallRecording;
 import com.careconnect.repository.CallRecordingRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,6 +86,8 @@ class CallRecordingServiceTest {
     @Mock private ChimeService chimeService;
     @Mock private CallRecordingRepository recordingRepository;
     @Mock private PostCallTranscriptionService postCallTranscriptionService;
+    @Mock private MediaInsightsConfig mediaInsightsConfig;
+    @Mock private KvsStreamPoolService kvsStreamPoolService;
 
     @InjectMocks
     private CallRecordingService service;
@@ -1564,6 +1567,58 @@ class CallRecordingServiceTest {
     // ══════════════════════════════════════════════════════════════════════════
     //  Private helpers
     // ══════════════════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  startKvsPipeline (F4 — config wiring)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("startKvsPipeline")
+    class StartKvsPipelineTests {
+
+        private static final String CONFIG_ARN =
+                "arn:aws:chime:us-east-1:123456789012:media-insights-pipeline-configuration/test";
+
+        @Test
+        @DisplayName("SPEAKER-032: returns DISABLED when KVS pool is not enabled")
+        void startKvsPipeline_kvsDisabled_returnsDisabled() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(false);
+
+            Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "DISABLED");
+            verifyNoInteractions(mediaInsightsConfig);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-033: missing Media Insights ARN fails fast with ERROR")
+        void startKvsPipeline_missingConfigArn_returnsError() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(mediaInsightsConfig.requireMediaInsightsConfigArn())
+                    .thenThrow(
+                            new IllegalStateException(
+                                    "Media Insights configuration ARN is not set"
+                                            + " (careconnect.chime.media-insights-config-arn)"));
+
+            Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "ERROR");
+            assertThat(result.get("message").toString()).contains("careconnect.chime.media-insights-config-arn");
+        }
+
+        @Test
+        @DisplayName("SPEAKER-034: configured ARN resolves to READY (pipeline hook in F5)")
+        void startKvsPipeline_configured_returnsReady() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(mediaInsightsConfig.requireMediaInsightsConfigArn()).thenReturn(CONFIG_ARN);
+
+            Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "READY");
+            assertThat(result).containsEntry("configArn", CONFIG_ARN);
+            assertThat(result).containsEntry("callId", CALL_ID);
+        }
+    }
 
     /**
      * Builds a minimal CallRecording for use in tests.
