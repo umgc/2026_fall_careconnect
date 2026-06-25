@@ -52,13 +52,12 @@ Future<void> main() async {
 
       // Configure URL strategy for web to remove hash from URLs
       if (kIsWeb) {
-    // For hash-based routes:
-         setUrlStrategy(const HashUrlStrategy());
- 
-        }else{
-            // Or, for path-based routes (no #):
-          usePathUrlStrategy();
-        }
+        // For hash-based routes:
+        setUrlStrategy(const HashUrlStrategy());
+      } else {
+        // Or, for path-based routes (no #):
+        usePathUrlStrategy();
+      }
 
       // Create providers (don't initialize them yet)
       final userProvider = UserProvider();
