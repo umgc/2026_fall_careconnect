@@ -949,12 +949,14 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     final Color bgColor;
     switch (status) {
       case 'invited':
-        message = 'Invitation sent to $name.';
-        bgColor = Colors.green.shade700;
-        break;
       case 'offline':
-        message = '$name is not available right now.';
-        bgColor = Colors.orange.shade700;
+        _videoCallService.trackParticipant(userId);
+        message = status == 'invited'
+            ? 'Invitation sent to $name.'
+            : '$name is not available right now.';
+        bgColor = status == 'invited'
+            ? Colors.green.shade700
+            : Colors.orange.shade700;
         break;
       default:
         message = 'Could not invite $name. Please try again.';
