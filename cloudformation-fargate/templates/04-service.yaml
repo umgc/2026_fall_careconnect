@@ -337,6 +337,12 @@ Resources:
               Value: 'false'
             - Name: SPRING_JPA_HIBERNATE_DDL_AUTO
               Value: update
+            - Name: CARECONNECT_KVS_ENABLED
+              Value: 'true'
+            - Name: CARECONNECT_KVS_STREAM_ARNS
+              Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/kvs-stream-arns}}'
+            - Name: CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN
+              Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/chime-media-insights-config-arn}}'
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
