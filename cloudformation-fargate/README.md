@@ -275,7 +275,9 @@ The full setup guide is in
 - ECR repository
 - ECS cluster
 - ECS task execution role
-- ECS task role
+- ECS task role (Chime, recording, KVS speaker capture, Bedrock, S3, Transcribe, SSM, …)
+- 10 pre-provisioned Kinesis Video Streams (speaker pool)
+- SSM parameter `/careconnect/{env}/kvs-stream-arns` (comma-separated stream ARNs)
 - CloudWatch log group for the backend container
 
 1. `04-service.yaml`
@@ -377,6 +379,16 @@ aws iam create-service-linked-role --aws-service-name mediapipelines.chime.amazo
 
 See also [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md)
 (sections 7–8) for local-dev IAM parity and troubleshooting.
+
+### KVS speaker stream pool (speaker identification)
+
+After deploying `03-platform.yaml`, the stack provides:
+
+- **10** pre-provisioned Kinesis Video Streams (`careconnect-{env}-kvs-01` … `10`)
+- SSM parameter `/careconnect/{env}/kvs-stream-arns` (comma-separated ARNs)
+- Task-role KVS + Media Insights actions (see [ECS task role permissions](#ecs-task-role-permissions) above)
+
+For ECS, set `CARECONNECT_KVS_ENABLED=true` and load `CARECONNECT_KVS_STREAM_ARNS` from the SSM parameter (wired in service stack when speaker capture ships). Local dev uses IAM user credentials from `.env`, not the ECS task role.
 
 ### Parameter files
 

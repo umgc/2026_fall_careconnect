@@ -87,8 +87,8 @@ Resources:
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/careconnect/${Environment}/*
 
-  # Task role: runtime permissions for Chime, recording, Bedrock, S3, Transcribe,
-  # SSM (prod profile), and related AWS SDK clients.
+  # Task role: runtime permissions for Chime, recording, KVS speaker capture,
+  # Bedrock, S3, Transcribe, SSM (prod profile), and related AWS SDK clients.
   # See cloudformation-fargate/README.md — ECS task role permissions.
   EcsTaskRole:
     Type: AWS::IAM::Role
@@ -240,6 +240,77 @@ Resources:
                   - sts:GetCallerIdentity
                 Resource: '*'
 
+  # Pre-provisioned KVS streams for per-attendee speaker capture (pool checkout in app).
+  KvsSpeakerStream01:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-01
+      DataRetentionInHours: 24
+  KvsSpeakerStream02:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-02
+      DataRetentionInHours: 24
+  KvsSpeakerStream03:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-03
+      DataRetentionInHours: 24
+  KvsSpeakerStream04:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-04
+      DataRetentionInHours: 24
+  KvsSpeakerStream05:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-05
+      DataRetentionInHours: 24
+  KvsSpeakerStream06:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-06
+      DataRetentionInHours: 24
+  KvsSpeakerStream07:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-07
+      DataRetentionInHours: 24
+  KvsSpeakerStream08:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-08
+      DataRetentionInHours: 24
+  KvsSpeakerStream09:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-09
+      DataRetentionInHours: 24
+  KvsSpeakerStream10:
+    Type: AWS::KinesisVideo::Stream
+    Properties:
+      Name: !Sub careconnect-${Environment}-kvs-10
+      DataRetentionInHours: 24
+
+  KvsStreamArnsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /careconnect/${Environment}/kvs-stream-arns
+      Type: String
+      Description: Comma-separated KVS stream ARNs for speaker-ID pool checkout
+      Value: !Join
+        - ','
+        - - !GetAtt KvsSpeakerStream01.Arn
+          - !GetAtt KvsSpeakerStream02.Arn
+          - !GetAtt KvsSpeakerStream03.Arn
+          - !GetAtt KvsSpeakerStream04.Arn
+          - !GetAtt KvsSpeakerStream05.Arn
+          - !GetAtt KvsSpeakerStream06.Arn
+          - !GetAtt KvsSpeakerStream07.Arn
+          - !GetAtt KvsSpeakerStream08.Arn
+          - !GetAtt KvsSpeakerStream09.Arn
+          - !GetAtt KvsSpeakerStream10.Arn
+
 Outputs:
   # Exported outputs are consumed by the service stack.
   EcrRepositoryUri:
@@ -276,3 +347,13 @@ Outputs:
     Value: !Ref BackendLogGroup
     Export:
       Name: !Sub careconnect-${Environment}-BackendLogGroupName
+
+  KvsStreamArnsParameterName:
+    Value: !Ref KvsStreamArnsParameter
+    Export:
+      Name: !Sub careconnect-${Environment}-KvsStreamArnsParameterName
+
+  KvsStreamPoolSize:
+    Value: '10'
+    Export:
+      Name: !Sub careconnect-${Environment}-KvsStreamPoolSize
