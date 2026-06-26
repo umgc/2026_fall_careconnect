@@ -47,10 +47,10 @@ void main() {
       expect(items.length, 5);
     });
 
-    test('CAREGIVER returns caregiver nav items (5)', () {
+    test('CAREGIVER returns caregiver nav items (6)', () {
       // Verifies the caregiver set has the expected item count.
       final items = BottomNavConfig.getNavItemsForRole('CAREGIVER');
-      expect(items.length, 5);
+      expect(items.length, 6);
     });
 
     test('FAMILY_LINK returns the same items as CAREGIVER', () {

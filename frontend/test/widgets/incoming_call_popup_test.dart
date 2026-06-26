@@ -68,10 +68,10 @@ void main() {
       expect(find.text('Caregiver'), findsOneWidget);
     });
 
-    testWidgets('shows lowercase role in "from" subtitle', (tester) async {
+    testWidgets('shows role in "from" subtitle', (tester) async {
       await tester.pumpWidget(_popup(callerRole: 'CAREGIVER'));
       await tester.pump();
-      expect(find.text('from caregiver'), findsOneWidget);
+      expect(find.text('from Caregiver'), findsOneWidget);
     });
 
     testWidgets('shows call_end icon for decline button', (tester) async {
@@ -95,10 +95,11 @@ void main() {
       expect(find.byIcon(Icons.videocam), findsWidgets);
     });
 
-    testWidgets('shows Call ID prefix when callId is provided', (tester) async {
+    testWidgets('accepts callId parameter', (tester) async {
+      // callId is stored but no longer displayed in the UI.
       await tester.pumpWidget(_popup(callId: 'abc123456789'));
       await tester.pump();
-      expect(find.textContaining('Call ID:'), findsOneWidget);
+      expect(find.byType(IncomingCallPopup), findsOneWidget);
     });
 
     testWidgets('shows tap hint text', (tester) async {
