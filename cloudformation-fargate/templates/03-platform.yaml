@@ -137,6 +137,7 @@ Resources:
                   - chime:CreateMediaConcatenationPipeline
                   - chime:DeleteMediaCapturePipeline
                   - chime:DeleteMediaPipeline
+                  - chime:DeleteMediaStreamPipeline
                   - chime:GetMediaCapturePipeline
                   - chime:GetMediaPipeline
                   - chime:CreateMediaStreamPipeline
@@ -150,13 +151,10 @@ Resources:
               - Sid: KinesisVideoStreams
                 Effect: Allow
                 Action:
-                  - kinesisvideo:CreateStream
                   - kinesisvideo:DescribeStream
                   - kinesisvideo:GetDataEndpoint
                   - kinesisvideo:GetMedia
                   - kinesisvideo:GetMediaForFragmentList
-                  - kinesisvideo:PutMedia
-                  - kinesisvideo:TagStream
                   - kinesisvideo:ListStreams
                   - kinesisvideo:ListFragments
                 Resource: !Sub arn:aws:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*
@@ -182,20 +180,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
-                Resource:
-                  # Named allow-list (Task 4.3 Titan v1 + chat/summary models); prefer least privilege
-                  # over foundation-model/* from deploy-permissions merge into develop.
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v1
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/mistral.voxtral-small-24b-2507
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-6
-                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+                Resource: '*'
               - Sid: TranscribeJobs
                 Effect: Allow
                 Action:
@@ -218,7 +203,7 @@ Resources:
                   - ses:SendRawEmail
                   - sns:Publish
                 Resource: '*'
-              # Covers kvs-stream-arns, chime-media-insights-config-arn, and other env SSM params.
+              # Covers kvs-stream-pool-arn, chime-media-insights-config-arn, and other env SSM params.
               - Sid: SsmParameters
                 Effect: Allow
                 Action:
@@ -249,76 +234,17 @@ Resources:
                   - sts:GetCallerIdentity
                 Resource: '*'
 
-  # Pre-provisioned KVS streams for per-attendee speaker capture (pool checkout in app).
-  KvsSpeakerStream01:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-01
-      DataRetentionInHours: 24
-  KvsSpeakerStream02:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-02
-      DataRetentionInHours: 24
-  KvsSpeakerStream03:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-03
-      DataRetentionInHours: 24
-  KvsSpeakerStream04:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-04
-      DataRetentionInHours: 24
-  KvsSpeakerStream05:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-05
-      DataRetentionInHours: 24
-  KvsSpeakerStream06:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-06
-      DataRetentionInHours: 24
-  KvsSpeakerStream07:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-07
-      DataRetentionInHours: 24
-  KvsSpeakerStream08:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-08
-      DataRetentionInHours: 24
-  KvsSpeakerStream09:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-09
-      DataRetentionInHours: 24
-  KvsSpeakerStream10:
-    Type: AWS::KinesisVideo::Stream
-    Properties:
-      Name: !Sub careconnect-${Environment}-kvs-10
-      DataRetentionInHours: 24
-
-  KvsStreamArnsParameter:
+  # Chime KVS Stream Pool for media stream pipeline ingest (create once via CLI/console).
+  # aws chime-sdk-media-pipelines create-media-pipeline-kinesis-video-stream-pool ...
+  KvsStreamPoolArnParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /careconnect/${Environment}/kvs-stream-arns
+      Name: !Sub /careconnect/${Environment}/kvs-stream-pool-arn
       Type: String
-      Description: Comma-separated KVS stream ARNs for speaker-ID pool checkout
-      Value: !Join
-        - ','
-        - - !GetAtt KvsSpeakerStream01.Arn
-          - !GetAtt KvsSpeakerStream02.Arn
-          - !GetAtt KvsSpeakerStream03.Arn
-          - !GetAtt KvsSpeakerStream04.Arn
-          - !GetAtt KvsSpeakerStream05.Arn
-          - !GetAtt KvsSpeakerStream06.Arn
-          - !GetAtt KvsSpeakerStream07.Arn
-          - !GetAtt KvsSpeakerStream08.Arn
-          - !GetAtt KvsSpeakerStream09.Arn
-          - !GetAtt KvsSpeakerStream10.Arn
+      Description: >-
+        Chime media-pipeline-kinesis-video-stream-pool ARN for CreateMediaStreamPipeline ingest.
+        Set manually after creating the pool (not provisioned by this stack).
+      Value: REPLACE_WITH_CHIME_KVS_STREAM_POOL_ARN
 
   ChimeMediaInsightsConfigArnParameter:
     Type: AWS::SSM::Parameter
@@ -365,15 +291,10 @@ Outputs:
     Export:
       Name: !Sub careconnect-${Environment}-BackendLogGroupName
 
-  KvsStreamArnsParameterName:
-    Value: !Ref KvsStreamArnsParameter
+  KvsStreamPoolArnParameterName:
+    Value: !Ref KvsStreamPoolArnParameter
     Export:
-      Name: !Sub careconnect-${Environment}-KvsStreamArnsParameterName
-
-  KvsStreamPoolSize:
-    Value: '10'
-    Export:
-      Name: !Sub careconnect-${Environment}-KvsStreamPoolSize
+      Name: !Sub careconnect-${Environment}-KvsStreamPoolArnParameterName
 
   ChimeMediaInsightsConfigArnParameterName:
     Value: !Ref ChimeMediaInsightsConfigArnParameter

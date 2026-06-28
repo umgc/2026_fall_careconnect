@@ -276,8 +276,8 @@ The full setup guide is in
 - ECS cluster
 - ECS task execution role
 - ECS task role (Chime, recording, KVS speaker capture, Bedrock, S3, Transcribe, SSM, …)
-- 10 pre-provisioned Kinesis Video Streams (speaker pool)
-- SSM parameter `/careconnect/{env}/kvs-stream-arns` (comma-separated stream ARNs)
+- SSM parameter `/careconnect/{env}/kvs-stream-pool-arn` (Chime KVS stream pool ARN — required for F5.5 ingest)
+- SSM parameter `/careconnect/{env}/chime-media-insights-config-arn`
 - CloudWatch log group for the backend container
 
 1. `04-service.yaml`
@@ -342,7 +342,7 @@ fails on media pipelines, and AI features fail on `bedrock:InvokeModel`.
 | Chime media pipelines | `chime:CreateMediaCapturePipeline`, `CreateMediaConcatenationPipeline`, `CreateMediaStreamPipeline`, Media Insights, … | Call recording, sentiment clips, speaker-ID ingest |
 | Kinesis Video | `kinesisvideo:ListStreams`, `GetDataEndpoint`, `GetMediaForFragmentList`, … | Per-attendee speaker export |
 | S3 | `s3:CreateBucket`, `PutObject`, `GetObject`, `PutBucketPolicy`, `PutBucketCors`, … on `careconnect-recordings-*` and `careconnect-uploads-*` | Recordings, uploads, invoice files |
-| Bedrock | `bedrock:InvokeModel`, `InvokeModelWithResponseStream` | AI chat, symptoms/allergies, sentiment, summaries |
+| Bedrock | `bedrock:InvokeModel`, `InvokeModelWithResponseStream` on `*` | AI chat, symptoms/allergies, sentiment, summaries |
 | Transcribe | `transcribe:StartTranscriptionJob`, `GetTranscriptionJob` | Post-call transcription |
 | Textract | `textract:DetectDocumentText`, `StartDocumentTextDetection`, … | Invoice OCR |
 | SES / SNS | `ses:SendEmail`, `sns:Publish` | Email and SMS notifications |
@@ -382,20 +382,34 @@ See also [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUIC
 
 ### KVS speaker stream pool (speaker identification)
 
+**F5.5 ingest (required for non-zero per-attendee export):** use a **Chime** `media-pipeline-kinesis-video-stream-pool` (not individual pre-provisioned KVS streams).
+
 After deploying `03-platform.yaml`, the stack provides:
 
-- **10** pre-provisioned Kinesis Video Streams (`careconnect-{env}-kvs-01` … `10`)
-- SSM parameter `/careconnect/{env}/kvs-stream-arns` (comma-separated ARNs)
-- SSM parameter `/careconnect/{env}/chime-media-insights-config-arn` (Media Insights configuration ARN)
-- Task-role KVS + Media Insights actions (see [ECS task role permissions](#ecs-task-role-permissions) above)
+- SSM `/careconnect/{env}/kvs-stream-pool-arn` — **required for F5.5** (placeholder until you create the Chime pool and `put-parameter`)
+- SSM `/careconnect/{env}/chime-media-insights-config-arn` (Media Insights configuration ARN)
+- Task-role KVS + media stream pipeline + Media Insights actions (see [ECS task role permissions](#ecs-task-role-permissions) above)
 
-**One-time per account/env:** Create the Chime Media Insights pipeline configuration in AWS, then update the platform stack with `MediaInsightsConfigArn=<arn>` (or `aws ssm put-parameter` on the SSM path).
+**Deploy checklist (one-time per env):**
 
-**ECS (`04-service.yaml`):** The service stack sets `CARECONNECT_KVS_ENABLED=true` and loads `CARECONNECT_KVS_STREAM_ARNS` and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN` from SSM via dynamic references. Redeploy `04-service.yaml` after updating the platform stack or SSM values.
+1. Create Chime Media Insights pipeline configuration → SSM `chime-media-insights-config-arn`
+2. Create Chime KVS Stream Pool:
+   ```bash
+   aws chime-sdk-media-pipelines create-media-pipeline-kinesis-video-stream-pool \
+     --pool-name careconnect-${ENV}-speaker \
+     --stream-configuration Region=${REGION},DataRetentionInHours=24 \
+     --region ${REGION}
+   ```
+3. Set SSM `/careconnect/{env}/kvs-stream-pool-arn` to the returned pool ARN
+4. Wire EventBridge `MediaPipelineKinesisVideoStreamStart` → app webhook `/api/internal/chime/media-stream-events` (set `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` when endpoint is live)
+5. Redeploy `04-service.yaml` after SSM updates
+6. Smoke test: `media_stream_pipeline_id` populated on 2nd join; non-zero `.ogg` in recordings bucket
 
-**Local dev:** Use your IAM user credentials from `.env` (not `EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED`, `CARECONNECT_KVS_STREAM_ARNS`, and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN` manually when testing speaker capture.
+**ECS (`04-service.yaml`):** Sets `CARECONNECT_KVS_ENABLED=true` and loads `CARECONNECT_KVS_STREAM_POOL_ARN` and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN` from SSM.
 
-**Prod Spring profile:** `SsmPropertySourceInitializer` also maps `/careconnect/prod/chime-media-insights-config-arn` and `/careconnect/prod/kvs-stream-arns` into Spring properties when those SSM parameters exist.
+**Local dev:** Use IAM user credentials from `.env` (not `EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED=true`, `CARECONNECT_KVS_STREAM_POOL_ARN`, and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN`.
+
+**Prod Spring profile:** `SsmPropertySourceInitializer` maps `/careconnect/prod/chime-media-insights-config-arn` and `kvs-stream-pool-arn` when those SSM parameters exist.
 
 ### Parameter files
 
