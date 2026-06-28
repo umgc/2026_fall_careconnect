@@ -1,13 +1,16 @@
 package com.careconnect.service;
 
+import com.careconnect.ai.bedrock.BedrockModelSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,10 +50,15 @@ public class BedrockSentimentService {
   private static final double VOICE_WEIGHT = 0.50;
   private static final double VIDEO_WEIGHT = 0.50;
   private static final int DEFAULT_MAX_TOKENS = 200;
+  private static final int SUMMARY_MAX_TOKENS = 1500;
   private static final int SUMMARY_LIST_LIMIT = 6;
   private static final int SUMMARY_HEADLINE_MAX_LEN = 80;
   private static final int SUMMARY_TEXT_MAX_LEN = 280;
+  private static final int SUMMARY_NARRATIVE_MAX_LEN = 800;
   private static final int SUMMARY_ITEM_MAX_LEN = 140;
+  private static final String DEFAULT_RISK_LEVEL = "LOW";
+  private static final String DEFAULT_SOURCE_TURN_ID = "transcript";
+  private static final double DEFAULT_ITEM_CONFIDENCE = 0.5;
   /** Score rounding multiplier — two decimal places. */
   private static final double ROUND_TWO_DECIMALS = 100.0;
   /** Score rounding multiplier — three decimal places. */
@@ -80,10 +88,22 @@ public class BedrockSentimentService {
   /** Score threshold above which voice activity is MODERATE. */
   private static final double VOICE_MODERATE_THRESHOLD = 0.30;
 
-  /** Nova Pro model ID — configured in application-prod.properties. */
-  // Nova Pro handles text + image (video frames)
-  @Value("${aws.bedrock.sentiment.model-id:amazon.nova-pro-v1:0}")
-  private String novaProModelId;
+  /**
+   * Bedrock model ID resolved from application properties. Falls through:
+   *   1. {@code aws.bedrock.sentiment.model-id} (per-service override)
+   *   2. {@code careconnect.ai.model} (team-wide AI model setting)
+   *   3. {@code amazon.nova-pro-v1:0} (final fallback)
+   * Supports both Amazon Nova and Anthropic Claude families via
+   * {@link BedrockModelSupport}.
+   */
+  @Value("${aws.bedrock.sentiment.model-id:${careconnect.ai.model:amazon.nova-pro-v1:0}}")
+  private String bedrockModelId;
+
+  /** Default temperature for Bedrock invocations. */
+  private static final double DEFAULT_TEMPERATURE = 0.2;
+
+  /** Default topP for Bedrock invocations. */
+  private static final double DEFAULT_TOP_P = 0.9;
 
   private final BedrockRuntimeClient bedrockRuntimeClient;
   private final ObjectMapper objectMapper;
@@ -438,38 +458,10 @@ Respond with ONLY a JSON object in this exact format, no other text:
               "overallLabel", combined.label()));
     }
 
-    final String prompt =
-        """
-        You are a HIPAA-safe clinical call summarizer for a caregiver dashboard.
-        Summarize the transcript as structured JSON only.
-
-        Call transcript:
-        $TRANSCRIPT$
-
-        Sentiment context:
-        - voiceLabel: $VOICE_LABEL$, voiceScore: $VOICE_SCORE$
-        - videoLabel: $VIDEO_LABEL$, videoScore: $VIDEO_SCORE$
-        - overallLabel: $OVERALL_LABEL$, overallScore: $OVERALL_SCORE$
-
-        Return ONLY valid JSON in this exact shape:
-        {
-          "headline": "short title, max 8 words",
-          "overallAssessment": "1-2 concise clinical sentences",
-          "keyConcerns": ["item1", "item2"],
-          "recommendedActions": ["action1", "action2"],
-          "followUpQuestions": ["question1", "question2"]
-        }
-        """
-            .replace("$TRANSCRIPT$", transcriptInput)
-            .replace("$VOICE_LABEL$", String.valueOf(voice.label()))
-            .replace("$VOICE_SCORE$", String.valueOf(voice.score()))
-            .replace("$VIDEO_LABEL$", String.valueOf(video.label()))
-            .replace("$VIDEO_SCORE$", String.valueOf(video.score()))
-            .replace("$OVERALL_LABEL$", String.valueOf(combined.label()))
-            .replace("$OVERALL_SCORE$", String.valueOf(combined.score()));
+    final String prompt = buildCombinedSummaryPrompt(transcriptInput, voice, video, combined);
 
     try {
-      final String responseBody = invokeNovaModel(prompt, null, null);
+      final String responseBody = invokeNovaModel(prompt, null, null, SUMMARY_MAX_TOKENS);
       final Map<String, Object> parsed = parseSummaryResponse(responseBody);
       if (parsed.isEmpty()) {
         return localTranscriptSummary(
@@ -491,42 +483,215 @@ Respond with ONLY a JSON object in this exact format, no other text:
     }
   }
 
+  /**
+   * Builds the prompt for the combined-schema summary. The schema preserves
+   * the legacy flat fields (headline, overallAssessment, keyConcerns,
+   * recommendedActions, followUpQuestions) for backward compatibility with
+   * existing consumers, and adds the v2 SOAP + safety-engineered fields:
+   * narrative, summaryConfidence, riskLevel, urgencyBanner, soap,
+   * clinicalObservations, icdTags, and three typed item arrays
+   * (actionItems, appointments, careInstructions). Each item carries a
+   * confidence and a source citation; itemId and needsConfirmation are
+   * assigned server-side after parsing so the model cannot bypass either.
+   */
+  private String buildCombinedSummaryPrompt(
+      final String transcript,
+      final SentimentResult voice,
+      final SentimentResult video,
+      final SentimentResult combined) {
+    return """
+        You are a HIPAA-safe clinical call summarizer for a caregiver dashboard.
+        Read the call transcript and produce a structured summary that supports
+        both clinical review (SOAP fields, risk level) and patient-friendly
+        action tracking (typed action items, appointments, and care
+        instructions, each with a confidence score and a citation back to the
+        supporting transcript content).
+
+        Call transcript:
+        $TRANSCRIPT$
+
+        Sentiment context:
+        - voiceLabel: $VOICE_LABEL$, voiceScore: $VOICE_SCORE$
+        - videoLabel: $VIDEO_LABEL$, videoScore: $VIDEO_SCORE$
+        - overallLabel: $OVERALL_LABEL$, overallScore: $OVERALL_SCORE$
+
+        Rules:
+        - Output ONLY valid JSON matching the schema below; no commentary.
+        - For every action item, appointment, and care instruction include a
+          confidence score between 0.0 and 1.0 reflecting how clearly the
+          transcript supports the extracted item.
+        - For every action item, appointment, and care instruction include a
+          sourceTurnId pointing to the supporting transcript content. When the
+          transcript is not turn-segmented, use the value "transcript".
+        - Do NOT include itemId or needsConfirmation fields on items; those
+          are assigned server-side.
+        - Do not fabricate detail that is not in the transcript. If a field is
+          unclear, leave a string empty or an array empty rather than guessing.
+        - Care-instruction type values must be one of: "medication",
+          "procedure", or "instruction".
+        - Risk level must be one of: "HIGH", "MODERATE", or "LOW".
+        - urgencyBanner.show must be true only when an emergency action is
+          warranted; otherwise false with an empty message and empty actions.
+
+        Return ONLY valid JSON in this exact shape:
+        {
+          "headline": "short title, max 8 words",
+          "overallAssessment": "1-2 concise clinical sentences",
+          "narrative": "3-5 plain-language sentences recapping the call",
+          "summaryConfidence": 0.0,
+          "riskLevel": "LOW",
+          "urgencyBanner": {
+            "show": false,
+            "message": "",
+            "actions": []
+          },
+          "keyConcerns": ["concern phrase"],
+          "recommendedActions": ["action phrase"],
+          "followUpQuestions": ["follow-up question"],
+          "soap": {
+            "subjective": "patient-reported symptoms",
+            "objective": ["observable fact"],
+            "assessment": "clinical synthesis with risk rationale",
+            "plan": {
+              "emergency": [],
+              "medications": [],
+              "appointments": [],
+              "monitoring": [],
+              "safety": []
+            }
+          },
+          "clinicalObservations": {
+            "acuteRedFlags": [],
+            "symptomCharacterization": [],
+            "functionalStatus": [],
+            "cognitiveBehavioral": [],
+            "medicationRelated": [],
+            "caregiverSignals": []
+          },
+          "icdTags": [],
+          "actionItems": [
+            {
+              "text": "action description",
+              "actor": "care_recipient",
+              "dueHint": "natural-language due hint",
+              "confidence": 0.0,
+              "sourceTurnId": "transcript"
+            }
+          ],
+          "appointments": [
+            {
+              "date": "YYYY-MM-DD",
+              "time": "HH:mm",
+              "with": "person or role",
+              "purpose": "short purpose",
+              "confidence": 0.0,
+              "sourceTurnId": "transcript"
+            }
+          ],
+          "careInstructions": [
+            {
+              "type": "medication",
+              "text": "instruction text",
+              "confidence": 0.0,
+              "sourceTurnId": "transcript"
+            }
+          ]
+        }
+        """
+        .replace("$TRANSCRIPT$", transcript)
+        .replace("$VOICE_LABEL$", String.valueOf(voice.label()))
+        .replace("$VOICE_SCORE$", String.valueOf(voice.score()))
+        .replace("$VIDEO_LABEL$", String.valueOf(video.label()))
+        .replace("$VIDEO_SCORE$", String.valueOf(video.score()))
+        .replace("$OVERALL_LABEL$", String.valueOf(combined.label()))
+        .replace("$OVERALL_SCORE$", String.valueOf(combined.score()));
+  }
+
   // ================================================================
   // PRIVATE — AWS BEDROCK INVOCATION
   // ================================================================
 
   /**
-   * Invokes Amazon Nova Pro for text or image analysis. Nova Pro supports: text input, image input,
-   * or both together.
+   * Invokes the configured Bedrock model (Nova or Claude) for text or image
+   * analysis with the default token budget. Image input is only supported on
+   * Nova models; Claude models receive a text-only payload.
    */
   private String invokeNovaModel(
       final String prompt,
       final String imageBase64,
       final String imageFormat)
       throws Exception {
-    final Map<String, Object> requestBody = new HashMap<>();
+    return invokeNovaModel(prompt, imageBase64, imageFormat, DEFAULT_MAX_TOKENS);
+  }
 
-    // Build content array — text only, or text + image
-    final Map<String, Object> userMessage = new HashMap<>();
-    if (imageBase64 != null && imageFormat != null) {
-      // Image + text request
-      userMessage.put("role", "user");
-      userMessage.put(
-          "content",
-          List.of(
-              Map.of(
-                  "image", Map.of("format", imageFormat, "source", Map.of("bytes", imageBase64))),
-              Map.of("text", prompt)));
-    } else {
-      // Text only request
-      userMessage.put("role", "user");
-      userMessage.put("content", List.of(Map.of("text", prompt)));
+  /**
+   * Invokes the configured Bedrock model with an explicit token budget.
+   * Routes the request through {@link BedrockModelSupport} which builds the
+   * payload in the format expected by the resolved model family (Amazon
+   * Nova vs. Anthropic Claude). Used by the summary pipeline, which needs
+   * more output room than the per-sample sentiment classification calls.
+   *
+   * <p>Image input is only attached when the resolved model is a Nova
+   * family model; Claude models in this codebase are invoked text-only.
+   * When an image is supplied to a Claude model, this method falls back to
+   * the manual Nova payload format against {@code bedrockModelId} so the
+   * caller still receives a response from a vision-capable model.
+   */
+  private String invokeNovaModel(
+      final String prompt,
+      final String imageBase64,
+      final String imageFormat,
+      final int maxTokens)
+      throws Exception {
+    final String resolvedModelId = BedrockModelSupport.resolveModelId(null, bedrockModelId);
+    final boolean hasImage = imageBase64 != null && imageFormat != null;
+
+    // Image requests stay on the manual Nova-format payload because the
+    // BedrockModelSupport helper currently builds text-only payloads.
+    if (hasImage) {
+      return invokeNovaImageRequest(prompt, imageBase64, imageFormat, maxTokens);
     }
 
-    requestBody.put("messages", List.of(userMessage));
-    requestBody.put("inferenceConfig", Map.of("maxTokens", DEFAULT_MAX_TOKENS));
+    final String payloadJson = BedrockModelSupport.buildInvokePayload(
+        resolvedModelId,
+        prompt,
+        maxTokens,
+        DEFAULT_TEMPERATURE,
+        DEFAULT_TOP_P,
+        objectMapper);
 
-    return invokeModel(novaProModelId, requestBody);
+    return invokeModelRaw(resolvedModelId, payloadJson);
+  }
+
+  /**
+   * Legacy Nova-format payload builder for image+text requests. Retained
+   * because {@link BedrockModelSupport#buildInvokePayload} is text-only.
+   * Always targets the resolved model ID, which must be a Nova family
+   * model for image input to be processed; non-Nova models will reject
+   * the request body.
+   */
+  private String invokeNovaImageRequest(
+      final String prompt,
+      final String imageBase64,
+      final String imageFormat,
+      final int maxTokens)
+      throws Exception {
+    final String resolvedModelId = BedrockModelSupport.resolveModelId(null, bedrockModelId);
+
+    final Map<String, Object> userMessage = new HashMap<>();
+    userMessage.put("role", "user");
+    userMessage.put(
+        "content",
+        List.of(
+            Map.of(
+                "image", Map.of("format", imageFormat, "source", Map.of("bytes", imageBase64))),
+            Map.of("text", prompt)));
+
+    final Map<String, Object> requestBody = new HashMap<>();
+    requestBody.put("messages", List.of(userMessage));
+    requestBody.put("inferenceConfig", Map.of("maxTokens", maxTokens));
+
+    return invokeModel(resolvedModelId, requestBody);
   }
 
   private SentimentResult safeChannelResult(
@@ -733,7 +898,17 @@ Respond with ONLY a JSON object in this exact format, no other text:
   private String invokeModel(final String modelId, final Map<String, Object> requestBody)
       throws Exception {
     final String requestJson = objectMapper.writeValueAsString(requestBody);
+    return invokeModelRaw(modelId, requestJson);
+  }
 
+  /**
+   * Low-level Bedrock invocation that accepts a pre-serialized JSON payload.
+   * Used in conjunction with {@link BedrockModelSupport#buildInvokePayload}
+   * which already returns a JSON string in the format expected by the
+   * resolved model family.
+   */
+  private String invokeModelRaw(final String modelId, final String requestJson)
+      throws Exception {
     final InvokeModelRequest request =
         InvokeModelRequest.builder()
             .modelId(modelId)
@@ -809,6 +984,16 @@ Respond with ONLY a JSON object in this exact format, no other text:
   }
 
   private String extractModelContentText(final JsonNode root) {
+    // Claude-style: content[].text (at the root). Try this first because
+    // Kodi's Claude rollout (PR #88) made Claude the team-wide default.
+    final JsonNode claudeContent = root.path("content");
+    if (claudeContent.isArray() && !claudeContent.isEmpty()) {
+      final String claudeText = extractTextFromContentNode(claudeContent);
+      if (!claudeText.isBlank()) {
+        return claudeText;
+      }
+    }
+
     // Nova-style: output.message.content[].text
     final JsonNode novaContent = root.path("output").path("message").path("content");
     String text = extractTextFromContentNode(novaContent);
@@ -1020,6 +1205,9 @@ Respond with ONLY a JSON object in this exact format, no other text:
       }
 
       final Map<String, Object> out = new LinkedHashMap<>();
+
+      // Legacy flat fields preserved for backward compatibility with the
+      // current PostCallTelemetrySummaryScreen consumer.
       out.put(
           "headline",
           safeSummaryText(
@@ -1033,24 +1221,184 @@ Respond with ONLY a JSON object in this exact format, no other text:
       out.put("keyConcerns", safeStringList(summaryNode.path("keyConcerns")));
       out.put("recommendedActions", safeStringList(summaryNode.path("recommendedActions")));
       out.put("followUpQuestions", safeStringList(summaryNode.path("followUpQuestions")));
+
+      // Combined-schema additions (v2 SOAP + safety-engineered fields).
+      out.put(
+          "narrative",
+          safeSummaryText(
+              summaryNode.path("narrative").asText(""),
+              SUMMARY_NARRATIVE_MAX_LEN));
+      out.put("summaryConfidence", extractConfidence(summaryNode.path("summaryConfidence")));
+      out.put("riskLevel", extractRiskLevel(summaryNode.path("riskLevel")));
+      out.put("urgencyBanner", extractNestedObject(summaryNode.path("urgencyBanner")));
+      out.put("soap", extractNestedObject(summaryNode.path("soap")));
+      out.put("clinicalObservations", extractNestedObject(summaryNode.path("clinicalObservations")));
+      out.put("icdTags", safeStringList(summaryNode.path("icdTags")));
+
+      // Typed extraction items. itemId and needsConfirmation are assigned
+      // server-side so the model cannot bypass the confirmation gate
+      // (FR-SUM-4, REQ-SC-5).
+      out.put("actionItems", extractTypedItems(summaryNode.path("actionItems")));
+      out.put("appointments", extractTypedItems(summaryNode.path("appointments")));
+      out.put("careInstructions", extractTypedItems(summaryNode.path("careInstructions")));
+
       return out;
     } catch (Exception ex) {
+      if (log.isWarnEnabled()) {
+        log.warn("parseSummaryResponse failed: {}", ex.getMessage());
+      }
       return Map.of();
     }
   }
 
+  /**
+   * Extracts a list of typed extraction items (action items, appointments,
+   * or care instructions). Server-generates {@code itemId} via
+   * {@code UUID.randomUUID()} and forces {@code needsConfirmation} to true
+   * on every item. Falls back to safe defaults when the model omits or
+   * malforms {@code confidence} or {@code sourceTurnId}.
+   */
+  private List<Map<String, Object>> extractTypedItems(final JsonNode arrayNode) {
+    if (arrayNode == null || !arrayNode.isArray()) {
+      return List.of();
+    }
+    final ArrayList<Map<String, Object>> out = new ArrayList<>();
+    for (final JsonNode item : arrayNode) {
+      if (item == null || !item.isObject()) {
+        continue;
+      }
+      final Map<String, Object> typed = new LinkedHashMap<>();
+      typed.put("itemId", UUID.randomUUID().toString());
+      final Iterator<String> fieldNames = item.fieldNames();
+      while (fieldNames.hasNext()) {
+        final String name = fieldNames.next();
+        if ("itemId".equals(name) || "needsConfirmation".equals(name)) {
+          continue;
+        }
+        if ("confidence".equals(name)) {
+          typed.put("confidence", extractConfidence(item.path("confidence")));
+        } else if ("sourceTurnId".equals(name)) {
+          final String src = item.path("sourceTurnId").asText("");
+          typed.put("sourceTurnId", src.isBlank() ? DEFAULT_SOURCE_TURN_ID : src);
+        } else {
+          final JsonNode value = item.path(name);
+          if (value.isTextual()) {
+            typed.put(name, safeSummaryText(value.asText(""), SUMMARY_ITEM_MAX_LEN));
+          } else if (value.isArray() || value.isObject()) {
+            typed.put(name, objectMapper.convertValue(value, Object.class));
+          } else {
+            typed.put(name, objectMapper.convertValue(value, Object.class));
+          }
+        }
+      }
+      // Force the safety fields whether or not the model produced them.
+      typed.putIfAbsent("confidence", DEFAULT_ITEM_CONFIDENCE);
+      typed.putIfAbsent("sourceTurnId", DEFAULT_SOURCE_TURN_ID);
+      typed.put("needsConfirmation", Boolean.TRUE);
+      out.add(typed);
+      if (out.size() >= SUMMARY_LIST_LIMIT) {
+        break;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Extracts a nested JSON object as a raw Map. Returns an empty map when the
+   * node is missing or not an object. Used for {@code urgencyBanner},
+   * {@code soap}, and {@code clinicalObservations}.
+   */
+  private Map<String, Object> extractNestedObject(final JsonNode node) {
+    if (node == null || node.isMissingNode() || !node.isObject()) {
+      return Map.of();
+    }
+    @SuppressWarnings("unchecked")
+    final Map<String, Object> result = objectMapper.convertValue(node, Map.class);
+    return result == null ? Map.of() : result;
+  }
+
+  /**
+   * Extracts a confidence value, clamped to the range 0.0–1.0. Returns the
+   * default item confidence when the node is missing or unparseable.
+   */
+  private double extractConfidence(final JsonNode node) {
+    if (node == null || node.isMissingNode() || node.isNull()) {
+      return DEFAULT_ITEM_CONFIDENCE;
+    }
+    final double value = node.asDouble(DEFAULT_ITEM_CONFIDENCE);
+    return clamp(value, 0.0, 1.0);
+  }
+
+  /**
+   * Extracts the SOAP risk level, normalizing to one of HIGH, MODERATE, or
+   * LOW. Unknown values fall back to LOW so the urgency banner cannot trip
+   * on bad model output.
+   */
+  private String extractRiskLevel(final JsonNode node) {
+    if (node == null || !node.isTextual()) {
+      return DEFAULT_RISK_LEVEL;
+    }
+    final String value = node.asText("").trim().toUpperCase(Locale.ROOT);
+    return switch (value) {
+      case "HIGH", "MODERATE", "LOW" -> value;
+      default -> DEFAULT_RISK_LEVEL;
+    };
+  }
+
+  /**
+   * Produces a minimum-viable empty-state summary for the combined schema
+   * when Bedrock is unavailable or returns unusable output. Populates the
+   * legacy flat fields with safe defaults and leaves all combined-schema
+   * fields empty so downstream consumers do not crash on missing keys.
+   */
   private Map<String, Object> localTranscriptSummary(final Map<String, Object> context) {
     final String overallLabel =
         context.get("overallLabel") == null
             ? DEFAULT_OVERALL_LABEL
             : String.valueOf(context.get("overallLabel"));
-    return Map.of(
-        "headline", "Call Summary",
+
+    final Map<String, Object> out = new LinkedHashMap<>();
+    out.put("headline", "Call Summary");
+    out.put(
         "overallAssessment",
-            "Automated Bedrock summary unavailable. Review transcript timeline directly.",
-        "keyConcerns", List.of("Overall sentiment: " + overallLabel),
-        "recommendedActions", List.of("Review full transcript and sentiment timeline."),
-        "followUpQuestions", List.of("Any symptom changes since this call?"));
+        "Automated Bedrock summary unavailable. Review transcript timeline directly.");
+    out.put("keyConcerns", List.of("Overall sentiment: " + overallLabel));
+    out.put("recommendedActions", List.of("Review full transcript and sentiment timeline."));
+    out.put("followUpQuestions", List.of("Any symptom changes since this call?"));
+
+    out.put("narrative", "");
+    out.put("summaryConfidence", 0.0);
+    out.put("riskLevel", DEFAULT_RISK_LEVEL);
+    out.put(
+        "urgencyBanner",
+        Map.of("show", Boolean.FALSE, "message", "", "actions", List.of()));
+    out.put(
+        "soap",
+        Map.of(
+            "subjective", "",
+            "objective", List.of(),
+            "assessment", "",
+            "plan",
+                Map.of(
+                    "emergency", List.of(),
+                    "medications", List.of(),
+                    "appointments", List.of(),
+                    "monitoring", List.of(),
+                    "safety", List.of())));
+    out.put(
+        "clinicalObservations",
+        Map.of(
+            "acuteRedFlags", List.of(),
+            "symptomCharacterization", List.of(),
+            "functionalStatus", List.of(),
+            "cognitiveBehavioral", List.of(),
+            "medicationRelated", List.of(),
+            "caregiverSignals", List.of()));
+    out.put("icdTags", List.of());
+    out.put("actionItems", List.of());
+    out.put("appointments", List.of());
+    out.put("careInstructions", List.of());
+    return out;
   }
 
   private List<String> safeStringList(final JsonNode node) {
