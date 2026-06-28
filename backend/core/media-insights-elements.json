@@ -1,0 +1,9 @@
+[
+    {
+      "Type": "S3RecordingSink",
+      "S3RecordingSinkConfiguration": {
+        "Destination": "arn:aws:s3:::careconnect-recordings-946509368247-us-east-1",
+        "RecordingFileFormat": "Opus"
+      }
+    }
+]

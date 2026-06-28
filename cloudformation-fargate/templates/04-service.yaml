@@ -339,8 +339,8 @@ Resources:
               Value: update
             - Name: CARECONNECT_KVS_ENABLED
               Value: 'true'
-            - Name: CARECONNECT_KVS_STREAM_ARNS
-              Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/kvs-stream-arns}}'
+            - Name: CARECONNECT_KVS_STREAM_POOL_ARN
+              Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/kvs-stream-pool-arn}}'
             - Name: CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN
               Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/chime-media-insights-config-arn}}'
           Secrets:

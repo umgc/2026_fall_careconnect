@@ -12,53 +12,82 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Checks out pre-provisioned Kinesis Video Stream ARNs for per-attendee speaker capture.
+ * KVS configuration for per-attendee speaker capture.
  *
- * <p>Stream ARNs are provisioned via CloudFormation ({@code cloudformation-fargate}) and supplied
- * to the app as {@code careconnect.kvs.stream-arns} (comma-separated) or SSM in deployed envs.
+ * <p><strong>Ingest mode (F5.5):</strong> {@code careconnect.kvs.stream-pool-arn} points at a Chime
+ * {@code media-pipeline-kinesis-video-stream-pool}. Meeting audio is written via
+ * {@code CreateMediaStreamPipeline}; stream ARNs are resolved by {@link KvsAttendeeStreamResolver}.
+ *
+ * <p><strong>Legacy mode:</strong> {@code careconnect.kvs.stream-arns} lists manual pre-provisioned
+ * KVS streams for in-app checkout (deprecated — insufficient for ingest alone).
  */
 @Service
 public class KvsStreamPoolService {
 
     private final boolean enabled;
-    private final List<String> poolArns;
+    private final String streamPoolArn;
+    private final List<String> legacyPoolArns;
     private final Map<String, Map<String, String>> reservationsByCall = new ConcurrentHashMap<>();
     private final Map<String, String> streamOwnerByArn = new ConcurrentHashMap<>();
 
     @Autowired
     public KvsStreamPoolService(
             @Value("${careconnect.kvs.enabled:false}") final boolean enabled,
+            @Value("${careconnect.kvs.stream-pool-arn:}") final String streamPoolArn,
             @Value("${careconnect.kvs.stream-arns:}") final String streamArnsCsv) {
-        this(enabled, parseArns(streamArnsCsv));
+        this(enabled, streamPoolArn, parseArns(streamArnsCsv));
     }
 
     /** Visible for unit tests. */
+    static KvsStreamPoolService forTest(
+            final boolean enabled, final String streamPoolArn, final String streamArnsCsv) {
+        return new KvsStreamPoolService(enabled, streamPoolArn, parseArns(streamArnsCsv));
+    }
+
+    /** Legacy test helper (manual stream ARNs only). */
     static KvsStreamPoolService forTest(final boolean enabled, final String streamArnsCsv) {
-        return new KvsStreamPoolService(enabled, parseArns(streamArnsCsv));
+        return new KvsStreamPoolService(enabled, "", parseArns(streamArnsCsv));
     }
 
-    private KvsStreamPoolService(final boolean enabled, final List<String> poolArns) {
+    private KvsStreamPoolService(
+            final boolean enabled, final String streamPoolArn, final List<String> legacyPoolArns) {
         this.enabled = enabled;
-        this.poolArns = Collections.unmodifiableList(poolArns);
+        this.streamPoolArn = streamPoolArn == null ? "" : streamPoolArn.trim();
+        this.legacyPoolArns = Collections.unmodifiableList(legacyPoolArns);
     }
 
-    /** Returns whether KVS checkout is configured and active. */
+    /** Chime KVS Stream Pool ARN used as the sink for {@code CreateMediaStreamPipeline}. */
+    public String getStreamPoolArn() {
+        return streamPoolArn;
+    }
+
+    /** Whether Chime media stream pipeline ingest is configured. */
+    public boolean isIngestMode() {
+        return enabled && !streamPoolArn.isBlank();
+    }
+
+    /** Whether legacy manual stream ARN checkout is configured. */
+    public boolean isLegacyCheckoutMode() {
+        return enabled && streamPoolArn.isBlank() && !legacyPoolArns.isEmpty();
+    }
+
+    /** Returns whether KVS speaker capture is configured (ingest or legacy checkout). */
     public boolean isEnabled() {
-        return enabled && !poolArns.isEmpty();
+        return isIngestMode() || isLegacyCheckoutMode();
     }
 
-    /** Total streams in the configured pool. */
+    /** Total legacy manual streams in the configured list. */
     public int getPoolSize() {
-        return poolArns.size();
+        return legacyPoolArns.size();
     }
 
-    /** Streams not currently checked out. */
+    /** Legacy manual streams not currently checked out. */
     public int getAvailableCount() {
-        return (int) poolArns.stream().filter(arn -> !streamOwnerByArn.containsKey(arn)).count();
+        return (int) legacyPoolArns.stream().filter(arn -> !streamOwnerByArn.containsKey(arn)).count();
     }
 
     /**
-     * Reserves a KVS stream for a call participant.
+     * Reserves a legacy manual KVS stream for a call participant.
      *
      * @param callId call identifier
      * @param holderId stable key for the reservation (e.g. Chime attendee id)
@@ -68,7 +97,14 @@ public class KvsStreamPoolService {
         if (!enabled) {
             throw new IllegalStateException("KVS stream pool is disabled");
         }
-        if (poolArns.isEmpty()) {
+        if (!isLegacyCheckoutMode()) {
+            if (isIngestMode()) {
+                throw new IllegalStateException(
+                        "Manual KVS stream checkout is not used when stream-pool-arn is configured");
+            }
+            throw new KvsStreamPoolExhaustedException("KVS stream pool is not configured");
+        }
+        if (legacyPoolArns.isEmpty()) {
             throw new KvsStreamPoolExhaustedException("KVS stream pool is not configured");
         }
 
@@ -80,7 +116,7 @@ public class KvsStreamPoolService {
         }
 
         final String arn =
-                poolArns.stream()
+                legacyPoolArns.stream()
                         .filter(candidate -> !streamOwnerByArn.containsKey(candidate))
                         .findFirst()
                         .orElseThrow(
@@ -93,7 +129,7 @@ public class KvsStreamPoolService {
         return arn;
     }
 
-    /** Releases all stream reservations for a call. */
+    /** Releases all legacy stream reservations for a call. */
     public synchronized void releaseCall(final String callId) {
         final Map<String, String> callReservations = reservationsByCall.remove(callId);
         if (callReservations == null) {

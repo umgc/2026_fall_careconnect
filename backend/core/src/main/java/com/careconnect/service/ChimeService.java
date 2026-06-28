@@ -778,6 +778,19 @@ public class ChimeService {
         return meeting == null ? null : meeting.meetingId();
     }
 
+    /** Reverse lookup: Chime meeting ID → call ID for active meetings. */
+    public final String findCallIdByMeetingId(final String meetingId) {
+        if (meetingId == null || meetingId.isBlank()) {
+            return null;
+        }
+        for (final Map.Entry<String, Meeting> entry : activeMeetings.entrySet()) {
+            if (meetingId.equals(entry.getValue().meetingId())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
     /**
      * Returns a debug status map for the transcription state of a call.
      *

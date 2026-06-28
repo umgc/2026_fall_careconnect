@@ -24,6 +24,9 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaC
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaInsightsPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaInsightsPipelineResponse;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineRequest;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineResponse;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.FragmentSelectorType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineRequest;
@@ -32,8 +35,11 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipe
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaCapturePipeline;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaConcatenationPipeline;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaInsightsPipeline;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamPipeline;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipeline;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipelineStatus;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.RecordingFileFormat;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.RecordingStreamConfiguration;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.regions.Region;
@@ -64,7 +70,9 @@ import java.util.TimeZone;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -95,6 +103,8 @@ class CallRecordingServiceTest {
     @Mock private PostCallTranscriptionService postCallTranscriptionService;
     @Mock private MediaInsightsConfig mediaInsightsConfig;
     @Mock private KvsStreamPoolService kvsStreamPoolService;
+    @Mock private KvsAttendeeStreamResolver kvsAttendeeStreamResolver;
+    @Mock private KvsAttendeeStreamRegistry kvsAttendeeStreamRegistry;
 
     @InjectMocks
     private CallRecordingService service;
@@ -108,6 +118,9 @@ class CallRecordingServiceTest {
     private static final String S3_PREFIX         = "recordings/" + CALL_ID + "/20260312-100000/";
     private static final String ACCOUNT_ID        = "123456789012";
     private static final String KVS_PIPELINE_ID   = "kvs-pipeline-uuid-001";
+    private static final String MEDIA_STREAM_PIPELINE_ID = "media-stream-pipeline-uuid-001";
+    private static final String STREAM_POOL_ARN =
+            "arn:aws:chime:us-east-1:123456789012:media-pipeline-kinesis-video-stream-pool/dev";
     private static final long   USER_ID           = 42L;
 
     @BeforeEach
@@ -1618,6 +1631,8 @@ class CallRecordingServiceTest {
         @DisplayName("SPEAKER-034: creates Media Insights pipeline and persists kvs_pipeline_id")
         void startKvsPipeline_configured_startsPipelineAndPersistsId() {
             when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
+            when(kvsStreamPoolService.isLegacyCheckoutMode()).thenReturn(true);
             when(mediaInsightsConfig.requireMediaInsightsConfigArn()).thenReturn(CONFIG_ARN);
             when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
 
@@ -1632,6 +1647,7 @@ class CallRecordingServiceTest {
             systemRecording.setInitiatedByUserId(null);
             when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(systemRecording));
+            ReflectionTestUtils.setField(service, "cachedRecordingBucket", BUCKET);
 
             final MediaInsightsPipeline insightsPipeline =
                     MediaInsightsPipeline.builder().mediaPipelineId(KVS_PIPELINE_ID).build();
@@ -1647,13 +1663,59 @@ class CallRecordingServiceTest {
             assertThat(result).containsEntry("kvsPipelineId", KVS_PIPELINE_ID);
             assertThat(systemRecording.getKvsPipelineId()).isEqualTo(KVS_PIPELINE_ID);
             verify(recordingRepository).save(systemRecording);
-            verify(pipelinesClient).createMediaInsightsPipeline(any(CreateMediaInsightsPipelineRequest.class));
+
+            final ArgumentCaptor<CreateMediaInsightsPipelineRequest> requestCaptor =
+                    ArgumentCaptor.forClass(CreateMediaInsightsPipelineRequest.class);
+            verify(pipelinesClient).createMediaInsightsPipeline(requestCaptor.capture());
+            final var kvsConfig =
+                    requestCaptor
+                            .getValue()
+                            .kinesisVideoStreamRecordingSourceRuntimeConfiguration();
+            assertThat(kvsConfig).isNotNull();
+            assertThat(kvsConfig.fragmentSelector().fragmentSelectorType())
+                    .isEqualTo(FragmentSelectorType.SERVER_TIMESTAMP);
+            assertThat(kvsConfig.fragmentSelector().timestampRange()).isNotNull();
+            assertThat(kvsConfig.fragmentSelector().timestampRange().startTimestamp()).isNotNull();
+            assertThat(kvsConfig.fragmentSelector().timestampRange().endTimestamp()).isNotNull();
+            assertThat(kvsConfig.fragmentSelector().timestampRange().endTimestamp())
+                    .isAfter(kvsConfig.fragmentSelector().timestampRange().startTimestamp());
+            final var s3SinkConfig = requestCaptor.getValue().s3RecordingSinkRuntimeConfiguration();
+            assertThat(s3SinkConfig).isNotNull();
+            assertThat(s3SinkConfig.destination()).isEqualTo("arn:aws:s3:::" + BUCKET);
+            assertThat(s3SinkConfig.recordingFileFormat()).isEqualTo(RecordingFileFormat.OPUS);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-039: more than two active attendees exceeds KVS stream API limit")
+        void startKvsPipeline_moreThanTwoAttendees_returnsError() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
+            when(kvsStreamPoolService.isLegacyCheckoutMode()).thenReturn(true);
+            when(mediaInsightsConfig.requireMediaInsightsConfigArn()).thenReturn(CONFIG_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(
+                            List.of(
+                                    buildCallAttendee("att-1", 1L, "CAREGIVER"),
+                                    buildCallAttendee("att-2", 2L, "PATIENT"),
+                                    buildCallAttendee("att-3", 3L, "CAREGIVER")));
+            when(kvsStreamPoolService.checkout(eq(CALL_ID), anyString()))
+                    .thenReturn("arn:aws:kinesisvideo:us-east-1:1:stream/a/1");
+
+            final Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "ERROR");
+            assertThat(result.get("message").toString()).contains("at most 2 streams");
+            verify(pipelinesClient, never())
+                    .createMediaInsightsPipeline(any(CreateMediaInsightsPipelineRequest.class));
         }
 
         @Test
         @DisplayName("SPEAKER-035: second startKvsPipeline call is idempotent")
         void startKvsPipeline_secondCall_returnsAlreadyStarted() {
             when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
+            when(kvsStreamPoolService.isLegacyCheckoutMode()).thenReturn(true);
             when(mediaInsightsConfig.requireMediaInsightsConfigArn()).thenReturn(CONFIG_ARN);
             when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
@@ -1675,6 +1737,129 @@ class CallRecordingServiceTest {
             verify(pipelinesClient, times(1))
                     .createMediaInsightsPipeline(any(CreateMediaInsightsPipelineRequest.class));
         }
+
+        @Test
+        @DisplayName("SPEAKER-040: ingest mode starts media stream pipeline then Insights on assigned streams")
+        void startKvsPipeline_ingestMode_startsMediaStreamThenInsights() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(mediaInsightsConfig.requireMediaInsightsConfigArn()).thenReturn(CONFIG_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+            final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
+            final CallAttendee patient = buildCallAttendee("att-patient", 2L, "PATIENT");
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(caregiver, patient));
+            when(kvsAttendeeStreamResolver.resolve(
+                            eq(CALL_ID),
+                            anyList(),
+                            eq(MEDIA_STREAM_PIPELINE_ID),
+                            eq(MEETING_ID)))
+                    .thenReturn(
+                            Map.of(
+                                    "att-caregiver",
+                                    "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-1/1",
+                                    "att-patient",
+                                    "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-2/1"));
+
+            final CallRecording systemRecording = buildRecording("STARTED");
+            systemRecording.setInitiatedByUserId(null);
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+            ReflectionTestUtils.setField(service, "cachedRecordingBucket", BUCKET);
+
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+            when(pipelinesClient.createMediaInsightsPipeline(any(CreateMediaInsightsPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaInsightsPipelineResponse.builder()
+                                    .mediaInsightsPipeline(
+                                            MediaInsightsPipeline.builder()
+                                                    .mediaPipelineId(KVS_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            final Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("kvsPipelineId", KVS_PIPELINE_ID);
+            assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+            assertThat(systemRecording.getKvsPipelineId()).isEqualTo(KVS_PIPELINE_ID);
+
+            final ArgumentCaptor<CreateMediaStreamPipelineRequest> streamRequestCaptor =
+                    ArgumentCaptor.forClass(CreateMediaStreamPipelineRequest.class);
+            verify(pipelinesClient).createMediaStreamPipeline(streamRequestCaptor.capture());
+            assertThat(streamRequestCaptor.getValue().sinks()).hasSize(1);
+            assertThat(streamRequestCaptor.getValue().sinks().get(0).mediaStreamType())
+                    .isEqualTo(MediaStreamType.INDIVIDUAL_AUDIO);
+            assertThat(streamRequestCaptor.getValue().sinks().get(0).sinkArn()).isEqualTo(STREAM_POOL_ARN);
+
+            final ArgumentCaptor<CreateMediaInsightsPipelineRequest> insightsCaptor =
+                    ArgumentCaptor.forClass(CreateMediaInsightsPipelineRequest.class);
+            verify(pipelinesClient).createMediaInsightsPipeline(insightsCaptor.capture());
+            assertThat(
+                            insightsCaptor
+                                    .getValue()
+                                    .kinesisVideoStreamRecordingSourceRuntimeConfiguration()
+                                    .streams())
+                    .extracting(RecordingStreamConfiguration::streamArn)
+                    .containsExactly(
+                            "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-1/1",
+                            "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-2/1");
+            verify(kvsStreamPoolService, never()).checkout(anyString(), anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("startMediaStreamPipeline")
+    class StartMediaStreamPipelineTests {
+
+        @Test
+        @DisplayName("SPEAKER-041: returns SKIPPED when stream pool ARN is not configured")
+        void startMediaStreamPipeline_noPoolArn_returnsSkipped() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
+
+            final Map<String, Object> result = service.startMediaStreamPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "SKIPPED");
+            verifyNoInteractions(pipelinesClient);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-042: creates IndividualAudio media stream pipeline and persists id")
+        void startMediaStreamPipeline_ingestMode_persistsPipelineId() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(buildCallAttendee("att-1", 1L, "CAREGIVER")));
+
+            final CallRecording systemRecording = buildRecording("STARTED");
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            final Map<String, Object> result = service.startMediaStreamPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+        }
     }
 
     @Nested
@@ -1682,8 +1867,9 @@ class CallRecordingServiceTest {
     class BuildAttendeeStreamsTests {
 
         @Test
-        @DisplayName("SPEAKER-036: assigns pool stream per active attendee row")
+        @DisplayName("SPEAKER-036: assigns pool stream per active attendee row (legacy checkout)")
         void buildAttendeeStreams_assignsPoolStreamPerAttendee() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
             final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
             final CallAttendee patient = buildCallAttendee("att-patient", 2L, "PATIENT");
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
@@ -1691,13 +1877,34 @@ class CallRecordingServiceTest {
             when(kvsStreamPoolService.checkout(CALL_ID, "att-caregiver")).thenReturn("arn:kvs:stream-1");
             when(kvsStreamPoolService.checkout(CALL_ID, "att-patient")).thenReturn("arn:kvs:stream-2");
 
-            final List<RecordingStreamConfiguration> streams = service.buildAttendeeStreams(CALL_ID);
+            final List<RecordingStreamConfiguration> streams =
+                    service.buildAttendeeStreams(CALL_ID, MEETING_ID, null);
 
             assertThat(streams).hasSize(2);
             assertThat(streams.get(0).streamArn()).isEqualTo("arn:kvs:stream-1");
             assertThat(streams.get(1).streamArn()).isEqualTo("arn:kvs:stream-2");
             verify(kvsStreamPoolService).checkout(CALL_ID, "att-caregiver");
             verify(kvsStreamPoolService).checkout(CALL_ID, "att-patient");
+        }
+
+        @Test
+        @DisplayName("SPEAKER-043: ingest mode uses Chime-assigned stream ARNs from resolver")
+        void buildAttendeeStreams_ingestMode_usesResolverMappings() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(caregiver));
+            when(kvsAttendeeStreamResolver.resolve(
+                            CALL_ID, List.of(caregiver), MEDIA_STREAM_PIPELINE_ID, MEETING_ID))
+                    .thenReturn(Map.of("att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1"));
+
+            final List<RecordingStreamConfiguration> streams =
+                    service.buildAttendeeStreams(CALL_ID, MEETING_ID, MEDIA_STREAM_PIPELINE_ID);
+
+            assertThat(streams).hasSize(1);
+            assertThat(streams.get(0).streamArn())
+                    .isEqualTo("arn:aws:kinesisvideo:us-east-1:1:stream/chime/1");
+            verify(kvsStreamPoolService, never()).checkout(anyString(), anyString());
         }
     }
 

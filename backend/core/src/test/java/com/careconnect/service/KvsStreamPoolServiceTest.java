@@ -16,6 +16,35 @@ class KvsStreamPoolServiceTest {
     private static final String ARN_1 = "arn:aws:kinesisvideo:us-east-1:123456789012:stream/pool-01";
     private static final String ARN_2 = "arn:aws:kinesisvideo:us-east-1:123456789012:stream/pool-02";
     private static final String ARN_3 = "arn:aws:kinesisvideo:us-east-1:123456789012:stream/pool-03";
+    private static final String POOL_ARN =
+            "arn:aws:chime:us-east-1:123456789012:media-pipeline-kinesis-video-stream-pool/dev";
+
+    @Nested
+    @DisplayName("Ingest mode (stream pool ARN)")
+    class IngestModeTests {
+
+        @Test
+        @DisplayName("SPEAKER-029: isIngestMode true when stream pool ARN is configured")
+        void ingestMode_configured() {
+            final KvsStreamPoolService service =
+                    KvsStreamPoolService.forTest(true, POOL_ARN, ARN_1 + "," + ARN_2);
+
+            assertThat(service.isIngestMode()).isTrue();
+            assertThat(service.isLegacyCheckoutMode()).isFalse();
+            assertThat(service.isEnabled()).isTrue();
+            assertThat(service.getStreamPoolArn()).isEqualTo(POOL_ARN);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-030: legacy checkout disabled when ingest mode is active")
+        void checkout_ingestMode_throws() {
+            final KvsStreamPoolService service = KvsStreamPoolService.forTest(true, POOL_ARN, ARN_1);
+
+            assertThatThrownBy(() -> service.checkout(CALL_A, "att-1"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("stream-pool-arn");
+        }
+    }
 
     @Nested
     @DisplayName("Disabled pool")

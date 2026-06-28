@@ -117,6 +117,10 @@ public class CallRecording extends Auditable {
     @Column(name = "kvs_pipeline_id", length = STANDARD_ID_LENGTH)
     private String kvsPipelineId;
 
+    /** AWS Chime media stream pipeline that ingests meeting audio into the KVS stream pool. */
+    @Column(name = "media_stream_pipeline_id", length = STANDARD_ID_LENGTH)
+    private String mediaStreamPipelineId;
+
     /** S3 bucket where recording artifacts are written. */
     @Column(name = "s3_bucket", length = STANDARD_ID_LENGTH)
     private String s3Bucket;
