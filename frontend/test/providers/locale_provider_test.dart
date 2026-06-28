@@ -34,6 +34,17 @@ void main() {
       expect(provider.locale!.languageCode, 'es');
     });
 
+    test('clears saved locale if previously persisted language code is not supported', () async {
+      // Verifies that loadSaved() reads the stored code and wraps it in a
+      // Locale object, restoring the user's language choice across sessions.
+      SharedPreferences.setMockInitialValues(
+          <String, Object>{'selected_locale': 'fy'});
+      final provider = LocaleProvider();
+      await provider.loadSaved();
+
+      expect(provider.locale, isNull);
+    });
+
     test('keeps locale null when no preference has been saved', () async {
       // Verifies the early-return path when the key is absent.
       SharedPreferences.setMockInitialValues(<String, Object>{});
