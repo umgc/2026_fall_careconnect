@@ -105,6 +105,17 @@ public class BedrockSentimentService {
   /** Default topP for Bedrock invocations. */
   private static final double DEFAULT_TOP_P = 0.9;
 
+  /**
+   * Nova family fallback model ID used by the image+text dispatch when the
+   * configured {@link #bedrockModelId} resolves to a non-Nova model (for
+   * example Anthropic Claude). The Nova-format payload built by
+   * {@link #invokeNovaImageRequest} can only be processed by Nova models,
+   * so image requests in Claude-default environments are routed here to
+   * keep the video sentiment path working. Per-PR review with Kodi
+   * (2026-06-28).
+   */
+  private static final String NOVA_PRO_FALLBACK_MODEL_ID = "amazon.nova-pro-v1:0";
+
   private final BedrockRuntimeClient bedrockRuntimeClient;
   private final ObjectMapper objectMapper;
   private final boolean awsEnabled;
@@ -631,11 +642,14 @@ Respond with ONLY a JSON object in this exact format, no other text:
    * Nova vs. Anthropic Claude). Used by the summary pipeline, which needs
    * more output room than the per-sample sentiment classification calls.
    *
-   * <p>Image input is only attached when the resolved model is a Nova
-   * family model; Claude models in this codebase are invoked text-only.
-   * When an image is supplied to a Claude model, this method falls back to
-   * the manual Nova payload format against {@code bedrockModelId} so the
-   * caller still receives a response from a vision-capable model.
+   * <p>Image+text requests use the manual Nova-format payload built by
+   * {@link #invokeNovaImageRequest} because {@link BedrockModelSupport
+   * #buildInvokePayload} is text-only. To keep the Nova-format payload
+   * compatible with the endpoint it is sent to, image requests are routed
+   * to the resolved model when it is a Nova family member, and to
+   * {@link #NOVA_PRO_FALLBACK_MODEL_ID} otherwise (for example when the
+   * configured {@code bedrockModelId} resolves to Claude). Text-only
+   * requests follow the configured model with no fallback.
    */
   private String invokeNovaModel(
       final String prompt,
@@ -646,10 +660,18 @@ Respond with ONLY a JSON object in this exact format, no other text:
     final String resolvedModelId = BedrockModelSupport.resolveModelId(null, bedrockModelId);
     final boolean hasImage = imageBase64 != null && imageFormat != null;
 
-    // Image requests stay on the manual Nova-format payload because the
-    // BedrockModelSupport helper currently builds text-only payloads.
+    // Image requests use the Nova-format payload (since BedrockModelSupport
+    // builds text-only payloads), so the target model must be a Nova family
+    // member regardless of what the team-wide AI model is set to. If the
+    // resolved model is non-Nova (e.g. Claude), force the image request
+    // through the Nova fallback so video sentiment continues to work in
+    // Claude-default environments.
     if (hasImage) {
-      return invokeNovaImageRequest(prompt, imageBase64, imageFormat, maxTokens);
+      final String imageModelId =
+          BedrockModelSupport.isNovaModel(resolvedModelId)
+              ? resolvedModelId
+              : NOVA_PRO_FALLBACK_MODEL_ID;
+      return invokeNovaImageRequest(imageModelId, prompt, imageBase64, imageFormat, maxTokens);
     }
 
     final String payloadJson = BedrockModelSupport.buildInvokePayload(
@@ -664,20 +686,24 @@ Respond with ONLY a JSON object in this exact format, no other text:
   }
 
   /**
-   * Legacy Nova-format payload builder for image+text requests. Retained
-   * because {@link BedrockModelSupport#buildInvokePayload} is text-only.
-   * Always targets the resolved model ID, which must be a Nova family
-   * model for image input to be processed; non-Nova models will reject
-   * the request body.
+   * Builds and sends a Nova-format image+text request to the given model.
+   * Used by {@link #invokeNovaModel} for image+text dispatch because
+   * {@link BedrockModelSupport#buildInvokePayload} is text-only and cannot
+   * produce the Nova image content block.
+   *
+   * <p>The caller is responsible for selecting a Nova family model ID; the
+   * Nova-format request body cannot be processed by Claude or other
+   * non-Nova endpoints. {@link #invokeNovaModel} routes to
+   * {@link #NOVA_PRO_FALLBACK_MODEL_ID} when the configured model is
+   * non-Nova so this contract is preserved.
    */
   private String invokeNovaImageRequest(
+      final String modelId,
       final String prompt,
       final String imageBase64,
       final String imageFormat,
       final int maxTokens)
       throws Exception {
-    final String resolvedModelId = BedrockModelSupport.resolveModelId(null, bedrockModelId);
-
     final Map<String, Object> userMessage = new HashMap<>();
     userMessage.put("role", "user");
     userMessage.put(
@@ -691,7 +717,7 @@ Respond with ONLY a JSON object in this exact format, no other text:
     requestBody.put("messages", List.of(userMessage));
     requestBody.put("inferenceConfig", Map.of("maxTokens", maxTokens));
 
-    return invokeModel(resolvedModelId, requestBody);
+    return invokeModel(modelId, requestBody);
   }
 
   private SentimentResult safeChannelResult(
