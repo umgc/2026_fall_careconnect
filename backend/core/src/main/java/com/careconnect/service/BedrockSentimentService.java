@@ -183,7 +183,7 @@ public class BedrockSentimentService {
             .replace("$TRANSCRIPT$", input);
 
     try {
-      final String responseBody = invokeNovaModel(prompt, null, null);
+      final String responseBody = invokeBedrockModel(prompt, null, null);
       final SentimentResult parsed = parseSentimentResponse(responseBody, CHANNEL_TEXT, callId);
       if (parsed != null && !parsed.fallback()) {
         return parsed;
@@ -292,7 +292,7 @@ Respond with ONLY a JSON object in this exact format, no other text:
         """;
 
     try {
-      final String responseBody = invokeNovaModel(prompt, imageBase64, imageFormat);
+      final String responseBody = invokeBedrockModel(prompt, imageBase64, imageFormat);
       return parseSentimentResponse(responseBody, CHANNEL_VIDEO, callId);
     } catch (Exception e) {
       if (log.isErrorEnabled()) {
@@ -431,7 +431,7 @@ Respond with ONLY a JSON object in this exact format, no other text:
             .replace("$VIDEO_NOTES$", safeNotes(video.notes()));
 
     try {
-      final String responseBody = invokeNovaModel(prompt, null, null);
+      final String responseBody = invokeBedrockModel(prompt, null, null);
       final SentimentResult parsed = parseSentimentResponse(responseBody, CHANNEL_COMBINED, callId);
       if (parsed == null || parsed.fallback()) {
         return localFinalOverall(voice, video, callId);
@@ -478,7 +478,7 @@ Respond with ONLY a JSON object in this exact format, no other text:
     final String prompt = buildCombinedSummaryPrompt(transcriptInput, voice, video, combined);
 
     try {
-      final String responseBody = invokeNovaModel(prompt, null, null, SUMMARY_MAX_TOKENS);
+      final String responseBody = invokeBedrockModel(prompt, null, null, SUMMARY_MAX_TOKENS);
       final Map<String, Object> parsed = parseSummaryResponse(responseBody);
       if (parsed.isEmpty()) {
         return localTranscriptSummary(
@@ -629,16 +629,17 @@ Respond with ONLY a JSON object in this exact format, no other text:
   // ================================================================
 
   /**
-   * Invokes the configured Bedrock model (Nova or Claude) for text or image
-   * analysis with the default token budget. Image input is only supported on
-   * Nova models; Claude models receive a text-only payload.
+   * Invokes the configured Bedrock model (Nova or Claude family) for text or
+   * image+text analysis with the default token budget. Delegates to the
+   * 4-arg overload, which handles per-family payload dispatch via
+   * {@link BedrockModelSupport}.
    */
-  private String invokeNovaModel(
+  private String invokeBedrockModel(
       final String prompt,
       final String imageBase64,
       final String imageFormat)
       throws Exception {
-    return invokeNovaModel(prompt, imageBase64, imageFormat, DEFAULT_MAX_TOKENS);
+    return invokeBedrockModel(prompt, imageBase64, imageFormat, DEFAULT_MAX_TOKENS);
   }
 
   /**
@@ -657,7 +658,7 @@ Respond with ONLY a JSON object in this exact format, no other text:
    * configured {@code bedrockModelId} resolves to Claude). Text-only
    * requests follow the configured model with no fallback.
    */
-  private String invokeNovaModel(
+  private String invokeBedrockModel(
       final String prompt,
       final String imageBase64,
       final String imageFormat,
@@ -693,13 +694,13 @@ Respond with ONLY a JSON object in this exact format, no other text:
 
   /**
    * Builds and sends a Nova-format image+text request to the given model.
-   * Used by {@link #invokeNovaModel} for image+text dispatch because
+   * Used by {@link #invokeBedrockModel} for image+text dispatch because
    * {@link BedrockModelSupport#buildInvokePayload} is text-only and cannot
    * produce the Nova image content block.
    *
    * <p>The caller is responsible for selecting a Nova family model ID; the
    * Nova-format request body cannot be processed by Claude or other
-   * non-Nova endpoints. {@link #invokeNovaModel} routes to
+   * non-Nova endpoints. {@link #invokeBedrockModel} routes to
    * {@link #NOVA_PRO_FALLBACK_MODEL_ID} when the configured model is
    * non-Nova so this contract is preserved.
    */
