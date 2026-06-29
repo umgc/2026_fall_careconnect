@@ -138,7 +138,19 @@
   "login_badgeHipaa": "HIPAA Compliant",
   "login_badgeAccessible": "Accessible",
   "login_e2eEncrypted": "End-to-end encrypted",
-  "login_wcagAACompliant": "WCAG AA compliant"
+  "login_wcagAACompliant": "WCAG AA compliant",
+
+  "voicecommand_wakeWordError": "Wake word init error",
+  "voicecommand_voiceCommandsUnavailable": "Speech recognition not available",
+  "voicecommand_micPermissionsDenied": "Microphone permission denied",
+  "voicecommand_commandNotRecognized": "Command not recognized — please try again.",
+  "voicecommand_voiceTimedOut": "Listening timed out.",
+  "voicecommand_noSpeechDetected": "No speech detected.",
+  "voicecommand_voiceCommandTitle": "Voice Commands",
+  "voicecommand_tapMicToStart": "Tap mic to start",
+  "voicecommand_wakeWordToStart": "Say wake word or tap mic",
+  "voicecommand_listeningState": "Listening",
+  "voicecommand_processingState": "Processing"
 
 
 }

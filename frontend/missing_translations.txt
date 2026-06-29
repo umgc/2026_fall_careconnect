@@ -1,1 +1,169 @@
-{}
+{
+  "am": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "ar": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "bn": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "fa": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "fr": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "hi": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "ja": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "ne": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "pt": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "ru": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "ur": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ],
+
+  "zh": [
+    "voicecommand_wakeWordError",
+    "voicecommand_voiceCommandsUnavailable",
+    "voicecommand_micPermissionsDenied",
+    "voicecommand_commandNotRecognized",
+    "voicecommand_voiceTimedOut",
+    "voicecommand_noSpeechDetected",
+    "voicecommand_voiceCommandTitle",
+    "voicecommand_tapMicToStart",
+    "voicecommand_wakeWordToStart",
+    "voicecommand_listeningState",
+    "voicecommand_processingState"
+  ]
+}

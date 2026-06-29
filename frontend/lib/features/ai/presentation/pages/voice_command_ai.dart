@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:porcupine_flutter/porcupine_manager.dart';
@@ -68,7 +69,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       debugPrint('Porcupine init failed: ${e.message}');
 
       messenger?.showSnackBar(
-        SnackBar(content: Text('Wake word init error: ${e.message}')),
+        SnackBar(content: Text('${AppLocalizations.of(context)?.voicecommand_wakeWordError}: ${e.message}')),
       );
     } catch (e, st) {
       debugPrint('Unexpected init error: $e\n$st');
@@ -92,7 +93,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
     if (!mounted || !available) {
       if (!mounted) return;
-      _showError('Speech recognition not available');
+      _showError(AppLocalizations.of(context)?.voicecommand_voiceCommandsUnavailable ?? 'Speech recognition not available');
       _reset();
       return;
     }
@@ -101,7 +102,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     final hasPermission = await _speech.hasPermission;
     if (!mounted || !hasPermission) {
       if (!mounted) return;
-      _showError('Microphone permission denied');
+      _showError(AppLocalizations.of(context)?.voicecommand_micPermissionsDenied ?? 'Microphone permission denied');
       _reset();
       return;
     }
@@ -161,7 +162,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         Navigator.pushNamed(context, '/symptomTracker');
       }
     } else {
-      _showError('Command not recognized — please try again.');
+      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.');
     }
     _reset();
   }
@@ -176,7 +177,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (txt.trim().isNotEmpty) {
       _process(txt);
     } else {
-      _showError('Listening timed out.');
+      _showError(AppLocalizations.of(context)?.voicecommand_voiceTimedOut ?? 'Listening timed out.');
       _reset();
     }
   }
@@ -211,7 +212,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (text.trim().isNotEmpty) {
         _process(text);
       } else {
-        _showError('No speech detected.');
+        _showError(AppLocalizations.of(context)?.voicecommand_noSpeechDetected ?? 'No speech detected.');
         _reset();
       }
     } else {
@@ -233,7 +234,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   Widget build(BuildContext ctx) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Voice Commands'),
+        title: Text(AppLocalizations.of(context)?.voicecommand_voiceCommandTitle ?? 'Voice Commands'),
         backgroundColor: Colors.blue.shade900,
       ),
       body: Center(
@@ -246,10 +247,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
           const SizedBox(height: 12),
           Text(
             !_wakeDetected
-                ? (kIsWeb ? 'Tap mic to start' : 'Say wake word or tap mic')
+                ? (kIsWeb ? AppLocalizations.of(context)?.voicecommand_tapMicToStart ?? 'Tap mic to start' : AppLocalizations.of(context)?.voicecommand_wakeWordToStart ?? 'Say wake word or tap mic')
                 : _isListening
-                    ? 'Listening...'
-                    : 'Processing...',
+                    ? '${AppLocalizations.of(context)?.voicecommand_listeningState ?? 'Listening'}...'
+                    : '${AppLocalizations.of(context)?.voicecommand_processingState ?? 'Processing'}...',
             style: const TextStyle(fontSize: 18),
           ),
         ]),

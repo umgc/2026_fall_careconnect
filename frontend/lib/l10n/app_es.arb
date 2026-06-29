@@ -136,7 +136,19 @@
   "login_badgeHipaa": "Cumple con HIPAA",
   "login_badgeAccessible": "Accesible",
   "login_e2eEncrypted": "Cifrado de extremo a extremo",
-  "login_wcagAACompliant": "Cumple con WCAG AA"
+  "login_wcagAACompliant": "Cumple con WCAG AA",
+
+  "voicecommand_wakeWordError": "Error de inicialización de la palabra de activación",
+  "voicecommand_voiceCommandsUnavailable": "Reconocimiento de voz no disponible",
+  "voicecommand_micPermissionsDenied": "Permiso de micrófono denegado",
+  "voicecommand_commandNotRecognized": "Comando no reconocido; inténtelo de nuevo.",
+  "voicecommand_voiceTimedOut": "La escucha ha expirado.",
+  "voicecommand_noSpeechDetected": "No se detectó ninguna voz.",
+  "voicecommand_voiceCommandTitle": "Comandos de voz",
+  "voicecommand_tapMicToStart": "Toca el micrófono para comenzar",
+  "voicecommand_wakeWordToStart": "Toca el micrófono para comenzar",
+  "voicecommand_listeningState": "Escuchando",
+  "voicecommand_processingState": "Proceso"
  
 
 
