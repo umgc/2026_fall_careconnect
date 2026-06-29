@@ -126,6 +126,37 @@ public class BedrockSentimentService {
   private final ObjectMapper objectMapper;
   private final boolean awsEnabled;
 
+  /**
+   * Medical data anonymizer used to scrub direct identifiers (names, SSN,
+   * phone numbers, emails) from transcript text before it is included in
+   * the prompt sent to Amazon Bedrock. Per Dominique's PR review (PHI
+   * concern, 2026-06-29): clinical transcripts may contain PHI; sending
+   * unredacted PHI to a third-party model is a HIPAA-adjacent risk.
+   *
+   * <p>Field injection (with {@code required = false}) is used deliberately
+   * so the existing unit-test fixtures that construct the service with
+   * {@code new BedrockSentimentService(client, mapper, true)} continue to
+   * compile and exercise the parsing/fallback paths without forcing a
+   * mock for a service that has no AWS dependency. Tests that need to
+   * verify anonymization behavior inject a real anonymizer via
+   * {@code ReflectionTestUtils.setField}. In production, Spring auto-wires
+   * the {@code @Service}-annotated {@link MedicalDataAnonymizer} bean.
+   *
+   * <p>When this field is null (test fixtures that opt out), the
+   * anonymization helper returns the input unchanged — the existing
+   * tests that assert on parsing/fallback behavior should not change
+   * shape because PHI redaction is layered on top of, not in place of,
+   * those paths.
+   *
+   * <p>TODO(follow-up PR): pipe the real {@code patientId} through
+   * {@code CallSummaryService} -> {@code summarizeTranscript} so the
+   * anonymizer can generate consistent per-patient pseudonyms. Today
+   * we pass {@code null}, which produces a global pseudonym key
+   * ({@code "null_NAME"}) but does not throw.
+   */
+  @Autowired(required = false)
+  private MedicalDataAnonymizer medicalDataAnonymizer;
+
   /** Creates the sentiment service with optional AWS Bedrock support. */
   @Autowired
   public BedrockSentimentService(
@@ -159,6 +190,10 @@ public class BedrockSentimentService {
       return analyzeTranscriptHeuristic(input, callId);
     }
 
+    // Scrub direct PHI identifiers before sending the transcript to a
+    // third-party model. See anonymizeIfAvailable for the policy details.
+    final String sanitized = anonymizeIfAvailable(input);
+
     final String prompt =
         """
         You are a clinical transcript sentiment analyzer for a healthcare video call.
@@ -180,7 +215,7 @@ public class BedrockSentimentService {
           "notes": "<max 10 words>"
         }
         """
-            .replace("$TRANSCRIPT$", input);
+            .replace("$TRANSCRIPT$", sanitized);
 
     try {
       final String responseBody = invokeBedrockModel(prompt, null, null);
@@ -475,7 +510,11 @@ Respond with ONLY a JSON object in this exact format, no other text:
               "overallLabel", combined.label()));
     }
 
-    final String prompt = buildCombinedSummaryPrompt(transcriptInput, voice, video, combined);
+    // Scrub direct PHI identifiers from the transcript before sending it
+    // to Bedrock. See anonymizeIfAvailable for the policy details.
+    final String sanitizedTranscript = anonymizeIfAvailable(transcriptInput);
+
+    final String prompt = buildCombinedSummaryPrompt(sanitizedTranscript, voice, video, combined);
 
     try {
       final String responseBody = invokeBedrockModel(prompt, null, null, SUMMARY_MAX_TOKENS);
@@ -1512,6 +1551,27 @@ Respond with ONLY a JSON object in this exact format, no other text:
 
   private boolean isBedrockAvailable() {
     return awsEnabled && bedrockRuntimeClient != null;
+  }
+
+  /**
+   * Scrubs direct identifiers (names, SSN, phone, email) from transcript
+   * text at the {@link MedicalDataAnonymizer.AnonymizationLevel#MINIMAL}
+   * level before it is included in a Bedrock prompt. Returns the input
+   * unchanged when the anonymizer is not wired (e.g. in unit-test
+   * fixtures that opt out) or when the input is null/blank.
+   *
+   * <p>Per Dominique's PR review: PHI must not leave the system to a
+   * third-party model in raw form. MINIMAL level is the lowest-disruption
+   * level — the {@code NAME_PATTERN} regex only matches "FirstWord
+   * SecondWord" capitalized pairs, so generic clinical terms like
+   * "lisinopril" or "the patient" are not garbled.
+   */
+  private String anonymizeIfAvailable(final String text) {
+    if (medicalDataAnonymizer == null || text == null || text.isBlank()) {
+      return text;
+    }
+    return medicalDataAnonymizer.anonymizePatientContext(
+        text, null, MedicalDataAnonymizer.AnonymizationLevel.MINIMAL);
   }
 
   // ================================================================
