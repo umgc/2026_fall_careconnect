@@ -666,6 +666,24 @@ Respond with ONLY a JSON object in this exact format, no other text:
       throws Exception {
     final String resolvedModelId = BedrockModelSupport.resolveModelId(null, bedrockModelId);
     final boolean hasImage = imageBase64 != null && imageFormat != null;
+    final int promptChars = prompt == null ? 0 : prompt.length();
+
+    // Production-debugging signal per Dominique's PR review: which model
+    // family handled this invocation? Log only metadata (modelId, family,
+    // hasImage, prompt length) -- never the prompt itself or response body,
+    // which may contain transcript content or extracted clinical PHI.
+    final String modelFamily =
+        BedrockModelSupport.isNovaModel(resolvedModelId)
+            ? "NOVA"
+            : (BedrockModelSupport.isClaudeModel(resolvedModelId) ? "CLAUDE" : "OTHER");
+    if (log.isInfoEnabled()) {
+      log.info(
+          "Bedrock invocation: modelId={}, family={}, hasImage={}, promptChars={}",
+          resolvedModelId,
+          modelFamily,
+          hasImage,
+          promptChars);
+    }
 
     // Image requests use the Nova-format payload (since BedrockModelSupport
     // builds text-only payloads), so the target model must be a Nova family
@@ -678,6 +696,12 @@ Respond with ONLY a JSON object in this exact format, no other text:
           BedrockModelSupport.isNovaModel(resolvedModelId)
               ? resolvedModelId
               : NOVA_PRO_FALLBACK_MODEL_ID;
+      if (!imageModelId.equals(resolvedModelId) && log.isDebugEnabled()) {
+        log.debug(
+            "Image request rerouted from non-Nova model {} to Nova fallback {} (Nova-format payload requires Nova family endpoint)",
+            resolvedModelId,
+            imageModelId);
+      }
       return invokeNovaImageRequest(imageModelId, prompt, imageBase64, imageFormat, maxTokens);
     }
 
