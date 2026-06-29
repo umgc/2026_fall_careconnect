@@ -95,9 +95,15 @@ public class BedrockSentimentService {
    *   3. {@code amazon.nova-pro-v1:0} (final fallback)
    * Supports both Amazon Nova and Anthropic Claude families via
    * {@link BedrockModelSupport}.
+   *
+   * <p>The Java field initializer ({@code = "amazon.nova-pro-v1:0"}) is
+   * required so the field is not null when this service is constructed
+   * outside Spring (for example in unit tests that bypass DI). Spring's
+   * {@code @Value} resolution runs after the constructor and overrides
+   * this initializer in production.
    */
   @Value("${aws.bedrock.sentiment.model-id:${careconnect.ai.model:amazon.nova-pro-v1:0}}")
-  private String bedrockModelId;
+  private String bedrockModelId = "amazon.nova-pro-v1:0";
 
   /** Default temperature for Bedrock invocations. */
   private static final double DEFAULT_TEMPERATURE = 0.2;
