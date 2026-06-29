@@ -1,7 +1,9 @@
 package com.careconnect.security;
 
 import com.careconnect.model.User;
+import com.careconnect.service.CaregiverPatientLinkService;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Service for enforcing Role-Based Access Control (RBAC) throughout the application.
@@ -32,7 +34,10 @@ import org.springframework.stereotype.Service;
  * @version 1.0
  */
 @Service
+@RequiredArgsConstructor // this will inject any required dependencies (e.g., services for checking relationships)
 public class AuthorizationService {
+
+    private final CaregiverPatientLinkService caregiverPatientLinkService;
 
     // ========== Permission Enforcement Methods ==========
 
@@ -245,18 +250,21 @@ public class AuthorizationService {
             return;
         }
 
-        // For Caregivers and Family Members, assignment/linking must be verified
-        // This is a placeholder - implement actual database check
-        // TODO: Query caregiver_patient or family_patient table to verify relationship
-        
-        // For now, we allow access if user has appropriate view permission
+
+       // For Caregivers, assignment/linking must be verified against the DB
+        //This is the security fix that is required to ensure that caregivers can only access patients they are assigned to. 
+        // The caregiverPatientLinkService is assumed to be a service that checks the database for valid caregiver-patient relationships.
         if (user.isCaregiver()) {
             if (!user.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)) {
                 throw new UnauthorizedException(
                     "User does not have permission to view patient data"
                 );
             }
-            // In production, verify: SELECT COUNT(*) FROM caregiver_patient WHERE caregiver_id = ? AND patient_id = ?
+            if (!caregiverPatientLinkService.hasAccessToPatient(user.getId(), patientId)) {
+                throw new UnauthorizedException(
+                    String.format("Caregiver '%s' is not linked to patient %d", user.getEmail(), patientId)
+                );
+            }
         } else if (user.isFamilyMember()) {
             if (!user.hasPermission(Permission.VIEW_HEALTH_DATA)) {
                 throw new UnauthorizedException(

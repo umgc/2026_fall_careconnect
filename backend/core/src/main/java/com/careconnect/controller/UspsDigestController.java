@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.careconnect.repository.UserRepository; // Import the UserRepository to fetch user details based on userId
 
 import java.time.LocalDate;
 import java.util.List;
@@ -30,18 +31,23 @@ public class UspsDigestController {
     private final AuthorizationService authorizationService;
     private final USPSDigestService uspsDigestService;
     private final NaturalLanguageMailSearchService naturalLanguageMailSearchService;
+    private final UserRepository userRepository; // Inject the UserRepository
 
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
 
 
     @GetMapping("/latest")
     public ResponseEntity<USPSDigest> getLatestDigest(
-            @RequestParam(defaultValue = "demo-user") String userId,
+            @RequestParam String userId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
 
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+
+            //replace the following line with the actual logic to fetch the current user and the patient user based on userId
+         User currentUser = securityUtil.resolveCurrentUser();
+        User patientUser = userRepository.findByEmail(userId)
+                .orElseThrow(() -> new UnauthorizedException("No patient found for userId: " + userId));
+        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         var digest = date != null
                 ? uspsDigestService.digestForDate(userId, date)
@@ -57,11 +63,13 @@ public class UspsDigestController {
 
     @GetMapping("/search")
     public ResponseEntity<List<Map<String, Object>>> search(
-            @RequestParam(defaultValue = "demo-user") String userId,
+            @RequestParam String userId,
             @RequestParam String keyword) throws UnauthorizedException {
 
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        User patientUser = userRepository.findByEmail(userId)
+                .orElseThrow(() -> new UnauthorizedException("No patient found for userId: " + userId));
+        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         var results = uspsDigestService.search(userId, keyword);
         return ResponseEntity.ok(results);
@@ -91,10 +99,12 @@ public class UspsDigestController {
 
     @PostMapping("/clear-cache")
     public ResponseEntity<String> clearCache(
-            @RequestParam(defaultValue = "demo-user") String userId) throws UnauthorizedException {
+            @RequestParam String userId) throws UnauthorizedException {
 
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        User patientUser = userRepository.findByEmail(userId)
+                .orElseThrow(() -> new UnauthorizedException("No patient found for userId: " + userId));
+        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         uspsDigestService.clearCacheForUser(userId);
         return ResponseEntity.ok("Cache cleared successfully for user: " + userId);

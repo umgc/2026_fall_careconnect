@@ -2,6 +2,7 @@ package com.careconnect.controller;
 
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.User;
+import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
@@ -22,6 +23,7 @@ import java.time.LocalDate;
 public class USPSController {
 
     private final USPSDigestService service;
+    private final UserRepository userRepository; // Inject the UserRepository to fetch user details based on userId
 
     @Autowired
     private SecurityUtil securityUtil;
@@ -35,11 +37,14 @@ public class USPSController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
         // RBAC: Only admins and caregivers can access USPS mail data
+        //replaced with previous logic to fetch the userId from the JWT token or fallback to a default value for testing
+                  var userId = jwt != null ? jwt.getSubject() : "demo-user"; // fallback for early testing
         if (securityUtil != null && authorizationService != null) {
             User currentUser = securityUtil.resolveCurrentUser();
-            authorizationService.requireAdminOrCaregiver(currentUser);
+            User patientUser = userRepository.findByEmail(userId)
+                    .orElseThrow(() -> new UnauthorizedException("No patient found for userId: " + userId));
+            authorizationService.requirePatientAccess(currentUser, patientUser.getId());
         }
-        var userId = jwt != null ? jwt.getSubject() : "demo-user"; // fallback for early testing
         var digestOpt = date != null
                 ? service.digestForDate(userId, date)
                 : service.latestForUser(userId);
