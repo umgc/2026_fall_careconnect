@@ -419,4 +419,30 @@ public class RolePermissionServiceTest {
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.EXPORT_HEALTH_DATA));
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.EXPORT_HEALTH_DATA));
     }
+
+    // ========== Null-argument and reporting coverage ==========
+
+    @Test
+    @DisplayName("hasAllPermissions returns false when the required array is null")
+    public void testHasAllPermissionsWithNullArray() {
+        assertFalse(RolePermissionService.hasAllPermissions(Role.PATIENT, (Permission[]) null));
+    }
+
+    @Test
+    @DisplayName("hasAnyPermission returns false when the required array is null")
+    public void testHasAnyPermissionWithNullArray() {
+        assertFalse(RolePermissionService.hasAnyPermission(Role.PATIENT, (Permission[]) null));
+    }
+
+    @Test
+    @DisplayName("printPermissionReport runs for every role without throwing")
+    public void testPrintPermissionReport() {
+        assertDoesNotThrow(RolePermissionService::printPermissionReport);
+    }
+
+    @Test
+    @DisplayName("RolePermissionService can be instantiated")
+    public void testConstructor() {
+        assertNotNull(new RolePermissionService());
+    }
 }
