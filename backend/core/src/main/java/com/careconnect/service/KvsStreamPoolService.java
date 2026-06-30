@@ -61,6 +61,31 @@ public class KvsStreamPoolService {
         return streamPoolArn;
     }
 
+    /**
+     * Pool name segment from a Chime {@code media-pipeline-kinesis-video-stream-pool} ARN
+     * (e.g. {@code careconnect-dev-speaker}).
+     */
+    public String getStreamPoolName() {
+        return extractResourceName(streamPoolArn);
+    }
+
+    /**
+     * {@code ListStreams} name prefix for streams Chime creates in the pool. Actual names look like
+     * {@code ChimeMediaPipelines-{poolName}-{uuid...}}, not {@code {poolName}} alone.
+     */
+    public String getStreamPoolListStreamsPrefix() {
+        final String poolName = getStreamPoolName();
+        if (poolName.isBlank()) {
+            return "";
+        }
+        return "ChimeMediaPipelines-" + poolName;
+    }
+
+    /** AWS region from the Chime stream pool ARN, or empty when not configured. */
+    public String getStreamPoolRegion() {
+        return extractArnRegion(streamPoolArn);
+    }
+
     /** Whether Chime media stream pipeline ingest is configured. */
     public boolean isIngestMode() {
         return enabled && !streamPoolArn.isBlank();
@@ -138,6 +163,22 @@ public class KvsStreamPoolService {
         for (final String arn : callReservations.values()) {
             streamOwnerByArn.remove(arn, callId);
         }
+    }
+
+    static String extractResourceName(final String arn) {
+        if (arn == null || arn.isBlank()) {
+            return "";
+        }
+        final int slash = arn.lastIndexOf('/');
+        return slash >= 0 && slash < arn.length() - 1 ? arn.substring(slash + 1) : "";
+    }
+
+    static String extractArnRegion(final String arn) {
+        if (arn == null || arn.isBlank()) {
+            return "";
+        }
+        final String[] parts = arn.split(":");
+        return parts.length > 3 ? parts[3] : "";
     }
 
     private static List<String> parseArns(final String streamArnsCsv) {

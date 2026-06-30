@@ -486,7 +486,7 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(callRecordingService, never()).startRecording(eq(CALL_ID), isNull());
-            verify(callRecordingService, never()).startKvsPipeline(CALL_ID);
+            verify(callRecordingService, never()).startKvsPipelineAsync(CALL_ID);
         }
 
         @Test
@@ -503,7 +503,7 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(callRecordingService).startRecording(CALL_ID, null);
-            verify(callRecordingService).startKvsPipeline(CALL_ID);
+            verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
         }
 
         @Test

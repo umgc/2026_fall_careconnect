@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -364,7 +365,7 @@ public class CallRecordingService {
           "Could not resolve AWS account ID for meeting ARN");
     }
 
-    final String sourceArn = "arn:aws:chime::" + accountId + ":meeting/" + meetingId;
+    final String sourceArn = chimeService.buildMeetingSourceArn(callId, meetingId, accountId);
     final String sinkArn = "arn:aws:s3:::" + bucket;
     final long recordingGeneration = recording.getGeneration();
 
@@ -697,7 +698,7 @@ public class CallRecordingService {
 
     final int reservedCapacity =
         Math.min(Math.max(attendees.size(), 1), KVS_RECORDING_STREAM_LIMIT);
-    final String sourceArn = "arn:aws:chime::" + accountId + ":meeting/" + meetingId;
+    final String sourceArn = chimeService.buildMeetingSourceArn(callId, meetingId, accountId);
     final String streamPoolArn = kvsStreamPoolService.getStreamPoolArn();
 
     try {
@@ -824,6 +825,39 @@ public class CallRecordingService {
           "callId", callId,
           "mediaStreamPipelineId", resolvedPipelineId,
           "warning", e.getMessage());
+    }
+  }
+
+  /**
+   * Starts KVS ingest + Media Insights on a background thread so call join is not blocked by
+   * attendee→stream discovery polling (can take tens of seconds).
+   */
+  @Async
+  public void startKvsPipelineAsync(final String callId) {
+    if (log.isInfoEnabled()) {
+      log.info("Background KVS pipeline start begun for callId={}", callId);
+    }
+    try {
+      final Map<String, Object> result = startKvsPipeline(callId);
+      final Object status = result.get("status");
+      if (status != null && ("STARTED".equals(status.toString()) || "ALREADY_STARTED".equals(status.toString()))) {
+        if (log.isInfoEnabled()) {
+          log.info(
+              "Background KVS pipeline start completed for callId={} status={}",
+              callId,
+              status);
+        }
+      } else if (status != null && log.isWarnEnabled()) {
+        log.warn(
+            "Background KVS pipeline start for call {} finished with status={}: {}",
+            callId,
+            status,
+            result.get("message"));
+      }
+    } catch (Exception e) {
+      if (log.isWarnEnabled()) {
+        log.warn("Background KVS pipeline start failed for call {}: {}", callId, e.getMessage());
+      }
     }
   }
 
