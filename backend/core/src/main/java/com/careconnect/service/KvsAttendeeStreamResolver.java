@@ -18,26 +18,37 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipelin
 /**
  * Resolves Chime-assigned KVS stream ARNs for call attendees after a media stream pipeline starts.
  *
- * <p>Primary source is {@link KvsAttendeeStreamRegistry} (EventBridge or manual registration).
- * Polls until all attendees are mapped or the configured timeout elapses.
+ * <p>Primary path: {@link KvsPoolStreamDiscoveryService} polls KVS pool streams and reads
+ * fragment metadata. Optional fast-path: {@link KvsAttendeeStreamRegistry} pre-filled by EventBridge
+ * webhook if configured.
  */
 @Service
 public class KvsAttendeeStreamResolver {
 
     private static final Logger log = LoggerFactory.getLogger(KvsAttendeeStreamResolver.class);
 
-    private static final long POLL_INTERVAL_MS = 500L;
+    private static final long DEFAULT_POLL_INTERVAL_MS = 3_000L;
 
     private final KvsAttendeeStreamRegistry registry;
+    private final KvsPoolStreamDiscoveryService poolStreamDiscoveryService;
+    private final KvsStreamPoolService kvsStreamPoolService;
 
     @Autowired(required = false)
     private ChimeSdkMediaPipelinesClient pipelinesClient;
 
-    @Value("${careconnect.kvs.stream-discovery-timeout-ms:15000}")
+    @Value("${careconnect.kvs.stream-discovery-timeout-ms:60000}")
     private long discoveryTimeoutMs;
 
-    public KvsAttendeeStreamResolver(final KvsAttendeeStreamRegistry registry) {
+    @Value("${careconnect.kvs.stream-discovery-poll-interval-ms:3000}")
+    private long pollIntervalMs;
+
+    public KvsAttendeeStreamResolver(
+            final KvsAttendeeStreamRegistry registry,
+            final KvsPoolStreamDiscoveryService poolStreamDiscoveryService,
+            final KvsStreamPoolService kvsStreamPoolService) {
         this.registry = registry;
+        this.poolStreamDiscoveryService = poolStreamDiscoveryService;
+        this.kvsStreamPoolService = kvsStreamPoolService;
     }
 
     /**
@@ -61,12 +72,28 @@ public class KvsAttendeeStreamResolver {
                         .collect(Collectors.toList());
 
         final long deadline = System.currentTimeMillis() + discoveryTimeoutMs;
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "KVS stream discovery started callId={} meetingId={} timeoutMs={} pollIntervalMs={}"
+                            + " attendees={}",
+                    callId,
+                    meetingId,
+                    discoveryTimeoutMs,
+                    pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS,
+                    attendeeIds.size());
+        }
+        waitForMediaStreamPipelineReady(mediaStreamPipelineId, deadline);
         while (System.currentTimeMillis() < deadline) {
-            waitForMediaStreamPipelineInProgress(mediaStreamPipelineId);
             if (hasAllMappings(callId, attendeeIds)) {
                 return copyMappings(callId, attendeeIds);
             }
-            sleep(POLL_INTERVAL_MS);
+            if (kvsStreamPoolService.isIngestMode()) {
+                poolStreamDiscoveryService.discoverAndRegister(callId, meetingId, attendeeIds);
+            }
+            if (hasAllMappings(callId, attendeeIds)) {
+                return copyMappings(callId, attendeeIds);
+            }
+            sleep(pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS);
         }
 
         if (hasAllMappings(callId, attendeeIds)) {
@@ -88,8 +115,8 @@ public class KvsAttendeeStreamResolver {
                         + callId
                         + " (mediaStreamPipelineId="
                         + mediaStreamPipelineId
-                        + "). Register mappings via EventBridge"
-                        + " MediaPipelineKinesisVideoStreamStart or KvsAttendeeStreamRegistry.");
+                        + "). Ensure media stream ingest is active and KVS ListStreams/ListFragments"
+                        + " IAM is allowed, or register mappings via optional EventBridge webhook.");
     }
 
     private boolean hasAllMappings(final String callId, final List<String> attendeeIds) {
@@ -109,31 +136,59 @@ public class KvsAttendeeStreamResolver {
         return resolved;
     }
 
-    private void waitForMediaStreamPipelineInProgress(final String mediaStreamPipelineId) {
+    private void waitForMediaStreamPipelineReady(
+            final String mediaStreamPipelineId, final long discoveryDeadline) {
         if (pipelinesClient == null
                 || mediaStreamPipelineId == null
                 || mediaStreamPipelineId.isBlank()) {
             return;
         }
-        try {
-            final var response =
-                    pipelinesClient.getMediaPipeline(
-                            GetMediaPipelineRequest.builder()
-                                    .mediaPipelineId(mediaStreamPipelineId)
-                                    .build());
-            if (response.mediaPipeline() != null
-                    && response.mediaPipeline().mediaStreamPipeline() != null
-                    && response.mediaPipeline().mediaStreamPipeline().status()
-                            == MediaPipelineStatus.IN_PROGRESS) {
-                return;
+        final long pipelineWaitDeadline =
+                Math.min(discoveryDeadline, System.currentTimeMillis() + 20_000L);
+        MediaPipelineStatus lastStatus = null;
+        while (System.currentTimeMillis() < pipelineWaitDeadline) {
+            try {
+                final var response =
+                        pipelinesClient.getMediaPipeline(
+                                GetMediaPipelineRequest.builder()
+                                        .mediaPipelineId(mediaStreamPipelineId)
+                                        .build());
+                if (response.mediaPipeline() != null
+                        && response.mediaPipeline().mediaStreamPipeline() != null) {
+                    lastStatus = response.mediaPipeline().mediaStreamPipeline().status();
+                    if (lastStatus == MediaPipelineStatus.IN_PROGRESS) {
+                        if (log.isInfoEnabled()) {
+                            log.info(
+                                    "Media stream pipeline {} is InProgress — starting KVS discovery",
+                                    mediaStreamPipelineId);
+                        }
+                        return;
+                    }
+                    if (lastStatus == MediaPipelineStatus.FAILED) {
+                        if (log.isWarnEnabled()) {
+                            log.warn(
+                                    "Media stream pipeline {} failed — KVS streams will not appear",
+                                    mediaStreamPipelineId);
+                        }
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                if (log.isDebugEnabled()) {
+                    log.debug(
+                            "Media stream pipeline {} not yet queryable: {}",
+                            mediaStreamPipelineId,
+                            e.getMessage());
+                }
             }
-        } catch (Exception e) {
-            if (log.isDebugEnabled()) {
-                log.debug(
-                        "Media stream pipeline {} not yet InProgress: {}",
-                        mediaStreamPipelineId,
-                        e.getMessage());
-            }
+            sleep(pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS);
+        }
+        if (log.isWarnEnabled()) {
+            log.warn(
+                    "Media stream pipeline {} not InProgress after wait (lastStatus={}) —"
+                            + " discovery will continue but streams appear only after audio flows",
+                    mediaStreamPipelineId,
+                    lastStatus);
         }
     }
 

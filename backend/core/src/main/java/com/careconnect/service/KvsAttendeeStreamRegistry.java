@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /**
  * In-memory attendee→KVS stream ARN mappings for active calls.
  *
- * <p>Populated by {@link KvsAttendeeStreamResolver} (fragment discovery) or future EventBridge
+ * <p>Populated by {@link KvsAttendeeStreamResolver} via KVS polling or optional EventBridge
  * handlers when Chime emits {@code MediaPipelineKinesisVideoStreamStart} events.
  */
 @Component

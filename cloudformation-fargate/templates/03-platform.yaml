@@ -137,7 +137,6 @@ Resources:
                   - chime:CreateMediaConcatenationPipeline
                   - chime:DeleteMediaCapturePipeline
                   - chime:DeleteMediaPipeline
-                  - chime:DeleteMediaStreamPipeline
                   - chime:GetMediaCapturePipeline
                   - chime:GetMediaPipeline
                   - chime:CreateMediaStreamPipeline

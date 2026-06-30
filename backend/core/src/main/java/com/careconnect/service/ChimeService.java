@@ -778,6 +778,27 @@ public class ChimeService {
         return meeting == null ? null : meeting.meetingId();
     }
 
+    /** Media region for an active meeting (defaults to {@link #DEFAULT_MEDIA_REGION}). */
+    public final String getMediaRegion(final String callId) {
+        final Meeting meeting = activeMeetings.get(callId);
+        if (meeting != null
+                && meeting.mediaRegion() != null
+                && !meeting.mediaRegion().isBlank()) {
+            return meeting.mediaRegion();
+        }
+        return DEFAULT_MEDIA_REGION;
+    }
+
+    /**
+     * Chime SDK meeting ARN for media pipeline sources ({@code CreateMediaStreamPipeline},
+     * {@code CreateMediaCapturePipeline}).
+     */
+    public final String buildMeetingSourceArn(
+            final String callId, final String meetingId, final String accountId) {
+        return String.format(
+                "arn:aws:chime:%s:%s:meeting/%s", getMediaRegion(callId), accountId, meetingId);
+    }
+
     /** Reverse lookup: Chime meeting ID → call ID for active meetings. */
     public final String findCallIdByMeetingId(final String meetingId) {
         if (meetingId == null || meetingId.isBlank()) {
