@@ -84,18 +84,18 @@ public class AiAuditLedger {
     private OffsetDateTime occurredAt;
 
     @PrePersist
-    void onCreate() {
+    public void onCreate() {
         if (occurredAt == null) occurredAt = OffsetDateTime.now();
     }
 
     @PreUpdate
-    void onUpdate() {
+    public void onUpdate() {
         throw new UnsupportedOperationException(
                 "AiAuditLedger records are immutable, updates are not allowed.");
     }
 
     @PreRemove
-    void onRemove() {
+    public void onRemove() {
         throw new UnsupportedOperationException(
                 "AiAuditLedger records are immutable, deletes are not allowed.");
     }

@@ -44,17 +44,24 @@ class AiAuditLedgerServiceTest {
         assertThat(saved.getActorUserId()).isEqualTo(42L);
         assertThat(saved.getPatientId()).isEqualTo(7L);
         assertThat(saved.getSessionId()).isEqualTo("sess-abc");
-        assertThat(saved.getPayload()).containsKey("query");
+        assertThat(saved.getPayload()).containsEntry("query", "What medications?");
     }
 
     @Test
     void log_doesNotThrowWhenRepositoryFails() {
         when(repository.save(any())).thenThrow(new RuntimeException("DB unavailable"));
 
-        assertThatCode(() ->
-                service.log(AuditEventType.VALIDATION, AuditSourceFeature.SUMMARY,
-                        null, null, null, null))
-                .doesNotThrowAnyException();
+        AiAuditLedger result = service.log(AuditEventType.VALIDATION, AuditSourceFeature.SUMMARY,
+                42L, 7L, "sess-fail", Map.of("k", "v"));
+
+        // On failure the service returns the unsaved entity rather than throwing
+        assertThat(result).isNotNull();
+        assertThat(result.getEventType()).isEqualTo("VALIDATION");
+        assertThat(result.getSourceFeature()).isEqualTo("SUMMARY");
+        assertThat(result.getActorUserId()).isEqualTo(42L);
+        assertThat(result.getPatientId()).isEqualTo(7L);
+        assertThat(result.getSessionId()).isEqualTo("sess-fail");
+        assertThat(result.getPayload()).containsEntry("k", "v");
     }
 
     @Test
@@ -72,10 +79,15 @@ class AiAuditLedgerServiceTest {
     @Test
     void logQuery_setsQueryEventType() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        service.logQuery(AuditSourceFeature.ASK_AI, 1L, 2L, "s1", Map.of());
+        service.logQuery(AuditSourceFeature.ASK_AI, 1L, 2L, "s1", Map.of("q", "x"));
         ArgumentCaptor<AiAuditLedger> c = ArgumentCaptor.forClass(AiAuditLedger.class);
         verify(repository).save(c.capture());
         assertThat(c.getValue().getEventType()).isEqualTo("QUERY");
+        assertThat(c.getValue().getSourceFeature()).isEqualTo("ASK_AI");
+        assertThat(c.getValue().getActorUserId()).isEqualTo(1L);
+        assertThat(c.getValue().getPatientId()).isEqualTo(2L);
+        assertThat(c.getValue().getSessionId()).isEqualTo("s1");
+        assertThat(c.getValue().getPayload()).containsEntry("q", "x");
     }
 
     @Test
@@ -85,6 +97,7 @@ class AiAuditLedgerServiceTest {
         ArgumentCaptor<AiAuditLedger> c = ArgumentCaptor.forClass(AiAuditLedger.class);
         verify(repository).save(c.capture());
         assertThat(c.getValue().getEventType()).isEqualTo("RESPONSE");
+        assertThat(c.getValue().getSourceFeature()).isEqualTo("ASK_AI");
     }
 
     @Test
@@ -94,6 +107,7 @@ class AiAuditLedgerServiceTest {
         ArgumentCaptor<AiAuditLedger> c = ArgumentCaptor.forClass(AiAuditLedger.class);
         verify(repository).save(c.capture());
         assertThat(c.getValue().getEventType()).isEqualTo("VALIDATION");
+        assertThat(c.getValue().getSourceFeature()).isEqualTo("SUMMARY");
     }
 
     @Test
@@ -103,6 +117,7 @@ class AiAuditLedgerServiceTest {
         ArgumentCaptor<AiAuditLedger> c = ArgumentCaptor.forClass(AiAuditLedger.class);
         verify(repository).save(c.capture());
         assertThat(c.getValue().getEventType()).isEqualTo("CONFIRMATION");
+        assertThat(c.getValue().getSourceFeature()).isEqualTo("CONFIRMATION_SERVICE");
     }
 
     // entity tests (creation and read-only)
