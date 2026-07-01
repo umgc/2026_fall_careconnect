@@ -7,8 +7,6 @@ import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
 import com.careconnect.util.SecurityUtil;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,17 +17,19 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/v1/api/usps")
-@RequiredArgsConstructor
 public class USPSController {
 
     private final USPSDigestService service;
-    private final UserRepository userRepository; // Inject the UserRepository to fetch user details based on userId
+    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
+    private final AuthorizationService authorizationService;
 
-    @Autowired
-    private SecurityUtil securityUtil;
-
-    @Autowired
-    private AuthorizationService authorizationService;
+    public USPSController(USPSDigestService service, UserRepository userRepository, SecurityUtil securityUtil, AuthorizationService authorizationService) {
+        this.service = service;
+        this.userRepository = userRepository;
+        this.securityUtil = securityUtil;
+        this.authorizationService = authorizationService;
+    }
 
     @GetMapping("/mail")
     public ResponseEntity<USPSDigest> getDigest(
@@ -37,14 +37,12 @@ public class USPSController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
         // RBAC: Only admins and caregivers can access USPS mail data
-        //replaced with previous logic to fetch the userId from the JWT token or fallback to a default value for testing
-                  var userId = jwt != null ? jwt.getSubject() : "demo-user"; // fallback for early testing
-        if (securityUtil != null && authorizationService != null) {
-            User currentUser = securityUtil.resolveCurrentUser();
-            User patientUser = userRepository.findByEmail(userId)
-                    .orElseThrow(() -> new UnauthorizedException("No patient found for userId: " + userId));
-            authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+        if (jwt == null) {
+            throw new UnauthorizedException("Missing or invalid authentication token");
         }
+        var userId = jwt.getSubject();
         var digestOpt = date != null
                 ? service.digestForDate(userId, date)
                 : service.latestForUser(userId);

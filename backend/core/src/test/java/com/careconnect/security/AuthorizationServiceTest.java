@@ -1,6 +1,8 @@
 package com.careconnect.security;
 
 import com.careconnect.model.User;
+import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,10 +18,14 @@ public class AuthorizationServiceTest {
 
     private AuthorizationService authorizationService;
     private User mockUser;
+    private CaregiverPatientLinkRepository caregiverPatientLinkRepository;
+    private FamilyMemberLinkRepository familyMemberLinkRepository;
 
     @BeforeEach
     void setUp() {
-        authorizationService = new AuthorizationService();
+        caregiverPatientLinkRepository = mock(CaregiverPatientLinkRepository.class);
+        familyMemberLinkRepository = mock(FamilyMemberLinkRepository.class);
+        authorizationService = new AuthorizationService(caregiverPatientLinkRepository, familyMemberLinkRepository);
         mockUser = mock(User.class);
         lenient().when(mockUser.getEmail()).thenReturn("test@example.com");
         lenient().when(mockUser.getId()).thenReturn(1L);
@@ -260,23 +266,23 @@ public class AuthorizationServiceTest {
     class RequirePatientAccessTests {
 
         @Test
-        @DisplayName("Should throw when user is null")
-        void shouldThrowWhenUserIsNull() {
+        @DisplayName("requirePatientAccess_whenUserIsNull_throwsUnauthorized")
+        void requirePatientAccess_whenUserIsNull_throwsUnauthorized() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
                 () -> authorizationService.requirePatientAccess(null, 1L));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
         @Test
-        @DisplayName("Should throw when patientId is null")
-        void shouldThrowWhenPatientIdIsNull() {
+        @DisplayName("requirePatientAccess_whenPatientIdIsNull_throwsIllegalArgument")
+        void requirePatientAccess_whenPatientIdIsNull_throwsIllegalArgument() {
             assertThrows(IllegalArgumentException.class,
                 () -> authorizationService.requirePatientAccess(mockUser, null));
         }
 
         @Test
-        @DisplayName("Should allow admin to access any patient")
-        void shouldAllowAdminAccess() {
+        @DisplayName("requirePatientAccess_whenUserIsAdmin_allowsAccessToAnyPatient")
+        void requirePatientAccess_whenUserIsAdmin_allowsAccessToAnyPatient() {
             when(mockUser.isAdmin()).thenReturn(true);
 
             assertDoesNotThrow(
@@ -284,8 +290,8 @@ public class AuthorizationServiceTest {
         }
 
         @Test
-        @DisplayName("Should allow patient to access own data")
-        void shouldAllowPatientAccessOwnData() {
+        @DisplayName("requirePatientAccess_whenPatientAccessesOwnData_allowsAccess")
+        void requirePatientAccess_whenPatientAccessesOwnData_allowsAccess() {
             when(mockUser.isAdmin()).thenReturn(false);
             when(mockUser.isPatient()).thenReturn(true);
             when(mockUser.getId()).thenReturn(1L);
@@ -295,8 +301,8 @@ public class AuthorizationServiceTest {
         }
 
         @Test
-        @DisplayName("Should deny patient access to other patient's data")
-        void shouldDenyPatientAccessOtherData() {
+        @DisplayName("requirePatientAccess_whenPatientAccessesOtherPatientData_throwsUnauthorized")
+        void requirePatientAccess_whenPatientAccessesOtherPatientData_throwsUnauthorized() {
             when(mockUser.isAdmin()).thenReturn(false);
             when(mockUser.isPatient()).thenReturn(true);
             when(mockUser.getId()).thenReturn(1L);
@@ -307,20 +313,8 @@ public class AuthorizationServiceTest {
         }
 
         @Test
-        @DisplayName("Should allow caregiver with VIEW_ASSIGNED_PATIENTS permission")
-        void shouldAllowCaregiverWithPermission() {
-            when(mockUser.isAdmin()).thenReturn(false);
-            when(mockUser.isPatient()).thenReturn(false);
-            when(mockUser.isCaregiver()).thenReturn(true);
-            when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
-
-            assertDoesNotThrow(
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
-        }
-
-        @Test
-        @DisplayName("Should deny caregiver without VIEW_ASSIGNED_PATIENTS permission")
-        void shouldDenyCaregiverWithoutPermission() {
+        @DisplayName("requirePatientAccess_whenCaregiverLacksViewPermission_throwsUnauthorized")
+        void requirePatientAccess_whenCaregiverLacksViewPermission_throwsUnauthorized() {
             when(mockUser.isAdmin()).thenReturn(false);
             when(mockUser.isPatient()).thenReturn(false);
             when(mockUser.isCaregiver()).thenReturn(true);
@@ -332,21 +326,39 @@ public class AuthorizationServiceTest {
         }
 
         @Test
-        @DisplayName("Should allow family member with VIEW_HEALTH_DATA permission")
-        void shouldAllowFamilyMemberWithPermission() {
+        @DisplayName("requirePatientAccess_whenCaregiverHasPermissionAndActiveLink_allowsAccess")
+        void requirePatientAccess_whenCaregiverHasPermissionAndActiveLink_allowsAccess() {
             when(mockUser.isAdmin()).thenReturn(false);
             when(mockUser.isPatient()).thenReturn(false);
-            when(mockUser.isCaregiver()).thenReturn(false);
-            when(mockUser.isFamilyMember()).thenReturn(true);
-            when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
+            when(mockUser.isCaregiver()).thenReturn(true);
+            when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
+            when(mockUser.getId()).thenReturn(10L);
+            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any()))
+                .thenReturn(true);
 
             assertDoesNotThrow(
                 () -> authorizationService.requirePatientAccess(mockUser, 5L));
         }
 
         @Test
-        @DisplayName("Should deny family member without VIEW_HEALTH_DATA permission")
-        void shouldDenyFamilyMemberWithoutPermission() {
+        @DisplayName("requirePatientAccess_whenCaregiverHasPermissionButNoActiveLink_throwsUnauthorized")
+        void requirePatientAccess_whenCaregiverHasPermissionButNoActiveLink_throwsUnauthorized() {
+            when(mockUser.isAdmin()).thenReturn(false);
+            when(mockUser.isPatient()).thenReturn(false);
+            when(mockUser.isCaregiver()).thenReturn(true);
+            when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
+            when(mockUser.getId()).thenReturn(10L);
+            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any()))
+                .thenReturn(false);
+
+            UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+            assertTrue(ex.getMessage().contains("not assigned to patient"));
+        }
+
+        @Test
+        @DisplayName("requirePatientAccess_whenFamilyMemberLacksViewPermission_throwsUnauthorized")
+        void requirePatientAccess_whenFamilyMemberLacksViewPermission_throwsUnauthorized() {
             when(mockUser.isAdmin()).thenReturn(false);
             when(mockUser.isPatient()).thenReturn(false);
             when(mockUser.isCaregiver()).thenReturn(false);
@@ -359,8 +371,41 @@ public class AuthorizationServiceTest {
         }
 
         @Test
-        @DisplayName("Should deny user with unknown role")
-        void shouldDenyUnknownRole() {
+        @DisplayName("requirePatientAccess_whenFamilyMemberHasPermissionAndActiveLink_allowsAccess")
+        void requirePatientAccess_whenFamilyMemberHasPermissionAndActiveLink_allowsAccess() {
+            when(mockUser.isAdmin()).thenReturn(false);
+            when(mockUser.isPatient()).thenReturn(false);
+            when(mockUser.isCaregiver()).thenReturn(false);
+            when(mockUser.isFamilyMember()).thenReturn(true);
+            when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
+            when(mockUser.getId()).thenReturn(20L);
+            when(familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(eq(20L), eq(5L), any()))
+                .thenReturn(true);
+
+            assertDoesNotThrow(
+                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+        }
+
+        @Test
+        @DisplayName("requirePatientAccess_whenFamilyMemberHasPermissionButNoActiveLink_throwsUnauthorized")
+        void requirePatientAccess_whenFamilyMemberHasPermissionButNoActiveLink_throwsUnauthorized() {
+            when(mockUser.isAdmin()).thenReturn(false);
+            when(mockUser.isPatient()).thenReturn(false);
+            when(mockUser.isCaregiver()).thenReturn(false);
+            when(mockUser.isFamilyMember()).thenReturn(true);
+            when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
+            when(mockUser.getId()).thenReturn(20L);
+            when(familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(eq(20L), eq(5L), any()))
+                .thenReturn(false);
+
+            UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+            assertTrue(ex.getMessage().contains("not linked to patient"));
+        }
+
+        @Test
+        @DisplayName("requirePatientAccess_whenRoleIsUnrecognized_throwsUnauthorized")
+        void requirePatientAccess_whenRoleIsUnrecognized_throwsUnauthorized() {
             when(mockUser.isAdmin()).thenReturn(false);
             when(mockUser.isPatient()).thenReturn(false);
             when(mockUser.isCaregiver()).thenReturn(false);

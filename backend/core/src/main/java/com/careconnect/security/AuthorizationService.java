@@ -1,9 +1,11 @@
 package com.careconnect.security;
 
 import com.careconnect.model.User;
-import com.careconnect.service.CaregiverPatientLinkService;
+import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
 import org.springframework.stereotype.Service;
-import lombok.RequiredArgsConstructor;
+
+import java.time.LocalDateTime;
 
 /**
  * Service for enforcing Role-Based Access Control (RBAC) throughout the application.
@@ -34,10 +36,16 @@ import lombok.RequiredArgsConstructor;
  * @version 1.0
  */
 @Service
-@RequiredArgsConstructor // this will inject any required dependencies (e.g., services for checking relationships)
 public class AuthorizationService {
 
-    private final CaregiverPatientLinkService caregiverPatientLinkService;
+    private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
+    private final FamilyMemberLinkRepository familyMemberLinkRepository;
+
+    public AuthorizationService(CaregiverPatientLinkRepository caregiverPatientLinkRepository,
+                                 FamilyMemberLinkRepository familyMemberLinkRepository) {
+        this.caregiverPatientLinkRepository = caregiverPatientLinkRepository;
+        this.familyMemberLinkRepository = familyMemberLinkRepository;
+    }
 
     // ========== Permission Enforcement Methods ==========
 
@@ -212,13 +220,12 @@ public class AuthorizationService {
      * 
      * Rules:
      * - Admins can access all patients
-     * - Caregivers can access assigned patients only
      * - Patients can access only themselves
-     * - Family members can access linked patients only
-     * 
-     * Note: This method checks basic access rules. Assignment/linking must be 
-     * verified separately via database queries.
-     * 
+     * - Caregivers can access a patient only if they hold VIEW_ASSIGNED_PATIENTS
+     *   permission AND have an active, non-expired caregiver-patient link
+     * - Family members can access a patient only if they hold VIEW_HEALTH_DATA
+     *   permission AND have an active, non-expired family-member link
+     *
      * @param user The authenticated user
      * @param patientId The ID of the patient being accessed
      * @throws UnauthorizedException if user cannot access this patient
@@ -250,19 +257,21 @@ public class AuthorizationService {
             return;
         }
 
-
-       // For Caregivers, assignment/linking must be verified against the DB
-        //This is the security fix that is required to ensure that caregivers can only access patients they are assigned to. 
-        // The caregiverPatientLinkService is assumed to be a service that checks the database for valid caregiver-patient relationships.
+        // For Caregivers and Family Members, both the view permission AND an
+        // active, non-expired link to this specific patient are required.
         if (user.isCaregiver()) {
             if (!user.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)) {
                 throw new UnauthorizedException(
                     "User does not have permission to view patient data"
                 );
             }
-            if (!caregiverPatientLinkService.hasAccessToPatient(user.getId(), patientId)) {
+            boolean linked = caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(
+                user.getId(), patientId, LocalDateTime.now());
+            if (!linked) {
                 throw new UnauthorizedException(
-                    String.format("Caregiver '%s' is not linked to patient %d", user.getEmail(), patientId)
+                    String.format("Caregiver '%s' is not assigned to patient %d",
+                        user.getEmail(),
+                        patientId)
                 );
             }
         } else if (user.isFamilyMember()) {
@@ -271,7 +280,15 @@ public class AuthorizationService {
                     "User does not have permission to view patient data"
                 );
             }
-            // In production, verify: SELECT COUNT(*) FROM family_patient WHERE family_id = ? AND patient_id = ?
+            boolean linked = familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(
+                user.getId(), patientId, LocalDateTime.now());
+            if (!linked) {
+                throw new UnauthorizedException(
+                    String.format("Family member '%s' is not linked to patient %d",
+                        user.getEmail(),
+                        patientId)
+                );
+            }
         } else {
             throw new UnauthorizedException(
                 String.format("User '%s' is not authorized to access patient %d",

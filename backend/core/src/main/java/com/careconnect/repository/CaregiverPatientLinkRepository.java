@@ -35,6 +35,10 @@ public interface CaregiverPatientLinkRepository extends JpaRepository<CaregiverP
     @Query("SELECT CASE WHEN COUNT(cpl) > 0 THEN true ELSE false END FROM CaregiverPatientLink cpl WHERE cpl.caregiverUser = :caregiverUser AND cpl.patientUser = :patientUser AND cpl.status = 'ACTIVE' AND (cpl.expiresAt IS NULL OR cpl.expiresAt > :now)")
     boolean existsActiveNonExpiredLink(@Param("caregiverUser") User caregiverUser, @Param("patientUser") User patientUser, @Param("now") LocalDateTime now);
 
+    // Check if active and non-expired link exists, by user IDs (no need to load full User entities)
+    @Query("SELECT CASE WHEN COUNT(cpl) > 0 THEN true ELSE false END FROM CaregiverPatientLink cpl WHERE cpl.caregiverUser.id = :caregiverUserId AND cpl.patientUser.id = :patientUserId AND cpl.status = 'ACTIVE' AND (cpl.expiresAt IS NULL OR cpl.expiresAt > :now)")
+    boolean existsActiveNonExpiredLinkByUserIds(@Param("caregiverUserId") Long caregiverUserId, @Param("patientUserId") Long patientUserId, @Param("now") LocalDateTime now);
+
     // Find all patients for a caregiver (active and non-expired links only)
     @Query("SELECT cpl FROM CaregiverPatientLink cpl WHERE cpl.caregiverUser = :caregiverUser AND cpl.status = 'ACTIVE' AND (cpl.expiresAt IS NULL OR cpl.expiresAt > :now)")
     List<CaregiverPatientLink> findActivePatientsByCaregiver(@Param("caregiverUser") User caregiverUser, @Param("now") LocalDateTime now);
