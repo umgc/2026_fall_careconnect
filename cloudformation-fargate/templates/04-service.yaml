@@ -281,7 +281,13 @@ Resources:
                 Fn::ImportValue: !Sub careconnect-${Environment}-DatabaseUsername
             - Name: APP_FRONTEND_BASE_URL
               Value: !Ref FrontendBaseUrl
+            # Spring Boot relaxed binding for frontend.base-url (overrides baked application-dev.properties).
+            - Name: FRONTEND_BASE_URL
+              Value: !Ref FrontendBaseUrl
             - Name: CORS_ALLOWED_LIST
+              Value: !Ref CorsAllowedList
+            # Spring Boot relaxed binding for careconnect.cors_allowed (overrides baked application-dev.properties).
+            - Name: CARECONNECT_CORS_ALLOWED
               Value: !Ref CorsAllowedList
             - Name: SPRING_FLYWAY_ENABLED
               Value: 'false'

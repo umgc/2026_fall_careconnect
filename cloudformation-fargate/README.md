@@ -27,11 +27,13 @@ Fargate deployment.
 - [Example deploy commands](#example-deploy-commands)
 - [macOS / Linux translation](#macos--linux-translation)
 - [Parallel environment pattern](#parallel-environment-pattern)
-- [Student Walkthrough: `cfdemo`](#student-walkthrough-cfdemo)
-- [Teardown: `cfdemo`](#teardown-cfdemo)
+- [Student Walkthrough:](#student-walkthrough-cfdemo) `cfdemo`
+- [Teardown:](#teardown-cfdemo) `cfdemo`
 - [Important safety note](#important-safety-note)
 - [macOS / Linux teardown translation](#macos--linux-teardown-translation)
 - [Common Failure Modes](#common-failure-modes)
+
+
 
 ### Stack order
 
@@ -40,6 +42,8 @@ Fargate deployment.
 3. `03-platform.yaml`
 4. Build and push the backend image to ECR
 5. `04-service.yaml`
+
+
 
 ### One-Command Scripts
 
@@ -60,6 +64,8 @@ Teardown:
 .\cloudformation-fargate\cdestroy_cloudformation.ps1 -Environment cfdemo -Profile careconnect-sso
 ```
 
+
+
 #### macOS / Linux
 
 Deploy:
@@ -74,6 +80,8 @@ Teardown:
 ./cloudformation-fargate/cdestroy_cloudformation.sh --environment cfdemo --profile careconnect-sso
 ```
 
+
+
 #### Notes
 
 - Deploy scripts create or update the four stacks in order
@@ -81,6 +89,8 @@ Teardown:
 - Teardown scripts delete stacks in dependency order and empty the ECR repository before removing the platform stack
 - `cdeploy_cloudformation.ps1` and `cdeploy_cloudformation.sh` skip Maven tests by default; use `-RunTests` in PowerShell or `--run-tests` in bash if you want tests included
 - `cdestroy_cloudformation.ps1` and `cdestroy_cloudformation.sh` support skipping ECR cleanup with `-SkipEcrCleanup` or `--skip-ecr-cleanup`
+
+
 
 ### GitHub Actions Backend Deploy
 
@@ -98,6 +108,8 @@ That flow:
 1. builds the backend jar
 2. builds and pushes a uniquely tagged Docker image to ECR
 3. updates only the ECS service stack
+
+
 
 #### Current GitHub storage split
 
@@ -147,6 +159,8 @@ What you are creating:
 - one IAM identity provider for GitHub Actions
 - one IAM role that GitHub Actions is allowed to assume
 
+
+
 ##### Create the GitHub OIDC identity provider
 
 1. Sign in to the AWS Console
@@ -154,57 +168,63 @@ What you are creating:
 3. Open `IAM`
 4. In the left sidebar, click `Identity providers`
 5. Check whether this provider already exists:
-   - `https://token.actions.githubusercontent.com`
+  - `https://token.actions.githubusercontent.com`
 6. If it already exists, keep it and move to the IAM role steps
 7. If it does not exist, click `Add provider`
 8. For `Provider type`, choose:
-   - `OpenID Connect`
+  - `OpenID Connect`
 9. For `Provider URL`, enter:
-   - `https://token.actions.githubusercontent.com`
+  - `https://token.actions.githubusercontent.com`
 10. For `Audience`, enter:
-    - `sts.amazonaws.com`
+  - `sts.amazonaws.com`
 11. Click `Add provider`
+
+
 
 ##### Create the IAM role for GitHub Actions
 
 1. In IAM, click `Roles`
 2. Click `Create role`
 3. For `Trusted entity type`, choose:
-   - `Web identity`
+  - `Web identity`
 4. For `Identity provider`, choose:
-   - `token.actions.githubusercontent.com`
+  - `token.actions.githubusercontent.com`
 5. For `Audience`, choose:
-   - `sts.amazonaws.com`
+  - `sts.amazonaws.com`
 6. Continue to the permissions step
 7. Search for:
-   - `PowerUserAccess`
+  - `PowerUserAccess`
 8. Check `PowerUserAccess`
 9. Continue to the naming step
 10. For role name, enter:
-    - `careconnect-github-actions-deploy`
+  - `careconnect-github-actions-deploy`
 11. Click `Create role`
+
+
 
 ##### Finish the role configuration
 
 1. Open the new role:
-   - `careconnect-github-actions-deploy`
+  - `careconnect-github-actions-deploy`
 2. Open the `Trust relationships` tab
 3. Click `Edit trust policy`
 4. Replace the default trust policy with the GitHub OIDC trust policy from
-   [`GITHUB_ACTIONS_SETUP.md`](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)
+  `[GITHUB_ACTIONS_SETUP.md](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)`
 5. Replace:
-   - `<account-id>`
-   - branch names if needed
-   - repo owner if needed
+  - `<account-id>`
+  - branch names if needed
+  - repo owner if needed
 6. Click `Update policy`
 7. Back on the role page, click `Add permissions`
 8. Click `Create inline policy`
 9. Open the `JSON` tab
 10. Paste the `iam:PassRole` policy from
-    [`GITHUB_ACTIONS_SETUP.md`](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)
+  `[GITHUB_ACTIONS_SETUP.md](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)`
 11. Replace:
-    - `<account-id>`
+  - `<account-id>`
 12. Save the inline policy
+
+
 
 ##### What to copy into GitHub
 
@@ -217,11 +237,12 @@ You will use that value in GitHub as:
 - `AWS_GITHUB_ACTIONS_ROLE_ARN`
 
 The full setup guide is in
-[`GITHUB_ACTIONS_SETUP.md`](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md).
+`[GITHUB_ACTIONS_SETUP.md](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)`.
 
 ### What each stack owns
 
 1. `01-networking.yaml`
+
 - VPC
 - public subnets for ALB and ECS
 - private subnets for RDS
@@ -229,26 +250,31 @@ The full setup guide is in
 - internet gateway
 - ALB / ECS / RDS security groups
 
-2. `02-data.yaml`
+1. `02-data.yaml`
+
 - PostgreSQL RDS instance
 - DB subnet group
 - Secrets Manager secret for DB password
 - Secrets Manager secret for JWT secret
 
-3. `03-platform.yaml`
+1. `03-platform.yaml`
+
 - ECR repository
 - ECS cluster
 - ECS task execution role
 - ECS task role
 - CloudWatch log group for the backend container
 
-4. `04-service.yaml`
+1. `04-service.yaml`
+
 - Application Load Balancer
 - target group
 - listener
 - ECS task definition
 - ECS service
 - app environment variable and secret wiring
+
+
 
 ### Design choices
 
@@ -257,6 +283,8 @@ The full setup guide is in
 - RDS runs in private subnets
 - Database and application secrets are stored in Secrets Manager
 - ECS task execution role reads secrets and writes logs
+
+
 
 ### Required application contract
 
@@ -277,11 +305,13 @@ The ALB health check path is:
 
 - `/v1/api/test/health`
 
+
+
 ### Parameter files
 
-Parameter files live under [`parameters`](2026_spring_careconnect/cloudformation-fargate/parameters).
+Parameter files live under `[parameters](2026_spring_careconnect/cloudformation-fargate/parameters)`.
 Because JSON does not support inline comments, the detailed parameter guide is
-in [`parameters/README.md`](2026_spring_careconnect/cloudformation-fargate/parameters/README.md).
+in `[parameters/README.md](2026_spring_careconnect/cloudformation-fargate/parameters/README.md)`.
 
 For the data stack specifically:
 
@@ -290,9 +320,11 @@ For the data stack specifically:
   - `CARECONNECT_DATABASE_MASTER_PASSWORD`
   - `CARECONNECT_JWT_SECRET`
   - or the manual GitHub full-deploy workflow that maps repository secrets into
-    those variables
+  those variables
 - `BackendImageUri` in `*-service.json` is normally overridden by the deploy
-  scripts or GitHub Actions workflow
+scripts or GitHub Actions workflow
+
+
 
 ### Example deploy commands
 
@@ -478,6 +510,8 @@ macOS / Linux:
 flutter run --dart-define=BACKEND_URL=http://<alb-dns-name>
 ```
 
+
+
 ### macOS / Linux translation
 
 The step-by-step walkthrough below includes direct macOS/Linux command blocks
@@ -487,12 +521,12 @@ Quick shell translation reference:
 
 - PowerShell env vars like `$Env:AWS_PROFILE = "careconnect-sso"` become:
   - `export AWS_PROFILE="careconnect-sso"`
-- PowerShell line continuation uses `` ` `` while `bash` / `zsh` use `\`
+- PowerShell line continuation uses ``` while `bash` / `zsh` use `\`
 - Windows Maven wrapper `.\mvnw.cmd` becomes `./mvnw`
 - PowerShell `Invoke-RestMethod` becomes `curl`
 - PowerShell `Remove-Item Env:...` becomes `unset ...`
 - Windows paths like `C:\Dev\...` become either your own absolute Unix path or
-  relative paths from the repo root
+relative paths from the repo root
 
 Minimal `bash` example:
 
@@ -509,6 +543,8 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
+
+
 ### Parallel environment pattern
 
 To test changes without touching an existing environment:
@@ -516,11 +552,13 @@ To test changes without touching an existing environment:
 1. copy the `dev-*.json` parameter files
 2. create a new environment name like `cfdemo`
 3. use unique stack names such as:
+
 - `careconnect-networking-cfdemo`
 - `careconnect-data-cfdemo`
 - `careconnect-platform-cfdemo`
 - `careconnect-service-cfdemo`
-4. use a distinct ECR image tag such as `cfdemo`
+
+1. use a distinct ECR image tag such as `cfdemo`
 
 This keeps the old and new ALBs, ECS services, clusters, and databases
 separate.
@@ -546,18 +584,22 @@ aws sso login --profile careconnect-sso
 aws sts get-caller-identity --profile careconnect-sso
 ```
 
+
+
 #### 2. Update parameter placeholders
 
 Replace the placeholder values in:
 
-- [`parameters/cfdemo-data.json`](2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-data.json)
-- [`parameters/cfdemo-service.json`](SWEN670/2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-service.json)
+- `[parameters/cfdemo-data.json](2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-data.json)`
+- `[parameters/cfdemo-service.json](SWEN670/2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-service.json)`
 
 At minimum, set:
 
 - a real PostgreSQL password
 - a real JWT secret
 - the final ECR image URI after the image push step
+
+
 
 #### 3. Create the networking stack
 
@@ -593,6 +635,8 @@ aws cloudformation wait stack-create-complete \
   --stack-name careconnect-networking-cfdemo
 ```
 
+
+
 #### 4. Create the data stack
 
 ```powershell
@@ -626,6 +670,8 @@ aws cloudformation wait stack-create-complete \
   --region us-east-1 \
   --stack-name careconnect-data-cfdemo
 ```
+
+
 
 #### 5. Create the platform stack
 
@@ -661,6 +707,8 @@ aws cloudformation wait stack-create-complete \
   --stack-name careconnect-platform-cfdemo
 ```
 
+
+
 #### 6. Get the `cfdemo` ECR repository URI
 
 ```powershell
@@ -689,6 +737,8 @@ Expected shape:
 331738867837.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo
 ```
 
+
+
 #### 7. Build the backend jar
 
 ```powershell
@@ -702,6 +752,8 @@ macOS / Linux:
 cd /path/to/2026_spring_careconnect/backend/core
 ./mvnw clean package -Pdocker -DskipTests
 ```
+
+
 
 #### 8. Build and push the `cfdemo` Docker image
 
@@ -747,10 +799,12 @@ Expected image URI:
 331738867837.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo:cfdemo
 ```
 
+
+
 #### 9. Update `cfdemo-service.json`
 
 Set `BackendImageUri` in
-[`parameters/cfdemo-service.json`](2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-service.json)
+`[parameters/cfdemo-service.json](2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-service.json)`
 to the full URI printed in the previous step.
 
 #### 10. Create the service stack
@@ -787,6 +841,8 @@ aws cloudformation wait stack-create-complete \
   --stack-name careconnect-service-cfdemo
 ```
 
+
+
 #### 11. Get the ALB DNS name
 
 ```powershell
@@ -809,6 +865,8 @@ aws cloudformation describe-stacks \
   --output text
 ```
 
+
+
 #### 12. Test the backend health endpoint
 
 ```powershell
@@ -820,6 +878,8 @@ macOS / Linux:
 ```bash
 curl http://<alb-dns-name>/v1/api/test/health
 ```
+
+
 
 #### 13. Run the frontend against the `cfdemo` backend
 
@@ -861,6 +921,8 @@ aws cloudformation describe-stack-events \
   --output table
 ```
 
+
+
 ### Teardown: `cfdemo`
 
 Use this order so dependencies are removed cleanly. Wait until each `wait`
@@ -870,6 +932,8 @@ command completes before continuing:
 2. `careconnect-platform-cfdemo`
 3. `careconnect-data-cfdemo`
 4. `careconnect-networking-cfdemo`
+
+
 
 #### 1. Delete the service stack
 
@@ -885,6 +949,8 @@ aws cloudformation wait stack-delete-complete `
   --stack-name careconnect-service-cfdemo
 ```
 
+
+
 #### 2. Delete the platform stack
 
 ```powershell
@@ -898,6 +964,8 @@ aws cloudformation wait stack-delete-complete `
   --region us-east-1 `
   --stack-name careconnect-platform-cfdemo
 ```
+
+
 
 #### 2a. If the platform stack deletion fails on the ECR repository
 
@@ -976,6 +1044,8 @@ aws cloudformation wait stack-delete-complete `
   --stack-name careconnect-platform-cfdemo
 ```
 
+
+
 #### 3. Delete the data stack
 
 ```powershell
@@ -990,6 +1060,8 @@ aws cloudformation wait stack-delete-complete `
   --stack-name careconnect-data-cfdemo
 ```
 
+
+
 #### 4. Delete the networking stack
 
 ```powershell
@@ -1003,6 +1075,8 @@ aws cloudformation wait stack-delete-complete `
   --region us-east-1 `
   --stack-name careconnect-networking-cfdemo
 ```
+
+
 
 #### Optional cleanup: remove the `cfdemo` ECR images before deleting the platform stack
 
@@ -1030,6 +1104,8 @@ aws cloudformation list-stacks `
   --output table
 ```
 
+
+
 ### Important safety note
 
 These teardown commands only target the parallel `cfdemo` stacks. They do not
@@ -1046,6 +1122,8 @@ syntax and the use of `bash` / `zsh`-style commands.
 ```bash
 export AWS_PROFILE="careconnect-sso"
 ```
+
+
 
 #### 2. Delete the stacks in the same order
 
@@ -1090,6 +1168,8 @@ aws cloudformation wait stack-delete-complete \
   --region us-east-1 \
   --stack-name careconnect-networking-cfdemo
 ```
+
+
 
 #### 3. If the platform stack fails because the ECR repository is not empty
 
@@ -1148,6 +1228,8 @@ aws cloudformation wait stack-delete-complete \
   --stack-name careconnect-platform-cfdemo
 ```
 
+
+
 #### 4. Verify that no `cfdemo` stacks remain
 
 ```bash
@@ -1158,6 +1240,8 @@ aws cloudformation list-stacks \
   --query "StackSummaries[?contains(StackName, 'cfdemo')].[StackName,StackStatus]" \
   --output table
 ```
+
+
 
 ### Common Failure Modes
 
@@ -1206,6 +1290,8 @@ unset AWS_SESSION_TOKEN
 unset AWS_PROFILE
 ```
 
+
+
 #### 2. Missing `-Pdocker` during backend build
 
 Symptoms:
@@ -1217,7 +1303,7 @@ Symptoms:
 Cause:
 
 - the default Maven profile in this repo builds the Lambda-oriented artifact,
-  not the Spring Boot fat jar used by Docker
+not the Spring Boot fat jar used by Docker
 
 Fix:
 
@@ -1232,6 +1318,8 @@ macOS / Linux:
 cd /path/to/2026_spring_careconnect/backend/core
 ./mvnw clean package -Pdocker -DskipTests
 ```
+
+
 
 #### 3. ECR repository name collision
 
@@ -1250,6 +1338,8 @@ Fix:
 
 - use a unique repository name for the parallel environment, for example:
   - `careconnect-backend-cfdemo`
+
+
 
 #### 4. Stopped RDS instance
 
@@ -1270,6 +1360,8 @@ Fix:
 2. wait for status `Available`
 3. force a new ECS deployment or retry the service
 
+
+
 #### 5. ECS / RDS VPC mismatch
 
 Symptoms:
@@ -1280,13 +1372,15 @@ Symptoms:
 Cause:
 
 - ECS tasks and RDS were created in different VPCs, so SG references and routing
-  do not form a valid path
+do not form a valid path
 
 Fix:
 
 - ECS, ALB, and RDS must be in the same VPC
 - the RDS security group should allow `5432` from the ECS task security group
 - the ECS task security group must actually be attached to the running task
+
+
 
 #### 6. Missing `http://` in `BACKEND_URL`
 
