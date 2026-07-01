@@ -148,9 +148,12 @@ class UserFileTest {
 
     @Test
     void fileCategory_allValues() throws Exception {
-        assertThat(FileCategory.values()).hasSize(9);
+        // 9 base categories + ONBOARDING_FORM + HIRING_DOCUMENT (hiring-form digitization).
+        assertThat(FileCategory.values()).hasSize(11);
         assertThat(FileCategory.valueOf("PROFILE_IMAGE")).isEqualTo(FileCategory.PROFILE_IMAGE);
         assertThat(FileCategory.valueOf("OTHER_DOCUMENT")).isEqualTo(FileCategory.OTHER_DOCUMENT);
+        assertThat(FileCategory.valueOf("ONBOARDING_FORM")).isEqualTo(FileCategory.ONBOARDING_FORM);
+        assertThat(FileCategory.valueOf("HIRING_DOCUMENT")).isEqualTo(FileCategory.HIRING_DOCUMENT);
     }
 
     @Test

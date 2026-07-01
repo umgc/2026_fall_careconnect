@@ -6,6 +6,7 @@ import 'package:care_connect_app/providers/locale_provider.dart';
 import 'package:care_connect_app/providers/shortcut_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -51,13 +52,12 @@ Future<void> main() async {
 
       // Configure URL strategy for web to remove hash from URLs
       if (kIsWeb) {
-    // For hash-based routes:
-         setUrlStrategy(const HashUrlStrategy());
- 
-        }else{
-            // Or, for path-based routes (no #):
-          usePathUrlStrategy();
-        }
+        // For hash-based routes:
+        setUrlStrategy(const HashUrlStrategy());
+      } else {
+        // Or, for path-based routes (no #):
+        usePathUrlStrategy();
+      }
 
       // Create providers (don't initialize them yet)
       final userProvider = UserProvider();
@@ -293,7 +293,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
       theme: AppTheme.lightTheme.copyWith(
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: AppTheme.lightTheme.textTheme.apply(fontFamily: 'Roboto'),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),
@@ -313,7 +313,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
       darkTheme: AppTheme.darkTheme.copyWith(
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: AppTheme.darkTheme.textTheme.apply(fontFamily: 'Roboto'),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),
