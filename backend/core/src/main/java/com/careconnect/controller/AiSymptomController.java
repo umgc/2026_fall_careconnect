@@ -38,7 +38,7 @@ public class AiSymptomController {
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
 
-    @RequirePermission(Permission.CREATE_TASKS)
+    @RequirePermission(Permission.USE_AI_FEATURES)
 
 
     @PostMapping(
