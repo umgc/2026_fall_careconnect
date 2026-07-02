@@ -1,15 +1,18 @@
 package com.careconnect.config;
 
-import com.careconnect.service.security.SecurityAuditService;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+
+import com.careconnect.service.security.SecurityAuditService;
+
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 
 @Configuration
 @ConditionalOnProperty(name = "careconnect.ai.enabled", havingValue = "true", matchIfMissing = false)
@@ -42,6 +45,7 @@ public class AIChatServiceConfig {
     }
 
     @Bean
+    @ConditionalOnExpression("'${careconnect.ai.provider:openai}'.toLowerCase() != 'bedrock'")
     public ChatModel chatModel() {
         LOG.info("Creating LangChain4j ChatModel bean for provider {}", provider);
         validateConfiguration();

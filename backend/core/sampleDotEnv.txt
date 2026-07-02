@@ -1,5 +1,9 @@
 ## Copy this file and create .env file
 
+# Host port for PostgreSQL Docker mapping (default 5432).
+# If your local 5432 is busy, set this to 5433 and update JDBC_URI below to match.
+POSTGRES_PORT=5432
+
 # PostgreSQL Development Database Configuration
 JDBC_URI=jdbc:postgresql://localhost:5432/careconnect
 DB_USER=postgres
