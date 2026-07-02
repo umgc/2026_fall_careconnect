@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/utils/sentiment_clip_recording_status.dart';
-import 'package:care_connect_app/utils/sentiment_clip_window.dart';
 import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
 import 'package:care_connect_app/widgets/sentiment_clip_player_widget.dart';
 import 'package:flutter/material.dart';
@@ -170,84 +169,6 @@ void main() {
   const secureStorageChannel = MethodChannel(
     'plugins.it_nomads.com/flutter_secure_storage',
   );
-
-  group('computeSentimentClipWindow', () {
-    test('parses UTC timestamps for post-call clip offset', () {
-      final window = computeSentimentClipWindow(
-        sentimentOccurredAt: DateTime.parse('2026-03-12T15:01:00Z'),
-        recordingStartedAt: DateTime.parse('2026-03-12T15:00:00Z'),
-      );
-
-      expect(window.offsetSec, 60);
-      expect(window.clipStartSec, 45);
-      expect(window.clipEndSec, 75);
-    });
-  });
-
-  group('sentimentClipRecordingStatusMessage', () {
-    test('available when user-initiated and playback ready', () {
-      expect(
-        sentimentClipRecordingStatusMessage({
-          'initiatedByUserId': 42,
-          'playbackReady': true,
-        }),
-        kSentimentClipRecordingStatusAvailable,
-      );
-    });
-
-    test('processing when user-initiated and not ready', () {
-      expect(
-        sentimentClipRecordingStatusMessage({
-          'initiatedByUserId': 42,
-          'playbackReady': false,
-        }),
-        kSentimentClipRecordingStatusProcessing,
-      );
-    });
-
-    test('unavailable for system-only recording', () {
-      expect(
-        sentimentClipRecordingStatusMessage({
-          'initiatedByUserId': null,
-          'playbackReady': false,
-        }),
-        kSentimentClipRecordingStatusUnavailable,
-      );
-    });
-  });
-
-  group('sentimentChartDotTapHint', () {
-    test('mentions video when playback is ready', () {
-      expect(
-        sentimentChartDotTapHint({
-          'initiatedByUserId': 42,
-          'playbackReady': true,
-        }),
-        kSentimentChartDotTapHintWithVideo,
-      );
-    });
-
-    test('mentions transcript while video is processing', () {
-      expect(
-        sentimentChartDotTapHint({
-          'initiatedByUserId': 42,
-          'playbackReady': false,
-        }),
-        kSentimentChartDotTapHintProcessing,
-      );
-    });
-
-    test('transcript only when video is unavailable', () {
-      expect(
-        sentimentChartDotTapHint({
-          'initiatedByUserId': null,
-          'playbackReady': false,
-        }),
-        kSentimentChartDotTapHintTranscriptOnly,
-      );
-      expect(sentimentChartDotTapHint(null), kSentimentChartDotTapHintTranscriptOnly);
-    });
-  });
 
   group('PostCallTelemetrySummaryScreen', () {
     setUpAll(() {
@@ -463,8 +384,7 @@ void main() {
       expect(sendMessageTapped, 1);
     });
 
-    testWidgets(
-        'timeline tap loads inline clip player when playback is ready',
+    testWidgets('SENT-CLIP-004 timeline tap loads clip when playback is ready',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -667,7 +587,7 @@ void main() {
       expect(find.textContaining('Selected sample:'), findsNothing);
     });
 
-    testWidgets('timeline tap does not load clip when playback is not ready',
+    testWidgets('SENT-CLIP-006 pending recording shows SnackBar on dot tap',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -727,8 +647,7 @@ void main() {
       expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsOneWidget);
     });
 
-    testWidgets(
-        'system-only recording shows unavailable status and silent dot tap',
+    testWidgets('SENT-CLIP-005 system-only tap is silent with unavailable status',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;

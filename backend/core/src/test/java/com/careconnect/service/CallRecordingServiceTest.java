@@ -447,7 +447,7 @@ class CallRecordingServiceTest {
         }
 
         @Test
-        @DisplayName("returns presigned URL when concatenated video is available in S3")
+        @DisplayName("SENT-CLIP-002 returns presigned URL with recordingStartedAt when video is available")
         void generatePlaybackUrl_withRecording_returnsUrl() throws Exception {
             String stitchedKey = S3_PREFIX + "concatenated/composited-video/concat-pipe-001.mp4";
 

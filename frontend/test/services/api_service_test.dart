@@ -2056,7 +2056,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   // Group 34 — Call recording playback (§3.3 F3)
   // ──────────────────────────────────────────────────────────────────────────
-  group('getCallRecordingPlaybackData', () {
+  group('SENT-CLIP-003 getCallRecordingPlaybackData', () {
     test('returns full playback map on 200', () async {
       final body = {
         'callId': 'chime_call_123',

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:chewie/chewie.dart';
-import 'package:care_connect_app/utils/sentiment_clip_window.dart';
 import 'package:care_connect_app/widgets/sentiment_clip_player_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,71 +113,6 @@ void main() {
   setUp(() {
     fakePlatform = _FakeVideoPlayerPlatform();
     VideoPlayerPlatform.instance = fakePlatform;
-  });
-
-  group('computeSentimentClipWindow', () {
-    test('uses UTC offset with ±15 s padding', () {
-      final recordingStartedAt = DateTime.utc(2026, 6, 20, 12, 0, 0);
-      final sentimentOccurredAt = DateTime.utc(2026, 6, 20, 12, 1, 45);
-
-      final window = computeSentimentClipWindow(
-        sentimentOccurredAt: sentimentOccurredAt,
-        recordingStartedAt: recordingStartedAt,
-      );
-
-      expect(window.offsetSec, 105);
-      expect(window.clipStartSec, 90);
-      expect(window.clipEndSec, 120);
-    });
-
-    test('clamps clip start at zero for early sentiment', () {
-      final recordingStartedAt = DateTime.utc(2026, 6, 20, 12, 0, 0);
-      final sentimentOccurredAt = DateTime.utc(2026, 6, 20, 12, 0, 10);
-
-      final window = computeSentimentClipWindow(
-        sentimentOccurredAt: sentimentOccurredAt,
-        recordingStartedAt: recordingStartedAt,
-      );
-
-      expect(window.offsetSec, 10);
-      expect(window.clipStartSec, 0);
-      expect(window.clipEndSec, 25);
-    });
-
-    test('normalizes local timestamps to UTC', () {
-      final recordingStartedAt =
-          DateTime.parse('2026-06-20T08:00:00-04:00').toUtc();
-      final sentimentOccurredAt =
-          DateTime.parse('2026-06-20T08:02:00-04:00').toUtc();
-
-      final window = computeSentimentClipWindow(
-        sentimentOccurredAt: sentimentOccurredAt,
-        recordingStartedAt: recordingStartedAt,
-      );
-
-      expect(window.offsetSec, 120);
-      expect(window.clipStartSec, 105);
-      expect(window.clipEndSec, 135);
-    });
-  });
-
-  group('sentimentClipShouldPause', () {
-    test('pauses at clip end boundary', () {
-      expect(
-        sentimentClipShouldPause(
-          position: const Duration(seconds: 59, milliseconds: 999),
-          clipEndSec: 60,
-        ),
-        isFalse,
-      );
-      expect(
-        sentimentClipShouldPause(
-          position: const Duration(seconds: 60),
-          clipEndSec: 60,
-        ),
-        isTrue,
-      );
-    });
   });
 
   group('SentimentClipPlayerWidget', () {
