@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../../services/evv_service.dart';
 import '../../../../widgets/app_bar_helper.dart';
 import '../../../../widgets/common_drawer.dart';
-import '../../../../utils/file_handler_web.dart';
+import '../../../../utils/file_handler_web_stub.dart'
+    if (dart.library.html) '../../../../utils/file_handler_web.dart';
 
 /// Allows a caregiver to review their APPROVED EVV visit records and
 /// manually trigger submission to HHAExchange
