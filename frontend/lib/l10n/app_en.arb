@@ -150,7 +150,21 @@
   "voicecommand_tapMicToStart": "Tap mic to start",
   "voicecommand_wakeWordToStart": "Say wake word or tap mic",
   "voicecommand_listeningState": "Listening",
-  "voicecommand_processingState": "Processing"
+  "voicecommand_processingState": "Processing",
+  "voicecommand_phaseLabelReady": "Ready",
+  "voicecommand_phaseLabelStatus": "Status",
+
+  "voicecommand_phaseLabelRecognized": "Command recognized",
+  "voicecommand_phaseLabelCapture": "Captured",
+  "voicecommand_phaseLabelNotRecognized": "Command not recognized",
+  "voicecommand_phaseLabelError": "Error",
+  "voicecommand_speechCaptured": "Speech captured",
+  "voicecommand_successRecognized": "Recognized",
+  "voicecommand_successOpenHome": "opening home",
+  "voicecommand_successOpenCalendar": "opening calendar",
+  "voicecommand_successOpenTracker": "opening symptom tracker",
+  "voicecommand_successNotRecognized": "command not recognized",
+  "voicecommand_statusAreaHeard": "Heard"
 
 
 }

@@ -112,19 +112,19 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   String _phaseLabel() {
     switch (_voiceStatus) {
       case _VoiceStatus.idle:
-        return 'Status: Ready';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelReady ?? 'Ready'}';
       case _VoiceStatus.listening:
-        return 'Status: Listening';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_listeningState ?? 'Listening'}';
       case _VoiceStatus.processing:
-        return 'Status: Processing';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_processingState ?? 'Processing'}';
       case _VoiceStatus.success:
-        return 'Status: Command recognized';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelRecognized ?? 'Command recognized'}';
       case _VoiceStatus.captured:
-        return 'Status: Captured';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelCapture ?? 'Captured'}';
       case _VoiceStatus.fallback:
-        return 'Status: Command not recognized';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelNotRecognized ?? 'Command not recognized'}';
       case _VoiceStatus.error:
-        return 'Status: Error';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelError ?? 'Error'}';
     }
   }
 
@@ -230,7 +230,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _setStatus(
         status: _VoiceStatus.captured,
         recognizedText: words,
-        detail: 'Speech captured: "$words"',
+        detail: '${AppLocalizations.of(context)?.voicecommand_speechCaptured ?? 'Speech captured'}: "$words"',
       );
       await Future.delayed(_statusDisplayDelay);
       if (!mounted) return;
@@ -241,13 +241,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     String? successDetail;
     String? destination;
     if (cmd.contains('take me home')) {
-      successDetail = 'Recognized: "$words" — opening home';
+      successDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successOpenHome ?? 'opening home'}';
       destination = '/dashboard';
     } else if (cmd.contains('take me to calendar')) {
-      successDetail = 'Recognized: "$words" — opening calendar';
+      successDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successOpenCalendar ?? 'opening calendar'}';
       destination = '/calendar';
     } else if (cmd.contains('take me to my tracker')) {
-      successDetail = 'Recognized: "$words" — opening symptom tracker';
+      successDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successOpenTracker ?? 'opening symptom tracker'}';
       destination = '/symptoms';
     }
 
@@ -268,7 +268,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _setStatus(
       status: _VoiceStatus.fallback,
       recognizedText: words,
-      detail: 'Recognized: "$words" — command not recognized',
+      detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successOpenTracker ?? 'command not recognized'}',
     );
     _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.', updateStatus: false);
     await Future.delayed(_statusDisplayDelay);
@@ -372,7 +372,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             if (_recognizedText.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                'Heard: "$_recognizedText"',
+                '${AppLocalizations.of(context)?.voicecommand_statusAreaHeard ?? 'Heard'}: "$_recognizedText"',
                 key: const Key('voice_status_heard'),
                 style: const TextStyle(fontSize: 15),
               ),

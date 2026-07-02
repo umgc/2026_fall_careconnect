@@ -10,7 +10,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "ar": [
@@ -24,7 +37,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "bn": [
@@ -38,7 +64,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "fa": [
@@ -52,7 +91,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "fr": [
@@ -66,7 +118,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "hi": [
@@ -80,7 +145,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "ja": [
@@ -94,7 +172,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "ne": [
@@ -108,7 +199,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "pt": [
@@ -122,7 +226,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "ru": [
@@ -136,7 +253,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "ur": [
@@ -150,7 +280,20 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ],
 
   "zh": [
@@ -164,6 +307,19 @@
     "voicecommand_tapMicToStart",
     "voicecommand_wakeWordToStart",
     "voicecommand_listeningState",
-    "voicecommand_processingState"
+    "voicecommand_processingState",
+    "voicecommand_phaseLabelReady",
+    "voicecommand_phaseLabelStatus",
+    "voicecommand_phaseLabelRecognized",
+    "voicecommand_phaseLabelCapture",
+    "voicecommand_phaseLabelNotRecognized",
+    "voicecommand_phaseLabelError",
+    "voicecommand_speechCaptured",
+    "voicecommand_successRecognized",
+    "voicecommand_successOpenHome",
+    "voicecommand_successOpenCalendar",
+    "voicecommand_successOpenTracker",
+    "voicecommand_successNotRecognized",
+    "voicecommand_statusAreaHeard"
   ]
 }

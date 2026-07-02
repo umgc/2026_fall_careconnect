@@ -144,11 +144,25 @@
   "voicecommand_commandNotRecognized": "Comando no reconocido; inténtelo de nuevo.",
   "voicecommand_voiceTimedOut": "La escucha ha expirado.",
   "voicecommand_noSpeechDetected": "No se detectó ninguna voz.",
-  "voicecommand_voiceCommandTitle": "Comandos de voz",
+  "voicecommand_voiceCommandTitle": "Comandos de Voz",
   "voicecommand_tapMicToStart": "Toca el micrófono para comenzar",
   "voicecommand_wakeWordToStart": "Toca el micrófono para comenzar",
   "voicecommand_listeningState": "Escuchando",
-  "voicecommand_processingState": "Proceso"
+  "voicecommand_processingState": "Procesando",
+  "voicecommand_phaseLabelReady": "Listo",
+  "voicecommand_phaseLabelStatus": "Estado",
+
+  "voicecommand_phaseLabelRecognized": "Comando reconocido",
+  "voicecommand_phaseLabelCapture": "Capturado",
+  "voicecommand_phaseLabelNotRecognized": "Comando no reconocido",
+  "voicecommand_phaseLabelError": "Error",
+  "voicecommand_speechCaptured": "Discurso capturado",
+  "voicecommand_successRecognized": "Reconocido",
+  "voicecommand_successOpenHome": "abriendo la página de inicio",
+  "voicecommand_successOpenCalendar": "abriendo el calendario",
+  "voicecommand_successOpenTracker": "abrir el rastreador de síntomas",
+  "voicecommand_successNotRecognized": "comando no reconocido",
+  "voicecommand_statusAreaHeard": "Escuchó"
  
 
 
