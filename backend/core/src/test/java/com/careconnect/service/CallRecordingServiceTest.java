@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -31,8 +32,11 @@ import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CommonPrefix;
+import software.amazon.awssdk.services.s3.model.CORSRule;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.PutBucketCorsRequest;
+import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
@@ -95,12 +99,24 @@ class CallRecordingServiceTest {
         ReflectionTestUtils.setField(service, "recordingEnabled",      true);
         ReflectionTestUtils.setField(service, "presignedUrlTtlMinutes", 15);
         ReflectionTestUtils.setField(service, "rawCleanupEnabled",      true);
+        ReflectionTestUtils.setField(service, "corsAllowedOrigins",     "http://localhost:*");
 
         // Pre-wire STS so account-ID resolution succeeds in any test that
         // exercises the happy path. The service calls the no-arg overload.
         GetCallerIdentityResponse identity =
                 GetCallerIdentityResponse.builder().account(ACCOUNT_ID).build();
         when(stsClient.getCallerIdentity()).thenReturn(identity);
+
+        lenient()
+                .when(s3Client.putBucketPolicy(any(PutBucketPolicyRequest.class)))
+                .thenReturn(
+                        software.amazon.awssdk.services.s3.model.PutBucketPolicyResponse.builder()
+                                .build());
+        lenient()
+                .when(s3Client.putBucketCors(any(PutBucketCorsRequest.class)))
+                .thenReturn(
+                        software.amazon.awssdk.services.s3.model.PutBucketCorsResponse.builder()
+                                .build());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1066,6 +1082,32 @@ class CallRecordingServiceTest {
 
             assertThat(deleted).isEqualTo(3L);
             verify(s3Client, times(2)).deleteObjects(any(software.amazon.awssdk.services.s3.model.DeleteObjectsRequest.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("recording bucket CORS (F1 / M7)")
+    class RecordingBucketCorsTests {
+
+        @Test
+        @DisplayName("resolveOrCreateRecordingBucket applies GET/HEAD CORS with range expose headers")
+        void resolveOrCreateRecordingBucket_appliesPlaybackCors() {
+            ReflectionTestUtils.setField(service, "defaultAwsRegion", Region.US_EAST_1);
+            ReflectionTestUtils.setField(service, "cachedRecordingBucket", null);
+
+            String bucket = ReflectionTestUtils.invokeMethod(service, "resolveOrCreateRecordingBucket");
+
+            assertThat(bucket).isEqualTo("careconnect-recordings-" + ACCOUNT_ID + "-us-east-1");
+
+            ArgumentCaptor<PutBucketCorsRequest> captor =
+                    ArgumentCaptor.forClass(PutBucketCorsRequest.class);
+            verify(s3Client).putBucketCors(captor.capture());
+
+            CORSRule rule = captor.getValue().corsConfiguration().corsRules().get(0);
+            assertThat(rule.allowedMethods()).containsExactlyInAnyOrder("GET", "HEAD");
+            assertThat(rule.exposeHeaders())
+                    .contains("Accept-Ranges", "Content-Range", "Content-Length", "ETag");
+            assertThat(rule.allowedOrigins()).contains("*");
         }
     }
 

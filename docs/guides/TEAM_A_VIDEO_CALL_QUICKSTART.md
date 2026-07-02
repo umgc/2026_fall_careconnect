@@ -101,7 +101,7 @@ Recording is OFF by default. To enable locally:
    iam:CreateServiceLinkedRole
      Resource: arn:aws:iam::*:role/aws-service-role/mediapipelines.chime.amazonaws.com/*
 
-   s3:CreateBucket, s3:PutBucketPolicy, s3:PutObject, s3:GetObject, s3:ListBucket, s3:DeleteObject
+   s3:CreateBucket, s3:PutBucketPolicy, s3:PutBucketCors, s3:PutObject, s3:GetObject, s3:ListBucket, s3:DeleteObject
      Resource: arn:aws:s3:::careconnect-recordings-*  (and :::careconnect-recordings-*/* for object actions)
 
    chime:CreateMediaCapturePipeline, chime:DeleteMediaCapturePipeline, chime:GetMediaCapturePipeline
@@ -110,6 +110,7 @@ Recording is OFF by default. To enable locally:
 3. Everything else is automatic:
    - The S3 bucket (careconnect-recordings-{accountId}-{region}) is created at startup if absent.
    - The Chime bucket policy is applied at startup on every run (idempotent).
+   - Recording bucket CORS (for §3.3 sentiment clip seek on web) is applied at startup if `s3:PutBucketCors` is allowed.
    - The IAM service-linked role AWSServiceRoleForAmazonChimeSDKMediaPipelines is created at
      startup if absent, provided iam:CreateServiceLinkedRole is in your policy.
 
@@ -117,6 +118,15 @@ Recording is OFF by default. To enable locally:
    (any team member, any machine — one-time per AWS account):
 
      aws iam create-service-linked-role --aws-service-name mediapipelines.chime.amazonaws.com
+
+   IF `s3:PutBucketCors` cannot be added to your dev user, apply CORS once manually (admin or bucket owner):
+
+     aws s3api put-bucket-cors --bucket careconnect-recordings-<accountId>-<region> --cors-configuration file://scripts/recording-bucket-cors.json
+
+   Example (us-east-1 account 946509368247):
+
+     cd backend/core
+     aws s3api put-bucket-cors --bucket careconnect-recordings-946509368247-us-east-1 --cors-configuration file://scripts/recording-bucket-cors.json
 
 4. To clean up test recordings after a session, tap "Delete Call History (Dev)" in the patient
    details screen. This wipes all S3 objects under the recordings/ prefix AND all DB records.

@@ -33,7 +33,7 @@ public class AIServiceFactory {
 
         switch (provider.toLowerCase()) {
             case "bedrock" ->
-                log.info("Using AWS Bedrock (Nova Lite via Amazon)");
+                log.info("Using AWS Bedrock (Nova Lite / Claude)");
             case "deepseek" ->
                 log.info("Using DeepSeek (OpenRouter)");
             default ->
