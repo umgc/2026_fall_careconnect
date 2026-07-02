@@ -7,6 +7,7 @@ import 'package:care_connect_app/providers/shortcut_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -293,7 +294,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
       theme: AppTheme.lightTheme.copyWith(
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: AppTheme.lightTheme.textTheme.apply(fontFamily: 'Roboto'),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),
@@ -313,7 +314,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
       darkTheme: AppTheme.darkTheme.copyWith(
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: AppTheme.darkTheme.textTheme.apply(fontFamily: 'Roboto'),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),
