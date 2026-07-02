@@ -2,7 +2,6 @@ package com.careconnect.controller;
 
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.User;
-import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
@@ -20,15 +19,13 @@ import java.time.LocalDate;
 public class USPSController {
 
     private final USPSDigestService service;
-    private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
 
-    public USPSController(USPSDigestService service, UserRepository userRepository, SecurityUtil securityUtil, AuthorizationService authorizationService) {
-        this.service = service;
-        this.userRepository = userRepository;
+    public USPSController(SecurityUtil securityUtil, AuthorizationService authorizationService, USPSDigestService uspsDigestService) {
         this.securityUtil = securityUtil;
         this.authorizationService = authorizationService;
+        this.service = uspsDigestService;
     }
 
     @GetMapping("/mail")
@@ -36,12 +33,11 @@ public class USPSController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
-        // RBAC: Only admins and caregivers can access USPS mail data
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
         if (jwt == null) {
             throw new UnauthorizedException("Missing or invalid authentication token");
         }
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
         var userId = jwt.getSubject();
         var digestOpt = date != null
                 ? service.digestForDate(userId, date)

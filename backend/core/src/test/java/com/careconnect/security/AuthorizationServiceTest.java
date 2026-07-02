@@ -3,12 +3,15 @@ package com.careconnect.security;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.security.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -333,7 +336,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isCaregiver()).thenReturn(true);
             when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
             when(mockUser.getId()).thenReturn(10L);
-            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any()))
+            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any(LocalDateTime.class)))
                 .thenReturn(true);
 
             assertDoesNotThrow(
@@ -348,7 +351,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isCaregiver()).thenReturn(true);
             when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
             when(mockUser.getId()).thenReturn(10L);
-            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any()))
+            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any(LocalDateTime.class)))
                 .thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
@@ -379,7 +382,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isFamilyMember()).thenReturn(true);
             when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
             when(mockUser.getId()).thenReturn(20L);
-            when(familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(eq(20L), eq(5L), any()))
+            when(familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(20L), eq(5L), any(LocalDateTime.class)))
                 .thenReturn(true);
 
             assertDoesNotThrow(
@@ -395,7 +398,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isFamilyMember()).thenReturn(true);
             when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
             when(mockUser.getId()).thenReturn(20L);
-            when(familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(eq(20L), eq(5L), any()))
+            when(familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(20L), eq(5L), any(LocalDateTime.class)))
                 .thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,

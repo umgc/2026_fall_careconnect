@@ -192,12 +192,16 @@ public class AuthorizationService {
     /**
      * Require user to be either Admin or Caregiver.
      * Throws UnauthorizedException otherwise.
-     * 
+     *
+     * <p><b>Usage guidance:</b> Use this method for endpoints that operate on system-level
+     * or role-scoped data where no specific patient ID is in scope (e.g., listing all
+     * caregivers, aggregate analytics, managing visit schedules, cache operations keyed
+     * by the caller's own JWT subject). If the endpoint accesses data for a specific
+     * patient identified by a patientId, use {@link #requirePatientAccess(User, Long)}
+     * instead — it enforces the caregiver-patient link and supports family-member access.
+     *
      * @param user The authenticated user
      * @throws UnauthorizedException if user is neither admin nor caregiver
-     * 
-     * @example
-     * authorizationService.requireAdminOrCaregiver(user);
      */
     public void requireAdminOrCaregiver(User user) throws UnauthorizedException {
         if (user == null) {
@@ -216,22 +220,28 @@ public class AuthorizationService {
     // ========== Patient Access Control Methods ==========
 
     /**
-     * Check if user can access a specific patient's data.
-     * 
-     * Rules:
-     * - Admins can access all patients
-     * - Patients can access only themselves
-     * - Caregivers can access a patient only if they hold VIEW_ASSIGNED_PATIENTS
-     *   permission AND have an active, non-expired caregiver-patient link
-     * - Family members can access a patient only if they hold VIEW_HEALTH_DATA
-     *   permission AND have an active, non-expired family-member link
+     * Enforce access to a specific patient's data. Always prefer this method over
+     * {@link #requireAdminOrCaregiver(User)} whenever a concrete patientId is available.
+     *
+     * <p><b>Usage guidance:</b> Call this on any endpoint whose data is scoped to a
+     * single patient (e.g., medications, USPS digests by patientEmail, symptoms, notes).
+     * Resolve the patient's database ID before calling — do not pass a raw request
+     * parameter without first looking up the {@code User} entity.
+     *
+     * <p><b>Access rules:</b>
+     * <ul>
+     *   <li>Admins — always allowed</li>
+     *   <li>Patients — allowed only for their own ID</li>
+     *   <li>Caregivers — must hold {@code VIEW_ASSIGNED_PATIENTS} permission AND have an
+     *       active, non-expired caregiver-patient link in the database</li>
+     *   <li>Family members — must hold {@code VIEW_HEALTH_DATA} permission AND have an
+     *       active, non-expired family-member link in the database</li>
+     * </ul>
      *
      * @param user The authenticated user
-     * @param patientId The ID of the patient being accessed
+     * @param patientId The database ID of the patient being accessed
      * @throws UnauthorizedException if user cannot access this patient
-     * 
-     * @example
-     * authorizationService.requirePatientAccess(user, patientId);
+     * @throws IllegalArgumentException if patientId is null
      */
     public void requirePatientAccess(User user, Long patientId) throws UnauthorizedException {
         if (user == null) {
@@ -280,7 +290,7 @@ public class AuthorizationService {
                     "User does not have permission to view patient data"
                 );
             }
-            boolean linked = familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(
+            boolean linked = familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(
                 user.getId(), patientId, LocalDateTime.now());
             if (!linked) {
                 throw new UnauthorizedException(
