@@ -247,13 +247,6 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       successDetail = 'Recognized: "$words" — opening calendar';
       destination = '/calendar';
     } else if (cmd.contains('take me to my tracker')) {
-<<<<<<< HEAD
-      if (mounted) {
-        Navigator.pushNamed(context, '/symptomTracker');
-      }
-    } else {
-      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.');
-=======
       successDetail = 'Recognized: "$words" — opening symptom tracker';
       destination = '/symptoms';
     }
@@ -270,7 +263,6 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       context.go(destination);
       _reset();
       return;
->>>>>>> b61115af499f7d8fbd59f2f14d33d56112ff567d
     }
 
     _setStatus(
@@ -278,7 +270,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       recognizedText: words,
       detail: 'Recognized: "$words" — command not recognized',
     );
-    _showError('Command not recognized — please try again.', updateStatus: false);
+    _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.', updateStatus: false);
     await Future.delayed(_statusDisplayDelay);
     _reset();
   }
@@ -299,12 +291,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (txt.trim().isNotEmpty) {
       _process(txt);
     } else {
-<<<<<<< HEAD
-      _showError(AppLocalizations.of(context)?.voicecommand_voiceTimedOut ?? 'Listening timed out.');
-      _reset();
-=======
-      _finishError('Listening timed out.');
->>>>>>> b61115af499f7d8fbd59f2f14d33d56112ff567d
+      _finishError(AppLocalizations.of(context)?.voicecommand_voiceTimedOut ?? 'Listening timed out.');
     }
   }
 
