@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-/// ±30 s window around a sentiment sample relative to recording start (UTC).
+/// ±15 s window around a sentiment sample relative to recording start (UTC).
 class SentimentClipWindow {
   const SentimentClipWindow({
     required this.offsetSec,
@@ -13,11 +13,14 @@ class SentimentClipWindow {
   final double clipEndSec;
 }
 
+/// Half-width of the sentiment clip window (total clip ≈ 2× this value).
+const double sentimentClipPaddingSec = 15;
+
 /// Clip bounds for Option A client seek on the full composited MP4.
 SentimentClipWindow computeSentimentClipWindow({
   required DateTime sentimentOccurredAt,
   required DateTime recordingStartedAt,
-  double paddingSec = 30,
+  double paddingSec = sentimentClipPaddingSec,
 }) {
   final offsetSec = sentimentOccurredAt
           .toUtc()

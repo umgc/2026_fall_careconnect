@@ -117,7 +117,7 @@ void main() {
   });
 
   group('computeSentimentClipWindow', () {
-    test('uses UTC offset with ±30 s padding', () {
+    test('uses UTC offset with ±15 s padding', () {
       final recordingStartedAt = DateTime.utc(2026, 6, 20, 12, 0, 0);
       final sentimentOccurredAt = DateTime.utc(2026, 6, 20, 12, 1, 45);
 
@@ -127,8 +127,8 @@ void main() {
       );
 
       expect(window.offsetSec, 105);
-      expect(window.clipStartSec, 75);
-      expect(window.clipEndSec, 135);
+      expect(window.clipStartSec, 90);
+      expect(window.clipEndSec, 120);
     });
 
     test('clamps clip start at zero for early sentiment', () {
@@ -142,7 +142,7 @@ void main() {
 
       expect(window.offsetSec, 10);
       expect(window.clipStartSec, 0);
-      expect(window.clipEndSec, 40);
+      expect(window.clipEndSec, 25);
     });
 
     test('normalizes local timestamps to UTC', () {
@@ -157,8 +157,8 @@ void main() {
       );
 
       expect(window.offsetSec, 120);
-      expect(window.clipStartSec, 90);
-      expect(window.clipEndSec, 150);
+      expect(window.clipStartSec, 105);
+      expect(window.clipEndSec, 135);
     });
   });
 
@@ -252,6 +252,39 @@ void main() {
       await tester.pump();
 
       expect(fakePlatform.calls, isNot(contains('pause')));
+    });
+
+    testWidgets('seeks on clip window change without re-fetching URL', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          const SentimentClipPlayerWidget(
+            playbackUrl: 'https://example.com/recording.mp4',
+            clipStartSec: 10,
+            clipEndSec: 25,
+          ),
+        ),
+      );
+
+      await _pumpPlayerReady(tester);
+      fakePlatform.calls.clear();
+
+      await tester.pumpWidget(
+        _wrap(
+          const SentimentClipPlayerWidget(
+            playbackUrl: 'https://example.com/recording.mp4',
+            clipStartSec: 42,
+            clipEndSec: 57,
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(fakePlatform.calls, isNot(contains('create')));
+      expect(fakePlatform.calls, contains('seekTo:42'));
     });
 
     testWidgets('shows error when playback URL is empty', (tester) async {

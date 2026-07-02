@@ -7,6 +7,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../config/theme/sentiment_colors.dart';
 import '../services/api_service.dart';
+import '../utils/sentiment_clip_recording_status.dart';
+import '../utils/sentiment_clip_window.dart';
+import 'sentiment_clip_player_widget.dart';
 
 class PostCallTelemetrySummaryScreen extends StatefulWidget {
   final String callId;
@@ -46,12 +49,18 @@ class _PostCallTelemetrySummaryScreenState
   List<Map<String, dynamic>> _transcriptSegments = const [];
   Map<String, dynamic>? _recording;
   bool _loadingPlaybackUrl = false;
+  bool _loadingClip = false;
+  String? _clipPlaybackUrl;
+  double? _clipStartSec;
+  double? _clipEndSec;
+  DateTime? _clipRecordingStartedAtUtc;
   _TimelineChannel _selectedChannel = _TimelineChannel.all;
   DateTime? _selectedSentimentAt;
   double? _selectedSentimentMinute;
   double? _selectedSentimentScore;
   bool _transcriptExpanded = false;
   final GlobalKey _transcriptCardKey = GlobalKey();
+  final GlobalKey _clipPanelKey = GlobalKey();
   final Map<int, GlobalKey> _transcriptRowKeys = <int, GlobalKey>{};
   final ScrollController _timelineScrollController = ScrollController();
   _CallTimelineWindow _timelineWindow = _CallTimelineWindow.fullCall;
@@ -96,6 +105,124 @@ class _PostCallTelemetrySummaryScreenState
       _dismissTimer!.cancel();
       setState(() => _dismissSecondsLeft = 0);
     }
+  }
+
+  Future<void> _loadClipForSelectedSentiment() async {
+    final rec = _recording;
+    final selectedAt = _selectedSentimentAt;
+    if (rec == null ||
+        selectedAt == null ||
+        !shouldLoadSentimentClipOnDotTap(rec)) {
+      return;
+    }
+
+    if (_clipPlaybackUrl != null && _clipRecordingStartedAtUtc != null) {
+      _updateClipWindowForSelection();
+      return;
+    }
+
+    setState(() {
+      _loadingClip = true;
+      _clipPlaybackUrl = null;
+      _clipStartSec = null;
+      _clipEndSec = null;
+      _clipRecordingStartedAtUtc = null;
+    });
+    _scrollClipPanelIntoView();
+
+    final data = await ApiService.getCallRecordingPlaybackData(widget.callId);
+    if (!mounted) {
+      return;
+    }
+
+    if (data == null) {
+      setState(() => _loadingClip = false);
+      return;
+    }
+
+    final playbackUrl = data['playbackUrl']?.toString().trim();
+    final recordingStartedAtRaw = data['recordingStartedAt']?.toString();
+    if (playbackUrl == null ||
+        playbackUrl.isEmpty ||
+        recordingStartedAtRaw == null ||
+        recordingStartedAtRaw.isEmpty) {
+      setState(() => _loadingClip = false);
+      return;
+    }
+
+    final recordingStartedAt = DateTime.parse(recordingStartedAtRaw).toUtc();
+    final clipWindow = computeSentimentClipWindow(
+      sentimentOccurredAt: selectedAt.toUtc(),
+      recordingStartedAt: recordingStartedAt,
+    );
+
+    setState(() {
+      _clipPlaybackUrl = playbackUrl;
+      _clipRecordingStartedAtUtc = recordingStartedAt;
+      _clipStartSec = clipWindow.clipStartSec;
+      _clipEndSec = clipWindow.clipEndSec;
+      _loadingClip = false;
+    });
+    _scrollClipPanelIntoView();
+  }
+
+  void _updateClipWindowForSelection() {
+    final selectedAt = _selectedSentimentAt;
+    final recordingStartedAt = _clipRecordingStartedAtUtc;
+    if (selectedAt == null || recordingStartedAt == null) {
+      return;
+    }
+
+    final clipWindow = computeSentimentClipWindow(
+      sentimentOccurredAt: selectedAt.toUtc(),
+      recordingStartedAt: recordingStartedAt,
+    );
+
+    setState(() {
+      _clipStartSec = clipWindow.clipStartSec;
+      _clipEndSec = clipWindow.clipEndSec;
+    });
+    _scrollClipPanelIntoView();
+  }
+
+  void _scrollClipPanelIntoView() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final clipCtx = _clipPanelKey.currentContext;
+      if (clipCtx == null || !mounted) {
+        return;
+      }
+      unawaited(
+        Scrollable.ensureVisible(
+          clipCtx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          alignment: 0.5,
+        ),
+      );
+    });
+  }
+
+  void _showRecordingProcessingSnackBar() {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(kSentimentClipRecordingProcessingSnackBar),
+      ),
+    );
+  }
+
+  void _dismissClipPanel() {
+    setState(_clearClipPlayback);
+  }
+
+  void _clearClipPlayback() {
+    _clipPlaybackUrl = null;
+    _clipStartSec = null;
+    _clipEndSec = null;
+    _clipRecordingStartedAtUtc = null;
+    _loadingClip = false;
   }
 
   Future<void> _loadPlaybackUrl() async {
@@ -145,6 +272,7 @@ class _PostCallTelemetrySummaryScreenState
       _selectedSentimentAt = null;
       _selectedSentimentMinute = null;
       _selectedSentimentScore = null;
+      _clearClipPlayback();
       _customTimelineRange = null;
       _loading = false;
     });
@@ -620,8 +748,22 @@ class _PostCallTelemetrySummaryScreenState
       _selectedSentimentScore = nearest.score;
     });
 
+    final rec = _recording;
+    final loadClip = shouldLoadSentimentClipOnDotTap(rec);
+
+    if (loadClip) {
+      unawaited(_loadClipForSelectedSentiment());
+    } else {
+      if (_clipPlaybackUrl != null || _loadingClip) {
+        setState(_clearClipPlayback);
+      }
+      if (shouldShowSentimentClipProcessingSnackBar(rec)) {
+        _showRecordingProcessingSnackBar();
+      }
+    }
+
     final transcriptCtx = _transcriptCardKey.currentContext;
-    if (transcriptCtx != null) {
+    if (!loadClip && transcriptCtx != null) {
       unawaited(
         Scrollable.ensureVisible(
           transcriptCtx,
@@ -796,6 +938,16 @@ class _PostCallTelemetrySummaryScreenState
                       'Sentiment Trend',
                       style: theme.textTheme.titleMedium,
                     ),
+                    if (sentimentClipRecordingStatusMessage(_recording) !=
+                        null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        sentimentClipRecordingStatusMessage(_recording)!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     _buildTimelineCard(isDark),
                     const SizedBox(height: 12),
@@ -1072,12 +1224,18 @@ class _PostCallTelemetrySummaryScreenState
                     return ChoiceChip(
                       label: Text(ch.label),
                       selected: _selectedChannel == ch,
-                      onSelected: (_) => setState(() {
-                        _selectedChannel = ch;
-                        _selectedSentimentAt = null;
-                        _selectedSentimentMinute = null;
-                        _selectedSentimentScore = null;
-                      }),
+                      onSelected: (_) {
+                        if (_selectedChannel == ch) {
+                          return;
+                        }
+                        setState(() {
+                          _selectedChannel = ch;
+                          _selectedSentimentAt = null;
+                          _selectedSentimentMinute = null;
+                          _selectedSentimentScore = null;
+                          _clearClipPlayback();
+                        });
+                      },
                     );
                   }).toList(),
                 ),
@@ -1175,6 +1333,7 @@ class _PostCallTelemetrySummaryScreenState
                       child: SizedBox(
                         width: contentWidth,
                         child: GestureDetector(
+                          key: const Key('sentiment_timeline_canvas'),
                           behavior: HitTestBehavior.opaque,
                           onTapDown: (details) => _handleTimelineTap(
                             localPosition: details.localPosition,
@@ -1203,6 +1362,48 @@ class _PostCallTelemetrySummaryScreenState
                   channelColors: channelColors,
                   isDark: isDark,
                 ),
+                if (_loadingClip ||
+                    (_clipPlaybackUrl != null &&
+                        _clipStartSec != null &&
+                        _clipEndSec != null))
+                  KeyedSubtree(
+                    key: _clipPanelKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_loadingClip) ...[
+                          const SizedBox(height: 12),
+                          const AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Text(
+                                'Sentiment clip',
+                                style: theme.textTheme.titleSmall,
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                key: const Key('dismiss_sentiment_clip'),
+                                onPressed: _dismissClipPanel,
+                                tooltip: 'Dismiss clip',
+                                icon: const Icon(Icons.close),
+                              ),
+                            ],
+                          ),
+                          SentimentClipPlayerWidget(
+                            key: ValueKey(_clipPlaybackUrl!),
+                            playbackUrl: _clipPlaybackUrl!,
+                            clipStartSec: _clipStartSec!,
+                            clipEndSec: _clipEndSec!,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
               ],
             );
           },

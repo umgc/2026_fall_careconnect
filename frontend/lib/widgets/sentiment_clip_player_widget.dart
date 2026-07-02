@@ -7,7 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../utils/sentiment_clip_window.dart';
 
-/// Inline 16:9 player for a ±30 s sentiment clip on the full composited MP4.
+/// Inline 16:9 player for a ±15 s sentiment clip on the full composited MP4.
 class SentimentClipPlayerWidget extends StatefulWidget {
   const SentimentClipPlayerWidget({
     super.key,
@@ -47,13 +47,16 @@ class _SentimentClipPlayerWidgetState extends State<SentimentClipPlayerWidget> {
   @override
   void didUpdateWidget(covariant SentimentClipPlayerWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.playbackUrl != widget.playbackUrl ||
-        oldWidget.clipStartSec != widget.clipStartSec ||
-        oldWidget.clipEndSec != widget.clipEndSec) {
+    if (oldWidget.playbackUrl != widget.playbackUrl) {
       _disposeControllers();
       _initializing = true;
       _error = null;
       _initPlayer();
+      return;
+    }
+    if (oldWidget.clipStartSec != widget.clipStartSec ||
+        oldWidget.clipEndSec != widget.clipEndSec) {
+      unawaited(_seekToClipStart());
     }
   }
 
@@ -78,7 +81,7 @@ class _SentimentClipPlayerWidgetState extends State<SentimentClipPlayerWidget> {
         return;
       }
 
-      await controller.seekTo(sentimentClipSeekPosition(widget.clipStartSec));
+      await _seekToClipStart();
       if (!mounted) {
         return;
       }
@@ -98,6 +101,18 @@ class _SentimentClipPlayerWidgetState extends State<SentimentClipPlayerWidget> {
     } catch (e) {
       _setError(e.toString());
     }
+  }
+
+  Future<void> _seekToClipStart() async {
+    final controller = _videoController;
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+    await controller.seekTo(sentimentClipSeekPosition(widget.clipStartSec));
+    if (!mounted) {
+      return;
+    }
+    await controller.play();
   }
 
   void _onPlaybackTick() {
