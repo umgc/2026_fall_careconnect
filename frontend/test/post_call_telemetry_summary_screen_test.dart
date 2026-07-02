@@ -216,6 +216,39 @@ void main() {
     });
   });
 
+  group('sentimentChartDotTapHint', () {
+    test('mentions video when playback is ready', () {
+      expect(
+        sentimentChartDotTapHint({
+          'initiatedByUserId': 42,
+          'playbackReady': true,
+        }),
+        kSentimentChartDotTapHintWithVideo,
+      );
+    });
+
+    test('mentions transcript while video is processing', () {
+      expect(
+        sentimentChartDotTapHint({
+          'initiatedByUserId': 42,
+          'playbackReady': false,
+        }),
+        kSentimentChartDotTapHintProcessing,
+      );
+    });
+
+    test('transcript only when video is unavailable', () {
+      expect(
+        sentimentChartDotTapHint({
+          'initiatedByUserId': null,
+          'playbackReady': false,
+        }),
+        kSentimentChartDotTapHintTranscriptOnly,
+      );
+      expect(sentimentChartDotTapHint(null), kSentimentChartDotTapHintTranscriptOnly);
+    });
+  });
+
   group('PostCallTelemetrySummaryScreen', () {
     setUpAll(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -500,6 +533,7 @@ void main() {
       expect(playbackFetchCount, 1);
       expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
       expect(find.text(kSentimentClipRecordingStatusAvailable), findsOneWidget);
+      expect(find.text(kSentimentChartDotTapHintWithVideo), findsOneWidget);
       expect(find.textContaining('Selected sample:'), findsOneWidget);
 
       await _tapTimelineNearSecondVoiceSample(tester);
@@ -509,7 +543,8 @@ void main() {
       expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
     });
 
-    testWidgets('dismiss button hides sentiment clip panel', (tester) async {
+    testWidgets('dismiss button hides sentiment clip panel and clears selection',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -566,12 +601,70 @@ void main() {
       await _pumpClipLoaded(tester);
 
       expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
+      expect(find.textContaining('Selected sample:'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('dismiss_sentiment_clip')));
       await tester.pump();
 
       expect(find.byType(SentimentClipPlayerWidget), findsNothing);
       expect(find.text('Sentiment clip'), findsNothing);
+      expect(find.textContaining('Selected sample:'), findsNothing);
+    });
+
+    testWidgets('selected sample dismiss clears dot without clip panel',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'PROCESSING',
+                'playbackReady': false,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-deselect-only',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.textContaining('Selected sample:'), findsOneWidget);
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+
+      await tester.tap(find.byKey(const Key('dismiss_sentiment_selection')));
+      await tester.pump();
+
+      expect(find.textContaining('Selected sample:'), findsNothing);
     });
 
     testWidgets('timeline tap does not load clip when playback is not ready',
@@ -625,6 +718,7 @@ void main() {
       await _pumpLoaded(tester);
 
       expect(find.text(kSentimentClipRecordingStatusProcessing), findsOneWidget);
+      expect(find.text(kSentimentChartDotTapHintProcessing), findsOneWidget);
 
       await _tapTimelineNearFirstVoiceSample(tester);
       await _pumpClipLoaded(tester);
@@ -683,6 +777,7 @@ void main() {
       await _pumpLoaded(tester);
 
       expect(find.text(kSentimentClipRecordingStatusUnavailable), findsOneWidget);
+      expect(find.text(kSentimentChartDotTapHintTranscriptOnly), findsOneWidget);
 
       await _tapTimelineNearFirstVoiceSample(tester);
       await _pumpClipLoaded(tester);

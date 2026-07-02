@@ -213,16 +213,27 @@ class _PostCallTelemetrySummaryScreenState
     );
   }
 
-  void _dismissClipPanel() {
-    setState(_clearClipPlayback);
-  }
-
   void _clearClipPlayback() {
     _clipPlaybackUrl = null;
     _clipStartSec = null;
     _clipEndSec = null;
     _clipRecordingStartedAtUtc = null;
     _loadingClip = false;
+  }
+
+  void _clearSentimentSelectionState() {
+    _selectedSentimentAt = null;
+    _selectedSentimentMinute = null;
+    _selectedSentimentScore = null;
+    _clearClipPlayback();
+  }
+
+  void _dismissSentimentSelection() {
+    setState(_clearSentimentSelectionState);
+  }
+
+  void _dismissClipPanel() {
+    _dismissSentimentSelection();
   }
 
   Future<void> _loadPlaybackUrl() async {
@@ -269,10 +280,7 @@ class _PostCallTelemetrySummaryScreenState
       _callSummary = callSummary;
       _transcriptSegments = transcriptSegments;
       _recording = recording;
-      _selectedSentimentAt = null;
-      _selectedSentimentMinute = null;
-      _selectedSentimentScore = null;
-      _clearClipPlayback();
+      _clearSentimentSelectionState();
       _customTimelineRange = null;
       _loading = false;
     });
@@ -948,6 +956,14 @@ class _PostCallTelemetrySummaryScreenState
                         ),
                       ),
                     ],
+                    const SizedBox(height: 6),
+                    Text(
+                      sentimentChartDotTapHint(_recording),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: isDark ? Colors.white54 : Colors.black54,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     _buildTimelineCard(isDark),
                     const SizedBox(height: 12),
@@ -1230,10 +1246,7 @@ class _PostCallTelemetrySummaryScreenState
                         }
                         setState(() {
                           _selectedChannel = ch;
-                          _selectedSentimentAt = null;
-                          _selectedSentimentMinute = null;
-                          _selectedSentimentScore = null;
-                          _clearClipPlayback();
+                          _clearSentimentSelectionState();
                         });
                       },
                     );
@@ -1300,9 +1313,27 @@ class _PostCallTelemetrySummaryScreenState
                 if (_selectedSentimentAt != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Selected sample: ${_formatAbsoluteTime(_selectedSentimentAt!)}',
-                      style: theme.textTheme.bodySmall,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Selected sample: ${_formatAbsoluteTime(_selectedSentimentAt!)}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                        IconButton(
+                          key: const Key('dismiss_sentiment_selection'),
+                          onPressed: _dismissSentimentSelection,
+                          tooltip: 'Clear selection',
+                          icon: const Icon(Icons.close, size: 18),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 if (!hasAnySamples)

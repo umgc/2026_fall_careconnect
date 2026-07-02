@@ -12,6 +12,15 @@ const String kSentimentClipRecordingStatusUnavailable =
 const String kSentimentClipRecordingProcessingSnackBar =
     'Video recording is still processing. Try again in a moment.';
 
+const String kSentimentChartDotTapHintWithVideo =
+    'Tap a dot to play that moment in the video and jump to the transcript.';
+
+const String kSentimentChartDotTapHintProcessing =
+    'Tap a dot to jump to that moment in the transcript. Video will be available once processing finishes.';
+
+const String kSentimentChartDotTapHintTranscriptOnly =
+    'Tap a dot to jump to that moment in the transcript.';
+
 bool isUserInitiatedCallRecording(Map<String, dynamic>? recording) {
   if (recording == null) {
     return false;
@@ -42,4 +51,14 @@ bool shouldShowSentimentClipProcessingSnackBar(
 ) {
   return isUserInitiatedCallRecording(recording) &&
       recording?['playbackReady'] != true;
+}
+
+String sentimentChartDotTapHint(Map<String, dynamic>? recording) {
+  if (shouldLoadSentimentClipOnDotTap(recording)) {
+    return kSentimentChartDotTapHintWithVideo;
+  }
+  if (shouldShowSentimentClipProcessingSnackBar(recording)) {
+    return kSentimentChartDotTapHintProcessing;
+  }
+  return kSentimentChartDotTapHintTranscriptOnly;
 }
