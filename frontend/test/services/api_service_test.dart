@@ -2054,7 +2054,61 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Group 34 — ApiConstants additional assertions
+  // Group 34 — Call recording playback (§3.3 F3)
+  // ──────────────────────────────────────────────────────────────────────────
+  group('getCallRecordingPlaybackData', () {
+    test('returns full playback map on 200', () async {
+      final body = {
+        'callId': 'chime_call_123',
+        'playbackUrl': 'https://s3.example.com/recording.mp4',
+        'recordingStartedAt': '2026-06-29T16:57:43',
+        'expiresInMinutes': 15,
+        'playbackReady': true,
+        'concatenationStatus': 'READY',
+        'recordingStatus': 'STOPPED',
+      };
+
+      final result = await _withSpec(
+        _FakeSpec(200, _okJson(body)),
+        () => ApiService.getCallRecordingPlaybackData('chime_call_123'),
+      );
+
+      expect(result, isNotNull);
+      expect(result!['playbackUrl'], 'https://s3.example.com/recording.mp4');
+      expect(result['recordingStartedAt'], '2026-06-29T16:57:43');
+      expect(result['expiresInMinutes'], 15);
+      expect(result['playbackReady'], true);
+      expect(result['concatenationStatus'], 'READY');
+    });
+
+    test('returns null on non-200', () async {
+      final result = await _withSpec(
+        const _FakeSpec(403, '{"error":"forbidden"}'),
+        () => ApiService.getCallRecordingPlaybackData('call-1'),
+      );
+
+      expect(result, isNull);
+    });
+  });
+
+  group('getCallRecordingPlaybackUrl', () {
+    test('returns only playbackUrl from full playback map', () async {
+      final body = {
+        'playbackUrl': 'https://s3.example.com/x.mp4',
+        'recordingStartedAt': '2026-06-29T16:57:43',
+      };
+
+      final result = await _withSpec(
+        _FakeSpec(200, _okJson(body)),
+        () => ApiService.getCallRecordingPlaybackUrl('call-1'),
+      );
+
+      expect(result, 'https://s3.example.com/x.mp4');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Group 35 — ApiConstants additional assertions
   // ──────────────────────────────────────────────────────────────────────────
   group('ApiConstants additional', () {
     test('patient and mood share the same endpoint', () {

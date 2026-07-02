@@ -2597,7 +2597,8 @@ class ApiService {
     return null;
   }
 
-  static Future<String?> getCallRecordingPlaybackUrl(String callId) async {
+  static Future<Map<String, dynamic>?> getCallRecordingPlaybackData(
+      String callId) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
       final response = await _httpClient
@@ -2608,10 +2609,17 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map) return decoded['playbackUrl'] as String?;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
       }
     } catch (_) {}
     return null;
+  }
+
+  static Future<String?> getCallRecordingPlaybackUrl(String callId) async {
+    final data = await getCallRecordingPlaybackData(callId);
+    final url = data?['playbackUrl'];
+    if (url is String) return url;
+    return url?.toString();
   }
 
   static Future<List<Map<String, dynamic>>> getMyCallTelemetry() async {
