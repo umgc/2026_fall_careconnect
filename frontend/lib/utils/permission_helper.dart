@@ -84,7 +84,7 @@ class PermissionHelper {
         };
 
       case 'PATIENT':
-        // Patient has 6 permissions
+        // Patient has 7 permissions (includes USE_AI_FEATURES for Ask AI on own records)
         return {
           'VIEW_TASKS',
           'COMPLETE_TASKS',
@@ -92,6 +92,7 @@ class PermissionHelper {
           'RECORD_HEALTH_DATA',
           'SEND_MESSAGES',
           'VIEW_MESSAGES',
+          'USE_AI_FEATURES',
         };
 
       case 'FAMILY_MEMBER':
