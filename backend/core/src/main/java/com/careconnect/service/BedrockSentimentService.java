@@ -510,6 +510,8 @@ Respond with ONLY a JSON object in this exact format, no other text:
               "overallLabel", combined.label()));
     }
 
+
+
     // Scrub direct PHI identifiers from the transcript before sending it
     // to Bedrock. See anonymizeIfAvailable for the policy details.
     final String sanitizedTranscript = anonymizeIfAvailable(transcriptInput);
@@ -518,6 +520,7 @@ Respond with ONLY a JSON object in this exact format, no other text:
 
     try {
       final String responseBody = invokeBedrockModel(prompt, null, null, SUMMARY_MAX_TOKENS);
+
       final Map<String, Object> parsed = parseSummaryResponse(responseBody);
       if (parsed.isEmpty()) {
         return localTranscriptSummary(
@@ -668,18 +671,22 @@ Respond with ONLY a JSON object in this exact format, no other text:
   // ================================================================
 
   /**
+
    * Invokes the configured Bedrock model (Nova or Claude family) for text or
    * image+text analysis with the default token budget. Delegates to the
    * 4-arg overload, which handles per-family payload dispatch via
    * {@link BedrockModelSupport}.
+
    */
   private String invokeBedrockModel(
       final String prompt,
       final String imageBase64,
       final String imageFormat)
       throws Exception {
+
     return invokeBedrockModel(prompt, imageBase64, imageFormat, DEFAULT_MAX_TOKENS);
   }
+
 
   /**
    * Invokes the configured Bedrock model with an explicit token budget.
@@ -1345,6 +1352,9 @@ Respond with ONLY a JSON object in this exact format, no other text:
       }
       return Map.of();
     }
+    @SuppressWarnings("unchecked")
+    final Map<String, Object> result = objectMapper.convertValue(node, Map.class);
+    return result == null ? Map.of() : result;
   }
 
   /**

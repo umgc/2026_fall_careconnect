@@ -29,22 +29,23 @@ class ConnectedDevice {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'platform': platform,
-    'name': name,
-    'connectedAt': connectedAt.toIso8601String(),
-    'permissions': permissions,
-    'isActive': isActive,
-  };
+        'id': id,
+        'platform': platform,
+        'name': name,
+        'connectedAt': connectedAt.toIso8601String(),
+        'permissions': permissions,
+        'isActive': isActive,
+      };
 
-  factory ConnectedDevice.fromJson(Map<String, dynamic> json) => ConnectedDevice(
-    id: json['id'],
-    platform: json['platform'],
-    name: json['name'],
-    connectedAt: DateTime.parse(json['connectedAt']),
-    permissions: List<String>.from(json['permissions']),
-    isActive: json['isActive'] ?? true,
-  );
+  factory ConnectedDevice.fromJson(Map<String, dynamic> json) =>
+      ConnectedDevice(
+        id: json['id'],
+        platform: json['platform'],
+        name: json['name'],
+        connectedAt: DateTime.parse(json['connectedAt']),
+        permissions: List<String>.from(json['permissions']),
+        isActive: json['isActive'] ?? true,
+      );
 }
 
 class HealthData {
@@ -53,6 +54,9 @@ class HealthData {
   final String unit;
   final DateTime date;
   final String source;
+  final bool isPlaceholder;
+  final String supportStatus;
+  final String? placeholderReason;
 
   HealthData({
     required this.type,
@@ -60,6 +64,27 @@ class HealthData {
     required this.unit,
     required this.date,
     required this.source,
+    this.isPlaceholder = false,
+    this.supportStatus = 'Persisted Mapping',
+    this.placeholderReason,
+  });
+}
+
+class SemesterMetricDefinition {
+  final String key;
+  final String type;
+  final String unit;
+  final bool mappedToPersistedEntity;
+  final bool availableFromCurrentSource;
+  final String note;
+
+  const SemesterMetricDefinition({
+    required this.key,
+    required this.type,
+    required this.unit,
+    required this.mappedToPersistedEntity,
+    required this.availableFromCurrentSource,
+    required this.note,
   });
 }
 
@@ -74,7 +99,178 @@ class _WearablesScreenState extends State<WearablesScreen> {
   List<ConnectedDevice> connectedDevices = [];
   Map<String, HealthData> latestHealthData = {};
   bool isLoadingData = false;
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
+  final FlutterSecureStorage _secureStorage =
+      const FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
+
+  static const Map<String, List<SemesterMetricDefinition>>
+      _semesterSourceMetricMatrix = {
+    'fitbit': [
+      SemesterMetricDefinition(
+        key: 'steps',
+        type: 'Steps',
+        unit: 'steps',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(STEPS).',
+      ),
+      SemesterMetricDefinition(
+        key: 'calories',
+        type: 'Activity (Calories)',
+        unit: 'cal',
+        mappedToPersistedEntity: false,
+        availableFromCurrentSource: true,
+        note: 'UI demo only; activity persistence is a future story.',
+      ),
+      SemesterMetricDefinition(
+        key: 'heart_rate',
+        type: 'Heart Rate',
+        unit: 'bpm',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: false,
+        note: 'Placeholder: Fitbit heart-rate sync not wired this semester.',
+      ),
+      SemesterMetricDefinition(
+        key: 'spo2',
+        type: 'SpO2',
+        unit: '%',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: false,
+        note: 'Placeholder: source/API mapping not wired this semester.',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_pressure_systolic',
+        type: 'Blood Pressure (Systolic)',
+        unit: 'mmHg',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: false,
+        note: 'Placeholder: source/API mapping not wired this semester.',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_pressure_diastolic',
+        type: 'Blood Pressure (Diastolic)',
+        unit: 'mmHg',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: false,
+        note: 'Placeholder: source/API mapping not wired this semester.',
+      ),
+    ],
+    'apple_health': [
+      SemesterMetricDefinition(
+        key: 'steps',
+        type: 'Steps',
+        unit: 'steps',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(STEPS).',
+      ),
+      SemesterMetricDefinition(
+        key: 'heart_rate',
+        type: 'Heart Rate',
+        unit: 'bpm',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(HEART_RATE).',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_pressure_systolic',
+        type: 'Blood Pressure (Systolic)',
+        unit: 'mmHg',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(BLOOD_PRESSURE_SYS).',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_pressure_diastolic',
+        type: 'Blood Pressure (Diastolic)',
+        unit: 'mmHg',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(BLOOD_PRESSURE_DIA).',
+      ),
+      SemesterMetricDefinition(
+        key: 'calories',
+        type: 'Activity (Calories)',
+        unit: 'cal',
+        mappedToPersistedEntity: false,
+        availableFromCurrentSource: true,
+        note: 'UI demo only; activity persistence is a future story.',
+      ),
+      SemesterMetricDefinition(
+        key: 'spo2',
+        type: 'SpO2',
+        unit: '%',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: false,
+        note: 'Placeholder: not collected from this source in app flow.',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_glucose',
+        type: 'Blood Glucose',
+        unit: 'mg/dL',
+        mappedToPersistedEntity: false,
+        availableFromCurrentSource: false,
+        note: 'Outside semester scope; shown as placeholder only.',
+      ),
+    ],
+    'google_fit': [
+      SemesterMetricDefinition(
+        key: 'steps',
+        type: 'Steps',
+        unit: 'steps',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(STEPS).',
+      ),
+      SemesterMetricDefinition(
+        key: 'heart_rate',
+        type: 'Heart Rate',
+        unit: 'bpm',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(HEART_RATE).',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_pressure_systolic',
+        type: 'Blood Pressure (Systolic)',
+        unit: 'mmHg',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(BLOOD_PRESSURE_SYS).',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_pressure_diastolic',
+        type: 'Blood Pressure (Diastolic)',
+        unit: 'mmHg',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: true,
+        note: 'Mapped to wearable_metric(BLOOD_PRESSURE_DIA).',
+      ),
+      SemesterMetricDefinition(
+        key: 'calories',
+        type: 'Activity (Calories)',
+        unit: 'cal',
+        mappedToPersistedEntity: false,
+        availableFromCurrentSource: true,
+        note: 'UI demo only; activity persistence is a future story.',
+      ),
+      SemesterMetricDefinition(
+        key: 'spo2',
+        type: 'SpO2',
+        unit: '%',
+        mappedToPersistedEntity: true,
+        availableFromCurrentSource: false,
+        note: 'Placeholder: not collected from this source in app flow.',
+      ),
+      SemesterMetricDefinition(
+        key: 'blood_glucose',
+        type: 'Blood Glucose',
+        unit: 'mg/dL',
+        mappedToPersistedEntity: false,
+        availableFromCurrentSource: false,
+        note: 'Outside semester scope; shown as placeholder only.',
+      ),
+    ],
+  };
 
   // Fitbit configuration
   static const String fitbitClientId = '23QG9C';
@@ -135,11 +331,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Future<void> _fetchFitbitData(DateTime startTime, DateTime endTime) async {
-    bool hasFitbitDevice = connectedDevices.any((device) => device.platform == 'fitbit');
+    bool hasFitbitDevice =
+        connectedDevices.any((device) => device.platform == 'fitbit');
     if (!hasFitbitDevice) return;
 
     try {
-      String? accessToken = await _secureStorage.read(key: 'fitbit_access_token');
+      String? accessToken =
+          await _secureStorage.read(key: 'fitbit_access_token');
       String? userID = await _secureStorage.read(key: 'fitbit_user_id');
 
       if (accessToken == null) {
@@ -162,26 +360,26 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
       // Fetch Calories
       await _fetchFitbitCalories(fitbitCredentials, today);
-
     } catch (e) {
       _setDefaultFitbitData();
     }
   }
 
-  Future<void> _fetchFitbitSteps(FitbitCredentials credentials, DateTime date) async {
+  Future<void> _fetchFitbitSteps(
+      FitbitCredentials credentials, DateTime date) async {
     try {
-      FitbitActivityTimeseriesDataManager stepsManager = FitbitActivityTimeseriesDataManager(
+      FitbitActivityTimeseriesDataManager stepsManager =
+          FitbitActivityTimeseriesDataManager(
         clientID: fitbitClientId,
         clientSecret: fitbitClientSecret,
       );
 
-      final stepsData = await stepsManager.fetch(
-          FitbitActivityTimeseriesAPIURL.dayWithResource(
-            date: date,
-            resource: Resource.steps,
-            fitbitCredentials: credentials,
-          )
-      );
+      final stepsData = await stepsManager
+          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
+        date: date,
+        resource: Resource.steps,
+        fitbitCredentials: credentials,
+      ));
 
       List<dynamic> dataList = stepsData;
       if (dataList.isNotEmpty) {
@@ -190,34 +388,35 @@ class _WearablesScreenState extends State<WearablesScreen> {
         DateTime dataDate = _extractFitbitDate(latestData);
 
         setState(() {
-          latestHealthData['steps'] = HealthData(
-            type: 'Steps',
-            value: finalValue,
-            unit: 'steps',
-            date: dataDate,
+          latestHealthData['steps'] = _healthDataFromDefinition(
+            key: 'steps',
             source: 'Fitbit',
+            value: finalValue,
+            date: dataDate,
           );
         });
       }
-        } catch (e) {
-      _setDefaultValue('steps', 'Steps', 'steps', 'Fitbit');
+    } catch (e) {
+      _setDefaultValue('steps', 'Fitbit',
+          reason: 'No Fitbit steps data available.');
     }
   }
 
-  Future<void> _fetchFitbitCalories(FitbitCredentials credentials, DateTime date) async {
+  Future<void> _fetchFitbitCalories(
+      FitbitCredentials credentials, DateTime date) async {
     try {
-      FitbitActivityTimeseriesDataManager caloriesManager = FitbitActivityTimeseriesDataManager(
+      FitbitActivityTimeseriesDataManager caloriesManager =
+          FitbitActivityTimeseriesDataManager(
         clientID: fitbitClientId,
         clientSecret: fitbitClientSecret,
       );
 
-      final caloriesData = await caloriesManager.fetch(
-          FitbitActivityTimeseriesAPIURL.dayWithResource(
-            date: date,
-            resource: Resource.calories,
-            fitbitCredentials: credentials,
-          )
-      );
+      final caloriesData = await caloriesManager
+          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
+        date: date,
+        resource: Resource.calories,
+        fitbitCredentials: credentials,
+      ));
 
       List<dynamic> dataList = caloriesData;
       if (dataList.isNotEmpty) {
@@ -226,33 +425,17 @@ class _WearablesScreenState extends State<WearablesScreen> {
         DateTime dataDate = _extractFitbitDate(latestData);
 
         setState(() {
-          latestHealthData['calories'] = HealthData(
-            type: 'Calories',
-            value: finalValue,
-            unit: 'cal',
-            date: dataDate,
+          latestHealthData['calories'] = _healthDataFromDefinition(
+            key: 'calories',
             source: 'Fitbit',
+            value: finalValue,
+            date: dataDate,
           );
         });
       }
-        } catch (e) {
-      _setDefaultValue('calories', 'Calories', 'cal', 'Fitbit');
-    }
-  }
-
-  Future<void> _fetchFitbitHeartRate(FitbitCredentials credentials, DateTime date) async {
-    try {
-      setState(() {
-        latestHealthData['heart_rate'] = HealthData(
-          type: 'Heart Rate',
-          value: 0,
-          unit: 'bpm',
-          date: DateTime.now(),
-          source: 'Fitbit',
-        );
-      });
     } catch (e) {
-      _setDefaultValue('heart_rate', 'Heart Rate', 'bpm', 'Fitbit');
+      _setDefaultValue('calories', 'Fitbit',
+          reason: 'Activity is demo-only this semester.');
     }
   }
 
@@ -289,26 +472,92 @@ class _WearablesScreenState extends State<WearablesScreen> {
     return DateTime.now();
   }
 
-  void _setDefaultValue(String key, String type, String unit, String source) {
+  String _sourceLabelForPlatform(String platform) {
+    switch (platform) {
+      case 'fitbit':
+        return 'Fitbit';
+      case 'apple_health':
+        return 'Apple Health';
+      case 'google_fit':
+      default:
+        return 'Health Connect';
+    }
+  }
+
+  SemesterMetricDefinition? _metricDefinitionFor(String source, String key) {
+    final platform = source == 'Apple Health'
+        ? 'apple_health'
+        : source == 'Fitbit'
+            ? 'fitbit'
+            : 'google_fit';
+    final sourceMetrics = _semesterSourceMetricMatrix[platform] ?? const [];
+    for (final metric in sourceMetrics) {
+      if (metric.key == key) {
+        return metric;
+      }
+    }
+    return null;
+  }
+
+  String _supportStatusFor(
+      SemesterMetricDefinition? definition, bool isPlaceholder) {
+    if (definition == null) {
+      return isPlaceholder ? 'Placeholder' : 'Persisted Mapping';
+    }
+    if (isPlaceholder || !definition.availableFromCurrentSource) {
+      return 'Placeholder';
+    }
+    return definition.mappedToPersistedEntity ? 'Persisted Mapping' : 'UI Only';
+  }
+
+  HealthData _healthDataFromDefinition({
+    required String key,
+    required String source,
+    required double value,
+    required DateTime date,
+    bool isPlaceholder = false,
+    String? placeholderReason,
+  }) {
+    final definition = _metricDefinitionFor(source, key);
+    return HealthData(
+      type: definition?.type ?? key,
+      value: value,
+      unit: definition?.unit ?? '',
+      date: date,
+      source: source,
+      isPlaceholder: isPlaceholder,
+      supportStatus: _supportStatusFor(definition, isPlaceholder),
+      placeholderReason:
+          placeholderReason ?? (isPlaceholder ? definition?.note : null),
+    );
+  }
+
+  void _setDefaultValue(String key, String source, {String? reason}) {
     setState(() {
-      latestHealthData[key] = HealthData(
-        type: type,
-        value: 0,
-        unit: unit,
-        date: DateTime.now(),
+      latestHealthData[key] = _healthDataFromDefinition(
+        key: key,
         source: source,
+        value: 0,
+        date: DateTime.now(),
+        isPlaceholder: true,
+        placeholderReason: reason,
       );
     });
   }
 
   void _setDefaultFitbitData() {
-    _setDefaultValue('steps', 'Steps', 'steps', 'Fitbit');
-    _setDefaultValue('calories', 'Calories', 'cal', 'Fitbit');
+    _setDefaultValue('steps', 'Fitbit',
+        reason: 'No Fitbit steps data available.');
+    _setDefaultValue('calories', 'Fitbit',
+        reason: 'Activity is demo-only this semester.');
+    _setDefaultValue('heart_rate', 'Fitbit',
+        reason: 'Fitbit heart-rate sync is a placeholder this semester.');
   }
 
-  Future<void> _fetchGoogleAppleHealthData(DateTime startTime, DateTime endTime) async {
+  Future<void> _fetchGoogleAppleHealthData(
+      DateTime startTime, DateTime endTime) async {
     bool hasHealthDevice = connectedDevices.any((device) =>
-    device.platform == 'google_fit' || device.platform == 'apple_health');
+        device.platform == 'google_fit' || device.platform == 'apple_health');
 
     if (!hasHealthDevice) return;
 
@@ -316,8 +565,10 @@ class _WearablesScreenState extends State<WearablesScreen> {
       Health health = Health();
       await health.configure();
 
-      String source = connectedDevices.any((device) => device.platform == 'apple_health')
-          ? 'Apple Health' : 'Health Connect';
+      String source =
+          connectedDevices.any((device) => device.platform == 'apple_health')
+              ? 'Apple Health'
+              : 'Health Connect';
 
       List<HealthDataType> types = [
         HealthDataType.STEPS,
@@ -337,14 +588,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
       // Process each type of health data
       await _processHealthDataByType(allHealthData, source);
-
     } catch (e) {
       print('⚠ Health data fetch failed: $e');
       _setDefaultHealthData();
     }
   }
 
-  Future<void> _processHealthDataByType(List<HealthDataPoint> allHealthData, String source) async {
+  Future<void> _processHealthDataByType(
+      List<HealthDataPoint> allHealthData, String source) async {
     // Group data by type
     Map<HealthDataType, List<HealthDataPoint>> groupedData = {};
     for (var point in allHealthData) {
@@ -360,12 +611,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
           .fold(0, (sum, point) => sum + (point.value as num).toInt());
 
       setState(() {
-        latestHealthData['steps'] = HealthData(
-          type: 'Steps',
-          value: totalSteps.toDouble(),
-          unit: 'steps',
-          date: DateTime.now(),
+        latestHealthData['steps'] = _healthDataFromDefinition(
+          key: 'steps',
           source: source,
+          value: totalSteps.toDouble(),
+          date: DateTime.now(),
         );
       });
     }
@@ -376,12 +626,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
           .fold(0.0, (sum, point) => sum + (point.value as num).toDouble());
 
       setState(() {
-        latestHealthData['calories'] = HealthData(
-          type: 'Calories',
-          value: totalCalories,
-          unit: 'cal',
-          date: DateTime.now(),
+        latestHealthData['calories'] = _healthDataFromDefinition(
+          key: 'calories',
           source: source,
+          value: totalCalories,
+          date: DateTime.now(),
         );
       });
     }
@@ -395,12 +644,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
         var latestHR = heartRateData.first;
 
         setState(() {
-          latestHealthData['heart_rate'] = HealthData(
-            type: 'Heart Rate',
-            value: (latestHR.value as num).toDouble(),
-            unit: 'bpm',
-            date: latestHR.dateFrom,
+          latestHealthData['heart_rate'] = _healthDataFromDefinition(
+            key: 'heart_rate',
             source: source,
+            value: (latestHR.value as num).toDouble(),
+            date: latestHR.dateFrom,
           );
         });
       }
@@ -414,12 +662,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
         var latestGlucose = glucoseData.first;
 
         setState(() {
-          latestHealthData['blood_glucose'] = HealthData(
-            type: 'Blood Glucose',
-            value: (latestGlucose.value as num).toDouble(),
-            unit: 'mg/dL',
-            date: latestGlucose.dateFrom,
+          latestHealthData['blood_glucose'] = _healthDataFromDefinition(
+            key: 'blood_glucose',
             source: source,
+            value: (latestGlucose.value as num).toDouble(),
+            date: latestGlucose.dateFrom,
+            isPlaceholder: true,
+            placeholderReason:
+                'Blood glucose is outside semester scope for persisted metrics.',
           );
         });
       }
@@ -433,12 +683,12 @@ class _WearablesScreenState extends State<WearablesScreen> {
         var latestDiastolic = diastolicData.first;
 
         setState(() {
-          latestHealthData['blood_pressure_diastolic'] = HealthData(
-            type: 'Blood Pressure (Diastolic)',
-            value: (latestDiastolic.value as num).toDouble(),
-            unit: 'mmHg',
-            date: latestDiastolic.dateFrom,
+          latestHealthData['blood_pressure_diastolic'] =
+              _healthDataFromDefinition(
+            key: 'blood_pressure_diastolic',
             source: source,
+            value: (latestDiastolic.value as num).toDouble(),
+            date: latestDiastolic.dateFrom,
           );
         });
       }
@@ -452,12 +702,12 @@ class _WearablesScreenState extends State<WearablesScreen> {
         var latestSystolic = systolicData.first;
 
         setState(() {
-          latestHealthData['blood_pressure_systolic'] = HealthData(
-            type: 'Blood Pressure (Systolic)',
-            value: (latestSystolic.value as num).toDouble(),
-            unit: 'mmHg',
-            date: latestSystolic.dateFrom,
+          latestHealthData['blood_pressure_systolic'] =
+              _healthDataFromDefinition(
+            key: 'blood_pressure_systolic',
             source: source,
+            value: (latestSystolic.value as num).toDouble(),
+            date: latestSystolic.dateFrom,
           );
         });
       }
@@ -470,20 +720,16 @@ class _WearablesScreenState extends State<WearablesScreen> {
   void _setDefaultHealthData([String? source]) {
     String defaultSource = source ??
         (connectedDevices.any((device) => device.platform == 'apple_health')
-            ? 'Apple Health' : 'Health Connect');
+            ? 'Apple Health'
+            : 'Health Connect');
 
-    List<Map<String, String>> defaultMetrics = [
-      {'key': 'steps', 'type': 'Steps', 'unit': 'steps'},
-      {'key': 'calories', 'type': 'Calories', 'unit': 'cal'},
-      {'key': 'heart_rate', 'type': 'Heart Rate', 'unit': 'bpm'},
-      {'key': 'blood_glucose', 'type': 'Blood Glucose', 'unit': 'mg/dL'},
-      {'key': 'blood_pressure_diastolic', 'type': 'Blood Pressure (Diastolic)', 'unit': 'mmHg'},
-      {'key': 'blood_pressure_systolic', 'type': 'Blood Pressure (Systolic)', 'unit': 'mmHg'},
-    ];
+    final platform =
+        defaultSource == 'Apple Health' ? 'apple_health' : 'google_fit';
+    final defaultMetrics = _semesterSourceMetricMatrix[platform] ?? const [];
 
-    for (var metric in defaultMetrics) {
-      if (!latestHealthData.containsKey(metric['key'])) {
-        _setDefaultValue(metric['key']!, metric['type']!, metric['unit']!, defaultSource);
+    for (final metric in defaultMetrics) {
+      if (!latestHealthData.containsKey(metric.key)) {
+        _setDefaultValue(metric.key, defaultSource, reason: metric.note);
       }
     }
   }
@@ -551,7 +797,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
               ElevatedButton(
                 onPressed: () => Navigator.of(context).pop(true),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Remove', style: TextStyle(color: Colors.white)),
+                child:
+                    const Text('Remove', style: TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -568,7 +815,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
         if (connectedDevices.isEmpty ||
             !connectedDevices.any((d) =>
-            d.platform == 'google_fit' ||
+                d.platform == 'google_fit' ||
                 d.platform == 'apple_health' ||
                 d.platform == 'fitbit')) {
           setState(() {
@@ -605,7 +852,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
   Future<void> _saveConnectedDevicesToStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final devicesJson = connectedDevices.map((device) => device.toJson()).toList();
+      final devicesJson =
+          connectedDevices.map((device) => device.toJson()).toList();
       await prefs.setString('connected_devices', jsonEncode(devicesJson));
       print('✓ Saved ${connectedDevices.length} connected devices');
     } catch (e) {
@@ -638,13 +886,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
       });
     }
 
-    return devices.map((device) =>
-        _buildSupportedDevice(
-          icon: device['icon'],
-          name: device['name'],
-          color: device['color'],
-        )
-    ).toList();
+    return devices
+        .map((device) => _buildSupportedDevice(
+              icon: device['icon'],
+              name: device['name'],
+              color: device['color'],
+            ))
+        .toList();
   }
 
   @override
@@ -691,9 +939,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
               color: Theme.of(context).primaryColor,
             ),
           ),
-
           const SizedBox(height: 32),
-
           Text(
             'No Wearables Connected',
             style: TextStyle(
@@ -702,17 +948,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
               color: Theme.of(context).primaryColor,
             ),
           ),
-
           const SizedBox(height: 16),
-
           const Text(
             'Connect wearable devices to track your patient\'s health data in real-time.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.4),
           ),
-
           const SizedBox(height: 40),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -740,9 +982,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 24),
-
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -757,7 +997,6 @@ class _WearablesScreenState extends State<WearablesScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-
                   Wrap(
                     spacing: 20,
                     children: supportedDeviceWidgets,
@@ -840,9 +1079,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
+            _buildSemesterScopeCard(),
+            const SizedBox(height: 20),
             if (latestHealthData.isNotEmpty) ...[
               const Text(
                 'Latest Health Data',
@@ -853,7 +1092,6 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-
               if (isLoadingData)
                 const Center(
                   child: Padding(
@@ -863,10 +1101,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 )
               else
                 _buildHealthDataCards(),
-
               const SizedBox(height: 20),
             ],
-
             const Text(
               'Your Devices',
               style: TextStyle(
@@ -876,8 +1112,98 @@ class _WearablesScreenState extends State<WearablesScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             ...connectedDevices.map((device) => _buildDeviceCard(device)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSemesterScopeCard() {
+    final connectedPlatforms = connectedDevices.map((d) => d.platform).toSet();
+    final visiblePlatforms = connectedPlatforms.isEmpty
+        ? {
+            'fitbit',
+            if (!kIsWeb && Platform.isIOS) 'apple_health',
+            if (!kIsWeb && Platform.isAndroid) 'google_fit'
+          }
+        : connectedPlatforms;
+
+    final rows = <Widget>[];
+    for (final platform in visiblePlatforms) {
+      final metrics = _semesterSourceMetricMatrix[platform] ?? const [];
+      final sourceLabel = _sourceLabelForPlatform(platform);
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                sourceLabel,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigo,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: metrics.map((metric) {
+                  final bool isPlaceholder =
+                      !metric.availableFromCurrentSource ||
+                          !metric.mappedToPersistedEntity;
+                  final Color chipColor =
+                      isPlaceholder ? Colors.orange : Colors.green;
+                  final String status = metric.mappedToPersistedEntity &&
+                          metric.availableFromCurrentSource
+                      ? 'Persisted'
+                      : 'Placeholder';
+                  return Chip(
+                    label: Text('${metric.type} ($status)'),
+                    backgroundColor: chipColor.withValues(alpha: 0.12),
+                    labelStyle: TextStyle(
+                      fontSize: 11,
+                      color: isPlaceholder
+                          ? Colors.orange.shade900
+                          : Colors.green.shade900,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Semester Metric Scope',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.indigo,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Persisted = mapped to backend entities. Placeholder = UI-only demo or not wired this semester.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            ...rows,
           ],
         ),
       ),
@@ -903,14 +1229,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 400),
               child: SingleChildScrollView(
                 child: Column(
-                  children: latestHealthData.values.map((data) =>
-                      _buildHealthDataItem(data)
-                  ).toList(),
+                  children: latestHealthData.values
+                      .map((data) => _buildHealthDataItem(data))
+                      .toList(),
                 ),
               ),
             ),
@@ -932,7 +1257,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
             width: 45,
             height: 45,
             decoration: BoxDecoration(
-              color: dataColor.withOpacity(0.1),
+              color: dataColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -960,9 +1285,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(
-                        color: _getSourceColor(data.source).withOpacity(0.1),
+                        color:
+                            _getSourceColor(data.source).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -970,6 +1297,27 @@ class _WearablesScreenState extends State<WearablesScreen> {
                         style: TextStyle(
                           fontSize: 9,
                           color: _getSourceColor(data.source),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: data.isPlaceholder
+                            ? Colors.orange.withValues(alpha: 0.12)
+                            : Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        data.supportStatus,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: data.isPlaceholder
+                              ? Colors.orange.shade900
+                              : Colors.green.shade900,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -990,7 +1338,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _formatHealthValue(data.value, data.type),
+                data.isPlaceholder
+                    ? '---'
+                    : _formatHealthValue(data.value, data.type),
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -998,12 +1348,24 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 ),
               ),
               Text(
-                data.unit,
+                data.isPlaceholder ? data.supportStatus : data.unit,
                 style: const TextStyle(
                   fontSize: 12,
                   color: Colors.grey,
                 ),
               ),
+              if (data.isPlaceholder && data.placeholderReason != null)
+                SizedBox(
+                  width: 140,
+                  child: Text(
+                    data.placeholderReason!,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -1113,7 +1475,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
             Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),

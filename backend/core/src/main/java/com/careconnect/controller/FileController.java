@@ -470,13 +470,19 @@ public class FileController {
 
             String userType = user.getRole().name();
 
-            List<UserFileDTO> files = s3StorageService.listUserFilesDto(userId, userType);
-
-            // Filter by category if specified
-            if (category != null && !category.isEmpty()) {
-                files = files.stream()
-                        .filter(file -> file.getS3FullKey().contains("/" + category.toLowerCase() + "/"))
-                        .toList();
+            List<UserFileDTO> files;
+            if (useS3ForLegacyEndpoints && s3StorageService != null) {
+                files = s3StorageService.listUserFilesDto(userId, userType);
+                // Filter by category if specified
+                if (category != null && !category.isEmpty()) {
+                    files = files.stream()
+                            .filter(file -> file.getS3FullKey() != null
+                                    && file.getS3FullKey().contains("/" + category.toLowerCase() + "/"))
+                            .toList();
+                }
+            } else {
+                // Database-backed listing (dev/local; same source as /my-files).
+                files = fileManagementService.listUserFiles(userId, userType, category);
             }
 
             return ResponseEntity.ok(Map.of(

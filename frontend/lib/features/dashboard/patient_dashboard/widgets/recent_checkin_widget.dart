@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/services/checkin_service.dart';
 
 /// CheckIn Model
@@ -99,33 +98,15 @@ class RecentCheckInsWidget extends StatelessWidget {
               ),
               icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
               label: const Text(
-                'Check In',
+                'Open Check-In',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
               ),
-              onPressed: () async {
-                final userProvider = Provider.of<UserProvider>(context, listen: false);
-                final patientId = userProvider.user?.id.toString() ?? '';
-                final caregiverId = userProvider.user?.caregiverId.toString() ?? '';
-
-                final success = await RecentCheckInsWidget.performCheckIn(
-                  patientId: patientId,
-                  caregiverId: caregiverId,
-                );
-
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        success ? 'Check-In successful!' : 'Check-In failed. Try again.',
-                      ),
-                      backgroundColor: success ? Colors.green : Colors.red,
-                    ),
-                  );
-                }
+              onPressed: () {
+                context.push('/virtual-checkin');
               },
             ),
           ),
@@ -183,18 +164,4 @@ class RecentCheckInsWidget extends StatelessWidget {
     ];
     return '${months[date.month - 1]} ${date.day}';
   }
-
-  /// Sends a check-in to the backend for this patient.
-Future<void> _recordCheckIn(String patientId, String caregiverId) async {
-  try {
-    final success = await CheckinService.addCheckin(patientId, caregiverId);
-    if (success) {
-      debugPrint('✅ Patient check-in successful. $patientId');
-    } else {
-      debugPrint('⚠️ Check-in failed.');
-    }
-  } catch (e) {
-    debugPrint('❌ Error recording check-in: $e');
-  }
-}
 }
