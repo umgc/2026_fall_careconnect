@@ -563,6 +563,11 @@ public class CallRecordingService {
       playbackResult.put("transcriptionStatus", rec.getTranscriptionStatus());
       // System recordings (initiatedByUserId == null) are transcription-only; never allow playback
       playbackResult.put("playbackReady", rec.getInitiatedByUserId() != null);
+      playbackResult.put(
+          "recordingStartedAt",
+          rec.getStartedAt() != null
+              ? rec.getStartedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+              : null);
       return playbackResult;
 
     } catch (Exception e) {

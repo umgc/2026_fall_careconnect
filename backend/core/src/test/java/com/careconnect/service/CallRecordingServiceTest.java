@@ -499,6 +499,9 @@ class CallRecordingServiceTest {
             assertThat(result).containsKey("playbackUrl");
             assertThat(result.get("playbackUrl").toString()).contains("presigned-url");
             assertThat(result).containsEntry("playbackReady", true);
+            assertThat(result).containsKey("recordingStartedAt");
+            assertThat(result.get("recordingStartedAt"))
+                    .isEqualTo(rec.getStartedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME));
         }
     }
 
