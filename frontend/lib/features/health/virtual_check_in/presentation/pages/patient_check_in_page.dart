@@ -1,9 +1,15 @@
 
 import 'package:care_connect_app/widgets/default_app_header.dart';
 import 'package:care_connect_app/widgets/video_widget.dart';
+import 'package:care_connect_app/config/env_constant.dart';
+import 'package:care_connect_app/features/health/virtual_check_in/models/virtual_check_in_backend_question_model.dart';
+import 'package:care_connect_app/features/health/virtual_check_in/services/checkin_api.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/services/checkin_service.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 
 class PatientVirtualCheckIn extends StatefulWidget {
   const PatientVirtualCheckIn({super.key});
@@ -34,10 +40,135 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
   bool isCameraAvailable = true;
   bool isCheckingCamera = false;
   bool _cameraChecked = false;
+  bool _isLoadingQuestionnaire = true;
+  String? _questionnaireError;
+  int? _activeCheckInId;
+  List<BackendQuestionDto> _assignedQuestions = const [];
 
   @override
   void initState() {
     super.initState();
+    _loadAssignedQuestionnaire();
+  }
+
+  Future<void> _loadAssignedQuestionnaire() async {
+    try {
+      final user = Provider.of<UserProvider>(context, listen: false).user;
+      if (user == null) {
+        setState(() {
+          _questionnaireError = 'No user session found. Please sign in again.';
+          _isLoadingQuestionnaire = false;
+        });
+        return;
+      }
+
+      final candidateIds = <int>{
+        if (user.patientId != null) user.patientId!,
+        user.id,
+      };
+
+      List<CheckInSummary> checkIns = const [];
+      for (final id in candidateIds) {
+        final found = await CheckinService.fetchCheckInsForPatient(
+          id.toString(),
+        );
+        if (found.isNotEmpty) {
+          checkIns = found;
+          break;
+        }
+      }
+
+      if (checkIns.isEmpty) {
+        setState(() {
+          _questionnaireError =
+              'No check-in questionnaire has been assigned yet.';
+          _isLoadingQuestionnaire = false;
+        });
+        return;
+      }
+
+      final latestCheckInId = checkIns.first.checkInId;
+      final api = CheckInApi(getBackendBaseUrl());
+      try {
+        final questions = await api.getQuestions(latestCheckInId.toString());
+        if (!mounted) return;
+        setState(() {
+          _activeCheckInId = latestCheckInId;
+          _assignedQuestions = questions;
+          _questionnaireError = questions.isEmpty
+              ? 'This check-in has no questions configured.'
+              : null;
+          _isLoadingQuestionnaire = false;
+        });
+      } finally {
+        api.close();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _questionnaireError = 'Failed to load questionnaire: $e';
+        _isLoadingQuestionnaire = false;
+      });
+    }
+  }
+
+  Widget _buildAssignedQuestionnaireCard() {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Assigned Check-In Questionnaire',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue[600],
+              ),
+            ),
+            if (_activeCheckInId != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Check-in #$_activeCheckInId',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (_isLoadingQuestionnaire)
+              const Center(child: CircularProgressIndicator())
+            else if (_questionnaireError != null)
+              Text(
+                _questionnaireError!,
+                style: const TextStyle(color: Colors.redAccent),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _assignedQuestions.map((q) {
+                  final requiredLabel = q.required ? 'Required' : 'Optional';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('• '),
+                        Expanded(
+                          child: Text(
+                            '${q.prompt} ($requiredLabel, ${q.type.name})',
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<bool> _checkCameraAvailability() async {
@@ -63,7 +194,7 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
           _cameraChecked = true;
         });
       }
-      print('Error checking camera availability: $e');
+      debugPrint('Error checking camera availability: $e');
       return false;
     }
   }
@@ -144,8 +275,10 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
         return;
       }
 
-    XFile video = await controller.stopVideoRecording();
+    await controller.stopVideoRecording();
     await http.post(Uri.parse(apiURL)); ///TODO: Add a proper body that includes XFile Video
+
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -345,6 +478,9 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                 ),
               if(showVideoCall)
                 const SizedBox(height: 16),
+
+              _buildAssignedQuestionnaireCard(),
+              const SizedBox(height: 16),
 
               // Mood selection card
               Card(

@@ -1,0 +1,84 @@
+{
+  "formType": "SWORN_DISCLOSURE",
+  "title": "Sworn Statement / Criminal History Disclosure",
+  "description": "Sworn disclosure of criminal history and abuse/neglect findings required for home-care direct-care staff prior to hire.",
+  "issuingAuthority": "CareConnect HR / Compliance",
+  "version": "1.0.0",
+  "effectiveDate": "2026-01-01",
+  "sourceDocument": {
+    "name": "Sworn Statement of Criminal History Disclosure",
+    "formNumber": "HR-SD-01",
+    "edition": "2026.1"
+  },
+  "fileAttachment": {
+    "category": "ONBOARDING_FORM",
+    "generatesPdf": true
+  },
+  "sections": [
+    {
+      "id": "applicant",
+      "title": "Applicant Information",
+      "order": 0,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "full_legal_name", "label": "Full legal name", "fieldType": "TEXT", "required": true, "order": 0,
+          "sourceMapping": { "documentField": "Full Legal Name", "page": 1 } },
+        { "id": "date_of_birth", "label": "Date of birth", "fieldType": "DATE", "required": true, "order": 1, "sensitive": true,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date of Birth", "page": 1 } },
+        { "id": "position_applied", "label": "Position applied for", "fieldType": "TEXT", "required": true, "order": 2,
+          "sourceMapping": { "documentField": "Position", "page": 1 } }
+      ]
+    },
+    {
+      "id": "disclosure",
+      "title": "Disclosure Questions",
+      "order": 1,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "convicted_felony", "label": "Have you ever been convicted of, or pleaded guilty/no contest to, a felony?", "fieldType": "RADIO", "required": true, "order": 0,
+          "options": [ { "value": "YES", "label": "Yes" }, { "value": "NO", "label": "No" } ],
+          "validations": [{ "type": "ENUM", "value": ["YES", "NO"] }],
+          "sourceMapping": { "documentField": "Felony conviction question", "line": "Q1", "page": 1 } },
+        { "id": "convicted_misdemeanor", "label": "Have you ever been convicted of a misdemeanor involving violence, theft, fraud, or abuse?", "fieldType": "RADIO", "required": true, "order": 1,
+          "options": [ { "value": "YES", "label": "Yes" }, { "value": "NO", "label": "No" } ],
+          "validations": [{ "type": "ENUM", "value": ["YES", "NO"] }],
+          "sourceMapping": { "documentField": "Misdemeanor conviction question", "line": "Q2", "page": 1 } },
+        { "id": "abuse_registry_finding", "label": "Have you ever had a substantiated finding of abuse, neglect, or exploitation on any registry?", "fieldType": "RADIO", "required": true, "order": 2,
+          "options": [ { "value": "YES", "label": "Yes" }, { "value": "NO", "label": "No" } ],
+          "validations": [{ "type": "ENUM", "value": ["YES", "NO"] }],
+          "sourceMapping": { "documentField": "Abuse/neglect registry question", "line": "Q3", "page": 1 } },
+        { "id": "pending_charges", "label": "Do you have any criminal charges currently pending?", "fieldType": "RADIO", "required": true, "order": 3,
+          "options": [ { "value": "YES", "label": "Yes" }, { "value": "NO", "label": "No" } ],
+          "validations": [{ "type": "ENUM", "value": ["YES", "NO"] }],
+          "sourceMapping": { "documentField": "Pending charges question", "line": "Q4", "page": 1 } },
+        { "id": "explanation", "label": "If you answered Yes to any question, provide details (offense, date, jurisdiction, disposition)", "fieldType": "TEXTAREA", "required": false, "order": 4,
+          "validations": [{ "type": "MAX_LENGTH", "value": 4000 }],
+          "sourceMapping": { "documentField": "Explanation", "page": 1 } }
+      ]
+    },
+    {
+      "id": "attestation",
+      "title": "Sworn Attestation",
+      "order": 2,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "sworn_true", "label": "I swear/affirm under penalty of perjury that the above is true and complete", "fieldType": "CHECKBOX", "required": true, "order": 0,
+          "validations": [{ "type": "CHECKED", "message": "You must affirm the statement." }],
+          "sourceMapping": { "documentField": "Sworn attestation", "page": 1 } },
+        { "id": "signature", "label": "Signature of applicant", "fieldType": "SIGNATURE", "required": true, "order": 1,
+          "validations": [{ "type": "REQUIRED" }],
+          "sourceMapping": { "documentField": "Signature", "page": 1 } },
+        { "id": "signature_date", "label": "Date", "fieldType": "DATE", "required": true, "order": 2,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date", "page": 1 } },
+        { "id": "notary_acknowledgement", "label": "Notary acknowledgement (if required by state)", "fieldType": "TEXT", "required": false, "order": 3,
+          "completedBy": "WITNESS",
+          "sourceMapping": { "documentField": "Notary block", "page": 1 } }
+      ]
+    }
+  ]
+}

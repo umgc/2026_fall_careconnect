@@ -24,12 +24,14 @@ class CheckInQuestionTest {
         final CheckIn checkIn = CheckIn.builder().id(1L).build();
         final Question question = Question.builder().id(2L).prompt("How are you?").type(QuestionType.TEXT).build();
 
-        final CheckInQuestion cq = new CheckInQuestion(checkIn, question, true, 1);
+        final CheckInQuestion cq = new CheckInQuestion(checkIn, question, true, 1, "How are you?", "TEXT");
 
         assertThat(cq.getCheckIn()).isSameAs(checkIn);
         assertThat(cq.getQuestion()).isSameAs(question);
         assertThat(cq.isRequired()).isTrue();
         assertThat(cq.getOrdinal()).isEqualTo(1);
+        assertThat(cq.getPromptSnapshot()).isEqualTo("How are you?");
+        assertThat(cq.getTypeSnapshot()).isEqualTo("TEXT");
         assertThat(cq.getId()).isNotNull();
         assertThat(cq.getId().getCheckInId()).isEqualTo(1L);
         assertThat(cq.getId().getQuestionId()).isEqualTo(2L);
@@ -49,11 +51,15 @@ class CheckInQuestionTest {
         cq.setQuestion(question);
         cq.setRequired(false);
         cq.setOrdinal(3);
+        cq.setPromptSnapshot("snapshot prompt");
+        cq.setTypeSnapshot("YES_NO");
 
         assertThat(cq.getId()).isSameAs(embeddedId);
         assertThat(cq.getCheckIn()).isSameAs(checkIn);
         assertThat(cq.getQuestion()).isSameAs(question);
         assertThat(cq.isRequired()).isFalse();
         assertThat(cq.getOrdinal()).isEqualTo(3);
+        assertThat(cq.getPromptSnapshot()).isEqualTo("snapshot prompt");
+        assertThat(cq.getTypeSnapshot()).isEqualTo("YES_NO");
     }
 }

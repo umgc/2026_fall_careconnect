@@ -96,14 +96,14 @@ PODS:
     - Flutter
   - pdfx (1.0.0):
     - Flutter
-  - permission_handler_apple (9.3.0):
+  - permission_handler_apple (9.4.8):
     - Flutter
   - Porcupine-iOS (3.0.4):
     - ios-voice-processor (~> 1.2.0)
   - porcupine_flutter (3.0.6):
     - Flutter
     - Porcupine-iOS (~> 3.0.4)
-  - record_ios (1.2.0):
+  - record_ios (1.2.1):
     - Flutter
   - SDWebImage (5.21.7):
     - SDWebImage/Core (= 5.21.7)
@@ -113,7 +113,7 @@ PODS:
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - sherpa_onnx_ios (1.12.25):
+  - sherpa_onnx_ios (1.13.3):
     - Flutter
   - speech_to_text (7.2.0):
     - CwlCatchException
@@ -273,7 +273,7 @@ SPEC CHECKSUMS:
   flutter_web_auth_2: 5c8d9dcd7848b5a9efb086d24e7a9adcae979c80
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
   Google-Maps-iOS-Utils: 0a484b05ed21d88c9f9ebbacb007956edd508a96
-  google_maps_flutter_ios: 0cf046caf50b00d95071f79e8031fcd5ef902beb
+  google_maps_flutter_ios: 17552876e72723da1d41accc22f03b5f7afbde69
   GoogleMaps: 0608099d4870cac8754bdba9b6953db543432438
   health: 4decf5d74e8f54c58a8c07a385fc72f629a831d9
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
@@ -283,16 +283,16 @@ SPEC CHECKSUMS:
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
   open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
-  pay_ios: 2c48d76615ded0cfaff66185669501b8b1dfc55e
+  pay_ios: 616e4e1ef4b51b69e11042ff18ba6bbe7408e13b
   pdfx: 77f4dddc48361fbb01486fa2bdee4532cbb97ef3
-  permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
+  permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
   Porcupine-iOS: da103a8848ce6b36acd4a5e42bb811d4532dd515
   porcupine_flutter: c74b9b5861bbe4a3a8976f7da2d98559ef6157d2
-  record_ios: 412daca2350b228e698fffcd08f1f94ceb1e3844
+  record_ios: 980fd386a97a35987d0fce3dfda4b26a38c90f4c
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
-  sherpa_onnx_ios: fcbaa0ac2a7cfe5283b3f10bc36fa0cf5711cd85
+  sherpa_onnx_ios: 0f9313326cfea79185f98aeb25dbcf647c9210c8
   speech_to_text: 3b313d98516d3d0406cea424782ec25470c59d19
   SQLCipher: eb79c64049cb002b4e9fcb30edb7979bf4706dfc
   sqlcipher_flutter_libs: ae224763b087bffb3a5955fe295a1c460d458cb1

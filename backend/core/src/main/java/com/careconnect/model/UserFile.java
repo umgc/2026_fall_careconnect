@@ -88,8 +88,10 @@ public class UserFile {
     }
     
     public enum FileCategory {
-        PROFILE_IMAGE, MEDICAL_RECORD, CLINICAL_NOTE, PRESCRIPTION, LAB_RESULT, 
-        INSURANCE_DOCUMENT, CONSENT_FORM, CARE_PLAN, OTHER_DOCUMENT
+        PROFILE_IMAGE, MEDICAL_RECORD, CLINICAL_NOTE, PRESCRIPTION, LAB_RESULT,
+        INSURANCE_DOCUMENT, CONSENT_FORM, CARE_PLAN, OTHER_DOCUMENT,
+        // Hiring & onboarding document digitization (see com.careconnect.model.forms)
+        ONBOARDING_FORM, HIRING_DOCUMENT
     }
     
     public enum StorageType {
