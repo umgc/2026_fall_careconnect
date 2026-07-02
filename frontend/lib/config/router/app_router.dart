@@ -71,8 +71,50 @@ import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.d
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
 import '../../features/usps/presentation/usps_test_screen.dart';
+import '../../features/telemetry/telemetry.dart';
+import 'dart:async';
 import 'dart:convert';
 
+GoRouter? _appRouterRef;
+
+/// Logs a [screen_view] telemetry event whenever navigation changes.
+class TelemetryGoRouterObserver extends NavigatorObserver {
+  void _logScreenView() {
+    final router = _appRouterRef;
+    if (router == null) return;
+
+    final location = router.state.uri.toString();
+    unawaited(
+      Telemetry.event('screen_view', {'screen': location}),
+    );
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    _logScreenView();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    _logScreenView();
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    _logScreenView();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    _logScreenView();
+  }
+}
+
+final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
 Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
@@ -83,8 +125,9 @@ Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
   );
 }
 
-final GoRouter appRouter = GoRouter(
+final GoRouter appRouter = _appRouterRef = GoRouter(
   initialLocation: '/',
+  observers: [_telemetryGoRouterObserver],
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(
