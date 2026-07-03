@@ -95,7 +95,7 @@ class InviteTokenServiceTest {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
         when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
-        when(tokenRepository.save(any(InviteToken.class))).thenAnswer(inv -> {
+        when(tokenRepository.saveAndFlush(any(InviteToken.class))).thenAnswer(inv -> {
             InviteToken t = inv.getArgument(0);
             t.setId(42L);
             t.setCreatedAt(LocalDateTime.now());
@@ -153,7 +153,7 @@ class InviteTokenServiceTest {
         when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         ArgumentCaptor<InviteToken> captor = ArgumentCaptor.forClass(InviteToken.class);
-        when(tokenRepository.save(captor.capture())).thenAnswer(inv -> {
+        when(tokenRepository.saveAndFlush(captor.capture())).thenAnswer(inv -> {
             InviteToken t = inv.getArgument(0); t.setId(1L); t.setCreatedAt(LocalDateTime.now()); return t;
         });
 
@@ -161,6 +161,24 @@ class InviteTokenServiceTest {
 
         LocalDateTime expires = captor.getValue().getExpiresAt();
         assertTrue(expires.isBefore(LocalDateTime.now().plusHours(169)));
+    }
+
+    @Test
+    @DisplayName("createInvite: concurrent duplicate PENDING -> 409 via unique index")
+    void createInvite_duplicatePendingConflict() {
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
+        // Application-level check passes (the racing tx hasn't committed yet)...
+        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
+        // ...but the DB unique partial index rejects the second insert.
+        when(tokenRepository.saveAndFlush(any(InviteToken.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint "
+                                + "\"idx_invite_token_one_pending_per_link\""));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createInvite(5L, null, creator, "1.2.3.4"));
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
     }
 
     // --------------------------------------------------------------- preview

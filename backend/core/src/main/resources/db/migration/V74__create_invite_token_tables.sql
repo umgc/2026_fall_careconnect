@@ -81,6 +81,15 @@ CREATE INDEX idx_invite_token_status      ON invite_token (status);
 -- Partial index to make the scheduled expiry sweep cheap.
 CREATE INDEX idx_invite_token_expires     ON invite_token (expires_at) WHERE status = 'PENDING';
 
+-- Enforce "at most one PENDING invite per link" at the DATABASE level. The
+-- application also checks this (existsActivePendingToken), but that check and
+-- the insert are not atomic: two concurrent creates could both pass the check
+-- and insert. This unique partial index makes the second insert fail, closing
+-- the race. The service catches the resulting integrity violation and maps it
+-- to a 409.
+CREATE UNIQUE INDEX idx_invite_token_one_pending_per_link
+    ON invite_token (link_id) WHERE status = 'PENDING';
+
 
 CREATE TABLE invite_token_audit
 (

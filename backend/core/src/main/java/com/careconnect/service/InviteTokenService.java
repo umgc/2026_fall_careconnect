@@ -127,7 +127,16 @@ public class InviteTokenService {
         token.setCreatedByUserId(createdByUser.getId());
         token.setExpiresAt(LocalDateTime.now().plusHours(ttl));
 
-        token = tokenRepository.save(token);
+        try {
+            // saveAndFlush forces the INSERT now so a unique-index violation
+            // (idx_invite_token_one_pending_per_link) surfaces here and can be
+            // mapped to 409, rather than leaking as a 500 at commit time.
+            token = tokenRepository.saveAndFlush(token);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // A concurrent create inserted a PENDING token for this link first.
+            throw new AppException(HttpStatus.CONFLICT,
+                    "An active invite already exists for this link. Revoke it before creating a new one.");
+        }
 
         auditService.record(token.getId(), InviteTokenAudit.EVENT_CREATED, createdByUser.getId(), actorIp,
                 "linkId=" + linkId + ", ttlHours=" + ttl
