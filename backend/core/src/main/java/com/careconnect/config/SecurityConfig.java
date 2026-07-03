@@ -147,7 +147,7 @@ public class SecurityConfig {
                         /* ---------- Authenticated endpoints ------------------- */
                         .requestMatchers("/v1/api/subscriptions/**").authenticated()
                         .requestMatchers("/v3/api/subscriptions/**").authenticated()
-                        .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
+                        .requestMatchers("/v1/api/invoices/extract-llm").authenticated()
                         .requestMatchers("/v1/api/invoices/**").authenticated()
                         .requestMatchers("/v1/api/notification-settings/**").authenticated()
                         .requestMatchers("/v1/api/patients/**").authenticated()
