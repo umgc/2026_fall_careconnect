@@ -26,7 +26,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "careconnect.deepseek.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "careconnect.ai.provider", havingValue = "bedrock")
 @RequestMapping({"/api/ai", "/v1/api/ai"})
 public class AiAllergyController {
 
