@@ -51,6 +51,62 @@ Widget _buildVoiceRouterApp({bool singleShot = false}) {
   return MaterialApp.router(routerConfig: router);
 }
 
+/// Builds a GoRouter-backed app hosting VoiceCommandAI plus stub destination
+/// pages, so navigation commands (context.go) resolve in widget tests.
+/// MaterialApp builds using the Spanish locale to test display text.
+Widget _buildVoiceRouterAppEn({bool singleShot = false}) {
+  final router = GoRouter(
+    initialLocation: '/voice',
+    routes: [
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) => VoiceCommandAI(singleShot: singleShot),
+      ),
+      GoRoute(
+        path: '/dashboard',
+        builder: (_, __) => const Scaffold(body: Text('Dashboard Page')),
+      ),
+      GoRoute(
+        path: '/calendar',
+        builder: (_, __) => const Scaffold(body: Text('Calendar Page')),
+      ),
+      GoRoute(
+        path: '/symptoms',
+        builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
+      ),
+    ],
+  );
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
+}
+
+/// Builds a GoRouter-backed app hosting VoiceCommandAI plus stub destination
+/// pages, so navigation commands (context.go) resolve in widget tests.
+/// MaterialApp builds using the Spanish locale to test display text.
+Widget _buildVoiceRouterAppEs({bool singleShot = false}) {
+  final router = GoRouter(
+    initialLocation: '/voice',
+    routes: [
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) => VoiceCommandAI(singleShot: singleShot),
+      ),
+      GoRoute(
+        path: '/dashboard',
+        builder: (_, __) => const Scaffold(body: Text('Dashboard Page')),
+      ),
+      GoRoute(
+        path: '/calendar',
+        builder: (_, __) => const Scaffold(body: Text('Calendar Page')),
+      ),
+      GoRoute(
+        path: '/symptoms',
+        builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
+      ),
+    ],
+  );
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), routerConfig: router);
+}
+
 /// Sends a speech recognition result via the method channel (platform -> Dart).
 Future<void> _sendSpeechResult(
   WidgetTester tester,
@@ -1163,9 +1219,9 @@ void main() {
     tearDown(clearMocks);
 
     // TC-S1-VC-001
-    testWidgets('recognized navigate command shows heard text and success status',
+    testWidgets('recognized navigate command shows heard text and success status - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pumpWidget(_buildVoiceRouterAppEn());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1178,6 +1234,27 @@ void main() {
       expect(find.text('Heard: "take me to calendar"'), findsOneWidget);
       expect(
         find.text('Recognized: "take me to calendar" — opening calendar'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+      testWidgets('recognized navigate command shows heard text and success status - Spanish',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Estado: Comando reconocido'), findsOneWidget);
+      expect(find.text('Escuchó: "take me to calendar"'), findsOneWidget);
+      expect(
+        find.text('Reconocido: "take me to calendar" — abriendo el calendario'),
         findsOneWidget,
       );
 
