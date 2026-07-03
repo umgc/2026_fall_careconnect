@@ -6,6 +6,7 @@ import '../services/comprehensive_file_service.dart';
 import '../services/enhanced_file_service.dart';
 import '../providers/user_provider.dart';
 import '../config/theme/app_theme.dart';
+import '../features/homecare_documents/widgets/home_care_digitization_card.dart';
 import '../widgets/file_upload_widget.dart';
 import '../widgets/manual_text_entry_upload.dart';
 import '../widgets/speech_to_text_widget.dart';
@@ -475,6 +476,14 @@ class _FileManagementPageState extends State<FileManagementPage>
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 24),
+            // Home Care Document Digitization (OCR + LLM prefill for review)
+            HomeCareDigitizationCard(
+              patientId: _userId,
+              onSaved: () {
+                _loadFiles(); // Refresh the files list
+              },
             ),
             const SizedBox(height: 24),
             // File Upload Section
