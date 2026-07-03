@@ -153,6 +153,27 @@ public class CallAttendeeService {
                 .toList();
     }
 
+    /** Persists the KVS stream ARN assigned to an attendee so post-call F7 can export it. */
+    @Transactional
+    public void recordKvsStreamMapping(
+            final String callId, final String chimeAttendeeId, final String streamArn) {
+        if (callId == null
+                || callId.isBlank()
+                || chimeAttendeeId == null
+                || chimeAttendeeId.isBlank()
+                || streamArn == null
+                || streamArn.isBlank()) {
+            return;
+        }
+        callAttendeeRepository
+                .findByCallIdAndChimeAttendeeId(callId, chimeAttendeeId)
+                .ifPresent(
+                        attendee -> {
+                            attendee.setKvsStreamArn(streamArn);
+                            callAttendeeRepository.save(attendee);
+                        });
+    }
+
     /** Marks active attendee rows for the user as left on call end/leave. */
     @Transactional
     public void recordLeave(final String callId, final Long userId) {

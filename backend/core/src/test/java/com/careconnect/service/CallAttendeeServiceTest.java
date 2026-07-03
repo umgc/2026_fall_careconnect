@@ -131,6 +131,22 @@ class CallAttendeeServiceTest {
     }
 
     @Test
+    @DisplayName("recordKvsStreamMapping persists attendee stream ARN for F7 export")
+    void recordKvsStreamMapping_persistsStreamArn() {
+        final CallAttendee attendee = new CallAttendee();
+        attendee.setCallId(CALL_ID);
+        attendee.setChimeAttendeeId(CHIME_ATTENDEE_ID);
+        final String streamArn = "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1";
+        when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
+                .thenReturn(Optional.of(attendee));
+
+        service.recordKvsStreamMapping(CALL_ID, CHIME_ATTENDEE_ID, streamArn);
+
+        assertThat(attendee.getKvsStreamArn()).isEqualTo(streamArn);
+        verify(callAttendeeRepository).save(attendee);
+    }
+
+    @Test
     @DisplayName("reconcileRosterFromChime syncs live ListAttendees and marks stale rows left")
     void reconcileRosterFromChime_syncsLiveAttendees() {
         when(chimeService.listMeetingAttendees(MEETING_ID))
