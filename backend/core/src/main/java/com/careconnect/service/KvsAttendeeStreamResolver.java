@@ -84,6 +84,7 @@ public class KvsAttendeeStreamResolver {
         }
         waitForMediaStreamPipelineReady(mediaStreamPipelineId, deadline);
         while (System.currentTimeMillis() < deadline) {
+            registry.tryAliasOrphansToRoster(callId, attendeeIds);
             if (hasAllMappings(callId, attendeeIds)) {
                 return copyMappings(callId, attendeeIds);
             }

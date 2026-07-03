@@ -105,6 +105,7 @@ class CallRecordingServiceTest {
     @Mock private KvsStreamPoolService kvsStreamPoolService;
     @Mock private KvsAttendeeStreamResolver kvsAttendeeStreamResolver;
     @Mock private KvsAttendeeStreamRegistry kvsAttendeeStreamRegistry;
+    @Mock private CallAttendeeService callAttendeeService;
 
     @InjectMocks
     private CallRecordingService service;

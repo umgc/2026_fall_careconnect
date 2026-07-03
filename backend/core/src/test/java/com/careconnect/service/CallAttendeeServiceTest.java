@@ -25,21 +25,26 @@ class CallAttendeeServiceTest {
 
     private static final String CALL_ID = "call-speaker-001";
     private static final String CHIME_ATTENDEE_ID = "chime-att-abc";
+    private static final String OLD_CHIME_ATTENDEE_ID = "chime-att-old";
     private static final Long USER_ID = 42L;
     private static final String ROLE = "CAREGIVER";
+    private static final String MEETING_ID = "meeting-uuid";
 
     @Mock private CallAttendeeRepository callAttendeeRepository;
+    @Mock private ChimeService chimeService;
 
     private CallAttendeeService service;
 
     @BeforeEach
     void setUp() {
-        service = new CallAttendeeService(callAttendeeRepository);
+        service = new CallAttendeeService(callAttendeeRepository, chimeService);
     }
 
     @Test
     @DisplayName("SPEAKER-003: recordJoin creates new attendee row with joined_at")
     void recordJoin_createsNewRow() {
+        when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, USER_ID))
+                .thenReturn(List.of());
         when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
                 .thenReturn(Optional.empty());
         when(callAttendeeRepository.save(any(CallAttendee.class)))
@@ -67,6 +72,8 @@ class CallAttendeeServiceTest {
         existing.setJoinedAt(LocalDateTime.of(2026, 1, 1, 10, 0));
         existing.setLeftAt(LocalDateTime.of(2026, 1, 1, 10, 30));
 
+        when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, USER_ID))
+                .thenReturn(List.of(existing));
         when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
                 .thenReturn(Optional.of(existing));
         when(callAttendeeRepository.save(existing)).thenReturn(existing);
@@ -76,6 +83,79 @@ class CallAttendeeServiceTest {
         assertThat(saved.getRole()).isEqualTo(ROLE);
         assertThat(saved.getLeftAt()).isNull();
         assertThat(saved.getJoinedAt()).isAfter(LocalDateTime.of(2026, 1, 1, 10, 0));
+    }
+
+    @Test
+    @DisplayName("SPEAKER-O1: recordJoin supersedes stale chime_attendee_id for same user")
+    void recordJoin_supersedesStaleAttendeeId() {
+        final CallAttendee stale = new CallAttendee();
+        stale.setCallId(CALL_ID);
+        stale.setUserId(USER_ID);
+        stale.setChimeAttendeeId(OLD_CHIME_ATTENDEE_ID);
+
+        when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, USER_ID))
+                .thenReturn(List.of(stale));
+        when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
+                .thenReturn(Optional.empty());
+        when(callAttendeeRepository.save(any(CallAttendee.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.recordJoin(CALL_ID, CHIME_ATTENDEE_ID, USER_ID, ROLE);
+
+        assertThat(stale.getLeftAt()).isNotNull();
+        verify(callAttendeeRepository).saveAll(List.of(stale));
+    }
+
+    @Test
+    @DisplayName("recordJoinFromStreamEvent upserts roster from externalUserId")
+    void recordJoinFromStreamEvent_upsertsFromExternalUserId() {
+        when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, 2L))
+                .thenReturn(List.of());
+        when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
+                .thenReturn(Optional.empty());
+        when(callAttendeeRepository.save(any(CallAttendee.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.recordJoinFromStreamEvent(CALL_ID, CHIME_ATTENDEE_ID, "CAREGIVER_Test_2");
+
+        verify(callAttendeeRepository).save(any(CallAttendee.class));
+    }
+
+    @Test
+    @DisplayName("recordJoinFromStreamEvent skips pipeline-internal externalUserId")
+    void recordJoinFromStreamEvent_skipsPipelineInternal() {
+        service.recordJoinFromStreamEvent(
+                CALL_ID, CHIME_ATTENDEE_ID, "aws:MediaPipeline-abc");
+
+        verify(callAttendeeRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("reconcileRosterFromChime syncs live ListAttendees and marks stale rows left")
+    void reconcileRosterFromChime_syncsLiveAttendees() {
+        when(chimeService.listMeetingAttendees(MEETING_ID))
+                .thenReturn(
+                        List.of(
+                                new ChimeMeetingAttendee(
+                                        CHIME_ATTENDEE_ID, "CAREGIVER_Test_" + USER_ID)));
+        when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, USER_ID))
+                .thenReturn(List.of());
+        when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
+                .thenReturn(Optional.empty());
+        when(callAttendeeRepository.save(any(CallAttendee.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        final CallAttendee stale = new CallAttendee();
+        stale.setCallId(CALL_ID);
+        stale.setChimeAttendeeId(OLD_CHIME_ATTENDEE_ID);
+        stale.setUserId(99L);
+        when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                .thenReturn(List.of(stale));
+
+        service.reconcileRosterFromChime(CALL_ID, MEETING_ID);
+
+        assertThat(stale.getLeftAt()).isNotNull();
+        verify(callAttendeeRepository).saveAll(List.of(stale));
     }
 
     @Test
