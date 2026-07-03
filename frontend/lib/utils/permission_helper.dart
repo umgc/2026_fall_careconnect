@@ -1,5 +1,5 @@
-/// Permission checking helper based on roles
-/// Permissions match backend exactly: 26 total permissions
+/// Permission checking helper based on roles.
+/// Permission strings match backend RolePermissionService; see [Permission] enum for all 28 values.
 class PermissionHelper {
   /// Check if role has specific permission
   static bool hasPermission(String role, String permission) {
