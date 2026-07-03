@@ -8,7 +8,6 @@ import com.careconnect.model.InviteTokenAudit;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.repository.FamilyMemberLinkRepository;
-import com.careconnect.repository.InviteTokenAuditRepository;
 import com.careconnect.repository.InviteTokenRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
@@ -19,7 +18,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
@@ -51,7 +49,7 @@ public class InviteTokenService {
     private static final int LOOKUP_LENGTH = 16; // chars of the prefix used as the index key
 
     private final InviteTokenRepository tokenRepository;
-    private final InviteTokenAuditRepository auditRepository;
+    private final InviteAuditService auditService;
     private final FamilyMemberLinkRepository linkRepository;
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
@@ -67,13 +65,13 @@ public class InviteTokenService {
     private int maxTtlHours;
 
     public InviteTokenService(InviteTokenRepository tokenRepository,
-                              InviteTokenAuditRepository auditRepository,
+                              InviteAuditService auditService,
                               FamilyMemberLinkRepository linkRepository,
                               UserRepository userRepository,
                               PatientRepository patientRepository,
                               TokenHashService tokenHashService) {
         this.tokenRepository = tokenRepository;
-        this.auditRepository = auditRepository;
+        this.auditService = auditService;
         this.linkRepository = linkRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
@@ -131,7 +129,7 @@ public class InviteTokenService {
 
         token = tokenRepository.save(token);
 
-        audit(token.getId(), InviteTokenAudit.EVENT_CREATED, createdByUser.getId(), actorIp,
+        auditService.record(token.getId(), InviteTokenAudit.EVENT_CREATED, createdByUser.getId(), actorIp,
                 "linkId=" + linkId + ", ttlHours=" + ttl
                         + ", invitedEmail=" + (token.getInvitedEmail() != null ? token.getInvitedEmail() : "none"));
 
@@ -174,7 +172,7 @@ public class InviteTokenService {
                 ? patientDisplayName(link.getPatientUser())
                 : "the patient";
 
-        auditSeparate(token.getId(), InviteTokenAudit.EVENT_VIEWED, null, actorIp, "preview");
+        auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED, null, actorIp, "preview");
 
         return new InvitePreviewResponse(
                 token.getLinkId(),
@@ -205,7 +203,7 @@ public class InviteTokenService {
         if (token.getInvitedEmail() != null && !token.getInvitedEmail().isBlank()) {
             if (acceptingUser.getEmail() == null
                     || !token.getInvitedEmail().equalsIgnoreCase(acceptingUser.getEmail())) {
-                audit(token.getId(), "ACCEPT_DENIED", acceptingUser.getId(), actorIp, "email mismatch");
+                auditService.record(token.getId(), "ACCEPT_DENIED", acceptingUser.getId(), actorIp, "email mismatch");
                 throw new AppException(HttpStatus.FORBIDDEN,
                         "This invite was issued to a different email address.");
             }
@@ -219,7 +217,7 @@ public class InviteTokenService {
         token.setAcceptedAt(LocalDateTime.now());
         tokenRepository.save(token);
 
-        audit(token.getId(), InviteTokenAudit.EVENT_ACCEPTED, acceptingUser.getId(), actorIp,
+        auditService.record(token.getId(), InviteTokenAudit.EVENT_ACCEPTED, acceptingUser.getId(), actorIp,
                 "linkId=" + token.getLinkId());
 
         log.info("Invite accepted: tokenId={}, linkId={}, acceptedBy={}",
@@ -267,7 +265,7 @@ public class InviteTokenService {
         token.setRevokeReason(reason);
         tokenRepository.save(token);
 
-        audit(token.getId(), InviteTokenAudit.EVENT_REVOKED, revokingUser.getId(), actorIp,
+        auditService.record(token.getId(), InviteTokenAudit.EVENT_REVOKED, revokingUser.getId(), actorIp,
                 "reason=" + (reason != null ? reason : "none"));
 
         log.info("Invite revoked: tokenId={}, linkId={}, revokedBy={}",
@@ -355,23 +353,5 @@ public class InviteTokenService {
         Optional<Patient> patient = patientRepository.findByUser(patientUser);
         return patient.map(p -> p.getFirstName() + " " + p.getLastName())
                 .orElse(patientUser.getEmail());
-    }
-
-    /** Write an audit row in the current transaction. */
-    private void audit(Long tokenId, String eventType, Long actorUserId, String actorIp, String detail) {
-        try {
-            auditRepository.save(new InviteTokenAudit(tokenId, eventType, actorUserId, actorIp, detail));
-        } catch (Exception e) {
-            log.error("Failed to write invite audit: tokenId={}, event={}", tokenId, eventType, e);
-        }
-    }
-
-    /**
-     * Write an audit row in its own transaction so read-only flows (preview)
-     * can still record a VIEWED event.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    protected void auditSeparate(Long tokenId, String eventType, Long actorUserId, String actorIp, String detail) {
-        audit(tokenId, eventType, actorUserId, actorIp, detail);
     }
 }

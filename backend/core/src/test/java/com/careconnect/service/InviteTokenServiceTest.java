@@ -32,7 +32,7 @@ import static org.mockito.Mockito.*;
 class InviteTokenServiceTest {
 
     @Mock private InviteTokenRepository tokenRepository;
-    @Mock private InviteTokenAuditRepository auditRepository;
+    @Mock private InviteAuditService auditService;
     @Mock private FamilyMemberLinkRepository linkRepository;
     @Mock private UserRepository userRepository;
     @Mock private PatientRepository patientRepository;
@@ -49,7 +49,7 @@ class InviteTokenServiceTest {
         MockitoAnnotations.openMocks(this);
 
         service = new InviteTokenService(
-                tokenRepository, auditRepository, linkRepository,
+                tokenRepository, auditService, linkRepository,
                 userRepository, patientRepository, tokenHashService);
 
         ReflectionTestUtils.setField(service, "inviteBaseUrl", "https://app.careconnect.io/invite");
@@ -110,7 +110,7 @@ class InviteTokenServiceTest {
         assertEquals("PENDING", resp.status());
         assertNotNull(resp.token());
         assertTrue(resp.inviteUrl().startsWith("https://app.careconnect.io/invite/"));
-        verify(auditRepository).save(argThat(a -> a.getEventType().equals("CREATED")));
+        verify(auditService).record(anyLong(), eq("CREATED"), any(), any(), any());
     }
 
     @Test
@@ -255,7 +255,7 @@ class InviteTokenServiceTest {
         assertEquals(99L, resp.patientUserId());
         verify(tokenRepository).save(argThat(t ->
                 t.getStatus() == InviteToken.Status.ACCEPTED && t.getAcceptedByUserId().equals(77L)));
-        verify(auditRepository).save(argThat(a -> a.getEventType().equals("ACCEPTED")));
+        verify(auditService).record(anyLong(), eq("ACCEPTED"), any(), any(), any());
     }
 
     @Test
@@ -307,7 +307,7 @@ class InviteTokenServiceTest {
         verify(tokenRepository).save(argThat(t ->
                 t.getStatus() == InviteToken.Status.REVOKED
                         && "Sent to wrong person".equals(t.getRevokeReason())));
-        verify(auditRepository).save(argThat(a -> a.getEventType().equals("REVOKED")));
+        verify(auditService).record(anyLong(), eq("REVOKED"), any(), any(), any());
     }
 
     @Test
