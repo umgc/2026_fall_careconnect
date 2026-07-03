@@ -13,7 +13,7 @@ import java.util.Map;
  * Immutable audit ledger for AI events
  * records queries/responses/validation events/confirmation events
  * Write-once enforced at:
- *   1. DB trigger (V74) which rejects UPDATE/DELETE in PostgreSQL
+ *   1. DB trigger (V44) which rejects UPDATE/DELETE in PostgreSQL
  *   2. JPA callbacks (@PreUpdate / @PreRemove) at the app level
  * just to ensure that anyone who bypasses the service 
  * and writes to the repo directly is denied write access
@@ -39,7 +39,7 @@ import java.util.Map;
  * WBS: 4.11.x
  * Safety/consent tests
  * integration method: I have to verify the trigger works in Postgres w/ Docker
- * note: Needs manual V74 application
+ * note: Needs manual V44 application
  */
 
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
