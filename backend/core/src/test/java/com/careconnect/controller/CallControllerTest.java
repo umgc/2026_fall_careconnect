@@ -507,9 +507,9 @@ class CallControllerTest {
         }
 
         @Test
-        @DisplayName("SPEAKER-002: POST /end records attendee leave for current user")
+        @DisplayName("SPEAKER-002: POST /end records all attendees left when meeting ends")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
-        void speaker002_endCallRecordsAttendeeLeave() throws Exception {
+        void speaker002_endCallRecordsAllAttendeesLeft() throws Exception {
             mockCurrentCaregiver();
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
@@ -518,7 +518,8 @@ class CallControllerTest {
                             .content("{}"))
                     .andExpect(status().isOk());
 
-            verify(callAttendeeService).recordLeave(eq(CALL_ID), eq(2L));
+            verify(callAttendeeService).recordCallEnded(eq(CALL_ID));
+            verify(callAttendeeService, never()).recordLeave(eq(CALL_ID), eq(2L));
         }
 
         @Test
@@ -1004,6 +1005,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void sent004_endCallTriggersFinalSentimentRecord() throws Exception {
             mockCurrentCaregiver();
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
             // Provide sentiment data so that maybeRecordFinalOverallSentiment has something to process
             CallTelemetryEvent voiceEvent = new CallTelemetryEvent();
             voiceEvent.setChannel("VOICE");
@@ -1015,6 +1018,7 @@ class CallControllerTest {
                     .thenReturn(new SentimentResult(0.7, "CALM", "Good", "COMBINED", CALL_ID, 123L, false));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .param("otherPartyId", "1")
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))

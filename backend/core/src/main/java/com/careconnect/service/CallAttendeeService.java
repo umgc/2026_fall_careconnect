@@ -188,6 +188,23 @@ public class CallAttendeeService {
         }
     }
 
+    /** Marks every active attendee row for a call as left when the meeting is ended. */
+    @Transactional
+    public void recordCallEnded(final String callId) {
+        if (callId == null || callId.isBlank()) {
+            return;
+        }
+        final LocalDateTime now = LocalDateTime.now();
+        final List<CallAttendee> activeRows =
+                callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId);
+        for (final CallAttendee row : activeRows) {
+            row.setLeftAt(now);
+        }
+        if (!activeRows.isEmpty()) {
+            callAttendeeRepository.saveAll(activeRows);
+        }
+    }
+
     private void markSupersededAttendeeRows(
             final String callId, final Long userId, final String chimeAttendeeId) {
         final LocalDateTime now = LocalDateTime.now();
