@@ -103,6 +103,20 @@ class EmailOAuthControllerTest {
 
             assertThat(location.toString()).contains("oauthError=");
             assertThat(location.toString()).contains("token+exchange+failed");
+            assertThat(location.toString()).contains("/usps-test");
+        }
+
+        @Test
+        void redirectsWithOauthErrorOnReturnUrl_whenExchangeFails() {
+            final String returnUrl = "http://localhost:3000/usps-test";
+            final String state = oauthStateSigner.sign(USER_ID, returnUrl);
+            doThrow(new RuntimeException("token exchange failed"))
+                    .when(googleOAuthService).exchange(USER_ID, AUTH_CODE);
+
+            final URI location = controller.callback(AUTH_CODE, state).getHeaders().getLocation();
+
+            assertThat(location.toString()).startsWith(returnUrl);
+            assertThat(location.toString()).contains("oauthError=");
         }
 
         @Test

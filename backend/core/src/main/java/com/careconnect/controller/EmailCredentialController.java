@@ -21,6 +21,7 @@ public class EmailCredentialController {
     public ResponseEntity<EmailConnectionStatus> getConnectionStatus(
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
+        // Accept patientEmail (preferred) or legacy userId; null falls through to current user in service.
         String identifier = firstNonBlank(patientEmail, userId);
         return ResponseEntity.ok(emailCredentialService.getGmailConnectionStatus(identifier));
     }
@@ -35,6 +36,10 @@ public class EmailCredentialController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Shared param resolution for dual-named query params ({@code patientEmail} preferred,
+     * {@code userId} legacy). Intentionally local to this controller — same pattern as USPS controllers.
+     */
     private static String firstNonBlank(String first, String second) {
         if (first != null && !first.isBlank()) return first.trim();
         if (second != null && !second.isBlank()) return second.trim();

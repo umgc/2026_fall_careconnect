@@ -50,7 +50,9 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   void _handleOAuthReturnError() {
-    final oauthError = Uri.base.queryParameters['oauthError'];
+    // oauthError is set by EmailOAuthController callback failures; error is legacy fallback.
+    final oauthError = Uri.base.queryParameters['oauthError'] ??
+        Uri.base.queryParameters['error'];
     if (oauthError != null && oauthError.isNotEmpty) {
       setState(() {
         gmailState = _GmailConnectionState.needsReconnect;
