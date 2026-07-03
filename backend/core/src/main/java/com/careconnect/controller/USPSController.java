@@ -16,6 +16,11 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.Optional;
 
+/**
+ * Primary USPS mail digest endpoint for authenticated clients (e.g. informed delivery screen).
+ * <p>Requires a valid JWT — the previous {@code demo-user} unauthenticated fallback was removed
+ * intentionally. {@link UserRepository} is injected via constructor (standard Spring bean wiring).
+ */
 @RestController
 @RequestMapping("/v1/api/usps")
 public class USPSController {

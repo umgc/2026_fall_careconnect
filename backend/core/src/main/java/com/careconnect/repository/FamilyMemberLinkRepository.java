@@ -51,6 +51,8 @@ public interface FamilyMemberLinkRepository extends JpaRepository<FamilyMemberLi
         @Param("patientId") Long patientId,
         @Param("now") LocalDateTime now);
 
+    // patientId column is denormalized for faster lookups; OR covers rows where only patientUser is set.
+    // NULL expiresAt means a permanent link (see FamilyMemberLink#isActive). :now uses JVM default TZ.
     @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM FamilyMemberLink f " +
            "WHERE f.familyUser.id = :familyMemberUserId " +
            "AND (f.patientId = :patientId OR f.patientUser.id = :patientId) " +

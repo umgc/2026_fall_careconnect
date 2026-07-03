@@ -9,6 +9,7 @@ import 'package:care_connect_app/config/env_constant.dart';
 import 'package:care_connect_app/features/usps/domain/models/mail_image_availability.dart';
 import 'package:care_connect_app/features/usps/presentation/widgets/mail_envelope_read_aloud_button.dart';
 import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_image.dart';
+import 'package:care_connect_app/services/auth_token_manager.dart';
 
 class UspsTestScreen extends StatefulWidget {
   const UspsTestScreen({super.key});
@@ -30,6 +31,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   String? searchError;
   bool _isSearchActive = false;
 
+  /// Patient identifier for USPS endpoints (email preferred, falls back to database id).
+  String? _patientQueryValue() {
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    if (user == null) return null;
+    if (user.email.isNotEmpty) return user.email;
+    return user.id.toString();
+  }
+
+  Future<Dio> _authenticatedDio({
+    Duration connectTimeout = const Duration(seconds: 10),
+    Duration receiveTimeout = const Duration(seconds: 20),
+  }) async {
+    final headers = await AuthTokenManager.getAuthHeaders();
+    return Dio(BaseOptions(
+      connectTimeout: connectTimeout,
+      receiveTimeout: receiveTimeout,
+      headers: headers,
+    ));
+  }
+
   Future<void> _fetchDigest() async {
     setState(() {
       loading = true;
@@ -38,23 +59,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     });
     final base = getBackendBaseUrl();
 
-    // Get user ID to pass as parameter
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    final dynamic userIdRaw = user?.id;
-    final userId = userIdRaw?.toString() ?? 'demo-user';
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      setState(() {
+        error = 'Please log in to view USPS mail.';
+        loading = false;
+      });
+      return;
+    }
 
     // Format date as YYYY-MM-DD
     final dateString =
         '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
-    final encodedUser = Uri.encodeComponent(userId);
-    final url = '$base/api/usps/latest?userId=$encodedUser&date=$dateString';
+    final encodedPatient = Uri.encodeComponent(patientEmail);
+    final url =
+        '$base/api/usps/latest?patientEmail=$encodedPatient&date=$dateString';
 
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 20),
-      ));
+      final dio = await _authenticatedDio();
 
       final resp = await dio.get(url);
       if (resp.statusCode == 200) {
@@ -153,20 +175,23 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     });
 
     final base = getBackendBaseUrl();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    final dynamic userIdRaw = user?.id;
-    final userId = userIdRaw?.toString() ?? 'demo-user';
-    final encodedUser = Uri.encodeComponent(userId);
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      setState(() {
+        searchError = 'Please log in to search USPS mail.';
+        searchLoading = false;
+      });
+      return;
+    }
+    final encodedPatient = Uri.encodeComponent(patientEmail);
 
     final url =
-        '$base/api/usps/search?userId=$encodedUser&keyword=${Uri.encodeComponent(keyword)}';
+        '$base/api/usps/search?patientEmail=$encodedPatient&keyword=${Uri.encodeComponent(keyword)}';
 
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
+      final dio = await _authenticatedDio(
         receiveTimeout: const Duration(seconds: 30),
-      ));
+      );
 
       final resp = await dio.get(url);
       if (resp.statusCode == 200) {
@@ -269,16 +294,19 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _clearCache() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    final dynamic userIdRaw = user?.id;
-    final userId = userIdRaw?.toString() ?? 'demo-user';
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
+      );
+      return;
+    }
 
     final base = getBackendBaseUrl();
     try {
-      final dio = Dio();
+      final dio = await _authenticatedDio();
       await dio.post(
-          '$base/api/usps/clear-cache?userId=${Uri.encodeComponent(userId)}');
+          '$base/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Cache cleared! Try fetching digest again.')),

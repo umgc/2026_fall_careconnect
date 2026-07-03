@@ -269,6 +269,8 @@ public class AuthorizationService {
 
         // For Caregivers and Family Members, both the view permission AND an
         // active, non-expired link to this specific patient are required.
+        // Note: each call performs a lightweight EXISTS query; monitor latency on
+        // high-volume endpoints and add caching only if profiling shows a bottleneck.
         if (user.isCaregiver()) {
             if (!user.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)) {
                 throw new UnauthorizedException(
