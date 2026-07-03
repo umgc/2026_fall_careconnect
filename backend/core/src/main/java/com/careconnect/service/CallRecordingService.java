@@ -126,6 +126,9 @@ public class CallRecordingService {
   /** Default fragment window when starting a KVS Media Insights pipeline. */
   private static final Duration KVS_FRAGMENT_WINDOW = Duration.ofHours(3);
 
+  /** Retry post-call transcription shortly after a ready recording if the original trigger was missed. */
+  private static final Duration POST_CALL_TRANSCRIPTION_LATE_TRIGGER_WINDOW = Duration.ofMinutes(30);
+
   private static final DateTimeFormatter S3_TS_FORMAT =
       DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
   private static final int PRESIGNED_URL_TTL_MINUTES = 15;
@@ -626,6 +629,8 @@ public class CallRecordingService {
           throw new IllegalStateException(
               "No KVS stream assigned for attendee " + attendee.getChimeAttendeeId());
         }
+        callAttendeeService.recordKvsStreamMapping(
+            callId, attendee.getChimeAttendeeId(), streamArn);
         streams.add(RecordingStreamConfiguration.builder().streamArn(streamArn).build());
       }
       return streams;
@@ -634,6 +639,8 @@ public class CallRecordingService {
     for (final CallAttendee attendee : attendees) {
       final String streamArn =
           kvsStreamPoolService.checkout(callId, attendee.getChimeAttendeeId());
+      callAttendeeService.recordKvsStreamMapping(
+          callId, attendee.getChimeAttendeeId(), streamArn);
       streams.add(RecordingStreamConfiguration.builder().streamArn(streamArn).build());
     }
     return streams;
@@ -1425,7 +1432,14 @@ public class CallRecordingService {
       // Trigger post-call transcription for all recordings.
       // For system recordings (initiatedByUserId == null) the service also deletes the
       // concatenated file after transcription; user recordings are kept for playback.
-      if (!CONCATENATION_STATUS_READY.equals(existingStatus)) {
+      if (shouldTriggerPostCallTranscription(existingStatus, rec)) {
+        if (log.isInfoEnabled() && CONCATENATION_STATUS_READY.equals(existingStatus)) {
+          log.info(
+              "Late post-call transcription trigger for callId={} recordingId={} transcriptionStatus={}",
+              rec.getCallId(),
+              rec.getId(),
+              rec.getTranscriptionStatus());
+        }
         postCallTranscriptionService.transcribeAndCleanup(rec.getCallId(), rec, playableKey);
       }
     } else if (rec.getConcatenationPipelineId() != null
@@ -1446,6 +1460,26 @@ public class CallRecordingService {
       rec.setErrorMessage(nextErrorMessage);
       recordingRepository.save(rec);
     }
+  }
+
+  private static boolean shouldTriggerPostCallTranscription(
+      final String existingConcatenationStatus, final CallRecording rec) {
+    if (!CONCATENATION_STATUS_READY.equals(existingConcatenationStatus)) {
+      return true;
+    }
+    final String transcriptionStatus = rec.getTranscriptionStatus();
+    if (PostCallTranscriptionService.TRANSCRIPTION_STATUS_PROCESSING.equals(transcriptionStatus)
+        || PostCallTranscriptionService.TRANSCRIPTION_STATUS_COMPLETE.equals(transcriptionStatus)) {
+      return false;
+    }
+    final LocalDateTime referenceTime =
+        rec.getEndedAt() != null ? rec.getEndedAt() : rec.getStartedAt();
+    if (referenceTime == null) {
+      return false;
+    }
+    final LocalDateTime retryCutoff =
+        LocalDateTime.now().minus(POST_CALL_TRANSCRIPTION_LATE_TRIGGER_WINDOW);
+    return referenceTime.isAfter(retryCutoff);
   }
 
   /** Deletes raw recording artifacts for a call when the stitched video is ready. */

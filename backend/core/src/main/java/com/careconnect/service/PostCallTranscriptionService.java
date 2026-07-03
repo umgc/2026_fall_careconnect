@@ -1,14 +1,20 @@
 package com.careconnect.service;
 
+import com.careconnect.model.CallAttendee;
 import com.careconnect.model.CallRecording;
 import com.careconnect.model.PostCallTranscriptionJob;
+import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import com.careconnect.service.CallTranscriptService.TranscriptSegmentInput;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,10 +29,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.transcribe.TranscribeClient;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobRequest;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobResponse;
@@ -91,6 +99,15 @@ public class PostCallTranscriptionService {
 
   @Autowired
   private CallSummaryService callSummaryService;
+
+  @Autowired
+  private CallAttendeeRepository callAttendeeRepository;
+
+  @Autowired(required = false)
+  private KvsArchivedMediaExportService kvsArchivedMediaExportService;
+
+  @Autowired(required = false)
+  private KvsAudioTranscodeService kvsAudioTranscodeService;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -204,45 +221,56 @@ public class PostCallTranscriptionService {
         "transcription-jobs/" + safeCallId + "/" + rec.getId() + "/" + jobName + ".json";
 
     setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_PROCESSING);
+    if (log.isInfoEnabled()) {
+      log.info(
+          "Post-call transcription starting callId={} recordingId={} playableKey={}",
+          callId,
+          rec.getId(),
+          playableKey);
+    }
 
     try {
-      if (log.isInfoEnabled()) {
-        log.info("Starting Transcribe job {} for call {} media {}", jobName, callId, mediaUri);
-      }
-      try {
-        startTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), outputKey);
-      } catch (software.amazon.awssdk.services.transcribe.model.ConflictException conflict) {
-        // Deterministic job names make restart recovery idempotent: continue polling the
-        // already-created AWS job instead of creating a second pipeline.
-        log.info("Resuming existing Transcribe job {} for call {}", jobName, callId);
-      }
-
-      final boolean completed = pollForCompletion(jobName);
-      if (!completed) {
-        if (log.isWarnEnabled()) {
-          log.warn("Transcribe job {} did not complete in time for call {}", jobName, callId);
-        }
-        setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_FAILED);
-        return;
-      }
-
-      // Build speaker label map using participant count from telemetry JOIN events
-      final Map<String, String> speakerMap = buildSpeakerRoleMap(callId);
-      final List<TranscriptSegmentInput> parsed =
-          downloadAndParse(rec.getS3Bucket(), outputKey, rec.getStartedAt(), speakerMap);
-      final List<TranscriptSegmentInput> segments = new ArrayList<>(parsed.size());
-      for (int index = 0; index < parsed.size(); index++) {
-        final TranscriptSegmentInput item = parsed.get(index);
-        final UUID stableId = UUID.nameUUIDFromBytes(
-            (callId + ":" + rec.getId() + ":" + index).getBytes(StandardCharsets.UTF_8));
-        segments.add(new TranscriptSegmentInput(
-            stableId, item.speakerLabel(), item.text(), item.startMs(), item.endMs(),
-            item.source(), item.occurredAt()));
-      }
-      if (!segments.isEmpty()) {
-        final int stored = callTranscriptService.recordSegments(callId, null, segments);
+      final boolean kvsTranscribed = tryTranscribeKvsAttendeeStreams(callId, rec);
+      if (!kvsTranscribed) {
         if (log.isInfoEnabled()) {
-          log.info("Stored {} transcript segments for call {}", stored, callId);
+          log.info(
+              "Starting fallback Transcribe job {} for call {} media {}", jobName, callId, mediaUri);
+        }
+        try {
+          startTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), outputKey);
+        } catch (software.amazon.awssdk.services.transcribe.model.ConflictException conflict) {
+          // Deterministic job names make restart recovery idempotent: continue polling the
+          // already-created AWS job instead of creating a second pipeline.
+          log.info("Resuming existing Transcribe job {} for call {}", jobName, callId);
+        }
+
+        final boolean completed = pollForCompletion(jobName);
+        if (!completed) {
+          if (log.isWarnEnabled()) {
+            log.warn("Transcribe job {} did not complete in time for call {}", jobName, callId);
+          }
+          setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_FAILED);
+          return;
+        }
+
+        // Build speaker label map using participant count from telemetry JOIN events
+        final Map<String, String> speakerMap = buildSpeakerRoleMap(callId);
+        final List<TranscriptSegmentInput> parsed =
+            downloadAndParse(rec.getS3Bucket(), outputKey, rec.getStartedAt(), speakerMap);
+        final List<TranscriptSegmentInput> segments = new ArrayList<>(parsed.size());
+        for (int index = 0; index < parsed.size(); index++) {
+          final TranscriptSegmentInput item = parsed.get(index);
+          final UUID stableId = UUID.nameUUIDFromBytes(
+              (callId + ":" + rec.getId() + ":" + index).getBytes(StandardCharsets.UTF_8));
+          segments.add(new TranscriptSegmentInput(
+              stableId, item.speakerLabel(), item.text(), item.startMs(), item.endMs(),
+              item.source(), item.occurredAt()));
+        }
+        if (!segments.isEmpty()) {
+          final int stored = callTranscriptService.recordSegments(callId, null, segments);
+          if (log.isInfoEnabled()) {
+            log.info("Stored {} fallback transcript segments for call {}", stored, callId);
+          }
         }
       }
       setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_COMPLETE);
@@ -271,6 +299,242 @@ public class PostCallTranscriptionService {
   // ----------------------------------------------------------------
   // Private helpers
   // ----------------------------------------------------------------
+
+  private record AttendeeSegments(Long userId, List<TranscriptSegmentInput> segments) {}
+
+  private boolean tryTranscribeKvsAttendeeStreams(final String callId, final CallRecording rec) {
+    if (kvsArchivedMediaExportService == null || kvsAudioTranscodeService == null) {
+      if (log.isInfoEnabled()) {
+        log.info("KVS attendee transcription unavailable for call {}; falling back to MP4", callId);
+      }
+      return false;
+    }
+    final Instant start = toInstant(rec.getStartedAt());
+    final Instant end = toInstant(rec.getEndedAt());
+    if (start == null || end == null || !end.isAfter(start)) {
+      if (log.isWarnEnabled()) {
+        log.warn(
+            "KVS attendee transcription has invalid recording window for call {} start={} end={}",
+            callId,
+            start,
+            end);
+      }
+      return false;
+    }
+
+    final List<CallAttendee> attendees =
+        callAttendeeRepository.findByCallId(callId).stream()
+            .filter(attendee -> attendee.getKvsStreamArn() != null)
+            .filter(attendee -> !attendee.getKvsStreamArn().isBlank())
+            .filter(attendee -> attendee.getUserId() != null)
+            .toList();
+    if (attendees.isEmpty()) {
+      if (log.isInfoEnabled()) {
+        log.info("No KVS attendee stream mappings found for call {}; falling back to MP4", callId);
+      }
+      return false;
+    }
+    if (log.isInfoEnabled()) {
+      log.info("Processing {} KVS attendee streams for call {}", attendees.size(), callId);
+    }
+
+    final List<AttendeeSegments> pendingSegments = new ArrayList<>();
+    try {
+      for (final CallAttendee attendee : attendees) {
+        final List<TranscriptSegmentInput> segments = transcribeSingleAttendee(callId, rec, attendee, start, end);
+        if (segments.isEmpty()) {
+          if (log.isInfoEnabled()) {
+            log.info(
+                "KVS attendee transcription produced no text callId={} attendeeId={} userId={}",
+                callId,
+                attendee.getChimeAttendeeId(),
+                attendee.getUserId());
+          }
+          continue;
+        }
+        pendingSegments.add(new AttendeeSegments(attendee.getUserId(), segments));
+      }
+      if (pendingSegments.isEmpty()) {
+        if (log.isWarnEnabled()) {
+          log.warn("All KVS attendee transcription jobs were empty for call {}; falling back to MP4", callId);
+        }
+        return false;
+      }
+      int stored = 0;
+      for (final AttendeeSegments pending : pendingSegments) {
+        stored += callTranscriptService.recordSegments(callId, pending.userId(), pending.segments());
+      }
+      if (log.isInfoEnabled()) {
+        log.info("Stored {} KVS attendee transcript segments for call {}", stored, callId);
+      }
+      return stored > 0;
+    } catch (Exception e) {
+      if (log.isWarnEnabled()) {
+        log.warn("KVS attendee transcription failed for call {}; falling back to MP4: {}", callId, e.getMessage(), e);
+      }
+      return false;
+    }
+  }
+
+  private List<TranscriptSegmentInput> transcribeSingleAttendee(
+      final String callId,
+      final CallRecording rec,
+      final CallAttendee attendee,
+      final Instant start,
+      final Instant end) throws Exception {
+    Path rawPath = null;
+    Path wavPath = null;
+    try {
+      rawPath =
+          kvsArchivedMediaExportService.exportAttendeeRange(
+              attendee.getKvsStreamArn(), start, end);
+      wavPath = kvsAudioTranscodeService.toWav(rawPath);
+      final String wavKey = buildAttendeeWavKey(rec, attendee);
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(rec.getS3Bucket())
+              .key(wavKey)
+              .contentType("audio/wav")
+              .build(),
+          RequestBody.fromFile(wavPath));
+
+      final String jobName =
+          "cc-kvs-"
+              + sanitizeJobPart(callId)
+              + "-"
+              + attendee.getId()
+              + "-"
+              + Instant.now().getEpochSecond();
+      final String outputKey = rec.getS3Prefix() + "speaker-id/transcripts/" + jobName + ".json";
+      final String mediaUri = "s3://" + rec.getS3Bucket() + "/" + wavKey;
+      if (log.isInfoEnabled()) {
+        log.info(
+            "Starting KVS attendee Transcribe job {} for call {} attendeeId={} media={}",
+            jobName,
+            callId,
+            attendee.getChimeAttendeeId(),
+            mediaUri);
+      }
+      startAttendeeTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), outputKey);
+      if (!pollForCompletion(jobName)) {
+        throw new IllegalStateException("Attendee Transcribe job did not complete: " + jobName);
+      }
+      return downloadAndParseSingleAttendee(
+          rec.getS3Bucket(),
+          outputKey,
+          rec.getStartedAt(),
+          roleLabel(attendee.getRole()));
+    } finally {
+      deleteTempFile(rawPath);
+      deleteTempFile(wavPath);
+    }
+  }
+
+  private void startAttendeeTranscribeJob(
+      final String jobName,
+      final String mediaUri,
+      final String outputBucket,
+      final String outputKey) {
+    transcribeClient.startTranscriptionJob(
+        StartTranscriptionJobRequest.builder()
+            .transcriptionJobName(jobName)
+            .languageCode(LanguageCode.EN_US)
+            .mediaFormat(MediaFormat.WAV)
+            .mediaSampleRateHertz(48_000)
+            .media(Media.builder().mediaFileUri(mediaUri).build())
+            .outputBucketName(outputBucket)
+            .outputKey(outputKey)
+            .settings(Settings.builder().showSpeakerLabels(false).build())
+            .build());
+  }
+
+  private List<TranscriptSegmentInput> downloadAndParseSingleAttendee(
+      final String bucket,
+      final String key,
+      final LocalDateTime recordingStartedAt,
+      final String speakerLabel) throws Exception {
+    final byte[] bytes;
+    try (ResponseInputStream<GetObjectResponse> is =
+        s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build())) {
+      bytes = is.readAllBytes();
+    }
+    return parseSingleAttendeeTranscript(objectMapper.readTree(bytes), recordingStartedAt, speakerLabel);
+  }
+
+  private List<TranscriptSegmentInput> parseSingleAttendeeTranscript(
+      final JsonNode root,
+      final LocalDateTime recordingStartedAt,
+      final String speakerLabel) {
+    final JsonNode items = root.path("results").path("items");
+    if (!items.isArray() || items.isEmpty()) {
+      return List.of();
+    }
+    final StringBuilder text = new StringBuilder();
+    Long startMs = null;
+    Long endMs = null;
+    for (final JsonNode item : items) {
+      final String type = item.path("type").asText();
+      final String content = item.path("alternatives").path(0).path("content").asText("");
+      if (content.isBlank()) {
+        continue;
+      }
+      if ("pronunciation".equals(type)) {
+        if (text.length() > 0) {
+          text.append(' ');
+        }
+        text.append(content);
+        final long itemStartMs = toMs(item.path("start_time").asText("0"));
+        final long itemEndMs = toMs(item.path("end_time").asText("0"));
+        if (startMs == null) {
+          startMs = itemStartMs;
+        }
+        endMs = itemEndMs;
+      } else if (text.length() > 0) {
+        text.append(content);
+      }
+    }
+    if (text.length() == 0) {
+      return List.of();
+    }
+    return List.of(buildSegment(speakerLabel, text.toString().trim(), startMs, endMs, recordingStartedAt));
+  }
+
+  private static String buildAttendeeWavKey(final CallRecording rec, final CallAttendee attendee) {
+    return rec.getS3Prefix()
+        + "speaker-id/audio/"
+        + sanitizeJobPart(attendee.getChimeAttendeeId())
+        + ".wav";
+  }
+
+  private static String sanitizeJobPart(final String value) {
+    if (value == null || value.isBlank()) {
+      return "unknown";
+    }
+    return value.replaceAll("[^A-Za-z0-9_-]", "-");
+  }
+
+  private static String roleLabel(final String role) {
+    if (role == null || role.isBlank()) {
+      return "Unknown";
+    }
+    final String lower = role.toLowerCase(java.util.Locale.ROOT);
+    return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+  }
+
+  private static Instant toInstant(final LocalDateTime value) {
+    return value == null ? null : value.atZone(ZoneId.systemDefault()).toInstant();
+  }
+
+  private static void deleteTempFile(final Path path) {
+    if (path == null) {
+      return;
+    }
+    try {
+      Files.deleteIfExists(path);
+    } catch (Exception ignored) {
+      // Temp cleanup failure should not affect transcription status.
+    }
+  }
 
   private void startTranscribeJob(
       final String jobName,
@@ -342,12 +606,6 @@ public class PostCallTranscriptionService {
     return parseTranscriptItems(root, recordingStartedAt, speakerMap);
   }
 
-  /**
-   * Parses the AWS Transcribe JSON result into {@link TranscriptSegmentInput} records.
-   *
-   * <p>Items with the same speaker label are grouped into continuous segments so that the UI
-   * receives speaker-level utterances rather than individual words.
-   */
   /**
    * Parses AWS Transcribe JSON into {@link TranscriptSegmentInput} records.
    *

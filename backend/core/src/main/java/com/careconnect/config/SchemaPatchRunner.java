@@ -115,6 +115,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) NULL"
         );
         applyPatch(
+            "V76 – add kvs_stream_arn to call_attendees",
+            "ALTER TABLE call_attendees ADD COLUMN IF NOT EXISTS kvs_stream_arn VARCHAR(512) NULL;"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_kvs_stream_arn ON call_attendees(kvs_stream_arn)"
+        );
+        applyPatch(
             "V74 – update mock user addresses to Falls Church, VA",
             "UPDATE patient SET city = 'Falls Church', state = 'VA', zip = '22046' " +
             "WHERE user_id = (SELECT id FROM users WHERE email = 'patient@careconnect.com') " +

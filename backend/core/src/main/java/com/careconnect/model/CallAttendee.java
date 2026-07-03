@@ -37,6 +37,9 @@ public class CallAttendee {
     /** Maximum length for Chime attendee identifier values. */
     private static final int CHIME_ATTENDEE_ID_LENGTH = 255;
 
+    /** Maximum length for persisted KVS stream ARNs. */
+    private static final int KVS_STREAM_ARN_LENGTH = 512;
+
     /** Maximum length for role values. */
     private static final int ROLE_LENGTH = 40;
 
@@ -49,6 +52,9 @@ public class CallAttendee {
 
     @Column(name = "chime_attendee_id", nullable = false, length = CHIME_ATTENDEE_ID_LENGTH)
     private String chimeAttendeeId;
+
+    @Column(name = "kvs_stream_arn", length = KVS_STREAM_ARN_LENGTH)
+    private String kvsStreamArn;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;

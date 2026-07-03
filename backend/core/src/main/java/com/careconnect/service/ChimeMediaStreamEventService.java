@@ -89,6 +89,7 @@ public class ChimeMediaStreamEventService {
 
         registry.register(callId, attendeeId, streamArn);
         aliasStreamToRosterAttendees(callId, attendeeId, streamArn);
+        persistRosterStreamMappings(callId);
 
         if (log.isInfoEnabled()) {
             log.info(
@@ -99,6 +100,15 @@ public class ChimeMediaStreamEventService {
                     streamArn,
                     externalUserId,
                     externalMeetingId);
+        }
+    }
+
+    private void persistRosterStreamMappings(final String callId) {
+        for (final String rosterAttendeeId : callAttendeeService.findActiveChimeAttendeeIds(callId)) {
+            final String mappedStreamArn = registry.getStreamArn(callId, rosterAttendeeId);
+            if (mappedStreamArn != null && !mappedStreamArn.isBlank()) {
+                callAttendeeService.recordKvsStreamMapping(callId, rosterAttendeeId, mappedStreamArn);
+            }
         }
     }
 
