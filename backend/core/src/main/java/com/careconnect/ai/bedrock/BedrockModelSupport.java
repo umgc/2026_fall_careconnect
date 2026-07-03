@@ -112,14 +112,36 @@ public final class BedrockModelSupport {
             double topP,
             ObjectMapper objectMapper
     ) {
+        return buildChatPayload(modelId, null, prompt, maxTokens, temperature, topP, objectMapper);
+    }
+
+    /**
+     * Builds a Bedrock invoke payload with optional system instructions and a user message.
+     * Claude models use the native {@code system} field; Nova models prepend system text to the user message.
+     */
+    public static String buildChatPayload(
+            String modelId,
+            String systemPrompt,
+            String userPrompt,
+            int maxTokens,
+            double temperature,
+            double topP,
+            ObjectMapper objectMapper
+    ) {
         try {
+            String safeUser = userPrompt == null ? "" : userPrompt;
+            String safeSystem = systemPrompt == null ? "" : systemPrompt.trim();
+
             if (isNovaModel(modelId)) {
+                String combinedPrompt = safeSystem.isBlank()
+                        ? safeUser
+                        : safeSystem + "\n\n" + safeUser;
                 Map<String, Object> payload = Map.of(
                         "messages", List.of(
                                 Map.of(
                                         "role", "user",
                                         "content", List.of(
-                                                Map.of("text", prompt)
+                                                Map.of("text", combinedPrompt)
                                         )
                                 )
                         ),
@@ -133,17 +155,22 @@ public final class BedrockModelSupport {
             }
 
             if (isClaudeModel(modelId)) {
-                Map<String, Object> payload = Map.of(
-                        "anthropic_version", "bedrock-2023-05-31",
-                        "max_tokens", maxTokens,
-                        "temperature", temperature,
-                        "messages", List.of(
+                Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                payload.put("anthropic_version", "bedrock-2023-05-31");
+                payload.put("max_tokens", maxTokens);
+                payload.put("temperature", temperature);
+                if (!safeSystem.isBlank()) {
+                    payload.put("system", safeSystem);
+                }
+                payload.put(
+                        "messages",
+                        List.of(
                                 Map.of(
                                         "role", "user",
                                         "content", List.of(
                                                 Map.of(
                                                         "type", "text",
-                                                        "text", prompt
+                                                        "text", safeUser
                                                 )
                                         )
                                 )
