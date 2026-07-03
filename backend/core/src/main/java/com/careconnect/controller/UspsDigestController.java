@@ -21,6 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * USPS digest endpoints scoped to a specific patient.
+ * <p>All endpoints require a valid JWT ({@code SecurityConfig} enforces authentication).
+ * Pass {@code patientEmail} (preferred) or legacy {@code userId} (email or numeric database id).
+ * When neither is supplied, the authenticated user's own record is used.
+ */
 @RestController
 @RequestMapping("/v1/api/usps")
 public class UspsDigestController {
@@ -43,13 +49,14 @@ public class UspsDigestController {
     @GetMapping("/latest")
     public ResponseEntity<USPSDigest> getLatestDigest(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam String patientEmail,
+            @RequestParam(required = false) String patientEmail,
+            @RequestParam(required = false) String userId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
 
         if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
         User currentUser = securityUtil.resolveCurrentUser();
-        User patientUser = resolvePatientUser(patientEmail);
+        User patientUser = resolvePatientUser(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
@@ -66,12 +73,13 @@ public class UspsDigestController {
     @GetMapping("/search")
     public ResponseEntity<List<Map<String, Object>>> search(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam String patientEmail,
+            @RequestParam(required = false) String patientEmail,
+            @RequestParam(required = false) String userId,
             @RequestParam String keyword) throws UnauthorizedException {
 
         if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
         User currentUser = securityUtil.resolveCurrentUser();
-        User patientUser = resolvePatientUser(patientEmail);
+        User patientUser = resolvePatientUser(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
@@ -83,26 +91,41 @@ public class UspsDigestController {
     @PostMapping("/clear-cache")
     public ResponseEntity<String> clearCache(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam String patientEmail) throws UnauthorizedException {
+            @RequestParam(required = false) String patientEmail,
+            @RequestParam(required = false) String userId) throws UnauthorizedException {
 
         if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
         User currentUser = securityUtil.resolveCurrentUser();
-        User patientUser = resolvePatientUser(patientEmail);
+        User patientUser = resolvePatientUser(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
         uspsDigestService.clearCacheForUser(serviceUserId);
-        return ResponseEntity.ok("Cache cleared successfully for user: " + patientEmail);
+        String identifier = patientEmail != null && !patientEmail.isBlank()
+                ? patientEmail
+                : (userId != null && !userId.isBlank() ? userId : String.valueOf(patientUser.getId()));
+        return ResponseEntity.ok("Cache cleared successfully for user: " + identifier);
     }
 
     /**
-     * Resolve patient by email or numeric database id (legacy {@code userId} query param).
+     * Resolve patient by email, numeric database id, or default to the authenticated user.
+     * Legacy {@code userId} query param is accepted for backward compatibility with the Flutter test screen.
      */
-    private User resolvePatientUser(String patientIdentifier) throws UnauthorizedException {
-        return userRepository.findByEmail(patientIdentifier)
-                .or(() -> parseNumericUserId(patientIdentifier).flatMap(userRepository::findById))
+    private User resolvePatientUser(String patientEmail, String userId, User currentUser) throws UnauthorizedException {
+        String identifier = firstNonBlank(patientEmail, userId);
+        if (identifier == null || identifier.isBlank() || "demo-user".equals(identifier)) {
+            return currentUser;
+        }
+        return userRepository.findByEmail(identifier)
+                .or(() -> parseNumericUserId(identifier).flatMap(userRepository::findById))
                 .orElseThrow(() -> new UnauthorizedException(
-                        "No patient found for identifier: " + patientIdentifier));
+                        "No patient found for identifier: " + identifier));
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) return first.trim();
+        if (second != null && !second.isBlank()) return second.trim();
+        return null;
     }
 
     private static Optional<Long> parseNumericUserId(String value) {
