@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -187,9 +186,8 @@ class CallAttendeeServiceTest {
 
         service.recordLeave(CALL_ID, USER_ID);
 
-        final ArgumentCaptor<List<CallAttendee>> captor = ArgumentCaptor.forClass(List.class);
-        verify(callAttendeeRepository).saveAll(captor.capture());
-        assertThat(captor.getValue().get(0).getLeftAt()).isNotNull();
+        assertThat(active.getLeftAt()).isNotNull();
+        verify(callAttendeeRepository).saveAll(List.of(active));
     }
 
     @Test
@@ -201,5 +199,24 @@ class CallAttendeeServiceTest {
         service.recordLeave(CALL_ID, USER_ID);
 
         verify(callAttendeeRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("SPEAKER-O2: recordCallEnded sets left_at on all active attendee rows")
+    void recordCallEnded_setsLeftAtOnAllActiveRows() {
+        final CallAttendee caregiver = new CallAttendee();
+        caregiver.setCallId(CALL_ID);
+        caregiver.setUserId(2L);
+        final CallAttendee patient = new CallAttendee();
+        patient.setCallId(CALL_ID);
+        patient.setUserId(1L);
+        when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                .thenReturn(List.of(caregiver, patient));
+
+        service.recordCallEnded(CALL_ID);
+
+        assertThat(caregiver.getLeftAt()).isNotNull();
+        assertThat(patient.getLeftAt()).isNotNull();
+        verify(callAttendeeRepository).saveAll(List.of(caregiver, patient));
     }
 }

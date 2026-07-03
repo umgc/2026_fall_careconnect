@@ -483,7 +483,11 @@ public class CallController {
       }
       final boolean shouldEndMeeting = leave.terminationOwner();
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
-      callAttendeeService.recordLeave(callId, currentUser.getId());
+      if (shouldEndMeeting) {
+        callAttendeeService.recordCallEnded(callId);
+      } else {
+        callAttendeeService.recordLeave(callId, currentUser.getId());
+      }
 
       if (shouldEndMeeting) {
         final boolean completed = callTerminationExecutor.execute(
