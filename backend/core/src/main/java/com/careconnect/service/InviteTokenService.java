@@ -162,7 +162,8 @@ public class InviteTokenService {
      */
     @Transactional(readOnly = true)
     public InvitePreviewResponse previewInvite(String rawToken, String actorIp) {
-        InviteToken token = resolveUsableToken(rawToken);
+        // persistExpiry=false: this runs in a read-only tx, so we must NOT write.
+        InviteToken token = resolveUsableToken(rawToken, false);
 
         FamilyMemberLink link = linkRepository.findById(token.getLinkId())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Care-circle link not found"));
@@ -197,7 +198,9 @@ public class InviteTokenService {
      * @param acceptingUser the authenticated redeemer
      */
     public AcceptInviteResponse acceptInvite(String rawToken, User acceptingUser, String actorIp) {
-        InviteToken token = resolveUsableToken(rawToken);
+        // persistExpiry=true: accept runs in a read-write tx, so lazily
+        // flipping an expired token to EXPIRED is safe and useful here.
+        InviteToken token = resolveUsableToken(rawToken, true);
 
         // If the invite named an email, the redeemer must match it.
         if (token.getInvitedEmail() != null && !token.getInvitedEmail().isBlank()) {
@@ -293,8 +296,15 @@ public class InviteTokenService {
      * Resolve and validate a raw token to a usable entity, throwing deterministic
      * {@link AppException}s for each terminal/invalid state (issue #53: "Expired
      * or revoked links are rejected with clear API errors").
+     *
+     * @param persistExpiry when true, a PENDING-but-past-TTL token is lazily
+     *                      flipped to EXPIRED and saved. Callers running in a
+     *                      READ-ONLY transaction (e.g. previewInvite) MUST pass
+     *                      false: writing inside a read-only tx fails on
+     *                      PostgreSQL and would turn the intended 410 into a 500.
+     *                      The scheduled sweep will mark such tokens EXPIRED.
      */
-    private InviteToken resolveUsableToken(String rawToken) {
+    private InviteToken resolveUsableToken(String rawToken, boolean persistExpiry) {
         if (rawToken == null || rawToken.length() < LOOKUP_LENGTH) {
             throw new AppException(HttpStatus.NOT_FOUND, "Invite token not found");
         }
@@ -317,9 +327,13 @@ public class InviteTokenService {
                     "This invite has expired.");
             case PENDING -> {
                 if (token.isExpired()) {
-                    // Lazily flip status so the DB stays consistent between sweeps.
-                    token.setStatus(InviteToken.Status.EXPIRED);
-                    tokenRepository.save(token);
+                    // Only persist the flip from a read-write caller. In a
+                    // read-only tx (preview) we skip the write and let the
+                    // scheduled sweep reconcile the status later.
+                    if (persistExpiry) {
+                        token.setStatus(InviteToken.Status.EXPIRED);
+                        tokenRepository.save(token);
+                    }
                     throw new AppException(HttpStatus.GONE, "This invite has expired.");
                 }
             }

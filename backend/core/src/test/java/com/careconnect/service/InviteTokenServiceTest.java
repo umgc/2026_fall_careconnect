@@ -219,17 +219,38 @@ class InviteTokenServiceTest {
     }
 
     @Test
-    @DisplayName("previewInvite: pending past TTL -> lazily expires -> 410")
-    void previewInvite_lazyExpiry() {
+    @DisplayName("previewInvite: pending past TTL -> 410 WITHOUT writing (read-only safe)")
+    void previewInvite_expiredDoesNotWrite() {
+        InviteToken token = pendingToken();
+        token.setExpiresAt(LocalDateTime.now().minusHours(1));
+        when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
+        when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.previewInvite("abcdef0123456789EXP", "1.2.3.4"));
+        assertEquals(HttpStatus.GONE, ex.getStatus());
+        // Critical: preview runs in a read-only tx, so it must NOT save.
+        // (Persisting inside a read-only tx throws on PostgreSQL -> 500.)
+        verify(tokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("acceptInvite: pending past TTL -> 410 AND lazily persists EXPIRED")
+    void acceptInvite_expiredPersists() {
         InviteToken token = pendingToken();
         token.setExpiresAt(LocalDateTime.now().minusHours(1));
         when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
         when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
+        User redeemer = new User();
+        redeemer.setId(77L);
+        redeemer.setEmail("redeemer@test.com");
+
         AppException ex = assertThrows(AppException.class,
-                () -> service.previewInvite("abcdef0123456789EXP", "1.2.3.4"));
+                () -> service.acceptInvite("abcdef0123456789EXP", redeemer, "1.2.3.4"));
         assertEquals(HttpStatus.GONE, ex.getStatus());
+        // Accept runs read-write, so the lazy flip to EXPIRED is persisted here.
         verify(tokenRepository).save(argThat(t -> t.getStatus() == InviteToken.Status.EXPIRED));
     }
 
