@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/enhanced_patient_notes_widget.dart';
 import 'package:care_connect_app/widgets/structured_entry_form.dart';
+import 'package:care_connect_app/features/compliance/presentation/pages/compliance_checklist_page.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
 import 'package:care_connect_app/services/structured_entry_service.dart';
 
@@ -108,6 +109,22 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         context,
         title: '${widget.patientName} - Files',
         additionalActions: [
+          IconButton(
+            icon: const Icon(Icons.fact_check),
+            tooltip: 'Required documents checklist',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (routeContext) => ComplianceChecklistPage(
+                    subjectType: 'CARE_CIRCLE',
+                    subjectId: widget.patientId,
+                    subjectName: widget.patientName,
+                    canEdit: true,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFiles),
         ],
       ),

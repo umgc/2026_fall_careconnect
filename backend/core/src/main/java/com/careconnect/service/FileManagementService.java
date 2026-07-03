@@ -45,6 +45,7 @@ public class FileManagementService {
     private final PatientRepository patientRepository;
     private final DatabaseStorageService databaseStorageService;
     private final S3StorageService s3StorageService;
+    private final DocumentComplianceService documentComplianceService;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
@@ -52,12 +53,14 @@ public class FileManagementService {
                                UserRepository userRepository,
                                PatientRepository patientRepository,
                                DatabaseStorageService databaseStorageService,
+                               DocumentComplianceService documentComplianceService,
                                @Autowired(required = false) S3StorageService s3StorageService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.databaseStorageService = databaseStorageService;
+        this.documentComplianceService = documentComplianceService;
         this.s3StorageService = s3StorageService;
     }
     
@@ -120,6 +123,11 @@ public class FileManagementService {
             if (mapCategoryToEnum(category) == UserFile.FileCategory.PROFILE_IMAGE) {
                 updateUserProfileImage(userId, filePath);
             }
+
+            // Compliance tracking: an uploaded required document moves its
+            // checklist entry forward (MISSING -> IN_PROGRESS), audited with
+            // the uploader and filename. Never fails the upload itself.
+            documentComplianceService.recordDocumentUploaded(userFile, userId);
             
             return FileUploadResponse.builder()
                     .fileId(userFile.getId())
@@ -351,6 +359,11 @@ public class FileManagementService {
         entry = structuredEntryRepository.save(entry);
         log.info("Structured entry created: ID={}, file={}, type={}, patient={}, employee={}",
                 entry.getId(), fileId, documentType, patientId, employeeUserId);
+
+        // Compliance tracking: a digitized structured record completes the
+        // requirement on the subject's checklist (audited transition).
+        documentComplianceService.recordStructuredEntrySaved(entry, file, createdBy);
+
         return mapEntryToDTO(entry, file);
     }
 
