@@ -2,6 +2,7 @@ package com.careconnect.service.confirmation;
 
 import com.careconnect.dto.confirmation.ConfirmationDtos.ConfirmationItemResponse;
 import com.careconnect.dto.confirmation.ConfirmationDtos.CreateConfirmationRequest;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.confirmation.ConfirmationItem;
 import com.careconnect.model.confirmation.ConfirmationSourceType;
 import com.careconnect.model.confirmation.ConfirmationStatus;
@@ -15,6 +16,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -131,7 +134,9 @@ class ConfirmationServiceTest {
                     .build();
 
             assertThatThrownBy(() -> service.createItem(req))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(AppException.class)
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -170,8 +175,10 @@ class ConfirmationServiceTest {
             when(repository.findById(99L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.confirm(99L, RESOLVER_ID, NOTE))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("not found");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not found")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         /** 4.11.2
@@ -183,8 +190,10 @@ class ConfirmationServiceTest {
             when(repository.findById(1L)).thenReturn(Optional.of(item));
 
             assertThatThrownBy(() -> service.confirm(1L, RESOLVER_ID, "second"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("not PENDING");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not PENDING")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
         /** 4.11.2
@@ -196,8 +205,10 @@ class ConfirmationServiceTest {
             when(repository.findById(1L)).thenReturn(Optional.of(item));
 
             assertThatThrownBy(() -> service.confirm(1L, RESOLVER_ID, "try confirm"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("not PENDING");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not PENDING")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
         @Test
@@ -210,6 +221,20 @@ class ConfirmationServiceTest {
 
             assertThat(result.getStatus()).isEqualTo(ConfirmationStatus.CONFIRMED);
             assertThat(result.getResolutionNote()).isNull();
+        }
+
+        @Test
+        void throwsConflictWhenConcurrentlyModified() {
+            ConfirmationItem item = buildPendingItem(1L);
+            when(repository.findById(1L)).thenReturn(Optional.of(item));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            doThrow(new ObjectOptimisticLockingFailureException(ConfirmationItem.class, 1L))
+                    .when(repository).flush();
+
+            assertThatThrownBy(() -> service.confirm(1L, RESOLVER_ID, NOTE))
+                    .isInstanceOf(AppException.class)
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.CONFLICT);
         }
     }
 
@@ -250,8 +275,10 @@ class ConfirmationServiceTest {
             when(repository.findById(99L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.dismiss(99L, RESOLVER_ID, NOTE))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("not found");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not found")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         @Test
@@ -261,8 +288,10 @@ class ConfirmationServiceTest {
             when(repository.findById(1L)).thenReturn(Optional.of(item));
 
             assertThatThrownBy(() -> service.dismiss(1L, RESOLVER_ID, "second"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("not PENDING");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not PENDING")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
         @Test
@@ -272,8 +301,24 @@ class ConfirmationServiceTest {
             when(repository.findById(1L)).thenReturn(Optional.of(item));
 
             assertThatThrownBy(() -> service.dismiss(1L, RESOLVER_ID, "try dismiss"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("not PENDING");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not PENDING")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        @Test
+        void throwsConflictWhenConcurrentlyModified() {
+            ConfirmationItem item = buildPendingItem(1L);
+            when(repository.findById(1L)).thenReturn(Optional.of(item));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            doThrow(new ObjectOptimisticLockingFailureException(ConfirmationItem.class, 1L))
+                    .when(repository).flush();
+
+            assertThatThrownBy(() -> service.dismiss(1L, RESOLVER_ID, NOTE))
+                    .isInstanceOf(AppException.class)
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.CONFLICT);
         }
     }
 
@@ -375,8 +420,10 @@ class ConfirmationServiceTest {
             when(repository.findById(99L)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getItem(99L))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("not found");
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining("not found")
+                    .extracting(e -> ((AppException) e).getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         @Test

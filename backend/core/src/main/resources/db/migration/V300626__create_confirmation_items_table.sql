@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS confirmation_items (
     resolved_by     BIGINT,
     resolved_at     TIMESTAMP,
     resolution_note VARCHAR(500),
+    version         BIGINT       NOT NULL DEFAULT 0,
     created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );

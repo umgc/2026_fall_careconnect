@@ -45,6 +45,10 @@ public class ConfirmationItem {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     public void confirm(Long resolverUserId, String note) {
         this.status = ConfirmationStatus.CONFIRMED;
         this.resolvedBy = resolverUserId;

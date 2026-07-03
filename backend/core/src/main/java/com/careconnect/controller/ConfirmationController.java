@@ -3,7 +3,6 @@ package com.careconnect.controller;
 import com.careconnect.dto.confirmation.ConfirmationDtos.ConfirmationItemResponse;
 import com.careconnect.dto.confirmation.ConfirmationDtos.ResolveConfirmationRequest;
 import com.careconnect.model.User;
-import com.careconnect.model.confirmation.ConfirmationSourceType;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
@@ -29,7 +28,6 @@ public class ConfirmationController {
     private final AuthorizationService authorizationService;
 
     @RequirePermission(Permission.USE_AI_FEATURES)
-
     @GetMapping("/pending")
     @Operation(summary = "List pending confirmation items",
                description = "Returns all PENDING confirmation items, optionally filtered by source type")
@@ -39,18 +37,15 @@ public class ConfirmationController {
     })
     public ResponseEntity<List<ConfirmationItemResponse>> listPending(
             @RequestParam(required = false) String sourceType) throws UnauthorizedException {
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePermission(currentUser, Permission.USE_AI_FEATURES);
         if (sourceType != null) {
             return ResponseEntity.ok(
                 confirmationService.getPendingItemsBySourceType(
-                    ConfirmationSourceType.valueOf(sourceType)));
+                    ConfirmationService.parseSourceType(sourceType)));
         }
         return ResponseEntity.ok(confirmationService.getPendingItems());
     }
 
     @RequirePermission(Permission.USE_AI_FEATURES)
-
     @GetMapping("/{id}")
     @Operation(summary = "Get confirmation item details")
     @ApiResponses({
@@ -58,13 +53,10 @@ public class ConfirmationController {
         @ApiResponse(responseCode = "404", description = "Item not found")
     })
     public ResponseEntity<ConfirmationItemResponse> getItem(@PathVariable Long id) throws UnauthorizedException {
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePermission(currentUser, Permission.USE_AI_FEATURES);
         return ResponseEntity.ok(confirmationService.getItem(id));
     }
 
     @RequirePermission(Permission.USE_AI_FEATURES)
-
     @PostMapping("/{id}/confirm")
     @Operation(summary = "Confirm an item",
                description = "Mark a PENDING item as CONFIRMED")
@@ -77,14 +69,12 @@ public class ConfirmationController {
             @PathVariable Long id,
             @RequestBody(required = false) ResolveConfirmationRequest request) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePermission(currentUser, Permission.USE_AI_FEATURES);
         String note = request != null ? request.getNote() : null;
         var confirmed = confirmationService.confirm(id, currentUser.getId(), note);
-        return ResponseEntity.ok(confirmationService.getItem(confirmed.getId()));
+        return ResponseEntity.ok(confirmationService.toResponse(confirmed));
     }
 
     @RequirePermission(Permission.USE_AI_FEATURES)
-
     @PostMapping("/{id}/dismiss")
     @Operation(summary = "Dismiss an item",
                description = "Mark a PENDING item as DISMISSED")
@@ -97,14 +87,12 @@ public class ConfirmationController {
             @PathVariable Long id,
             @RequestBody(required = false) ResolveConfirmationRequest request) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePermission(currentUser, Permission.USE_AI_FEATURES);
         String note = request != null ? request.getNote() : null;
         var dismissed = confirmationService.dismiss(id, currentUser.getId(), note);
-        return ResponseEntity.ok(confirmationService.getItem(dismissed.getId()));
+        return ResponseEntity.ok(confirmationService.toResponse(dismissed));
     }
 
     @RequirePermission(Permission.USE_AI_FEATURES)
-
     @GetMapping("/user/{userId}")
     @Operation(summary = "Get confirmation items for a user",
                description = "Returns all confirmation items requested by a specific user")
