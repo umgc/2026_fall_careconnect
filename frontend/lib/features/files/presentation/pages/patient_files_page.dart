@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/enhanced_patient_notes_widget.dart';
 import 'package:care_connect_app/widgets/structured_entry_form.dart';
+import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/compliance/presentation/pages/compliance_checklist_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
 import 'package:care_connect_app/services/structured_entry_service.dart';
 
@@ -113,13 +115,21 @@ class _PatientFilesPageState extends State<PatientFilesPage>
             icon: const Icon(Icons.fact_check),
             tooltip: 'Required documents checklist',
             onPressed: () {
+              // Only coordinators may transition statuses (mirrors the
+              // backend's requireAdminOrCaregiver); everyone else gets a
+              // read-only checklist.
+              final role = Provider.of<UserProvider>(context, listen: false)
+                  .user
+                  ?.role
+                  .toUpperCase();
+              final canEdit = role == 'CAREGIVER' || role == 'ADMIN';
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (routeContext) => ComplianceChecklistPage(
                     subjectType: 'CARE_CIRCLE',
                     subjectId: widget.patientId,
                     subjectName: widget.patientName,
-                    canEdit: true,
+                    canEdit: canEdit,
                   ),
                 ),
               );

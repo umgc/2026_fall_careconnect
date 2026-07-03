@@ -88,21 +88,12 @@ Map<String, dynamic> _checklistJson() => {
       'percentComplete': 25,
     };
 
-Widget _page({bool canEdit = true}) => const MaterialApp(
+Widget _page({bool canEdit = true}) => MaterialApp(
       home: ComplianceChecklistPage(
         subjectType: 'CARE_CIRCLE',
         subjectId: 7,
         subjectName: 'Pat Recipient',
-        canEdit: true,
-      ),
-    );
-
-Widget _pageReadOnly() => const MaterialApp(
-      home: ComplianceChecklistPage(
-        subjectType: 'CARE_CIRCLE',
-        subjectId: 7,
-        subjectName: 'Pat Recipient',
-        canEdit: false,
+        canEdit: canEdit,
       ),
     );
 
@@ -191,7 +182,7 @@ void main() {
         (request) async => http.Response(jsonEncode(_checklistJson()), 200));
 
     await http.runWithClient(() async {
-      await tester.pumpWidget(_pageReadOnly());
+      await tester.pumpWidget(_page(canEdit: false));
       await tester.pumpAndSettle();
 
       expect(find.byType(PopupMenuButton<String>), findsNothing);

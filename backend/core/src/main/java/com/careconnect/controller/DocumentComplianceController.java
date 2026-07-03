@@ -177,8 +177,14 @@ public class DocumentComplianceController {
         if (user.isAdmin() || user.isCaregiver()) {
             return;
         }
-        if (type == SubjectType.EMPLOYEE && user.getId().equals(subjectId)) {
-            return;
+        if (type == SubjectType.EMPLOYEE) {
+            if (user.getId().equals(subjectId)) {
+                return;
+            }
+            // A patient id must never be conflated with an employee user id, so
+            // reject explicitly instead of falling through to patient access.
+            throw new UnauthorizedException(
+                    "Admin or caregiver role required to view another employee's checklist");
         }
         authorizationService.requirePatientAccess(user, subjectId);
     }

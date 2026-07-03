@@ -180,6 +180,18 @@ class DocumentComplianceControllerTest {
     }
 
     @Test
+    @DisplayName("GET /checklist - non-coordinator viewing another employee's checklist -> 403")
+    void checklist_otherEmployee_forbidden() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(patientUser); // id 5
+
+        mockMvc.perform(get("/v1/api/document-compliance/checklist/EMPLOYEE/2"))
+                .andExpect(status().isForbidden());
+        // Must be rejected outright — an employee user id is not a patient id.
+        verify(authorizationService, never()).requirePatientAccess(any(), anyLong());
+        verifyNoInteractions(complianceService);
+    }
+
+    @Test
     @DisplayName("GET /checklist - care-circle access denied for unrelated user -> 403")
     void checklist_careCircleUnauthorized_forbidden() throws Exception {
         when(securityUtil.resolveCurrentUser()).thenReturn(patientUser);
