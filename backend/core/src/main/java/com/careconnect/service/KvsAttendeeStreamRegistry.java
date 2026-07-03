@@ -1,6 +1,7 @@
 package com.careconnect.service;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
@@ -56,5 +57,42 @@ public class KvsAttendeeStreamRegistry {
             return;
         }
         streamArnByAttendeeByCall.remove(callId);
+    }
+
+    /**
+     * When EventBridge registers streams under pipeline attendee ids that differ from roster ids,
+     * copy the single orphan mapping onto the single roster row still missing a stream (O1).
+     *
+     * @return {@code true} when an alias was applied
+     */
+    public boolean tryAliasOrphansToRoster(
+            final String callId, final List<String> rosterAttendeeIds) {
+        if (callId == null
+                || callId.isBlank()
+                || rosterAttendeeIds == null
+                || rosterAttendeeIds.isEmpty()) {
+            return false;
+        }
+        final Map<String, String> mappings = streamArnByAttendeeByCall.get(callId);
+        if (mappings == null || mappings.isEmpty()) {
+            return false;
+        }
+        final List<String> rosterWithoutStream =
+                rosterAttendeeIds.stream().filter(id -> !mappings.containsKey(id)).toList();
+        final List<String> orphanIds =
+                mappings.keySet().stream()
+                        .filter(id -> !rosterAttendeeIds.contains(id))
+                        .toList();
+        if (orphanIds.size() != 1 || rosterWithoutStream.size() != 1) {
+            return false;
+        }
+        final String orphanId = orphanIds.get(0);
+        final String rosterId = rosterWithoutStream.get(0);
+        final String streamArn = mappings.get(orphanId);
+        if (streamArn == null || streamArn.isBlank()) {
+            return false;
+        }
+        mappings.put(rosterId, streamArn);
+        return true;
     }
 }

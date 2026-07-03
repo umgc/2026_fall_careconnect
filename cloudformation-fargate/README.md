@@ -401,9 +401,8 @@ After deploying `03-platform.yaml`, the stack provides:
      --region ${REGION}
    ```
 3. Set SSM `/careconnect/{env}/kvs-stream-pool-arn` to the returned pool ARN
-4. Wire EventBridge `MediaPipelineKinesisVideoStreamStart` → app webhook `/api/internal/chime/media-stream-events` (set `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` when endpoint is live)
-5. Redeploy `04-service.yaml` after SSM updates
-6. Smoke test: `media_stream_pipeline_id` populated on 2nd join; non-zero `.ogg` in recordings bucket
+4. Redeploy `04-service.yaml` after SSM updates — stack wires EventBridge `chime:MediaPipelineKinesisVideoStreamStart` → `/api/internal/chime/media-stream-events` and sets `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true`
+5. Smoke test: 2-party call; logs `Registered KVS stream from EventBridge`; DB `kvs_pipeline_id` set; non-zero `.ogg` in recordings bucket
 
 **ECS (`04-service.yaml`):** Sets `CARECONNECT_KVS_ENABLED=true` and loads `CARECONNECT_KVS_STREAM_POOL_ARN` and `CARECONNECT_CHIME_MEDIA_INSIGHTS_CONFIG_ARN` from SSM.
 

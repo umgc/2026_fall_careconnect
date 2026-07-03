@@ -192,6 +192,8 @@ public class CallRecordingService {
 
   @Autowired private KvsAttendeeStreamRegistry kvsAttendeeStreamRegistry;
 
+  @Autowired private CallAttendeeService callAttendeeService;
+
   @Value("${careconnect.recording.enabled:false}")
   private boolean recordingEnabled;
 
@@ -609,6 +611,9 @@ public class CallRecordingService {
 
   List<RecordingStreamConfiguration> buildAttendeeStreams(
       final String callId, final String meetingId, final String mediaStreamPipelineId) {
+    if (meetingId != null && !meetingId.isBlank()) {
+      callAttendeeService.reconcileRosterFromChime(callId, meetingId);
+    }
     final List<CallAttendee> attendees = callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId);
     final List<RecordingStreamConfiguration> streams = new ArrayList<>();
 

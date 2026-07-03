@@ -31,6 +31,8 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTransc
 import software.amazon.awssdk.services.chimesdkmeetings.model.TranscriptionConfiguration;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -678,10 +680,19 @@ public class ChimeService {
         createMeeting(callId);
         final Map<String, Object> cached = getCachedAttendeeCredentials(callId, userId);
         if (cached != null) {
-            if (log.isInfoEnabled()) {
-                log.info("Returning cached join credentials for userId: {} in callId: {}", userId, callId);
+            if (isCachedAttendeeStillLive(callId, userId, cached)) {
+                if (log.isInfoEnabled()) {
+                    log.info("Returning cached join credentials for userId: {} in callId: {}", userId, callId);
+                }
+                return cached;
             }
-            return cached;
+            invalidateCachedAttendeeCredentials(callId, userId);
+            if (log.isWarnEnabled()) {
+                log.warn(
+                        "Discarded stale cached attendee credentials for userId={} callId={}",
+                        userId,
+                        callId);
+            }
         }
         // Add user as attendee and return join credentials
         return createAttendee(callId, userId, role, displayName);
@@ -807,6 +818,52 @@ public class ChimeService {
         for (final Map.Entry<String, Meeting> entry : activeMeetings.entrySet()) {
             if (meetingId.equals(entry.getValue().meetingId())) {
                 return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns live app attendees in a meeting ({@code ListAttendees}), excluding pipeline-internal
+     * {@code aws:MediaPipeline-*} rows when possible.
+     */
+    public List<ChimeMeetingAttendee> listMeetingAttendees(final String meetingId) {
+        if (meetingId == null || meetingId.isBlank() || !isAwsChimeAvailable()) {
+            return List.of();
+        }
+        try {
+            final ListAttendeesResponse response =
+                    chimeSdkMeetingsClient.listAttendees(
+                            ListAttendeesRequest.builder().meetingId(meetingId).build());
+            if (response.attendees() == null) {
+                return List.of();
+            }
+            return response.attendees().stream()
+                    .map(
+                            attendee ->
+                                    new ChimeMeetingAttendee(
+                                            attendee.attendeeId(), attendee.externalUserId()))
+                    .toList();
+        } catch (Exception e) {
+            if (log.isWarnEnabled()) {
+                log.warn("ListAttendees failed for meetingId={}: {}", meetingId, e.getMessage());
+            }
+            return List.of();
+        }
+    }
+
+    /** Live Chime attendee id for a user in a meeting, or null when not present / unknown. */
+    public String findLiveAttendeeIdForUser(final String meetingId, final String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        final Long numericUserId = parseNumericUserId(userId);
+        if (numericUserId == null) {
+            return null;
+        }
+        for (final ChimeMeetingAttendee attendee : listMeetingAttendees(meetingId)) {
+            if (numericUserId.equals(ChimeExternalUserIdParser.parseUserId(attendee.externalUserId()))) {
+                return attendee.attendeeId();
             }
         }
         return null;
@@ -968,6 +1025,35 @@ public class ChimeService {
     private void cacheAttendeeCredentials(
             final String callId, final String userId, final Map<String, Object> credentials) {
         attendeeCredentials.computeIfAbsent(callId, k -> new ConcurrentHashMap<>()).put(userId, credentials);
+    }
+
+    private void invalidateCachedAttendeeCredentials(final String callId, final String userId) {
+        final Map<String, Map<String, Object>> perCall = attendeeCredentials.get(callId);
+        if (perCall != null) {
+            perCall.remove(userId);
+        }
+    }
+
+    private boolean isCachedAttendeeStillLive(
+            final String callId, final String userId, final Map<String, Object> cached) {
+        final Meeting meeting = activeMeetings.get(callId);
+        if (meeting == null) {
+            return false;
+        }
+        final Object cachedAttendeeId = cached.get("attendeeId");
+        if (cachedAttendeeId == null || cachedAttendeeId.toString().isBlank()) {
+            return false;
+        }
+        final String liveAttendeeId = findLiveAttendeeIdForUser(meeting.meetingId(), userId);
+        return liveAttendeeId == null || liveAttendeeId.equals(cachedAttendeeId.toString());
+    }
+
+    private static Long parseNumericUserId(final String userId) {
+        try {
+            return Long.parseLong(userId.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private Map<String, Object> buildMeetingResponse(final Meeting meeting) {

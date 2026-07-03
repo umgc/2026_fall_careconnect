@@ -10,10 +10,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Receives Chime media stream EventBridge notifications for local/dev wiring.
+ * Receives Chime media stream EventBridge notifications.
  *
- * <p>Enable with {@code careconnect.kvs.event-webhook.enabled=true} only for an optional EventBridge
- * fast-path. Primary discovery is KVS polling in {@link KvsPoolStreamDiscoveryService}.
+ * <p>Primary discovery path on deploy (EventBridge rule in {@code 04-service.yaml}).
+ * Enable with {@code careconnect.kvs.event-webhook.enabled=true}. KVS polling in
+ * {@link KvsPoolStreamDiscoveryService} remains fallback.
  */
 @RestController
 @RequestMapping("/api/internal/chime")
