@@ -206,6 +206,69 @@ void main() {
     });
   });
 
+  group('resilience', () {
+    testWidgets('throwing extractor resets loading and opens manual entry',
+        (tester) async {
+      await tester.pumpWidget(wrap(
+        initialFiles: [pickedFile],
+        extractor: ({required documentType, required files}) =>
+            throw Exception('network down'),
+      ));
+      await tester.pumpAndSettle();
+      await selectDocumentType(tester, 'Employment Application');
+
+      await tester.tap(find.text('Digitize & Review'));
+      await tester.pumpAndSettle();
+
+      // No stuck spinner, and the review page opened in manual mode.
+      expect(find.text('Processing...'), findsNothing);
+      expect(find.byType(HomeCareDocumentReviewPage), findsOneWidget);
+      expect(
+        find.text(
+            'Automatic extraction failed. Please enter the fields manually.'),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('throwing types loader falls back to local schema mirror',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HomeCareDigitizationCard(
+              patientId: 1,
+              typesLoader: () async => throw Exception('backend down'),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select document type'));
+      await tester.pumpAndSettle();
+      expect(find.text('Employment Application'), findsWidgets);
+    });
+
+    testWidgets('empty types list falls back to local schema mirror',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: HomeCareDigitizationCard(
+              patientId: 1,
+              typesLoader: () async => const <HomeCareDocumentTypeInfo>[],
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Select document type'));
+      await tester.pumpAndSettle();
+      expect(find.text('Certification / License'), findsWidgets);
+    });
+  });
+
   group('manual entry shortcut', () {
     testWidgets('"Enter manually" opens a blank schema form without files',
         (tester) async {

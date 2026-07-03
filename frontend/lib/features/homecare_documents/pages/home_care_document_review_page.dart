@@ -157,6 +157,16 @@ class _HomeCareDocumentReviewPageState
   }
 
   Future<void> _save() async {
+    final userId = widget.patientId;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to save digitized form: missing user ID.'),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? true)) return;
 
     setState(() => _saving = true);
@@ -197,7 +207,7 @@ class _HomeCareDocumentReviewPageState
         category: widget.result.documentType,
         description:
             'Digitized ${widget.result.documentTypeDisplayName} (reviewed)',
-        patientId: widget.patientId,
+        patientId: userId,
       );
 
       if (!mounted) return;

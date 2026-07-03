@@ -9,6 +9,7 @@ import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.homecare.HomeCareLlmExtractionService;
 import com.careconnect.service.invoice.TextractService;
+import com.careconnect.util.JsonSanitizer;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -140,7 +141,7 @@ public class HomeCareDocumentController {
 
         try {
             String aiResult = llmExtractionService.extractDocumentData(type, ocrResult.rawText);
-            String sanitizedJson = InvoiceController.JsonSanitizer.extractFirstJsonObject(aiResult);
+            String sanitizedJson = JsonSanitizer.extractFirstJsonObject(aiResult);
             if (sanitizedJson == null) {
                 throw new IllegalStateException("LLM response contained no JSON object");
             }

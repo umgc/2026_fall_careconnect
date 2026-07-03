@@ -57,7 +57,15 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
 
   Future<void> _loadTypes() async {
     final loader = widget.typesLoader ?? HomeCareDocumentApi.fetchDocumentTypes;
-    final types = await loader();
+    List<HomeCareDocumentTypeInfo> types;
+    try {
+      types = await loader();
+    } catch (_) {
+      types = defaultHomeCareDocumentTypes;
+    }
+    if (types.isEmpty) {
+      types = defaultHomeCareDocumentTypes;
+    }
     if (!mounted) return;
     setState(() {
       _types = types;
@@ -97,13 +105,25 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
     setState(() => _processing = true);
 
     final extractor = widget.extractor ?? HomeCareDocumentApi.extract;
-    final result = await extractor(
-      documentType: type,
-      files: List.of(_pickedFiles),
-    );
+    HomeCareExtractionResult result;
+    try {
+      result = await extractor(
+        documentType: type,
+        files: List.of(_pickedFiles),
+      );
+    } catch (_) {
+      // The default extractor never throws, but injected ones might — fall
+      // back to manual entry rather than leaving the card stuck processing.
+      result = HomeCareExtractionResult.manualFallback(
+        type,
+        message:
+            'Automatic extraction failed. Please enter the fields manually.',
+      );
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
 
     if (!mounted) return;
-    setState(() => _processing = false);
 
     if (result.manualEntryRequired) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -182,6 +202,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
               onChanged: _processing
                   ? null
                   : (value) {
+                      if (value == null) return;
                       setState(() {
                         _selectedType =
                             _types.firstWhere((t) => t.type == value);

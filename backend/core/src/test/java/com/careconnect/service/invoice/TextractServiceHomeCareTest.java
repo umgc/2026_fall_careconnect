@@ -161,6 +161,47 @@ class TextractServiceHomeCareTest {
     }
 
     @Test
+    void analyzeAndGetResult_nullPrefix_throwsIllegalArgument() {
+        // Prefix validation runs before the files are touched.
+        final MultipartFile file = mock(MultipartFile.class);
+
+        assertThatThrownBy(() -> textractService.analyzeAndGetResult(List.of(file), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("S3 key prefix cannot be null or blank.");
+    }
+
+    @Test
+    void analyzeAndGetResult_blankPrefix_throwsIllegalArgument() {
+        final MultipartFile file = mock(MultipartFile.class);
+
+        assertThatThrownBy(() -> textractService.analyzeAndGetResult(List.of(file), "   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("S3 key prefix cannot be null or blank.");
+    }
+
+    @Test
+    @Timeout(value = 15, unit = TimeUnit.SECONDS)
+    void analyzeAndGetResult_prefixWithoutTrailingSlash_isNormalized()
+            throws IOException, InterruptedException {
+        final MultipartFile file = nonEmptyFile("doc.pdf");
+        when(pdfService.combineToPdf(any())).thenReturn(new byte[]{1, 2, 3});
+
+        when(textractClient.startDocumentTextDetection(any(StartDocumentTextDetectionRequest.class)))
+                .thenReturn(StartDocumentTextDetectionResponse.builder().jobId("job-norm").build());
+        when(textractClient.getDocumentTextDetection(any(GetDocumentTextDetectionRequest.class)))
+                .thenReturn(GetDocumentTextDetectionResponse.builder()
+                        .jobStatus(JobStatus.SUCCEEDED)
+                        .blocks(List.of(Block.builder().blockType(BlockType.LINE).text("x").build()))
+                        .nextToken(null)
+                        .build());
+
+        final AiRequest.AnalysisResult result =
+                textractService.analyzeAndGetResult(List.of(file), "custom-folder");
+
+        assertThat(result.s3Key).startsWith("custom-folder/");
+    }
+
+    @Test
     void analyzeAndGetResult_textractClientError_propagatesAsFailure() throws IOException {
         final MultipartFile file = nonEmptyFile("i9.pdf");
         when(pdfService.combineToPdf(any())).thenReturn(new byte[]{1, 2, 3});

@@ -112,6 +112,33 @@ void main() {
     });
   });
 
+  group('saving', () {
+    testWidgets('save without a user ID shows an error instead of uploading',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: HomeCareDocumentReviewPage(
+          result: prefilledResult(),
+          patientId: null,
+        ),
+      ));
+
+      await tester.dragUntilVisible(
+        find.text('Confirm & Save'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.tap(find.text('Confirm & Save'));
+      await tester.pump();
+
+      expect(
+        find.text('Unable to save digitized form: missing user ID.'),
+        findsOneWidget,
+      );
+      // The review page stays open so nothing is lost.
+      expect(find.byType(HomeCareDocumentReviewPage), findsOneWidget);
+    });
+  });
+
   group('manual-entry fallback', () {
     HomeCareExtractionResult manualResult({String? message}) {
       final type = defaultHomeCareDocumentTypes
