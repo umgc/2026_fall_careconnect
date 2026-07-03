@@ -14,6 +14,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -140,7 +141,7 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('shows error when speech recognition not available',
+    testWidgets('shows error when speech recognition not available - English',
         (tester) async {
       // Override to return false for initialize
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -156,13 +157,40 @@ void main() {
       );
 
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Speech recognition not available'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('shows error when speech recognition not available - Spanish',
+        (tester) async {
+      // Override to return false for initialize
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugin.csdcorp.com/speech_to_text'),
+        (call) async {
+          if (call.method == 'has_permission') return true;
+          if (call.method == 'initialize') return false;
+          if (call.method == 'stop') return null;
+          if (call.method == 'cancel') return null;
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Reconocimiento de voz no disponible'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -198,19 +226,29 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('renders Scaffold with AppBar titled Voice Commands',
+    testWidgets('renders Scaffold with AppBar titled Voice Commands - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Voice Commands'), findsOneWidget);
       expect(find.byType(Scaffold), findsWidgets);
     });
 
+    testWidgets('renders Scaffold with AppBar titled Voice Commands - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Comandos de Voz'), findsOneWidget);
+      expect(find.byType(Scaffold), findsWidgets);
+    });
+
     testWidgets('AppBar has blue shade 900 background', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       final appBar = tester.widget<AppBar>(find.byType(AppBar));
@@ -220,7 +258,7 @@ void main() {
     testWidgets('renders mic_none icon initially (not wake-detected)',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byIcon(Icons.mic_none), findsOneWidget);
@@ -228,7 +266,7 @@ void main() {
 
     testWidgets('initial icon is grey and size 64', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       final icon = tester.widget<Icon>(find.byIcon(Icons.mic_none));
@@ -236,18 +274,27 @@ void main() {
       expect(icon.color, equals(Colors.grey));
     });
 
-    testWidgets('shows "Say wake word or tap mic" text initially (non-web)',
+    testWidgets('shows "Say wake word or tap mic" text initially (non-web and English only)',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
     });
 
+    testWidgets('shows translated "Tap mic to start" text initially - (Spanish)',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Toca el micrófono para comenzar'), findsOneWidget);
+    });
+
     testWidgets('instruction text has fontSize 18', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       final text =
@@ -257,7 +304,7 @@ void main() {
 
     testWidgets('renders FloatingActionButton with mic icon', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(FloatingActionButton), findsOneWidget);
@@ -266,7 +313,7 @@ void main() {
 
     testWidgets('uses Center and Column layout', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(Center), findsWidgets);
@@ -278,10 +325,10 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('tapping FAB shows Listening and mic_off on FAB',
+    testWidgets('tapping FAB shows Listening and mic_off on FAB - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -293,9 +340,24 @@ void main() {
       await _tearDown(tester);
     });
 
+        testWidgets('tapping FAB shows Listening and mic_off on FAB - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Escuchando...'), findsOneWidget);
+      expect(find.byIcon(Icons.mic_off), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
     testWidgets('large icon turns red when wake-detected', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -311,7 +373,7 @@ void main() {
     testWidgets('tapping FAB calls initialize and listen on speech plugin',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       speechMethodCalls.clear();
@@ -330,10 +392,10 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('tapping FAB while listening shows error if no speech',
+    testWidgets('tapping FAB while listening shows error if no speech - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -347,10 +409,27 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('tapping FAB while listening processes buffered text',
+    testWidgets('tapping FAB while listening shows error if no speech - Spanish',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('No se detectó ninguna voz.'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('tapping FAB while listening processes buffered text - English',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -368,16 +447,38 @@ void main() {
 
       await _tearDown(tester);
     });
+
+    testWidgets('tapping FAB while listening processes buffered text - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Fill buffer with partial
+      await _sendSpeechResult(tester, 'hello there', isFinal: false);
+
+      // Stop => processes buffer (unrecognized)
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Comando no reconocido; inténtelo de nuevo.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
   });
 
   group('VoiceCommandAI speech recognition', () {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('final result with unrecognized command shows error',
+    testWidgets('final result with unrecognized command shows error - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -397,10 +498,33 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('partial result does not trigger processing',
+    testWidgets('final result with unrecognized command shows error - Spanish',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'hello world', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+          find.text('Comando no reconocido; inténtelo de nuevo.'),
+          findsOneWidget);
+      expect(find.text('Estado: Comando no reconocido'), findsOneWidget);
+
+      await tester.pump(_statusSettleDelay);
+      expect(find.text('Toca el micrófono para comenzar'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('partial result does not trigger processing - English',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -413,10 +537,26 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('final result with empty words falls back to buffer',
+    testWidgets('partial result does not trigger processing - Spanish',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me', isFinal: false);
+
+      expect(find.text('Escuchando...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('final result with empty words falls back to buffer - English',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -427,6 +567,25 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Command not recognized \u2014 please try again.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('final result with empty words falls back to buffer - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'something unknown', isFinal: false);
+      await _sendSpeechResult(tester, '', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Comando no reconocido; inténtelo de nuevo.'),
           findsOneWidget);
 
       await _tearDown(tester);
@@ -522,9 +681,9 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('unrecognized command shows error snackbar', (tester) async {
+    testWidgets('unrecognized command shows error snackbar - English', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -534,6 +693,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Command not recognized \u2014 please try again.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('unrecognized command shows error snackbar - Spanish', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'do something random', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Comando no reconocido; inténtelo de nuevo.'),
           findsOneWidget);
 
       await _tearDown(tester);
@@ -624,10 +800,10 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('timeout with no speech shows "Listening timed out."',
+    testWidgets('timeout with no speech shows "Listening timed out." - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -645,9 +821,30 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('timeout with buffered text processes it', (tester) async {
+    testWidgets('timeout with no speech shows "Listening timed out." - Spanish',
+        (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Escuchando...'), findsOneWidget);
+
+      // Advance past the 12-second timeout and error display delay
+      await tester.pump(const Duration(seconds: 13));
+      await tester.pump(_statusSettleDelay);
+
+      expect(find.text('La escucha ha expirado.'), findsOneWidget);
+      expect(find.text('Toca el micrófono para comenzar'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('timeout with buffered text processes it - English', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -662,13 +859,31 @@ void main() {
 
       await _tearDown(tester);
     });
+
+    testWidgets('timeout with buffered text processes it - Spanish', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'some unknown command', isFinal: false);
+
+      await tester.pump(const Duration(seconds: 13));
+
+      expect(find.text('Comando no reconocido; inténtelo de nuevo.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
   });
 
   group('VoiceCommandAI permission denied', () {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('shows error when microphone permission denied',
+    testWidgets('shows error when microphone permission denied - English',
         (tester) async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
@@ -683,13 +898,39 @@ void main() {
       );
 
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Microphone permission denied'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('shows error when microphone permission denied - Spanish',
+        (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugin.csdcorp.com/speech_to_text'),
+        (call) async {
+          if (call.method == 'has_permission') return false;
+          if (call.method == 'initialize') return true;
+          if (call.method == 'stop') return null;
+          if (call.method == 'cancel') return null;
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Permiso de micrófono denegado'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -701,7 +942,7 @@ void main() {
 
     testWidgets('disposes cleanly while listening', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -713,7 +954,7 @@ void main() {
 
     testWidgets('disposes cleanly when not listening', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await _tearDown(tester);
@@ -725,10 +966,10 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('after processing, widget returns to initial state',
+    testWidgets('after processing, widget returns to initial state - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -744,10 +985,29 @@ void main() {
       await _tearDown(tester);
     });
 
+    testWidgets('after processing, widget returns to initial state - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'random words', isFinal: true);
+      await tester.pump(_statusSettleDelay);
+
+      expect(find.byIcon(Icons.mic_none), findsOneWidget);
+      expect(find.text('Toca el micrófono para comenzar'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
     testWidgets('stop is called on speech plugin during reset',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -768,7 +1028,7 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('shows Processing when wakeDetected but not yet listening',
+    testWidgets('shows Processing when wakeDetected but not yet listening - English',
         (tester) async {
       final completer = Completer<bool>();
 
@@ -786,7 +1046,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Tap FAB — sets wakeDetected=true then awaits hasPermission
@@ -804,15 +1064,52 @@ void main() {
 
       await _tearDown(tester);
     });
+
+      testWidgets('shows Processing when wakeDetected but not yet listening - Spanish',
+        (tester) async {
+      final completer = Completer<bool>();
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugin.csdcorp.com/speech_to_text'),
+        (call) async {
+          if (call.method == 'has_permission') return completer.future;
+          if (call.method == 'initialize') return true;
+          if (call.method == 'stop') return null;
+          if (call.method == 'cancel') return null;
+          if (call.method == 'listen') return true;
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Tap FAB — sets wakeDetected=true then awaits hasPermission
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
+
+      // wakeDetected=true, isListening=false => "Processing..."
+      expect(find.text('Procesando...'), findsOneWidget);
+
+      // Complete
+      completer.complete(true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Escuchando...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
   });
 
   group('VoiceCommandAI multiple interactions', () {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('can start listening again after reset', (tester) async {
+    testWidgets('can start listening again after reset - English', (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Start
@@ -831,6 +1128,31 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.text('Listening...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('can start listening again after reset - Spanish', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Start
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Escuchando...'), findsOneWidget);
+
+      // Stop (no speech)
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Flush timers
+      await _flush(tester);
+
+      // Start again
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Escuchando...'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -863,10 +1185,10 @@ void main() {
     });
 
     // TC-S1-VC-002
-    testWidgets('unknown command shows heard text and fallback status',
+    testWidgets('unknown command shows heard text and fallback status - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -888,10 +1210,35 @@ void main() {
       await _tearDown(tester);
     });
 
-    // TC-S1-VC-003
-    testWidgets('timeout with no speech shows error status', (tester) async {
+    testWidgets('unknown command shows heard text and fallback status - Spanish',
+        (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'do something random', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Estado: Comando no reconocido'), findsOneWidget);
+      expect(find.text('Escuchó: "do something random"'), findsOneWidget);
+      expect(
+        find.text(
+            'Reconocido: "do something random" — comando no reconocido'),
+        findsOneWidget,
+      );
+      expect(find.text('Comando no reconocido; inténtelo de nuevo.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-003
+    testWidgets('timeout with no speech shows error status - English', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -912,11 +1259,34 @@ void main() {
       await _tearDown(tester);
     });
 
+    testWidgets('timeout with no speech shows error status - Spanish', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      var sawErrorStatus = false;
+      for (var i = 0; i < 140; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Estado: Error').evaluate().isNotEmpty) {
+          sawErrorStatus = true;
+          break;
+        }
+      }
+
+      expect(sawErrorStatus, isTrue);
+      expect(find.text('La escucha ha expirado.'), findsNWidgets(2));
+
+      await _tearDown(tester);
+    });
+
     // TC-S1-VC-004
-    testWidgets('timeout with buffered text shows fallback status',
+    testWidgets('timeout with buffered text shows fallback status - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -935,6 +1305,32 @@ void main() {
 
       expect(sawFallbackStatus, isTrue);
       expect(find.text('Heard: "some unknown command"'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+      testWidgets('timeout with buffered text shows fallback status - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'some unknown command', isFinal: false);
+
+      var sawFallbackStatus = false;
+      for (var i = 0; i < 140; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.text('Estado: Comando no reconocido').evaluate().isNotEmpty) {
+          sawFallbackStatus = true;
+          break;
+        }
+      }
+
+      expect(sawFallbackStatus, isTrue);
+      expect(find.text('Escuchó: "some unknown command"'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -982,10 +1378,10 @@ void main() {
     });
 
     // TC-S1-VC-006
-    testWidgets('partial STT result updates heard text while listening',
+    testWidgets('partial STT result updates heard text while listening - English',
         (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1000,10 +1396,28 @@ void main() {
       await _tearDown(tester);
     });
 
-    // TC-S1-VC-007
-    testWidgets('after reset, status area returns to idle', (tester) async {
+    testWidgets('partial STT result updates heard text while listening - Spanish',
+        (tester) async {
       await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me', isFinal: false);
+
+      expect(find.text('Estado: Escuchando'), findsOneWidget);
+      expect(find.text('Escuchó: "take me"'), findsOneWidget);
+      expect(find.text('Escuchando...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    // TC-S1-VC-007
+    testWidgets('after reset, status area returns to idle - English', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Status: Ready'), findsOneWidget);
@@ -1017,6 +1431,28 @@ void main() {
       await tester.pump();
 
       expect(find.text('Status: Ready'), findsOneWidget);
+      expect(find.byKey(const Key('voice_status_heard')), findsNothing);
+      expect(find.byKey(const Key('voice_status_detail')), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('after reset, status area returns to idle - Spanish', (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Estado: Listo'), findsOneWidget);
+      expect(find.byKey(const Key('voice_status_heard')), findsNothing);
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'random words', isFinal: true);
+      await tester.pump(_statusSettleDelay);
+      await tester.pump();
+
+      expect(find.text('Estado: Listo'), findsOneWidget);
       expect(find.byKey(const Key('voice_status_heard')), findsNothing);
       expect(find.byKey(const Key('voice_status_detail')), findsNothing);
 
