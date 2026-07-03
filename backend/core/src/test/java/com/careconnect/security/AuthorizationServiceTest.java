@@ -360,6 +360,23 @@ public class AuthorizationServiceTest {
         }
 
         @Test
+        @DisplayName("requirePatientAccess_whenCaregiverLinkExpired_throwsUnauthorized")
+        void requirePatientAccess_whenCaregiverLinkExpired_throwsUnauthorized() {
+            when(mockUser.isAdmin()).thenReturn(false);
+            when(mockUser.isPatient()).thenReturn(false);
+            when(mockUser.isCaregiver()).thenReturn(true);
+            when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
+            when(mockUser.getId()).thenReturn(10L);
+            // Repository filters expired links; false simulates an expired or missing assignment.
+            when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any(LocalDateTime.class)))
+                .thenReturn(false);
+
+            UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+            assertTrue(ex.getMessage().contains("not assigned to patient"));
+        }
+
+        @Test
         @DisplayName("requirePatientAccess_whenFamilyMemberLacksViewPermission_throwsUnauthorized")
         void requirePatientAccess_whenFamilyMemberLacksViewPermission_throwsUnauthorized() {
             when(mockUser.isAdmin()).thenReturn(false);

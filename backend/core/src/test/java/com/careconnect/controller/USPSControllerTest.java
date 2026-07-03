@@ -1,7 +1,13 @@
 package com.careconnect.controller;
 
 import com.careconnect.model.USPSDigest;
+import com.careconnect.model.User;
+import com.careconnect.repository.UserRepository;
+import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
+import com.careconnect.util.SecurityUtil;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,65 +31,82 @@ class USPSControllerTest {
     @Mock
     private USPSDigestService service;
 
+    @Mock
+    private SecurityUtil securityUtil;
+
+    @Mock
+    private AuthorizationService authorizationService;
+
+    @Mock
+    private UserRepository userRepository;
+
     @InjectMocks
     private USPSController controller;
 
-    private USPSDigest emptyDigest() throws Exception {
+    private User mockCaller;
+
+    @BeforeEach
+    void setUp() {
+        mockCaller = mock(User.class);
+        lenient().when(mockCaller.getId()).thenReturn(42L);
+        lenient().when(securityUtil.resolveCurrentUser()).thenReturn(mockCaller);
+    }
+
+    private USPSDigest emptyDigest() {
         return new USPSDigest(null, List.of(), List.of());
     }
 
     // ─── getDigest ────────────────────────────────────────────────────────────
 
     @Test
-    void getDigest_jwtPresentDatePresent_callsDigestForDate() throws Exception {
+    void getDigest_jwtPresentDatePresent_callsDigestForDateForCurrentUser() throws Exception {
         final Jwt jwt = mock(Jwt.class);
-        when(jwt.getSubject()).thenReturn("user-123");
         final LocalDate date = LocalDate.of(2025, 1, 15);
         final USPSDigest digest = emptyDigest();
-        when(service.digestForDate("user-123", date)).thenReturn(Optional.of(digest));
+        when(service.digestForDate("42", date)).thenReturn(Optional.of(digest));
 
-        final ResponseEntity<USPSDigest> response = controller.getDigest(jwt, date);
+        final ResponseEntity<USPSDigest> response = controller.getDigest(jwt, null, date);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(digest);
-        verify(service).digestForDate("user-123", date);
+        verify(service).digestForDate("42", date);
+        verify(authorizationService).requirePatientAccess(mockCaller, 42L);
     }
 
     @Test
-    void getDigest_jwtPresentDateNull_callsLatestForUser() throws Exception {
+    void getDigest_jwtPresentDateNull_callsLatestForUserForCurrentUser() throws Exception {
         final Jwt jwt = mock(Jwt.class);
-        when(jwt.getSubject()).thenReturn("user-123");
         final USPSDigest digest = emptyDigest();
-        when(service.latestForUser("user-123")).thenReturn(Optional.of(digest));
+        when(service.latestForUser("42")).thenReturn(Optional.of(digest));
 
-        final ResponseEntity<USPSDigest> response = controller.getDigest(jwt, null);
+        final ResponseEntity<USPSDigest> response = controller.getDigest(jwt, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(digest);
-        verify(service).latestForUser("user-123");
+        verify(service).latestForUser("42");
+        verify(authorizationService).requirePatientAccess(mockCaller, 42L);
     }
 
     @Test
-    void getDigest_jwtNullDateNull_usesDemoUserFallback() throws Exception {
-        when(service.latestForUser("demo-user")).thenReturn(Optional.empty());
+    void getDigest_patientEmailProvided_resolvesPatientAndUsesDatabaseId() throws Exception {
+        final Jwt jwt = mock(Jwt.class);
+        final User patient = mock(User.class);
+        when(patient.getId()).thenReturn(7L);
+        when(userRepository.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(service.latestForUser("7")).thenReturn(Optional.empty());
 
-        final ResponseEntity<USPSDigest> response = controller.getDigest(null, null);
+        final ResponseEntity<USPSDigest> response = controller.getDigest(jwt, "patient@example.com", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        // orElseGet returns a new empty digest
         assertThat(response.getBody()).isNotNull();
-        verify(service).latestForUser("demo-user");
+        verify(authorizationService).requirePatientAccess(mockCaller, 7L);
+        verify(service).latestForUser("7");
     }
 
     @Test
-    void getDigest_jwtNullDatePresent_callsDigestForDateWithDemoUser() throws Exception {
-        final LocalDate date = LocalDate.of(2025, 3, 10);
-        when(service.digestForDate("demo-user", date)).thenReturn(Optional.empty());
-
-        final ResponseEntity<USPSDigest> response = controller.getDigest(null, date);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isNotNull();
-        verify(service).digestForDate("demo-user", date);
+    void getDigest_jwtNull_throwsUnauthorized() {
+        assertThatThrownBy(() -> controller.getDigest(null, null, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("Missing or invalid authentication token");
     }
 }
