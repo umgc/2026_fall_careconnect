@@ -22,6 +22,10 @@ CREATE TABLE invite_token
 (
     id                  BIGSERIAL PRIMARY KEY,
 
+    -- Optimistic-lock version (JPA @Version). Prevents double-accept races:
+    -- concurrent updates to the same row make the second commit fail.
+    version             BIGINT       NOT NULL DEFAULT 0,
+
     -- Fast, non-secret lookup key (prefix of the raw token). Indexed, unique.
     token_lookup        VARCHAR(32)  NOT NULL,
 

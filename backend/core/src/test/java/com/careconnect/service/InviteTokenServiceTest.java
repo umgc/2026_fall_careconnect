@@ -264,7 +264,7 @@ class InviteTokenServiceTest {
         when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
         when(patientRepository.findByUser(patientUser)).thenReturn(Optional.empty());
-        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(tokenRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         User redeemer = new User();
         redeemer.setId(77L);
@@ -274,9 +274,31 @@ class InviteTokenServiceTest {
 
         assertEquals(5L, resp.linkId());
         assertEquals(99L, resp.patientUserId());
-        verify(tokenRepository).save(argThat(t ->
+        verify(tokenRepository).saveAndFlush(argThat(t ->
                 t.getStatus() == InviteToken.Status.ACCEPTED && t.getAcceptedByUserId().equals(77L)));
         verify(auditService).record(anyLong(), eq("ACCEPTED"), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("acceptInvite: concurrent double-accept -> loser gets 409 (optimistic lock)")
+    void acceptInvite_optimisticLockConflict() {
+        InviteToken token = pendingToken();
+        when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
+        when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
+        // Simulate a concurrent transaction having already updated the row:
+        // the flush fails with an optimistic-lock error.
+        when(tokenRepository.saveAndFlush(any()))
+                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                        InviteToken.class, 1L));
+
+        User redeemer = new User();
+        redeemer.setId(88L);
+        redeemer.setEmail("redeemer2@test.com");
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.acceptInvite("abcdef0123456789ABC", redeemer, "1.2.3.4"));
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
     }
 
     @Test

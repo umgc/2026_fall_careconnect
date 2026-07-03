@@ -25,6 +25,16 @@ public class InviteToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Optimistic-lock version. JPA increments this on every update; if two
+     * concurrent transactions read the same row and both try to save, the
+     * second commit fails with OptimisticLockException. This prevents a
+     * double-accept race where two users could both redeem one PENDING token.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Column(name = "token_lookup", nullable = false, unique = true, length = 32)
     private String tokenLookup;
 
@@ -113,6 +123,9 @@ public class InviteToken {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     public String getTokenLookup() { return tokenLookup; }
     public void setTokenLookup(String tokenLookup) { this.tokenLookup = tokenLookup; }

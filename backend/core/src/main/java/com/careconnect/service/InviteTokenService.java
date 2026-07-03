@@ -218,7 +218,15 @@ public class InviteTokenService {
         token.setStatus(InviteToken.Status.ACCEPTED);
         token.setAcceptedByUserId(acceptingUser.getId());
         token.setAcceptedAt(LocalDateTime.now());
-        tokenRepository.save(token);
+        try {
+            // saveAndFlush forces the UPDATE now so an optimistic-lock conflict
+            // surfaces here (not later at commit) and can be mapped to 409.
+            tokenRepository.saveAndFlush(token);
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+            // A concurrent request accepted this same token first. Treat the
+            // loser of the race exactly like an already-accepted invite.
+            throw new AppException(HttpStatus.CONFLICT, "This invite has already been accepted.");
+        }
 
         auditService.record(token.getId(), InviteTokenAudit.EVENT_ACCEPTED, acceptingUser.getId(), actorIp,
                 "linkId=" + token.getLinkId());
