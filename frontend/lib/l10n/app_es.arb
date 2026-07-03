@@ -151,7 +151,6 @@
   "voicecommand_processingState": "Procesando",
   "voicecommand_phaseLabelReady": "Listo",
   "voicecommand_phaseLabelStatus": "Estado",
-
   "voicecommand_phaseLabelRecognized": "Comando reconocido",
   "voicecommand_phaseLabelCapture": "Capturado",
   "voicecommand_phaseLabelNotRecognized": "Comando no reconocido",
