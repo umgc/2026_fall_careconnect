@@ -184,7 +184,7 @@ class InviteTokenServiceTest {
     // --------------------------------------------------------------- preview
 
     @Test
-    @DisplayName("previewInvite: valid token returns link type, status, and reason")
+    @DisplayName("previewInvite: valid token returns context + ACCEPT action")
     void previewInvite_happyPath() {
         InviteToken token = pendingToken();
         token.setInviteReason("Join my care circle");
@@ -196,60 +196,102 @@ class InviteTokenServiceTest {
 
         InvitePreviewResponse resp = service.previewInvite("abcdef0123456789ZZZ", "1.2.3.4");
 
+        assertTrue(resp.valid());
+        assertEquals("VALID", resp.status());
+        assertEquals("ACCEPT", resp.nextAction());
         assertEquals(5L, resp.linkId());
-        assertEquals("PERMANENT", resp.linkType());
-        assertEquals("PENDING", resp.status());
         assertEquals("Join my care circle", resp.inviteReason());
     }
 
     @Test
-    @DisplayName("previewInvite: unknown lookup -> 404")
-    void previewInvite_notFound() {
-        when(tokenRepository.findByTokenLookup(anyString())).thenReturn(Optional.empty());
+    @DisplayName("previewInvite: email-scoped valid token -> SIGN_IN next action")
+    void previewInvite_emailScopedRequiresSignIn() {
+        InviteToken token = pendingToken();
+        token.setInvitedEmail("bob@test.com");
+        when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
+        when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(creator));
+        when(patientRepository.findByUser(patientUser)).thenReturn(Optional.empty());
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.previewInvite("abcdef0123456789XYZ", "1.2.3.4"));
-        assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+        InvitePreviewResponse resp = service.previewInvite("abcdef0123456789ZZZ", "1.2.3.4");
+
+        assertTrue(resp.valid());
+        assertEquals("SIGN_IN", resp.nextAction());
     }
 
     @Test
-    @DisplayName("previewInvite: hash mismatch -> 404 (no token leak)")
-    void previewInvite_hashMismatch() {
+    @DisplayName("previewInvite: unknown lookup -> non-enumerating INVALID (no throw, no context)")
+    void previewInvite_unknownIsInvalid() {
+        when(tokenRepository.findByTokenLookup(anyString())).thenReturn(Optional.empty());
+
+        InvitePreviewResponse resp = service.previewInvite("abcdef0123456789XYZ", "1.2.3.4");
+
+        assertFalse(resp.valid());
+        assertEquals("INVALID", resp.status());
+        assertNull(resp.linkId());
+        assertNull(resp.inviterName());
+    }
+
+    @Test
+    @DisplayName("previewInvite: hash mismatch is indistinguishable from unknown (INVALID)")
+    void previewInvite_hashMismatchIsInvalid() {
         when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(pendingToken()));
         when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(false);
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.previewInvite("abcdef0123456789BAD", "1.2.3.4"));
-        assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+        InvitePreviewResponse resp = service.previewInvite("abcdef0123456789BAD", "1.2.3.4");
+
+        assertFalse(resp.valid());
+        assertEquals("INVALID", resp.status());
     }
 
     @Test
-    @DisplayName("previewInvite: revoked token -> 410 GONE")
+    @DisplayName("previewInvite: revoked token -> REVOKED status, REQUEST_NEW, no context")
     void previewInvite_revoked() {
         InviteToken token = pendingToken();
         token.setStatus(InviteToken.Status.REVOKED);
         when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
         when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.previewInvite("abcdef0123456789RVK", "1.2.3.4"));
-        assertEquals(HttpStatus.GONE, ex.getStatus());
+        InvitePreviewResponse resp = service.previewInvite("abcdef0123456789RVK", "1.2.3.4");
+
+        assertFalse(resp.valid());
+        assertEquals("REVOKED", resp.status());
+        assertEquals("REQUEST_NEW", resp.nextAction());
+        assertNull(resp.inviterName());
     }
 
     @Test
-    @DisplayName("previewInvite: pending past TTL -> 410 WITHOUT writing (read-only safe)")
+    @DisplayName("previewInvite: already accepted -> ACCEPTED status, SIGN_IN")
+    void previewInvite_accepted() {
+        InviteToken token = pendingToken();
+        token.setStatus(InviteToken.Status.ACCEPTED);
+        when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
+        when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
+
+        InvitePreviewResponse resp = service.previewInvite("abcdef0123456789ACC", "1.2.3.4");
+
+        assertFalse(resp.valid());
+        assertEquals("ACCEPTED", resp.status());
+        assertEquals("SIGN_IN", resp.nextAction());
+    }
+
+    @Test
+    @DisplayName("previewInvite: pending past TTL -> EXPIRED status, no write (read-only safe)")
     void previewInvite_expiredDoesNotWrite() {
         InviteToken token = pendingToken();
         token.setExpiresAt(LocalDateTime.now().minusHours(1));
         when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
         when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.previewInvite("abcdef0123456789EXP", "1.2.3.4"));
-        assertEquals(HttpStatus.GONE, ex.getStatus());
-        // Critical: preview runs in a read-only tx, so it must NOT save.
-        // (Persisting inside a read-only tx throws on PostgreSQL -> 500.)
+        InvitePreviewResponse resp = service.previewInvite("abcdef0123456789EXP", "1.2.3.4");
+
+        assertFalse(resp.valid());
+        assertEquals("EXPIRED", resp.status());
+        assertEquals("REQUEST_NEW", resp.nextAction());
+        // Read-only path must never write.
         verify(tokenRepository, never()).save(any());
+        verify(tokenRepository, never()).saveAndFlush(any());
     }
 
     @Test
