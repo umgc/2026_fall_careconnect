@@ -268,7 +268,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _setStatus(
       status: _VoiceStatus.fallback,
       recognizedText: words,
-      detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_phaseLabelNotRecognized ?? 'command not recognized'}',
+      detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
     );
     _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.', updateStatus: false);
     await Future.delayed(_statusDisplayDelay);
