@@ -127,7 +127,58 @@ jobs:
           retention-days: 14
 
       # ----------------------------------------------------------------
-      # Stage 5: Coverage gate
+      # Stage 5a: SonarCloud — class-wide code quality scan
+      # Runs on every push and PR. Results posted as PR decoration.
+      # continue-on-error so gate never blocks on Sonar issues alone.
+      # ----------------------------------------------------------------
+      - name: SonarCloud scan (backend)
+        continue-on-error: true
+        working-directory: backend/core
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN not set — skipping SonarCloud scan."
+            exit 0
+          fi
+          mvn -B sonar:sonar \
+            -Dsonar.projectKey=umgc_2026_summer_careconnect \
+            -Dsonar.organization=umgc \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+            -DskipTests=true
+
+      - name: SonarCloud scan (frontend — Dart)
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN not set — skipping SonarCloud scan."
+            exit 0
+          fi
+          # Install sonar-scanner CLI
+          npm install -g sonar-scanner --silent 2>/dev/null || \
+            curl -sSL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip \
+              -o /tmp/sonar-scanner.zip && \
+            unzip -q /tmp/sonar-scanner.zip -d /opt && \
+            ln -sf /opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner /usr/local/bin/sonar-scanner || true
+
+          sonar-scanner \
+            -Dsonar.projectKey=umgc_2026_summer_careconnect \
+            -Dsonar.organization=umgc \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.sources=frontend/lib \
+            -Dsonar.tests=frontend/test \
+            -Dsonar.dart.lcov.reportPaths=frontend/coverage/lcov.info \
+            -Dsonar.exclusions="**/build/**,**/*.g.dart,**/*.freezed.dart" || true
+
+      # ----------------------------------------------------------------
+      # Stage 5b: Coverage gate
       # Posts failure details as a PR comment on hard failures.
       # ----------------------------------------------------------------
       - name: Run coverage gate
