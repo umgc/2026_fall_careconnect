@@ -37,6 +37,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.careconnect.model.Patient;
+import com.careconnect.model.UserFile;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.MessageRepository;
 
@@ -98,18 +99,29 @@ public class FileController {
         
         try {
             User currentUser = getCurrentUser();
-            log.info("File upload request - User: {}, Category: {}, PatientId: {}", 
+            log.info("File upload request - User: {}, Category: {}, PatientId: {}",
                     currentUser.getId(), category, patientId);
-            
+
+            // Validate the category up-front so an invalid value returns a clear 400.
+            // (The service wraps failures in a RuntimeException, which would otherwise
+            //  surface as a generic 500 and lose the helpful message.)
+            UserFile.FileCategory resolvedCategory;
+            try {
+                resolvedCategory = UserFile.FileCategory.fromClientValue(category);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            }
+
             // Validate patient access if patientId is specified
             if (patientId != null && !hasAccessToPatient(currentUser, patientId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Not authorized to upload files for this patient"));
             }
-            
+
             String userType = currentUser.getRole().name();
+            // Pass the canonical token downstream so storage naming/logs never see a raw alias.
             FileUploadResponse response = fileManagementService.uploadFile(
-                    file, currentUser.getId(), userType, category, description, patientId);
+                    file, currentUser.getId(), userType, resolvedCategory.name(), description, patientId);
             
             return ResponseEntity.ok(Map.of(
                     "data", response,
@@ -125,7 +137,157 @@ public class FileController {
                     .body(Map.of("error", "Failed to upload file"));
         }
     }
-    
+
+    // ==================== EMPLOYMENT / HOME-CARE INTAKE WORKFLOW ====================
+
+    /**
+     * Dedicated intake workflow for employment and home-care documents (hiring and
+     * onboarding forms). The document type is selected from the typed category model and
+     * the file is linked to the uploading owner and, when supplied, to the patient /
+     * care circle it pertains to.
+     */
+    @RequirePermission(Permission.RECORD_HEALTH_DATA)
+
+    @PostMapping("/intake")
+    @Operation(summary = "Upload an employment / home-care intake document",
+            description = "Intake workflow for hiring and onboarding forms with typed document-type "
+                    + "selection. The document is linked to the uploading owner and, when provided, to the "
+                    + "patient / care circle it pertains to.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Intake document uploaded successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid or missing document type"),
+        @ApiResponse(responseCode = "401", description = "Authentication required"),
+        @ApiResponse(responseCode = "403", description = "Not authorized for the target patient / care circle")
+    })
+    public ResponseEntity<?> uploadIntakeDocument(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "documentType", required = false) String documentType,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "patientId", required = false) Long patientId,
+            @RequestParam(value = "careCircleId", required = false) Long careCircleId) {
+
+        try {
+            User currentUser = getCurrentUser();
+
+            // A document type is mandatory for intake; accept either parameter name.
+            String rawType = (documentType != null && !documentType.isBlank()) ? documentType : category;
+            if (rawType == null || rawType.isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "A document type is required for intake uploads. "
+                                + "Valid types: " + employmentIntakeTypeNames()));
+            }
+
+            // Resolve + validate against the typed category model (clear 400 on a bad value).
+            UserFile.FileCategory resolved;
+            try {
+                resolved = UserFile.FileCategory.fromClientValue(rawType);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            }
+
+            // Intake is restricted to employment / home-care document types.
+            if (!resolved.isEmploymentIntake()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "'" + rawType + "' is not a valid intake document type. "
+                                + "Use one of: " + employmentIntakeTypeNames()));
+            }
+
+            // Care-circle context: a care circle is anchored on its care recipient (patient),
+            // so both parameters identify the same person. Reject conflicting values instead
+            // of silently preferring one, then accept whichever was supplied.
+            if (patientId != null && careCircleId != null && !patientId.equals(careCircleId)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "patientId and careCircleId refer to the same care "
+                                + "recipient but were given conflicting values ("
+                                + patientId + " vs " + careCircleId + "). Provide just one."));
+            }
+            Long careRecipientId = (patientId != null) ? patientId : careCircleId;
+
+            // Ensure the uploader may attach documents to that patient / care circle.
+            if (careRecipientId != null && !hasAccessToPatient(currentUser, careRecipientId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error",
+                                "Not authorized to upload intake documents for this patient / care circle"));
+            }
+
+            log.info("Intake upload - owner: {} ({}), type: {}, patient/careCircle: {}",
+                    currentUser.getId(), currentUser.getRole(), resolved, careRecipientId);
+
+            String userType = currentUser.getRole().name();
+            FileUploadResponse response = fileManagementService.uploadFile(
+                    file, currentUser.getId(), userType, resolved.name(), description, careRecipientId);
+
+            return ResponseEntity.ok(Map.of(
+                    "data", response,
+                    "message", "Intake document uploaded successfully"));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error uploading intake document", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to upload intake document"));
+        }
+    }
+
+    /**
+     * List the current user's employment / onboarding intake documents.
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+
+    @GetMapping("/intake/my")
+    @Operation(summary = "List my intake documents",
+            description = "List employment / onboarding documents owned by the current user")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Intake documents retrieved successfully"),
+        @ApiResponse(responseCode = "401", description = "Authentication required")
+    })
+    public ResponseEntity<?> listMyIntakeDocuments() {
+        try {
+            User currentUser = getCurrentUser();
+            List<UserFileDTO> files = fileManagementService.listEmploymentDocumentsForUser(
+                    currentUser.getId(), currentUser.getRole().name());
+            return ResponseEntity.ok(Map.of(
+                    "data", files,
+                    "message", "Intake documents retrieved successfully"));
+        } catch (Exception e) {
+            log.error("Error listing intake documents", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to list intake documents"));
+        }
+    }
+
+    /**
+     * List intake documents linked to a specific patient / care circle.
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+
+    @GetMapping("/intake/patient/{patientId}")
+    @Operation(summary = "List intake documents for a patient / care circle",
+            description = "List employment / onboarding documents linked to a patient (care-circle context)")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Intake documents retrieved successfully"),
+        @ApiResponse(responseCode = "403", description = "Access denied")
+    })
+    public ResponseEntity<?> listPatientIntakeDocuments(@PathVariable Long patientId) {
+        try {
+            User currentUser = getCurrentUser();
+            if (!hasAccessToPatient(currentUser, patientId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Not authorized to access this patient's intake documents"));
+            }
+            List<UserFileDTO> files = fileManagementService.listEmploymentDocumentsForPatient(patientId);
+            return ResponseEntity.ok(Map.of(
+                    "data", files,
+                    "message", "Intake documents retrieved successfully"));
+        } catch (Exception e) {
+            log.error("Error listing patient intake documents for patientId: {}", patientId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to list patient intake documents"));
+        }
+    }
+
     /**
      * Download a file by ID
      */
@@ -603,5 +765,13 @@ public class FileController {
     private String extractFileName(String filePath) {
         String[] parts = filePath.split("/");
         return parts[parts.length - 1];
+    }
+
+    /** Comma-separated, sorted list of valid intake document types (for error messages). */
+    private static String employmentIntakeTypeNames() {
+        return UserFile.FileCategory.EMPLOYMENT_INTAKE.stream()
+                .map(Enum::name)
+                .sorted()
+                .collect(Collectors.joining(", "));
     }
 }
