@@ -1,10 +1,15 @@
 package com.careconnect.service;
 
+import com.careconnect.indexing.IndexingEventEmitter;
+import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.repository.CallSummaryRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +49,9 @@ public class CallSummaryService {
   /** JSON mapper used to serialize and deserialize summary payloads. */
   private final ObjectMapper objectMapper;
 
+  /** Emits SUMMARY_CREATED events to the indexing outbox after successful persistence. */
+  private final IndexingEventEmitter indexingEventEmitter;
+
   /**
    * Returns the latest stored summary entity for a call when available.
    *
@@ -74,11 +82,17 @@ public class CallSummaryService {
   /**
    * Generates, stores, and returns a summary for the supplied call.
    *
+   * <p>Persistence and the SUMMARY_CREATED emit share one transaction
+   * so downstream indexing never sees a summary without its
+   * notification (or vice versa). Only SUCCESS summaries are emitted
+   * per Ravichandra Vasireddy's 2026-07-03 indexing contract.
+   *
    * @param callId call identifier
    * @param generatedByUserId generating user identifier, when known
    * @param latestByChannel latest channel sentiment events
    * @return stored summary response payload
    */
+  @Transactional
   public Map<String, Object> generateAndStoreSummary(
       final String callId,
       final Long generatedByUserId,
@@ -176,9 +190,61 @@ public class CallSummaryService {
       final String normalizedCallId,
       final CallSummary summary) {
     transcriptService.archiveIfEligible(normalizedCallId);
-    final Map<String, Object> response = toResponse(summaryRepository.save(summary));
+    final CallSummary saved = summaryRepository.save(summary);
+    emitIfSuccess(saved);
+    final Map<String, Object> response = toResponse(saved);
     response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(normalizedCallId));
     return response;
+  }
+
+  /**
+   * Emits SUMMARY_CREATED for a persisted summary when its status is
+   * SUCCESS. Per Ravi's 2026-07-03 indexing contract, NO_TRANSCRIPT
+   * and ERROR summaries are not indexed.
+   *
+   * <p>{@code patientId} is read from the summary entity (nullable);
+   * callers that supply it get RBAC-scoped indexing, historic paths
+   * leave the resolution to Ravi's downstream poller.
+   */
+  private void emitIfSuccess(final CallSummary summary) {
+    if (summary == null || !"SUCCESS".equals(summary.getStatus())) {
+      return;
+    }
+    final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+        "call",
+        "call_summaries",
+        summary.getId(),
+        summary.getCallId(),
+        summary.getPatientId(),
+        summary.getStatus(),
+        summary.getGeneratedAt(),
+        summary.getTranscriptSegmentCount(),
+        summary.getCaregiverVisibility(),
+        summary.getSummarizationEngine(),
+        sha256(summary.getSummaryJson()));
+    indexingEventEmitter.emitSummaryCreated(payload);
+  }
+
+  /**
+   * Computes {@code sha256:<hex>} of the given input for the
+   * SUMMARY_CREATED payload's contentHash field. Consumers use this
+   * to skip re-embedding an unchanged summary.
+   */
+  private String sha256(final String input) {
+    if (input == null) {
+      return null;
+    }
+    try {
+      final MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      final byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+      final StringBuilder hex = new StringBuilder(hash.length * 2);
+      for (final byte b : hash) {
+        hex.append(String.format("%02x", b));
+      }
+      return "sha256:" + hex;
+    } catch (final NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 not available", e);
+    }
   }
 
   private static Map<String, Object> emptySummaryPayload(

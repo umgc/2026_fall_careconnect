@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.repository.CallSummaryRepository;
@@ -38,6 +39,9 @@ class CallSummaryServiceTest {
     @Mock
     private BedrockSentimentService bedrockSentimentService;
 
+    @Mock
+    private IndexingEventEmitter indexingEventEmitter;
+
     private CallSummaryService service;
 
     private static final String CALL_ID = "call-1";
@@ -48,7 +52,8 @@ class CallSummaryServiceTest {
                 callSummaryRepository,
                 callTranscriptService,
                 bedrockSentimentService,
-                new ObjectMapper()
+                new ObjectMapper(),
+                indexingEventEmitter
         );
     }
 
