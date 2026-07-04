@@ -68,7 +68,7 @@ void main() {
       expect(find.textContaining('Employment Application'), findsWidgets);
 
       // Opening the menu reveals all 8 hiring/onboarding types.
-      await tester.tap(find.byType(EmploymentDocumentTypeDropdown));
+      await tester.tap(find.byType(DropdownButtonFormField<FileCategory>));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Onboarding Form'), findsWidgets);
@@ -89,7 +89,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Pick a type from the menu (context/type selection before upload).
-      await tester.tap(find.byType(EmploymentDocumentTypeDropdown));
+      await tester.tap(find.byType(DropdownButtonFormField<FileCategory>));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Onboarding Form').last);
       await tester.pumpAndSettle();

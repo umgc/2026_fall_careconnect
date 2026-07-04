@@ -105,8 +105,9 @@ public class FileController {
             // Validate the category up-front so an invalid value returns a clear 400.
             // (The service wraps failures in a RuntimeException, which would otherwise
             //  surface as a generic 500 and lose the helpful message.)
+            UserFile.FileCategory resolvedCategory;
             try {
-                UserFile.FileCategory.fromClientValue(category);
+                resolvedCategory = UserFile.FileCategory.fromClientValue(category);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
             }
@@ -116,10 +117,11 @@ public class FileController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Not authorized to upload files for this patient"));
             }
-            
+
             String userType = currentUser.getRole().name();
+            // Pass the canonical token downstream so storage naming/logs never see a raw alias.
             FileUploadResponse response = fileManagementService.uploadFile(
-                    file, currentUser.getId(), userType, category, description, patientId);
+                    file, currentUser.getId(), userType, resolvedCategory.name(), description, patientId);
             
             return ResponseEntity.ok(Map.of(
                     "data", response,
@@ -191,8 +193,15 @@ public class FileController {
                                 + "Use one of: " + employmentIntakeTypeNames()));
             }
 
-            // Care-circle context: a care circle is anchored on its care recipient (patient).
-            // Accept an explicit patientId, or fall back to a supplied careCircleId.
+            // Care-circle context: a care circle is anchored on its care recipient (patient),
+            // so both parameters identify the same person. Reject conflicting values instead
+            // of silently preferring one, then accept whichever was supplied.
+            if (patientId != null && careCircleId != null && !patientId.equals(careCircleId)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "patientId and careCircleId refer to the same care "
+                                + "recipient but were given conflicting values ("
+                                + patientId + " vs " + careCircleId + "). Provide just one."));
+            }
             Long careRecipientId = (patientId != null) ? patientId : careCircleId;
 
             // Ensure the uploader may attach documents to that patient / care circle.

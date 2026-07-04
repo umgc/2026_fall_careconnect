@@ -11,10 +11,13 @@ import 'enhanced_file_service.dart';
 
 /// File upload categories based on healthcare requirements.
 ///
-/// The [value] of each entry is the canonical token shared with the backend
-/// (`com.careconnect.model.UserFile.FileCategory`). Keeping these aligned
-/// guarantees an uploaded file is stored under the same category the user
-/// selected, instead of silently falling back to "other".
+/// The [value] of each entry is a backend-recognized token: either a canonical
+/// `com.careconnect.model.UserFile.FileCategory` enum name, or one of its
+/// accepted aliases (e.g. AI_CHAT_UPLOAD, HEALTH_DATA_IMPORT and BACKUP_FILE
+/// intentionally resolve to OTHER_DOCUMENT on the backend). Unknown values are
+/// rejected by the backend with a 400 rather than silently miscategorized, so
+/// keeping this list aligned guarantees a file is stored under the category
+/// the user selected.
 enum FileCategory {
   // Core Healthcare
   medicalReport('MEDICAL_RECORD', 'Medical Report', '🏥'),
