@@ -1,0 +1,134 @@
+{
+  "formType": "W4",
+  "title": "Employee's Withholding Certificate (Form W-4)",
+  "description": "Federal income tax withholding elections completed by every new employee.",
+  "issuingAuthority": "Internal Revenue Service (IRS)",
+  "version": "2026",
+  "effectiveDate": "2026-01-01",
+  "sourceDocument": {
+    "name": "Employee's Withholding Certificate",
+    "formNumber": "W-4",
+    "edition": "2026",
+    "ombNumber": "1545-0074",
+    "url": "https://www.irs.gov/pub/irs-pdf/fw4.pdf"
+  },
+  "fileAttachment": {
+    "category": "ONBOARDING_FORM",
+    "generatesPdf": true
+  },
+  "sections": [
+    {
+      "id": "step1_personal",
+      "title": "Step 1 - Enter Personal Information",
+      "order": 0,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "first_name_mi", "label": "First name and middle initial", "fieldType": "TEXT", "required": true, "order": 0,
+          "validations": [{ "type": "MAX_LENGTH", "value": 60 }],
+          "sourceMapping": { "documentField": "First name and middle initial", "section": "Step 1", "line": "1(a)", "page": 1 } },
+        { "id": "last_name", "label": "Last name", "fieldType": "TEXT", "required": true, "order": 1,
+          "validations": [{ "type": "MAX_LENGTH", "value": 60 }],
+          "sourceMapping": { "documentField": "Last name", "section": "Step 1", "line": "1(a)", "page": 1 } },
+        { "id": "address", "label": "Address", "fieldType": "TEXT", "required": true, "order": 2,
+          "sourceMapping": { "documentField": "Address", "section": "Step 1", "line": "1(b)", "page": 1 } },
+        { "id": "city_state_zip", "label": "City or town, state, and ZIP code", "fieldType": "TEXT", "required": true, "order": 3,
+          "sourceMapping": { "documentField": "City or town, state, and ZIP code", "section": "Step 1", "line": "1(b)", "page": 1 } },
+        { "id": "ssn", "label": "Social Security Number", "fieldType": "SSN", "required": true, "order": 4, "sensitive": true,
+          "validations": [{ "type": "SSN", "message": "Enter a valid 9-digit Social Security Number." }],
+          "sourceMapping": { "documentField": "Social security number", "section": "Step 1", "line": "1(b)", "page": 1 } },
+        { "id": "filing_status", "label": "Filing status", "fieldType": "RADIO", "required": true, "order": 5,
+          "options": [
+            { "value": "SINGLE_OR_MFS", "label": "Single or Married filing separately" },
+            { "value": "MFJ_OR_QSS", "label": "Married filing jointly or Qualifying surviving spouse" },
+            { "value": "HEAD_OF_HOUSEHOLD", "label": "Head of household" }
+          ],
+          "validations": [{ "type": "ENUM", "value": ["SINGLE_OR_MFS", "MFJ_OR_QSS", "HEAD_OF_HOUSEHOLD"] }],
+          "sourceMapping": { "documentField": "Filing status", "section": "Step 1", "line": "1(c)", "page": 1 } }
+      ]
+    },
+    {
+      "id": "step2_multiple_jobs",
+      "title": "Step 2 - Multiple Jobs or Spouse Works",
+      "order": 1,
+      "required": false,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "multiple_jobs", "label": "Two jobs total / spouse also works (use higher withholding)", "fieldType": "CHECKBOX", "required": false, "order": 0,
+          "helpText": "Check this box if it applies. Otherwise complete the Multiple Jobs Worksheet or the IRS estimator.",
+          "sourceMapping": { "documentField": "Multiple jobs checkbox", "section": "Step 2", "line": "2(c)", "page": 1 } }
+      ]
+    },
+    {
+      "id": "step3_dependents",
+      "title": "Step 3 - Claim Dependents and Other Credits",
+      "order": 2,
+      "required": false,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "qualifying_children_credit", "label": "Qualifying children under 17 x $2,200", "fieldType": "CURRENCY", "required": false, "order": 0,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "sourceMapping": { "documentField": "Qualifying children credit", "section": "Step 3", "line": "3(a)", "page": 1 } },
+        { "id": "other_dependents_credit", "label": "Other dependents x $500", "fieldType": "CURRENCY", "required": false, "order": 1,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "sourceMapping": { "documentField": "Other dependents credit", "section": "Step 3", "line": "3(b)", "page": 1 } },
+        { "id": "total_credits", "label": "Total credits", "fieldType": "CURRENCY", "required": false, "order": 2,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "sourceMapping": { "documentField": "Total of credits", "section": "Step 3", "line": "3", "page": 1 } }
+      ]
+    },
+    {
+      "id": "step4_adjustments",
+      "title": "Step 4 - Other Adjustments (optional)",
+      "order": 3,
+      "required": false,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "other_income", "label": "4(a) Other income (not from jobs)", "fieldType": "CURRENCY", "required": false, "order": 0,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "sourceMapping": { "documentField": "Other income", "section": "Step 4", "line": "4(a)", "page": 1 } },
+        { "id": "deductions", "label": "4(b) Deductions (above the standard deduction)", "fieldType": "CURRENCY", "required": false, "order": 1,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "sourceMapping": { "documentField": "Deductions", "section": "Step 4", "line": "4(b)", "page": 1 } },
+        { "id": "extra_withholding", "label": "4(c) Extra withholding per pay period", "fieldType": "CURRENCY", "required": false, "order": 2,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "sourceMapping": { "documentField": "Extra withholding", "section": "Step 4", "line": "4(c)", "page": 1 } },
+        { "id": "exempt", "label": "Claim exemption from withholding for 2026", "fieldType": "CHECKBOX", "required": false, "order": 3,
+          "helpText": "Check only if you meet both IRS conditions for exemption. Certification is required.",
+          "sourceMapping": { "documentField": "Exempt checkbox", "section": "Step 4", "line": "Exempt", "page": 1 } }
+      ]
+    },
+    {
+      "id": "step5_signature",
+      "title": "Step 5 - Sign Here",
+      "order": 4,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "employee_signature", "label": "Employee's signature", "fieldType": "SIGNATURE", "required": true, "order": 0,
+          "validations": [{ "type": "REQUIRED", "message": "Form W-4 is not valid until signed." }],
+          "sourceMapping": { "documentField": "Employee's signature", "section": "Step 5", "page": 1 } },
+        { "id": "signature_date", "label": "Date", "fieldType": "DATE", "required": true, "order": 1,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date", "section": "Step 5", "page": 1 } }
+      ]
+    },
+    {
+      "id": "employer_only",
+      "title": "Employers Only",
+      "order": 5,
+      "required": true,
+      "completedBy": "EMPLOYER",
+      "fields": [
+        { "id": "employer_name_address", "label": "Employer's name and address", "fieldType": "TEXT", "required": true, "order": 0,
+          "sourceMapping": { "documentField": "Employer's name and address", "section": "Employers Only", "page": 1 } },
+        { "id": "first_date_employment", "label": "First date of employment", "fieldType": "DATE", "required": true, "order": 1,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "First date of employment", "section": "Employers Only", "page": 1 } },
+        { "id": "employer_ein", "label": "Employer Identification Number (EIN)", "fieldType": "EIN", "required": true, "order": 2,
+          "validations": [{ "type": "EIN", "message": "Enter a valid 9-digit EIN." }],
+          "sourceMapping": { "documentField": "Employer identification number (EIN)", "section": "Employers Only", "page": 1 } }
+      ]
+    }
+  ]
+}

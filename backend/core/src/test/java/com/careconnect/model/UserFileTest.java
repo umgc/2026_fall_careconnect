@@ -148,12 +148,13 @@ class UserFileTest {
 
     @Test
     void fileCategory_allValues() throws Exception {
-        // 9 core healthcare categories + 9 employment / home-care intake categories
-        assertThat(FileCategory.values()).hasSize(18);
+        // 8 core + 9 employment/home-care intake + HIRING_DOCUMENT + OTHER_DOCUMENT
+        assertThat(FileCategory.values()).hasSize(19);
         assertThat(FileCategory.valueOf("PROFILE_IMAGE")).isEqualTo(FileCategory.PROFILE_IMAGE);
         assertThat(FileCategory.valueOf("OTHER_DOCUMENT")).isEqualTo(FileCategory.OTHER_DOCUMENT);
         assertThat(FileCategory.valueOf("EMPLOYMENT_APPLICATION"))
                 .isEqualTo(FileCategory.EMPLOYMENT_APPLICATION);
+        assertThat(FileCategory.valueOf("HIRING_DOCUMENT")).isEqualTo(FileCategory.HIRING_DOCUMENT);
     }
 
     // ─── fromClientValue(): typed category alignment ──────────────────────────
@@ -199,7 +200,9 @@ class UserFileTest {
         assertThat(FileCategory.EMPLOYMENT_APPLICATION.isEmploymentIntake()).isTrue();
         assertThat(FileCategory.WORK_AUTHORIZATION.isEmploymentIntake()).isTrue();
         assertThat(FileCategory.MEDICAL_RECORD.isEmploymentIntake()).isFalse();
-        assertThat(FileCategory.EMPLOYMENT_INTAKE).hasSize(9);
+        assertThat(FileCategory.EMERGENCY_CONTACT.isEmploymentIntake()).isFalse();
+        assertThat(FileCategory.HIRING_DOCUMENT.isEmploymentIntake()).isFalse();
+        assertThat(FileCategory.EMPLOYMENT_INTAKE).hasSize(8);
     }
 
     @Test

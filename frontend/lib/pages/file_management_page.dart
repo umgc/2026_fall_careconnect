@@ -9,6 +9,7 @@ import '../config/theme/app_theme.dart';
 import '../widgets/file_upload_widget.dart';
 import '../widgets/manual_text_entry_upload.dart';
 import '../widgets/speech_to_text_widget.dart';
+import '../widgets/forms/hiring_forms_tab.dart';
 
 /// Comprehensive file management page
 class FileManagementPage extends StatefulWidget {
@@ -29,10 +30,17 @@ class _FileManagementPageState extends State<FileManagementPage>
   final TextEditingController _searchController = TextEditingController();
   int? _userId;
 
+  /// Hiring/onboarding forms are caregiver-only, so the tab is shown only for
+  /// caregiver accounts.
+  bool _isCaregiver = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    _isCaregiver = user?.role.toUpperCase() == 'CAREGIVER';
+    // 4 tabs for caregivers (incl. Hiring Forms), 3 for everyone else.
+    _tabController = TabController(length: _isCaregiver ? 4 : 3, vsync: this);
     _loadFiles();
   }
 
@@ -110,22 +118,34 @@ class _FileManagementPageState extends State<FileManagementPage>
       Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final isCaregiver = user.role.toUpperCase() == 'CAREGIVER';
     return Scaffold(
       appBar: AppBar(
         title: const Text('File Management'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.folder), text: 'My Files'),
-            Tab(icon: Icon(Icons.cloud_upload), text: 'Upload'),
-            Tab(icon: Icon(Icons.analytics), text: 'Analytics'),
+          // Size each tab to its label and allow horizontal scrolling so the
+          // longest label ("Hiring Forms") is shown in full on narrow screens
+          // instead of being clipped at the edge.
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            const Tab(icon: Icon(Icons.folder), text: 'My Files'),
+            const Tab(icon: Icon(Icons.cloud_upload), text: 'Upload'),
+            const Tab(icon: Icon(Icons.analytics), text: 'Analytics'),
+            // Hiring/onboarding forms are caregiver-only.
+            if (_isCaregiver)
+              const Tab(icon: Icon(Icons.assignment), text: 'Hiring Forms'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildFilesTab(), _buildUploadTab(), _buildAnalyticsTab()],
+        children: [
+          _buildFilesTab(),
+          _buildUploadTab(),
+          _buildAnalyticsTab(),
+          if (_isCaregiver) const HiringFormsTab(),
+        ],
       ),
     );
   }

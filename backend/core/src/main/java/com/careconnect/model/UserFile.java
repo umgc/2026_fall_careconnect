@@ -100,16 +100,20 @@ public class UserFile {
         EMPLOYMENT_APPLICATION, ONBOARDING_FORM, BACKGROUND_CHECK, CERTIFICATION,
         REFERENCE, EMPLOYMENT_CONTRACT, TAX_FORM, WORK_AUTHORIZATION, EMERGENCY_CONTACT,
 
+        // Legacy hiring bucket retained from team-d-develop (see com.careconnect.model.forms)
+        HIRING_DOCUMENT,
+
         // Fallback bucket for general/uncategorized documents
         OTHER_DOCUMENT;
 
         /**
          * Document types that belong to the employment / home-care intake workflow.
-         * Used to gate the dedicated intake endpoint and to drive intake reporting.
+         * Kept in sync with the frontend {@code FileCategory.employmentIntake} list (8 types).
+         * EMERGENCY_CONTACT and HIRING_DOCUMENT are valid categories but not intake types.
          */
         public static final Set<FileCategory> EMPLOYMENT_INTAKE = Set.of(
                 EMPLOYMENT_APPLICATION, ONBOARDING_FORM, BACKGROUND_CHECK, CERTIFICATION,
-                REFERENCE, EMPLOYMENT_CONTRACT, TAX_FORM, WORK_AUTHORIZATION, EMERGENCY_CONTACT);
+                REFERENCE, EMPLOYMENT_CONTRACT, TAX_FORM, WORK_AUTHORIZATION);
 
         /**
          * Accepted client aliases (frontend values, legacy names and friendly synonyms)
@@ -143,11 +147,13 @@ public class UserFile {
                 Map.entry("I_9", WORK_AUTHORIZATION),
                 Map.entry("WORK_AUTH", WORK_AUTHORIZATION),
                 Map.entry("EMERGENCY", EMERGENCY_CONTACT),
+                Map.entry("HIRING", HIRING_DOCUMENT),
                 Map.entry("DOCUMENT", OTHER_DOCUMENT),
                 Map.entry("DOCUMENTS", OTHER_DOCUMENT),
                 Map.entry("GENERAL", OTHER_DOCUMENT),
                 Map.entry("OTHER", OTHER_DOCUMENT),
                 Map.entry("AI_CHAT_UPLOAD", OTHER_DOCUMENT),
+                Map.entry("CHAT_ATTACHMENT", OTHER_DOCUMENT),
                 Map.entry("HEALTH_DATA_IMPORT", OTHER_DOCUMENT),
                 Map.entry("BACKUP_FILE", OTHER_DOCUMENT));
 

@@ -127,6 +127,38 @@ public class FileManagementService {
     }
     
     /**
+     * Store an application-generated document (e.g., a submitted form's PDF copy)
+     * as a database-backed {@link UserFile} owned by {@code ownerId}. The file
+     * then appears in that user's File Management ("My Files").
+     */
+    public UserFile storeGeneratedDocument(byte[] data,
+                                           String originalFilename,
+                                           String contentType,
+                                           Long ownerId,
+                                           UserFile.OwnerType ownerType,
+                                           String category,
+                                           String description,
+                                           Long patientId) {
+        UserFile userFile = UserFile.builder()
+                .filename(generateUniqueFilename(originalFilename, ownerId, ownerType.name(), category))
+                .originalFilename(originalFilename)
+                .contentType(contentType)
+                .fileSize((long) data.length)
+                .fileData(data)
+                .ownerId(ownerId)
+                .ownerType(ownerType)
+                .fileCategory(mapCategoryToEnum(category))
+                .patientId(patientId)
+                .storageType(UserFile.StorageType.DATABASE)
+                .description(description)
+                .build();
+        UserFile saved = userFileRepository.save(userFile);
+        log.info("Stored generated document {} ({} bytes) for {} {}",
+                saved.getId(), data.length, ownerType, ownerId);
+        return saved;
+    }
+
+    /**
      * Get file by ID
      */
     public Optional<UserFileDTO> getFile(Long fileId) {
