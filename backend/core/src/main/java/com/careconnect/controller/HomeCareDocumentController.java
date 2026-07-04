@@ -96,15 +96,11 @@ public class HomeCareDocumentController {
             @RequestParam("documentType") String documentTypeRaw
     ) throws UnauthorizedException {
 
-        User currentUser = null;
+        User currentUser = securityUtil.resolveCurrentUser();
 
-        try {
-            currentUser = securityUtil.resolveCurrentUser();
-        } catch (Exception ignored) {
-            // allow anonymous, mirroring invoice extract-llm
-        }
-
-        // Only enforce auth if user exists
+        // Enforce caregiver/admin role when a user is resolved.
+        // SecurityConfig requires authentication for this endpoint, so
+        // currentUser will be non-null for all authenticated callers.
         if (currentUser != null) {
             authorizationService.requireAdminOrCaregiver(currentUser);
         }

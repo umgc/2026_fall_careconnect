@@ -204,7 +204,7 @@ class _HomeCareDocumentReviewPageState
       final response = await EnhancedFileService.uploadFileWeb(
         fileBytes: bytes,
         fileName: fileName,
-        category: widget.result.documentType,
+        category: homeCareDocumentTypeToFileCategory(widget.result.documentType),
         description:
             'Digitized ${widget.result.documentTypeDisplayName} (reviewed)',
         patientId: userId,

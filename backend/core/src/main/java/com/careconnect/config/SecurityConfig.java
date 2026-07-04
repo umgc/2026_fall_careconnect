@@ -149,8 +149,6 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api/subscriptions/**").authenticated()
                         .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
                         .requestMatchers("/v1/api/invoices/**").authenticated()
-                        .requestMatchers("/v1/api/homecare-documents/extract").permitAll()
-                        .requestMatchers("/v1/api/homecare-documents/types").permitAll()
                         .requestMatchers("/v1/api/homecare-documents/**").authenticated()
                         .requestMatchers("/v1/api/notification-settings/**").authenticated()
                         .requestMatchers("/v1/api/patients/**").authenticated()

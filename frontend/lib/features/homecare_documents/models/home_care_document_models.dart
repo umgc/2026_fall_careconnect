@@ -1,5 +1,17 @@
 // Models for Home Care Document Digitization (OCR + LLM prefill).
 
+/// Maps a [HomeCareDocumentType] name to the backend [UserFile.FileCategory]
+/// string expected by [EnhancedFileService.uploadFileWeb].
+///
+/// - Tax forms and work-authorization documents are onboarding paperwork.
+/// - Employment applications and certifications are hiring-stage documents.
+String homeCareDocumentTypeToFileCategory(String documentType) {
+  return switch (documentType.toUpperCase()) {
+    'TAX_FORM' || 'WORK_AUTHORIZATION' => 'ONBOARDING_FORM',
+    _ => 'HIRING_DOCUMENT',
+  };
+}
+
 /// Statuses returned by the backend extraction endpoint.
 class HomeCareExtractionStatus {
   static const String prefilled = 'PREFILLED';
