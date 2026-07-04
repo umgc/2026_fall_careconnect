@@ -148,7 +148,7 @@ class UserFileTest {
 
     @Test
     void fileCategory_allValues() throws Exception {
-        // 8 core + 9 employment/home-care intake + HIRING_DOCUMENT + OTHER_DOCUMENT
+        // 8 core + 8 employment/home-care intake + EMERGENCY_CONTACT + HIRING_DOCUMENT + OTHER_DOCUMENT
         assertThat(FileCategory.values()).hasSize(19);
         assertThat(FileCategory.valueOf("PROFILE_IMAGE")).isEqualTo(FileCategory.PROFILE_IMAGE);
         assertThat(FileCategory.valueOf("OTHER_DOCUMENT")).isEqualTo(FileCategory.OTHER_DOCUMENT);

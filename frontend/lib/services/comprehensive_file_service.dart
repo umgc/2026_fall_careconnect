@@ -551,10 +551,11 @@ class ComprehensiveFileService {
   }) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
+      final queryString = params?.toQueryString() ?? '';
 
       final response = await http
           .get(
-            Uri.parse('${ApiConstants.files}/users/$userId/list'),
+            Uri.parse('${ApiConstants.files}/users/$userId/list$queryString'),
             headers: headers,
           )
           .timeout(const Duration(seconds: 30));
@@ -581,10 +582,11 @@ class ComprehensiveFileService {
       }) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
+      final queryString = params?.toQueryString() ?? '';
 
       final response = await http
           .get(
-        Uri.parse('${ApiConstants.files}/users/$userId/list'),
+        Uri.parse('${ApiConstants.files}/users/$userId/list$queryString'),
         headers: headers,
       )
           .timeout(const Duration(seconds: 30));

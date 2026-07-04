@@ -690,14 +690,9 @@ class FileManagementServiceTest {
     }
 
     @Test
-    @DisplayName("listUserFiles - unknown category - maps to OTHER_DOCUMENT")
-    void listUserFiles_unknownCategory_mapsToOtherDocument() throws Exception {
-        when(userFileRepository.findByOwnerIdAndOwnerTypeAndFileCategoryAndIsActiveTrue(
-                1L, UserFile.OwnerType.PATIENT, UserFile.FileCategory.OTHER_DOCUMENT))
-                .thenReturn(List.of());
-
-        final List<UserFileDTO> result = fileManagementService.listUserFiles(1L, "PATIENT", "RANDOM");
-
-        assertTrue(result.isEmpty());
+    @DisplayName("listUserFiles - unknown category - throws IllegalArgumentException")
+    void listUserFiles_unknownCategory_mapsToOtherDocument() {
+        assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.listUserFiles(1L, "PATIENT", "RANDOM"));
     }
 }

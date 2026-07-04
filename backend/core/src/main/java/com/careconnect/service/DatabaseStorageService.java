@@ -89,6 +89,10 @@ public class DatabaseStorageService implements StorageService {
             
             return "db://files/" + saved.getId();
             
+        } catch (IllegalArgumentException e) {
+            // Validation errors (e.g. unknown category) propagate as-is so callers
+            // can return a proper 400 without an opaque "Failed to upload" message.
+            throw e;
         } catch (IOException e) {
             log.error("IOException during database file upload for user: {}", userId, e);
             throw new RuntimeException("Failed to upload file - IO Error", e);
