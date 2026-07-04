@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ai_chat_service.dart';
 import '../config/theme/app_theme.dart';
+import '../shared/widgets/disclaimer_banner.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import 'dart:io';
@@ -1757,6 +1758,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                   ),
                 ],
               ),
+            ),
+            // AI disclaimer (WBS 3.15.4)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: DisclaimerBanner.ai(),
             ),
             Divider(color: colorScheme.outlineVariant),
             // Message list
