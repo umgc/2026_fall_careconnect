@@ -155,8 +155,7 @@ void main() {
         },
       );
 
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -198,10 +197,20 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
+    // TC-S2-VC-ENTRY-003
+    testWidgets('/voice entry route builds VoiceCommandAI page',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(VoiceCommandAI), findsOneWidget);
+      expect(find.text('Voice Commands'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+    });
+
     testWidgets('renders Scaffold with AppBar titled Voice Commands',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Voice Commands'), findsOneWidget);
@@ -209,8 +218,7 @@ void main() {
     });
 
     testWidgets('AppBar has blue shade 900 background', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       final appBar = tester.widget<AppBar>(find.byType(AppBar));
@@ -219,16 +227,14 @@ void main() {
 
     testWidgets('renders mic_none icon initially (not wake-detected)',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byIcon(Icons.mic_none), findsOneWidget);
     });
 
     testWidgets('initial icon is grey and size 64', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       final icon = tester.widget<Icon>(find.byIcon(Icons.mic_none));
@@ -238,26 +244,22 @@ void main() {
 
     testWidgets('shows "Say wake word or tap mic" text initially (non-web)',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
     });
 
     testWidgets('instruction text has fontSize 18', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
-      final text =
-          tester.widget<Text>(find.text('Say wake word or tap mic'));
+      final text = tester.widget<Text>(find.text('Say wake word or tap mic'));
       expect(text.style?.fontSize, equals(18));
     });
 
     testWidgets('renders FloatingActionButton with mic icon', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(FloatingActionButton), findsOneWidget);
@@ -265,8 +267,7 @@ void main() {
     });
 
     testWidgets('uses Center and Column layout', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(Center), findsWidgets);
@@ -280,8 +281,7 @@ void main() {
 
     testWidgets('tapping FAB shows Listening and mic_off on FAB',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -294,8 +294,7 @@ void main() {
     });
 
     testWidgets('large icon turns red when wake-detected', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -310,8 +309,7 @@ void main() {
 
     testWidgets('tapping FAB calls initialize and listen on speech plugin',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       speechMethodCalls.clear();
@@ -332,8 +330,7 @@ void main() {
 
     testWidgets('tapping FAB while listening shows error if no speech',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -349,8 +346,7 @@ void main() {
 
     testWidgets('tapping FAB while listening processes buffered text',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -376,8 +372,7 @@ void main() {
 
     testWidgets('final result with unrecognized command shows error',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -386,8 +381,7 @@ void main() {
       await _sendSpeechResult(tester, 'hello world', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(
-          find.text('Command not recognized \u2014 please try again.'),
+      expect(find.text('Command not recognized \u2014 please try again.'),
           findsOneWidget);
       expect(find.text('Status: Command not recognized'), findsOneWidget);
 
@@ -397,10 +391,8 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('partial result does not trigger processing',
-        (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+    testWidgets('partial result does not trigger processing', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -415,8 +407,7 @@ void main() {
 
     testWidgets('final result with empty words falls back to buffer',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -437,8 +428,7 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('"take me home" navigates to /dashboard',
-        (tester) async {
+    testWidgets('"take me home" navigates to /dashboard', (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -454,8 +444,7 @@ void main() {
       await _flush(tester);
     });
 
-    testWidgets('"take me to calendar" navigates to /calendar',
-        (tester) async {
+    testWidgets('"take me to calendar" navigates to /calendar', (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -512,8 +501,8 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(
-          tester, 'please take me to my tracker now', isFinal: true);
+      await _sendSpeechResult(tester, 'please take me to my tracker now',
+          isFinal: true);
       await tester.pump(_statusSettleDelay);
       await tester.pump();
 
@@ -523,8 +512,7 @@ void main() {
     });
 
     testWidgets('unrecognized command shows error snackbar', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -626,8 +614,7 @@ void main() {
 
     testWidgets('timeout with no speech shows "Listening timed out."',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -646,8 +633,7 @@ void main() {
     });
 
     testWidgets('timeout with buffered text processes it', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -682,8 +668,7 @@ void main() {
         },
       );
 
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -700,8 +685,7 @@ void main() {
     tearDown(clearMocks);
 
     testWidgets('disposes cleanly while listening', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -712,8 +696,7 @@ void main() {
     });
 
     testWidgets('disposes cleanly when not listening', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await _tearDown(tester);
@@ -727,8 +710,7 @@ void main() {
 
     testWidgets('after processing, widget returns to initial state',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -744,10 +726,8 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('stop is called on speech plugin during reset',
-        (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+    testWidgets('stop is called on speech plugin during reset', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -785,8 +765,7 @@ void main() {
         },
       );
 
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Tap FAB — sets wakeDetected=true then awaits hasPermission
@@ -811,8 +790,7 @@ void main() {
     tearDown(clearMocks);
 
     testWidgets('can start listening again after reset', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Start
@@ -841,7 +819,8 @@ void main() {
     tearDown(clearMocks);
 
     // TC-S1-VC-001
-    testWidgets('recognized navigate command shows heard text and success status',
+    testWidgets(
+        'recognized navigate command shows heard text and success status',
         (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
@@ -865,8 +844,7 @@ void main() {
     // TC-S1-VC-002
     testWidgets('unknown command shows heard text and fallback status',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -878,8 +856,7 @@ void main() {
       expect(find.text('Status: Command not recognized'), findsOneWidget);
       expect(find.text('Heard: "do something random"'), findsOneWidget);
       expect(
-        find.text(
-            'Recognized: "do something random" — command not recognized'),
+        find.text('Recognized: "do something random" — command not recognized'),
         findsOneWidget,
       );
       expect(find.text('Command not recognized \u2014 please try again.'),
@@ -890,8 +867,7 @@ void main() {
 
     // TC-S1-VC-003
     testWidgets('timeout with no speech shows error status', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -915,8 +891,7 @@ void main() {
     // TC-S1-VC-004
     testWidgets('timeout with buffered text shows fallback status',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -984,8 +959,7 @@ void main() {
     // TC-S1-VC-006
     testWidgets('partial STT result updates heard text while listening',
         (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1002,8 +976,7 @@ void main() {
 
     // TC-S1-VC-007
     testWidgets('after reset, status area returns to idle', (tester) async {
-      await tester.pumpWidget(
-          const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Status: Ready'), findsOneWidget);

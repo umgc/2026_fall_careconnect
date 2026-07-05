@@ -48,6 +48,11 @@ Widget _buildApp({UserSession? session, Widget? child}) {
       GoRoute(path: '/login', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/profile', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/subscription', builder: (_, __) => const SizedBox()),
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) =>
+            const Scaffold(body: Text('Voice Commands Entry Route')),
+      ),
     ],
   );
 
@@ -138,6 +143,21 @@ void main() {
 
       // Each tool tile is a Card inside an InkWell.
       expect(find.byType(Card), findsWidgets);
+    });
+
+    // TC-S2-VC-ENTRY-001
+    testWidgets('renders voice commands menu entry and opens /voice',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Voice Commands'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+
+      await tester.tap(find.text('Voice Commands'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Voice Commands Entry Route'), findsOneWidget);
     });
   });
 }
