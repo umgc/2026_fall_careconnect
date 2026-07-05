@@ -58,6 +58,10 @@ public class ChimeService {
     /** Active meetings keyed by callId. */
     private final Map<String, Meeting> activeMeetings = new ConcurrentHashMap<>();
 
+    /** Cached join credentials per callId and userId (L5a idempotent re-join). */
+    private final Map<String, Map<String, Map<String, Object>>> attendeeCredentials =
+            new ConcurrentHashMap<>();
+
     /** Tracks whether transcription has been started for each callId. */
     private final Map<String, Boolean> transcriptionStarted = new ConcurrentHashMap<>();
 
@@ -196,11 +200,20 @@ public class ChimeService {
                 + ". Create the meeting first.");
         }
 
+        final Map<String, Object> cached = getCachedAttendeeCredentials(callId, userId);
+        if (cached != null) {
+            if (log.isInfoEnabled()) {
+                log.info("Returning cached Chime attendee credentials for userId: {} in callId: {}",
+                        userId, callId);
+            }
+            return cached;
+        }
+
         if (!isAwsChimeAvailable()) {
             final String externalUserId = toChimeExternalUserId(userId, role, displayName);
             final String mediaRegion = meeting.mediaRegion() == null
                     ? DEFAULT_MEDIA_REGION : meeting.mediaRegion();
-            return Map.of(
+            final Map<String, Object> credentials = Map.of(
                 "meetingId",         meeting.meetingId(),
                 "externalMeetingId", meeting.externalMeetingId(),
                 "mediaRegion",       mediaRegion,
@@ -218,6 +231,8 @@ public class ChimeService {
                 "externalUserId",  externalUserId,
                 "joinToken",       "local-join-token-" + UUID.randomUUID()
             );
+            cacheAttendeeCredentials(callId, userId, credentials);
+            return credentials;
         }
 
         try {
@@ -242,7 +257,7 @@ public class ChimeService {
                     ? meeting.mediaPlacement().eventIngestionUrl() : "";
 
             // Return everything Flutter needs to join the meeting
-            return Map.of(
+            final Map<String, Object> credentials = Map.of(
                 "meetingId",         meeting.meetingId(),
                 "externalMeetingId", meeting.externalMeetingId(),
                 "mediaRegion",       meeting.mediaRegion(),
@@ -260,6 +275,8 @@ public class ChimeService {
                 "externalUserId", attendee.externalUserId(),
                 "joinToken",      attendee.joinToken()
             );
+            cacheAttendeeCredentials(callId, userId, credentials);
+            return credentials;
 
         } catch (Exception e) {
             log.error("Failed to create attendee for userId: {} in callId: {}", userId, callId, e);
@@ -287,6 +304,13 @@ public class ChimeService {
         if (!activeMeetings.containsKey(callId)) {
             createMeeting(callId);
         }
+        final Map<String, Object> cached = getCachedAttendeeCredentials(callId, userId);
+        if (cached != null) {
+            if (log.isInfoEnabled()) {
+                log.info("Returning cached join credentials for userId: {} in callId: {}", userId, callId);
+            }
+            return cached;
+        }
         // Add user as attendee and return join credentials
         return createAttendee(callId, userId, role, displayName);
     }
@@ -304,6 +328,8 @@ public class ChimeService {
      */
     public final void endMeeting(final String callId) {
         log.info("Ending Chime meeting for callId: {}", callId);
+
+        attendeeCredentials.remove(callId);
 
         final Meeting meeting = activeMeetings.remove(callId);
         if (meeting == null) {
@@ -408,6 +434,16 @@ public class ChimeService {
     // ================================================================
     // PRIVATE HELPERS
     // ================================================================
+
+    private Map<String, Object> getCachedAttendeeCredentials(final String callId, final String userId) {
+        final Map<String, Map<String, Object>> perCall = attendeeCredentials.get(callId);
+        return perCall != null ? perCall.get(userId) : null;
+    }
+
+    private void cacheAttendeeCredentials(
+            final String callId, final String userId, final Map<String, Object> credentials) {
+        attendeeCredentials.computeIfAbsent(callId, k -> new ConcurrentHashMap<>()).put(userId, credentials);
+    }
 
     private Map<String, Object> buildMeetingResponse(final Meeting meeting) {
         return Map.of(

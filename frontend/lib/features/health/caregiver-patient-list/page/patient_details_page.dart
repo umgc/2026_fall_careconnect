@@ -35,6 +35,7 @@ import '../widgets/recent_symptom_card.dart' as sympt;
 
 // API and models
 import '../../../../services/api_service.dart';
+import '../../../../services/checkin_service.dart';
 import '../../../health/medication-tracker/models/medication-model.dart';
 import '../../../../providers/user_provider.dart';
 import 'package:care_connect_app/features/activities/presentation/pages/adl_iadl_management_screen.dart';
@@ -351,6 +352,9 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       final symptomData = await symptomsFuture;
       final telemetryData = await telemetryFuture;
       final caregiverData = await caregiverViewFuture;
+      final checkInSummaries = await CheckinService.fetchCheckInsForPatient(
+        widget.patientId,
+      );
       await medsFuture;
 
       final profilePayload = _extractProfilePayload(profileResp);
@@ -378,7 +382,11 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       _applyCaregiverCallPolicy(caregiverData);
       _applyMoodData(moodData);
       _applySymptomData(symptomData);
-      _applyVirtualCheckIns(detailsPayload);
+      if (checkInSummaries.isNotEmpty) {
+        _applyVirtualCheckInSummaries(checkInSummaries);
+      } else {
+        _applyVirtualCheckIns(detailsPayload);
+      }
       _callHistoryPatientUserId = moodUserId;
       _applyCallHistoryData(
         patientUserId: moodUserId,
@@ -606,7 +614,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
             Padding(
               padding: const EdgeInsets.only(top: 10, right: 8),
               child: Icon(icon,
-                  size: 20, color: theme.colorScheme.primary.withOpacity(0.8)),
+                  size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.8)),
             ),
             Expanded(
               child: TextField(
@@ -626,7 +634,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
             Padding(
               padding: const EdgeInsets.only(top: 2, right: 8),
               child: Icon(icon,
-                  size: 20, color: theme.colorScheme.primary.withOpacity(0.8)),
+                  size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.8)),
             ),
             Expanded(
               child: Column(
@@ -733,7 +741,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                       child: Icon(
                         Icons.chat_bubble_outline,
                         size: 20,
-                        color: theme.colorScheme.primary.withOpacity(0.8),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.8),
                       ),
                     ),
                     Expanded(
@@ -1128,6 +1136,84 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         summary: _firstNonEmpty([entry['summary'], entry['notes']]),
       );
     }).toList();
+  }
+
+  void _applyVirtualCheckInSummaries(List<CheckInSummary> summaries) {
+    _virtualCheckIns = summaries.map((entry) {
+      final startedAt = entry.createdAt ?? DateTime.now();
+      final status = entry.submittedAt == null
+          ? CheckInStatus.missed
+          : CheckInStatus.completed;
+      final summaryText = entry.submittedAt == null
+          ? '${entry.questionCount} configured questions pending patient submission.'
+          : '${entry.questionCount} question responses submitted.';
+
+      return VirtualCheckIn(
+        id: entry.checkInId.toString(),
+        type: CheckInType.routine,
+        clinicianName: 'Care Team',
+        startedAt: startedAt,
+        durationMinutes: 0,
+        status: status,
+        moodLabel: _currentMoodLabel,
+        nextCheckIn: startedAt,
+        summary: summaryText,
+      );
+    }).toList();
+  }
+
+  int? _latestVirtualCheckInId() {
+    final ordered = [..._virtualCheckIns]
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    for (final entry in ordered) {
+      final parsed = int.tryParse(entry.id);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  List<int>? _extractCatalogQuestionIds(List<VirtualCheckInQuestion> questions) {
+    final ids = <int>{};
+    for (final question in questions) {
+      final parsed = int.tryParse(question.id.trim());
+      if (parsed == null) return null;
+      ids.add(parsed);
+    }
+    return ids.toList();
+  }
+
+  void _showConfigureFeedback(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<bool> _saveVirtualCheckInConfiguration(
+    List<VirtualCheckInQuestion> updated,
+  ) async {
+    final selectedQuestionIds = _extractCatalogQuestionIds(updated);
+    if (selectedQuestionIds == null) {
+      _showConfigureFeedback(
+        'Custom questions are not supported yet. Please add questions from the catalog.',
+      );
+      return false;
+    }
+    if (selectedQuestionIds.isEmpty) {
+      _showConfigureFeedback('Select at least one question to save.');
+      return false;
+    }
+
+    final createdCheckInId = await CheckinService.createCheckinWithSelectedQuestions(
+      patientId: widget.patientId,
+      selectedQuestionIds: selectedQuestionIds,
+    );
+    if (createdCheckInId == null) {
+      _showConfigureFeedback('Failed to save virtual check-in configuration.');
+      return false;
+    }
+
+    await _loadPatientData();
+    _showConfigureFeedback('Virtual check-in configuration saved');
+    return true;
   }
 
   void _applyCallHistoryData({
@@ -2478,9 +2564,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                                       // Seed with your current config if you have it:
                                       final initialQuestions =
                                           <VirtualCheckInQuestion>[];
-                                      // TODO: replace with your real ID source:
-                                      final checkInId =
-                                          1; // TODO: replace with real patient id
+                                      final checkInId = _latestVirtualCheckInId();
 
                                       final updated =
                                           await showModalBottomSheet<
@@ -2497,23 +2581,15 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                                             ),
                                             builder: (_) =>
                                                 VirtualCheckInConfigSheet(
-                                                  checkInId:
-                                                      checkInId, // ✅ required
+                                                  checkInId: checkInId,
                                                   initial: initialQuestions,
                                                 ),
                                           );
 
                                       if (!context.mounted) return;
                                       if (updated != null) {
-                                        // TODO: persist `updated` to backend and refresh UI
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Virtual check-in configuration saved',
-                                            ),
-                                          ),
+                                        await _saveVirtualCheckInConfiguration(
+                                          updated,
                                         );
                                       }
                                     }

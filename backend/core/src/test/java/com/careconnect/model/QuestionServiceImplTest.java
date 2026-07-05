@@ -14,6 +14,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -116,43 +119,102 @@ class QuestionServiceImplTest {
         assertThat(result).isEmpty();
     }
 
-    // ─── create() ────────────────────────────────────────────────────────────
+    // ─── create() – no conflict ───────────────────────────────────────────────
 
     @Test
-    void create_savesAndReturnsMappedDto() throws Exception {
+    void create_noConflict_savesWithoutShifting() throws Exception {
+        // Arrange
         final QuestionUpsertDTO body = new QuestionUpsertDTO("How do you feel?", QuestionType.TEXT, false, 1);
-
+        when(repo.existsByOrdinalAndIdNot(1, Long.MAX_VALUE)).thenReturn(false);
         final Question saved = Question.builder().id(10L).prompt("How do you feel?")
                 .type(QuestionType.TEXT).required(false).active(true).ordinal(1).build();
         when(repo.save(any(Question.class))).thenReturn(saved);
 
+        // Act
         final QuestionDTO result = service.create(body);
 
+        // Assert
         assertThat(result.id()).isEqualTo(10L);
-        assertThat(result.prompt()).isEqualTo("How do you feel?");
         assertThat(result.active()).isTrue();
+        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong());
         verify(repo).save(any(Question.class));
     }
 
-    // ─── update() – found ────────────────────────────────────────────────────
+    @Test
+    void create_ordinalConflict_shiftsExistingQuestionsUp() throws Exception {
+        // Arrange – ordinal 2 is already taken
+        final QuestionUpsertDTO body = new QuestionUpsertDTO("New Q?", QuestionType.TEXT, false, 2);
+        when(repo.existsByOrdinalAndIdNot(2, Long.MAX_VALUE)).thenReturn(true);
+        final Question saved = Question.builder().id(11L).prompt("New Q?")
+                .type(QuestionType.TEXT).active(true).ordinal(2).build();
+        when(repo.save(any(Question.class))).thenReturn(saved);
+
+        // Act
+        service.create(body);
+
+        // Assert – shift was triggered
+        verify(repo).shiftOrdinalsUp(2, Long.MAX_VALUE);
+        verify(repo).save(any(Question.class));
+    }
+
+    // ─── update() – no ordinal change ────────────────────────────────────────
 
     @Test
-    void update_existingId_savesAndReturnsMappedDto() throws Exception {
-        final QuestionUpsertDTO body = new QuestionUpsertDTO("Updated prompt?", QuestionType.YES_NO, true, 2);
+    void update_existingId_sameOrdinal_noShift() throws Exception {
+        // Arrange – ordinal unchanged (0 → 0)
+        final QuestionUpsertDTO body = new QuestionUpsertDTO("Updated prompt?", QuestionType.YES_NO, true, 0);
+        final Question existing = Question.builder().id(7L).prompt("Old prompt?")
+                .type(QuestionType.TEXT).active(true).ordinal(0).build();
+        final Question updated = Question.builder().id(7L).prompt("Updated prompt?")
+                .type(QuestionType.YES_NO).required(true).active(true).ordinal(0).build();
+        when(repo.findById(7L)).thenReturn(Optional.of(existing));
+        when(repo.save(any(Question.class))).thenReturn(updated);
 
+        // Act
+        final Optional<QuestionDTO> result = service.update(7L, body);
+
+        // Assert
+        assertThat(result).isPresent();
+        assertThat(result.get().prompt()).isEqualTo("Updated prompt?");
+        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong());
+    }
+
+    @Test
+    void update_existingId_ordinalChanges_conflictExists_shiftsUp() throws Exception {
+        // Arrange – ordinal changes from 0 to 2, and 2 is taken
+        final QuestionUpsertDTO body = new QuestionUpsertDTO("Updated prompt?", QuestionType.YES_NO, true, 2);
         final Question existing = Question.builder().id(7L).prompt("Old prompt?")
                 .type(QuestionType.TEXT).active(true).ordinal(0).build();
         final Question updated = Question.builder().id(7L).prompt("Updated prompt?")
                 .type(QuestionType.YES_NO).required(true).active(true).ordinal(2).build();
-
         when(repo.findById(7L)).thenReturn(Optional.of(existing));
+        when(repo.existsByOrdinalAndIdNot(2, 7L)).thenReturn(true);
         when(repo.save(any(Question.class))).thenReturn(updated);
 
-        final Optional<QuestionDTO> result = service.update(7L, body);
+        // Act
+        service.update(7L, body);
 
-        assertThat(result).isPresent();
-        assertThat(result.get().prompt()).isEqualTo("Updated prompt?");
-        assertThat(result.get().type()).isEqualTo("YES_NO");
+        // Assert
+        verify(repo).shiftOrdinalsUp(2, 7L);
+    }
+
+    @Test
+    void update_existingId_ordinalChanges_noConflict_noShift() throws Exception {
+        // Arrange – ordinal changes from 0 to 3, but 3 is free
+        final QuestionUpsertDTO body = new QuestionUpsertDTO("Updated?", QuestionType.TEXT, false, 3);
+        final Question existing = Question.builder().id(8L).prompt("Q?")
+                .type(QuestionType.TEXT).active(true).ordinal(0).build();
+        final Question updated = Question.builder().id(8L).prompt("Updated?")
+                .type(QuestionType.TEXT).active(true).ordinal(3).build();
+        when(repo.findById(8L)).thenReturn(Optional.of(existing));
+        when(repo.existsByOrdinalAndIdNot(3, 8L)).thenReturn(false);
+        when(repo.save(any(Question.class))).thenReturn(updated);
+
+        // Act
+        service.update(8L, body);
+
+        // Assert
+        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong());
     }
 
     // ─── update() – not found ────────────────────────────────────────────────
