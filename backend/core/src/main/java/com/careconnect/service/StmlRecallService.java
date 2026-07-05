@@ -8,14 +8,16 @@ import com.careconnect.repository.*;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-
+/**
+ * Service for STML-1 recall — answers patient questions from care records.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,7 +31,13 @@ public class StmlRecallService {
     private final TaskRepository taskRepository;
     private final PatientRepository patientRepository;
 
-    public StmlRecallResponse recall(StmlRecallRequest request) {
+    /**
+     * Answers a patient recall question using grounded care record context.
+     *
+     * @param request the recall request containing patientId and question
+     * @return the recall response with AI answer and source citations
+     */
+    public StmlRecallResponse recall(final StmlRecallRequest request) {
         Long patientId = request.getPatientId();
 
         StringBuilder context = new StringBuilder();
