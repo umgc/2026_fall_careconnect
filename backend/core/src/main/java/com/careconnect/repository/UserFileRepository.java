@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,6 +57,20 @@ public interface UserFileRepository extends JpaRepository<UserFile, Long> {
     long countByOwnerIdAndOwnerTypeAndFileCategoryAndIsActiveTrue(
             Long ownerId, UserFile.OwnerType ownerType, UserFile.FileCategory fileCategory);
     
+    /**
+     * Find active files owned by a user across a set of categories
+     * (e.g. all employment / onboarding intake documents for a caregiver).
+     */
+    List<UserFile> findByOwnerIdAndOwnerTypeAndFileCategoryInAndIsActiveTrue(
+            Long ownerId, UserFile.OwnerType ownerType, Collection<UserFile.FileCategory> categories);
+
+    /**
+     * Find active files linked to a patient (care-circle context) across a set of categories
+     * (e.g. all intake documents associated with a care recipient).
+     */
+    List<UserFile> findByPatientIdAndFileCategoryInAndIsActiveTrue(
+            Long patientId, Collection<UserFile.FileCategory> categories);
+
     /**
      * Find files that can be accessed by a caregiver for a specific patient
      * Includes files owned by the patient and files uploaded by caregivers for that patient

@@ -103,8 +103,8 @@ public class FileManagementService {
                 userFile = userFileRepository.save(userFile);
             }
             
-            // Handle profile image updates
-            if (UserFile.FileCategory.PROFILE_IMAGE.name().equals(category.toUpperCase())) {
+            // Handle profile image updates (resolve aliases so PROFILE/PROFILE_PICTURE also match)
+            if (mapCategoryToEnum(category) == UserFile.FileCategory.PROFILE_IMAGE) {
                 updateUserProfileImage(userId, filePath);
             }
             
@@ -270,6 +270,33 @@ public class FileManagementService {
                 .map(this::mapToDTO);
     }
     
+    /**
+     * List employment / home-care intake documents owned by a user (e.g. a caregiver's
+     * hiring and onboarding forms).
+     */
+    public List<UserFileDTO> listEmploymentDocumentsForUser(Long userId, String userType) {
+        UserFile.OwnerType ownerType = UserFile.OwnerType.valueOf(userType.toUpperCase());
+        return userFileRepository
+                .findByOwnerIdAndOwnerTypeAndFileCategoryInAndIsActiveTrue(
+                        userId, ownerType, UserFile.FileCategory.EMPLOYMENT_INTAKE)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * List employment / home-care intake documents linked to a specific patient
+     * (the care recipient at the center of a care circle).
+     */
+    public List<UserFileDTO> listEmploymentDocumentsForPatient(Long patientId) {
+        return userFileRepository
+                .findByPatientIdAndFileCategoryInAndIsActiveTrue(
+                        patientId, UserFile.FileCategory.EMPLOYMENT_INTAKE)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
     // Helper methods
     private void validateFile(MultipartFile file) {
         if (file.isEmpty()) {
@@ -302,24 +329,14 @@ public class FileManagementService {
         return filename.substring(filename.lastIndexOf("."));
     }
     
+    /**
+     * Map a client-supplied category string to the canonical {@link UserFile.FileCategory}.
+     * Delegates to the single source of truth on the enum so the frontend and backend stay
+     * aligned. Unknown values throw {@link IllegalArgumentException} (callers that take user
+     * input should validate up-front so the message can be surfaced as a 400).
+     */
     private UserFile.FileCategory mapCategoryToEnum(String category) {
-        if (category == null) {
-            return UserFile.FileCategory.OTHER_DOCUMENT;
-        }
-        
-        return switch (category.toUpperCase()) {
-            case "PROFILE_IMAGE", "PROFILE" -> UserFile.FileCategory.PROFILE_IMAGE;
-            case "MEDICAL_RECORD", "MEDICAL" -> UserFile.FileCategory.MEDICAL_RECORD;
-            case "CLINICAL_NOTE", "CLINICAL" -> UserFile.FileCategory.CLINICAL_NOTE;
-            case "PRESCRIPTION" -> UserFile.FileCategory.PRESCRIPTION;
-            case "LAB_RESULT", "LAB" -> UserFile.FileCategory.LAB_RESULT;
-            case "INSURANCE_DOCUMENT", "INSURANCE" -> UserFile.FileCategory.INSURANCE_DOCUMENT;
-            case "CONSENT_FORM", "CONSENT" -> UserFile.FileCategory.CONSENT_FORM;
-            case "CARE_PLAN", "CARE" -> UserFile.FileCategory.CARE_PLAN;
-            case "ONBOARDING_FORM", "ONBOARDING" -> UserFile.FileCategory.ONBOARDING_FORM;
-            case "HIRING_DOCUMENT", "HIRING" -> UserFile.FileCategory.HIRING_DOCUMENT;
-            default -> UserFile.FileCategory.OTHER_DOCUMENT;
-        };
+        return UserFile.FileCategory.fromClientValue(category);
     }
     
     private Long determinePatientId(Long userId, String userType) {
