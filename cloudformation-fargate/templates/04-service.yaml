@@ -1,5 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CareConnect ECS Fargate service and ALB stack.
+Description: >-
+  CareConnect ECS Fargate service with API Gateway HTTP API, VPC Link,
+  Cloud Map service discovery, ACM certificate, and Route 53 custom domain.
 
 Parameters:
   # Environment name must match the networking, data, and platform stacks.
@@ -59,56 +61,177 @@ Parameters:
     Type: String
     Default: '3072'
 
-  # Public health endpoint used by the ALB target group.
+  # Public health endpoint used by Cloud Map health checks.
   HealthCheckPath:
     Type: String
     Default: /v1/api/test/health
 
-  # Gives Spring enough time to start before ALB health checks count as failures.
-  HealthCheckGracePeriodSeconds:
-    Type: Number
-    Default: 180
+  # Custom domain name for API Gateway (e.g., api.careconnect.example.com).
+  # Leave empty to skip Route 53 and ACM resources (API Gateway will still
+  # provide its default execute-api endpoint).
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name for the API (leave empty to use default API Gateway URL)
+
+  # Route 53 hosted zone ID for the custom domain.
+  # Required only when DomainName is provided.
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route 53 Hosted Zone ID (required if DomainName is set)
+
+Conditions:
+  # Only create custom domain resources when a domain name is provided.
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
 
 Resources:
-  # Public Application Load Balancer.
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  # ---------------------------------------------------------------------------
+  # Cloud Map namespace and service for ECS service discovery.
+  # API Gateway VPC Link routes traffic through Cloud Map to ECS tasks.
+  # ---------------------------------------------------------------------------
+
+  # Private DNS namespace used by Cloud Map for service discovery within the VPC.
+  CloudMapNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: !Sub careconnect-${Environment}-alb
-      Scheme: internet-facing
-      Type: application
-      SecurityGroups:
-        - Fn::ImportValue: !Sub careconnect-${Environment}-AlbSecurityGroupId
-      Subnets:
+      Name: !Sub careconnect-${Environment}.local
+      Vpc:
+        Fn::ImportValue: !Sub careconnect-${Environment}-VpcId
+      Description: !Sub CareConnect ${Environment} service discovery namespace
+
+  # Cloud Map service registered by ECS for task instance discovery.
+  CloudMapService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: backend
+      NamespaceId: !Ref CloudMapNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: SRV
+            TTL: 15
+        RoutingPolicy: MULTIVALUE
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # ---------------------------------------------------------------------------
+  # API Gateway HTTP API with VPC Link integration.
+  # ---------------------------------------------------------------------------
+
+  # VPC Link allows API Gateway to reach resources in the VPC (ECS tasks).
+  VpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub careconnect-${Environment}-vpc-link
+      SubnetIds:
         - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetAId
         - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetBId
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub careconnect-${Environment}-VpcLinkSecurityGroupId
 
-  # ALB target group for ECS tasks.
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  # HTTP API (cheaper and simpler than REST API, supports JWT authorizers natively).
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: !Sub careconnect-${Environment}-tg
-      Port: !Ref ContainerPort
-      Protocol: HTTP
-      TargetType: ip
-      VpcId:
-        Fn::ImportValue: !Sub careconnect-${Environment}-VpcId
-      HealthCheckEnabled: true
-      HealthCheckPath: !Ref HealthCheckPath
-      HealthCheckProtocol: HTTP
-      Matcher:
-        HttpCode: 200
+      Name: !Sub careconnect-${Environment}-api
+      ProtocolType: HTTP
+      Description: !Sub CareConnect ${Environment} backend API
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - PATCH
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+        MaxAge: 86400
 
-  # Port 80 HTTP listener forwarding to the target group.
-  Listener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
+  # Default integration pointing to the Cloud Map service via VPC Link.
+  HttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
     Properties:
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+      ApiId: !Ref HttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref VpcLink
+      IntegrationUri: !GetAtt CloudMapService.Arn
+      PayloadFormatVersion: '1.0'
+
+  # Catch-all route that forwards every request to the backend.
+  HttpApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: '$default'
+      Target: !Sub integrations/${HttpApiIntegration}
+
+  # Auto-deploy stage so changes are live immediately.
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  # ---------------------------------------------------------------------------
+  # ACM Certificate + Custom Domain + Route 53 (conditional on DomainName).
+  # ---------------------------------------------------------------------------
+
+  # ACM certificate for HTTPS on the custom domain. DNS validation is used.
+  AcmCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub careconnect-${Environment}-api-cert
+
+  # API Gateway custom domain name bound to the ACM certificate.
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - EndpointType: REGIONAL
+          CertificateArn: !Ref AcmCertificate
+
+  # Maps the custom domain to the HTTP API default stage.
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName
+      Stage: !Ref HttpApiStage
+
+  # Route 53 alias record pointing the custom domain to the API Gateway.
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomainName.RegionalHostedZoneId
+
+  # ---------------------------------------------------------------------------
+  # ECS Task Definition and Service.
+  # ---------------------------------------------------------------------------
 
   # ECS task definition tied to the runtime contract used by the backend code.
   TaskDefinition:
@@ -136,6 +259,7 @@ Resources:
               HostPort: !Ref ContainerPort
               Protocol: tcp
               AppProtocol: http
+              Name: backend-port
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -172,11 +296,9 @@ Resources:
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
 
-  # Long-running Fargate service fronted by the ALB.
+  # ECS Fargate service registered with Cloud Map for API Gateway discovery.
   EcsService:
     Type: AWS::ECS::Service
-    DependsOn:
-      - Listener
     Properties:
       ServiceName: !Sub careconnect-${Environment}-backend
       Cluster:
@@ -184,7 +306,6 @@ Resources:
       LaunchType: FARGATE
       DesiredCount: !Ref DesiredCount
       TaskDefinition: !Ref TaskDefinition
-      HealthCheckGracePeriodSeconds: !Ref HealthCheckGracePeriodSeconds
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
@@ -193,29 +314,40 @@ Resources:
           Subnets:
             - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetAId
             - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetBId
-      LoadBalancers:
-        - ContainerName: cc-backend
-          ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt CloudMapService.Arn
+          Port: !Ref ContainerPort
 
 Outputs:
-  # Public endpoint used by testers and the Flutter app.
-  LoadBalancerDnsName:
-    Value: !GetAtt LoadBalancer.DNSName
+  # API Gateway invoke URL (always available).
+  ApiEndpoint:
+    Description: API Gateway HTTP API default endpoint
+    Value: !GetAtt HttpApi.ApiEndpoint
     Export:
-      Name: !Sub careconnect-${Environment}-LoadBalancerDnsName
+      Name: !Sub careconnect-${Environment}-ApiEndpoint
 
-  LoadBalancerUrl:
-    Value: !Sub http://${LoadBalancer.DNSName}
+  # Custom domain URL (only when custom domain is configured).
+  CustomDomainUrl:
+    Condition: HasCustomDomain
+    Description: Custom domain HTTPS URL
+    Value: !Sub https://${DomainName}
     Export:
-      Name: !Sub careconnect-${Environment}-LoadBalancerUrl
+      Name: !Sub careconnect-${Environment}-CustomDomainUrl
 
-  TargetGroupArn:
-    Value: !Ref TargetGroup
-    Export:
-      Name: !Sub careconnect-${Environment}-TargetGroupArn
-
+  # Service name for CI/CD to force new deployments.
   ServiceName:
     Value: !Ref EcsService
     Export:
       Name: !Sub careconnect-${Environment}-ServiceName
+
+  # VPC Link ID for reference by other stacks.
+  VpcLinkId:
+    Value: !Ref VpcLink
+    Export:
+      Name: !Sub careconnect-${Environment}-VpcLinkId
+
+  # API ID for reference.
+  HttpApiId:
+    Value: !Ref HttpApi
+    Export:
+      Name: !Sub careconnect-${Environment}-HttpApiId
