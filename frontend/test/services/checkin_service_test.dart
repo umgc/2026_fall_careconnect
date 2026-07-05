@@ -137,8 +137,7 @@ void main() {
       expect(requestCount, 0);
     });
 
-    test('does not require caregiver id for snapshot create flow',
-        () async {
+    test('does not require caregiver id for snapshot create flow', () async {
       final result = await _runAddCheckinWithClient((req) async {
         if (req.method == 'GET' && req.url.path.endsWith('/api/questions')) {
           return http.Response(
@@ -447,6 +446,94 @@ void main() {
 
       expect(result, isEmpty);
       expect(requestCount, 0);
+    });
+  });
+
+  group('CheckinService.fetchCheckInsForPatientFiltered()', () {
+    test('returns paginated filtered check-ins', () async {
+      final page = await http.runWithClient(
+        () => CheckinService.fetchCheckInsForPatientFiltered(
+          patientId: '7',
+          status: 'submitted',
+          startDate: DateTime(2026, 6, 1),
+          endDate: DateTime(2026, 6, 30),
+          page: 0,
+          size: 5,
+        ),
+        () => MockClient((req) async {
+          expect(req.method, 'GET');
+          expect(req.url.path, contains('/api/checkins/patients/7/search'));
+          expect(req.url.queryParameters['status'], 'submitted');
+          expect(req.url.queryParameters['page'], '0');
+          expect(req.url.queryParameters['size'], '5');
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'checkInId': 11,
+                  'patientId': 7,
+                  'createdAt': '2026-06-26T10:00:00Z',
+                  'submittedAt': '2026-06-26T10:10:00Z',
+                  'reviewedAt': null,
+                  'questionCount': 3,
+                }
+              ],
+              'page': 0,
+              'size': 5,
+              'totalElements': 1,
+              'totalPages': 1
+            }),
+            200,
+          );
+        }),
+      );
+
+      expect(page, isNotNull);
+      expect(page!.items, hasLength(1));
+      expect(page.items.first.checkInId, 11);
+      expect(page.totalPages, 1);
+    });
+  });
+
+  group('CheckinService.fetchCheckInDetail()', () {
+    test('returns check-in detail with answers', () async {
+      final detail = await http.runWithClient(
+        () => CheckinService.fetchCheckInDetail(42),
+        () => MockClient((req) async {
+          expect(req.method, 'GET');
+          expect(req.url.path, contains('/api/checkins/42/detail'));
+          return http.Response(
+            jsonEncode({
+              'checkInId': 42,
+              'patientId': 7,
+              'createdAt': '2026-06-26T10:00:00Z',
+              'submittedAt': '2026-06-26T10:10:00Z',
+              'reviewedAt': '2026-06-26T10:20:00Z',
+              'status': 'reviewed',
+              'answers': [
+                {
+                  'questionId': 1,
+                  'prompt': 'How are you?',
+                  'type': 'TEXT',
+                  'required': true,
+                  'ordinal': 1,
+                  'valueText': 'Good',
+                  'valueBoolean': null,
+                  'valueNumber': null,
+                  'answeredAt': '2026-06-26T10:10:30Z'
+                }
+              ]
+            }),
+            200,
+          );
+        }),
+      );
+
+      expect(detail, isNotNull);
+      expect(detail!.status, 'reviewed');
+      expect(detail.answers, hasLength(1));
+      expect(detail.answers.first.prompt, 'How are you?');
+      expect(detail.answers.first.valueText, 'Good');
     });
   });
 }

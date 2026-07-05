@@ -9,6 +9,7 @@ import com.careconnect.model.CheckInQuestion;
 import com.careconnect.model.Patient;
 import com.careconnect.model.Question;
 import com.careconnect.model.QuestionType;
+import com.careconnect.repository.AnswerRepository;
 import com.careconnect.repository.CheckInQuestionRepository;
 import com.careconnect.repository.CheckInRepository;
 import com.careconnect.repository.PatientRepository;
@@ -41,6 +42,8 @@ class CheckInSnapshotServiceTest {
     @Mock
     private CheckInQuestionRepository checkInQuestionRepository;
     @Mock
+    private AnswerRepository answerRepository;
+    @Mock
     private PatientRepository patientRepository;
     @Mock
     private QuestionRepository questionRepository;
@@ -52,6 +55,7 @@ class CheckInSnapshotServiceTest {
         service = new CheckInSnapshotService(
                 checkInRepository,
                 checkInQuestionRepository,
+                answerRepository,
                 patientRepository,
                 questionRepository
         );
