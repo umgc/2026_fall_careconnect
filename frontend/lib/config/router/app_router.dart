@@ -91,15 +91,17 @@ class TelemetryGoRouterObserver extends NavigatorObserver {
     final router = _activeRouter;
     if (router == null) return;
 
-    final String location;
+    final Uri uri;
     try {
-      location = router.state.uri.toString();
+      uri = router.state.uri;
     } on StateError {
       return;
     }
 
+    final screen = uri.path.isEmpty ? '/' : uri.path;
+
     try {
-      await Telemetry.event('screen_view', {'screen': location});
+      await Telemetry.event('screen_view', {'screen': screen});
     } catch (e) {
       debugPrint('Telemetry logging failed: $e');
     }
