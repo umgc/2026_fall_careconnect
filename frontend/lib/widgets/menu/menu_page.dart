@@ -164,7 +164,7 @@ class _MenuPageState extends State<MenuPage> {
       ),
       _MenuItem(
         icon: Icons.mic,
-        label: 'Voice Commands',
+        label: local.voiceCommands,
         route: '/voice',
       ),
       _MenuItem(

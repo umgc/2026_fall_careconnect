@@ -1,5 +1,6 @@
 {
   "am": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -38,6 +39,7 @@
   ],
 
   "ar": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -76,6 +78,7 @@
   ],
 
   "bn": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -114,6 +117,7 @@
   ],
 
   "fa": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -152,6 +156,7 @@
   ],
 
   "fr": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -190,6 +195,7 @@
   ],
 
   "hi": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -228,6 +234,7 @@
   ],
 
   "ja": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -266,6 +273,7 @@
   ],
 
   "ne": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -304,6 +312,7 @@
   ],
 
   "pt": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -342,6 +351,7 @@
   ],
 
   "ru": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -380,6 +390,7 @@
   ],
 
   "ur": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
@@ -418,6 +429,7 @@
   ],
 
   "zh": [
+    "voiceCommands",
     "voicecommand_wakeWordError",
     "voicecommand_voiceCommandsUnavailable",
     "voicecommand_micPermissionsDenied",
