@@ -79,38 +79,54 @@ GoRouter? _appRouterRef;
 
 /// Logs a [screen_view] telemetry event whenever navigation changes.
 class TelemetryGoRouterObserver extends NavigatorObserver {
-  void _logScreenView() {
-    final router = _appRouterRef;
+  TelemetryGoRouterObserver({GoRouter? Function()? routerProvider})
+      : _routerProvider = routerProvider;
+
+  final GoRouter? Function()? _routerProvider;
+
+  GoRouter? get _activeRouter =>
+      _routerProvider != null ? _routerProvider() : _appRouterRef;
+
+  Future<void> _logScreenView() async {
+    final router = _activeRouter;
     if (router == null) return;
 
-    final location = router.state.uri.toString();
-    unawaited(
-      Telemetry.event('screen_view', {'screen': location}),
-    );
+    final String location;
+    try {
+      location = router.state.uri.toString();
+    } on StateError {
+      return;
+    }
+
+    try {
+      await Telemetry.event('screen_view', {'screen': location});
+    } catch (e) {
+      debugPrint('Telemetry logging failed: $e');
+    }
   }
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    _logScreenView();
+    unawaited(_logScreenView());
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
-    _logScreenView();
+    unawaited(_logScreenView());
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-    _logScreenView();
+    unawaited(_logScreenView());
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
-    _logScreenView();
+    unawaited(_logScreenView());
   }
 }
 
