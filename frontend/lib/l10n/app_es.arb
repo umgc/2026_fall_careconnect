@@ -11,6 +11,7 @@
   "search": "Buscar",
   "invoiceAssistant": "Asistente de Facturas",
   "evv": "EVV",
+  "voiceCommands": "Voice Commands",
   "calendarAssistant": "Asistente de Calendario",
   "medicationManagement": "Gestión de Medicación",
   "socialFeed": "Red Social",
@@ -157,14 +158,22 @@
   "voicecommand_phaseLabelError": "Error",
   "voicecommand_speechCaptured": "Discurso capturado",
   "voicecommand_successRecognized": "Reconocido",
-  "voicecommand_successOpenHome": "abriendo la página de inicio",
-  "voicecommand_successOpenCalendar": "abriendo el calendario",
-  "voicecommand_successOpenTracker": "abrir el rastreador de síntomas",
+  "voicecommand_successOpen": "¿abierto",
+  "voicecommand_commandLabelHome": "la Página de Inicio",
+  "voicecommand_commandLabelCalendar": "el Calendario",
+  "voicecommand_commandLabelTracker": "el Rastreador de Síntomas",
   "voicecommand_successNotRecognized": "comando no reconocido",
-  "voicecommand_statusAreaHeard": "Escuchó"
- 
-
-
+  "voicecommand_statusAreaHeard": "Escuchó",
+  "voicecommand_confirmCommand": "Confirmar comando",
+  "voicecommand_clarifyCommand": "Aclarar comando",
+  "voicecommand_multipleMatchesCommand": "Múltiples coincidencias",
+  "voicecommand_selectOneOptionCommand": "Seleccione una opción",
+  "voicecommand_onConfirmedCommand": "Confirmado",
+  "voicecommand_onConfirmedCommandNavigate": "navegando",
+  "voicecommand_onClarifyCommand": "Seleccionado",
+  "voicecommand_onClarifyCommandConfirm": "¿confirmar",
+  "voicecommand_confirmButton": "Confirmar",
+  "voicecommand_cancelButton": "Cancelar"
 
 
 }
