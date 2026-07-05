@@ -14,6 +14,7 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.invoice.LlmExtractionService;
 import com.careconnect.service.invoice.InvoiceService;
 import com.careconnect.service.invoice.TextractService;
+import com.careconnect.util.JsonSanitizer;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -269,27 +270,5 @@ public class InvoiceController {
 
     private static BigDecimal parseDecimal(String s) {
         return s == null || s.isBlank() ? null : new BigDecimal(s);
-    }
-
-    public static final class JsonSanitizer {
-        private JsonSanitizer() {}
-
-        public static String extractFirstJsonObject(String s) {
-            if (s == null) return null;
-
-            String t = s.trim();
-            int start = t.indexOf('{');
-            if (start < 0) return null;
-
-            int depth = 0;
-            for (int i = start; i < t.length(); i++) {
-                if (t.charAt(i) == '{') depth++;
-                else if (t.charAt(i) == '}') {
-                    depth--;
-                    if (depth == 0) return t.substring(start, i + 1);
-                }
-            }
-            return null;
-        }
     }
 }
