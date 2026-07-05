@@ -22,7 +22,7 @@ docker-compose up -d
 
 ### PostgreSQL Database
 - **Host**: localhost
-- **Port**: 5433
+- **Port**: 5432 (default, configurable via `POSTGRES_PORT`)
 - **Database**: careconnect
 - **Username**: postgres
 - **Password**: changeme
@@ -75,6 +75,7 @@ docker-compose up -d
 Create a `.env` file in this directory to customize:
 
 ```env
+POSTGRES_PORT=5432
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=changeme
 POSTGRES_DB=careconnect
@@ -82,6 +83,9 @@ PGADMIN_DEFAULT_EMAIL=admin@example.com
 PGADMIN_DEFAULT_PASSWORD=admin
 PGADMIN_PORT=5050
 ```
+
+If you need to run PostgreSQL on a different host port (for example `5433`), set
+`POSTGRES_PORT=5433` and make sure your backend `JDBC_URI` uses the same port.
 
 ## Migration Files
 

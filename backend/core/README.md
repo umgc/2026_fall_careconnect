@@ -142,6 +142,13 @@ If you prefer to use your IDE's run configuration instead of the `.env` approach
    You need to have `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` setup in your environment variables. You can also do that in the IDE or make it global in your System Environment variable.
    Go to for more details [Configure your AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) - to make it simple we suggest you to use environment variables [here is the sub link](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html).
 
+  **AI (Bedrock) local opt-in:** In `application-dev.properties`, `careconnect.ai.enabled` is disabled by default. To run AI chat locally with Bedrock, enable it via your local `.env` or IDE environment variables and set:
+  - `CARECONNECT_AI_ENABLED=true`
+  - `CARECONNECT_AI_PROVIDER=bedrock`
+  - `AWS_ACCESS_KEY_ID=<your_key>`
+  - `AWS_SECRET_ACCESS_KEY=<your_secret>`
+  - `AWS_REGION=us-east-1` (or your Bedrock-enabled region)
+
 4. Retrieving properties from SSM Parameter Store
 
    This configuration is more for AWS deployment. 

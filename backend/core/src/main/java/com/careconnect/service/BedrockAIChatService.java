@@ -1,27 +1,29 @@
 package com.careconnect.service;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Service;
+
 import com.careconnect.ai.AIService;
+import com.careconnect.ai.bedrock.BedrockModelSupport;
 import com.careconnect.dto.ChatConversationSummary;
 import com.careconnect.dto.ChatMessageSummary;
 import com.careconnect.dto.ChatRequest;
 import com.careconnect.dto.ChatResponse;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
-
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @ConditionalOnProperty(name = "careconnect.ai.provider", havingValue = "bedrock")
@@ -30,11 +32,22 @@ public class BedrockAIChatService implements AIService {
     private static final Logger log = LoggerFactory.getLogger(BedrockAIChatService.class);
 
     private final BedrockRuntimeClient client;
+        private final ObjectMapper objectMapper;
+        private final String defaultModelId;
 
-    public BedrockAIChatService() {
-        this.client = BedrockRuntimeClient.builder()
-                .region(Region.US_EAST_1)
-                .build();
+        @Autowired
+        public BedrockAIChatService(@Value("${careconnect.ai.model:amazon.nova-lite-v1:0}") String defaultModelId) {
+                this(
+                                BedrockRuntimeClient.builder().region(Region.US_EAST_1).build(),
+                                defaultModelId,
+                                new ObjectMapper()
+                );
+        }
+
+        BedrockAIChatService(BedrockRuntimeClient client, String defaultModelId, ObjectMapper objectMapper) {
+                this.client = client;
+                this.defaultModelId = defaultModelId;
+                this.objectMapper = objectMapper;
     }
 
     @Override
@@ -42,33 +55,19 @@ public class BedrockAIChatService implements AIService {
 
         log.info("Using Bedrock AI provider");
 
-        String payload = """
-        {
-          "messages": [
-            {
-                "role": "user",
-                "content": [
-                  {
-                    "text": "%s"
-                  }
-                ]
-            }
-          ],
-            "inferenceConfig": {
-            "maxTokens": 500,
-            "temperature": 0.5,
-            "topP": 0.9
-          }
-        }
-        """.formatted(
-            request.getMessage()
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-        );
+                String modelId = BedrockModelSupport.resolveModelId(request.getPreferredModel(), defaultModelId);
+                String safePrompt = request.getMessage() == null ? "" : request.getMessage();
+                String payload = BedrockModelSupport.buildInvokePayload(
+                                modelId,
+                                safePrompt,
+                                500,
+                                0.5,
+                                0.9,
+                                objectMapper
+                );
 
         InvokeModelRequest invokeRequest = InvokeModelRequest.builder()
-                .modelId("amazon.nova-lite-v1:0")
+                                .modelId(modelId)
                 .contentType("application/json")
                 .accept("application/json")
                 .body(SdkBytes.fromString(payload, StandardCharsets.UTF_8))
@@ -76,28 +75,13 @@ public class BedrockAIChatService implements AIService {
 
         InvokeModelResponse response = client.invokeModel(invokeRequest);
 
-        ObjectMapper mapper = new ObjectMapper();
-
         String raw = response.body().asUtf8String();
-
-        JsonNode root;
-        
-        try {
-            root = mapper.readTree(raw);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to parse Bedrock response", e);
-        }
-
-        String aiText = root
-                .path("output")
-                .path("message")
-                .path("content")
-                .get(0)
-                .path("text")
-                .asText();
+                String aiText = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
 
         ChatResponse chatResponse = new ChatResponse();
         chatResponse.setAiResponse(aiText);
+                chatResponse.setAiProvider("bedrock");
+                chatResponse.setModelUsed(modelId);
         chatResponse.setSuccess(true);
         chatResponse.setTimestamp(LocalDateTime.now());
 

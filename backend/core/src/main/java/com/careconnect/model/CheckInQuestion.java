@@ -33,13 +33,28 @@ public class CheckInQuestion {
     @Column(nullable = false)
     private int ordinal;
 
+    @Column(name = "prompt_snapshot", nullable = false, columnDefinition = "text")
+    private String promptSnapshot;
+
+    @Column(name = "type_snapshot", nullable = false, length = 32)
+    private String typeSnapshot;
+
     public CheckInQuestion() {}
 
-    public CheckInQuestion(CheckIn checkIn, Question question, boolean required, int ordinal) {
+    public CheckInQuestion(
+            CheckIn checkIn,
+            Question question,
+            boolean required,
+            int ordinal,
+            String promptSnapshot,
+            String typeSnapshot
+    ) {
         this.checkIn = checkIn;
         this.question = question;
         this.required = required;
         this.ordinal = ordinal;
+        this.promptSnapshot = promptSnapshot;
+        this.typeSnapshot = typeSnapshot;
         this.id = new CheckInQuestionId(
             checkIn.getId(), 
             question.getId()

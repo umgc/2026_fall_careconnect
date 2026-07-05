@@ -2,7 +2,6 @@
 import 'dart:js_interop';
 import 'dart:typed_data';
 import 'package:web/web.dart' as web;
-import 'dart:io' as io;
 import '../abstracts/file_handler.dart';
 
 class WebFileHandler implements FileHandler {
@@ -30,23 +29,17 @@ class WebFileHandler implements FileHandler {
 
   @override
   Future<FileUploadResult> processPickedFile(String? path, String? fileName, Uint8List? bytes) async {
-    if (bytes == null || fileName == null) {
-      throw Exception('Web file processing requires bytes and filename');
-    }
-
-    // Create temporary file for web
-    final tempDir = io.Directory.systemTemp;
-    final tempFile = io.File('${tempDir.path}/$fileName');
-    await tempFile.writeAsBytes(bytes);
-
-    return FileUploadResult(
-      filePath: tempFile.path,
-      isTemporary: true,
+    // Web has no local filesystem, so there is no real file path to return.
+    // Callers on web must upload the picked bytes directly (e.g.
+    // EnhancedFileService.uploadFileWeb). Touching dart:io here would break
+    // web compilation, which is exactly what this handler must avoid.
+    throw UnsupportedError(
+      'processPickedFile is not supported on web; upload the picked bytes directly.',
     );
   }
 }
 
 // Platform-specific implementation for web platform
-FileHandler _createPlatformHandler() {
+FileHandler createFileHandler() {
   return WebFileHandler();
 }
