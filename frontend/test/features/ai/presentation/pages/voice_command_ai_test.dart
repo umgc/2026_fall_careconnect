@@ -282,7 +282,7 @@ void main() {
     tearDown(clearMocks);
 
     testWidgets('Team C smoke: renders primary voice controls', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
+      await tester.pumpWidget(const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Voice Commands'), findsOneWidget);
