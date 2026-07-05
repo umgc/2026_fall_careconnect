@@ -22,12 +22,15 @@ import com.careconnect.repository.QuestionRepository;
 import com.careconnect.security.Role;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -156,34 +159,36 @@ public class CheckInSnapshotService {
         final String normalizedStatus = normalizeStatus(status);
 
         final OffsetDateTime rangeStart = startDate == null
-                ? OffsetDateTime.MIN
-                : startDate.atStartOfDay().atOffset(OffsetDateTime.now().getOffset());
+                ? null
+                : startDate.atStartOfDay().atOffset(ZoneOffset.UTC);
         final OffsetDateTime rangeEnd = endDate == null
-                ? OffsetDateTime.MAX
-                : endDate.plusDays(1).atStartOfDay().atOffset(OffsetDateTime.now().getOffset()).minusNanos(1);
-        if (rangeStart.isAfter(rangeEnd)) {
+                ? null
+                : endDate.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC).minusNanos(1);
+        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
             throw new AppException(HttpStatus.BAD_REQUEST, "startDate must be on or before endDate");
         }
 
-        List<CheckIn> all = checkInRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
-        List<CheckIn> filtered = all.stream()
-                .filter(checkIn -> !checkIn.getCreatedAt().isBefore(rangeStart) && !checkIn.getCreatedAt().isAfter(rangeEnd))
-                .filter(checkIn -> matchesStatus(checkIn, normalizedStatus))
-                .sorted(Comparator.comparing(CheckIn::getCreatedAt).reversed())
-                .toList();
-
-        int totalElements = filtered.size();
-        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
-        int fromIndex = Math.min(safePage * safeSize, totalElements);
-        int toIndex = Math.min(fromIndex + safeSize, totalElements);
-        List<CheckIn> pageItems = filtered.subList(fromIndex, toIndex);
+        Page<CheckIn> filteredPage = checkInRepository.findByPatientIdWithFilters(
+                patientId,
+                normalizedStatus,
+                rangeStart,
+                rangeEnd,
+                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+        List<CheckIn> pageItems = filteredPage.getContent();
 
         Map<Long, Integer> questionCounts = buildQuestionCountsMap(pageItems);
         List<CheckInSummaryDTO> items = pageItems.stream()
                 .map(checkIn -> toSummary(checkIn, questionCounts))
                 .toList();
 
-        return new CheckInPageDTO(items, safePage, safeSize, totalElements, totalPages);
+        return new CheckInPageDTO(
+                items,
+                filteredPage.getNumber(),
+                filteredPage.getSize(),
+                filteredPage.getTotalElements(),
+                filteredPage.getTotalPages()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -273,18 +278,6 @@ public class CheckInSnapshotService {
             throw new AppException(HttpStatus.BAD_REQUEST, "status must be one of: draft, submitted, reviewed");
         }
         return normalized;
-    }
-
-    private boolean matchesStatus(CheckIn checkIn, String status) {
-        if (status == null) {
-            return true;
-        }
-        return switch (status) {
-            case "draft" -> checkIn.getSubmittedAt() == null;
-            case "submitted" -> checkIn.getSubmittedAt() != null && checkIn.getReviewedAt() == null;
-            case "reviewed" -> checkIn.getReviewedAt() != null;
-            default -> true;
-        };
     }
 
     private String computeStatus(CheckIn checkIn) {

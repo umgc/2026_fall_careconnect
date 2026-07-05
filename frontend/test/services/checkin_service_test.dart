@@ -464,6 +464,8 @@ void main() {
           expect(req.method, 'GET');
           expect(req.url.path, contains('/api/checkins/patients/7/search'));
           expect(req.url.queryParameters['status'], 'submitted');
+          expect(req.url.queryParameters['startDate'], '2026-06-01');
+          expect(req.url.queryParameters['endDate'], '2026-06-30');
           expect(req.url.queryParameters['page'], '0');
           expect(req.url.queryParameters['size'], '5');
           return http.Response(
