@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -86,82 +87,7 @@ class CallNotificationService {
         (message) {
           final data = _decode(message);
           if (data == null || data.isEmpty) return;
-          final type = data['type'] as String?;
-          if (type == null) return;
-
-          if (type == 'incoming-video-call') {
-            debugPrint('📞 Received incoming video call: $data');
-            _incomingCallController.add(data);
-            _handleIncomingCall(data);
-          } else if (type == 'call-ended') {
-            debugPrint('📞 Call ended: $data');
-            _incomingCallController.add(data);
-            final endedCallId = (data['callId'] ?? '').toString();
-            if (endedCallId.isNotEmpty) {
-              _suppressIncomingCallId(endedCallId);
-              if (_activeCallId == endedCallId) {
-                _activeCallId = null;
-              }
-              if (_currentIncomingCallId == endedCallId) {
-                _dismissIncomingCallPopup();
-              }
-            }
-            _notifyCallEnded(data);
-          } else if (type == 'call-answered') {
-            debugPrint('📞 Call answered: $data');
-            _incomingCallController.add(data);
-            final answeredCallId = (data['callId'] ?? '').toString();
-            if (answeredCallId.isNotEmpty) {
-              _activeCallId = answeredCallId;
-            }
-            _notifyCallAnswered(data);
-          } else if (type == 'call-declined') {
-            debugPrint('📞 Call declined: $data');
-            _incomingCallController.add(data);
-            final declinedCallId = (data['callId'] ?? '').toString();
-            if (declinedCallId.isNotEmpty) {
-              _suppressIncomingCallId(declinedCallId);
-              if (_activeCallId == declinedCallId) {
-                _activeCallId = null;
-              }
-            }
-            _notifyCallDeclined(data);
-          } else if (type == 'call-invitation-sent') {
-            final callId = (data['callId'] ?? '').toString();
-            final pending = _pendingOutgoingInvitations.remove(callId);
-            if (pending != null && !pending.isCompleted) {
-              pending.complete(true);
-            }
-          } else if (type == 'call-invitation-failed') {
-            final callId = (data['callId'] ?? '').toString();
-            final reason = (data['reason'] ?? 'Recipient unavailable')
-                .toString()
-                .trim();
-            final recipientName = (data['recipientName'] ?? '')
-                .toString()
-                .trim();
-            final recipientRole = (data['recipientRole'] ?? '')
-                .toString()
-                .trim();
-            final recipientLabel = recipientName.isNotEmpty
-                ? recipientName
-                : (_roleLabel(recipientRole) ?? 'Recipient');
-            final pending = _pendingOutgoingInvitations.remove(callId);
-            if (pending != null && !pending.isCompleted) {
-              pending.complete(false);
-            }
-            if (_activeCallId == callId) {
-              _activeCallId = null;
-            }
-            _showCallFeedback(
-              '$recipientLabel is unavailable: $reason.',
-              backgroundColor: Colors.orange.shade800,
-            );
-          } else if (type == 'sentiment-update') {
-            _incomingCallController.add(data);
-          } else if (type == 'sentiment-channel-state') {
-            _incomingCallController.add(data);
-          }
+          _processNotificationMessage(data);
         },
         onDone: () {
           _isConnected = false;
@@ -177,6 +103,97 @@ class CallNotificationService {
     } catch (e) {
       debugPrint('❌ Error initializing CallNotificationService: $e');
       return false;
+    }
+  }
+
+  static void _processNotificationMessage(Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+    if (type == null) return;
+
+    if (type == 'incoming-video-call') {
+      debugPrint('📞 Received incoming video call: $data');
+      _incomingCallController.add(data);
+      _handleIncomingCall(data);
+    } else if (type == 'call-ended') {
+      debugPrint('📞 Call ended: $data');
+      _incomingCallController.add(data);
+      _dismissIncomingCallForCallId((data['callId'] ?? '').toString());
+      _notifyCallEnded(data);
+    } else if (type == 'call-invitation-cancelled') {
+      debugPrint('📞 Call invitation cancelled: $data');
+      _incomingCallController.add(data);
+      _dismissIncomingCallForCallId((data['callId'] ?? '').toString());
+    } else if (type == 'call-answered') {
+      debugPrint('📞 Call answered: $data');
+      _incomingCallController.add(data);
+      final answeredCallId = (data['callId'] ?? '').toString();
+      if (answeredCallId.isNotEmpty) {
+        _activeCallId = answeredCallId;
+      }
+      _notifyCallAnswered(data);
+    } else if (type == 'call-declined') {
+      debugPrint('📞 Call declined: $data');
+      _incomingCallController.add(data);
+      final declinedCallId = (data['callId'] ?? '').toString();
+      if (declinedCallId.isNotEmpty) {
+        _suppressIncomingCallId(declinedCallId);
+        if (_activeCallId == declinedCallId) {
+          _activeCallId = null;
+        }
+      }
+      _notifyCallDeclined(data);
+    } else if (type == 'call-invitation-sent') {
+      final callId = (data['callId'] ?? '').toString();
+      final pending = _pendingOutgoingInvitations.remove(callId);
+      if (pending != null && !pending.isCompleted) {
+        pending.complete(true);
+      }
+    } else if (type == 'call-invitation-failed') {
+      final callId = (data['callId'] ?? '').toString();
+      final reason = (data['reason'] ?? 'Recipient unavailable')
+          .toString()
+          .trim();
+      final recipientName = (data['recipientName'] ?? '').toString().trim();
+      final recipientRole = (data['recipientRole'] ?? '').toString().trim();
+      final recipientLabel = recipientName.isNotEmpty
+          ? recipientName
+          : (_roleLabel(recipientRole) ?? 'Recipient');
+      final pending = _pendingOutgoingInvitations.remove(callId);
+      if (pending != null && !pending.isCompleted) {
+        pending.complete(false);
+      }
+      if (_activeCallId == callId) {
+        _activeCallId = null;
+      }
+      _showCallFeedback(
+        '$recipientLabel is unavailable: $reason.',
+        backgroundColor: Colors.orange.shade800,
+      );
+    } else if (type == 'sentiment-update') {
+      _incomingCallController.add(data);
+    } else if (type == 'sentiment-channel-state') {
+      _incomingCallController.add(data);
+    }
+  }
+
+  static void _dismissIncomingCallForCallId(String callId) {
+    if (callId.isEmpty) return;
+
+    _suppressIncomingCallId(callId);
+    if (_activeCallId == callId) {
+      _activeCallId = null;
+    }
+
+    if (_isIncomingDialogVisible &&
+        _currentIncomingCallId != null &&
+        _currentIncomingCallId != callId) {
+      return;
+    }
+
+    final shouldDismissPopup = _isIncomingDialogVisible &&
+        (_currentIncomingCallId == null || _currentIncomingCallId == callId);
+    if (shouldDismissPopup) {
+      _dismissIncomingCallPopup();
     }
   }
 
@@ -687,5 +704,40 @@ class CallNotificationService {
     _pendingOutgoingInvitations.clear();
 
     // Keep stream controller alive for app lifetime.
+  }
+
+  @visibleForTesting
+  static void configureForTest({
+    required BuildContext context,
+    String userId = 'test-user',
+    String userRole = 'FAMILY_MEMBER',
+    String? userDisplayName,
+  }) {
+    _context = context;
+    _currentUserId = userId;
+    _currentUserRole = userRole;
+    _currentUserDisplayName = userDisplayName;
+    _isConnected = true;
+  }
+
+  @visibleForTesting
+  static void resetTestState() {
+    _isIncomingDialogVisible = false;
+    _currentIncomingCallId = null;
+    _activeCallId = null;
+    _suppressedIncomingCallIds.clear();
+  }
+
+  @visibleForTesting
+  static void clearIncomingCallIdForTest() {
+    _currentIncomingCallId = null;
+  }
+
+  @visibleForTesting
+  static bool get isIncomingDialogVisibleForTest => _isIncomingDialogVisible;
+
+  @visibleForTesting
+  static void processNotificationMessageForTest(Map<String, dynamic> data) {
+    _processNotificationMessage(data);
   }
 }

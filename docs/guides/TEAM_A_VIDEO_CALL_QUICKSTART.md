@@ -155,6 +155,8 @@ Local syntax check already passes:
 
 For team integration later, keep this module parallel and avoid touching shared migration work unless requested.
 
+**Conference / Chime note:** `ChimeService` join-credential cache and `CallNotificationHandler` WebSocket sessions are **in-memory per JVM**. For Fargate dev/demo, keep the backend ECS service at **`DesiredCount: 1`** (already the default in `cloudformation-fargate/parameters/*-service.json`). Scaling out requires sticky sessions or a distributed cache — not implemented in this repo yet.
+
 ---
 
 ## 10) Automated Testing
