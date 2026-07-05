@@ -35,7 +35,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "ar": [
@@ -74,7 +75,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "bn": [
@@ -113,7 +115,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "fa": [
@@ -152,7 +155,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "fr": [
@@ -191,7 +195,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "hi": [
@@ -230,7 +235,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "ja": [
@@ -269,7 +275,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "ne": [
@@ -308,7 +315,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "pt": [
@@ -347,7 +355,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "ru": [
@@ -386,7 +395,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "ur": [
@@ -425,7 +435,8 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ],
 
   "zh": [
@@ -464,6 +475,7 @@
     "voicecommand_onClarifyCommand",
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
-    "voicecommand_cancelButton"
+    "voicecommand_cancelButton",
+    "mainscreen_voiceCommandsTooltip"
   ]
 }

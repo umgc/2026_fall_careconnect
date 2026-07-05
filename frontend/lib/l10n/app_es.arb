@@ -173,7 +173,8 @@
   "voicecommand_onClarifyCommand": "Seleccionado",
   "voicecommand_onClarifyCommandConfirm": "¿confirmar",
   "voicecommand_confirmButton": "Confirmar",
-  "voicecommand_cancelButton": "Cancelar"
+  "voicecommand_cancelButton": "Cancelar",
 
+  "mainscreen_voiceCommandsTooltip": "Comandos de voz"
 
 }

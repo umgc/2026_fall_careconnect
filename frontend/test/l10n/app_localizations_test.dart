@@ -133,6 +133,7 @@ void main() {
       loc.search,
       loc.invoiceAssistant,
       loc.evv,
+      loc.voiceCommands,
       loc.calendarAssistant,
       loc.medicationManagement,
       loc.socialFeed,
@@ -275,6 +276,7 @@ void main() {
       loc.voicecommand_onClarifyCommandConfirm,
       loc.voicecommand_confirmButton,
       loc.voicecommand_cancelButton,
+      loc.mainscreen_voiceCommandsTooltip,
     ];
   }
 
