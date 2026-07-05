@@ -7,7 +7,9 @@ import jakarta.validation.Valid;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.Permission;
 import com.careconnect.security.Role;
+import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.util.SecurityUtil;
 
@@ -291,6 +293,7 @@ public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int 
     }
 
     @PostMapping("/vitals/ingest")
+    @RequirePermission(Permission.RECORD_HEALTH_DATA)
     public ResponseEntity<?> ingestWearableReadings(@Valid @RequestBody WearableReadingIngestionRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String userEmail = auth.getName();

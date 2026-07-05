@@ -409,8 +409,8 @@ public class VitalSampleService {
     private String determineHeartRateAlert(Double heartRate) {
         if (heartRate == null) return "NORMAL";
         if (heartRate < 60) return "LOW";
-        if (heartRate > 100) return "HIGH"; 
         if (heartRate > 120) return "CRITICAL";
+        if (heartRate > 100) return "HIGH";
         return "NORMAL";
     }
     
