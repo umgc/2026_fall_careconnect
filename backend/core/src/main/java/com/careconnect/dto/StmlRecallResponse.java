@@ -1,10 +1,13 @@
 package com.careconnect.dto;
 
-import lombok.Builder;
-import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
+import lombok.Builder;
+import lombok.Data;
 
+/**
+ * DTO for STML-1 recall response with AI answer and citations.
+ */
 @Data
 @Builder
 public class StmlRecallResponse {
