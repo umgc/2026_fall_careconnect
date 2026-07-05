@@ -113,6 +113,20 @@ void main() {
       );
     });
 
+    testWidgets('Team C smoke: renders logged-in menu integration surfaces',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('Care Giver'), findsOneWidget);
+      expect(find.text('CAREGIVER'), findsOneWidget);
+      expect(find.text('Tools'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
+      expect(find.text('Preferences', skipOffstage: false), findsOneWidget);
+    });
+
     testWidgets('renders the Tools section header', (tester) async {
       // Verifies that the grid section header for Tools is present.
       await tester.pumpWidget(_buildApp(session: caregiverSession));
