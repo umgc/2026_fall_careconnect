@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
@@ -62,9 +63,7 @@ class BedrockSentimentServiceTest {
         return new BedrockSentimentService(client, new ObjectMapper(), true);
     }
 
-    // ════════════════════════════════════════════════════════════════════════
     //  TEXT SENTIMENT (heuristic / local mode)
-    // ════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Text Sentiment Analysis")
@@ -137,9 +136,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
     //  VOICE SENTIMENT (Chime metrics)
-    // ════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Voice Sentiment Analysis")
@@ -193,9 +190,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
     //  VIDEO SENTIMENT (disabled in local mode)
-    // ════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Video Sentiment Analysis")
@@ -213,9 +208,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
     //  COMBINED SENTIMENT
-    // ════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Combined Sentiment")
@@ -295,9 +288,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
     //  scoreToLabel / voiceActivityLabel thresholds
-    // ════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Label Threshold Tests")
@@ -641,6 +632,138 @@ class BedrockSentimentServiceTest {
             assertThat(result.score()).isEqualTo(0.67);
             assertThat(result.label()).isEqualTo("CALM");
             assertThat(result.channel()).isEqualTo("VIDEO");
+        }
+    }
+
+    //  PHI ANONYMIZATION (Commit C — Dominique's PR review)
+
+    @Nested
+    @DisplayName("PHI Anonymization")
+    class PhiAnonymizationTests {
+
+        /**
+         * Builds a service identical to awsBackedService(...) but ALSO injects
+         * a real MedicalDataAnonymizer via reflection so the PHI redaction
+         * helper actually runs. Without this injection, the helper short-
+         * circuits and returns the input unchanged (which is the documented
+         * behavior for unit-test fixtures that opt out).
+         *
+         * <p>Returns both the service and the mocked BedrockRuntimeClient so
+         * the test can use ArgumentCaptor on the client.
+         */
+        private Object[] awsBackedServiceWithAnonymizer(String responseBody) {
+            BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+            when(client.invokeModel(any(InvokeModelRequest.class))).thenReturn(
+                    InvokeModelResponse.builder()
+                            .body(SdkBytes.fromUtf8String(responseBody))
+                            .build()
+            );
+            BedrockSentimentService svc =
+                    new BedrockSentimentService(client, new ObjectMapper(), true);
+            ReflectionTestUtils.setField(svc, "medicalDataAnonymizer", new MedicalDataAnonymizer());
+            return new Object[] { svc, client };
+        }
+
+        @Test
+        @DisplayName("analyzeText scrubs direct identifiers (name, phone) from prompt before Bedrock invocation")
+        void analyzeText_phiInTranscript_isAnonymizedBeforePromptSent() {
+            // Bedrock will return any valid sentiment JSON — we don't care about
+            // the response here, we care about the REQUEST.
+            Object[] fixture = awsBackedServiceWithAnonymizer("""
+                    {"score":0.6,"label":"CALM","notes":"ok"}
+                    """);
+            BedrockSentimentService svc = (BedrockSentimentService) fixture[0];
+            BedrockRuntimeClient client = (BedrockRuntimeClient) fixture[1];
+
+            // PHI-shaped input: a recognizable name and a phone number.
+            String transcriptWithPhi =
+                    "John Smith reports feeling stable. Reachable at 555-123-4567.";
+
+            svc.analyzeText(transcriptWithPhi, CALL_ID);
+
+            // Capture the request body that was sent to Bedrock.
+            ArgumentCaptor<InvokeModelRequest> captor =
+                    ArgumentCaptor.forClass(InvokeModelRequest.class);
+            org.mockito.Mockito.verify(client).invokeModel(captor.capture());
+            String requestBodyJson = captor.getValue().body().asUtf8String();
+
+            // The original PHI must not appear in the request.
+            assertThat(requestBodyJson)
+                    .as("Bedrock request body should not contain raw patient name")
+                    .doesNotContain("John Smith");
+            assertThat(requestBodyJson)
+                    .as("Bedrock request body should not contain raw phone number")
+                    .doesNotContain("555-123-4567");
+
+            // The replacement tokens defined by MedicalDataAnonymizer.MINIMAL
+            // should be present in some form (proves anonymizer actually ran).
+            assertThat(requestBodyJson)
+                    .as("anonymizer should have inserted a pseudonym or marker")
+                    .containsAnyOf("Patient_", "**PHONE**");
+        }
+
+        @Test
+        @DisplayName("summarizeTranscript scrubs direct identifiers from the transcript before sending to Bedrock")
+        void summarizeTranscript_phiInTranscript_isAnonymizedBeforePromptSent() {
+            Object[] fixture = awsBackedServiceWithAnonymizer("""
+                    {"output":{"message":{"content":[{"text":"```json\\n{\\"headline\\":\\"ok\\"}\\n```"}]}}}
+                    """);
+            BedrockSentimentService svc = (BedrockSentimentService) fixture[0];
+            BedrockRuntimeClient client = (BedrockRuntimeClient) fixture[1];
+
+            String transcriptWithPhi =
+                    "Margaret Lewis called about chest pain. Email: margaret@example.com.";
+
+            svc.summarizeTranscript(
+                    CALL_ID,
+                    transcriptWithPhi,
+                    Map.of("COMBINED",
+                            new SentimentResult(0.55, "CALM", "stable", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            ArgumentCaptor<InvokeModelRequest> captor =
+                    ArgumentCaptor.forClass(InvokeModelRequest.class);
+            org.mockito.Mockito.verify(client).invokeModel(captor.capture());
+            String requestBodyJson = captor.getValue().body().asUtf8String();
+
+            assertThat(requestBodyJson)
+                    .as("summary request should not contain raw patient name")
+                    .doesNotContain("Margaret Lewis");
+            assertThat(requestBodyJson)
+                    .as("summary request should not contain raw email address")
+                    .doesNotContain("margaret@example.com");
+        }
+
+        @Test
+        @DisplayName("when MedicalDataAnonymizer is not wired (default test fixture), prompt is sent unchanged — backwards compat")
+        void analyzeText_anonymizerNotWired_promptUnchanged() {
+            // Construct directly without injecting the anonymizer — mirrors how
+            // the rest of the test suite constructs the service.
+            BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+            when(client.invokeModel(any(InvokeModelRequest.class))).thenReturn(
+                    InvokeModelResponse.builder()
+                            .body(SdkBytes.fromUtf8String("""
+                                    {"score":0.6,"label":"CALM","notes":"ok"}
+                                    """))
+                            .build()
+            );
+            BedrockSentimentService svc =
+                    new BedrockSentimentService(client, new ObjectMapper(), true);
+            // Note: NOT calling ReflectionTestUtils.setField — anonymizer stays null.
+
+            String transcriptWithPhi = "Jane Doe is doing well.";
+            svc.analyzeText(transcriptWithPhi, CALL_ID);
+
+            ArgumentCaptor<InvokeModelRequest> captor =
+                    ArgumentCaptor.forClass(InvokeModelRequest.class);
+            org.mockito.Mockito.verify(client).invokeModel(captor.capture());
+            String requestBodyJson = captor.getValue().body().asUtf8String();
+
+            // Without the anonymizer wired, the prompt is unchanged. This proves
+            // the existing 35 tests continue to exercise the same code paths.
+            assertThat(requestBodyJson)
+                    .as("with no anonymizer wired, transcript content appears in prompt")
+                    .contains("Jane Doe");
         }
     }
 }
