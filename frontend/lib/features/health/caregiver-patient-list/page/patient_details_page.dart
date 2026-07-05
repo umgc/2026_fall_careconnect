@@ -394,8 +394,17 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       _applyCaregiverCallPolicy(caregiverData);
       _applyMoodData(moodData);
       _applySymptomData(symptomData);
-      final checkInSummaries = checkInPage?.items ?? const <CheckInSummary>[];
-      _checkInTotalPages = checkInPage?.totalPages ?? 0;
+      List<CheckInSummary> checkInSummaries = const <CheckInSummary>[];
+      if (checkInPage != null) {
+        checkInSummaries = checkInPage.items;
+        _checkInTotalPages = checkInPage.totalPages;
+      } else {
+        // Backward-compatible fallback if filtered endpoint is unavailable.
+        checkInSummaries = await CheckinService.fetchCheckInsForPatient(
+          widget.patientId,
+        );
+        _checkInTotalPages = checkInSummaries.isEmpty ? 0 : 1;
+      }
       if (checkInSummaries.isNotEmpty) {
         _applyVirtualCheckInSummaries(checkInSummaries);
       } else {
