@@ -1341,6 +1341,9 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         );
       },
     );
+
+    if (!mounted) return;
+    await _loadPatientData();
   }
 
   Future<bool> _saveVirtualCheckInConfiguration(
