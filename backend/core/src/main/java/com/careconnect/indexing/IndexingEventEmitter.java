@@ -5,6 +5,7 @@ import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -102,9 +103,8 @@ public class IndexingEventEmitter {
         envelope.put("eventType", eventType);
         envelope.put("eventId", UUID.randomUUID().toString());
         envelope.put("occurredAt",
-                LocalDateTime.now(ZoneOffset.UTC)
-                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME
-                                .withZone(ZoneOffset.UTC)));
+                OffsetDateTime.now(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         envelope.put("schemaVersion", SCHEMA_VERSION);
         envelope.put("payload", payload);
         try {
