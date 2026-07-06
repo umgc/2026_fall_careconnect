@@ -144,7 +144,7 @@ jobs:
           fi
           mvn -B sonar:sonar \
             -Dsonar.projectKey=umgc_2026_summer_careconnect \
-            -Dsonar.organization=umgc \
+            -Dsonar.organization=careconnect-summer-2026 \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token="${SONAR_TOKEN}" \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
@@ -169,7 +169,7 @@ jobs:
 
           sonar-scanner \
             -Dsonar.projectKey=umgc_2026_summer_careconnect \
-            -Dsonar.organization=umgc \
+            -Dsonar.organization=careconnect-summer-2026 \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token="${SONAR_TOKEN}" \
             -Dsonar.sources=frontend/lib \

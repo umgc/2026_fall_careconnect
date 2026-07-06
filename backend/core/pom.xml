@@ -28,7 +28,7 @@
         <dependency-check.failBuild>false</dependency-check.failBuild>
         <!-- SonarQube / SonarCloud -->
         <sonar.projectKey>umgc_2026_summer_careconnect</sonar.projectKey>
-        <sonar.organization>umgc</sonar.organization>
+        <sonar.organization>careconnect-summer-2026</sonar.organization>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     </properties>
 
