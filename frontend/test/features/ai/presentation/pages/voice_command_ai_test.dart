@@ -197,15 +197,15 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    // TC-S2-VC-ENTRY-003
-    testWidgets('/voice entry route builds VoiceCommandAI page',
-        (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterApp());
+    testWidgets('Team C smoke: renders primary voice controls', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(VoiceCommandAI), findsOneWidget);
       expect(find.text('Voice Commands'), findsOneWidget);
+      expect(find.byIcon(Icons.mic_none), findsOneWidget);
+      expect(find.text('Say wake word or tap mic'), findsOneWidget);
       expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
     });
 
     testWidgets('renders Scaffold with AppBar titled Voice Commands',

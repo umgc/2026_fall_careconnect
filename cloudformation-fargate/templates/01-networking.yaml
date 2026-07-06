@@ -1,5 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CareConnect clean networking stack for public ALB, public ECS tasks, and private RDS.
+Description: >-
+  CareConnect networking stack for API Gateway VPC Link, public ECS tasks,
+  and private RDS.
 
 Parameters:
   # Environment is used as the naming prefix for every exported value.
@@ -19,8 +21,9 @@ Parameters:
     Type: String
     Default: 10.30.0.0/16
 
-  # Public subnets host the ALB and ECS tasks in this simplified student setup.
-  # ECS tasks receive public IPs so the design avoids NAT gateway cost/complexity.
+  # Public subnets host the VPC Link ENIs and ECS tasks in this simplified
+  # student setup. ECS tasks receive public IPs so the design avoids NAT
+  # gateway cost/complexity.
   PublicSubnetACidr:
     Type: String
     Default: 10.30.0.0/24
@@ -65,7 +68,7 @@ Resources:
       VpcId: !Ref Vpc
       InternetGatewayId: !Ref InternetGateway
 
-  # Public subnet A for ALB and ECS tasks.
+  # Public subnet A for VPC Link ENIs and ECS tasks.
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -77,7 +80,7 @@ Resources:
         - Key: Name
           Value: !Sub careconnect-${Environment}-public-a
 
-  # Public subnet B for ALB and ECS tasks in a second AZ.
+  # Public subnet B for VPC Link ENIs and ECS tasks in a second AZ.
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -168,35 +171,35 @@ Resources:
       RouteTableId: !Ref PrivateDbRouteTable
       SubnetId: !Ref PrivateDbSubnetB
 
-  # ALB SG: public HTTP ingress, open egress.
-  AlbSecurityGroup:
+  # ---------------------------------------------------------------------------
+  # Security Groups
+  # ---------------------------------------------------------------------------
+
+  # VPC Link SG: API Gateway creates ENIs in the VPC using this security group.
+  # Egress is open so ENIs can reach ECS tasks on the application port.
+  VpcLinkSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Public HTTP access to the CareConnect ALB
+      GroupDescription: Security group for API Gateway VPC Link ENIs
       VpcId: !Ref Vpc
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub careconnect-${Environment}-alb-sg
+          Value: !Sub careconnect-${Environment}-vpclink-sg
 
-  # ECS task SG: only the ALB can reach application traffic on 8081.
+  # ECS task SG: only the VPC Link ENIs can reach application traffic on 8081.
   EcsTaskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Application traffic from ALB to ECS tasks
+      GroupDescription: Application traffic from API Gateway VPC Link to ECS tasks
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8081
           ToPort: 8081
-          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -249,10 +252,10 @@ Outputs:
     Export:
       Name: !Sub careconnect-${Environment}-PrivateDbSubnetBId
 
-  AlbSecurityGroupId:
-    Value: !Ref AlbSecurityGroup
+  VpcLinkSecurityGroupId:
+    Value: !Ref VpcLinkSecurityGroup
     Export:
-      Name: !Sub careconnect-${Environment}-AlbSecurityGroupId
+      Name: !Sub careconnect-${Environment}-VpcLinkSecurityGroupId
 
   EcsTaskSecurityGroupId:
     Value: !Ref EcsTaskSecurityGroup

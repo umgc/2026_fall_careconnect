@@ -100,7 +100,6 @@ class AIService {
         patientId: patientId,
         userId: userId,
         chatType: chatType,
-        preferredModel: model.modelName,
         temperature: 0.7,
         maxTokens: 1000,
         includeVitals: role == 'analytics' || role == 'caregiver',
