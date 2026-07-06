@@ -348,6 +348,14 @@ class CheckinService {
     );
   }
 
+  static Future<bool> markCheckInReviewed(int checkInId) async {
+    final url = Uri.parse('$_baseUrl/$checkInId/review');
+    final headers = await AuthTokenManager.getAuthHeaders();
+    headers['Accept'] = 'application/json';
+    final response = await http.post(url, headers: headers);
+    return response.statusCode == 200;
+  }
+
   /// Fetches the total number of check-ins tied to a caregiver.
   /// Example use: final count = await CheckinService.getCheckinCount(caregiverId);
   static Future<int> getCheckinCount(String caregiverId) async {

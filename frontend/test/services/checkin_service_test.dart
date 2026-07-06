@@ -538,4 +538,27 @@ void main() {
       expect(detail.answers.first.valueText, 'Good');
     });
   });
+
+  group('CheckinService.markCheckInReviewed()', () {
+    test('posts to review endpoint and returns true on 200', () async {
+      final result = await http.runWithClient(
+        () => CheckinService.markCheckInReviewed(42),
+        () => MockClient((req) async {
+          expect(req.method, 'POST');
+          expect(req.url.path, contains('/api/checkins/42/review'));
+          return http.Response('', 200);
+        }),
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('returns false on non-200 response', () async {
+      final result = await http.runWithClient(
+        () => CheckinService.markCheckInReviewed(42),
+        () => MockClient((_) async => http.Response('', 409)),
+      );
+      expect(result, isFalse);
+    });
+  });
 }

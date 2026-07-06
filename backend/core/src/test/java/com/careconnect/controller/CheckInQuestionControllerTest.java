@@ -232,7 +232,7 @@ class CheckInQuestionControllerTest {
     void getCheckInDetail_returnsAnswersAndTimestampFields() throws Exception {
         final Long checkInId = 42L;
         when(checkInSnapshotService.getPatientIdForCheckIn(checkInId)).thenReturn(7L);
-        when(checkInSnapshotService.getCheckInDetail(eq(checkInId), any(User.class)))
+        when(checkInSnapshotService.getCheckInDetail(eq(checkInId)))
                 .thenReturn(new CheckInDetailDTO(
                         42L,
                         7L,
@@ -251,7 +251,31 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$.reviewedAt").isNotEmpty());
 
         verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
-        verify(checkInSnapshotService).getCheckInDetail(eq(checkInId), any(User.class));
+        verify(checkInSnapshotService).getCheckInDetail(eq(checkInId));
+    }
+
+    @Test
+    void markCheckInReviewed_returnsUpdatedDetail() throws Exception {
+        final Long checkInId = 42L;
+        when(checkInSnapshotService.getPatientIdForCheckIn(checkInId)).thenReturn(7L);
+        when(checkInSnapshotService.markCheckInReviewed(eq(checkInId), any(User.class)))
+                .thenReturn(new CheckInDetailDTO(
+                        42L,
+                        7L,
+                        OffsetDateTime.parse("2026-06-26T10:00:00Z"),
+                        OffsetDateTime.parse("2026-06-26T10:10:00Z"),
+                        OffsetDateTime.parse("2026-06-26T10:20:00Z"),
+                        "reviewed",
+                        List.of()
+                ));
+
+        mockMvc.perform(post("/api/checkins/{checkInId}/review", checkInId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkInId").value(42))
+                .andExpect(jsonPath("$.status").value("reviewed"));
+
+        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(checkInSnapshotService).markCheckInReviewed(eq(checkInId), any(User.class));
     }
 
     @Test

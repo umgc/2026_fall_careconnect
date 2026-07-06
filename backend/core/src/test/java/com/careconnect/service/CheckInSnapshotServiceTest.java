@@ -9,11 +9,13 @@ import com.careconnect.model.CheckInQuestion;
 import com.careconnect.model.Patient;
 import com.careconnect.model.Question;
 import com.careconnect.model.QuestionType;
+import com.careconnect.model.User;
 import com.careconnect.repository.AnswerRepository;
 import com.careconnect.repository.CheckInQuestionRepository;
 import com.careconnect.repository.CheckInRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.QuestionRepository;
+import com.careconnect.security.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -186,6 +188,69 @@ class CheckInSnapshotServiceTest {
         verify(checkInRepository).findTopByPatientIdOrderByCreatedAtDesc(8L);
         verify(checkInQuestionRepository).countByCheckInIds(Set.of(100L));
         verify(checkInQuestionRepository, never()).countByCheckIn_Id(100L);
+    }
+
+    @Test
+    void getCheckInDetail_doesNotAutoMarkReviewed() {
+        Patient patient = Patient.builder().id(8L).build();
+        CheckIn checkIn = CheckIn.builder()
+                .id(100L)
+                .patient(patient)
+                .submittedAt(OffsetDateTime.parse("2026-06-27T10:05:00Z"))
+                .build();
+
+        when(checkInRepository.findById(100L)).thenReturn(Optional.of(checkIn));
+        when(checkInQuestionRepository.findByCheckIn_IdOrderByOrdinalAsc(100L)).thenReturn(List.of());
+        when(answerRepository.findByCheckIn_Id(100L)).thenReturn(List.of());
+
+        var detail = service.getCheckInDetail(100L);
+
+        assertThat(detail.status()).isEqualTo("submitted");
+        assertThat(detail.reviewedAt()).isNull();
+        verify(checkInRepository, never()).save(any(CheckIn.class));
+    }
+
+    @Test
+    void markCheckInReviewed_setsReviewedAtForSubmittedCheckIn() {
+        Patient patient = Patient.builder().id(8L).build();
+        CheckIn checkIn = CheckIn.builder()
+                .id(100L)
+                .patient(patient)
+                .createdAt(OffsetDateTime.parse("2026-06-27T10:00:00Z"))
+                .submittedAt(OffsetDateTime.parse("2026-06-27T10:05:00Z"))
+                .build();
+        User caregiver = new User();
+        caregiver.setRole(Role.CAREGIVER);
+
+        when(checkInRepository.findById(100L)).thenReturn(Optional.of(checkIn));
+        when(checkInRepository.save(any(CheckIn.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(checkInQuestionRepository.findByCheckIn_IdOrderByOrdinalAsc(100L)).thenReturn(List.of());
+        when(answerRepository.findByCheckIn_Id(100L)).thenReturn(List.of());
+
+        var detail = service.markCheckInReviewed(100L, caregiver);
+
+        assertThat(detail.reviewedAt()).isNotNull();
+        assertThat(detail.status()).isEqualTo("reviewed");
+        verify(checkInRepository).save(any(CheckIn.class));
+    }
+
+    @Test
+    void markCheckInReviewed_rejectsNonCaregiverRole() {
+        Patient patient = Patient.builder().id(8L).build();
+        CheckIn checkIn = CheckIn.builder()
+                .id(100L)
+                .patient(patient)
+                .submittedAt(OffsetDateTime.parse("2026-06-27T10:05:00Z"))
+                .build();
+        User patientUser = new User();
+        patientUser.setRole(Role.PATIENT);
+
+        when(checkInRepository.findById(100L)).thenReturn(Optional.of(checkIn));
+
+        assertThatThrownBy(() -> service.markCheckInReviewed(100L, patientUser))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("Only caregivers or admins");
+        verify(checkInRepository, never()).save(any(CheckIn.class));
     }
 
     private static final class CountProjection implements CheckInQuestionRepository.CheckInQuestionCountProjection {

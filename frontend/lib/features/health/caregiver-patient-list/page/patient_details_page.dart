@@ -1294,7 +1294,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       return 'No answer submitted';
     }
 
-    await showDialog<void>(
+    final markedReviewed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -1333,8 +1333,26 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
             ),
           ),
           actions: [
+            if (widget.isCaregiver && detail.status == 'submitted')
+              ElevatedButton(
+                onPressed: () async {
+                  final success = await CheckinService.markCheckInReviewed(
+                      detail.checkInId);
+                  if (!context.mounted) return;
+                  if (!success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to mark check-in as reviewed'),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop(true);
+                },
+                child: const Text('Mark as reviewed'),
+              ),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Close'),
             ),
           ],
@@ -1343,7 +1361,9 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     );
 
     if (!mounted) return;
-    await _loadPatientData();
+    if (markedReviewed == true) {
+      await _loadPatientData();
+    }
   }
 
   Future<bool> _saveVirtualCheckInConfiguration(

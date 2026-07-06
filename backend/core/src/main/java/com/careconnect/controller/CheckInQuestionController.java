@@ -152,7 +152,22 @@ public class CheckInQuestionController {
         User currentUser = securityUtil.resolveCurrentUser();
         Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
         authorizationService.requirePatientAccess(currentUser, patientId);
-        return ResponseEntity.ok(checkInSnapshotService.getCheckInDetail(checkInId, currentUser));
+        return ResponseEntity.ok(checkInSnapshotService.getCheckInDetail(checkInId));
+    }
+
+    /**
+     * POST /api/checkins/{checkInId}/review
+     * POST /v1/api/checkins/{checkInId}/review
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+    @PostMapping("/{checkInId}/review")
+    public ResponseEntity<CheckInDetailDTO> markCheckInReviewed(
+            @PathVariable("checkInId") Long checkInId
+    ) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
+        authorizationService.requirePatientAccess(currentUser, patientId);
+        return ResponseEntity.ok(checkInSnapshotService.markCheckInReviewed(checkInId, currentUser));
     }
 
     /**

@@ -203,15 +203,36 @@ public class CheckInSnapshotService {
                 });
     }
 
-    public CheckInDetailDTO getCheckInDetail(Long checkInId, User currentUser) {
+    public CheckInDetailDTO getCheckInDetail(Long checkInId) {
+        CheckIn checkIn = checkInRepository.findById(checkInId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Check-in not found: " + checkInId));
+        return buildCheckInDetail(checkIn);
+    }
+
+    public CheckInDetailDTO markCheckInReviewed(Long checkInId, User currentUser) {
         CheckIn checkIn = checkInRepository.findById(checkInId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Check-in not found: " + checkInId));
 
-        if (shouldMarkReviewed(checkIn, currentUser)) {
+        if (currentUser == null || currentUser.getRole() == null) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Only caregivers or admins can review check-ins");
+        }
+        Role role = currentUser.getRole();
+        if (role != Role.ADMIN && role != Role.CAREGIVER) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Only caregivers or admins can review check-ins");
+        }
+        if (checkIn.getSubmittedAt() == null) {
+            throw new AppException(HttpStatus.CONFLICT, "Cannot review a draft check-in");
+        }
+        if (checkIn.getReviewedAt() == null) {
             checkIn.setReviewedAt(OffsetDateTime.now());
             checkIn = checkInRepository.save(checkIn);
         }
 
+        return buildCheckInDetail(checkIn);
+    }
+
+    private CheckInDetailDTO buildCheckInDetail(CheckIn checkIn) {
+        Long checkInId = checkIn.getId();
         List<CheckInQuestion> snapshotQuestions = checkInQuestionRepository.findByCheckIn_IdOrderByOrdinalAsc(checkInId);
         Map<Long, Answer> answersByQuestionId = new HashMap<>();
         for (Answer answer : answerRepository.findByCheckIn_Id(checkInId)) {
@@ -290,11 +311,4 @@ public class CheckInSnapshotService {
         return "draft";
     }
 
-    private boolean shouldMarkReviewed(CheckIn checkIn, User currentUser) {
-        if (checkIn.getSubmittedAt() == null || checkIn.getReviewedAt() != null || currentUser == null || currentUser.getRole() == null) {
-            return false;
-        }
-        Role role = currentUser.getRole();
-        return role == Role.ADMIN || role == Role.CAREGIVER;
-    }
 }
