@@ -7,7 +7,6 @@ import 'package:care_connect_app/providers/shortcut_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -23,6 +22,7 @@ import 'config/theme/app_theme.dart';
 import 'config/utils/responsive_utils.dart';
 import 'config/utils/web_utils.dart';
 import 'features/tasks/utils/task_type_manager.dart';
+import 'features/telemetry/telemetry_error_handler.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
 
@@ -31,18 +31,11 @@ Future<void> main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      installTelemetryErrorHandlers();
 
       // Load environment variables from .env file
       await dotenv.load(fileName: ".env");
 
-      // Global error handling for Flutter errors
-      FlutterError.onError = (FlutterErrorDetails details) {
-        FlutterError.presentError(details);
-        // Optionally log to a remote server
-        debugPrint(
-          'FlutterError: \\n${details.exceptionAsString()}\\n${details.stack}',
-        );
-      };
       // Performance optimization: Set preferred orientations
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
@@ -88,6 +81,7 @@ Future<void> main() async {
       _initializeServicesInBackground(userProvider);
     },
     (error, stack) {
+      recordZoneUncaughtError(error);
       // Use print() not debugPrint() — debugPrint is a no-op in release mode,
       // which silently swallows startup crashes and leaves the loading screen stuck.
       // ignore: avoid_print

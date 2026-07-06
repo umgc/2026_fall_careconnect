@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../features/telemetry/telemetry.dart';
 import 'local_db/offline_sync_service.dart';
+import 'telemetry_http_client.dart';
 
 export 'local_db/offline_sync_service.dart'
     show OfflineSyncQueueItem, OfflineSyncRunSummary;
@@ -28,7 +29,7 @@ class ApiServiceOffline {
 
   /// HTTP client that automatically routes requests through the offline queue.
   static final http.Client httpClient = OfflineQueueHttpClient(
-    inner: http.Client(),
+    inner: TelemetryHttpClient(http.Client()),
     offlineSyncService: _offlineSyncService,
     canQueueWrites: () => _canQueueOfflineWrites?.call() ?? true,
   );
