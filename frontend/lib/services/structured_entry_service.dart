@@ -174,29 +174,25 @@ class StructuredEntryService {
       AuthTokenManager.getAuthHeaders;
 
   /// Fetch the structured entry for a file, or `null` when none exists yet.
+  /// Throws an [Exception] for any non-404 error so callers can surface it.
   static Future<StructuredEntryDTO?> getEntryForFile(int fileId) async {
-    try {
-      final headers = await authHeadersProvider();
-      final response = await client
-          .get(
-            Uri.parse('${ApiConstants.files}/$fileId/structured-entry'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
+    final headers = await authHeadersProvider();
+    final response = await client
+        .get(
+          Uri.parse('${ApiConstants.files}/$fileId/structured-entry'),
+          headers: headers,
+        )
+        .timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        return StructuredEntryDTO.fromJson(responseData['data']);
-      }
-      if (response.statusCode == 404) {
-        return null; // No entry yet is not an error
-      }
-      final errorData = json.decode(response.body);
-      throw Exception(errorData['error'] ?? 'Failed to load structured entry');
-    } catch (e) {
-      print('Error loading structured entry: $e');
-      return null;
+    if (response.statusCode == 200) {
+      final responseData = json.decode(response.body);
+      return StructuredEntryDTO.fromJson(responseData['data']);
     }
+    if (response.statusCode == 404) {
+      return null; // No entry yet is not an error
+    }
+    final errorData = json.decode(response.body);
+    throw Exception(errorData['error'] ?? 'Failed to load structured entry');
   }
 
   /// Create a structured entry for [fileId]. Throws with the backend's

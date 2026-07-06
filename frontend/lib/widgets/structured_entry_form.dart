@@ -119,12 +119,21 @@ class _StructuredEntryFormDialogState extends State<StructuredEntryFormDialog> {
 
   Future<void> _pickDate(TextEditingController controller) async {
     final now = DateTime.now();
-    final initial = DateTime.tryParse(controller.text) ?? now;
+    final firstDate = DateTime(now.year - 60);
+    final lastDate = DateTime(now.year + 20);
+    final parsed = DateTime.tryParse(controller.text) ?? now;
+    // Clamp to the picker's range so a typed/out-of-range value can't trip
+    // showDatePicker's initialDate assertion.
+    final initial = parsed.isBefore(firstDate)
+        ? firstDate
+        : parsed.isAfter(lastDate)
+            ? lastDate
+            : parsed;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(now.year - 60),
-      lastDate: DateTime(now.year + 20),
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
     if (picked != null) {
       controller.text =

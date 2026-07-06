@@ -392,23 +392,29 @@ public class FileManagementService {
     public Optional<StructuredDocumentEntryDTO> getStructuredEntry(Long entryId) {
         return structuredEntryRepository.findById(entryId)
                 .filter(StructuredDocumentEntry::getIsActive)
-                .map(entry -> mapEntryToDTO(entry,
-                        userFileRepository.findById(entry.getUserFileId()).orElse(null)));
+                .flatMap(entry -> userFileRepository.findById(entry.getUserFileId())
+                        .map(file -> mapEntryToDTO(entry, file)));
     }
 
     /** Get the structured entry captured from a specific uploaded file, if any. */
     public Optional<StructuredDocumentEntryDTO> getStructuredEntryForFile(Long fileId) {
         return structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(fileId)
-                .map(entry -> mapEntryToDTO(entry,
-                        userFileRepository.findById(entry.getUserFileId()).orElse(null)));
+                .flatMap(entry -> userFileRepository.findById(entry.getUserFileId())
+                        .map(file -> mapEntryToDTO(entry, file)));
     }
 
     /** List structured entries linked to a patient (care-circle context). */
     public List<StructuredDocumentEntryDTO> listStructuredEntriesForPatient(Long patientId) {
-        return structuredEntryRepository.findByPatientIdAndIsActiveTrue(patientId)
+        List<StructuredDocumentEntry> entries = structuredEntryRepository.findByPatientIdAndIsActiveTrue(patientId);
+        Set<Long> fileIds = entries.stream()
+                .map(StructuredDocumentEntry::getUserFileId)
+                .collect(Collectors.toSet());
+        Map<Long, UserFile> fileMap = userFileRepository.findAllById(fileIds)
                 .stream()
-                .map(entry -> mapEntryToDTO(entry,
-                        userFileRepository.findById(entry.getUserFileId()).orElse(null)))
+                .collect(Collectors.toMap(UserFile::getId, f -> f));
+        return entries.stream()
+                .filter(entry -> fileMap.containsKey(entry.getUserFileId()))
+                .map(entry -> mapEntryToDTO(entry, fileMap.get(entry.getUserFileId())))
                 .collect(Collectors.toList());
     }
 

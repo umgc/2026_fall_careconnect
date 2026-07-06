@@ -944,7 +944,8 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Not authorized to access this file"));
         }
-        if (request.getPatientId() != null && !hasAccessToPatient(currentUser, request.getPatientId())) {
+        Long effectivePatientId = request.getPatientId() != null ? request.getPatientId() : fileDto.getPatientId();
+        if (effectivePatientId != null && !hasAccessToPatient(currentUser, effectivePatientId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Not authorized to create structured entries for this patient"));
         }

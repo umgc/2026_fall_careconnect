@@ -355,13 +355,24 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   /// context — creating a new entry, or editing the one already captured
   /// from this document.
   Future<void> _openStructuredEntry(UserFileDTO file) async {
-    final existing = await StructuredEntryService.getEntryForFile(file.id);
+    StructuredEntryDTO? existing;
+    try {
+      existing = await StructuredEntryService.getEntryForFile(file.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load structured entry: $e')),
+      );
+      return;
+    }
     if (!mounted) return;
 
     final saved = await StructuredEntryFormDialog.show(
       context,
       fileId: file.id,
-      fileName: file.originalFilename,
+      fileName: file.originalFilename.isNotEmpty
+          ? file.originalFilename
+          : file.fileName,
       fileCategory: file.fileCategory,
       patientId: file.patientId ?? widget.patientId,
       existingEntry: existing,

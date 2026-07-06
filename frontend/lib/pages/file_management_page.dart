@@ -668,7 +668,16 @@ class _FileManagementPageState extends State<FileManagementPage>
     final user = userProvider.user;
     if (user == null) return;
 
-    final existing = await StructuredEntryService.getEntryForFile(file.id);
+    StructuredEntryDTO? existing;
+    try {
+      existing = await StructuredEntryService.getEntryForFile(file.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load structured entry: $e')),
+      );
+      return;
+    }
     if (!mounted) return;
 
     final isPatient = user.role.toUpperCase() == 'PATIENT';
@@ -679,7 +688,7 @@ class _FileManagementPageState extends State<FileManagementPage>
           ? file.originalFilename
           : file.fileName,
       fileCategory: file.fileCategory,
-      patientId: file.patientId ?? (isPatient ? user.id : null),
+      patientId: file.patientId ?? (isPatient ? user.patientId : null),
       employeeUserId: isPatient ? null : user.id,
       existingEntry: existing,
     );

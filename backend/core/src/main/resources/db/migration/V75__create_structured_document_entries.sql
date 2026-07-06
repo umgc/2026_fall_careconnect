@@ -17,6 +17,11 @@ CREATE TABLE structured_document_entries (
         CHECK (patient_id IS NOT NULL OR employee_user_id IS NOT NULL)
 );
 
-CREATE INDEX idx_structured_entries_user_file ON structured_document_entries(user_file_id);
+-- One *active* structured entry per uploaded file (soft-deleted rows exempt);
+-- doubles as the lookup index for user_file_id.
+CREATE UNIQUE INDEX uq_structured_entries_active_user_file
+    ON structured_document_entries(user_file_id)
+    WHERE is_active;
+
 CREATE INDEX idx_structured_entries_patient ON structured_document_entries(patient_id);
 CREATE INDEX idx_structured_entries_employee ON structured_document_entries(employee_user_id);
