@@ -80,18 +80,9 @@ public class InvoiceController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int pageSize
     ) throws UnauthorizedException {
-        User currentUser = null;
-
-        try {
-            currentUser = securityUtil.resolveCurrentUser();
-        } catch (Exception ignored) {
-            // allow anonymous for extract-llm
-        }
-
-        // Only enforce auth if user exists
-        if (currentUser != null) {
-            authorizationService.requireAdminOrCaregiver(currentUser);
-        }
+        // Bug fix (Issue #57 Gap #9): removed anonymous bypass - authentication required.
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
         
         Sort s = InvoiceService.resolveSort(sort);
         Pageable pageable = PageRequest.of(page, pageSize, s);
@@ -182,18 +173,11 @@ public class InvoiceController {
     @PostMapping(value = "/extract-llm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> extractWithLlm(@RequestParam("files") List<MultipartFile> files) throws UnauthorizedException {
         
-        User currentUser = null;
-        
-        try{
-            currentUser = securityUtil.resolveCurrentUser();
-        } catch (Exception ignored) {
-            //allow anonymous for extract-llm
-        }
-
-        //Only enforce auth if user exists
-        if (currentUser != null) {
-            authorizationService.requireAdminOrCaregiver(currentUser);
-        }
+        // Bug fix (Issue #57 Gap #9): removed anonymous bypass - authentication is required.
+        // Previous code wrapped resolveCurrentUser() in try/catch allowing unauthenticated
+        // requests to trigger AWS Textract jobs and upload files to S3 at project expense.
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
         
         if (isFileListInvalid(files)) {
             return ResponseEntity.badRequest().body("Please provide at least one valid file.");
@@ -201,6 +185,14 @@ public class InvoiceController {
 
         try {
             log.info("Received file for OCR: {}", files.get(0).getOriginalFilename());
+
+            // Bug fix (Issue #57 Gap #8): null guard on llmExtractionService.
+            // Previously @Nullable injection with no check caused NPE when AI provider
+            // was misconfigured. Now returns 503 with a clear message instead.
+            if (llmExtractionService == null) {
+                log.error("[Invoice] LLM extraction service is not available. Ensure careconnect.aws.enabled=true and AI provider is configured.");
+                return ResponseEntity.status(503).body("Invoice extraction service is unavailable. The AI provider is not configured. Contact your system administrator.");
+            }
 
             // Step 1: Textract
             AiRequest.AnalysisResult result = textractService.analyzeAndGetResult(files);
