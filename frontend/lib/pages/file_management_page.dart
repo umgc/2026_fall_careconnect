@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../services/comprehensive_file_service.dart';
 import '../services/enhanced_file_service.dart';
+import '../services/structured_entry_service.dart';
 import '../providers/user_provider.dart';
 import '../config/theme/app_theme.dart';
 import '../features/homecare_documents/widgets/home_care_digitization_card.dart';
@@ -11,6 +12,7 @@ import '../widgets/file_upload_widget.dart';
 import '../widgets/manual_text_entry_upload.dart';
 import '../widgets/speech_to_text_widget.dart';
 import '../widgets/forms/hiring_forms_tab.dart';
+import '../widgets/structured_entry_form.dart';
 
 /// Comprehensive file management page
 class FileManagementPage extends StatefulWidget {
@@ -388,6 +390,9 @@ class _FileManagementPageState extends State<FileManagementPage>
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             switch (value) {
+              case 'structured':
+                _openStructuredEntry(file);
+                break;
               case 'download':
                 // TODO: Implement download functionality
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -409,6 +414,18 @@ class _FileManagementPageState extends State<FileManagementPage>
             }
           },
           itemBuilder: (BuildContext context) => [
+            if (DocumentFieldTemplates.isSupported(file.fileCategory))
+              PopupMenuItem(
+                value: 'structured',
+                child: ListTile(
+                  leading: Icon(Icons.edit_note, color: theme.iconTheme.color),
+                  title: Text(
+                    'Structured entry',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             PopupMenuItem(
               value: 'download',
               child: ListTile(
@@ -640,6 +657,35 @@ class _FileManagementPageState extends State<FileManagementPage>
         ),
       ),
     );
+  }
+
+  /// Opens the structured form-entry dialog for [file] — creating a new
+  /// entry, or editing the one already captured from this document. The
+  /// patient/employee context is derived from the current user's role so it
+  /// is always present before saving.
+  Future<void> _openStructuredEntry(UserFileDTO file) async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final user = userProvider.user;
+    if (user == null) return;
+
+    final existing = await StructuredEntryService.getEntryForFile(file.id);
+    if (!mounted) return;
+
+    final isPatient = user.role.toUpperCase() == 'PATIENT';
+    final saved = await StructuredEntryFormDialog.show(
+      context,
+      fileId: file.id,
+      fileName: file.originalFilename.isNotEmpty
+          ? file.originalFilename
+          : file.fileName,
+      fileCategory: file.fileCategory,
+      patientId: file.patientId ?? (isPatient ? user.id : null),
+      employeeUserId: isPatient ? null : user.id,
+      existingEntry: existing,
+    );
+    if (saved == true) {
+      _loadFiles();
+    }
   }
 
   void _handleFileAction(String action, UserFileDTO file) async {

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/enhanced_patient_notes_widget.dart';
+import 'package:care_connect_app/widgets/structured_entry_form.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
+import 'package:care_connect_app/services/structured_entry_service.dart';
 
 class PatientFilesPage extends StatefulWidget {
   final int patientId;
@@ -294,6 +296,9 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
             switch (value) {
+              case 'structured':
+                _openStructuredEntry(file);
+                break;
               case 'preview':
                 _previewFile(file);
                 break;
@@ -306,6 +311,15 @@ class _PatientFilesPageState extends State<PatientFilesPage>
             }
           },
           itemBuilder: (context) => [
+            if (DocumentFieldTemplates.isSupported(file.fileCategory))
+              const PopupMenuItem(
+                value: 'structured',
+                child: ListTile(
+                  leading: Icon(Icons.edit_note),
+                  title: Text('Structured entry'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             const PopupMenuItem(
               value: 'preview',
               child: ListTile(
@@ -335,6 +349,26 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         onTap: () => _previewFile(file),
       ),
     );
+  }
+
+  /// Opens the structured form-entry dialog for [file] in this patient's
+  /// context — creating a new entry, or editing the one already captured
+  /// from this document.
+  Future<void> _openStructuredEntry(UserFileDTO file) async {
+    final existing = await StructuredEntryService.getEntryForFile(file.id);
+    if (!mounted) return;
+
+    final saved = await StructuredEntryFormDialog.show(
+      context,
+      fileId: file.id,
+      fileName: file.originalFilename,
+      fileCategory: file.fileCategory,
+      patientId: file.patientId ?? widget.patientId,
+      existingEntry: existing,
+    );
+    if (saved == true) {
+      await _loadFiles();
+    }
   }
 
   void _previewFile(UserFileDTO file) {

@@ -4,6 +4,8 @@ import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 
 import com.careconnect.dto.FileUploadResponse;
+import com.careconnect.dto.StructuredDocumentEntryDTO;
+import com.careconnect.dto.StructuredEntryRequest;
 import com.careconnect.dto.UserFileDTO;
 import com.careconnect.service.S3StorageService;
 import com.careconnect.service.FileManagementService;
@@ -285,6 +287,185 @@ public class FileController {
             log.error("Error listing patient intake documents for patientId: {}", patientId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to list patient intake documents"));
+        }
+    }
+
+    // ==================== STRUCTURED FORM ENTRIES ====================
+
+    /**
+     * Create a structured form entry for an uploaded document. The original file
+     * remains linked to the record as supporting evidence.
+     */
+    @RequirePermission(Permission.RECORD_HEALTH_DATA)
+
+    @PostMapping("/{fileId}/structured-entry")
+    @Operation(summary = "Create a structured entry for a file",
+            description = "Capture key fields from an uploaded onboarding document as a structured, "
+                    + "searchable record. The original file stays linked as supporting evidence. "
+                    + "A patient or employee context and all required fields for the document type "
+                    + "must be supplied.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Structured entry created successfully"),
+        @ApiResponse(responseCode = "400", description = "Missing context, unsupported document type, or incomplete required fields"),
+        @ApiResponse(responseCode = "403", description = "Access denied"),
+        @ApiResponse(responseCode = "404", description = "File not found")
+    })
+    public ResponseEntity<?> createStructuredEntry(
+            @PathVariable Long fileId,
+            @RequestBody StructuredEntryRequest request) {
+        try {
+            User currentUser = getCurrentUser();
+
+            Optional<UserFileDTO> fileOpt = fileManagementService.getFile(fileId);
+            if (fileOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "File not found"));
+            }
+            ResponseEntity<?> denied = checkStructuredEntryAccess(currentUser, fileOpt.get(), request);
+            if (denied != null) {
+                return denied;
+            }
+
+            StructuredDocumentEntryDTO entry = fileManagementService.createStructuredEntry(
+                    fileId, request, currentUser.getId());
+            return ResponseEntity.ok(Map.of(
+                    "data", entry,
+                    "message", "Structured entry created successfully"));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error creating structured entry for file: {}", fileId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to create structured entry"));
+        }
+    }
+
+    /**
+     * Get the structured entry captured from a specific file, if any.
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+
+    @GetMapping("/{fileId}/structured-entry")
+    @Operation(summary = "Get the structured entry for a file",
+            description = "Fetch the structured record captured from an uploaded document")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Structured entry retrieved successfully"),
+        @ApiResponse(responseCode = "403", description = "Access denied"),
+        @ApiResponse(responseCode = "404", description = "File or structured entry not found")
+    })
+    public ResponseEntity<?> getStructuredEntry(@PathVariable Long fileId) {
+        try {
+            User currentUser = getCurrentUser();
+
+            Optional<UserFileDTO> fileOpt = fileManagementService.getFile(fileId);
+            if (fileOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "File not found"));
+            }
+            if (!hasAccessToFile(currentUser, fileOpt.get())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Not authorized to access this file"));
+            }
+
+            Optional<StructuredDocumentEntryDTO> entry =
+                    fileManagementService.getStructuredEntryForFile(fileId);
+            if (entry.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "No structured entry exists for this file"));
+            }
+            return ResponseEntity.ok(Map.of(
+                    "data", entry.get(),
+                    "message", "Structured entry retrieved successfully"));
+
+        } catch (Exception e) {
+            log.error("Error getting structured entry for file: {}", fileId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to get structured entry"));
+        }
+    }
+
+    /**
+     * Update an existing structured entry (the link to the original file is immutable).
+     */
+    @RequirePermission(Permission.RECORD_HEALTH_DATA)
+
+    @PutMapping("/structured-entries/{entryId}")
+    @Operation(summary = "Update a structured entry",
+            description = "Edit the captured fields, document type or context of a structured record. "
+                    + "The same completeness rules as creation apply.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Structured entry updated successfully"),
+        @ApiResponse(responseCode = "400", description = "Missing context, unsupported document type, or incomplete required fields"),
+        @ApiResponse(responseCode = "403", description = "Access denied"),
+        @ApiResponse(responseCode = "404", description = "Structured entry not found")
+    })
+    public ResponseEntity<?> updateStructuredEntry(
+            @PathVariable Long entryId,
+            @RequestBody StructuredEntryRequest request) {
+        try {
+            User currentUser = getCurrentUser();
+
+            // Authorize against the linked file before applying any change.
+            Optional<StructuredDocumentEntryDTO> existingOpt =
+                    fileManagementService.getStructuredEntry(entryId);
+            if (existingOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Structured entry not found"));
+            }
+            Optional<UserFileDTO> fileOpt = fileManagementService.getFile(existingOpt.get().getFileId());
+            if (fileOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Linked file not found"));
+            }
+            ResponseEntity<?> denied = checkStructuredEntryAccess(currentUser, fileOpt.get(), request);
+            if (denied != null) {
+                return denied;
+            }
+
+            StructuredDocumentEntryDTO entry =
+                    fileManagementService.updateStructuredEntry(entryId, request);
+            return ResponseEntity.ok(Map.of(
+                    "data", entry,
+                    "message", "Structured entry updated successfully"));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error updating structured entry: {}", entryId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to update structured entry"));
+        }
+    }
+
+    /**
+     * List structured entries linked to a patient (care-circle context).
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+
+    @GetMapping("/structured-entries/patient/{patientId}")
+    @Operation(summary = "List structured entries for a patient",
+            description = "List structured document records linked to a patient / care circle")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Structured entries retrieved successfully"),
+        @ApiResponse(responseCode = "403", description = "Access denied")
+    })
+    public ResponseEntity<?> listPatientStructuredEntries(@PathVariable Long patientId) {
+        try {
+            User currentUser = getCurrentUser();
+            if (!hasAccessToPatient(currentUser, patientId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Not authorized to access this patient's structured entries"));
+            }
+            List<StructuredDocumentEntryDTO> entries =
+                    fileManagementService.listStructuredEntriesForPatient(patientId);
+            return ResponseEntity.ok(Map.of(
+                    "data", entries,
+                    "message", "Structured entries retrieved successfully"));
+        } catch (Exception e) {
+            log.error("Error listing structured entries for patientId: {}", patientId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to list structured entries"));
         }
     }
 
@@ -749,6 +930,31 @@ public class FileController {
         }
         
         return false;
+    }
+
+    /**
+     * Authorization for creating/updating a structured entry: the caller must be
+     * able to access the linked file, any patient context must be a patient they
+     * may act for, and a non-admin may only set the employee context to themselves.
+     * Returns a 403 response when denied, or {@code null} when access is allowed.
+     */
+    private ResponseEntity<?> checkStructuredEntryAccess(User currentUser, UserFileDTO fileDto,
+                                                         StructuredEntryRequest request) {
+        if (!hasAccessToFile(currentUser, fileDto)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Not authorized to access this file"));
+        }
+        if (request.getPatientId() != null && !hasAccessToPatient(currentUser, request.getPatientId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Not authorized to create structured entries for this patient"));
+        }
+        if (request.getEmployeeUserId() != null
+                && currentUser.getRole() != Role.ADMIN
+                && !request.getEmployeeUserId().equals(currentUser.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Not authorized to create structured entries for another employee"));
+        }
+        return null;
     }
 
     private List<String> getValidCategoriesForRole(Role role) {
