@@ -341,7 +341,7 @@ void main() {
       await _tearDown(tester);
     });
 
-        testWidgets('tapping FAB shows Listening and mic_off on FAB - Spanish',
+    testWidgets('tapping FAB shows Listening and mic_off on FAB - Spanish',
         (tester) async {
       await tester.pumpWidget(
           const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
@@ -1065,7 +1065,7 @@ void main() {
       await _tearDown(tester);
     });
 
-      testWidgets('shows Processing when wakeDetected but not yet listening - Spanish',
+    testWidgets('shows Processing when wakeDetected but not yet listening - Spanish',
         (tester) async {
       final completer = Completer<bool>();
 
@@ -1183,7 +1183,7 @@ void main() {
       await _tearDown(tester);
     });
 
-      testWidgets('recognized navigate command shows heard text and confirm status - Spanish',
+    testWidgets('recognized navigate command shows heard text and confirm status - Spanish',
         (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -1329,7 +1329,7 @@ void main() {
       await _tearDown(tester);
     });
 
-      testWidgets('timeout with buffered text shows fallback status - Spanish',
+    testWidgets('timeout with buffered text shows fallback status - Spanish',
         (tester) async {
       await tester.pumpWidget(
           const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), home: VoiceCommandAI()));
