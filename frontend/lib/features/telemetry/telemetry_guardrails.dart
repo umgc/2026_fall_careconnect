@@ -22,6 +22,8 @@ class TelemetryGuardrails {
     'sync_started',
     'sync_completed',
     'sync_failed',
+    'session_start',
+    'session_end',
     // Feature analytics (anonymous)
     'feature.medications.view_all',
     'feature.medications.view_active',

@@ -22,6 +22,7 @@ import 'config/theme/app_theme.dart';
 import 'config/utils/responsive_utils.dart';
 import 'config/utils/web_utils.dart';
 import 'features/tasks/utils/task_type_manager.dart';
+import 'features/telemetry/telemetry.dart';
 import 'features/telemetry/telemetry_error_handler.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
@@ -204,7 +205,8 @@ class CareConnectApp extends StatefulWidget {
   State<CareConnectApp> createState() => _CareConnectAppState();
 }
 
-class _CareConnectAppState extends State<CareConnectApp> {
+class _CareConnectAppState extends State<CareConnectApp>
+    with WidgetsBindingObserver {
   StreamSubscription? _linkSubscription;
   late AppLinks _appLinks;
   Locale? _localeOverride;
@@ -212,7 +214,16 @@ class _CareConnectAppState extends State<CareConnectApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(Telemetry.event('session_start', {'source': 'cold_start'}));
     _initializeDeepLinks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      unawaited(Telemetry.event('session_end', {'reason': 'detached'}));
+    }
   }
 
   Future<void> _initializeDeepLinks() async {
@@ -257,6 +268,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_linkSubscription != null) {
       _linkSubscription!.cancel();
     }
