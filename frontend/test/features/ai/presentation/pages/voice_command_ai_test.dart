@@ -26,7 +26,8 @@ const _statusSettleDelay = Duration(milliseconds: 5050);
 
 /// Builds a GoRouter-backed app hosting VoiceCommandAI plus stub destination
 /// pages, so navigation commands (context.go) resolve in widget tests.
-Widget _buildVoiceRouterApp({bool singleShot = false}) {
+/// MaterialApp builds using the specified locale to test display text.
+Widget _buildVoiceRouterApp({String localestring = 'en', bool singleShot = false}) {
   final router = GoRouter(
     initialLocation: '/voice',
     routes: [
@@ -48,63 +49,7 @@ Widget _buildVoiceRouterApp({bool singleShot = false}) {
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
-}
-
-/// Builds a GoRouter-backed app hosting VoiceCommandAI plus stub destination
-/// pages, so navigation commands (context.go) resolve in widget tests.
-/// MaterialApp builds using the Spanish locale to test display text.
-Widget _buildVoiceRouterAppEn({bool singleShot = false}) {
-  final router = GoRouter(
-    initialLocation: '/voice',
-    routes: [
-      GoRoute(
-        path: '/voice',
-        builder: (_, __) => VoiceCommandAI(singleShot: singleShot),
-      ),
-      GoRoute(
-        path: '/dashboard',
-        builder: (_, __) => const Scaffold(body: Text('Dashboard Page')),
-      ),
-      GoRoute(
-        path: '/calendar',
-        builder: (_, __) => const Scaffold(body: Text('Calendar Page')),
-      ),
-      GoRoute(
-        path: '/symptoms',
-        builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
-      ),
-    ],
-  );
-  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
-}
-
-/// Builds a GoRouter-backed app hosting VoiceCommandAI plus stub destination
-/// pages, so navigation commands (context.go) resolve in widget tests.
-/// MaterialApp builds using the Spanish locale to test display text.
-Widget _buildVoiceRouterAppEs({bool singleShot = false}) {
-  final router = GoRouter(
-    initialLocation: '/voice',
-    routes: [
-      GoRoute(
-        path: '/voice',
-        builder: (_, __) => VoiceCommandAI(singleShot: singleShot),
-      ),
-      GoRoute(
-        path: '/dashboard',
-        builder: (_, __) => const Scaffold(body: Text('Dashboard Page')),
-      ),
-      GoRoute(
-        path: '/calendar',
-        builder: (_, __) => const Scaffold(body: Text('Calendar Page')),
-      ),
-      GoRoute(
-        path: '/symptoms',
-        builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
-      ),
-    ],
-  );
-  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('es'), routerConfig: router);
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale(localestring), routerConfig: router);
 }
 
 /// Sends a speech recognition result via the method channel (platform -> Dart).
@@ -1219,7 +1164,7 @@ void main() {
     // TC-S1-VC-001
     testWidgets('recognized navigate command shows heard text and confirm status - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1240,7 +1185,7 @@ void main() {
 
       testWidgets('recognized navigate command shows heard text and confirm status - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1543,7 +1488,7 @@ void main() {
 
     testWidgets('"take me home" enters confirming state before navigating - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1562,7 +1507,7 @@ void main() {
 
     testWidgets('"take me home" enters confirming state before navigating - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1581,7 +1526,7 @@ void main() {
 
     testWidgets('confirming state shows confirm and cancel buttons - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1600,7 +1545,7 @@ void main() {
 
     testWidgets('confirming state shows confirm and cancel buttons - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1638,7 +1583,7 @@ void main() {
 
     testWidgets('tapping cancel returns to idle without navigation - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1659,7 +1604,7 @@ void main() {
 
     testWidgets('tapping cancel returns to idle without navigation - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1680,7 +1625,7 @@ void main() {
 
     testWidgets('ambiguous input "take me to" enters clarifying state - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1699,7 +1644,7 @@ void main() {
 
     testWidgets('ambiguous input "take me to" enters clarifying state - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1718,7 +1663,7 @@ void main() {
 
     testWidgets('clarifying state shows multiple options and cancel - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1736,7 +1681,7 @@ void main() {
 
     testWidgets('clarifying state shows multiple options and cancel - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1754,7 +1699,7 @@ void main() {
 
     testWidgets('selecting an option from clarifying moves to confirming - English',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1775,7 +1720,7 @@ void main() {
 
     testWidgets('selecting an option from clarifying moves to confirming - Spanish',
         (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1795,7 +1740,7 @@ void main() {
     });
 
     testWidgets('canceling clarification returns to idle - English', (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEn());
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -1815,7 +1760,7 @@ void main() {
     });
 
     testWidgets('canceling clarification returns to idle - Spanish', (tester) async {
-      await tester.pumpWidget(_buildVoiceRouterAppEs());
+      await tester.pumpWidget(_buildVoiceRouterApp(localestring: 'es'));
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));

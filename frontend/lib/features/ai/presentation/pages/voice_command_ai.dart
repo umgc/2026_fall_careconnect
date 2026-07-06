@@ -151,7 +151,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       case 'Symptom Tracker':
         return AppLocalizations.of(context)?.voicecommand_commandLabelTracker ?? 'Symptom Tracker';
       default:
-        return AppLocalizations.of(context)?.voicecommand_phaseLabelError ?? 'Error';
+        return commandLabel;
     }
   }
 
