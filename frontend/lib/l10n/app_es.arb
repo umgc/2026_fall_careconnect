@@ -158,7 +158,7 @@
   "voicecommand_phaseLabelError": "Error",
   "voicecommand_speechCaptured": "Discurso capturado",
   "voicecommand_successRecognized": "Reconocido",
-  "voicecommand_successOpen": "¿abierto",
+  "voicecommand_successOpen": "¿abrir",
   "voicecommand_commandLabelHome": "la Página de Inicio",
   "voicecommand_commandLabelCalendar": "el Calendario",
   "voicecommand_commandLabelTracker": "el Rastreador de Síntomas",

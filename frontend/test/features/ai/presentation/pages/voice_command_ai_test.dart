@@ -1197,7 +1197,7 @@ void main() {
       expect(find.text('Estado: Confirmar comando'), findsOneWidget);
       expect(find.text('Escuchó: "take me to calendar"'), findsOneWidget);
       expect(
-        find.text('Reconocido: "take me to calendar" — ¿abierto el Calendario?'),
+        find.text('Reconocido: "take me to calendar" — ¿abrir el Calendario?'),
         findsOneWidget,
       );
 
