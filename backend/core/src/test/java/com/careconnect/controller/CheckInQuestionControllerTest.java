@@ -2,6 +2,8 @@ package com.careconnect.controller;
 
 import com.careconnect.dto.CheckInCreateRequestDTO;
 import com.careconnect.dto.CheckInCreateResponseDTO;
+import com.careconnect.dto.CheckInDetailDTO;
+import com.careconnect.dto.CheckInPageDTO;
 import com.careconnect.dto.CheckInSummaryDTO;
 import com.careconnect.dto.QuestionDTO;
 import com.careconnect.model.User;
@@ -189,6 +191,32 @@ class CheckInQuestionControllerTest {
     }
 
     @Test
+    void searchPatientCheckIns_returnsFilteredPage() throws Exception {
+        when(checkInSnapshotService.listCheckInsForPatientFiltered(eq(7L), eq("draft"), any(), any(), eq(0), eq(5)))
+                .thenReturn(new CheckInPageDTO(
+                        List.of(new CheckInSummaryDTO(42L, 7L, OffsetDateTime.parse("2026-06-26T10:15:30Z"), null, null, 3)),
+                        0,
+                        5,
+                        1L,
+                        1
+                ));
+
+        mockMvc.perform(get("/api/checkins/patients/{patientId}/search", 7L)
+                        .queryParam("status", "draft")
+                        .queryParam("startDate", "2026-06-01")
+                        .queryParam("endDate", "2026-06-30")
+                        .queryParam("page", "0")
+                        .queryParam("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].checkInId").value(42))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(5));
+
+        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+    }
+
+    @Test
     void latestPatientCheckIn_returnsNoContentWhenMissing() throws Exception {
         when(checkInSnapshotService.getLatestCheckInForPatient(7L))
                 .thenReturn(java.util.Optional.empty());
@@ -198,6 +226,56 @@ class CheckInQuestionControllerTest {
 
         verify(checkInSnapshotService).getLatestCheckInForPatient(7L);
         verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+    }
+
+    @Test
+    void getCheckInDetail_returnsAnswersAndTimestampFields() throws Exception {
+        final Long checkInId = 42L;
+        when(checkInSnapshotService.getPatientIdForCheckIn(checkInId)).thenReturn(7L);
+        when(checkInSnapshotService.getCheckInDetail(eq(checkInId)))
+                .thenReturn(new CheckInDetailDTO(
+                        42L,
+                        7L,
+                        OffsetDateTime.parse("2026-06-26T10:00:00Z"),
+                        OffsetDateTime.parse("2026-06-26T10:10:00Z"),
+                        OffsetDateTime.parse("2026-06-26T10:20:00Z"),
+                        "reviewed",
+                        List.of()
+                ));
+
+        mockMvc.perform(get("/api/checkins/{checkInId}/detail", checkInId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkInId").value(42))
+                .andExpect(jsonPath("$.status").value("reviewed"))
+                .andExpect(jsonPath("$.submittedAt").isNotEmpty())
+                .andExpect(jsonPath("$.reviewedAt").isNotEmpty());
+
+        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(checkInSnapshotService).getCheckInDetail(eq(checkInId));
+    }
+
+    @Test
+    void markCheckInReviewed_returnsUpdatedDetail() throws Exception {
+        final Long checkInId = 42L;
+        when(checkInSnapshotService.getPatientIdForCheckIn(checkInId)).thenReturn(7L);
+        when(checkInSnapshotService.markCheckInReviewed(eq(checkInId), any(User.class)))
+                .thenReturn(new CheckInDetailDTO(
+                        42L,
+                        7L,
+                        OffsetDateTime.parse("2026-06-26T10:00:00Z"),
+                        OffsetDateTime.parse("2026-06-26T10:10:00Z"),
+                        OffsetDateTime.parse("2026-06-26T10:20:00Z"),
+                        "reviewed",
+                        List.of()
+                ));
+
+        mockMvc.perform(post("/api/checkins/{checkInId}/review", checkInId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkInId").value(42))
+                .andExpect(jsonPath("$.status").value("reviewed"));
+
+        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(checkInSnapshotService).markCheckInReviewed(eq(checkInId), any(User.class));
     }
 
     @Test

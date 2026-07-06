@@ -5,6 +5,8 @@ import com.careconnect.security.RequirePermission;
 
 import com.careconnect.dto.CheckInCreateRequestDTO;
 import com.careconnect.dto.CheckInCreateResponseDTO;
+import com.careconnect.dto.CheckInDetailDTO;
+import com.careconnect.dto.CheckInPageDTO;
 import com.careconnect.dto.CheckInSummaryDTO;
 import com.careconnect.dto.QuestionDTO;
 import com.careconnect.dto.SubmitAnswersRequestDTO;
@@ -20,8 +22,10 @@ import jakarta.validation.Valid;
 import com.careconnect.util.SecurityUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -92,6 +96,36 @@ public class CheckInQuestionController {
     }
 
     /**
+     * GET /api/checkins/patients/{patientId}/search
+     * GET /v1/api/checkins/patients/{patientId}/search
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+    @GetMapping("/patients/{patientId}/search")
+    public ResponseEntity<CheckInPageDTO> searchPatientCheckIns(
+            @PathVariable("patientId") Long patientId,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "startDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(name = "endDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(name = "page", defaultValue = "0") Integer page,
+            @RequestParam(name = "size", defaultValue = "20") Integer size
+    ) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requirePatientAccess(currentUser, patientId);
+        return ResponseEntity.ok(
+                checkInSnapshotService.listCheckInsForPatientFiltered(
+                        patientId,
+                        status,
+                        startDate,
+                        endDate,
+                        page,
+                        size
+                )
+        );
+    }
+
+    /**
      * GET /api/checkins/patients/{patientId}/latest
      * GET /v1/api/checkins/patients/{patientId}/latest
      */
@@ -104,6 +138,36 @@ public class CheckInQuestionController {
         authorizationService.requirePatientAccess(currentUser, patientId);
         Optional<CheckInSummaryDTO> latest = checkInSnapshotService.getLatestCheckInForPatient(patientId);
         return latest.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
+     * GET /api/checkins/{checkInId}/detail
+     * GET /v1/api/checkins/{checkInId}/detail
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+    @GetMapping("/{checkInId}/detail")
+    public ResponseEntity<CheckInDetailDTO> getCheckInDetail(
+            @PathVariable("checkInId") Long checkInId
+    ) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
+        authorizationService.requirePatientAccess(currentUser, patientId);
+        return ResponseEntity.ok(checkInSnapshotService.getCheckInDetail(checkInId));
+    }
+
+    /**
+     * POST /api/checkins/{checkInId}/review
+     * POST /v1/api/checkins/{checkInId}/review
+     */
+    @RequirePermission(Permission.VIEW_HEALTH_DATA)
+    @PostMapping("/{checkInId}/review")
+    public ResponseEntity<CheckInDetailDTO> markCheckInReviewed(
+            @PathVariable("checkInId") Long checkInId
+    ) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
+        authorizationService.requirePatientAccess(currentUser, patientId);
+        return ResponseEntity.ok(checkInSnapshotService.markCheckInReviewed(checkInId, currentUser));
     }
 
     /**
