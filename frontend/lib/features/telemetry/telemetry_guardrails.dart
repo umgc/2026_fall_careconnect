@@ -18,6 +18,7 @@ class TelemetryGuardrails {
     'error_network',
     'error_timeout',
     'offline_toggled',
+    'feature_use',
     // Feature analytics (anonymous)
     'feature.medications.view_all',
     'feature.medications.view_active',
