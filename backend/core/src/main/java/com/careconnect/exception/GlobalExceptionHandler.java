@@ -1,6 +1,7 @@
 package com.careconnect.exception;
 
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -19,6 +20,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ForbiddenScopeException.class)
+    public ResponseEntity<?> handleForbiddenScopeException(ForbiddenScopeException ex) {
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("code", ex.getErrorCode());
+        error.put("message", ex.getMessage());
+        error.put("details", List.of());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", false);
+        if (ex.getAuditId() != null) {
+            body.put("auditId", ex.getAuditId().toString());
+        }
+        body.put("deliveryStatus", "WITHHELD");
+        body.put("error", error);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -1,5 +1,6 @@
 package com.careconnect.exception;
 
+import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -7,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,6 +20,32 @@ class GlobalExceptionHandlerTest {
     @BeforeEach
     void setUp() throws Exception {
         handler = new GlobalExceptionHandler();
+    }
+
+    // ── handleForbiddenScopeException ────────────────────────────────────────
+
+    @Test
+    @DisplayName("handleForbiddenScopeException returns 403 FORBIDDEN_SCOPE with WITHHELD delivery")
+    void handleForbiddenScopeException_returns403WithContractBody() throws Exception {
+        UUID auditId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        final ForbiddenScopeException ex = ForbiddenScopeException.patientOutOfScope(
+                42L, "user@test.com", 10L, auditId);
+
+        final ResponseEntity<?> response = handler.handleForbiddenScopeException(ex);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertNotNull(body);
+        assertEquals(false, body.get("success"));
+        assertEquals("WITHHELD", body.get("deliveryStatus"));
+        assertEquals(auditId.toString(), body.get("auditId"));
+
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> error = (Map<String, Object>) body.get("error");
+        assertNotNull(error);
+        assertEquals("FORBIDDEN_SCOPE", error.get("code"));
+        assertEquals(ex.getMessage(), error.get("message"));
     }
 
     // ── handleRegistrationException ────────────────────────────────────────────
