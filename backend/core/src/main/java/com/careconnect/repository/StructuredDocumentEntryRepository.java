@@ -18,4 +18,10 @@ public interface StructuredDocumentEntryRepository extends JpaRepository<Structu
 
     /** Active structured entries linked to an employee (caregiver / staff member). */
     List<StructuredDocumentEntry> findByEmployeeUserIdAndIsActiveTrue(Long employeeUserId);
+
+    /** All active employee-linked entries (compliance dashboard aggregation). */
+    List<StructuredDocumentEntry> findByEmployeeUserIdIsNotNullAndIsActiveTrue();
+
+    /** All active patient-linked entries (compliance dashboard aggregation). */
+    List<StructuredDocumentEntry> findByPatientIdIsNotNullAndIsActiveTrue();
 }

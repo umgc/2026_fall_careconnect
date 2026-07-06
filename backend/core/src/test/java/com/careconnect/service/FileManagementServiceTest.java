@@ -34,6 +34,7 @@ class FileManagementServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private DatabaseStorageService databaseStorageService;
+    @Mock private DocumentComplianceService documentComplianceService;
     @Mock private S3StorageService s3StorageService;
     @Mock private MultipartFile multipartFile;
 
@@ -47,7 +48,7 @@ class FileManagementServiceTest {
         MockitoAnnotations.openMocks(this);
         fileManagementService = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, s3StorageService);
+                databaseStorageService, documentComplianceService, s3StorageService);
         ReflectionTestUtils.setField(fileManagementService, "defaultStorageType", "database");
         ReflectionTestUtils.setField(fileManagementService, "useS3ForNewFiles", false);
 
@@ -141,7 +142,7 @@ class FileManagementServiceTest {
     void uploadFile_s3EnabledNullService_fallsBackToDatabase() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, null);
+                databaseStorageService, documentComplianceService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", true);
 
@@ -368,7 +369,7 @@ class FileManagementServiceTest {
     void getFile_s3FileNullS3Service_returnsUnavailableUrl() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, null);
+                databaseStorageService, documentComplianceService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -412,7 +413,7 @@ class FileManagementServiceTest {
     void downloadFile_s3FileNullS3Service_throwsRuntimeException() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, null);
+                databaseStorageService, documentComplianceService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -982,5 +983,65 @@ class FileManagementServiceTest {
                 .thenReturn(Optional.empty());
 
         assertTrue(fileManagementService.getStructuredEntryForFile(20L).isEmpty());
+    }
+
+    // Compliance tracking hooks
+
+    @Test
+    @DisplayName("uploadFile - notifies compliance tracking with the saved file and uploader")
+    void uploadFile_notifiesComplianceTracking() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(1024L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("report.pdf");
+        when(databaseStorageService.uploadFile(any(), anyLong(), anyString(), anyString()))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenReturn(userFile);
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+
+        fileManagementService.uploadFile(multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "desc", 1L);
+
+        verify(documentComplianceService).recordDocumentUploaded(userFile, 1L);
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - notifies compliance tracking with the saved entry")
+    void createStructuredEntry_notifiesComplianceTracking() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+        when(structuredEntryRepository.save(any(StructuredDocumentEntry.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        fileManagementService.createStructuredEntry(20L, request, 2L);
+
+        verify(documentComplianceService)
+                .recordStructuredEntrySaved(any(StructuredDocumentEntry.class), eq(file), eq(2L));
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - validation failure - compliance tracking is never notified")
+    void createStructuredEntry_validationFails_complianceNotNotified() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(Map.of())
+                .build();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        verify(documentComplianceService, never()).recordStructuredEntrySaved(any(), any(), any());
     }
 }
