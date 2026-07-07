@@ -133,7 +133,8 @@ public class RetrievalScopeService {
         String detail = String.format("Patient %d not found", patientId);
         UUID auditId = scopeAuditService.logScopeDenied(
                 caller, patientId, ScopeDenialReason.PATIENT_NOT_FOUND, detail);
-        return ForbiddenScopeException.patientNotFound(patientId, caller.getId(), auditId);
+        return ForbiddenScopeException.of(
+                ScopeDenialReason.PATIENT_NOT_FOUND, patientId, caller.getId(), detail, auditId);
     }
 
     private ForbiddenScopeException denyPatientOutOfScope(User caller, Long patientId) {
@@ -141,8 +142,8 @@ public class RetrievalScopeService {
                 "Patient %d is out of scope for user '%s'", patientId, caller.getEmail());
         UUID auditId = scopeAuditService.logScopeDenied(
                 caller, patientId, ScopeDenialReason.PATIENT_OUT_OF_SCOPE, detail);
-        return ForbiddenScopeException.patientOutOfScope(
-                patientId, caller.getEmail(), caller.getId(), auditId);
+        return ForbiddenScopeException.of(
+                ScopeDenialReason.PATIENT_OUT_OF_SCOPE, patientId, caller.getId(), detail, auditId);
     }
 
     private ForbiddenScopeException denyNoPermittedSourceTypes(User caller, Long patientId) {
@@ -151,14 +152,15 @@ public class RetrievalScopeService {
                 patientId);
         UUID auditId = scopeAuditService.logScopeDenied(
                 caller, patientId, ScopeDenialReason.NO_PERMITTED_SOURCE_TYPES, detail);
-        return ForbiddenScopeException.noPermittedSourceTypes(patientId, caller.getId(), auditId);
+        return ForbiddenScopeException.of(
+                ScopeDenialReason.NO_PERMITTED_SOURCE_TYPES, patientId, caller.getId(), detail, auditId);
     }
 
     private ForbiddenScopeException denyUnsupportedRole(User caller, Role role) {
         String detail = String.format("Role '%s' cannot resolve Ask AI retrieval scope", role);
         UUID auditId = scopeAuditService.logScopeDenied(
                 caller, null, ScopeDenialReason.UNSUPPORTED_ROLE, detail);
-        return ForbiddenScopeException.unsupportedRole(role, caller.getId(), auditId);
+        return ForbiddenScopeException.unsupportedRole(role, caller.getId(), detail, auditId);
     }
 
     private boolean resolveConsentGranted(User caller, Long patientUserId) {

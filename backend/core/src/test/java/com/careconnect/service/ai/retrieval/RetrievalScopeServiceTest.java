@@ -397,6 +397,23 @@ class RetrievalScopeServiceTest {
         }
 
         @Test
+        @DisplayName("audits when patient entity is missing")
+        void auditsPatientNotFound() {
+            when(patientRepository.findById(PATIENT_ENTITY_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.resolveRetrievalScope(patientUser, PATIENT_ENTITY_ID))
+                    .isInstanceOf(ForbiddenScopeException.class)
+                    .satisfies(ex -> assertThat(((ForbiddenScopeException) ex).getDenialReason())
+                            .isEqualTo(ScopeDenialReason.PATIENT_NOT_FOUND));
+
+            verify(scopeAuditService).logScopeDenied(
+                    eq(patientUser),
+                    eq(PATIENT_ENTITY_ID),
+                    eq(ScopeDenialReason.PATIENT_NOT_FOUND),
+                    any());
+        }
+
+        @Test
         @DisplayName("audits when no permitted source types remain")
         void auditsNoPermittedSourceTypes() {
             when(patientRepository.findById(PATIENT_ENTITY_ID)).thenReturn(Optional.of(patient));

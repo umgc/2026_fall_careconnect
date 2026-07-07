@@ -1,12 +1,14 @@
 package com.careconnect.exception;
 
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
+import com.careconnect.service.ai.retrieval.ScopeDenialReason;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,8 +30,13 @@ class GlobalExceptionHandlerTest {
     @DisplayName("handleForbiddenScopeException returns 403 FORBIDDEN_SCOPE with WITHHELD delivery")
     void handleForbiddenScopeException_returns403WithContractBody() throws Exception {
         UUID auditId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        final ForbiddenScopeException ex = ForbiddenScopeException.patientOutOfScope(
-                42L, "user@test.com", 10L, auditId);
+        String detail = "Patient 42 is out of scope for user 'user@test.com'";
+        final ForbiddenScopeException ex = ForbiddenScopeException.of(
+                ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                42L,
+                10L,
+                detail,
+                auditId);
 
         final ResponseEntity<?> response = handler.handleForbiddenScopeException(ex);
 
@@ -46,6 +53,8 @@ class GlobalExceptionHandlerTest {
         assertNotNull(error);
         assertEquals("FORBIDDEN_SCOPE", error.get("code"));
         assertEquals(ex.getMessage(), error.get("message"));
+        assertEquals("PATIENT_OUT_OF_SCOPE", error.get("denialReason"));
+        assertEquals(List.of(), error.get("details"));
     }
 
     // ── handleRegistrationException ────────────────────────────────────────────

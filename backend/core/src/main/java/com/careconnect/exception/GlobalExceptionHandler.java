@@ -27,6 +27,9 @@ public class GlobalExceptionHandler {
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", ex.getErrorCode());
         error.put("message", ex.getMessage());
+        if (ex.getDenialReason() != null) {
+            error.put("denialReason", ex.getDenialReason().name());
+        }
         error.put("details", List.of());
 
         Map<String, Object> body = new LinkedHashMap<>();

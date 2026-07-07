@@ -17,7 +17,7 @@ public class ForbiddenScopeException extends Exception {
     private final Long callerUserId;
     private final UUID auditId;
 
-    public ForbiddenScopeException(
+    private ForbiddenScopeException(
             ScopeDenialReason denialReason,
             Long patientId,
             Long callerUserId,
@@ -34,51 +34,13 @@ public class ForbiddenScopeException extends Exception {
             ScopeDenialReason denialReason,
             Long patientId,
             Long callerUserId,
-            String message,
+            String detail,
             UUID auditId) {
-        return new ForbiddenScopeException(denialReason, patientId, callerUserId, message, auditId);
+        return new ForbiddenScopeException(denialReason, patientId, callerUserId, detail, auditId);
     }
 
-    public static ForbiddenScopeException patientOutOfScope(
-            Long patientId,
-            String callerEmail,
-            Long callerUserId,
-            UUID auditId) {
-        return of(
-                ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
-                patientId,
-                callerUserId,
-                String.format("Patient %d is out of scope for user '%s'", patientId, callerEmail),
-                auditId);
-    }
-
-    public static ForbiddenScopeException patientNotFound(Long patientId, Long callerUserId, UUID auditId) {
-        return of(
-                ScopeDenialReason.PATIENT_NOT_FOUND,
-                patientId,
-                callerUserId,
-                String.format("Patient %d not found", patientId),
-                auditId);
-    }
-
-    public static ForbiddenScopeException noPermittedSourceTypes(Long patientId, Long callerUserId, UUID auditId) {
-        return of(
-                ScopeDenialReason.NO_PERMITTED_SOURCE_TYPES,
-                patientId,
-                callerUserId,
-                String.format(
-                        "No permitted source types remain for patient %d after RBAC and consent filters",
-                        patientId),
-                auditId);
-    }
-
-    public static ForbiddenScopeException unsupportedRole(Role callerRole, Long callerUserId, UUID auditId) {
-        return of(
-                ScopeDenialReason.UNSUPPORTED_ROLE,
-                null,
-                callerUserId,
-                String.format("Role '%s' cannot resolve Ask AI retrieval scope", callerRole),
-                auditId);
+    public static ForbiddenScopeException unsupportedRole(Role callerRole, Long callerUserId, String detail, UUID auditId) {
+        return of(ScopeDenialReason.UNSUPPORTED_ROLE, null, callerUserId, detail, auditId);
     }
 
     public String getErrorCode() {
