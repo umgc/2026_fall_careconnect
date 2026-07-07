@@ -14,6 +14,7 @@ import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChimeService;
 import com.careconnect.service.FamilyMemberService;
+import com.careconnect.notifications.SnsService;
 import com.careconnect.websocket.CallNotificationHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -74,6 +75,7 @@ class CallControllerExtendedTest {
     @MockitoBean private FamilyMemberService familyMemberService;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;
+    @MockitoBean private SnsService snsService;
 
     private ObjectMapper objectMapper;
     private User patientUser;
