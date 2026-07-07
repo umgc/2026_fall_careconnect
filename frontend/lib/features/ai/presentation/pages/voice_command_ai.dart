@@ -155,6 +155,19 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     }
   }
 
+    String _commandPhraseToTranslatedString(String commandPhrase){
+    switch (commandPhrase){
+      case 'take me home':
+        return AppLocalizations.of(context)?.voicecommand_commandPhraseHome ?? 'take me home';
+      case 'take me to calendar':
+        return AppLocalizations.of(context)?.voicecommand_commandPhraseCalendar ?? 'take me to calendar';
+      case 'take me to my tracker':
+        return AppLocalizations.of(context)?.voicecommand_commandPhraseTracker ?? 'take me to my tracker';
+      default:
+        return commandPhrase;
+    }
+  }
+
   Color _statusColor() {
     switch (_voiceStatus) {
       case _VoiceStatus.idle:
@@ -269,7 +282,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       return;
     }
 
-    final exactMatches = _commandTable.where((c) => cmd.contains(c.phrase)).toList();
+    final exactMatches = _commandTable.where((c) => cmd.contains(_commandPhraseToTranslatedString(c.phrase))).toList();
 
     if (exactMatches.length == 1) {
       _speech.stop();
@@ -294,7 +307,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     }
 
     final partialMatches = _commandTable
-        .where((c) => c.phrase.startsWith(cmd) && cmd.length >= 4)
+        .where((c) => _commandPhraseToTranslatedString(c.phrase).startsWith(cmd) && cmd.length >= 4)
         .toList();
 
     if (partialMatches.length > 1) {

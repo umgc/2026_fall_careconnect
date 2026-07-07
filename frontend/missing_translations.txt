@@ -36,6 +36,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -76,6 +79,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -116,6 +122,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -156,6 +165,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -196,6 +208,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -236,6 +251,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -276,6 +294,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -316,6 +337,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -356,6 +380,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -396,6 +423,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -436,6 +466,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ],
 
@@ -476,6 +509,9 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
+    "voicecommand_commandPhraseHome",
+    "voicecommand_commandPhraseCalendar",
+    "voicecommand_commandPhraseTracker",
     "mainscreen_voiceCommandsTooltip"
   ]
 }

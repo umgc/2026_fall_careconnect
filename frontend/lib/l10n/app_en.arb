@@ -176,6 +176,9 @@
   "voicecommand_onClarifyCommandConfirm": "confirm",
   "voicecommand_confirmButton": "Confirm",
   "voicecommand_cancelButton": "Cancel",
+  "voicecommand_commandPhraseHome": "take me home",
+  "voicecommand_commandPhraseCalendar": "take me to calendar",
+  "voicecommand_commandPhraseTracker": "take me to my tracker",
 
   "mainscreen_voiceCommandsTooltip": "Voice commands"
 
