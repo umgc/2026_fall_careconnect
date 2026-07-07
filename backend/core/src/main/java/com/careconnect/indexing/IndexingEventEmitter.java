@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -107,7 +109,8 @@ public class IndexingEventEmitter {
         envelope.put("eventType", eventType);
         envelope.put("eventId", UUID.randomUUID().toString());
         envelope.put("occurredAt",
-                DateTimeFormatter.ISO_INSTANT.format(Instant.now()));
+                OffsetDateTime.now(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         envelope.put("schemaVersion", SCHEMA_VERSION);
         envelope.put("payload", payload);
         try {
