@@ -37,6 +37,7 @@ import java.time.LocalDateTime;
                         name = "idx_call_summary_caregiver_visibility",
                         columnList = "caregiver_visibility"
                 )
+                // patient_id index is created by Flyway migration V2607032251 (PR #244)
         }
 )
 public class CallSummary extends Auditable {
@@ -81,6 +82,15 @@ public class CallSummary extends Auditable {
     /** Call identifier associated with the generated summary. */
     @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
     private String callId;
+
+    /**
+     * Patient this summary is about. Nullable so historic rows survive;
+     * populated for new summaries via the call context at persistence time.
+     * Carried on SUMMARY_CREATED events (WBS 3.11.5) as the RBAC scope key.
+     * Column added by Flyway migration V2607032251 (PR #244).
+     */
+    @Column(name = "patient_id")
+    private Long patientId;
 
     /** Serialized summary payload stored as JSON text. */
     @Column(name = "summary_json", nullable = false, columnDefinition = "TEXT")

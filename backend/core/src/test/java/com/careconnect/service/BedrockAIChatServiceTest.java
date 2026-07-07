@@ -153,17 +153,25 @@ class BedrockAIChatServiceTest {
     }
 
     @Test
-    void processChat_unapprovedModel_throwsIllegalArgumentException() {
+    void processChat_unapprovedModel_fallsBackToDefaultModel() {
         BedrockRuntimeClient mockClient = mock(BedrockRuntimeClient.class);
+        when(mockClient.invokeModel(any(InvokeModelRequest.class))).thenReturn(
+                InvokeModelResponse.builder()
+                        .body(SdkBytes.fromUtf8String("{\"output\":{\"message\":{\"content\":[{\"text\":\"ok\"}]}}}"))
+                        .build());
         BedrockAIChatService service = new BedrockAIChatService(mockClient, "amazon.nova-lite-v1:0", new ObjectMapper());
 
         ChatRequest request = new ChatRequest();
         request.setMessage("Hello");
         request.setPreferredModel("anthropic.claude-4-opus-v1:0");
 
-        assertThatThrownBy(() -> service.processChat(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not approved");
+        ChatResponse response = service.processChat(request);
+
+        ArgumentCaptor<InvokeModelRequest> captor = ArgumentCaptor.forClass(InvokeModelRequest.class);
+        verify(mockClient).invokeModel(captor.capture());
+        assertThat(captor.getValue().modelId()).isEqualTo("amazon.nova-lite-v1:0");
+        assertThat(response.getModelUsed()).isEqualTo("amazon.nova-lite-v1:0");
+        assertThat(response.getSuccess()).isTrue();
     }
 
     @Test
