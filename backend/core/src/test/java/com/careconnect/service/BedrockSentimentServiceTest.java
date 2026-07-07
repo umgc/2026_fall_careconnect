@@ -638,6 +638,150 @@ class BedrockSentimentServiceTest {
     //  PHI ANONYMIZATION (Commit C — Dominique's PR review)
 
     @Nested
+    @DisplayName("Schema Backward Compatibility (v1 flat + v2 combined)")
+    class SchemaBackwardCompatTests {
+
+        @Test
+        @DisplayName("v1-only response populates legacy flat fields with safe v2 defaults (WBS 3.4.11)")
+        void summarizeTranscript_v1OnlyResponse_populatesLegacyFieldsAndSafeV2Defaults() {
+            service = awsBackedService("""
+                    {
+                      "headline": "Legacy flat summary",
+                      "overallAssessment": "Patient stable per legacy schema.",
+                      "keyConcerns": ["Fatigue"],
+                      "recommendedActions": ["Hydration"],
+                      "followUpQuestions": ["Sleep quality?"]
+                    }
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.60, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            // Legacy flat fields land as-is.
+            assertThat(result).containsEntry("headline", "Legacy flat summary");
+            assertThat(result).containsEntry("overallAssessment", "Patient stable per legacy schema.");
+            assertThat(asList(result.get("keyConcerns"))).contains("Fatigue");
+            assertThat(asList(result.get("recommendedActions"))).contains("Hydration");
+            assertThat(asList(result.get("followUpQuestions"))).contains("Sleep quality?");
+
+            // v2 fields absent from response get safe defaults so downstream
+            // consumers do not crash on missing keys.
+            assertThat(asList(result.get("actionItems"))).isEmpty();
+            assertThat(asList(result.get("appointments"))).isEmpty();
+            assertThat(asList(result.get("careInstructions"))).isEmpty();
+            assertThat(result.get("riskLevel")).isEqualTo("LOW");
+            assertThat(result.get("soap")).isInstanceOf(Map.class);
+            assertThat(result.get("clinicalObservations")).isInstanceOf(Map.class);
+        }
+
+        @Test
+        @DisplayName("Response missing headline triggers local fallback summary (documented behavior)")
+        void summarizeTranscript_missingHeadline_returnsLocalFallback() {
+            // The parser gates on the presence of a "headline" field at the
+            // root. Responses without one are treated as malformed and the
+            // local fallback summary is returned instead. This preserves the
+            // guarantee that consumers always get a valid summary shape,
+            // even when Bedrock returns partial or degenerate output.
+            service = awsBackedService("""
+                    {
+                      "riskLevel": "HIGH",
+                      "actionItems": [{"text": "no headline field on this response"}]
+                    }
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.35, "ANXIOUS", "concerned", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            // Local fallback fires — legacy defaults, empty v2 typed lists,
+            // safe risk level, and the local fallback overallAssessment string
+            // that documents the failure mode to the caller.
+            assertThat(result).containsEntry("headline", "Call Summary");
+            assertThat(result.get("overallAssessment").toString())
+                    .contains("Automated Bedrock summary unavailable");
+            assertThat(result).containsEntry("riskLevel", "LOW");
+            assertThat(asList(result.get("actionItems"))).isEmpty();
+            assertThat(asList(result.get("appointments"))).isEmpty();
+            assertThat(asList(result.get("careInstructions"))).isEmpty();
+        }        
+
+        @Test
+        @DisplayName("Combined v1+v2 response populates all fields with no cross-contamination")
+        void summarizeTranscript_bothV1AndV2_populatesAllFieldsIndependently() {
+            service = awsBackedService("""
+                    {
+                      "headline": "Follow-up check",
+                      "overallAssessment": "Patient stable.",
+                      "keyConcerns": ["Sleep"],
+                      "recommendedActions": ["Hydrate"],
+                      "followUpQuestions": ["Any dizziness?"],
+                      "riskLevel": "MODERATE",
+                      "narrative": "Patient reports mild sleep disruption.",
+                      "actionItems": [{"text": "Continue medication", "status": "pending"}],
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            // Legacy fields carry their values.
+            assertThat(result).containsEntry("headline", "Follow-up check");
+            assertThat(result).containsEntry("overallAssessment", "Patient stable.");
+            assertThat(asList(result.get("keyConcerns"))).contains("Sleep");
+            assertThat(asList(result.get("recommendedActions"))).contains("Hydrate");
+
+            // v2 fields carry their values.
+            assertThat(result).containsEntry("riskLevel", "MODERATE");
+            assertThat(result.get("narrative").toString()).contains("sleep disruption");
+            assertThat(asList(result.get("actionItems"))).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Partial v2 response — missing v2 fields default without crashing")
+        void summarizeTranscript_partialV2Response_missingFieldsGetSafeDefaults() {
+            service = awsBackedService("""
+                    {
+                      "headline": "Routine call",
+                      "overallAssessment": "Stable.",
+                      "keyConcerns": [],
+                      "recommendedActions": [],
+                      "followUpQuestions": [],
+                      "riskLevel": "HIGH",
+                      "actionItems": [{"text": "Increase fluid intake", "status": "pending"}]
+                    }
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.50, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            // Explicitly provided v2 fields land.
+            assertThat(result).containsEntry("riskLevel", "HIGH");
+            assertThat(asList(result.get("actionItems"))).hasSize(1);
+
+            // Omitted v2 fields default safely — key must be present so consumers
+            // that always dereference (for example, response["soap"]) do not NPE.
+            assertThat(result).containsKey("soap");
+            assertThat(result).containsKey("clinicalObservations");
+            assertThat(result).containsKey("urgencyBanner");
+            assertThat(asList(result.get("appointments"))).isEmpty();
+            assertThat(asList(result.get("careInstructions"))).isEmpty();
+        }
+    }
+
+    @Nested
     @DisplayName("PHI Anonymization")
     class PhiAnonymizationTests {
 
