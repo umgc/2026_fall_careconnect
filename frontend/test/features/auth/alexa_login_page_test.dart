@@ -282,5 +282,52 @@ void main() {
       // it stays pending — harmless). The debug log proves the OAuth code path ran.
       expect(find.textContaining('Launching Alexa redirect'), findsWidgets);
     });
+
+    testWidgets('Alexa code generation failure shows the error', (tester) async {
+      _ignoreOverflowErrors();
+      tester.view.physicalSize = const Size(1400, 2600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(MockClient((req) async {
+        return http.Response(
+          jsonEncode({
+            'id': 1,
+            'email': 'user@test.com',
+            'role': 'PATIENT',
+            'token': 'jwt-token-0123456789-0123456789-0123456789',
+            'name': 'Test User',
+            'emailVerified': true,
+          }),
+          200,
+        );
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+
+      // Alexa-code endpoint returns 401 -> getAlexaAuthorizationCode reports
+      // failure -> _handleAlexaOAuthFlow takes the "failed to generate" branch.
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(401, '{"error":"nope"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(wrapWithProvider());
+      await tester.pump();
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).at(0), 'user@test.com');
+      await tester.enterText(find.byType(TextField).at(1), 'password123');
+      await tester.pump();
+
+      final signIn = find.widgetWithText(ElevatedButton, 'Sign In');
+      await tester.ensureVisible(signIn);
+      await tester.tap(signIn);
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      expect(find.textContaining('Failed to generate code'), findsWidgets);
+    });
   });
 }
