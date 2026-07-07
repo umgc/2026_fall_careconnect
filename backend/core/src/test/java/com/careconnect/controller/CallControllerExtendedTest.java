@@ -534,13 +534,13 @@ class CallControllerExtendedTest {
             when(callRecordingService.generatePlaybackUrl(anyString()))
                     .thenReturn(Map.of(
                             "playbackUrl", "https://s3.example.com/recording.mp4",
-                            "recordingStartedAt", "2026-06-29T16:57:43"));
+                            "recordingStartedAt", "2026-06-29T16:57:43Z"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording/playback-url")
                             .with(csrf()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.playbackUrl").value("https://s3.example.com/recording.mp4"))
-                    .andExpect(jsonPath("$.recordingStartedAt").value("2026-06-29T16:57:43"));
+                    .andExpect(jsonPath("$.recordingStartedAt").value("2026-06-29T16:57:43Z"));
         }
 
         @Test

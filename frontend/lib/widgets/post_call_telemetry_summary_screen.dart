@@ -54,6 +54,7 @@ class _PostCallTelemetrySummaryScreenState
   double? _clipStartSec;
   double? _clipEndSec;
   DateTime? _clipRecordingStartedAtUtc;
+  int _clipLoadGeneration = 0;
   _TimelineChannel _selectedChannel = _TimelineChannel.all;
   DateTime? _selectedSentimentAt;
   double? _selectedSentimentMinute;
@@ -130,13 +131,15 @@ class _PostCallTelemetrySummaryScreenState
     });
     _scrollClipPanelIntoView();
 
+    final generation = ++_clipLoadGeneration;
     final data = await ApiService.getCallRecordingPlaybackData(widget.callId);
-    if (!mounted) {
+    if (!mounted || generation != _clipLoadGeneration) {
       return;
     }
 
     if (data == null) {
       setState(() => _loadingClip = false);
+      _showClipLoadFailedSnackBar();
       return;
     }
 
@@ -147,6 +150,7 @@ class _PostCallTelemetrySummaryScreenState
         recordingStartedAtRaw == null ||
         recordingStartedAtRaw.isEmpty) {
       setState(() => _loadingClip = false);
+      _showClipLoadFailedSnackBar();
       return;
     }
 
@@ -209,6 +213,17 @@ class _PostCallTelemetrySummaryScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(kSentimentClipRecordingProcessingSnackBar),
+      ),
+    );
+  }
+
+  void _showClipLoadFailedSnackBar() {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(kSentimentClipLoadFailedSnackBar),
       ),
     );
   }

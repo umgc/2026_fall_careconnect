@@ -12,6 +12,9 @@ const String kSentimentClipRecordingStatusUnavailable =
 const String kSentimentClipRecordingProcessingSnackBar =
     'Video recording is still processing. Try again in a moment.';
 
+const String kSentimentClipLoadFailedSnackBar =
+    'Could not load video for this moment. Try again shortly.';
+
 const String kSentimentChartDotTapHintWithVideo =
     'Tap a dot to play that moment in the video and jump to the transcript.';
 

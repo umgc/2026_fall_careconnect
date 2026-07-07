@@ -128,6 +128,10 @@ Recording is OFF by default. To enable locally:
      cd backend/core
      aws s3api put-bucket-cors --bucket careconnect-recordings-946509368247-us-east-1 --cors-configuration file://scripts/recording-bucket-cors.json
 
+   For shared/prod buckets, set `careconnect.recording.cors-allow-wildcard=false` (or env
+   `CARECONNECT_RECORDING_CORS_ALLOW_WILDCARD=false`) and list explicit Amplify origins in
+   `careconnect.cors_allowed` instead of `*`.
+
 4. To clean up test recordings after a session, tap "Delete Call History (Dev)" in the patient
    details screen. This wipes all S3 objects under the recordings/ prefix AND all DB records.
 

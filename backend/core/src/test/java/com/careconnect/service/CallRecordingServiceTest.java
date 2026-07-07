@@ -100,6 +100,7 @@ class CallRecordingServiceTest {
         ReflectionTestUtils.setField(service, "presignedUrlTtlMinutes", 15);
         ReflectionTestUtils.setField(service, "rawCleanupEnabled",      true);
         ReflectionTestUtils.setField(service, "corsAllowedOrigins",     "http://localhost:*");
+        ReflectionTestUtils.setField(service, "recordingCorsAllowWildcard", true);
 
         // Pre-wire STS so account-ID resolution succeeds in any test that
         // exercises the happy path. The service calls the no-arg overload.
@@ -500,8 +501,13 @@ class CallRecordingServiceTest {
             assertThat(result.get("playbackUrl").toString()).contains("presigned-url");
             assertThat(result).containsEntry("playbackReady", true);
             assertThat(result).containsKey("recordingStartedAt");
+            assertThat(result.get("recordingStartedAt").toString()).endsWith("Z");
             assertThat(result.get("recordingStartedAt"))
-                    .isEqualTo(rec.getStartedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                    .isEqualTo(
+                            rec.getStartedAt()
+                                    .atZone(java.time.ZoneOffset.UTC)
+                                    .toInstant()
+                                    .toString());
         }
     }
 
@@ -1111,6 +1117,29 @@ class CallRecordingServiceTest {
             assertThat(rule.exposeHeaders())
                     .contains("Accept-Ranges", "Content-Range", "Content-Length", "ETag");
             assertThat(rule.allowedOrigins()).contains("*");
+        }
+
+        @Test
+        @DisplayName("resolveOrCreateRecordingBucket uses explicit origins when wildcard disabled")
+        void resolveOrCreateRecordingBucket_explicitOriginsWhenWildcardDisabled() {
+            ReflectionTestUtils.setField(service, "defaultAwsRegion", Region.US_EAST_1);
+            ReflectionTestUtils.setField(service, "cachedRecordingBucket", null);
+            ReflectionTestUtils.setField(service, "recordingCorsAllowWildcard", false);
+            ReflectionTestUtils.setField(
+                    service,
+                    "corsAllowedOrigins",
+                    "http://localhost:*,https://main.dpsx8p4n4v314.amplifyapp.com");
+
+            ReflectionTestUtils.invokeMethod(service, "resolveOrCreateRecordingBucket");
+
+            ArgumentCaptor<PutBucketCorsRequest> captor =
+                    ArgumentCaptor.forClass(PutBucketCorsRequest.class);
+            verify(s3Client).putBucketCors(captor.capture());
+
+            CORSRule rule = captor.getValue().corsConfiguration().corsRules().get(0);
+            assertThat(rule.allowedOrigins())
+                    .containsExactly("https://main.dpsx8p4n4v314.amplifyapp.com");
+            assertThat(rule.allowedOrigins()).doesNotContain("*");
         }
     }
 

@@ -120,9 +120,13 @@ class _SentimentClipPlayerWidgetState extends State<SentimentClipPlayerWidget> {
     if (controller == null || !controller.value.isInitialized) {
       return;
     }
+    final endSec = effectiveSentimentClipEndSec(
+      clipEndSec: widget.clipEndSec,
+      videoDuration: controller.value.duration,
+    );
     if (sentimentClipShouldPause(
       position: controller.value.position,
-      clipEndSec: widget.clipEndSec,
+      clipEndSec: endSec,
     )) {
       controller.pause();
     }

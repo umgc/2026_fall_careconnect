@@ -104,6 +104,30 @@ void main() {
         isTrue,
       );
     });
+
+    test('effectiveSentimentClipEndSec clamps to video duration', () {
+      expect(
+        effectiveSentimentClipEndSec(
+          clipEndSec: 120,
+          videoDuration: const Duration(seconds: 90),
+        ),
+        90,
+      );
+      expect(
+        effectiveSentimentClipEndSec(
+          clipEndSec: 45,
+          videoDuration: const Duration(seconds: 90),
+        ),
+        45,
+      );
+      expect(
+        effectiveSentimentClipEndSec(
+          clipEndSec: 45,
+          videoDuration: Duration.zero,
+        ),
+        45,
+      );
+    });
   });
 
   group('SENT-CLIP-001 recording status + tap policy', () {

@@ -46,3 +46,15 @@ bool sentimentClipShouldPause({
 }) {
   return position.inMilliseconds >= (clipEndSec * 1000).round();
 }
+
+/// Caps clip end to known video duration so late-call samples pause at EOF.
+double effectiveSentimentClipEndSec({
+  required double clipEndSec,
+  required Duration videoDuration,
+}) {
+  final durationSec = videoDuration.inMilliseconds / 1000.0;
+  if (durationSec <= 0) {
+    return clipEndSec;
+  }
+  return math.min(clipEndSec, durationSec);
+}

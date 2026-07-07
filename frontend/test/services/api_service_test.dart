@@ -2061,7 +2061,7 @@ void main() {
       final body = {
         'callId': 'chime_call_123',
         'playbackUrl': 'https://s3.example.com/recording.mp4',
-        'recordingStartedAt': '2026-06-29T16:57:43',
+        'recordingStartedAt': '2026-06-29T16:57:43Z',
         'expiresInMinutes': 15,
         'playbackReady': true,
         'concatenationStatus': 'READY',
@@ -2075,7 +2075,7 @@ void main() {
 
       expect(result, isNotNull);
       expect(result!['playbackUrl'], 'https://s3.example.com/recording.mp4');
-      expect(result['recordingStartedAt'], '2026-06-29T16:57:43');
+      expect(result['recordingStartedAt'], '2026-06-29T16:57:43Z');
       expect(result['expiresInMinutes'], 15);
       expect(result['playbackReady'], true);
       expect(result['concatenationStatus'], 'READY');
@@ -2095,7 +2095,7 @@ void main() {
     test('returns only playbackUrl from full playback map', () async {
       final body = {
         'playbackUrl': 'https://s3.example.com/x.mp4',
-        'recordingStartedAt': '2026-06-29T16:57:43',
+        'recordingStartedAt': '2026-06-29T16:57:43Z',
       };
 
       final result = await _withSpec(

@@ -5,6 +5,7 @@ import com.careconnect.repository.CallRecordingRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -144,6 +145,9 @@ public class CallRecordingService {
 
   @Value("${careconnect.cors_allowed:http://localhost:*}")
   private String corsAllowedOrigins;
+
+  @Value("${careconnect.recording.cors-allow-wildcard:true}")
+  private boolean recordingCorsAllowWildcard;
 
   // Cached AWS account ID (looked up once via STS on first use)
   private String cachedAccountId;
@@ -561,12 +565,13 @@ public class CallRecordingService {
       playbackResult.put("recordingStatus", rec.getStatus());
       playbackResult.put("concatenationStatus", rec.getConcatenationStatus());
       playbackResult.put("transcriptionStatus", rec.getTranscriptionStatus());
-      // System recordings (initiatedByUserId == null) are transcription-only; never allow playback
+      // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
+      // User-initiated recordings with a resolved video key are ready to play.
       playbackResult.put("playbackReady", rec.getInitiatedByUserId() != null);
       playbackResult.put(
           "recordingStartedAt",
           rec.getStartedAt() != null
-              ? rec.getStartedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+              ? rec.getStartedAt().atZone(ZoneOffset.UTC).toInstant().toString()
               : null);
       return playbackResult;
 
@@ -1539,8 +1544,15 @@ public class CallRecordingService {
     }
 
     if (needsWildcard || explicit.isEmpty()) {
-      explicit.clear();
-      explicit.add("*");
+      if (recordingCorsAllowWildcard) {
+        explicit.clear();
+        explicit.add("*");
+      } else if (explicit.isEmpty() && log.isWarnEnabled()) {
+        log.warn(
+            "Recording bucket CORS requires wildcard origins for localhost dev ports but"
+                + " careconnect.recording.cors-allow-wildcard=false — configure explicit"
+                + " origins in careconnect.cors_allowed");
+      }
     }
     return explicit;
   }

@@ -587,6 +587,63 @@ void main() {
       expect(find.textContaining('Selected sample:'), findsNothing);
     });
 
+    testWidgets('SENT-CLIP-007 playback fetch failure shows SnackBar on dot tap',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'READY',
+                'durationSeconds': 305,
+                'startedAt': '2026-03-12T15:00:00Z',
+                'playbackReady': true,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          if (path.contains('/recording/playback-url')) {
+            return http.Response('', 500);
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-clip-fail',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+      expect(find.text(kSentimentClipLoadFailedSnackBar), findsOneWidget);
+    });
+
     testWidgets('SENT-CLIP-006 pending recording shows SnackBar on dot tap',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
