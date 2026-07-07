@@ -1,6 +1,7 @@
 package com.careconnect.service;
 
 import com.careconnect.indexing.IndexingEventEmitter;
+import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.repository.CallSummaryRepository;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -246,6 +248,64 @@ class CallSummaryServiceTest {
             assertThat(saved.getRiskLevel()).isNull();
             assertThat(saved.getCaregiverVisibility()).isEqualTo("on_consent");
             assertThat(saved.getSummarizationEngine()).isNull();
+        }
+
+        @Test
+        @DisplayName("emits SUMMARY_CREATED on SUCCESS path")
+        void generateAndStoreSummary_success_emitsSummaryCreated() {
+            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Chest pain");
+            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(3L);
+            when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(true);
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(true);
+            when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
+                    "headline", "Chest pain follow-up",
+                    "overallAssessment", "Patient reported chest pain onset.",
+                    "keyConcerns", List.of("Chest pain"),
+                    "recommendedActions", List.of("Refer to urgent care"),
+                    "followUpQuestions", List.of()
+            ));
+            when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.generateAndStoreSummary(CALL_ID, 8L, Map.of());
+
+            ArgumentCaptor<SummaryCreatedPayload> payloadCaptor =
+                    ArgumentCaptor.forClass(SummaryCreatedPayload.class);
+            verify(indexingEventEmitter).emitSummaryCreated(payloadCaptor.capture());
+            SummaryCreatedPayload payload = payloadCaptor.getValue();
+            assertThat(payload.status()).isEqualTo("SUCCESS");
+            assertThat(payload.callId()).isEqualTo(CALL_ID);
+            assertThat(payload.episodeType()).isEqualTo("call");
+            assertThat(payload.sourceTable()).isEqualTo("call_summaries");
+            assertThat(payload.contentHash()).startsWith("sha256:");
+        }
+
+        @Test
+        @DisplayName("does not emit SUMMARY_CREATED when transcript is blank (NO_TRANSCRIPT path)")
+        void generateAndStoreSummary_noTranscript_doesNotEmit() {
+            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn(" ");
+            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(0L);
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
+            when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.generateAndStoreSummary(CALL_ID, 7L, Map.of());
+
+            verify(indexingEventEmitter, never()).emitSummaryCreated(any());
+        }
+
+        @Test
+        @DisplayName("does not emit SUMMARY_CREATED when Bedrock throws (ERROR path)")
+        void generateAndStoreSummary_bedrockThrows_doesNotEmit() {
+            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Needs review");
+            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(4L);
+            when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
+            when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
+                    .thenThrow(new RuntimeException("bedrock timeout"));
+            when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.generateAndStoreSummary(CALL_ID, 3L, Map.of());
+
+            verify(indexingEventEmitter, never()).emitSummaryCreated(any());
         }
 
         @Test
