@@ -9,6 +9,7 @@ import '../services/auth_token_manager.dart';
 import '../services/call_notification_service.dart';
 import '../services/user_role_storage_service.dart';
 import '../config/theme/app_theme.dart';
+import '../features/telemetry/telemetry.dart';
 import '../widgets/sentiment_dashboard_widget.dart';
 import '../widgets/chime_meeting_embed.dart';
 import '../features/health/caregiver-patient-list/page/patient_details_page.dart';
@@ -331,6 +332,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         _localAudioEnabled = session.isAudioEnabled;
         _localVideoEnabled = session.isVideoEnabled;
       });
+      unawaited(
+        Telemetry.event('feature_use', {'feature': 'video_call'}),
+      );
     } catch (e) {
       setState(() {
         _error = e.toString();

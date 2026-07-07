@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
 import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
 import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-card.dart';
 import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-header.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +36,9 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(
+      Telemetry.event('feature_use', {'feature': 'medications_tracker'}),
+    );
     _fetchMedications();
   }
 
