@@ -428,7 +428,7 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('"take me home" navigates to /dashboard',
+    testWidgets('"take me home" enters confirming then navigates on confirm',
         (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
@@ -437,7 +437,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me home', isFinal: true);
-      await tester.pump(_statusSettleDelay);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Confirm command'), findsOneWidget);
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
       await tester.pump();
 
       expect(find.text('Dashboard Page'), findsOneWidget);
@@ -445,7 +451,7 @@ void main() {
       await _flush(tester);
     });
 
-    testWidgets('"take me to calendar" navigates to /calendar',
+    testWidgets('"take me to calendar" confirms then navigates to /calendar',
         (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
@@ -454,7 +460,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
-      await tester.pump(_statusSettleDelay);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
       await tester.pump();
 
       expect(find.text('Calendar Page'), findsOneWidget);
@@ -462,7 +471,7 @@ void main() {
       await _tearDown(tester);
     });
 
-    testWidgets('"take me to my tracker" navigates to /symptoms',
+    testWidgets('"take me to my tracker" confirms then navigates to /symptoms',
         (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
@@ -471,7 +480,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'take me to my tracker', isFinal: true);
-      await tester.pump(_statusSettleDelay);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
       await tester.pump();
 
       expect(find.text('Symptoms Page'), findsOneWidget);
@@ -487,7 +499,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await _sendSpeechResult(tester, 'TAKE ME TO CALENDAR', isFinal: true);
-      await tester.pump(_statusSettleDelay);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
       await tester.pump();
 
       expect(find.text('Calendar Page'), findsOneWidget);
@@ -505,7 +520,10 @@ void main() {
 
       await _sendSpeechResult(
           tester, 'please take me to my tracker now', isFinal: true);
-      await tester.pump(_statusSettleDelay);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
       await tester.pump();
 
       expect(find.text('Symptoms Page'), findsOneWidget);
@@ -821,7 +839,7 @@ void main() {
     tearDown(clearMocks);
 
     // TC-S1-VC-001
-    testWidgets('recognized navigate command shows heard text and success status',
+    testWidgets('recognized navigate command shows heard text and confirm status',
         (tester) async {
       await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
@@ -832,10 +850,10 @@ void main() {
       await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Status: Command recognized'), findsOneWidget);
+      expect(find.text('Status: Confirm command'), findsOneWidget);
       expect(find.text('Heard: "take me to calendar"'), findsOneWidget);
       expect(
-        find.text('Recognized: "take me to calendar" — opening calendar'),
+        find.text('Recognized: "take me to calendar" \u2014 open Calendar?'),
         findsOneWidget,
       );
 
@@ -1001,6 +1019,233 @@ void main() {
       expect(find.byKey(const Key('voice_status_detail')), findsNothing);
 
       await _tearDown(tester);
+    });
+  });
+
+  // ──────────── T11 confirmation and clarification tests ────────────
+
+  group('VoiceCommandAI confirmation and clarification', () {
+    setUp(setupDefaultMocks);
+    tearDown(clearMocks);
+
+    testWidgets('"take me home" enters confirming state before navigating',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Confirm command'), findsOneWidget);
+      expect(find.text('Heard: "take me home"'), findsOneWidget);
+      // Should NOT have navigated yet
+      expect(find.text('Dashboard Page'), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('confirming state shows confirm and cancel buttons',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      expect(find.byKey(const Key('voice_cancel_btn')), findsOneWidget);
+      expect(find.text('Confirm'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('tapping confirm navigates to destination', (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Dashboard Page'), findsOneWidget);
+
+      await _flush(tester);
+    });
+
+    testWidgets('tapping cancel returns to idle without navigation',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_cancel_btn')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Ready'), findsOneWidget);
+      expect(find.text('Dashboard Page'), findsNothing);
+      expect(find.byKey(const Key('voice_confirm_btn')), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('ambiguous input "take me to" enters clarifying state',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // "take me to" matches both "take me to calendar" and "take me to my tracker"
+      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Clarify command'), findsOneWidget);
+      expect(find.text('Multiple matches \u2014 please choose one'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('clarifying state shows multiple options and cancel',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Calendar'), findsOneWidget);
+      expect(find.text('Symptom Tracker'), findsOneWidget);
+      expect(find.byKey(const Key('voice_clarify_cancel_btn')), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('selecting an option from clarifying moves to confirming',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Confirm command'), findsOneWidget);
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      expect(find.text('Selected: Calendar \u2014 confirm?'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('canceling clarification returns to idle', (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('voice_clarify_cancel_btn')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Ready'), findsOneWidget);
+      expect(find.text('Calendar Page'), findsNothing);
+      expect(find.text('Symptoms Page'), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('singleShot mode skips confirmation', (tester) async {
+      String? poppedResult;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () async {
+                poppedResult = await Navigator.of(ctx).push<String>(
+                  MaterialPageRoute(
+                    builder: (_) => const VoiceCommandAI(singleShot: true),
+                  ),
+                );
+              },
+              child: const Text('Open Voice'),
+            ),
+          ),
+        ),
+      ));
+
+      await tester.tap(find.text('Open Voice'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Should NOT show confirmation — singleShot pops directly
+      expect(find.byKey(const Key('voice_confirm_btn')), findsNothing);
+
+      await _flush(tester);
+
+      expect(poppedResult, equals('take me home'));
+
+      await _flush(tester);
+    });
+
+    testWidgets('clarify then confirm navigates to chosen destination',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Pick "Symptom Tracker" from clarification
+      await tester.tap(find.byKey(const Key('voice_clarify_/symptoms')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Now confirm
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Symptoms Page'), findsOneWidget);
+
+      await _flush(tester);
     });
   });
 }

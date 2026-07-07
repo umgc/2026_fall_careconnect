@@ -7,7 +7,7 @@ import 'package:porcupine_flutter/porcupine_error.dart';
 import 'package:porcupine_flutter/porcupine.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-enum _VoiceStatus { idle, listening, processing, success, captured, fallback, error }
+enum _VoiceStatus { idle, listening, processing, success, captured, fallback, error, confirming, clarifying }
 
 class VoiceCommandAI extends StatefulWidget {
   final bool singleShot;
@@ -35,6 +35,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   String _recognizedText = '';
   _VoiceStatus _voiceStatus = _VoiceStatus.idle;
   String _statusDetail = '';
+
+  String? _pendingDestination;
+  String? _pendingDetail;
+  List<_CommandMatch> _ambiguousMatches = [];
+
+  static const _commandTable = [
+    _CommandMatch(phrase: 'take me home', destination: '/dashboard', label: 'Home'),
+    _CommandMatch(phrase: 'take me to calendar', destination: '/calendar', label: 'Calendar'),
+    _CommandMatch(phrase: 'take me to my tracker', destination: '/symptoms', label: 'Symptom Tracker'),
+  ];
 
   Duration get _statusDisplayDelay =>
       kDebugMode ? const Duration(seconds: 5) : const Duration(milliseconds: 300);
@@ -124,6 +134,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         return 'Status: Command not recognized';
       case _VoiceStatus.error:
         return 'Status: Error';
+      case _VoiceStatus.confirming:
+        return 'Status: Confirm command';
+      case _VoiceStatus.clarifying:
+        return 'Status: Clarify command';
     }
   }
 
@@ -141,6 +155,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         return Colors.orange.shade800;
       case _VoiceStatus.error:
         return Colors.red.shade700;
+      case _VoiceStatus.confirming:
+        return Colors.amber.shade800;
+      case _VoiceStatus.clarifying:
+        return Colors.purple.shade700;
     }
   }
 
@@ -237,30 +255,53 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       return;
     }
 
-    String? successDetail;
-    String? destination;
-    if (cmd.contains('take me home')) {
-      successDetail = 'Recognized: "$words" — opening home';
-      destination = '/dashboard';
-    } else if (cmd.contains('take me to calendar')) {
-      successDetail = 'Recognized: "$words" — opening calendar';
-      destination = '/calendar';
-    } else if (cmd.contains('take me to my tracker')) {
-      successDetail = 'Recognized: "$words" — opening symptom tracker';
-      destination = '/symptoms';
+    final exactMatches = _commandTable.where((c) => cmd.contains(c.phrase)).toList();
+
+    if (exactMatches.length == 1) {
+      _speech.stop();
+      final match = exactMatches.first;
+      setState(() {
+        _pendingDestination = match.destination;
+        _pendingDetail = 'Recognized: "$words" \u2014 open ${match.label}?';
+        _voiceStatus = _VoiceStatus.confirming;
+        _statusDetail = _pendingDetail!;
+      });
+      return;
     }
 
-    if (successDetail != null && destination != null) {
-      _setStatus(
-        status: _VoiceStatus.success,
-        recognizedText: words,
-        detail: successDetail,
-      );
-      await Future.delayed(_statusDisplayDelay);
-      if (!mounted) return;
+    if (exactMatches.length > 1) {
+      _speech.stop();
+      setState(() {
+        _ambiguousMatches = exactMatches;
+        _voiceStatus = _VoiceStatus.clarifying;
+        _statusDetail = 'Multiple matches \u2014 please choose one';
+      });
+      return;
+    }
 
-      context.go(destination);
-      _reset();
+    final partialMatches = _commandTable
+        .where((c) => c.phrase.startsWith(cmd) && cmd.length >= 4)
+        .toList();
+
+    if (partialMatches.length > 1) {
+      _speech.stop();
+      setState(() {
+        _ambiguousMatches = partialMatches;
+        _voiceStatus = _VoiceStatus.clarifying;
+        _statusDetail = 'Multiple matches \u2014 please choose one';
+      });
+      return;
+    }
+
+    if (partialMatches.length == 1) {
+      _speech.stop();
+      final match = partialMatches.first;
+      setState(() {
+        _pendingDestination = match.destination;
+        _pendingDetail = 'Recognized: "$words" \u2014 open ${match.label}?';
+        _voiceStatus = _VoiceStatus.confirming;
+        _statusDetail = _pendingDetail!;
+      });
       return;
     }
 
@@ -313,8 +354,43 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         _recognizedText = '';
         _voiceStatus = _VoiceStatus.idle;
         _statusDetail = '';
+        _pendingDestination = null;
+        _pendingDetail = null;
+        _ambiguousMatches = [];
       });
     }
+  }
+
+  void _onConfirm() {
+    if (!mounted || _pendingDestination == null) return;
+    final destination = _pendingDestination!;
+    _setStatus(
+      status: _VoiceStatus.success,
+      detail: 'Confirmed — navigating',
+    );
+    _pendingDestination = null;
+    _pendingDetail = null;
+    _ambiguousMatches = [];
+    context.go(destination);
+    _reset();
+  }
+
+  void _onCancelConfirmation() {
+    _pendingDestination = null;
+    _pendingDetail = null;
+    _ambiguousMatches = [];
+    _reset();
+  }
+
+  void _onClarifyChoice(_CommandMatch choice) {
+    if (!mounted) return;
+    setState(() {
+      _ambiguousMatches = [];
+      _pendingDestination = choice.destination;
+      _pendingDetail = 'Selected: ${choice.label} — confirm?';
+      _voiceStatus = _VoiceStatus.confirming;
+      _statusDetail = _pendingDetail!;
+    });
   }
 
   void _onMicPressed() {
@@ -414,6 +490,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             style: const TextStyle(fontSize: 18),
           ),
           _buildStatusArea(),
+          if (_voiceStatus == _VoiceStatus.confirming)
+            _buildConfirmActions(),
+          if (_voiceStatus == _VoiceStatus.clarifying)
+            _buildClarifyActions(),
         ]),
       ),
       floatingActionButton: Builder(
@@ -424,4 +504,75 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       ),
     );
   }
+
+  Widget _buildConfirmActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton.icon(
+            key: const Key('voice_confirm_btn'),
+            onPressed: _onConfirm,
+            icon: const Icon(Icons.check),
+            label: const Text('Confirm'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade700,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 16),
+          OutlinedButton.icon(
+            key: const Key('voice_cancel_btn'),
+            onPressed: _onCancelConfirmation,
+            icon: const Icon(Icons.close),
+            label: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClarifyActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: _ambiguousMatches.map((match) {
+              return ActionChip(
+                key: Key('voice_clarify_${match.destination}'),
+                avatar: const Icon(Icons.arrow_forward, size: 18),
+                label: Text(match.label),
+                onPressed: () => _onClarifyChoice(match),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            key: const Key('voice_clarify_cancel_btn'),
+            onPressed: _onCancelConfirmation,
+            icon: const Icon(Icons.close),
+            label: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommandMatch {
+  final String phrase;
+  final String destination;
+  final String label;
+
+  const _CommandMatch({
+    required this.phrase,
+    required this.destination,
+    required this.label,
+  });
 }
