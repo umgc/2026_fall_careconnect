@@ -23,6 +23,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/login_page.dart';
+import 'package:care_connect_app/widgets/email_verification_dialog.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
@@ -324,6 +325,75 @@ void main() {
 
       // On success the page navigates to the dashboard/login route, so the
       // LoginPage itself is no longer in the tree.
+      expect(find.byType(LoginPage), findsNothing);
+    });
+
+    testWidgets('unverified email shows the verification dialog',
+        (tester) async {
+      _suppressOverflow();
+      // The dialog opens a live WebSocket + poll timer in production; the test
+      // seam disables that so the caller can be exercised without a real
+      // connection or a pending timer.
+      EmailVerificationDialog.debugDisableRealtime = true;
+      addTearDown(() => EmailVerificationDialog.debugDisableRealtime = false);
+      ApiService.debugSetHttpClient(MockClient((req) async {
+        return http.Response(
+          jsonEncode({
+            'id': 1,
+            'email': 'user@test.com',
+            'role': 'PATIENT',
+            'token': 'jwt-token',
+            'name': 'Test User',
+            'emailVerified': false,
+          }),
+          200,
+        );
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      final emailField = find.byType(TextFormField).at(0);
+      final pwdField = find.byType(TextFormField).at(1);
+      await tester.ensureVisible(emailField);
+      await tester.enterText(emailField, 'user@test.com');
+      await tester.ensureVisible(pwdField);
+      await tester.enterText(pwdField, 'password123');
+      await tester.pump();
+
+      final signIn = find.widgetWithText(ElevatedButton, 'Sign In');
+      await tester.ensureVisible(signIn);
+      await tester.tap(signIn);
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      expect(find.text('Email Verification Required'), findsOneWidget);
+    });
+  });
+
+  group('LoginPage – navigation links', () {
+    testWidgets('Forgot Password navigates away to /reset-password',
+        (tester) async {
+      _suppressOverflow();
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+      final link = find.text('Forgot Password?');
+      await tester.ensureVisible(link);
+      await tester.tap(link);
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginPage), findsNothing);
+    });
+
+    testWidgets('Create Account navigates away to /signup', (tester) async {
+      _suppressOverflow();
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+      final link = find.text('Create Account');
+      await tester.ensureVisible(link);
+      await tester.tap(link);
+      await tester.pumpAndSettle();
       expect(find.byType(LoginPage), findsNothing);
     });
   });
