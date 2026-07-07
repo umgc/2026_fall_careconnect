@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:go_router/go_router.dart';
 import 'package:porcupine_flutter/porcupine_manager.dart';
 import 'package:porcupine_flutter/porcupine_error.dart';
 import 'package:porcupine_flutter/porcupine.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+
+enum _VoiceStatus { idle, listening, processing, success, captured, fallback, error }
 
 class VoiceCommandAI extends StatefulWidget {
   final bool singleShot;
@@ -28,6 +31,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
   String _buffer = '';
   bool _initialized = false;
+
+  String _recognizedText = '';
+  _VoiceStatus _voiceStatus = _VoiceStatus.idle;
+  String _statusDetail = '';
+
+  Duration get _statusDisplayDelay =>
+      kDebugMode ? const Duration(seconds: 5) : const Duration(milliseconds: 300);
 
   @override
   void initState() {
@@ -81,6 +91,59 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _startListening();
   }
 
+  void _setStatus({
+    required _VoiceStatus status,
+    String? recognizedText,
+    String? detail,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _voiceStatus = status;
+      if (recognizedText != null) {
+        _recognizedText = recognizedText;
+      }
+      if (detail != null) {
+        _statusDetail = detail;
+      }
+    });
+  }
+
+  String _phaseLabel() {
+    switch (_voiceStatus) {
+      case _VoiceStatus.idle:
+        return 'Status: Ready';
+      case _VoiceStatus.listening:
+        return 'Status: Listening';
+      case _VoiceStatus.processing:
+        return 'Status: Processing';
+      case _VoiceStatus.success:
+        return 'Status: Command recognized';
+      case _VoiceStatus.captured:
+        return 'Status: Captured';
+      case _VoiceStatus.fallback:
+        return 'Status: Command not recognized';
+      case _VoiceStatus.error:
+        return 'Status: Error';
+    }
+  }
+
+  Color _statusColor() {
+    switch (_voiceStatus) {
+      case _VoiceStatus.idle:
+        return Colors.grey.shade700;
+      case _VoiceStatus.listening:
+      case _VoiceStatus.processing:
+        return Colors.blue.shade700;
+      case _VoiceStatus.success:
+      case _VoiceStatus.captured:
+        return Colors.green.shade700;
+      case _VoiceStatus.fallback:
+        return Colors.orange.shade800;
+      case _VoiceStatus.error:
+        return Colors.red.shade700;
+    }
+  }
+
   Future<void> _startListening() async {
     if (!mounted || _isListening) return;
 
@@ -107,62 +170,113 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     }
 
     if (!mounted) return;
-    setState(() => _isListening = true);
+    setState(() {
+      _isListening = true;
+      _voiceStatus = _VoiceStatus.listening;
+      _recognizedText = '';
+      _statusDetail = '';
+    });
 
-      _speech.listen(
-        listenFor: const Duration(seconds: 12),
-        pauseFor: const Duration(seconds: 2),
-        onResult: (r) {
-          if (r.recognizedWords.isNotEmpty) {
-            _buffer = r.recognizedWords;
+    _speech.listen(
+      listenFor: const Duration(seconds: 12),
+      pauseFor: const Duration(seconds: 2),
+      onResult: (r) {
+        if (r.recognizedWords.isNotEmpty) {
+          _buffer = r.recognizedWords;
+          if (mounted) {
+            setState(() {
+              _recognizedText = r.recognizedWords;
+              _voiceStatus = _VoiceStatus.listening;
+            });
           }
-          if (r.finalResult) {
-            _timeoutTimer?.cancel();
-            _process(_buffer.isNotEmpty ? _buffer : r.recognizedWords);
-          }
-        },
-        listenOptions: stt.SpeechListenOptions(
-          cancelOnError: true,
-          partialResults: true,
-          listenMode: stt.ListenMode.dictation,
-          onDevice: false,
-          autoPunctuation: true,
-          enableHapticFeedback: false,
-        ),
-      );
+        }
+        if (r.finalResult) {
+          _timeoutTimer?.cancel();
+          _process(_buffer.isNotEmpty ? _buffer : r.recognizedWords);
+        }
+      },
+      listenOptions: stt.SpeechListenOptions(
+        cancelOnError: true,
+        partialResults: true,
+        listenMode: stt.ListenMode.dictation,
+        onDevice: false,
+        autoPunctuation: true,
+        enableHapticFeedback: false,
+      ),
+    );
 
-      _timeoutTimer = Timer(const Duration(seconds: 12), _onTimeout);
+    _timeoutTimer = Timer(const Duration(seconds: 12), _onTimeout);
   }
 
-  void _process(String words) {
+  Future<void> _process(String words) async {
     if (!mounted) return;
 
     final cmd = words.toLowerCase().trim();
     debugPrint('Heard: $cmd');
 
+    _timeoutTimer?.cancel();
+
+    if (!mounted) return;
+    setState(() {
+      _recognizedText = words;
+      _voiceStatus = _VoiceStatus.processing;
+      _statusDetail = '';
+      _isListening = false;
+    });
+
     if (widget.singleShot) {
-      _reset();
-      if (mounted) {
-        Navigator.of(context).pop<String>(words);
-      }
+      _speech.stop();
+      _setStatus(
+        status: _VoiceStatus.captured,
+        recognizedText: words,
+        detail: 'Speech captured: "$words"',
+      );
+      await Future.delayed(_statusDisplayDelay);
+      if (!mounted) return;
+      Navigator.of(context).pop<String>(words);
       return;
     }
 
+    String? successDetail;
+    String? destination;
     if (cmd.contains('take me home')) {
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
-      }
+      successDetail = 'Recognized: "$words" — opening home';
+      destination = '/dashboard';
     } else if (cmd.contains('take me to calendar')) {
-      if (mounted) {
-        Navigator.pushNamed(context, '/telehealth');
-      }
+      successDetail = 'Recognized: "$words" — opening calendar';
+      destination = '/calendar';
     } else if (cmd.contains('take me to my tracker')) {
-      if (mounted) {
-        Navigator.pushNamed(context, '/symptomTracker');
-      }
-    } else {
-      _showError('Command not recognized — please try again.');
+      successDetail = 'Recognized: "$words" — opening symptom tracker';
+      destination = '/symptoms';
     }
+
+    if (successDetail != null && destination != null) {
+      _setStatus(
+        status: _VoiceStatus.success,
+        recognizedText: words,
+        detail: successDetail,
+      );
+      await Future.delayed(_statusDisplayDelay);
+      if (!mounted) return;
+
+      context.go(destination);
+      _reset();
+      return;
+    }
+
+    _setStatus(
+      status: _VoiceStatus.fallback,
+      recognizedText: words,
+      detail: 'Recognized: "$words" — command not recognized',
+    );
+    _showError('Command not recognized — please try again.', updateStatus: false);
+    await Future.delayed(_statusDisplayDelay);
+    _reset();
+  }
+
+  Future<void> _finishError(String msg) async {
+    _showError(msg);
+    await Future.delayed(_statusDisplayDelay);
     _reset();
   }
 
@@ -176,13 +290,15 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (txt.trim().isNotEmpty) {
       _process(txt);
     } else {
-      _showError('Listening timed out.');
-      _reset();
+      _finishError('Listening timed out.');
     }
   }
 
-  void _showError(String msg) {
+  void _showError(String msg, {bool updateStatus = true}) {
     if (!mounted) return;
+    if (updateStatus) {
+      _setStatus(status: _VoiceStatus.error, detail: msg);
+    }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -194,6 +310,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       setState(() {
         _isListening = false;
         _wakeDetected = false;
+        _recognizedText = '';
+        _voiceStatus = _VoiceStatus.idle;
+        _statusDetail = '';
       });
     }
   }
@@ -229,6 +348,48 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     super.dispose();
   }
 
+  Widget _buildStatusArea() {
+    return Card(
+      key: const Key('voice_status_area'),
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 96, minWidth: 280),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _phaseLabel(),
+              key: const Key('voice_status_phase'),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _statusColor(),
+              ),
+            ),
+            if (_recognizedText.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Heard: "$_recognizedText"',
+                key: const Key('voice_status_heard'),
+                style: const TextStyle(fontSize: 15),
+              ),
+            ],
+            if (_statusDetail.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                _statusDetail,
+                key: const Key('voice_status_detail'),
+                style: TextStyle(fontSize: 14, color: _statusColor()),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext ctx) {
     return Scaffold(
@@ -252,6 +413,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
                     : 'Processing...',
             style: const TextStyle(fontSize: 18),
           ),
+          _buildStatusArea(),
         ]),
       ),
       floatingActionButton: Builder(
