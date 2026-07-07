@@ -22,13 +22,16 @@ import org.mockito.quality.Strictness;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** Task 2.1 / WBS 3.2.3 — RetrievalScopeService unit tests (FR-AI-1, REQ-SC-7/8). */
@@ -55,6 +58,9 @@ class RetrievalScopeServiceTest {
     @Mock
     private RetrievalConsentProvider consentProvider;
 
+    @Mock
+    private RetrievalScopeAuditService scopeAuditService;
+
     private RetrievalScopeService service;
 
     private User patientUser;
@@ -71,7 +77,8 @@ class RetrievalScopeServiceTest {
                 caregiverPatientLinkService,
                 familyMemberService,
                 sourceExclusionProvider,
-                consentProvider
+                consentProvider,
+                scopeAuditService
         );
 
         patientUser = User.builder()
@@ -104,6 +111,8 @@ class RetrievalScopeServiceTest {
                 .build();
 
         when(sourceExclusionProvider.getExcludedSourceTypes(anyLong())).thenReturn(Set.of());
+        when(scopeAuditService.logScopeDenied(any(), anyLong(), any(), any()))
+                .thenReturn(UUID.fromString("11111111-1111-1111-1111-111111111111"));
     }
 
     @Nested
@@ -279,7 +288,8 @@ class RetrievalScopeServiceTest {
                     caregiverPatientLinkService,
                     familyMemberService,
                     sourceExclusionProvider,
-                    consentProvider
+                    consentProvider,
+                    scopeAuditService
             );
 
             when(patientRepository.findById(PATIENT_ENTITY_ID)).thenReturn(Optional.of(patient));
@@ -305,7 +315,8 @@ class RetrievalScopeServiceTest {
                     caregiverPatientLinkService,
                     familyMemberService,
                     sourceExclusionProvider,
-                    consentProvider
+                    consentProvider,
+                    scopeAuditService
             );
 
             when(patientRepository.findById(PATIENT_ENTITY_ID)).thenReturn(Optional.of(patient));
@@ -353,6 +364,72 @@ class RetrievalScopeServiceTest {
             assertThatThrownBy(() -> service.resolveRetrievalScope(null, PATIENT_ENTITY_ID))
                     .isInstanceOf(UnauthorizedException.class)
                     .hasMessageContaining("not authenticated");
+        }
+    }
+
+    @Nested
+    @DisplayName("Task 2.6 — scope denial audit")
+    class ScopeDenialAudit {
+
+        @Test
+        @DisplayName("audits and attaches auditId when patient is out of scope")
+        void auditsPatientOutOfScope() {
+            Patient otherPatient = Patient.builder()
+                    .id(OTHER_PATIENT_ENTITY_ID)
+                    .user(User.builder().id(50L).email("other@test.com").role(Role.PATIENT).build())
+                    .build();
+            when(patientRepository.findById(OTHER_PATIENT_ENTITY_ID)).thenReturn(Optional.of(otherPatient));
+
+            assertThatThrownBy(() -> service.resolveRetrievalScope(patientUser, OTHER_PATIENT_ENTITY_ID))
+                    .isInstanceOf(ForbiddenScopeException.class)
+                    .satisfies(ex -> {
+                        ForbiddenScopeException denied = (ForbiddenScopeException) ex;
+                        assertThat(denied.getAuditId()).isNotNull();
+                        assertThat(denied.getErrorCode()).isEqualTo(ForbiddenScopeException.ERROR_CODE);
+                        assertThat(denied.getDenialReason()).isEqualTo(ScopeDenialReason.PATIENT_OUT_OF_SCOPE);
+                    });
+
+            verify(scopeAuditService).logScopeDenied(
+                    eq(patientUser),
+                    eq(OTHER_PATIENT_ENTITY_ID),
+                    eq(ScopeDenialReason.PATIENT_OUT_OF_SCOPE),
+                    any());
+        }
+
+        @Test
+        @DisplayName("audits when patient entity is missing")
+        void auditsPatientNotFound() {
+            when(patientRepository.findById(PATIENT_ENTITY_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.resolveRetrievalScope(patientUser, PATIENT_ENTITY_ID))
+                    .isInstanceOf(ForbiddenScopeException.class)
+                    .satisfies(ex -> assertThat(((ForbiddenScopeException) ex).getDenialReason())
+                            .isEqualTo(ScopeDenialReason.PATIENT_NOT_FOUND));
+
+            verify(scopeAuditService).logScopeDenied(
+                    eq(patientUser),
+                    eq(PATIENT_ENTITY_ID),
+                    eq(ScopeDenialReason.PATIENT_NOT_FOUND),
+                    any());
+        }
+
+        @Test
+        @DisplayName("audits when no permitted source types remain")
+        void auditsNoPermittedSourceTypes() {
+            when(patientRepository.findById(PATIENT_ENTITY_ID)).thenReturn(Optional.of(patient));
+            when(sourceExclusionProvider.getExcludedSourceTypes(PATIENT_ENTITY_ID))
+                    .thenReturn(RetrievalRecordType.defaultsForRole(Role.PATIENT));
+
+            assertThatThrownBy(() -> service.resolveRetrievalScope(patientUser, PATIENT_ENTITY_ID))
+                    .isInstanceOf(ForbiddenScopeException.class)
+                    .satisfies(ex -> assertThat(((ForbiddenScopeException) ex).getDenialReason())
+                            .isEqualTo(ScopeDenialReason.NO_PERMITTED_SOURCE_TYPES));
+
+            verify(scopeAuditService).logScopeDenied(
+                    eq(patientUser),
+                    eq(PATIENT_ENTITY_ID),
+                    eq(ScopeDenialReason.NO_PERMITTED_SOURCE_TYPES),
+                    any());
         }
     }
 
