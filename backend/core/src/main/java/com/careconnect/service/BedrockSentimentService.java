@@ -1352,9 +1352,6 @@ Respond with ONLY a JSON object in this exact format, no other text:
       }
       return Map.of();
     }
-    @SuppressWarnings("unchecked")
-    final Map<String, Object> result = objectMapper.convertValue(node, Map.class);
-    return result == null ? Map.of() : result;
   }
 
   /**
