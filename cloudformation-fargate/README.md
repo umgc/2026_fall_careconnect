@@ -24,11 +24,12 @@ Fargate deployment.
 - [Design choices](#design-choices)
 - [Required application contract](#required-application-contract)
 - [Parameter files](#parameter-files)
+- [Repository root (`APP_ROOT`)](#repository-root-app_root)
 - [Example deploy commands](#example-deploy-commands)
 - [macOS / Linux translation](#macos--linux-translation)
 - [Parallel environment pattern](#parallel-environment-pattern)
-- [Student Walkthrough:](#student-walkthrough-cfdemo) `cfdemo`
-- [Teardown:](#teardown-cfdemo) `cfdemo`
+- [Student Walkthrough: `cfdemo`](#student-walkthrough-cfdemo)
+- [Teardown: `cfdemo`](#teardown-cfdemo)
 - [Important safety note](#important-safety-note)
 - [macOS / Linux teardown translation](#macos--linux-teardown-translation)
 - [Common Failure Modes](#common-failure-modes)
@@ -209,7 +210,7 @@ What you are creating:
 2. Open the `Trust relationships` tab
 3. Click `Edit trust policy`
 4. Replace the default trust policy with the GitHub OIDC trust policy from
-  `[GITHUB_ACTIONS_SETUP.md](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)`
+  [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md)
 5. Replace:
   - `<account-id>`
   - branch names if needed
@@ -219,7 +220,7 @@ What you are creating:
 8. Click `Create inline policy`
 9. Open the `JSON` tab
 10. Paste the `iam:PassRole` policy from
-  `[GITHUB_ACTIONS_SETUP.md](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)`
+  [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md)
 11. Replace:
   - `<account-id>`
 12. Save the inline policy
@@ -237,7 +238,7 @@ You will use that value in GitHub as:
 - `AWS_GITHUB_ACTIONS_ROLE_ARN`
 
 The full setup guide is in
-`[GITHUB_ACTIONS_SETUP.md](C:/Dev/SWEN670/2026_spring_careconnect/cloudformation-fargate/GITHUB_ACTIONS_SETUP.md)`.
+[GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md).
 
 ### What each stack owns
 
@@ -309,9 +310,9 @@ The ALB health check path is:
 
 ### Parameter files
 
-Parameter files live under `[parameters](2026_spring_careconnect/cloudformation-fargate/parameters)`.
+Parameter files live under [parameters](./parameters).
 Because JSON does not support inline comments, the detailed parameter guide is
-in `[parameters/README.md](2026_spring_careconnect/cloudformation-fargate/parameters/README.md)`.
+in [parameters/README.md](./parameters/README.md).
 
 For the data stack specifically:
 
@@ -325,6 +326,25 @@ For the data stack specifically:
 scripts or GitHub Actions workflow
 
 
+
+### Repository root (`APP_ROOT`)
+
+Several commands below use **`APP_ROOT`** as the path to your local clone of this
+repository. Set it once per shell session before running those commands:
+
+PowerShell:
+
+```powershell
+# Replace with your clone path (no trailing backslash).
+$APP_ROOT = "<your-clone-path>"
+```
+
+macOS / Linux:
+
+```bash
+# Replace with your clone path (no trailing slash).
+export APP_ROOT="<your-clone-path>"
+```
 
 ### Example deploy commands
 
@@ -406,10 +426,10 @@ aws cloudformation describe-stacks \
   --output text
 ```
 
-Build and push the backend image after packaging the jar (must be done from backend/core of your repository):
+Build and push the backend image after packaging the jar (must be done from `backend/core`; set `APP_ROOT` first — see [Repository root](#repository-root-app_root)):
 
 ```powershell
-cd C:\Dev\SWEN670\2026_spring_careconnect\backend\core
+cd "$APP_ROOT\backend\core"
 .\mvnw.cmd clean package -Pdocker -DskipTests
 
 $REGION = "us-east-1"
@@ -425,7 +445,7 @@ docker push $IMAGE_URI
 macOS / Linux:
 
 ```bash
-cd /path/to/2026_spring_careconnect/backend/core
+cd "$APP_ROOT/backend/core"
 ./mvnw clean package -Pdocker -DskipTests
 
 REGION="us-east-1"
@@ -501,13 +521,13 @@ aws cloudformation describe-stacks \
 Run the frontend against the deployed backend:
 
 ```powershell
-flutter run --dart-define=BACKEND_URL=http://<alb-dns-name>
+flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
 macOS / Linux:
 
 ```bash
-flutter run --dart-define=BACKEND_URL=http://<alb-dns-name>
+flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
 
@@ -525,12 +545,12 @@ Quick shell translation reference:
 - Windows Maven wrapper `.\mvnw.cmd` becomes `./mvnw`
 - PowerShell `Invoke-RestMethod` becomes `curl`
 - PowerShell `Remove-Item Env:...` becomes `unset ...`
-- Windows paths like `C:\Dev\...` become either your own absolute Unix path or
-relative paths from the repo root
+- Set `APP_ROOT` to your local clone path (see [Repository root](#repository-root-app_root)); use `$APP_ROOT\...` on Windows or `$APP_ROOT/...` on macOS/Linux
 
 Minimal `bash` example:
 
 ```bash
+export APP_ROOT="<your-clone-path>"
 export AWS_PROFILE="careconnect-sso"
 aws sso login --profile careconnect-sso
 
@@ -538,8 +558,8 @@ aws cloudformation create-stack \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-networking-cfdemo \
-  --template-body file://$(pwd)/cloudformation-fargate/templates/01-networking.yaml \
-  --parameters file://$(pwd)/cloudformation-fargate/parameters/cfdemo-networking.json \
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/01-networking.yaml \
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-networking.json \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
@@ -568,6 +588,9 @@ separate.
 This is the shortest working path for a second, parallel deployment that does
 not interfere with an existing manual Fargate environment.
 
+Set `APP_ROOT` to your local clone before running the commands below (see
+[Repository root](#repository-root-app_root)).
+
 #### 1. Log in to AWS CLI
 
 ```powershell
@@ -590,8 +613,8 @@ aws sts get-caller-identity --profile careconnect-sso
 
 Replace the placeholder values in:
 
-- `[parameters/cfdemo-data.json](2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-data.json)`
-- `[parameters/cfdemo-service.json](SWEN670/2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-service.json)`
+- [parameters/cfdemo-data.json](./parameters/cfdemo-data.json)
+- [parameters/cfdemo-service.json](./parameters/cfdemo-service.json)
 
 At minimum, set:
 
@@ -604,12 +627,14 @@ At minimum, set:
 #### 3. Create the networking stack
 
 ```powershell
+$APP_ROOT = "<your-clone-path>"   # see Repository root section
+
 aws cloudformation create-stack `
   --profile careconnect-sso `
   --region us-east-1 `
   --stack-name careconnect-networking-cfdemo `
-  --template-body file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\templates\01-networking.yaml `
-  --parameters file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\parameters\cfdemo-networking.json `
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/01-networking.yaml `
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-networking.json `
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete `
@@ -625,8 +650,8 @@ aws cloudformation create-stack \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-networking-cfdemo \
-  --template-body file://$(pwd)/cloudformation-fargate/templates/01-networking.yaml \
-  --parameters file://$(pwd)/cloudformation-fargate/parameters/cfdemo-networking.json \
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/01-networking.yaml \
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-networking.json \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete \
@@ -644,8 +669,8 @@ aws cloudformation create-stack `
   --profile careconnect-sso `
   --region us-east-1 `
   --stack-name careconnect-data-cfdemo `
-  --template-body file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\templates\02-data.yaml `
-  --parameters file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\parameters\cfdemo-data.json `
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/02-data.yaml `
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-data.json `
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete `
@@ -661,8 +686,8 @@ aws cloudformation create-stack \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-data-cfdemo \
-  --template-body file://$(pwd)/cloudformation-fargate/templates/02-data.yaml \
-  --parameters file://$(pwd)/cloudformation-fargate/parameters/cfdemo-data.json \
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/02-data.yaml \
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-data.json \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete \
@@ -680,8 +705,8 @@ aws cloudformation create-stack `
   --profile careconnect-sso `
   --region us-east-1 `
   --stack-name careconnect-platform-cfdemo `
-  --template-body file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\templates\03-platform.yaml `
-  --parameters file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\parameters\cfdemo-platform.json `
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/03-platform.yaml `
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-platform.json `
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete `
@@ -697,8 +722,8 @@ aws cloudformation create-stack \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-platform-cfdemo \
-  --template-body file://$(pwd)/cloudformation-fargate/templates/03-platform.yaml \
-  --parameters file://$(pwd)/cloudformation-fargate/parameters/cfdemo-platform.json \
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/03-platform.yaml \
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-platform.json \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete \
@@ -742,14 +767,14 @@ Expected shape:
 #### 7. Build the backend jar
 
 ```powershell
-cd C:\Dev\SWEN670\2026_spring_careconnect\backend\core
+cd "$APP_ROOT\backend\core"
 .\mvnw.cmd clean package -Pdocker -DskipTests
 ```
 
 macOS / Linux:
 
 ```bash
-cd /path/to/2026_spring_careconnect/backend/core
+cd "$APP_ROOT/backend/core"
 ./mvnw clean package -Pdocker -DskipTests
 ```
 
@@ -804,7 +829,7 @@ Expected image URI:
 #### 9. Update `cfdemo-service.json`
 
 Set `BackendImageUri` in
-`[parameters/cfdemo-service.json](2026_spring_careconnect/cloudformation-fargate/parameters/cfdemo-service.json)`
+[parameters/cfdemo-service.json](./parameters/cfdemo-service.json)
 to the full URI printed in the previous step.
 
 #### 10. Create the service stack
@@ -814,8 +839,8 @@ aws cloudformation create-stack `
   --profile careconnect-sso `
   --region us-east-1 `
   --stack-name careconnect-service-cfdemo `
-  --template-body file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\templates\04-service.yaml `
-  --parameters file://C:\Dev\SWEN670\2026_spring_careconnect\cloudformation-fargate\parameters\cfdemo-service.json `
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/04-service.yaml `
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-service.json `
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete `
@@ -831,8 +856,8 @@ aws cloudformation create-stack \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-service-cfdemo \
-  --template-body file://$(pwd)/cloudformation-fargate/templates/04-service.yaml \
-  --parameters file://$(pwd)/cloudformation-fargate/parameters/cfdemo-service.json \
+  --template-body file://$APP_ROOT/cloudformation-fargate/templates/04-service.yaml \
+  --parameters file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-service.json \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete \
@@ -870,29 +895,131 @@ aws cloudformation describe-stacks \
 #### 12. Test the backend health endpoint
 
 ```powershell
-Invoke-RestMethod "http://<alb-dns-name>/v1/api/test/health"
+Invoke-RestMethod "https://<api-gateway-endpoint>/v1/api/test/health"
 ```
 
 macOS / Linux:
 
 ```bash
-curl http://<alb-dns-name>/v1/api/test/health
+curl https://<api-gateway-endpoint>/v1/api/test/health
 ```
+
+
+
+#### 12a. CORS smoke test (deployed environment)
+
+After the service stack is up, confirm the API Gateway endpoint responds and
+returns CORS headers for your frontend origin.
+
+Set these once for the commands below (replace the placeholders; do not commit
+real URLs if you paste this into notes elsewhere):
+
+PowerShell:
+
+```powershell
+# API Gateway output ApiEndpoint — no trailing slash, no /v1 suffix.
+$BACKEND_URL = "https://<api-gateway-endpoint>"
+# Browser origin for your app (Amplify deploy URL, or http://localhost:3000 for local Flutter web).
+$FRONTEND_URL = "https://<your-frontend-url>"
+```
+
+macOS / Linux:
+
+```bash
+# API Gateway output ApiEndpoint — no trailing slash, no /v1 suffix.
+export BACKEND_URL="https://<api-gateway-endpoint>"
+# Browser origin for your app (Amplify deploy URL, or http://localhost:3000 for local Flutter web).
+export FRONTEND_URL="https://<your-frontend-url>"
+```
+
+To read `ApiEndpoint` from the `cfdemo` service stack:
+
+```powershell
+$BACKEND_URL = (aws cloudformation describe-stacks `
+  --profile careconnect-sso `
+  --region us-east-1 `
+  --stack-name careconnect-service-cfdemo `
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" `
+  --output text).Trim()
+```
+
+macOS / Linux:
+
+```bash
+export BACKEND_URL="$(aws cloudformation describe-stacks \
+  --profile careconnect-sso \
+  --region us-east-1 \
+  --stack-name careconnect-service-cfdemo \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)"
+```
+
+**1. Health check**
+
+```powershell
+curl.exe -s -o NUL -w "health HTTP %{http_code}`n" "$BACKEND_URL/v1/api/test/health"
+```
+
+macOS / Linux:
+
+```bash
+curl -s -o /dev/null -w "health HTTP %{http_code}\n" "$BACKEND_URL/v1/api/test/health"
+```
+
+Expect `health HTTP 200`.
+
+**2. CORS preflight** (browser `OPTIONS` before cross-origin `GET`)
+
+```powershell
+curl.exe -s -D - -o NUL -X OPTIONS "$BACKEND_URL/v1/api/test/health" `
+  -H "Origin: $FRONTEND_URL" `
+  -H "Access-Control-Request-Method: GET"
+```
+
+macOS / Linux:
+
+```bash
+curl -s -D - -o /dev/null -X OPTIONS "$BACKEND_URL/v1/api/test/health" \
+  -H "Origin: $FRONTEND_URL" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expect `HTTP/1.1 200` and response headers including
+`access-control-allow-origin` (API Gateway allows `*` for all origins in the
+current template).
+
+**3. GET with `Origin` header** (simulates a browser cross-origin request)
+
+```powershell
+curl.exe -s -D - -o NUL "$BACKEND_URL/v1/api/test/health" -H "Origin: $FRONTEND_URL"
+```
+
+macOS / Linux:
+
+```bash
+curl -s -D - -o /dev/null "$BACKEND_URL/v1/api/test/health" -H "Origin: $FRONTEND_URL"
+```
+
+Expect `HTTP/1.1 200` and `access-control-allow-origin` in the response headers.
+
+If preflight or GET fail, check that `CorsAllowedList` in your service
+parameters includes your `$FRONTEND_URL` pattern (for direct ECS paths) and that
+the API Gateway stage is deployed (`04-service.yaml` sets `AllowOrigins: '*'`).
 
 
 
 #### 13. Run the frontend against the `cfdemo` backend
 
 ```powershell
-cd C:\Dev\SWEN670\2026_spring_careconnect\frontend
-flutter run --dart-define=BACKEND_URL=http://<alb-dns-name>
+cd "$APP_ROOT\frontend"
+flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
 macOS / Linux:
 
 ```bash
-cd /path/to/2026_spring_careconnect/frontend
-flutter run --dart-define=BACKEND_URL=http://careconnect-cfdemo-alb-953043145.us-east-1.elb.amazonaws.com
+cd "$APP_ROOT/frontend"
+flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
 Do not append `/v1` to `BACKEND_URL`.
@@ -1308,14 +1435,14 @@ not the Spring Boot fat jar used by Docker
 Fix:
 
 ```powershell
-cd C:\Dev\SWEN670\2026_spring_careconnect\backend\core
+cd "$APP_ROOT\backend\core"
 .\mvnw.cmd clean package -Pdocker -DskipTests
 ```
 
 macOS / Linux:
 
 ```bash
-cd /path/to/2026_spring_careconnect/backend/core
+cd "$APP_ROOT/backend/core"
 ./mvnw clean package -Pdocker -DskipTests
 ```
 
@@ -1398,13 +1525,13 @@ Fix:
 Use:
 
 ```powershell
-flutter run --dart-define=BACKEND_URL=http://<alb-dns-name>
+flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
 macOS / Linux:
 
 ```bash
-flutter run --dart-define=BACKEND_URL=http://<alb-dns-name>
+flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
 Do not use:
