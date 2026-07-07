@@ -2,6 +2,9 @@ package com.careconnect.repository.retrieval;
 
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -25,4 +28,17 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     long countByPatientId(Long patientId);
 
     void deleteBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
+
+    /**
+     * Writes a pgvector embedding for an indexed chunk (Task 4.3).
+     *
+     * @param id        chunk primary key
+     * @param embedding pgvector literal, e.g. {@code [0.1,0.2,...]} with
+     *                  {@link com.careconnect.model.retrieval.RetrievalIndexSchema#EMBEDDING_DIMENSION} values
+     */
+    @Modifying
+    @Query(
+            value = "UPDATE retrieval_index_chunk SET embedding = CAST(:embedding AS vector) WHERE id = :id",
+            nativeQuery = true)
+    void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
 }

@@ -47,6 +47,14 @@ docker exec cc_pg_5433 psql -U postgres -d careconnect -c "ALTER USER postgres W
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
+### pgvector requirement (Tasks 1.5 / 1.6)
+
+The local container image `pgvector/pgvector:pg15` is **required** for Ask AI Flyway migrations
+`V2607071920` (vector extension) and `V2607071921` (`retrieval_index_chunk` with FTS + embeddings).
+
+**Production:** Aurora PostgreSQL 15+ must have the `vector` extension enabled before those
+migrations run.
+
 ---
 
 ## 3) Backend Start (Two Modes)

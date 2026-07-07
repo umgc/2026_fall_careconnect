@@ -4,6 +4,7 @@
 -- Per Team E backlog and Hybrid Retrieval Scope design (1536-dim vectors).
 --
 -- Requires PostgreSQL with pgvector installed (local: pgvector/pgvector Docker image).
+-- Production: Aurora PostgreSQL 15+ with the vector extension enabled before this runs.
 -- Related: Task 1.5 retrieval_index_chunk.embedding column.
 
 CREATE EXTENSION IF NOT EXISTS vector;

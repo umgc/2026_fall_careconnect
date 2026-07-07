@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS retrieval_index_chunk (
     consent_scope     VARCHAR(40)   NULL
 );
 
+ALTER TABLE retrieval_index_chunk
+    ADD CONSTRAINT fk_retrieval_chunk_patient
+    FOREIGN KEY (patient_id) REFERENCES patient (id);
+
 -- RBAC scope filter — every retrieval query starts here (FR-AI-1).
 CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id
     ON retrieval_index_chunk (patient_id);
@@ -51,7 +55,7 @@ COMMENT ON TABLE retrieval_index_chunk IS
     'Ask AI hybrid retrieval index chunks (Task 1.5). Scoped by patient_id; record_type aligns with RetrievalRecordType enum.';
 
 COMMENT ON COLUMN retrieval_index_chunk.patient_id IS
-    'Patient entity id (patients.id). Mandatory scope key for every retrieval query (FR-AI-1).';
+    'Patient entity id (patient.id). Mandatory scope key for every retrieval query (FR-AI-1).';
 
 COMMENT ON COLUMN retrieval_index_chunk.record_type IS
     'Canonical source type (e.g. CALL_SUMMARY, TRANSCRIPT_SEGMENT). Matches RetrievalRecordType.name().';
@@ -75,6 +79,7 @@ COMMENT ON COLUMN retrieval_index_chunk.consent_scope IS
     'Caregiver visibility scope at index time: on_consent, auto, or hidden (REQ-SC-8).';
 
 -- Maintain search_vector from chunk_text on write (Task 4.2 FTS precursor).
+-- Task 4.2 follow-up: add Spanish config (to_tsvector('spanish', ...)) for bilingual FTS.
 CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger()
 RETURNS TRIGGER AS $$
 BEGIN

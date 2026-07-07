@@ -28,12 +28,23 @@ class RetrievalIndexChunkMigrationSqlTest {
         assertThat(sql).contains("record_type       VARCHAR(40)   NOT NULL");
         assertThat(sql).contains("chunk_text        TEXT          NOT NULL");
         assertThat(sql).contains("search_vector     TSVECTOR");
-        assertThat(sql).contains("embedding         vector(1536)");
+        assertThat(sql).contains("embedding         vector(" + RetrievalIndexSchema.EMBEDDING_DIMENSION + ")");
+        assertThat(sql).contains("fk_retrieval_chunk_patient");
+        assertThat(sql).contains("REFERENCES patient (id)");
         assertThat(sql).contains("idx_retrieval_chunk_patient_id");
         assertThat(sql).contains("idx_retrieval_chunk_fts");
         assertThat(sql).contains("USING GIN (search_vector)");
         assertThat(sql).contains("idx_retrieval_chunk_embedding");
         assertThat(sql).contains("vector_cosine_ops");
+    }
+
+    @Test
+    @DisplayName("embedding dimension in SQL matches RetrievalIndexSchema")
+    void embeddingDimensionMatchesSchema() throws Exception {
+        String sql = readMigration("V2607071921__create_retrieval_index_chunk.sql");
+
+        assertThat(sql).contains("vector(" + RetrievalIndexSchema.EMBEDDING_DIMENSION + ")");
+        assertThat(RetrievalIndexSchema.EMBEDDING_DIMENSION).isEqualTo(1536);
     }
 
     @Test

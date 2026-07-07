@@ -48,6 +48,19 @@ class RetrievalIndexChunkTest {
     }
 
     @Test
+    @DisplayName("resolveRecordTypeEnum returns empty for unknown stored values")
+    void resolveRecordTypeEnumHandlesUnknownValues() {
+        RetrievalIndexChunk chunk = RetrievalIndexChunk.builder()
+                .patientId(1L)
+                .recordType("NOT_A_REAL_TYPE")
+                .sourceRecordId("x")
+                .chunkText("text")
+                .build();
+
+        assertThat(chunk.resolveRecordTypeEnum()).isEmpty();
+    }
+
+    @Test
     @DisplayName("onCreate populates indexedAt when missing")
     void onCreateSetsIndexedAt() throws Exception {
         RetrievalIndexChunk chunk = RetrievalIndexChunk.builder()

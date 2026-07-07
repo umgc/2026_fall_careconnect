@@ -16,6 +16,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -25,7 +26,7 @@ import java.util.UUID;
  * PostgreSQL-specific columns {@code search_vector} and {@code embedding} are defined in Flyway
  * and maintained or written via native SQL in the indexing pipeline (Tasks 4.2 / 4.3).
  *
- * <p>{@link #patientId} is the patient entity id ({@code patients.id}) and is the mandatory
+ * <p>{@link #patientId} is the patient entity id ({@code patient.id}) and is the mandatory
  * RBAC scope key for every retrieval query (FR-AI-1).
  */
 @Entity
@@ -76,6 +77,20 @@ public class RetrievalIndexChunk {
 
     public RetrievalRecordType getRecordTypeEnum() {
         return recordType == null ? null : RetrievalRecordType.valueOf(recordType);
+    }
+
+    /**
+     * Returns the record type when valid; empty for null or unknown stored values.
+     */
+    public Optional<RetrievalRecordType> resolveRecordTypeEnum() {
+        if (recordType == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(RetrievalRecordType.valueOf(recordType));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
     }
 
     public void setRecordTypeEnum(RetrievalRecordType type) {
