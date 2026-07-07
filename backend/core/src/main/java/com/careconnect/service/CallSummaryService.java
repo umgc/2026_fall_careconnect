@@ -165,6 +165,9 @@ public class CallSummaryService {
     summary.setGeneratedByUserId(generatedByUserId);
     summary.setGeneratedAt(LocalDateTime.now());
     summary.setErrorMessage(errorMessage);
+    summary.setRiskLevel(extractStringField(summaryPayload, "riskLevel"));
+    summary.setCaregiverVisibility(extractCaregiverVisibility(summaryPayload));
+    summary.setSummarizationEngine(extractStringField(summaryPayload, "summarizationEngine"));
     summary.setSummaryJson(toJsonSafe(summaryPayload));
     return summary;
   }
@@ -275,6 +278,37 @@ public class CallSummaryService {
     response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(summary.getCallId()));
     response.put("summary", payload);
     return response;
+  }
+
+  /**
+   * Reads an optional string field from the Bedrock summary payload,
+   * returning null when the field is absent or blank. Preserves
+   * entity nullability for downstream consumers that treat null as
+   * "not classified" (see WBS 3.4.3, 3.4.4).
+   */
+  private static String extractStringField(
+      final Map<String, Object> payload,
+      final String fieldName) {
+    final Object value = payload.get(fieldName);
+    final String result;
+    if (value == null) {
+      result = null;
+    } else {
+      final String trimmed = value.toString().trim();
+      result = trimmed.isEmpty() ? null : trimmed;
+    }
+    return result;
+  }
+
+  /**
+   * Extracts caregiver_visibility from the Bedrock summary payload,
+   * defaulting to on_consent when absent so that caregivers cannot
+   * view the summary unless consent is granted.
+   */
+  private static String extractCaregiverVisibility(
+      final Map<String, Object> payload) {
+    final String raw = extractStringField(payload, "caregiverVisibility");
+    return raw == null ? "on_consent" : raw;
   }
 
   private String toJsonSafe(final Object value) {

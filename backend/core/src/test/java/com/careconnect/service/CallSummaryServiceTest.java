@@ -189,6 +189,61 @@ class CallSummaryServiceTest {
         }
 
         @Test
+        @DisplayName("stores SUCCESS summary and persists riskLevel, caregiverVisibility, and summarizationEngine from Bedrock payload")
+        void generateAndStoreSummary_success_persistsRiskAndVisibilityAndEngine() {
+            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Chest pain");
+            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(5L);
+            when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(true);
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(true);
+            when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
+                    "headline", "Chest pain follow-up",
+                    "overallAssessment", "Patient reported chest pain onset last night.",
+                    "keyConcerns", List.of("Chest pain"),
+                    "recommendedActions", List.of("Refer to urgent care"),
+                    "followUpQuestions", List.of("Any shortness of breath?"),
+                    "riskLevel", "HIGH",
+                    "caregiverVisibility", "auto",
+                    "summarizationEngine", "aws_bedrock:amazon.nova-pro-v1:0"
+            ));
+            when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.generateAndStoreSummary(CALL_ID, 8L, Map.of());
+
+            ArgumentCaptor<CallSummary> captor = ArgumentCaptor.forClass(CallSummary.class);
+            verify(callSummaryRepository).save(captor.capture());
+            CallSummary saved = captor.getValue();
+            assertThat(saved.getRiskLevel()).isEqualTo("HIGH");
+            assertThat(saved.getCaregiverVisibility()).isEqualTo("auto");
+            assertThat(saved.getSummarizationEngine()).isEqualTo("aws_bedrock:amazon.nova-pro-v1:0");
+        }
+
+        @Test
+        @DisplayName("SUCCESS summary defaults caregiverVisibility to on_consent when Bedrock omits it")
+        void generateAndStoreSummary_success_defaultsCaregiverVisibilityWhenAbsent() {
+            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Routine check-in");
+            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(2L);
+            when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
+            when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
+                    "headline", "Routine call",
+                    "overallAssessment", "Stable.",
+                    "keyConcerns", List.of(),
+                    "recommendedActions", List.of(),
+                    "followUpQuestions", List.of()
+            ));
+            when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.generateAndStoreSummary(CALL_ID, 8L, Map.of());
+
+            ArgumentCaptor<CallSummary> captor = ArgumentCaptor.forClass(CallSummary.class);
+            verify(callSummaryRepository).save(captor.capture());
+            CallSummary saved = captor.getValue();
+            assertThat(saved.getRiskLevel()).isNull();
+            assertThat(saved.getCaregiverVisibility()).isEqualTo("on_consent");
+            assertThat(saved.getSummarizationEngine()).isNull();
+        }
+
+        @Test
         @DisplayName("stores ERROR summary when Bedrock summarization throws")
         void generateAndStoreSummary_bedrockThrows_storesError() {
             when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Needs review");
