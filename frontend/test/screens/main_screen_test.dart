@@ -157,6 +157,43 @@ void main() {
   // ---------------------------------------------------------------
 
   group('Basic rendering', () {
+    testWidgets('Team C smoke: renders main shell navigation surfaces',
+        (tester) async {
+      tester.view.physicalSize = const Size(1440, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final config = MainScreenConfig(
+        userRole: 'PATIENT',
+        userId: 1,
+        enablePageAnimation: false,
+        customNavItems: [
+          BottomNavItem(
+            label: 'Home',
+            icon: Icons.home,
+            routeName: 'home',
+            screen: const Scaffold(body: Text('Home Shell')),
+          ),
+          BottomNavItem(
+            label: 'Menu',
+            icon: Icons.menu,
+            routeName: 'menu',
+            screen: const Scaffold(body: Text('Menu Shell')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(_wrap(config: config));
+      await tester.pump();
+
+      expect(find.byType(MainScreen), findsOneWidget);
+      expect(find.byType(PageView), findsOneWidget);
+      expect(find.byType(BottomNavigationBar), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('Home Shell'), findsOneWidget);
+    });
+
     testWidgets('renders a Scaffold', (tester) async {
       tester.view.physicalSize = const Size(1440, 1920);
       tester.view.devicePixelRatio = 1.0;

@@ -4,6 +4,7 @@ import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,23 +25,19 @@ import org.springframework.stereotype.Service;
  * <h2>Transactional contract</h2>
  * <p>Emitters MUST call this service from inside their own
  * {@code @Transactional} method so the outbox row commits or rolls
- * back together with the source-record persistence (transcript
- * segments, summary rows). This service does not open its own
- * transaction; it participates in whatever transaction the caller
- * has open.
+ * back together with the source-record persistence. This service does
+ * not open its own transaction.
  *
  * <h2>Envelope shape</h2>
  * <pre>
  * {
  *   "eventType": "TRANSCRIPT_INDEXED" | "SUMMARY_CREATED" | ...,
  *   "eventId": "uuid",
- *   "occurredAt": "2026-07-03T22:57:00Z",
+ *   "occurredAt": "2026-07-04T02:57:00Z",
  *   "schemaVersion": 1,
  *   "payload": { ... event-specific body from the caller ... }
  * }
  * </pre>
- * The {@code eventId} is generated fresh per emit; consumers use it
- * for idempotent de-duplication.
  */
 @Service
 public class IndexingEventEmitter {
@@ -62,22 +59,31 @@ public class IndexingEventEmitter {
 
     /**
      * Emit a {@code TRANSCRIPT_INDEXED} event after a transcript
-     * segment batch is persisted. Called from within the caller's
-     * transaction so the emit and the segment inserts commit together.
+     * segment batch is persisted (WBS 3.11.1).
      *
-     * @param payload TRANSCRIPT_INDEXED payload body (WBS 3.11.1)
-     * @return the persisted outbox row (mostly useful for tests /
-     *         logging)
+     * @param payload TRANSCRIPT_INDEXED payload body
+     * @return the persisted outbox row
      */
     public IndexingOutboxRow emitTranscriptIndexed(final TranscriptIndexedPayload payload) {
         return emit("TRANSCRIPT_INDEXED", payload);
     }
 
     /**
+     * Emit a {@code SUMMARY_CREATED} event after a call or visit
+     * summary is persisted with {@code status == SUCCESS} (WBS 3.11.5).
+     * Callers guard on status before invoking; per Ravi's contract
+     * NO_TRANSCRIPT and ERROR summaries are not indexed.
+     *
+     * @param payload SUMMARY_CREATED payload body
+     * @return the persisted outbox row
+     */
+    public IndexingOutboxRow emitSummaryCreated(final SummaryCreatedPayload payload) {
+        return emit("SUMMARY_CREATED", payload);
+    }
+
+    /**
      * General-purpose emit hook. Package-private so type-specific
-     * public wrappers (like {@link #emitTranscriptIndexed}) enforce
-     * the correct payload type at compile time. SUMMARY_CREATED will
-     * add its own public wrapper when 3.11.5 lands.
+     * public wrappers enforce the correct payload type at compile time.
      *
      * @param eventType event type discriminator string
      * @param payload   event-specific payload; serialized with the

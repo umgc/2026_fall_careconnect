@@ -4,6 +4,7 @@ import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,7 +29,7 @@ class IndexingEventEmitterTest {
     @BeforeEach
     void setUp() {
         outboxRepository = mock(IndexingOutboxRepository.class);
-        objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         // Repo returns whatever it is asked to save so tests can
         // inspect the row that would be persisted.
         when(outboxRepository.save(any(IndexingOutboxRow.class)))
@@ -122,5 +123,86 @@ class IndexingEventEmitterTest {
         final String secondEventId = objectMapper.readTree(captor.getAllValues().get(1).getPayloadJson())
                 .get("eventId").asText();
         assertThat(firstEventId).isNotEqualTo(secondEventId);
+    }
+
+    @Test
+    void emitSummaryCreated_writesRowWithCorrectEventType() {
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 42L, "call-42", 100L, "SUCCESS",
+                java.time.LocalDateTime.now(), 12, "on_consent",
+                "aws_bedrock:amazon.nova-pro-v1:0", "sha256:abc123");
+
+        emitter.emitSummaryCreated(payload);
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getEventType()).isEqualTo("SUMMARY_CREATED");
+    }
+
+    @Test
+    void emitSummaryCreated_envelope_hasAllRequiredFields() throws Exception {
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 42L, "call-42", 100L, "SUCCESS",
+                java.time.LocalDateTime.now(), 12, "on_consent",
+                "aws_bedrock:amazon.nova-pro-v1:0", "sha256:abc123");
+
+        emitter.emitSummaryCreated(payload);
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        final JsonNode envelope = objectMapper.readTree(captor.getValue().getPayloadJson());
+        assertThat(envelope.get("eventType").asText()).isEqualTo("SUMMARY_CREATED");
+        assertThat(envelope.get("eventId").asText()).isNotBlank();
+        assertThat(envelope.get("occurredAt").asText()).isNotBlank();
+        assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(1);
+        assertThat(envelope.get("payload")).isNotNull();
+    }
+
+    @Test
+    void emitSummaryCreated_payload_carriesAllPassedFields() throws Exception {
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 42L, "call-42", 100L, "SUCCESS",
+                java.time.LocalDateTime.parse("2026-07-04T02:00:00"), 12,
+                "on_consent", "aws_bedrock:amazon.nova-pro-v1:0", "sha256:abc123");
+
+        emitter.emitSummaryCreated(payload);
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        final JsonNode payloadNode = objectMapper.readTree(captor.getValue().getPayloadJson())
+                .get("payload");
+        assertThat(payloadNode.get("episodeType").asText()).isEqualTo("call");
+        assertThat(payloadNode.get("sourceTable").asText()).isEqualTo("call_summaries");
+        assertThat(payloadNode.get("summaryId").asLong()).isEqualTo(42L);
+        assertThat(payloadNode.get("callId").asText()).isEqualTo("call-42");
+        assertThat(payloadNode.get("patientId").asLong()).isEqualTo(100L);
+        assertThat(payloadNode.get("status").asText()).isEqualTo("SUCCESS");
+        assertThat(payloadNode.get("transcriptSegmentCount").asInt()).isEqualTo(12);
+        assertThat(payloadNode.get("caregiverVisibility").asText()).isEqualTo("on_consent");
+        assertThat(payloadNode.get("summarizationEngine").asText())
+                .isEqualTo("aws_bedrock:amazon.nova-pro-v1:0");
+        assertThat(payloadNode.get("contentHash").asText()).isEqualTo("sha256:abc123");
+    }
+
+    @Test
+    void emitSummaryCreated_tolerates_nullPatientId() throws Exception {
+        // patient_id may be null for historic rows that predate the column
+        // (see PR #244); resolved downstream by Ravi's poller for now.
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 42L, "call-42", null, "SUCCESS",
+                java.time.LocalDateTime.now(), 12, "on_consent",
+                "aws_bedrock:amazon.nova-pro-v1:0", "sha256:abc123");
+
+        emitter.emitSummaryCreated(payload);
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        final JsonNode payloadNode = objectMapper.readTree(captor.getValue().getPayloadJson())
+                .get("payload");
+        assertThat(payloadNode.get("patientId").isNull()).isTrue();
     }
 }
