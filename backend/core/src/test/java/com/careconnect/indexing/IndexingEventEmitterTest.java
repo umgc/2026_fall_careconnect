@@ -4,6 +4,7 @@ import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,7 +29,7 @@ class IndexingEventEmitterTest {
     @BeforeEach
     void setUp() {
         outboxRepository = mock(IndexingOutboxRepository.class);
-        objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         // Repo returns whatever it is asked to save so tests can
         // inspect the row that would be persisted.
         when(outboxRepository.save(any(IndexingOutboxRow.class)))
