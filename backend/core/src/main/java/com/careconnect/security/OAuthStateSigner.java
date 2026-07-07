@@ -18,7 +18,9 @@ import java.util.Base64;
 public class OAuthStateSigner {
 
     private static final long STATE_TTL_SECONDS = 600;
+    private static final long START_TOKEN_TTL_SECONDS = 120;
     private static final String HMAC_ALGO = "HmacSHA256";
+    private static final String START_TOKEN_PREFIX = "start";
 
     private final byte[] hmacKey;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -36,72 +38,97 @@ public class OAuthStateSigner {
     }
 
     public String sign(String userId, String returnUrl) {
-        long expiresAtEpoch = Instant.now().getEpochSecond() + STATE_TTL_SECONDS;
+        return buildSignedToken(userId, returnUrl, STATE_TTL_SECONDS, null);
+    }
+
+    /**
+     * Short-lived token for {@code /oauth/google/start}; obtained via authenticated API.
+     */
+    public String signStartToken(String userId, String returnUrl) {
+        return buildSignedToken(userId, returnUrl, START_TOKEN_TTL_SECONDS, START_TOKEN_PREFIX);
+    }
+
+    public ParsedOAuthState verifyStartToken(String startToken) {
+        ParsedOAuthState parsed = verifySignedToken(startToken, START_TOKEN_PREFIX);
+        if (parsed == null) {
+            throw new IllegalArgumentException("Invalid start token");
+        }
+        return parsed;
+    }
+
+    public ParsedOAuthState verify(String state) {
+        ParsedOAuthState parsed = verifySignedToken(state, null);
+        if (parsed == null) {
+            throw new IllegalArgumentException("Invalid state");
+        }
+        return parsed;
+    }
+
+    private String buildSignedToken(String userId, String returnUrl, long ttlSeconds, String prefix) {
+        long expiresAtEpoch = Instant.now().getEpochSecond() + ttlSeconds;
         byte[] nonceBytes = new byte[16];
         secureRandom.nextBytes(nonceBytes);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
-        String payload = userId + "|" + nullToEmpty(returnUrl) + "|" + expiresAtEpoch + "|" + nonce;
-        String signature = signPayload(payload);
+        String payload = buildPayload(userId, returnUrl, expiresAtEpoch, nonce, prefix);
+        String signature = hmacSign(payload);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8))
                 + "." + signature;
     }
 
-    public ParsedOAuthState verify(String state) {
-        if (state == null || state.isBlank()) {
-            throw new IllegalArgumentException("Invalid state: missing");
+    private ParsedOAuthState verifySignedToken(String token, String requiredPrefix) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Invalid token: missing");
         }
-        int dot = state.lastIndexOf('.');
-        if (dot <= 0 || dot == state.length() - 1) {
-            throw new IllegalArgumentException("Invalid state: malformed");
+        int dot = token.lastIndexOf('.');
+        if (dot <= 0 || dot == token.length() - 1) {
+            throw new IllegalArgumentException("Invalid token: malformed");
         }
-        String encodedPayload = state.substring(0, dot);
-        String signature = state.substring(dot + 1);
+        String encodedPayload = token.substring(0, dot);
+        String signature = token.substring(dot + 1);
         String payload = new String(Base64.getUrlDecoder().decode(encodedPayload), StandardCharsets.UTF_8);
-        if (!constantTimeEquals(signPayload(payload), signature)) {
-            throw new IllegalArgumentException("Invalid state: signature mismatch");
+        if (!constantTimeEquals(hmacSign(payload), signature)) {
+            throw new IllegalArgumentException("Invalid token: signature mismatch");
         }
-        String[] parts = payload.split("\\|", 4);
-        if (parts.length != 4) {
-            throw new IllegalArgumentException("Invalid state: payload format");
+        String[] parts = payload.split("\\|", -1);
+        if (parts.length == 5 && START_TOKEN_PREFIX.equals(parts[0])) {
+            if (requiredPrefix == null) {
+                throw new IllegalArgumentException("Invalid token: payload format");
+            }
+            if (!START_TOKEN_PREFIX.equals(requiredPrefix)) {
+                return null;
+            }
+            return parsePayloadParts(parts[1], parts[2], parts[3]);
         }
-        long expiresAtEpoch = Long.parseLong(parts[2]);
-        if (Instant.now().getEpochSecond() > expiresAtEpoch) {
-            throw new IllegalArgumentException("Invalid state: expired");
+        if (parts.length == 4 && requiredPrefix == null) {
+            return parsePayloadParts(parts[0], parts[1], parts[2]);
         }
-        String returnUrl = parts[1].isBlank() ? null : parts[1];
-        return new ParsedOAuthState(parts[0], returnUrl);
+        throw new IllegalArgumentException("Invalid token: payload format");
     }
 
-    /**
-     * Parse legacy unsigned state for backward compatibility during rollout.
-     */
-    public ParsedOAuthState parseLegacy(String state) {
-        if (state == null) {
-            throw new IllegalArgumentException("Invalid state: null");
+    private ParsedOAuthState parsePayloadParts(String userId, String returnUrlPart, String expiresPart) {
+        long expiresAtEpoch = Long.parseLong(expiresPart);
+        if (Instant.now().getEpochSecond() > expiresAtEpoch) {
+            throw new IllegalArgumentException("Invalid token: expired");
         }
-        String userId = null;
-        String returnUrl = null;
-        for (String part : state.split("\\|")) {
-            if (part.startsWith("u:")) {
-                userId = part.substring(2);
-            } else if (part.startsWith("r:")) {
-                returnUrl = part.substring(2);
-            }
-        }
-        if (userId == null || userId.isBlank()) {
-            throw new IllegalArgumentException("Invalid state: missing userId");
-        }
+        String returnUrl = returnUrlPart.isBlank() ? null : returnUrlPart;
         return new ParsedOAuthState(userId, returnUrl);
     }
 
-    public ParsedOAuthState parse(String state) {
-        if (state.contains(".")) {
-            return verify(state);
+    private static String buildPayload(
+            String userId,
+            String returnUrl,
+            long expiresAtEpoch,
+            String nonce,
+            String prefix) {
+        String safeUserId = nullToEmpty(userId);
+        String safeReturnUrl = nullToEmpty(returnUrl);
+        if (prefix == null || prefix.isBlank()) {
+            return safeUserId + "|" + safeReturnUrl + "|" + expiresAtEpoch + "|" + nonce;
         }
-        return parseLegacy(state);
+        return prefix + "|" + safeUserId + "|" + safeReturnUrl + "|" + expiresAtEpoch + "|" + nonce;
     }
 
-    private String signPayload(String payload) {
+    private String hmacSign(String payload) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGO);
             mac.init(new SecretKeySpec(hmacKey, HMAC_ALGO));

@@ -7,6 +7,8 @@ import com.careconnect.model.User;
 import com.careconnect.repository.EmailCredentialRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.OAuthRedirectValidator;
+import com.careconnect.security.OAuthStateSigner;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,8 @@ public class EmailCredentialService {
     private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
+    private final OAuthStateSigner oauthStateSigner;
+    private final OAuthRedirectValidator oauthRedirectValidator;
 
     public EmailConnectionStatus getGmailConnectionStatus(String patientIdentifier) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
@@ -76,6 +80,20 @@ public class EmailCredentialService {
                     googleOAuthService.revokeIfPossible(cred);
                     credRepo.delete(cred);
                 });
+    }
+
+    /**
+     * Issues a short-lived start token after patient-scoped authorization.
+     * The token is consumed by {@code /oauth/google/start} in an external browser.
+     */
+    public String createGmailOAuthStartToken(String patientIdentifier, String returnUrl)
+            throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        User patientUser = resolvePatientUser(patientIdentifier, currentUser);
+        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+
+        String sanitizedReturnUrl = oauthRedirectValidator.sanitizeReturnUrl(returnUrl);
+        return oauthStateSigner.signStartToken(String.valueOf(patientUser.getId()), sanitizedReturnUrl);
     }
 
     private User resolvePatientUser(String patientIdentifier, User currentUser) throws UnauthorizedException {

@@ -58,4 +58,24 @@ class EmailCredentialControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(emailCredentialService).disconnectGmail("patient@example.com");
     }
+
+    @Test
+    void getGmailConnectUrl_returnsSignedStartUrl() throws Exception {
+        when(emailCredentialService.createGmailOAuthStartToken("patient@example.com", "http://localhost:3000/usps-test"))
+                .thenReturn("signed-start-token");
+
+        var request = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(request.getContextPath()).thenReturn("");
+
+        ResponseEntity<com.careconnect.dto.GmailConnectUrlResponse> response = controller.getGmailConnectUrl(
+                request,
+                "patient@example.com",
+                null,
+                "http://localhost:3000/usps-test");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().url()).contains("/oauth/google/start");
+        assertThat(response.getBody().url()).contains("startToken=signed-start-token");
+    }
 }

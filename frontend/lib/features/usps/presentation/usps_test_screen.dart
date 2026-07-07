@@ -16,7 +16,7 @@ class UspsTestScreen extends StatefulWidget {
   State<UspsTestScreen> createState() => _UspsTestScreenState();
 }
 
-class _UspsTestScreenState extends State<UspsTestScreen> {
+class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? digest;
   bool loading = false;
   String? error;
@@ -29,6 +29,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   bool searchLoading = false;
   String? searchError;
   bool _isSearchActive = false;
+  bool _awaitingOAuthReturn = false;
 
   String? _patientQueryValue() {
     final user = Provider.of<UserProvider>(context, listen: false).user;
@@ -54,6 +55,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final oauthError = Uri.base.queryParameters['oauthError'] ??
         Uri.base.queryParameters['error'];
     if (oauthError != null && oauthError.isNotEmpty) {
+      _awaitingOAuthReturn = false;
       setState(() {
         gmailState = _GmailConnectionState.needsReconnect;
         gmailStatusMessage = Uri.decodeComponent(oauthError);
@@ -271,6 +273,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _handleOAuthReturnError();
     _checkGoogleConnection().then((_) {
       if (isGoogleConnected) {
@@ -280,12 +283,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh connection status when coming back from OAuth
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingOAuthReturn) {
+      _awaitingOAuthReturn = false;
       _checkGoogleConnection();
-    });
+    }
   }
 
   Future<void> _clearCache() async {
@@ -324,10 +333,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _connectGoogleAccount() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-
-    if (user == null) {
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in first')),
       );
@@ -335,17 +342,41 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     }
 
     final base = getBackendBaseUrl();
-
-    // Use a platform-safe return URL; Uri.base works on web and mobile.
     final currentUrl = kIsWeb ? Uri.base.toString() : getWebBaseUrl();
-    final authUrl =
-        '$base/oauth/google/start?userId=${Uri.encodeComponent(user.id.toString())}&returnUrl=${Uri.encodeComponent(currentUrl)}';
 
-    final uri = Uri.parse(authUrl);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+    try {
+      final dio = await _authenticatedDio();
+      final resp = await dio.get(
+        '$base/v1/api/email-credentials/gmail/connect-url',
+        queryParameters: {
+          'patientEmail': patientEmail,
+          'returnUrl': currentUrl,
+        },
+      );
+      final connectUrl = resp.data is Map<String, dynamic>
+          ? resp.data['url'] as String?
+          : null;
+      if (connectUrl == null || connectUrl.isEmpty) {
+        throw StateError('Missing Gmail connect URL');
+      }
+
+      _awaitingOAuthReturn = true;
+      final uri = connectUrl.startsWith('http')
+          ? Uri.parse(connectUrl)
+          : Uri.parse('$base$connectUrl');
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        _awaitingOAuthReturn = false;
+        if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open Google authentication')),
+          );
+        }
+      }
+    } catch (e) {
+      _awaitingOAuthReturn = false;
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Google authentication')),
+          const SnackBar(content: Text('Could not start Gmail connection')),
         );
       }
     }
