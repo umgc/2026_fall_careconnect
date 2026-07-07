@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:go_router/go_router.dart';
@@ -88,7 +89,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       debugPrint('Porcupine init failed: ${e.message}');
 
       messenger?.showSnackBar(
-        SnackBar(content: Text('Wake word init error: ${e.message}')),
+        SnackBar(content: Text('${AppLocalizations.of(context)?.voicecommand_wakeWordError}: ${e.message}')),
       );
     } catch (e, st) {
       debugPrint('Unexpected init error: $e\n$st');
@@ -121,23 +122,36 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   String _phaseLabel() {
     switch (_voiceStatus) {
       case _VoiceStatus.idle:
-        return 'Status: Ready';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelReady ?? 'Ready'}';
       case _VoiceStatus.listening:
-        return 'Status: Listening';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_listeningState ?? 'Listening'}';
       case _VoiceStatus.processing:
-        return 'Status: Processing';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_processingState ?? 'Processing'}';
       case _VoiceStatus.success:
-        return 'Status: Command recognized';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelRecognized ?? 'Command recognized'}';
       case _VoiceStatus.captured:
-        return 'Status: Captured';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelCapture ?? 'Captured'}';
       case _VoiceStatus.fallback:
-        return 'Status: Command not recognized';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelNotRecognized ?? 'Command not recognized'}';
       case _VoiceStatus.error:
-        return 'Status: Error';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_phaseLabelError ?? 'Error'}';
       case _VoiceStatus.confirming:
-        return 'Status: Confirm command';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_confirmCommand ?? 'Confirm command'}';
       case _VoiceStatus.clarifying:
-        return 'Status: Clarify command';
+        return '${AppLocalizations.of(context)?.voicecommand_phaseLabelStatus ?? 'Status'}: ${AppLocalizations.of(context)?.voicecommand_clarifyCommand ?? 'Clarify command'}';
+    }
+  }
+
+  String _commandLabelToDisplayText(String commandLabel){
+    switch (commandLabel){
+      case 'Home':
+        return AppLocalizations.of(context)?.voicecommand_commandLabelHome ?? 'Home';
+      case 'Calendar':
+        return AppLocalizations.of(context)?.voicecommand_commandLabelCalendar ?? 'Calendar';
+      case 'Symptom Tracker':
+        return AppLocalizations.of(context)?.voicecommand_commandLabelTracker ?? 'Symptom Tracker';
+      default:
+        return commandLabel;
     }
   }
 
@@ -173,7 +187,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
     if (!mounted || !available) {
       if (!mounted) return;
-      _showError('Speech recognition not available');
+      _showError(AppLocalizations.of(context)?.voicecommand_voiceCommandsUnavailable ?? 'Speech recognition not available');
       _reset();
       return;
     }
@@ -182,7 +196,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     final hasPermission = await _speech.hasPermission;
     if (!mounted || !hasPermission) {
       if (!mounted) return;
-      _showError('Microphone permission denied');
+      _showError(AppLocalizations.of(context)?.voicecommand_micPermissionsDenied ?? 'Microphone permission denied');
       _reset();
       return;
     }
@@ -247,7 +261,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _setStatus(
         status: _VoiceStatus.captured,
         recognizedText: words,
-        detail: 'Speech captured: "$words"',
+        detail: '${AppLocalizations.of(context)?.voicecommand_speechCaptured ?? 'Speech captured'}: "$words"',
       );
       await Future.delayed(_statusDisplayDelay);
       if (!mounted) return;
@@ -262,7 +276,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       final match = exactMatches.first;
       setState(() {
         _pendingDestination = match.destination;
-        _pendingDetail = 'Recognized: "$words" \u2014 open ${match.label}?';
+        _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
         _voiceStatus = _VoiceStatus.confirming;
         _statusDetail = _pendingDetail!;
       });
@@ -274,7 +288,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       setState(() {
         _ambiguousMatches = exactMatches;
         _voiceStatus = _VoiceStatus.clarifying;
-        _statusDetail = 'Multiple matches \u2014 please choose one';
+        _statusDetail = '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
       });
       return;
     }
@@ -288,7 +302,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       setState(() {
         _ambiguousMatches = partialMatches;
         _voiceStatus = _VoiceStatus.clarifying;
-        _statusDetail = 'Multiple matches \u2014 please choose one';
+        _statusDetail = '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
       });
       return;
     }
@@ -298,7 +312,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       final match = partialMatches.first;
       setState(() {
         _pendingDestination = match.destination;
-        _pendingDetail = 'Recognized: "$words" \u2014 open ${match.label}?';
+        _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
         _voiceStatus = _VoiceStatus.confirming;
         _statusDetail = _pendingDetail!;
       });
@@ -308,9 +322,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _setStatus(
       status: _VoiceStatus.fallback,
       recognizedText: words,
-      detail: 'Recognized: "$words" — command not recognized',
+      detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
     );
-    _showError('Command not recognized — please try again.', updateStatus: false);
+    _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.', updateStatus: false);
     await Future.delayed(_statusDisplayDelay);
     _reset();
   }
@@ -331,7 +345,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (txt.trim().isNotEmpty) {
       _process(txt);
     } else {
-      _finishError('Listening timed out.');
+      _finishError(AppLocalizations.of(context)?.voicecommand_voiceTimedOut ?? 'Listening timed out.');
     }
   }
 
@@ -366,7 +380,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     final destination = _pendingDestination!;
     _setStatus(
       status: _VoiceStatus.success,
-      detail: 'Confirmed — navigating',
+      detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} — ${AppLocalizations.of(context)?.voicecommand_onConfirmedCommandNavigate ?? 'navigating'}',
     );
     _pendingDestination = null;
     _pendingDetail = null;
@@ -387,7 +401,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     setState(() {
       _ambiguousMatches = [];
       _pendingDestination = choice.destination;
-      _pendingDetail = 'Selected: ${choice.label} — confirm?';
+      _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_onClarifyCommand ?? 'Selected'}: ${_commandLabelToDisplayText(choice.label)} — ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
       _voiceStatus = _VoiceStatus.confirming;
       _statusDetail = _pendingDetail!;
     });
@@ -406,7 +420,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (text.trim().isNotEmpty) {
         _process(text);
       } else {
-        _showError('No speech detected.');
+        _showError(AppLocalizations.of(context)?.voicecommand_noSpeechDetected ?? 'No speech detected.');
         _reset();
       }
     } else {
@@ -447,7 +461,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             if (_recognizedText.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                'Heard: "$_recognizedText"',
+                '${AppLocalizations.of(context)?.voicecommand_statusAreaHeard ?? 'Heard'}: "$_recognizedText"',
                 key: const Key('voice_status_heard'),
                 style: const TextStyle(fontSize: 15),
               ),
@@ -470,7 +484,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   Widget build(BuildContext ctx) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Voice Commands'),
+        title: Text(AppLocalizations.of(context)?.voicecommand_voiceCommandTitle ?? 'Voice Commands'),
         backgroundColor: Colors.blue.shade900,
       ),
       body: Center(
@@ -483,10 +497,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
           const SizedBox(height: 12),
           Text(
             !_wakeDetected
-                ? (kIsWeb ? 'Tap mic to start' : 'Say wake word or tap mic')
+                ? (kIsWeb ? AppLocalizations.of(context)?.voicecommand_tapMicToStart ?? 'Tap mic to start' : AppLocalizations.of(context)?.voicecommand_wakeWordToStart ?? 'Say wake word or tap mic')
                 : _isListening
-                    ? 'Listening...'
-                    : 'Processing...',
+                    ? '${AppLocalizations.of(context)?.voicecommand_listeningState ?? 'Listening'}...'
+                    : '${AppLocalizations.of(context)?.voicecommand_processingState ?? 'Processing'}...',
             style: const TextStyle(fontSize: 18),
           ),
           _buildStatusArea(),
@@ -515,7 +529,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             key: const Key('voice_confirm_btn'),
             onPressed: _onConfirm,
             icon: const Icon(Icons.check),
-            label: const Text('Confirm'),
+            label: Text(AppLocalizations.of(context)?.voicecommand_confirmButton ?? 'Confirm'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green.shade700,
               foregroundColor: Colors.white,
@@ -526,7 +540,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             key: const Key('voice_cancel_btn'),
             onPressed: _onCancelConfirmation,
             icon: const Icon(Icons.close),
-            label: const Text('Cancel'),
+            label: Text(AppLocalizations.of(context)?.voicecommand_cancelButton ?? 'Cancel'),
           ),
         ],
       ),
@@ -547,7 +561,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
               return ActionChip(
                 key: Key('voice_clarify_${match.destination}'),
                 avatar: const Icon(Icons.arrow_forward, size: 18),
-                label: Text(match.label),
+                label: Text(_commandLabelToDisplayText(match.label)),
                 onPressed: () => _onClarifyChoice(match),
               );
             }).toList(),
@@ -557,7 +571,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             key: const Key('voice_clarify_cancel_btn'),
             onPressed: _onCancelConfirmation,
             icon: const Icon(Icons.close),
-            label: const Text('Cancel'),
+            label: Text(AppLocalizations.of(context)?.voicecommand_cancelButton ?? 'Cancel'),
           ),
         ],
       ),
