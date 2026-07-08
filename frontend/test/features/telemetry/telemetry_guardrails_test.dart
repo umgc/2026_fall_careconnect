@@ -125,7 +125,14 @@ void main() {
       expect(TelemetryGuardrails.allowedEvents, contains('screen_view'));
       expect(TelemetryGuardrails.allowedEvents, contains('button_tap'));
       expect(TelemetryGuardrails.allowedEvents, contains('error_network'));
+      expect(TelemetryGuardrails.allowedEvents, contains('error_timeout'));
       expect(TelemetryGuardrails.allowedEvents, contains('offline_toggled'));
+      expect(TelemetryGuardrails.allowedEvents, contains('feature_use'));
+      expect(TelemetryGuardrails.allowedEvents, contains('sync_started'));
+      expect(TelemetryGuardrails.allowedEvents, contains('sync_completed'));
+      expect(TelemetryGuardrails.allowedEvents, contains('sync_failed'));
+      expect(TelemetryGuardrails.allowedEvents, contains('session_start'));
+      expect(TelemetryGuardrails.allowedEvents, contains('session_end'));
     });
 
     test('blockedKeys contains PII/PHI fields', () {
@@ -144,6 +151,115 @@ void main() {
       );
       expect(result, isNotNull);
       expect(result!['count'], 1);
+    });
+
+    test('feature_use keeps anonymous feature key', () {
+      final result = TelemetryGuardrails.sanitize(
+        'feature_use',
+        {'feature': 'medications_tracker'},
+      );
+      expect(result, isNotNull);
+      expect(result!['feature'], 'medications_tracker');
+    });
+
+    test('sync_started keeps scope and pendingCount', () {
+      final result = TelemetryGuardrails.sanitize(
+        'sync_started',
+        {'scope': 'batch', 'pendingCount': 3},
+      );
+      expect(result, isNotNull);
+      expect(result!['scope'], 'batch');
+      expect(result['pendingCount'], 3);
+    });
+
+    test('sync_completed keeps batch counters', () {
+      final result = TelemetryGuardrails.sanitize(
+        'sync_completed',
+        {
+          'scope': 'batch',
+          'attempted': 2,
+          'succeeded': 1,
+          'failed': 1,
+        },
+      );
+      expect(result, isNotNull);
+      expect(result!['attempted'], 2);
+      expect(result['succeeded'], 1);
+      expect(result['failed'], 1);
+    });
+
+    test('sync_failed keeps scope and failed count', () {
+      final result = TelemetryGuardrails.sanitize(
+        'sync_failed',
+        {'scope': 'single', 'attempted': 1, 'failed': 1},
+      );
+      expect(result, isNotNull);
+      expect(result!['scope'], 'single');
+      expect(result['failed'], 1);
+    });
+
+    test('session lifecycle events keep coarse reason fields', () {
+      final start = TelemetryGuardrails.sanitize(
+        'session_start',
+        {'source': 'cold_start'},
+      );
+      final end = TelemetryGuardrails.sanitize(
+        'session_end',
+        {'reason': 'detached'},
+      );
+
+      expect(start, isNotNull);
+      expect(start!['source'], 'cold_start');
+      expect(end, isNotNull);
+      expect(end!['reason'], 'detached');
+    });
+
+    test('error_timeout keeps anonymous transport metadata', () {
+      final result = TelemetryGuardrails.sanitize(
+        'error_timeout',
+        {
+          'source': 'http',
+          'method': 'GET',
+          'endpoint': 'patients',
+          'timeoutMs': 15000,
+        },
+      );
+      expect(result, isNotNull);
+      expect(result!['source'], 'http');
+      expect(result['method'], 'GET');
+      expect(result['endpoint'], 'patients');
+      expect(result['timeoutMs'], 15000);
+    });
+
+    test('error_network keeps anonymous transport metadata', () {
+      final result = TelemetryGuardrails.sanitize(
+        'error_network',
+        {
+          'source': 'http',
+          'method': 'POST',
+          'endpoint': 'evv',
+          'statusCode': 0,
+          'errorType': 'client',
+        },
+      );
+      expect(result, isNotNull);
+      expect(result!['endpoint'], 'evv');
+      expect(result['statusCode'], 0);
+      expect(result['errorType'], 'client');
+    });
+
+    test('sync event details drop blocked patient identifiers', () {
+      final result = TelemetryGuardrails.sanitize(
+        'sync_started',
+        {
+          'scope': 'single',
+          'pendingCount': 1,
+          'patientId': 42,
+        },
+      );
+      expect(result, isNotNull);
+      expect(result!.containsKey('patientId'), isFalse);
+      expect(result['scope'], 'single');
     });
   });
 }
