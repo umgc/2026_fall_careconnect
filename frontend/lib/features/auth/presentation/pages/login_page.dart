@@ -81,7 +81,7 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Login failed: $e';
+        _error = '${AppLocalizations.of(context)?.login_loginFailedError ?? 'Login failed'}: $e';
       });
     } finally {
       setState(() => _busy = false);
