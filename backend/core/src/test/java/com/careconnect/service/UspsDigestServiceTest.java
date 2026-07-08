@@ -5,6 +5,7 @@ import com.careconnect.model.EmailCredential;
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.USPSDigestCache;
 import com.careconnect.repository.EmailCredentialRepo;
+import com.careconnect.repository.EmailCredentialRepository;
 import com.careconnect.repository.USPSDigestCacheRepo;
 import com.careconnect.security.TokenCryptor;
 import org.junit.jupiter.api.Test;
@@ -84,14 +85,13 @@ class USPSDigestServiceTest {
         cached.setPayloadJson("{\"digestDate\":null,\"mailpieces\":[],\"packages\":[]}");
         cacheStub.nextLookup = Optional.of(cached);
 
-        USPSDigestService service = new USPSDigestService(
+        USPSDigestService service = buildService(
                 emailCredentialRepository(Optional.empty()),
-                cacheStub.asRepo(),
+                cacheStub,
                 new StubGmailClient(),
                 new OutlookClient(),
                 new StubGmailParser(),
-                new OutlookParser(),
-                new TokenCryptor("test-secret-key")
+                new OutlookParser()
         );
 
         Optional<USPSDigest> result = service.latestForUser("user-2");
@@ -731,6 +731,21 @@ class USPSDigestServiceTest {
             GmailParser gmailParser,
             OutlookParser outlookParser
     ) throws Exception {
+        GoogleOAuthService googleOAuthService = new GoogleOAuthService(
+                new org.springframework.web.client.RestTemplate(),
+                (EmailCredentialRepository) Proxy.newProxyInstance(
+                        EmailCredentialRepository.class.getClassLoader(),
+                        new Class[]{EmailCredentialRepository.class},
+                        (proxy, method, args) -> null),
+                new TokenCryptor("unit-test-secret-32-bytes-long!!!")
+        ) {
+            @Override
+            public boolean ensureFreshToken(EmailCredential current) {
+                return current != null
+                        && current.getAccessTokenEnc() != null
+                        && !current.getAccessTokenEnc().isBlank();
+            }
+        };
         return new USPSDigestService(
                 credRepo,
                 cacheStub.asRepo(),
@@ -738,7 +753,8 @@ class USPSDigestServiceTest {
                 outlookClient,
                 gmailParser,
                 outlookParser,
-                new TokenCryptor("unit-test-secret-32-bytes-long!!!")
+                new TokenCryptor("unit-test-secret-32-bytes-long!!!"),
+                googleOAuthService
         );
     }
 

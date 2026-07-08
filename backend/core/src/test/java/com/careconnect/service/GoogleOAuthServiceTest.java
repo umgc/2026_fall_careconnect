@@ -190,16 +190,14 @@ class GoogleOAuthServiceTest {
     class EnsureFreshTokenTests {
 
         @Test
-        @DisplayName("returns current credential when token is still valid")
-        void returnsCurrentWhenStillValid() throws Exception {
+        @DisplayName("returns true when token is still valid")
+        void returnsTrueWhenStillValid() throws Exception {
             final EmailCredential credential = new EmailCredential();
             credential.setAccessTokenEnc(tokenCryptor.encrypt("existing"));
             credential.setRefreshTokenEnc(tokenCryptor.encrypt("refresh-123"));
             credential.setExpiresAt(Instant.now().plusSeconds(600));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
+            assertTrue(service.ensureFreshToken(credential));
             assertNull(savedRef.get(), "Repository save should not be invoked");
             server.verify();
         }
@@ -225,9 +223,7 @@ class GoogleOAuthServiceTest {
                     .andExpect(content().string(org.hamcrest.Matchers.containsString("refresh_token=refresh-321")))
                     .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
+            assertTrue(service.ensureFreshToken(credential));
             final EmailCredential persisted = savedRef.get();
             assertNotNull(persisted, "Repository save should capture entity");
             assertSame(credential, persisted, "Service should update the same credential instance");
@@ -252,10 +248,8 @@ class GoogleOAuthServiceTest {
                     .andExpect(method(HttpMethod.POST))
                     .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
-            assertEquals("refreshed-access", tokenCryptor.decrypt(result.getAccessTokenEnc()));
+            assertTrue(service.ensureFreshToken(credential));
+            assertEquals("refreshed-access", tokenCryptor.decrypt(credential.getAccessTokenEnc()));
             assertNotNull(savedRef.get());
 
             server.verify();
@@ -267,7 +261,6 @@ class GoogleOAuthServiceTest {
             final EmailCredential credential = new EmailCredential();
             credential.setAccessTokenEnc(tokenCryptor.encrypt("almost-stale"));
             credential.setRefreshTokenEnc(tokenCryptor.encrypt("refresh-buffer"));
-            // Expires in 60 seconds - within the 120-second buffer
             credential.setExpiresAt(Instant.now().plusSeconds(60));
 
             final String json = "{\"access_token\": \"fresh-access\"," +
@@ -277,88 +270,74 @@ class GoogleOAuthServiceTest {
                     .andExpect(method(HttpMethod.POST))
                     .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
-            assertEquals("fresh-access", tokenCryptor.decrypt(result.getAccessTokenEnc()));
+            assertTrue(service.ensureFreshToken(credential));
+            assertEquals("fresh-access", tokenCryptor.decrypt(credential.getAccessTokenEnc()));
             assertNotNull(savedRef.get());
 
             server.verify();
         }
 
         @Test
-        @DisplayName("returns current credential when decrypted refresh token is null")
-        void returnsCurrentWhenRefreshTokenDecryptsToNull() throws Exception {
+        @DisplayName("returns false when decrypted refresh token is null")
+        void returnsFalseWhenRefreshTokenDecryptsToNull() throws Exception {
             final EmailCredential credential = new EmailCredential();
             credential.setAccessTokenEnc(tokenCryptor.encrypt("stale"));
-            // Set refreshTokenEnc to null so decrypt returns null
             credential.setRefreshTokenEnc(null);
             credential.setExpiresAt(Instant.now().minusSeconds(5));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
-            assertNull(savedRef.get(), "Should not save when refresh token is unavailable");
+            assertFalse(service.ensureFreshToken(credential));
+            assertNotNull(savedRef.get(), "Should invalidate credential when refresh token is unavailable");
             server.verify();
         }
 
         @Test
-        @DisplayName("returns current credential when decrypted refresh token is blank")
-        void returnsCurrentWhenRefreshTokenIsBlank() throws Exception {
+        @DisplayName("returns false when decrypted refresh token is blank")
+        void returnsFalseWhenRefreshTokenIsBlank() throws Exception {
             final EmailCredential credential = new EmailCredential();
             credential.setAccessTokenEnc(tokenCryptor.encrypt("stale"));
             credential.setRefreshTokenEnc(tokenCryptor.encrypt("   "));
             credential.setExpiresAt(Instant.now().minusSeconds(5));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
-            assertNull(savedRef.get(), "Should not save when refresh token is blank");
+            assertFalse(service.ensureFreshToken(credential));
+            assertNotNull(savedRef.get(), "Should invalidate credential when refresh token is blank");
             server.verify();
         }
 
         @Test
-        @DisplayName("does not update credential when refresh response has no access token")
-        void doesNotUpdateWhenRefreshResponseHasNoAccessToken() throws Exception {
+        @DisplayName("returns false when refresh response has no access token")
+        void returnsFalseWhenRefreshResponseHasNoAccessToken() throws Exception {
             final EmailCredential credential = new EmailCredential();
             credential.setAccessTokenEnc(tokenCryptor.encrypt("old-access"));
             credential.setRefreshTokenEnc(tokenCryptor.encrypt("refresh-no-result"));
             credential.setExpiresAt(Instant.now().minusSeconds(5));
 
-            // Return a response with no access_token
             final String json = "{\"expires_in\": 3600}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
                     .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
-            assertNull(savedRef.get(), "Should not save when access token is null in response");
-            // The original access token enc should remain unchanged
-            assertEquals("old-access", tokenCryptor.decrypt(result.getAccessTokenEnc()));
+            assertFalse(service.ensureFreshToken(credential));
+            assertNotNull(savedRef.get(), "Should invalidate credential when refresh fails");
+            assertNull(credential.getAccessTokenEnc());
 
             server.verify();
         }
 
         @Test
-        @DisplayName("does not update credential when refresh returns null body")
-        void doesNotUpdateWhenRefreshReturnsNullBody() throws Exception {
+        @DisplayName("returns false when refresh returns null body")
+        void returnsFalseWhenRefreshReturnsNullBody() throws Exception {
             final EmailCredential credential = new EmailCredential();
             credential.setAccessTokenEnc(tokenCryptor.encrypt("old-access"));
             credential.setRefreshTokenEnc(tokenCryptor.encrypt("refresh-null-body"));
             credential.setExpiresAt(Instant.now().minusSeconds(5));
 
-            // Return a "null" literal which deserializes to null
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
                     .andRespond(withSuccess("null", MediaType.APPLICATION_JSON));
 
-            final EmailCredential result = service.ensureFreshToken(credential);
-
-            assertSame(credential, result);
-            assertNull(savedRef.get(), "Should not save when token response is null");
+            assertFalse(service.ensureFreshToken(credential));
+            assertNotNull(savedRef.get(), "Should invalidate credential when token response is null");
 
             server.verify();
         }

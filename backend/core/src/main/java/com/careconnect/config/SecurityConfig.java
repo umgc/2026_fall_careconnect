@@ -184,7 +184,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/patient/**").authenticated()
                         .requestMatchers("/api/gamification/**").authenticated()
                         .requestMatchers("/api/websocket/**").authenticated()
-                        .requestMatchers("/api/email-credentials/**").authenticated()
+                        // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
+                        .requestMatchers("/v1/api/email-credentials/**", "/api/email-credentials/**").authenticated()
                         .requestMatchers("/api/v3/calls/**").authenticated()
                         .requestMatchers("/v1/api/**", "/v2/api/**", "/v3/api/**").authenticated()
                         .requestMatchers("/api/**").authenticated()

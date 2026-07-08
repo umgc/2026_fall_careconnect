@@ -32,6 +32,7 @@ public class USPSDigestService {
     private final GmailParser gmailParser;
     private final OutlookParser outlookParser;
     private final TokenCryptor tokenCryptor;
+    private final GoogleOAuthService googleOAuthService;
     private final ObjectMapper om = new ObjectMapper();
 
     public Optional<USPSDigest> latestForUser(String userId) {
@@ -45,13 +46,16 @@ public class USPSDigestService {
 
         // 2) Gmail
         var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
-        if (g.isPresent()) {
-            var at = decrypt(g.get().getAccessTokenEnc());
-            var raw = gmailClient.fetchLatestDigest(at);
-            if (raw.isPresent()) {
-                var digest = gmailParser.toDomain(raw.get());
-                cache(userId, digest);
-                return Optional.of(digest);
+        if (g.isPresent() && googleOAuthService.ensureFreshToken(g.get())) {
+            var refreshed = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+            if (refreshed.isPresent()) {
+                var at = decrypt(refreshed.get().getAccessTokenEnc());
+                var raw = gmailClient.fetchLatestDigest(at);
+                if (raw.isPresent()) {
+                    var digest = gmailParser.toDomain(raw.get());
+                    cache(userId, digest);
+                    return Optional.of(digest);
+                }
             }
         }
 
@@ -89,13 +93,16 @@ public class USPSDigestService {
         }
 
         var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
-        if (g.isPresent()) {
-            var at = decrypt(g.get().getAccessTokenEnc());
-            var raw = gmailClient.fetchDigestForDate(at, date);
-            if (raw.isPresent()) {
-                var digest = gmailParser.toDomain(raw.get());
-                cache(userId, digest, date);
-                return Optional.of(digest);
+        if (g.isPresent() && googleOAuthService.ensureFreshToken(g.get())) {
+            var refreshed = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+            if (refreshed.isPresent()) {
+                var at = decrypt(refreshed.get().getAccessTokenEnc());
+                var raw = gmailClient.fetchDigestForDate(at, date);
+                if (raw.isPresent()) {
+                    var digest = gmailParser.toDomain(raw.get());
+                    cache(userId, digest, date);
+                    return Optional.of(digest);
+                }
             }
         }
 

@@ -8,23 +8,28 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
 import 'package:care_connect_app/services/auth_token_manager.dart';
 
+enum _GmailConnectionState { disconnected, connected, needsReconnect, checking }
+
 class UspsTestScreen extends StatefulWidget {
   const UspsTestScreen({super.key});
   @override
   State<UspsTestScreen> createState() => _UspsTestScreenState();
 }
 
-class _UspsTestScreenState extends State<UspsTestScreen> {
+class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? digest;
   bool loading = false;
   String? error;
   bool isGoogleConnected = false;
+  _GmailConnectionState gmailState = _GmailConnectionState.checking;
+  String? gmailStatusMessage;
   DateTime selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> searchResults = [];
   bool searchLoading = false;
   String? searchError;
   bool _isSearchActive = false;
+  bool _awaitingOAuthReturn = false;
 
   /// Patient identifier for USPS endpoints (email preferred, falls back to database id).
   String? _patientQueryValue() {
@@ -44,6 +49,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
       receiveTimeout: receiveTimeout,
       headers: headers,
     ));
+  }
+
+  void _handleOAuthReturnError() {
+    final oauthError = Uri.base.queryParameters['oauthError'] ??
+        Uri.base.queryParameters['error'];
+    if (oauthError != null && oauthError.isNotEmpty) {
+      _awaitingOAuthReturn = false;
+      setState(() {
+        gmailState = _GmailConnectionState.needsReconnect;
+        gmailStatusMessage = Uri.decodeComponent(oauthError);
+      });
+    }
   }
 
   Future<void> _fetchDigest() async {
@@ -189,30 +206,80 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _checkGoogleConnection() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    if (user == null) return;
-    final encodedUser = Uri.encodeComponent(user.id.toString());
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      setState(() {
+        gmailState = _GmailConnectionState.disconnected;
+        isGoogleConnected = false;
+        gmailStatusMessage = 'Please log in to connect Gmail.';
+      });
+      return;
+    }
 
     final base = getBackendBaseUrl();
+    setState(() => gmailState = _GmailConnectionState.checking);
     try {
-      final dio = Dio();
-      final resp = await dio
-          .get('$base/api/email-credentials/status?userId=$encodedUser');
-      if (resp.statusCode == 200 && resp.data == true) {
-        setState(() => isGoogleConnected = true);
+      final dio = await _authenticatedDio();
+      final resp = await dio.get(
+          '$base/v1/api/email-credentials/status?patientEmail=${Uri.encodeComponent(patientEmail)}');
+      if (resp.statusCode == 200 && resp.data is Map<String, dynamic>) {
+        final data = resp.data as Map<String, dynamic>;
+        final connected = data['connected'] == true;
+        final status = data['status']?.toString() ?? '';
+        final message = data['message']?.toString();
+        setState(() {
+          isGoogleConnected = connected;
+          gmailStatusMessage = message;
+          gmailState = connected
+              ? _GmailConnectionState.connected
+              : (status == 'NEEDS_RECONNECT'
+                  ? _GmailConnectionState.needsReconnect
+                  : _GmailConnectionState.disconnected);
+        });
+      } else {
+        setState(() {
+          isGoogleConnected = false;
+          gmailState = _GmailConnectionState.disconnected;
+        });
       }
     } catch (e) {
-      // Connection check failed, assume not connected
-      setState(() => isGoogleConnected = false);
+      setState(() {
+        isGoogleConnected = false;
+        gmailState = _GmailConnectionState.disconnected;
+        gmailStatusMessage = 'Unable to check Gmail connection status.';
+      });
+    }
+  }
+
+  Future<void> _disconnectGoogleAccount() async {
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) return;
+    final base = getBackendBaseUrl();
+    try {
+      final dio = await _authenticatedDio();
+      await dio.delete(
+          '$base/v1/api/email-credentials/gmail?patientEmail=${Uri.encodeComponent(patientEmail)}');
+      await _checkGoogleConnection();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gmail disconnected.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to disconnect Gmail')),
+        );
+      }
     }
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _handleOAuthReturnError();
     _checkGoogleConnection().then((_) {
-      // Auto-fetch today's digest after checking connection
       if (isGoogleConnected) {
         _fetchDigest();
       }
@@ -220,12 +287,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh connection status when coming back from OAuth
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingOAuthReturn) {
+      _awaitingOAuthReturn = false;
       _checkGoogleConnection();
-    });
+    }
   }
 
   Future<void> _clearCache() async {
@@ -267,10 +340,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _connectGoogleAccount() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-
-    if (user == null) {
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in first')),
       );
@@ -278,17 +349,41 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     }
 
     final base = getBackendBaseUrl();
-
-    // Use a platform-safe return URL; Uri.base works on web and mobile.
     final currentUrl = kIsWeb ? Uri.base.toString() : getWebBaseUrl();
-    final authUrl =
-        '$base/oauth/google/start?userId=${Uri.encodeComponent(user.id.toString())}&returnUrl=${Uri.encodeComponent(currentUrl)}';
 
-    final uri = Uri.parse(authUrl);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+    try {
+      final dio = await _authenticatedDio();
+      final resp = await dio.get(
+        '$base/v1/api/email-credentials/gmail/connect-url',
+        queryParameters: {
+          'patientEmail': patientEmail,
+          'returnUrl': currentUrl,
+        },
+      );
+      final connectUrl = resp.data is Map<String, dynamic>
+          ? resp.data['url'] as String?
+          : null;
+      if (connectUrl == null || connectUrl.isEmpty) {
+        throw StateError('Missing Gmail connect URL');
+      }
+
+      _awaitingOAuthReturn = true;
+      final uri = connectUrl.startsWith('http')
+          ? Uri.parse(connectUrl)
+          : Uri.parse('$base$connectUrl');
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        _awaitingOAuthReturn = false;
+        if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open Google authentication')),
+          );
+        }
+      }
+    } catch (e) {
+      _awaitingOAuthReturn = false;
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Google authentication')),
+          const SnackBar(content: Text('Could not start Gmail connection')),
         );
       }
     }
@@ -633,35 +728,47 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isGoogleConnected
-                          ? '✅ Google account connected! You can now fetch USPS digests automatically.'
-                          : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
+                      'CareConnect reads USPS Informed Delivery emails from Gmail using read-only access. We never send, delete, or modify your email.',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      gmailStatusMessage ??
+                          (gmailState == _GmailConnectionState.connected
+                              ? 'Google account connected. You can fetch USPS digests automatically.'
+                              : gmailState == _GmailConnectionState.needsReconnect
+                                  ? 'Gmail access expired. Reconnect to continue syncing mail.'
+                                  : 'Connect your Google account to automatically fetch USPS digests from Gmail.'),
                       style: TextStyle(
-                        color: isGoogleConnected ? Colors.green : Colors.grey,
+                        color: gmailState == _GmailConnectionState.connected
+                            ? Colors.green
+                            : gmailState == _GmailConnectionState.needsReconnect
+                                ? Colors.orange
+                                : Colors.grey,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    if (!isGoogleConnected)
+                    if (gmailState != _GmailConnectionState.connected)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.link),
-                          label: const Text('Connect Google Account'),
+                          label: Text(gmailState ==
+                                  _GmailConnectionState.needsReconnect
+                              ? 'Reconnect Google Account'
+                              : 'Connect Google Account'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
                           ),
                         ),
                       )
-                    else
+                    else ...[
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: () {
-                            setState(() => isGoogleConnected = false);
-                            _connectGoogleAccount();
-                          },
+                          onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.refresh),
                           label: const Text('Reconnect Google Account'),
                           style: OutlinedButton.styleFrom(
@@ -669,6 +776,16 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: _disconnectGoogleAccount,
+                          icon: const Icon(Icons.link_off),
+                          label: const Text('Disconnect Gmail'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -92,24 +92,73 @@ public class GoogleOAuthService {
         }
     }
 
-    // refresh utility
-    public EmailCredential ensureFreshToken(EmailCredential current) {
-        if (current.getExpiresAt() != null &&
-                current.getExpiresAt().isAfter(Instant.now().plusSeconds(120))) {
-            return current; // still fresh
+    // refresh utility — returns true when a usable access token is available
+    public boolean ensureFreshToken(EmailCredential current) {
+        if (current == null) {
+            return false;
+        }
+        if (hasUsableAccessToken(current)) {
+            return true;
         }
 
-        String refresh = tokenCryptor.decrypt(current.getRefreshTokenEnc());
-        if (refresh == null || refresh.isBlank()) return current;
+        String refreshEnc = current.getRefreshTokenEnc();
+        if (refreshEnc == null || refreshEnc.isBlank()) {
+            invalidateCredential(current);
+            return false;
+        }
+
+        String refresh = tokenCryptor.decrypt(refreshEnc);
+        if (refresh == null || refresh.isBlank()) {
+            invalidateCredential(current);
+            return false;
+        }
 
         GoogleTokenResponse token = postForToken(formForRefresh(refresh));
-
         if (token != null && token.accessToken() != null) {
             current.setAccessTokenEnc(tokenCryptor.encrypt(token.accessToken()));
             current.setExpiresAt(token.computeExpiryFromNow());
             credRepo.save(current);
+            return true;
         }
-        return current;
+
+        invalidateCredential(current);
+        return false;
+    }
+
+    public boolean hasUsableAccessToken(EmailCredential credential) {
+        if (credential == null || credential.getAccessTokenEnc() == null || credential.getAccessTokenEnc().isBlank()) {
+            return false;
+        }
+        Instant expiresAt = credential.getExpiresAt();
+        return expiresAt != null && expiresAt.isAfter(Instant.now().plusSeconds(120));
+    }
+
+    public void revokeIfPossible(EmailCredential credential) {
+        if (credential == null) {
+            return;
+        }
+        try {
+            String refreshEnc = credential.getRefreshTokenEnc();
+            if (refreshEnc != null && !refreshEnc.isBlank()) {
+                String refresh = tokenCryptor.decrypt(refreshEnc);
+                if (refresh != null && !refresh.isBlank()) {
+                    MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                    form.add("token", refresh);
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+                    http.postForEntity("https://oauth2.googleapis.com/revoke", new HttpEntity<>(form, headers), String.class);
+                }
+            }
+        } catch (Exception ignored) {
+            // Best-effort revoke; local deletion still removes app access.
+        }
+    }
+
+    private void invalidateCredential(EmailCredential current) {
+        current.setAccessTokenEnc(null);
+        current.setRefreshTokenEnc(null);
+        current.setExpiresAt(Instant.EPOCH);
+        credRepo.save(current);
     }
 
     private GoogleTokenResponse postForToken(MultiValueMap<String, String> form) {
