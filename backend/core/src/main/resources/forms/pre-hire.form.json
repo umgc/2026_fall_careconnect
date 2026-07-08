@@ -1,0 +1,99 @@
+{
+  "formType": "PRE_HIRE",
+  "title": "Pre-Hire Authorizations and Acknowledgements",
+  "description": "Conditional-offer pre-hire packet: background-check authorization, drug-screen consent, and policy acknowledgements completed before the first day of work.",
+  "issuingAuthority": "CareConnect HR / Compliance",
+  "version": "1.0.0",
+  "effectiveDate": "2026-01-01",
+  "sourceDocument": {
+    "name": "Pre-Hire Authorization Packet",
+    "formNumber": "HR-PH-01",
+    "edition": "2026.1"
+  },
+  "fileAttachment": {
+    "category": "ONBOARDING_FORM",
+    "generatesPdf": true,
+    "supportingDocumentCategories": ["HIRING_DOCUMENT", "CONSENT_FORM"]
+  },
+  "sections": [
+    {
+      "id": "candidate",
+      "title": "Candidate Information",
+      "order": 0,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "full_legal_name", "label": "Full legal name", "fieldType": "TEXT", "required": true, "order": 0,
+          "sourceMapping": { "documentField": "Full Legal Name", "page": 1 } },
+        { "id": "date_of_birth", "label": "Date of birth", "fieldType": "DATE", "required": true, "order": 1, "sensitive": true,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date of Birth", "page": 1 } },
+        { "id": "offer_position", "label": "Position offered", "fieldType": "TEXT", "required": true, "order": 2,
+          "sourceMapping": { "documentField": "Position Offered", "page": 1 } }
+      ]
+    },
+    {
+      "id": "background_check",
+      "title": "Background Check Authorization (FCRA)",
+      "order": 1,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "fcra_disclosure_ack", "label": "I have read the stand-alone FCRA disclosure", "fieldType": "CHECKBOX", "required": true, "order": 0,
+          "validations": [{ "type": "CHECKED" }],
+          "sourceMapping": { "documentField": "FCRA Disclosure acknowledgement", "page": 1 } },
+        { "id": "background_authorize", "label": "I authorize CareConnect to obtain consumer/criminal background reports", "fieldType": "CHECKBOX", "required": true, "order": 1,
+          "validations": [{ "type": "CHECKED", "message": "Background-check authorization is required." }],
+          "sourceMapping": { "documentField": "Background check authorization", "page": 1 } },
+        { "id": "ssn", "label": "Social Security Number (for screening)", "fieldType": "SSN", "required": true, "order": 2, "sensitive": true,
+          "validations": [{ "type": "SSN" }],
+          "sourceMapping": { "documentField": "SSN", "page": 1 } }
+      ]
+    },
+    {
+      "id": "drug_screen",
+      "title": "Drug Screening Consent",
+      "order": 2,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "drug_screen_consent", "label": "I consent to pre-employment drug screening", "fieldType": "CHECKBOX", "required": true, "order": 0,
+          "validations": [{ "type": "CHECKED" }],
+          "sourceMapping": { "documentField": "Drug screen consent", "page": 1 } }
+      ]
+    },
+    {
+      "id": "policy_acknowledgements",
+      "title": "Policy Acknowledgements",
+      "order": 3,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "ack_handbook", "label": "I acknowledge receipt of the Employee Handbook", "fieldType": "CHECKBOX", "required": true, "order": 0,
+          "validations": [{ "type": "CHECKED" }],
+          "sourceMapping": { "documentField": "Handbook acknowledgement", "page": 2 } },
+        { "id": "ack_hipaa", "label": "I acknowledge the HIPAA confidentiality policy", "fieldType": "CHECKBOX", "required": true, "order": 1,
+          "validations": [{ "type": "CHECKED" }],
+          "sourceMapping": { "documentField": "HIPAA acknowledgement", "page": 2 } },
+        { "id": "at_will_ack", "label": "I understand employment is at-will", "fieldType": "CHECKBOX", "required": true, "order": 2,
+          "validations": [{ "type": "CHECKED" }],
+          "sourceMapping": { "documentField": "At-will acknowledgement", "page": 2 } }
+      ]
+    },
+    {
+      "id": "signature",
+      "title": "Signature",
+      "order": 4,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "signature", "label": "Candidate signature", "fieldType": "SIGNATURE", "required": true, "order": 0,
+          "validations": [{ "type": "REQUIRED" }],
+          "sourceMapping": { "documentField": "Signature", "page": 2 } },
+        { "id": "signature_date", "label": "Date", "fieldType": "DATE", "required": true, "order": 1,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date", "page": 2 } }
+      ]
+    }
+  ]
+}

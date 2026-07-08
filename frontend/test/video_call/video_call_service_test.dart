@@ -17,6 +17,9 @@
 // maxBufferedTranscriptSegments = 120;`) and update the references below.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'dart:convert';
 import 'package:care_connect_app/services/video_call_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -638,5 +641,73 @@ void main() {
         svc.dispose();
       },
     );
+  });
+
+  // =========================================================================
+  // GROUP: Conference participant tracking
+  // =========================================================================
+  group('Conference participant tracking (L8a)', () {
+    late VideoCallService service;
+
+    setUp(() {
+      service = VideoCallService();
+    });
+
+    tearDown(() {
+      service.dispose();
+    });
+
+    test('trackParticipant_accumulatesIds', () {
+      service.trackParticipant('user-2');
+      service.trackParticipant('user-4');
+      service.trackParticipant('user-2');
+
+      expect(service.participantUserIdsForTest, equals({'user-2', 'user-4'}));
+    });
+
+    test('trackParticipant_ignoresBlankIds', () {
+      service.trackParticipant('  ');
+      service.trackParticipant('user-3');
+
+      expect(service.participantUserIdsForTest, equals({'user-3'}));
+    });
+
+    test('endCall_sendsParticipantUserIdsInBody', () async {
+      Map<String, dynamic>? endBody;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: 'user-1',
+          jwtToken: 'tok',
+          enablePatientSentimentCapture: false,
+        );
+        await service.joinCall(
+          callId: 'call-x',
+          otherPartyId: 'user-2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        service.trackParticipant('user-4');
+        await service.endCall();
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/end')) {
+            endBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return http.Response('{"status":"ended"}', 200);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      expect(endBody, isNotNull);
+      expect(endBody!['participantUserIds'], containsAll(['user-2', 'user-4']));
+      expect(endBody!['otherPartyId'], 'user-2');
+    });
   });
 }

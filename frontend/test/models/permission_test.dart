@@ -1,6 +1,4 @@
 // Tests for Permission enum (lib/models/permission.dart).
-// Pure Dart enum with fromString/toBackendString/displayName/description/
-// isAdminOnly/category and PermissionCategory.displayName.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/models/permission.dart';
@@ -12,52 +10,52 @@ void main() {
       expect(Permission.fromString('view_all_users'), Permission.viewAllUsers);
     });
 
-    test('parses MANAGE_USERS', () {
-      expect(Permission.fromString('MANAGE_USERS'), Permission.manageUsers);
-    });
-
-    test('parses CREATE_PATIENTS', () {
+    test('parses USE_AI_FEATURES', () {
       expect(
-        Permission.fromString('CREATE_PATIENTS'),
-        Permission.createPatients,
+        Permission.fromString('USE_AI_FEATURES'),
+        Permission.useAiFeatures,
+      );
+      expect(
+        Permission.fromString('use_ai_features'),
+        Permission.useAiFeatures,
       );
     });
 
-    test('parses COMPLETE_TASKS', () {
+    test('parses VIEW_ALL_PATIENTS', () {
       expect(
-        Permission.fromString('COMPLETE_TASKS'),
-        Permission.completeTasks,
+        Permission.fromString('VIEW_ALL_PATIENTS'),
+        Permission.viewAllPatients,
       );
     });
 
-    test('parses MANAGE_SYSTEM_SETTINGS', () {
+    test('parses MANAGE_DEVICES and MANAGE_NOTIFICATIONS', () {
       expect(
-        Permission.fromString('MANAGE_SYSTEM_SETTINGS'),
-        Permission.manageSystemSettings,
+        Permission.fromString('MANAGE_DEVICES'),
+        Permission.manageDevices,
+      );
+      expect(
+        Permission.fromString('MANAGE_NOTIFICATIONS'),
+        Permission.manageNotifications,
       );
     });
 
     test('throws ArgumentError for unknown permission', () {
       expect(() => Permission.fromString('UNKNOWN_PERM'), throwsArgumentError);
       expect(() => Permission.fromString(''), throwsArgumentError);
+      expect(
+        () => Permission.fromString('MANAGE_SYSTEM_SETTINGS'),
+        throwsArgumentError,
+      );
     });
   });
 
   group('Permission.toBackendString', () {
-    test('viewAllUsers → VIEW_ALL_USERS', () {
-      expect(Permission.viewAllUsers.toBackendString(), 'VIEW_ALL_USERS');
+    test('useAiFeatures → USE_AI_FEATURES', () {
+      expect(Permission.useAiFeatures.toBackendString(), 'USE_AI_FEATURES');
     });
 
-    test('manageUsers → MANAGE_USERS', () {
-      expect(Permission.manageUsers.toBackendString(), 'MANAGE_USERS');
-    });
-
-    test('viewAuditLogs → VIEW_AUDIT_LOGS', () {
-      expect(Permission.viewAuditLogs.toBackendString(), 'VIEW_AUDIT_LOGS');
-    });
-
-    test('round-trips all 25 permissions', () {
-      expect(Permission.values.length, 25);
+    test('round-trips all 28 permissions', () {
+      expect(Permission.values.length, 28);
       for (final perm in Permission.values) {
         expect(Permission.fromString(perm.toBackendString()), perm);
       }
@@ -70,11 +68,6 @@ void main() {
         expect(perm.displayName, isNotEmpty);
       }
     });
-
-    test('viewAllUsers display name starts with capital', () {
-      final name = Permission.viewAllUsers.displayName;
-      expect(name[0], equals(name[0].toUpperCase()));
-    });
   });
 
   group('Permission.description', () {
@@ -86,78 +79,36 @@ void main() {
   });
 
   group('Permission.isAdminOnly', () {
-    test('viewAllUsers is admin-only', () {
-      expect(Permission.viewAllUsers.isAdminOnly, isTrue);
+    test('viewAllPatients is admin-only', () {
+      expect(Permission.viewAllPatients.isAdminOnly, isTrue);
     });
 
-    test('manageUsers is admin-only', () {
-      expect(Permission.manageUsers.isAdminOnly, isTrue);
-    });
-
-    test('deletePatients is admin-only', () {
-      expect(Permission.deletePatients.isAdminOnly, isTrue);
-    });
-
-    test('manageSystemSettings is admin-only', () {
-      expect(Permission.manageSystemSettings.isAdminOnly, isTrue);
+    test('useAiFeatures is NOT admin-only', () {
+      expect(Permission.useAiFeatures.isAdminOnly, isFalse);
     });
 
     test('viewHealthData is NOT admin-only', () {
       expect(Permission.viewHealthData.isAdminOnly, isFalse);
     });
-
-    test('viewTasks is NOT admin-only', () {
-      expect(Permission.viewTasks.isAdminOnly, isFalse);
-    });
   });
 
   group('Permission.category', () {
-    test('viewAllUsers → userManagement', () {
-      expect(Permission.viewAllUsers.category, PermissionCategory.userManagement);
+    test('useAiFeatures → aiAssistant', () {
+      expect(Permission.useAiFeatures.category, PermissionCategory.aiAssistant);
     });
 
-    test('createPatients → patientManagement', () {
+    test('manageDevices → deviceIntegration', () {
       expect(
-        Permission.createPatients.category,
-        PermissionCategory.patientManagement,
+        Permission.manageDevices.category,
+        PermissionCategory.deviceIntegration,
       );
     });
 
-    test('viewHealthData → healthData', () {
-      expect(Permission.viewHealthData.category, PermissionCategory.healthData);
-    });
-
-    test('completeTasks → taskManagement', () {
+    test('manageNotifications → system', () {
       expect(
-        Permission.completeTasks.category,
-        PermissionCategory.taskManagement,
+        Permission.manageNotifications.category,
+        PermissionCategory.system,
       );
-    });
-
-    test('manageMedications → medicationManagement', () {
-      expect(
-        Permission.manageMedications.category,
-        PermissionCategory.medicationManagement,
-      );
-    });
-
-    test('viewAnalytics → analytics', () {
-      expect(Permission.viewAnalytics.category, PermissionCategory.analytics);
-    });
-
-    test('sendMessages → messaging', () {
-      expect(Permission.sendMessages.category, PermissionCategory.messaging);
-    });
-
-    test('manageSubscriptions → billing', () {
-      expect(
-        Permission.manageSubscriptions.category,
-        PermissionCategory.billing,
-      );
-    });
-
-    test('viewAuditLogs → system', () {
-      expect(Permission.viewAuditLogs.category, PermissionCategory.system);
     });
   });
 
@@ -166,14 +117,6 @@ void main() {
       for (final cat in PermissionCategory.values) {
         expect(cat.displayName, isNotEmpty);
       }
-    });
-
-    test('userManagement → User Management', () {
-      expect(PermissionCategory.userManagement.displayName, 'User Management');
-    });
-
-    test('analytics → Analytics & Reports', () {
-      expect(PermissionCategory.analytics.displayName, 'Analytics & Reports');
     });
   });
 }

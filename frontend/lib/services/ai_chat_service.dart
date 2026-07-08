@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_service.dart';
 import '../config/env_constant.dart';
@@ -15,7 +16,7 @@ class AIChatService {
     String? conversationId,
     String chatType = 'GENERAL_SUPPORT',
     String? title,
-    String preferredModel = 'deepseek-chat',
+    String? preferredModel,
     double temperature = 0.7,
     int maxTokens = 1000,
     bool includeVitals = true,
@@ -37,7 +38,8 @@ class AIChatService {
         if (conversationId != null) 'conversationId': conversationId,
         'chatType': chatType,
         if (title != null) 'title': title,
-        'preferredModel': preferredModel,
+        if (preferredModel != null && preferredModel.trim().isNotEmpty)
+          'preferredModel': preferredModel,
         'temperature': temperature,
         'maxTokens': maxTokens,
         'includeVitals': includeVitals,
@@ -78,30 +80,42 @@ class AIChatService {
           'success': false,
           'error': 'Authentication failed. Please log in again.',
           'response': 'Your session has expired. Please log in again to continue chatting.',
+          'aiResponse': 'Your session has expired. Please log in again to continue chatting.',
         };
       } else if (response.statusCode == 403) {
         return {
           'success': false,
           'error': 'Access denied.',
           'response': 'You don\'t have permission to access this chat feature.',
+          'aiResponse': 'You don\'t have permission to access this chat feature.',
         };
       } else if (response.statusCode == 429) {
         return {
           'success': false,
           'error': 'Rate limit exceeded.',
           'response': 'You\'re sending messages too quickly. Please wait a moment and try again.',
+          'aiResponse': 'You\'re sending messages too quickly. Please wait a moment and try again.',
         };
       } else if (response.statusCode >= 500) {
+        final serverError = _extractServerErrorMessage(response.body);
+        final unavailableMessage = kDebugMode
+            ? 'The AI service is temporarily unavailable at $_baseUrl. Please verify BACKEND_URL and try again.'
+            : 'The AI service is temporarily unavailable. Please try again in a few minutes.';
         return {
           'success': false,
           'error': 'Server error: ${response.statusCode}',
-          'response': 'The AI service is temporarily unavailable. Please try again in a few minutes.',
+          'errorMessage': serverError,
+          'response': serverError ?? unavailableMessage,
+          'aiResponse': serverError ?? unavailableMessage,
         };
       } else {
+        final serverError = _extractServerErrorMessage(response.body);
         return {
           'success': false,
           'error': 'Unexpected error: ${response.statusCode}',
-          'response': 'An unexpected error occurred. Please try again.',
+          'errorMessage': serverError,
+          'response': serverError ?? 'An unexpected error occurred. Please try again.',
+          'aiResponse': serverError ?? 'An unexpected error occurred. Please try again.',
         };
       }
     } on http.ClientException catch (e) {
@@ -109,20 +123,46 @@ class AIChatService {
         'success': false,
         'error': 'Network error: $e',
         'response': 'Unable to connect to the AI service. Please check your internet connection and try again.',
+        'aiResponse': 'Unable to connect to the AI service. Please check your internet connection and try again.',
       };
     } on FormatException catch (e) {
       return {
         'success': false,
         'error': 'Invalid response format: $e',
         'response': 'Received an unexpected response from the server. Please try again.',
+        'aiResponse': 'Received an unexpected response from the server. Please try again.',
       };
     } catch (e) {
       return {
         'success': false,
         'error': 'Failed to send message: $e',
         'response': 'Sorry, I encountered an error. Please try again later.',
+        'aiResponse': 'Sorry, I encountered an error. Please try again later.',
       };
     }
+  }
+
+  static String? _extractServerErrorMessage(String responseBody) {
+    try {
+      final parsed = jsonDecode(responseBody);
+      if (parsed is Map<String, dynamic>) {
+        final fromErrorMessage = parsed['errorMessage'];
+        if (fromErrorMessage is String && fromErrorMessage.trim().isNotEmpty) {
+          return fromErrorMessage;
+        }
+        final fromError = parsed['error'];
+        if (fromError is String && fromError.trim().isNotEmpty) {
+          return fromError;
+        }
+        final fromMessage = parsed['message'];
+        if (fromMessage is String && fromMessage.trim().isNotEmpty) {
+          return fromMessage;
+        }
+      }
+    } catch (_) {
+      // Ignore non-JSON error bodies.
+    }
+    return null;
   }
 
   /// Clear a conversation from the backend

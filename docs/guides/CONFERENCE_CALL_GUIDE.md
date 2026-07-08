@@ -1,17 +1,23 @@
 # Conference Call (Add Participant) — Implementation Guide
 
+Caregivers can add care-circle members to an active Chime video call.
+
+For local setup, API smoke tests, and ECS notes, see [TEAM_A_VIDEO_CALL_QUICKSTART.md](./TEAM_A_VIDEO_CALL_QUICKSTART.md).
+
 ## Overview
 
 A caregiver in an active call can add another caregiver or a family member from the patient's care circle to the call. The invited person receives the same in-app popup that any incoming call triggers. Once they accept, they join the existing Chime meeting and their video tile appears automatically for all participants.
 
-**Who can invite:** Caregiver only
-**Who can be invited:** Any CAREGIVER or FAMILY_MEMBER with an active link to the patient in the call
-**Who cannot be invited:** Another PATIENT
+**Who can invite:** Caregiver only  
+**Who can be invited:** Any CAREGIVER or FAMILY_MEMBER with an active link to the patient in the call  
+**Who cannot be invited:** Another PATIENT  
 **Sentiment analysis:** Unchanged — patient sentiment only, same as 1:1 calls
 
 ---
 
-## Architecture
+## Architecture (Pattern A)
+
+Invite is **notify-only**. Chime `createAttendee` runs on **`POST /join`**, not on invite. This avoids duplicate attendees when the invitee accepts.
 
 ```
 Caregiver taps "Add Participant"
@@ -20,13 +26,23 @@ Caregiver taps "Add Participant"
 
 Caregiver selects a person
   → Flutter: POST /api/v3/calls/{callId}/invite  { targetUserId }
-  ← Backend: createAttendee() on existing Chime meeting
-           + WebSocket "incoming-video-call" (isConferenceInvite: true) → invitee
+  ← Backend: WebSocket "incoming-video-call" (isConferenceInvite: true) if invitee is online
+           OR SMS via SnsService if invitee is offline and has a phone number on file
+           (no createAttendee on invite)
 
 Invitee sees "Joining Existing Call" popup
-  → accepts → Flutter: POST /api/v3/calls/{callId}/join  (existing endpoint, unchanged)
+  → accepts → Flutter: POST /api/v3/calls/{callId}/join
+  ← Backend: createAttendee() + cached join credentials (idempotent re-join)
   ← Chime SDK: new video tile appears for all participants automatically
 ```
+
+### End-call and dismiss (3-party)
+
+When the meeting ends (`POST /{callId}/end` with `shouldEndMeeting`):
+
+- Backend notifies **all active participants** plus **pending invitees** (invited but never joined) via `call-ended` WebSocket.
+- Frontend `call_notification_service.dart` dismisses any stale incoming-call popup for that `callId` on `call-ended` or `call-invitation-cancelled`.
+- Flutter sends `participantUserIds` in the end-call body so the server can merge roster for notify/leave logic.
 
 ---
 
@@ -36,19 +52,19 @@ Invitee sees "Joining Existing Call" popup
 
 | File | Change |
 |------|--------|
-| [CallController.java](../../backend/core/src/main/java/com/careconnect/controller/CallController.java) | `GET /{callId}/eligible-invitees`, `POST /{callId}/invite`, `findPatientInCall()`, `getCallUserDisplayName()` helpers. `FamilyMemberService` autowired. |
-
-No changes to `ChimeService`, `CallNotificationHandler`, or any data model — the existing `createAttendee()` and `sendNotificationToUser()` methods handle everything.
+| [CallController.java](../../backend/core/src/main/java/com/careconnect/controller/CallController.java) | `GET /eligible-invitees`, `POST /invite` (notify-only), `resolveNotifyUserIds`, `resolvePendingInviteeIds`, offline SMS (`maybeSendOfflineConferenceInviteSms`), end-call broadcast |
+| [ChimeService.java](../../backend/core/src/main/java/com/careconnect/service/ChimeService.java) | In-memory join credential cache; cleared on `endMeeting` |
 
 ### Frontend
 
 | File | Change |
 |------|--------|
-| [video_call_service.dart](../../frontend/lib/services/video_call_service.dart) | `getEligibleInvitees(callId)`, `inviteParticipant(callId, targetUserId)` |
-| [call_notification_service.dart](../../frontend/lib/services/call_notification_service.dart) | Reads `isConferenceInvite` flag from incoming `incoming-video-call` WS message; passes it to `IncomingCallPopup` |
-| [incoming_call_popup.dart](../../frontend/lib/widgets/incoming_call_popup.dart) | `isConferenceInvite` optional param; title changes to "Joining Existing Call", subtitle to "invited by Caregiver" |
-| [hybrid_video_call_widget.dart](../../frontend/lib/widgets/hybrid_video_call_widget.dart) | `person_add` icon button in controls bar (caregiver-only); `_showAddParticipantDialog()`, `_inviteParticipant()` methods |
-| [chime_meeting_embed_web.dart](../../frontend/lib/widgets/chime_meeting_embed_web.dart) | Dynamic multi-tile video grid (see section below) |
+| [video_call_service.dart](../../frontend/lib/services/video_call_service.dart) | `getEligibleInvitees`, `inviteParticipant`, `trackParticipant`, `participantUserIds` in end body |
+| [call_notification_service.dart](../../frontend/lib/services/call_notification_service.dart) | `isConferenceInvite` popup; dismiss on `call-ended` / `call-invitation-cancelled` |
+| [incoming_call_popup.dart](../../frontend/lib/widgets/incoming_call_popup.dart) | "Joining Existing Call" UI for conference invites |
+| [hybrid_video_call_widget.dart](../../frontend/lib/widgets/hybrid_video_call_widget.dart) | Caregiver `person_add` invite flow; participant tracking |
+| [chime_meeting_embed_web.dart](../../frontend/lib/widgets/chime_meeting_embed_web.dart) | Multi-tile scrollable video grid |
+| [chime_meeting_embed_mobile.dart](../../frontend/lib/widgets/chime_meeting_embed_mobile.dart) | Same multi-tile grid in WebView (Android/iOS) |
 
 ---
 
@@ -56,7 +72,7 @@ No changes to `ChimeService`, `CallNotificationHandler`, or any data model — t
 
 ### GET `/api/v3/calls/{callId}/eligible-invitees`
 
-**Auth:** JWT — CAREGIVER role required
+**Auth:** JWT — CAREGIVER role required  
 **Returns:** Array of inviteable care-circle members
 
 ```json
@@ -73,8 +89,8 @@ No changes to `ChimeService`, `CallNotificationHandler`, or any data model — t
 
 ### POST `/api/v3/calls/{callId}/invite`
 
-**Auth:** JWT — CAREGIVER role required
-**Body:** `{ "targetUserId": 42 }`
+**Auth:** JWT — CAREGIVER role required  
+**Body:** `{ "targetUserId": 42 }`  
 **Returns:** `{ "status": "invited", "callId": "...", "targetUserId": 42 }`
 
 **Errors:**
@@ -83,56 +99,88 @@ No changes to `ChimeService`, `CallNotificationHandler`, or any data model — t
 - `404` — user not found / no patient in call
 
 **Side effects:**
-- Adds the target as a Chime attendee on the existing meeting
-- Sends `incoming-video-call` WebSocket message with `isConferenceInvite: true` to the target if online
-- Records a `CONFERENCE_INVITE` telemetry event
+
+- Does **not** call Chime `createAttendee` — invitee is added on `POST /join` only
+- If target is **online:** sends `incoming-video-call` with `isConferenceInvite: true`
+- If target is **offline** and has `User.phone` set: sends conference-invite **SMS** via `SnsService`
+- Records `CONFERENCE_INVITE` telemetry (`STATUS_SUCCESS` or `OFFLINE`)
+
+### POST `/api/v3/calls/{callId}/join`
+
+Unchanged route; creates attendee credentials (with in-memory cache for idempotent re-join).
+
+### POST `/api/v3/calls/{callId}/end`
+
+When the meeting is fully ended, notifies all participants and pending invitees. Optional body may include `participantUserIds` (array of user IDs) from the client roster.
 
 ---
 
-## Chime Video Grid
+## Chime Video Grid (web + mobile)
 
-The previous layout used a single fixed `<video id="remoteVideo">` element (PiP local + one full-screen remote). The updated layout uses a dynamic CSS grid inside the iframe.
+Previous layout used a single `<video id="remoteVideo">` (one remote at a time). Both embeds now use a dynamic grid:
 
-**CSS grid classes** (`#videoGrid.count-N`):
+- `#videoGridScroll` — scrollable container
+- `#videoGrid` — CSS grid; one `<video class="remote-video">` per remote tile
+- `remoteTiles` Map in embed JS — `videoTileDidUpdate` / `videoTileWasRemoved`
+- Column count computed from participant count and viewport width; last-row orphan spans full width
+- Local PiP (`#localVideo`) unchanged
+- **7+ remotes:** vertical scroll (`layout-scroll`)
 
-| Participants | Grid |
-|---|---|
-| 1 remote | 1 column, full screen |
-| 2 remotes | 2 columns, 1 row |
-| 3–4 remotes | 2×2 grid |
+No Flutter-side tile management — Chime SDK signaling drives tile add/remove.
 
-When a new participant joins, Chime SDK fires `videoTileDidUpdate`. The JS creates a new `<video class="remote-video">` element, appends it to `#videoGrid`, and updates the grid class. When a participant leaves, `videoTileWasRemoved` removes their element and updates the class. No Flutter-side changes are needed — Chime handles all the signaling.
+---
+
+## Deployment note (ECS)
+
+`ChimeService` caches join credentials **in memory per JVM**. WebSocket call notifications are also in-memory per instance.
+
+For dev/demo Fargate stacks, keep **`DesiredCount: 1`** on the ECS service so invite/join cache and WS sessions stay on one task. Multi-task scaling requires sticky sessions or a shared cache (not implemented yet).
+
+CloudFormation parameters already default to `DesiredCount: 1` in `cloudformation-fargate/parameters/*-service.json`.
 
 ---
 
 ## Known Limitations
 
-### Offline invitees
-If the target user does not have an active WebSocket session when `POST /invite` is called, the Chime attendee credential is still created (they are "in" the meeting at the Chime level), but no in-app notification is delivered. The caregiver sees a snackbar: *"[Name] is not available right now."*
+### FCM / push (not implemented)
 
-**Future work:** The push notification infrastructure (`SnsService`, `DeviceToken`, `device_tokens` table) is fully built but not connected to call flows. Wiring `SnsService.sendPushNotification()` into `CallNotificationHandler.sendNotificationToUser()` as a fallback when the target has no open WebSocket session would fix this for both 1:1 calls and conference invites simultaneously. See the TODO comment in `CallNotificationHandler` around the `call-invitation-failed` path.
+SMS covers offline conference invite when a phone number exists. **FCM push** for users without SMS is not wired into call flows yet.
 
-### End-call notification scope
-The current `end-call` WebSocket message only notifies the original `otherPartyId`. If a third participant was added and the call initiator ends the call, only the original recipient gets the `call-ended` WS notification. The third participant's Chime session terminates at the AWS level (meeting is deleted), but their Flutter UI does not get the explicit WS notification. Their Chime embed will disconnect and surface `audioVideoDidStop`, which is a graceful failure, but no "Call ended by X" snackbar appears.
+### Multi-task ECS
 
-**Future work:** Track all participant IDs server-side (a `call_participants` table or in-memory set in `CallNotificationHandler`) and broadcast `call-ended` to all of them when the meeting ends.
+Join credential cache and WebSocket routing are not shared across ECS tasks. Do not scale the call-facing service above one task without stickiness or Redis.
 
-### Maximum participants
-AWS Chime SDK for Meetings supports up to 250 attendees. The CSS grid caps the visual layout at a 2×2 tile arrangement (4 tiles). A 5th+ participant's tile will render but may extend outside the visible area. For the current use case (1 patient + 2 caregivers/family) this is not an issue.
+### Maximum participants (visual)
+
+AWS Chime supports many attendees. The grid scrolls for large N; layout is optimized for 1 patient + 2–3 caregivers/family.
+
+### Sentiment
+
+Conference video works for all parties; Bedrock sentiment monitoring remains **patient-only** (same as 1:1 calls).
 
 ---
 
 ## Testing Checklist
 
-- [ ] Caregiver in a 1:1 call sees the `person_add` button in the control bar
-- [ ] Patient in a 1:1 call does NOT see the `person_add` button
-- [ ] Tapping the button while call is loading shows a spinner, not a crash
-- [ ] If no eligible invitees exist, a snackbar shows "No available care-circle members to add."
-- [ ] Eligible list excludes users already in the call
-- [ ] Eligible list excludes patients
-- [ ] Selecting an online invitee: they receive "Joining Existing Call" popup
-- [ ] Selecting an offline invitee: caregiver gets "not available" snackbar
-- [ ] Accepted invitee joins Chime meeting and their video tile appears for all participants
-- [ ] Grid shifts from 1-column to 2-column when second remote joins
-- [ ] When a participant leaves, their tile is removed and grid re-adjusts
-- [ ] Sentiment analysis continues on patient audio/video only — not on added caregivers/family
+### Automated
+
+```powershell
+cd backend\core
+.\mvnw.cmd test -Dtest="CallControllerTest,CallFlowIntegrationTest,ChimeServiceTest,CallNotificationHandlerTest" --batch-mode
+
+cd frontend
+flutter test test/video_call/ test/services/hybrid_video_call_service_test.dart test/widgets/incoming_call_popup_test.dart test/services/call_notification_service_test.dart
+```
+
+### Manual (3-party)
+
+- [ ] Caregiver sees `person_add`; patient does not
+- [ ] Online invitee gets "Joining Existing Call" popup
+- [ ] Offline invitee with phone gets SMS (SNS configured)
+- [ ] Accepted invitee joins; each remote gets a tile (web + mobile)
+- [ ] Grid resizes with participant count; scrolls when many remotes
+- [ ] End call dismisses popup for pending invitees; all parties disconnect
+- [ ] Re-join same call returns cached credentials (no duplicate attendee)
+- [ ] Sentiment still tracks patient only
+
+**Dev logins** (mock data): `patient@careconnect.com`, `caregiver@careconnect.com`, `family@careconnect.com` — password `password`.

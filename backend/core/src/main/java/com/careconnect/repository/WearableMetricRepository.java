@@ -12,7 +12,11 @@ import java.util.List;
 public interface WearableMetricRepository
         extends JpaRepository<WearableMetric, Long> {
 
-    /** Average of a metric over a time-window */
+    /**
+     * Average of a persisted wearable metric over a time-window.
+     * Metric values are sourced from {@link WearableMetric.MetricType}, including
+     * split blood pressure rows (systolic/diastolic).
+     */
     @Query("SELECT AVG(w.metricValue) " +
            "FROM WearableMetric w " +
            "WHERE w.patient.id = :pid " +

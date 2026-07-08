@@ -88,7 +88,7 @@ void main() {
       expect(PermissionHelper.hasPermission('CAREGIVER', 'VIEW_AUDIT_LOGS'), false);
     });
 
-    test('Patient has exactly 6 permissions', () {
+    test('Patient has exactly 7 permissions including USE_AI_FEATURES', () {
       final patientPermissions = [
         'VIEW_TASKS',
         'COMPLETE_TASKS',
@@ -96,6 +96,7 @@ void main() {
         'RECORD_HEALTH_DATA',
         'SEND_MESSAGES',
         'VIEW_MESSAGES',
+        'USE_AI_FEATURES',
       ];
 
       for (var permission in patientPermissions) {
@@ -106,7 +107,16 @@ void main() {
         );
       }
 
-      expect(PermissionHelper.getPermissionCount('PATIENT'), 6);
+      expect(PermissionHelper.getPermissionCount('PATIENT'), 7);
+    });
+
+    test('Task 2.2: Patient has USE_AI_FEATURES but not MANAGE_DEVICES', () {
+      expect(PermissionHelper.hasPermission('PATIENT', 'USE_AI_FEATURES'), true);
+      expect(PermissionHelper.hasPermission('PATIENT', 'MANAGE_DEVICES'), false);
+    });
+
+    test('Task 2.2: Family Member does not have USE_AI_FEATURES', () {
+      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'USE_AI_FEATURES'), false);
     });
 
     test('Family Member has exactly 3 permissions', () {
