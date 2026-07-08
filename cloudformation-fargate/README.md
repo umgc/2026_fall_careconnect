@@ -34,6 +34,7 @@ Fargate deployment.
 - [Important safety note](#important-safety-note)
 - [macOS / Linux teardown translation](#macos--linux-teardown-translation)
 - [Common Failure Modes](#common-failure-modes)
+- [Amplify welcome page / CORS after redeploy](#7-amplify-welcome-page-backend-unhealthy-cors-after-redeploy)
 
 
 
@@ -91,6 +92,10 @@ Teardown:
 - Teardown scripts delete stacks in dependency order and empty the ECR repository before removing the platform stack
 - `cdeploy_cloudformation.ps1` and `cdeploy_cloudformation.sh` skip Maven tests by default; use `-RunTests` in PowerShell or `--run-tests` in bash if you want tests included
 - `cdestroy_cloudformation.ps1` and `cdestroy_cloudformation.sh` support skipping ECR cleanup with `-SkipEcrCleanup` or `--skip-ecr-cleanup`
+- **Amplify / browser:** After backend deploy, plain `curl` health is not enough — once
+  Amplify is live, run [DEPLOY_2026_SUMMER.md §7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url)
+  (CORS + `FrontendBaseUrl`). After **app-only** redeploy, re-run §7 if needed
+  ([§11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy))
 
 
 
@@ -110,6 +115,12 @@ That flow:
 1. builds the backend jar
 2. builds and pushes a uniquely tagged Docker image to ECR
 3. updates only the ECS service stack
+
+**CORS caveat:** App-only deploy reads `parameters/{env}-service.json`. The
+checked-in `cfdemo-service.json` defaults `CorsAllowedList` to localhost only.
+Each app-only run can **reset** Amplify CORS on the service stack. After
+app-only, re-apply your Amplify origin via the service stack ([DEPLOY_2026_SUMMER.md §7 / §11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy)).
+You do not fix this by hardcoding URLs in backend or Flutter source.
 
 
 
@@ -639,6 +650,13 @@ separate.
 This is the shortest working path for a second, parallel deployment that does
 not interfere with an existing manual Fargate environment.
 
+**Hosted Flutter web (Amplify):** This walkthrough covers backend stacks only.
+For the full backend + Amplify order (including required CORS after Amplify is
+live), use [DEPLOY_2026_SUMMER.md](./DEPLOY_2026_SUMMER.md) — especially
+[§2 first-time path](./DEPLOY_2026_SUMMER.md#first-time-path-backend-then-amplify-recommended-order),
+[§7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url), and
+[§11 after redeploy](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy).
+
 Set `APP_ROOT` to your local clone before running the commands below (see
 [Repository root](#repository-root-app_root)).
 
@@ -883,6 +901,16 @@ Set `BackendImageUri` in
 [parameters/cfdemo-service.json](./parameters/cfdemo-service.json)
 to the full URI printed in the previous step.
 
+For **Amplify / browser** access, also set (or apply via CLI after deploy —
+see [DEPLOY_2026_SUMMER.md §7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url)):
+
+- `FrontendBaseUrl` — full `https://…` Amplify URL (auth redirects)
+- `CorsAllowedList` — include `http://localhost:*,http://127.0.0.1:*` **and**
+  your exact Amplify origin (scheme + host, no path)
+
+Do not commit team-specific Amplify URLs unless your process allows it; CLI
+`--parameter-overrides` in the summer deploy guide is the usual path.
+
 #### 10. Create the service stack
 
 ```powershell
@@ -917,6 +945,13 @@ aws cloudformation wait stack-create-complete \
   --stack-name careconnect-service-cfdemo
 ```
 
+**Amplify / browser (after frontend is hosted):** The service stack defaults in
+`cfdemo-service.json` allow localhost CORS only. Once you have an Amplify URL,
+run [DEPLOY_2026_SUMMER.md §7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url)
+to set `FrontendBaseUrl` and `CorsAllowedList`, then [§8 smoke test](./DEPLOY_2026_SUMMER.md#8-smoke-test).
+After any **app-only** redeploy, re-run §7 if the welcome page shows “backend
+unhealthy” ([§11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy)).
+
 
 
 #### 11. Get the ALB DNS name
@@ -944,6 +979,10 @@ aws cloudformation describe-stacks \
 
 
 #### 12. Test the backend health endpoint
+
+Plain `curl` confirms the API is up. It does **not** prove CORS for Amplify —
+the browser sends an `Origin` header. Always run [12a](#12a-cors-smoke-test-deployed-environment)
+before sharing the hosted frontend.
 
 ```powershell
 Invoke-RestMethod "https://<api-gateway-endpoint>/v1/api/test/health"
@@ -1053,9 +1092,14 @@ curl -s -D - -o /dev/null "$BACKEND_URL/v1/api/test/health" -H "Origin: $FRONTEN
 
 Expect `HTTP/1.1 200` and `access-control-allow-origin` in the response headers.
 
-If preflight or GET fail, check that `CorsAllowedList` in your service
-parameters includes your `$FRONTEND_URL` pattern (for direct ECS paths) and that
-the API Gateway stage is deployed (`04-service.yaml` sets `AllowOrigins: '*'`).
+If preflight or GET with `Origin` fail, update **`CorsAllowedList`** on the
+service stack so ECS passes `CORS_ALLOWED_LIST` into Spring
+(`careconnect.cors_allowed` in `application-dev.properties`). API Gateway also
+allows `*` in `04-service.yaml`, but **Spring enforces the allow list** on ECS —
+that is what blocks Amplify when the list is localhost-only.
+
+See [DEPLOY_2026_SUMMER.md §11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy)
+for the full fix after redeploy.
 
 
 
@@ -1590,5 +1634,32 @@ Do not use:
 ```text
 cc-backend-alb-xxxx.us-east-1.elb.amazonaws.com
 ```
+
+
+
+#### 7. Amplify welcome page: backend unhealthy (CORS after redeploy)
+
+Symptoms:
+
+- `curl` / `Invoke-RestMethod` from your PC returns healthy JSON for
+  `/v1/api/test/health`
+- The **Amplify welcome page** warns the backend is unhealthy
+- Browser DevTools shows a failed health request or CORS error
+
+Cause (most common):
+
+- **`cdeploy_app_only`** redeployed the service stack from
+  `parameters/cfdemo-service.json`, resetting `CorsAllowedList` to localhost-only
+- Or Amplify was built without **`BACKEND_URL`** (Flutter web falls back to
+  `http://localhost:8080`)
+
+Fix (no hardcoded URLs in source):
+
+1. Diagnose with `curl` **including** `-H "Origin: https://<amplify-host>"`
+2. Re-apply `FrontendBaseUrl` and `CorsAllowedList` on the service stack
+3. Confirm Amplify env vars `BACKEND_URL`, `APP_DOMAIN`, `APP_PORT` and redeploy
+   the frontend branch if the API URL changed
+
+Full playbook: [DEPLOY_2026_SUMMER.md §11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy).
 
 Do not append `/v1`, because the app already builds those paths.
