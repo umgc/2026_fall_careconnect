@@ -10,6 +10,7 @@ import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.NaturalLanguageMailSearchService;
 import com.careconnect.service.USPSDigestService;
+import com.careconnect.service.UspsPatientResolver;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.util.SecurityUtil;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -17,12 +18,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import com.careconnect.repository.UserRepository;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * USPS digest endpoints scoped to a specific patient.
@@ -37,18 +36,17 @@ public class UspsDigestController {
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
     private final USPSDigestService uspsDigestService;
+    private final UspsPatientResolver patientResolver;
     private final NaturalLanguageMailSearchService naturalLanguageMailSearchService;
-    private final UserRepository userRepository;
 
     public UspsDigestController(SecurityUtil securityUtil, AuthorizationService authorizationService,
-                                USPSDigestService uspsDigestService,
-                                NaturalLanguageMailSearchService naturalLanguageMailSearchService,
-                                UserRepository userRepository) {
+                                USPSDigestService uspsDigestService, UspsPatientResolver patientResolver,
+                                NaturalLanguageMailSearchService naturalLanguageMailSearchService) {
         this.securityUtil = securityUtil;
         this.authorizationService = authorizationService;
         this.uspsDigestService = uspsDigestService;
+        this.patientResolver = patientResolver;
         this.naturalLanguageMailSearchService = naturalLanguageMailSearchService;
-        this.userRepository = userRepository;
     }
 
     // @RequirePermission gates role-level access; requirePatientAccess enforces link/expiry checks.
@@ -63,7 +61,7 @@ public class UspsDigestController {
 
         if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
         User currentUser = securityUtil.resolveCurrentUser();
-        User patientUser = resolvePatientUser(patientEmail, userId, currentUser);
+        User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
@@ -86,7 +84,7 @@ public class UspsDigestController {
 
         if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
         User currentUser = securityUtil.resolveCurrentUser();
-        User patientUser = resolvePatientUser(patientEmail, userId, currentUser);
+        User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
@@ -122,7 +120,7 @@ public class UspsDigestController {
 
         if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
         User currentUser = securityUtil.resolveCurrentUser();
-        User patientUser = resolvePatientUser(patientEmail, userId, currentUser);
+        User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
@@ -131,34 +129,5 @@ public class UspsDigestController {
                 ? patientEmail
                 : (userId != null && !userId.isBlank() ? userId : String.valueOf(patientUser.getId()));
         return ResponseEntity.ok("Cache cleared successfully for user: " + identifier);
-    }
-
-    /**
-     * Resolve patient by email, numeric database id, or default to the authenticated user.
-     * Legacy {@code userId} query param is accepted for backward compatibility with the Flutter test screen.
-     */
-    private User resolvePatientUser(String patientEmail, String userId, User currentUser) throws UnauthorizedException {
-        String identifier = firstNonBlank(patientEmail, userId);
-        if (identifier == null || identifier.isBlank()) {
-            return currentUser;
-        }
-        return userRepository.findByEmail(identifier)
-                .or(() -> parseNumericUserId(identifier).flatMap(userRepository::findById))
-                .orElseThrow(() -> new UnauthorizedException(
-                        "No patient found for identifier: " + identifier));
-    }
-
-    private static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) return first.trim();
-        if (second != null && !second.isBlank()) return second.trim();
-        return null;
-    }
-
-    private static Optional<Long> parseNumericUserId(String value) {
-        try {
-            return Optional.of(Long.parseLong(value));
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
     }
 }

@@ -3,10 +3,11 @@ package com.careconnect.controller;
 import com.careconnect.dto.NaturalLanguageMailSearchResponse;
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.User;
-import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.NaturalLanguageMailSearchService;
 import com.careconnect.service.USPSDigestService;
+import com.careconnect.service.UspsPatientResolver;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,7 +46,7 @@ class UspsDigestControllerTest {
     private AuthorizationService authorizationService;
 
     @Mock
-    private UserRepository userRepository;
+    private UspsPatientResolver patientResolver;
 
     @Mock
     private Jwt jwt;
@@ -55,14 +58,14 @@ class UspsDigestControllerTest {
     private User mockPatient;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         mockCaller = mock(User.class);
         mockPatient = mock(User.class);
         lenient().when(mockCaller.getId()).thenReturn(99L);
         lenient().when(mockPatient.getId()).thenReturn(1L);
         when(securityUtil.resolveCurrentUser()).thenReturn(mockCaller);
-        lenient().when(userRepository.findByEmail(any())).thenReturn(Optional.of(mockPatient));
-        lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(mockPatient));
+        lenient().when(patientResolver.resolvePatient(any(), any(), eq(mockCaller))).thenReturn(mockPatient);
+        lenient().when(patientResolver.resolvePatient(isNull(), isNull(), eq(mockCaller))).thenReturn(mockCaller);
     }
 
     private USPSDigest digest() {
@@ -99,19 +102,19 @@ class UspsDigestControllerTest {
     @Test
     void getLatestDigest_legacyUserIdParam_resolvesByDatabaseId() throws Exception {
         final USPSDigest d = digest();
-        when(userRepository.findByEmail("1")).thenReturn(Optional.empty());
+        when(patientResolver.resolvePatient(null, "1", mockCaller)).thenReturn(mockPatient);
         when(uspsDigestService.latestForUser("1")).thenReturn(Optional.of(d));
 
         final ResponseEntity<USPSDigest> response = controller.getLatestDigest(jwt, null, "1", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(userRepository).findById(1L);
         verify(uspsDigestService).latestForUser("1");
     }
 
     @Test
     void getLatestDigest_noPatientParam_defaultsToCurrentUser() throws Exception {
         final USPSDigest d = digest();
+        when(patientResolver.resolvePatient(null, null, mockCaller)).thenReturn(mockCaller);
         when(uspsDigestService.latestForUser("99")).thenReturn(Optional.of(d));
 
         final ResponseEntity<USPSDigest> response = controller.getLatestDigest(jwt, null, null, null);
@@ -162,7 +165,7 @@ class UspsDigestControllerTest {
         verify(naturalLanguageMailSearchService).search(user, 42L, "pharmacy bills", 20);
     }
 
-    // ─── clearCache ───────────────────────────────────────────────────────────
+    // â”€â”€â”€ clearCache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Test
     void clearCache_returnsOkWithMessage() throws Exception {
@@ -173,5 +176,16 @@ class UspsDigestControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("user1@example.com");
         verify(uspsDigestService).clearCacheForUser("1");
+    }
+
+    @Test
+    void getLatestDigest_unlinkedCaregiver_throwsUnauthorized() throws Exception {
+        doThrow(new UnauthorizedException("Caregiver is not assigned to patient 1"))
+                .when(authorizationService).requirePatientAccess(mockCaller, 1L);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> controller.getLatestDigest(jwt, "patient@example.com", null, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("not assigned");
     }
 }
