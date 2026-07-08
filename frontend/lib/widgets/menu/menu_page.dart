@@ -108,11 +108,6 @@ class _MenuPageState extends State<MenuPage> {
         route: '/calendar',
       ),
       _MenuItem(
-        icon: Icons.mic,
-        label: 'Voice Commands',
-        route: '/voice',
-      ),
-      _MenuItem(
           icon: Icons.medication,
           label: 'Medication Tracker',
           onTap: () {

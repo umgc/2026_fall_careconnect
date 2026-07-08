@@ -13,9 +13,6 @@
 //     logged-in build    — menu scaffold renders with the Tools section header
 //                          and at least one tool tile.
 //
-//   Note: interactive callbacks (context.push, context.go) are NOT triggered
-//   in these tests, so GoRouter is only needed for the logged-in tree.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -174,6 +171,11 @@ void main() {
 
       expect(find.text('Voice Commands'), findsOneWidget);
       expect(find.byIcon(Icons.mic), findsOneWidget);
+
+      await tester.tap(find.text('Voice Commands'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Voice Commands Entry Route'), findsOneWidget);
     });
   });
 }
