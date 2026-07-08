@@ -277,6 +277,20 @@ void main() {
       loc.voicecommand_confirmButton,
       loc.voicecommand_cancelButton,
       loc.mainscreen_voiceCommandsTooltip,
+      loc.languagepicker_English,
+      loc.languagepicker_Spanish,
+      loc.languagepicker_Urdu,
+      loc.languagepicker_Arabic,
+      loc.languagepicker_French,
+      loc.languagepicker_Amharic,
+      loc.languagepicker_Nepali,
+      loc.languagepicker_Hindi,
+      loc.languagepicker_Farsi,
+      loc.languagepicker_MandarinChinese,
+      loc.languagepicker_Portuguese,
+      loc.languagepicker_Bengali,
+      loc.languagepicker_Russian,
+      loc.languagepicker_Japanese,
     ];
   }
 

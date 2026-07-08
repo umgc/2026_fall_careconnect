@@ -177,6 +177,21 @@
   "voicecommand_confirmButton": "Confirm",
   "voicecommand_cancelButton": "Cancel",
 
-  "mainscreen_voiceCommandsTooltip": "Voice commands"
+  "mainscreen_voiceCommandsTooltip": "Voice commands",
+
+  "languagepicker_English": "English",
+  "languagepicker_Spanish": "Español (Spanish)",
+  "languagepicker_Urdu": "'اردو (Urdu)",
+  "languagepicker_Arabic": "العربية (Arabic)",
+  "languagepicker_French": "Français (French)",
+  "languagepicker_Amharic": "አማርኛ (Amharic)",
+  "languagepicker_Nepali": "नेपाली (Nepali)",
+  "languagepicker_Hindi": "हिन्दी (Hindi)",
+  "languagepicker_Farsi": "فارسی (Farsi)",
+  "languagepicker_MandarinChinese": "中文 (Mandarin Chinese)",
+  "languagepicker_Portuguese": "Português (Portuguese)",
+  "languagepicker_Bengali": "বাংলা (Bengali)",
+  "languagepicker_Russian": "Русский (Russian)",
+  "languagepicker_Japanese": "日本語 (Japanese)"
 
 }

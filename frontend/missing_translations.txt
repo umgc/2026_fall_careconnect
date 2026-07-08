@@ -36,7 +36,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "ar": [
@@ -76,7 +90,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "bn": [
@@ -116,7 +144,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "fa": [
@@ -156,7 +198,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "fr": [
@@ -196,7 +252,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "hi": [
@@ -236,7 +306,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "ja": [
@@ -276,7 +360,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "ne": [
@@ -316,7 +414,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "pt": [
@@ -356,7 +468,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "ru": [
@@ -396,7 +522,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "ur": [
@@ -436,7 +576,21 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ],
 
   "zh": [
@@ -476,6 +630,20 @@
     "voicecommand_onClarifyCommandConfirm",
     "voicecommand_confirmButton",
     "voicecommand_cancelButton",
-    "mainscreen_voiceCommandsTooltip"
+    "mainscreen_voiceCommandsTooltip",
+    "languagepicker_English",
+    "languagepicker_Spanish",
+    "languagepicker_Urdu",
+    "languagepicker_Arabic",
+    "languagepicker_French",
+    "languagepicker_Amharic",
+    "languagepicker_Nepali",
+    "languagepicker_Hindi",
+    "languagepicker_Farsi",
+    "languagepicker_MandarinChinese",
+    "languagepicker_Portuguese",
+    "languagepicker_Bengali",
+    "languagepicker_Russian",
+    "languagepicker_Japanese"
   ]
 }

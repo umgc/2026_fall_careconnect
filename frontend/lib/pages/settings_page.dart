@@ -41,7 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final currentLabel = localeProvider.locale == null
         ? t.systemDefault
-        : LanguagePicker.labelFor(localeProvider.locale!);
+        : LanguagePicker.labelFor(localeProvider.locale!, t);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),

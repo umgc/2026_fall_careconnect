@@ -28,70 +28,85 @@ Widget _wrap(Widget child) {
 
 void main() {
   // ──────────────────────────────────────────────────────────────
-  // LanguagePicker.labelFor — pure static function
+  // LanguagePicker.labelFor
   // ──────────────────────────────────────────────────────────────
 
   group('LanguagePicker.labelFor', () {
-    test('returns English for en locale', () {
-      expect(LanguagePicker.labelFor(const Locale('en')), 'English');
+    test('returns English for en locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('en'), l10n), 'English');
     });
 
-    test('returns Spanish label for es locale', () {
-      expect(LanguagePicker.labelFor(const Locale('es')), contains('Spanish'));
+    test('returns Spanish label for es locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('es'), l10n), contains('Spanish'));
     });
 
-    test('returns French label for fr locale', () {
-      expect(LanguagePicker.labelFor(const Locale('fr')), contains('French'));
+    test('returns French label for fr locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('fr'), l10n), contains('French'));
     });
 
-    test('returns Urdu label for ur locale', () {
-      expect(LanguagePicker.labelFor(const Locale('ur')), contains('Urdu'));
+    test('returns Urdu label for ur locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('ur'), l10n), contains('Urdu'));
     });
 
-    test('returns Arabic label for ar locale', () {
-      expect(LanguagePicker.labelFor(const Locale('ar')), contains('Arabic'));
+    test('returns Arabic label for ar locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('ar'), l10n), contains('Arabic'));
     });
 
-    test('returns Amharic label for am locale', () {
-      expect(LanguagePicker.labelFor(const Locale('am')), contains('Amharic'));
+    test('returns Amharic label for am locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('am'), l10n), contains('Amharic'));
     });
 
-    test('returns Nepali label for ne locale', () {
-      expect(LanguagePicker.labelFor(const Locale('ne')), contains('Nepali'));
+    test('returns Nepali label for ne locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('ne'), l10n), contains('Nepali'));
     });
 
-    test('returns Hindi label for hi locale', () {
-      expect(LanguagePicker.labelFor(const Locale('hi')), contains('Hindi'));
+    test('returns Hindi label for hi locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('hi'),l10n), contains('Hindi'));
     });
 
-    test('returns Farsi label for fa locale', () {
-      expect(LanguagePicker.labelFor(const Locale('fa')), contains('Farsi'));
+    test('returns Farsi label for fa locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('fa'), l10n), contains('Farsi'));
     });
 
-    test('returns Chinese label for zh locale', () {
-      expect(LanguagePicker.labelFor(const Locale('zh')), contains('Chinese'));
+    test('returns Chinese label for zh locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('zh'), l10n), contains('Chinese'));
     });
 
-    test('returns Portuguese label for pt locale', () {
-      expect(LanguagePicker.labelFor(const Locale('pt')), contains('Portuguese'));
+    test('returns Portuguese label for pt locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('pt'), l10n), contains('Portuguese'));
     });
 
-    test('returns Bengali label for bn locale', () {
-      expect(LanguagePicker.labelFor(const Locale('bn')), contains('Bengali'));
+    test('returns Bengali label for bn locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('bn'), l10n), contains('Bengali'));
     });
 
-    test('returns Russian label for ru locale', () {
-      expect(LanguagePicker.labelFor(const Locale('ru')), contains('Russian'));
+    test('returns Russian label for ru locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('ru'), l10n), contains('Russian'));
     });
 
-    test('returns Japanese label for ja locale', () {
-      expect(LanguagePicker.labelFor(const Locale('ja')), contains('Japanese'));
+    test('returns Japanese label for ja locale', () async  {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(LanguagePicker.labelFor(const Locale('ja'), l10n), contains('Japanese'));
     });
 
-    test('falls back to language tag for unknown locale', () {
+    test('falls back to language tag for unknown locale', () async  {
       // Verifies that an unknown locale returns its language tag string.
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       final locale = const Locale('xx');
-      expect(LanguagePicker.labelFor(locale), locale.toLanguageTag());
+      expect(LanguagePicker.labelFor(locale, l10n), locale.toLanguageTag());
     });
   });
 

@@ -278,7 +278,7 @@ class _MenuPageState extends State<MenuPage> {
                   final localeProvider = context.watch<LocaleProvider>();
                   final currentLabel = localeProvider.locale == null
                       ? local.systemDefault
-                      : LanguagePicker.labelFor(localeProvider.locale!);
+                      : LanguagePicker.labelFor(localeProvider.locale!, local);
 
                   final darkTile = ListTile(
                     leading: const Icon(Icons.brightness_6),
