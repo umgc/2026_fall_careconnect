@@ -63,16 +63,34 @@ You can also use `./run-dev.sh`, which sources `.env` automatically.
 
 ## 6. Quick Smoke Test
 
-1. Request the auth redirect:
+The OAuth start endpoint is patient-scoped. `/oauth/google/start` no longer accepts a raw
+`userId`; it requires a short-lived, HMAC-signed `startToken` issued by the authenticated
+connect-url endpoint.
+
+1. Request a connect URL (JWT required). This authorizes the caller against the patient and
+   returns a `/oauth/google/start?startToken=...` URL:
    ```bash
-   curl -s -D - "http://localhost:8080/oauth/google/start?userId=test123" \
+   curl -s "http://localhost:8080/v1/api/email-credentials/gmail/connect-url?returnUrl=http://localhost:3000/usps-test" \
+     -H "Authorization: Bearer <jwt>"
+   ```
+   Response:
+   ```json
+   { "url": "http://localhost:8080/oauth/google/start?startToken=<signed-token>" }
+   ```
+2. Follow the returned URL to obtain the Google redirect:
+   ```bash
+   curl -s -D - "http://localhost:8080/oauth/google/start?startToken=<signed-token>" \
      -o /dev/null | grep -i '^Location:'
    ```
-2. Confirm the `Location` header shows:
+3. Confirm the `Location` header shows:
    - `client_id=<your actual client id>`
    - Encoded `redirect_uri` (`http%3A%2F%2Flocalhost...`)
    - Encoded `scope` (`https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.readonly`)
-3. Paste the URL into a browser to verify the Google consent screen appears. If prompted, approve and ensure the app captures the callback.
+4. Paste the URL into a browser to verify the Google consent screen appears. If prompted, approve and ensure the app captures the callback.
+
+> Notes:
+> - The `startToken` is valid for ~2 minutes and is single-purpose (it is rejected if replayed as the callback `state`).
+> - `returnUrl` must resolve to an allowed frontend host (`google.oauth.frontend-url`, `frontend.base-url`, any host in `google.oauth.allowed-return-hosts`, or localhost). Unknown hosts are rejected.
 
 ## 7. Common Errors
 
@@ -81,6 +99,8 @@ You can also use `./run-dev.sh`, which sources `.env` automatically.
 | `redirect_uri_mismatch` | Redirect URI in the request does not match the authorized list. | Update Google Cloud credential entry to include `http://localhost:8080/oauth/google/callback`. |
 | `invalid_client` | Placeholder client ID/secret or typo. | Re-copy credentials into `.env`; restart backend. |
 | Loop back to `/oauth/google/start` with 400 | Values are not URL-encoded. | Ensure you are running a build after Feb 2025 (controller encodes each parameter). |
+| `/oauth/google/start` returns an error / `Invalid start token` | Calling `/oauth/google/start` directly without a `startToken`, or the token expired (~2 min). | Fetch a fresh URL from `/v1/api/email-credentials/gmail/connect-url` and follow it promptly. |
+| `returnUrl host is not allowed` | The `returnUrl` points to a host not on the allowlist. | Use an allowed frontend origin or add it to `google.oauth.allowed-return-hosts`. |
 | `access_denied` after consent | User cancelled or account not in test users list. | Add the account under OAuth consent screen ➜ Test users. |
 
 ## 8. Security Notes
