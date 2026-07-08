@@ -179,22 +179,14 @@ public class DatabaseStorageService implements StorageService {
         return filename.substring(filename.lastIndexOf("."));
     }
     
+    /**
+     * Map a client-supplied category string to the canonical {@link UserFile.FileCategory}.
+     * Delegates to the single source of truth on the enum so files persisted through the
+     * (default) database storage path are stored under the same category the user selected,
+     * keeping the frontend and backend category models aligned.
+     */
     private UserFile.FileCategory mapCategoryToEnum(String category) {
-        if (category == null) {
-            return UserFile.FileCategory.OTHER_DOCUMENT;
-        }
-        
-        return switch (category.toUpperCase()) {
-            case "PROFILE_IMAGE", "PROFILE" -> UserFile.FileCategory.PROFILE_IMAGE;
-            case "MEDICAL_RECORD", "MEDICAL" -> UserFile.FileCategory.MEDICAL_RECORD;
-            case "CLINICAL_NOTE", "CLINICAL" -> UserFile.FileCategory.CLINICAL_NOTE;
-            case "PRESCRIPTION" -> UserFile.FileCategory.PRESCRIPTION;
-            case "LAB_RESULT", "LAB" -> UserFile.FileCategory.LAB_RESULT;
-            case "INSURANCE_DOCUMENT", "INSURANCE" -> UserFile.FileCategory.INSURANCE_DOCUMENT;
-            case "CONSENT_FORM", "CONSENT" -> UserFile.FileCategory.CONSENT_FORM;
-            case "CARE_PLAN", "CARE" -> UserFile.FileCategory.CARE_PLAN;
-            default -> UserFile.FileCategory.OTHER_DOCUMENT;
-        };
+        return UserFile.FileCategory.fromClientValue(category);
     }
     
     private Long determinePatientId(Long userId, UserFile.OwnerType ownerType) {

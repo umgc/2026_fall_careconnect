@@ -31,6 +31,9 @@ public class CheckIn {
     @Column(name = "submitted_at")
     private OffsetDateTime submittedAt;
 
+    @Column(name = "reviewed_at")
+    private OffsetDateTime reviewedAt;
+
     // Existing relation to answers
     @OneToMany(mappedBy = "checkIn", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
