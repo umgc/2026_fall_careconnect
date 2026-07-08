@@ -2,10 +2,10 @@ package com.careconnect.controller;
 
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.User;
-import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
+import com.careconnect.service.UspsPatientResolver;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +23,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,7 +40,7 @@ class USPSControllerTest {
     private AuthorizationService authorizationService;
 
     @Mock
-    private UserRepository userRepository;
+    private UspsPatientResolver patientResolver;
 
     @InjectMocks
     private USPSController controller;
@@ -46,10 +48,11 @@ class USPSControllerTest {
     private User mockCaller;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         mockCaller = mock(User.class);
         lenient().when(mockCaller.getId()).thenReturn(42L);
         lenient().when(securityUtil.resolveCurrentUser()).thenReturn(mockCaller);
+        lenient().when(patientResolver.resolvePatient(isNull(), eq(mockCaller))).thenReturn(mockCaller);
     }
 
     private USPSDigest emptyDigest() {
@@ -92,7 +95,7 @@ class USPSControllerTest {
         final Jwt jwt = mock(Jwt.class);
         final User patient = mock(User.class);
         when(patient.getId()).thenReturn(7L);
-        when(userRepository.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
+        when(patientResolver.resolvePatient("patient@example.com", mockCaller)).thenReturn(patient);
         when(service.latestForUser("7")).thenReturn(Optional.empty());
 
         final ResponseEntity<USPSDigest> response = controller.getDigest(jwt, "patient@example.com", null);
@@ -108,5 +111,19 @@ class USPSControllerTest {
         assertThatThrownBy(() -> controller.getDigest(null, null, null))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("Missing or invalid authentication token");
+    }
+
+    @Test
+    void getDigest_unlinkedCaregiver_throwsUnauthorized() throws Exception {
+        final Jwt jwt = mock(Jwt.class);
+        final User patient = mock(User.class);
+        when(patient.getId()).thenReturn(7L);
+        when(patientResolver.resolvePatient("patient@example.com", mockCaller)).thenReturn(patient);
+        doThrow(new UnauthorizedException("Caregiver is not assigned to patient 7"))
+                .when(authorizationService).requirePatientAccess(mockCaller, 7L);
+
+        assertThatThrownBy(() -> controller.getDigest(jwt, "patient@example.com", null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("not assigned");
     }
 }
