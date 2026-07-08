@@ -46,6 +46,13 @@ public class GmailParser {
     @Autowired(required = false)
     private MailpieceOcrService mailpieceOcrService;
 
+    /**
+     * Allows unit tests to inject a mocked OCR service without Spring context.
+     */
+    void setMailpieceOcrService(MailpieceOcrService mailpieceOcrService) {
+        this.mailpieceOcrService = mailpieceOcrService;
+    }
+
     public USPSDigest toDomain(GmailDigestPayload payload) {
         if (payload == null) return null;
 
@@ -504,15 +511,13 @@ public class GmailParser {
         if (isBlank(sender)) {
             sender = extractSender(block);
         }
-        if (isBlank(sender)) {
-            sender = inferSenderFromImage(src);
-        }
-        sender = sanitizeOrFallback(sender, rawSender);
 
         String summary = firstNonBlank(
                 textOrNull(block.selectFirst(".summary")),
                 deriveSummaryFromAlt(alt));
-        summary = normalizeSummary(summary, sender);
+        MailpieceFields fields = enrichWithOcrFallbackWhenMetadataInsufficient(sender, summary, src);
+        sender = sanitizeOrFallback(fields.sender(), rawSender);
+        summary = normalizeSummary(fields.summary(), sender);
 
         if (isMarketingText(alt) || isMarketingText(sender) || isMarketingText(summary)) {
             return null;
@@ -550,12 +555,10 @@ public class GmailParser {
         if (isBlank(sender)) {
             sender = extractSender(img.parent());
         }
-        if (isBlank(sender)) {
-            sender = inferSenderFromImage(src);
-        }
-        sender = sanitizeOrFallback(sender, rawSender);
         String summary = deriveSummaryFromAlt(alt);
-        summary = normalizeSummary(summary, sender);
+        MailpieceFields fields = enrichWithOcrFallbackWhenMetadataInsufficient(sender, summary, src);
+        sender = sanitizeOrFallback(fields.sender(), rawSender);
+        summary = normalizeSummary(fields.summary(), sender);
         OffsetDateTime received = payload.receivedAt() != null ? payload.receivedAt() : defaultDate;
 
         if (isMarketingText(alt) || isMarketingText(sender) || isMarketingText(summary)) {
@@ -906,28 +909,69 @@ public class GmailParser {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private String inferSenderFromImage(String imageSrc) {
-        if (mailpieceOcrService == null || isBlank(imageSrc)) {
-            return null;
+    private record MailpieceFields(String sender, String summary) {}
+
+    private boolean isMetadataInsufficientForOcr(String sender, String summary) {
+        return isBlank(sender) || isSummaryMetadataInsufficient(summary);
+    }
+
+    private boolean isSummaryMetadataInsufficient(String summary) {
+        if (isBlank(summary)) {
+            return true;
         }
-        if (!imageSrc.startsWith("data:")) {
-            return null;
+        String lower = summary.trim().toLowerCase(Locale.ROOT);
+        return lower.equals("mail")
+                || lower.equals("campaign")
+                || lower.equals("image")
+                || lower.startsWith("image of");
+    }
+
+    private MailpieceFields enrichWithOcrFallbackWhenMetadataInsufficient(
+            String sender, String summary, String imageSrc) {
+        if (!isMetadataInsufficientForOcr(sender, summary)) {
+            return new MailpieceFields(sender, summary);
+        }
+        return runOcrOnImage(imageSrc)
+                .map(ocr -> new MailpieceFields(
+                        isBlank(sender) ? sanitizeOrFallback(ocr.sender(), ocr.sender()) : sender,
+                        resolveSummaryWithOcrFallback(summary, ocr)))
+                .orElse(new MailpieceFields(sender, summary));
+    }
+
+    private String resolveSummaryWithOcrFallback(String summary, MailpieceOcrResult ocr) {
+        if (!isSummaryMetadataInsufficient(summary)) {
+            return summary;
+        }
+        return firstNonBlank(ocr.summaryLine(), ocr.sender());
+    }
+
+    private Optional<MailpieceOcrResult> runOcrOnImage(String imageSrc) {
+        if (mailpieceOcrService == null || isBlank(imageSrc)) {
+            return Optional.empty();
+        }
+        return decodeDataUrlImage(imageSrc)
+                .flatMap(decoded -> mailpieceOcrService.extractMailpieceMetadata(decoded.bytes(), decoded.metadata()));
+    }
+
+    private Optional<DecodedDataUrlImage> decodeDataUrlImage(String imageSrc) {
+        if (isBlank(imageSrc) || !imageSrc.startsWith("data:")) {
+            return Optional.empty();
         }
         int comma = imageSrc.indexOf(',');
         if (comma <= 0 || comma >= imageSrc.length() - 1) {
-            return null;
+            return Optional.empty();
         }
-        String metadata = imageSrc.substring(5, comma); // after 'data:'
+        String metadata = imageSrc.substring(5, comma);
         String base64 = imageSrc.substring(comma + 1);
         try {
-            byte[] bytes = Base64.getDecoder().decode(base64);
-            Optional<String> candidate = mailpieceOcrService.extractTopLeftLabel(bytes, metadata);
-            return candidate.map(c -> sanitizeOrFallback(c, c)).orElse(null);
+            return Optional.of(new DecodedDataUrlImage(Base64.getDecoder().decode(base64), metadata));
         } catch (IllegalArgumentException ex) {
             System.out.println("[GmailParser] Failed to decode inline image for OCR: " + ex.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
+
+    private record DecodedDataUrlImage(byte[] bytes, String metadata) {}
 
     private String normalizeSummary(String summary, String sender) {
         if (!isBlank(summary)) {
@@ -1001,10 +1045,9 @@ public class GmailParser {
                     textOrNull(container.selectFirst("p")),
                     textOrNull(container.selectFirst("span"))
             );
-            if (isBlank(sender)) {
-                sender = inferSenderFromImage(resolved);
-            }
-            sender = sanitizeOrFallback(sender, rawSender);
+            MailpieceFields fields = enrichWithOcrFallbackWhenMetadataInsufficient(sender, summary, resolved);
+            sender = sanitizeOrFallback(fields.sender(), rawSender);
+            summary = fields.summary();
             if (isBlank(summary) && !isBlank(sender)) {
                 summary = sender;
             }
