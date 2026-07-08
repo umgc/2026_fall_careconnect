@@ -128,19 +128,18 @@ class _SettingsPageState extends State<SettingsPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Telemetry is enabled'),
-          content: const Text(
-            'CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability. '
-            'You can opt out at any time.',
+          title: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ?? 'Telemetry is enabled'),
+          content: Text(
+            AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogDescription ?? 'CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability.\nYou can opt out at any time.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Opt out'),
+              child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Keep enabled'),
+              child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogKeepEnabled ?? 'Keep enabled'),
             ),
           ],
         );
@@ -234,18 +233,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Opt out of telemetry?'),
-        content: const Text(
-          'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
+        title: Text(AppLocalizations.of(context)?.settings_telemetryOptOutDialogTitle ?? 'Opt out of telemetry?'),
+        content: Text(
+          AppLocalizations.of(context)?.settings_telemetryOptOutDialogDescription ?? 'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Opt out'),
+            child: Text(AppLocalizations.of(context)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
           ),
         ],
       ),
@@ -260,18 +259,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Enable telemetry?'),
-        content: const Text(
-          'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
+        title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ?? 'Enable telemetry?'),
+        content: Text(
+          AppLocalizations.of(context)?.settings_telemetryOptInDialogDescription ?? 'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Enable'),
+            child: Text(AppLocalizations.of(context)?.settings_telemetryOptInDialogEnable ?? 'Enable'),
           ),
         ],
       ),
@@ -684,12 +683,12 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 24),
 
               // Privacy
-              _buildSectionHeader(context, 'Privacy'),
+              _buildSectionHeader(context, t.settings_privacySectionHeader),
               _buildToggleCard(
                 context,
                 icon: Icons.privacy_tip,
-                title: 'Telemetry',
-                subtitle: 'Anonymous diagnostics and performance metrics',
+                title: t.settings_privacySectionTelemetrySetting,
+                subtitle: t.settings_privacySectionTelemetrySettingDescription,
                 value: _telemetryEnabled,
                 loading: _loadingTelemetry,
                 onChanged: (enabled) async {
@@ -724,8 +723,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
                     messenger.showSnackBar(
                       SnackBar(
-                        content: const Text(
-                          'Unable to update telemetry setting.',
+                        content: Text(
+                          t.settings_telemetryFailedToUpdate,
                         ),
                         backgroundColor: errorColor,
                       ),
@@ -782,10 +781,10 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildToggleCard(
                 context,
                 icon: Icons.cloud_off,
-                title: 'Offline Persistence',
+                title: t.settings_generalSectionOfflinePersistenceSetting,
                 subtitle: userProvider.offlineModeEnabled
-                    ? 'Save data locally and sync when reconnected'
-                    : 'New data will not be stored locally for offline use.',
+                    ? t.settings_generalSectionOfflinePersistenceSettingEnabled
+                    : t.settings_generalSectionOfflinePersistenceSettingDisabled,
                 value: userProvider.offlineModeEnabled,
                 // loading: _loadingPersistence,
                 onChanged: (enabled) async {

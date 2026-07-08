@@ -291,6 +291,22 @@ void main() {
       loc.languagepicker_Bengali,
       loc.languagepicker_Russian,
       loc.languagepicker_Japanese,
+      loc.settings_telemetryDefaultDialogTitle,
+      loc.settings_telemetryDefaultDialogDescription,
+      loc.settings_telemetryDefaultDialogKeepEnabled,
+      loc.settings_telemetryDefaultDialogOptOut,
+      loc.settings_telemetryOptOutDialogTitle,
+      loc.settings_telemetryOptOutDialogDescription,
+      loc.settings_telemetryOptInDialogTitle,
+      loc.settings_telemetryOptInDialogDescription,
+      loc.settings_telemetryOptInDialogEnable,
+      loc.settings_privacySectionHeader,
+      loc.settings_privacySectionTelemetrySetting,
+      loc.settings_privacySectionTelemetrySettingDescription,
+      loc.settings_telemetryFailedToUpdate,
+      loc.settings_generalSectionOfflinePersistenceSetting,
+      loc.settings_generalSectionOfflinePersistenceSettingEnabled,
+      loc.settings_generalSectionOfflinePersistenceSettingDisabled,
     ];
   }
 

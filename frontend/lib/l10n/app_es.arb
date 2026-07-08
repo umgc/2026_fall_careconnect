@@ -61,10 +61,8 @@
 "settingsLoadingNotificationSettings": "Cargando ajustes de notificaciones...",
 "settingsUnableToLoadNotificationSettings": "No se puede cargar los ajustes de notificaciones",
 "settingsRefresh": "Actualizar",
-
 "settingsDarkMode": "Modo oscuro",
 "settingsToggleThemeDesc": "Alternar entre tema claro y oscuro",
-
 "settingsNotifEmergency": "Alertas de emergencia",
 "settingsNotifEmergencyDesc": "Alertas críticas de salud y emergencias",
 "settingsNotifVideoCall": "Notificaciones de videollamada",
@@ -77,37 +75,47 @@
 "settingsNotifSMSDesc": "Alertas de mensajes de texto a tu teléfono",
 "settingsNotifGamification": "Gamificación",
 "settingsNotifGamificationDesc": "Notificaciones de logros y progreso",
-
 "settingsSnackUpdated": "Ajustes de notificaciones actualizados",
 "settingsSnackUpdateFailed": "Error al actualizar ajustes",
 "settingsCacheCleared": "Caché borrada con éxito",
-
 "settingsAIAssistant": "Asistente de IA",
 "settingsAIConfiguration": "Configuración de IA",
 "settingsAIConfigurationDesc": "Personaliza la configuración de tu asistente de IA",
-
 "settingsSubscription": "Suscripción",
 "settingsManageSubscription": "Administrar suscripción",
 "settingsManageSubscriptionDesc": "Ver o actualizar tu plan de suscripción",
-
 "settingsNotetakerAssistant": "Asistente de toma de notas",
 "settingsNotetakerConfiguration": "Configuración del asistente de notas",
 "settingsNotetakerConfigurationDesc": "Personaliza la configuración del asistente de notas",
-
 "settingsGeneral": "General",
 "settingsClearCache": "Borrar caché",
 "settingsClearCacheShortDesc": "Eliminar archivos temporales y datos de caché",
 "settingsClearCacheDesc": "Esto borrará todos los archivos temporales y datos de caché. La app puede demorar más en cargar contenido al inicio luego de borrar la caché.",
-
 "settingsSignOut": "Cerrar sesión",
 "settingsSignOutDesc": "Cerrar sesión de tu cuenta",
 "settingsSignOutConfirmMessage": "¿Estás seguro de que deseas cerrar sesión?",
-
 "settingsDeleteAccount": "Eliminar cuenta",
 "settingsDeleteAccountShortDesc": "Eliminar permanentemente tu cuenta",
 "settingsDeleteAccountDesc": "Esta acción no se puede deshacer. Todos tus datos serán eliminados permanentemente.",
 "settingsDeleteAccountRequested": "Solicitud de eliminación de cuenta enviada. Por favor contacta soporte.",
 "settingsDeleteAccountAction": "Eliminar cuenta",
+
+"settings_telemetryDefaultDialogTitle": "La telemetría está activada",
+"settings_telemetryDefaultDialogDescription": "CareConnect recopila, de forma predeterminada, datos de diagnóstico y métricas de rendimiento anónimos para ayudar a mejorar la fiabilidad.\nPuedes darte de baja en cualquier momento.",
+"settings_telemetryDefaultDialogKeepEnabled": "Mantener activado",
+"settings_telemetryDefaultDialogOptOut": "Darse de baja",
+"settings_telemetryOptOutDialogTitle": "¿Deseas desactivar la telemetría?",
+"settings_telemetryOptOutDialogDescription": "Si decides no participar, CareConnect dejará de recopilar datos de diagnóstico y métricas de rendimiento anónimos.",
+"settings_telemetryOptInDialogTitle": "¿Activar la telemetría?",
+"settings_telemetryOptInDialogDescription": "Esto permitirá a CareConnect recopilar datos de diagnóstico y métricas de rendimiento anónimos para mejorar la fiabilidad.",
+"settings_telemetryOptInDialogEnable": "Activar",
+"settings_privacySectionHeader": "Privacidad",
+"settings_privacySectionTelemetrySetting": "Telemetría",
+"settings_privacySectionTelemetrySettingDescription": "Diagnósticos anónimos y métricas de rendimiento",
+"settings_telemetryFailedToUpdate": "No se ha podido actualizar la configuración de telemetría.",
+"settings_generalSectionOfflinePersistenceSetting": "Persistencia sin Conexión",
+"settings_generalSectionOfflinePersistenceSettingEnabled": "Guardar los datos localmente y sincronizarlos cuando se vuelva a conectar",
+"settings_generalSectionOfflinePersistenceSettingDisabled": "Los nuevos datos no se almacenarán localmente para su uso sin conexión.",
 
 
   "welcomeInitializingHealthcare": "Iniciando tu experiencia de salud…",
