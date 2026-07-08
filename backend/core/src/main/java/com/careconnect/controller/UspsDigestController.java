@@ -113,7 +113,7 @@ public class UspsDigestController {
         return ResponseEntity.ok(response);
     }
 
-    @RequirePermission(Permission.CREATE_TASKS)
+    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
     @PostMapping("/clear-cache")
     public ResponseEntity<String> clearCache(
             @AuthenticationPrincipal Jwt jwt,
@@ -139,7 +139,7 @@ public class UspsDigestController {
      */
     private User resolvePatientUser(String patientEmail, String userId, User currentUser) throws UnauthorizedException {
         String identifier = firstNonBlank(patientEmail, userId);
-        if (identifier == null || identifier.isBlank() || "demo-user".equals(identifier)) {
+        if (identifier == null || identifier.isBlank()) {
             return currentUser;
         }
         return userRepository.findByEmail(identifier)

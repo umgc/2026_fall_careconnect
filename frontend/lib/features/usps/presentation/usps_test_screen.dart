@@ -73,7 +73,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
         '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
     final encodedPatient = Uri.encodeComponent(patientEmail);
     final url =
-        '$base/api/usps/latest?patientEmail=$encodedPatient&date=$dateString';
+        '$base/v1/api/usps/latest?patientEmail=$encodedPatient&date=$dateString';
 
     try {
       final dio = await _authenticatedDio();
@@ -186,7 +186,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final encodedPatient = Uri.encodeComponent(patientEmail);
 
     final url =
-        '$base/api/usps/search?patientEmail=$encodedPatient&keyword=${Uri.encodeComponent(keyword)}';
+        '$base/v1/api/usps/search?patientEmail=$encodedPatient&keyword=${Uri.encodeComponent(keyword)}';
 
     try {
       final dio = await _authenticatedDio(
@@ -306,7 +306,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     try {
       final dio = await _authenticatedDio();
       await dio.post(
-          '$base/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
+          '$base/v1/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Cache cleared! Try fetching digest again.')),
