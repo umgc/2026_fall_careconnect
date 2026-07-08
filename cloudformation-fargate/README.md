@@ -23,6 +23,7 @@ Fargate deployment.
 - [What each stack owns](#what-each-stack-owns)
 - [Design choices](#design-choices)
 - [Required application contract](#required-application-contract)
+- [ECS task role permissions](#ecs-task-role-permissions)
 - [Parameter files](#parameter-files)
 - [Repository root (`APP_ROOT`)](#repository-root-app_root)
 - [Example deploy commands](#example-deploy-commands)
@@ -306,7 +307,57 @@ The ALB health check path is:
 
 - `/v1/api/test/health`
 
+### ECS task role permissions
 
+`03-platform.yaml` attaches an inline IAM policy to **`careconnect-{env}-ecsTaskRole`**
+(the ECS **task** role, not the execution role). The backend uses this role at runtime
+when `careconnect.aws.enabled=true` (default in the `dev` Spring profile used by Fargate).
+
+Without these permissions, video calls fail with `403` on `chime:CreateMeeting`, recording
+fails on media pipelines, and AI features fail on `bedrock:InvokeModel`.
+
+| Area | IAM actions (summary) | Used by |
+| ---- | --------------------- | ------- |
+| Chime meetings | `chime:CreateMeeting`, `CreateAttendee`, `DeleteMeeting`, `StartMeetingTranscription`, … | Video calls, live transcription |
+| Chime media pipelines | `chime:CreateMediaCapturePipeline`, `CreateMediaConcatenationPipeline`, `CreateMediaStreamPipeline`, Media Insights, … | Call recording, sentiment clips, speaker-ID ingest |
+| Kinesis Video | `kinesisvideo:ListStreams`, `GetDataEndpoint`, `GetMediaForFragmentList`, … | Per-attendee speaker export |
+| S3 | `s3:CreateBucket`, `PutObject`, `GetObject`, `PutBucketPolicy`, `PutBucketCors`, … on `careconnect-recordings-*` and `careconnect-uploads-*` | Recordings, uploads, invoice files |
+| Bedrock | `bedrock:InvokeModel`, `InvokeModelWithResponseStream` | AI chat, symptoms/allergies, sentiment, summaries |
+| Transcribe | `transcribe:StartTranscriptionJob`, `GetTranscriptionJob` | Post-call transcription |
+| Textract | `textract:DetectDocumentText`, `StartDocumentTextDetection`, … | Invoice OCR |
+| SES / SNS | `ses:SendEmail`, `sns:Publish` | Email and SMS notifications |
+| SSM | `ssm:GetParameter*` on `/careconnect/*` | KVS pool ARNs, Media Insights config (speaker-ID) |
+| IAM (one-time) | `iam:CreateServiceLinkedRole` for `mediapipelines.chime.amazonaws.com` | Chime recording bucket pipelines |
+
+Full policy: [`templates/03-platform.yaml`](./templates/03-platform.yaml) (`EcsTaskRole`).
+
+**After updating IAM**, redeploy the platform stack, then force a new ECS deployment so
+tasks assume the updated role:
+
+```powershell
+aws cloudformation deploy `
+  --stack-name careconnect-platform-cfdemo `
+  --template-file "$APP_ROOT\cloudformation-fargate\templates\03-platform.yaml" `
+  --parameter-overrides file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-platform.json `
+  --capabilities CAPABILITY_NAMED_IAM `
+  --profile careconnect-sso
+
+aws ecs update-service `
+  --cluster careconnect-cfdemo-cluster `
+  --service careconnect-cfdemo-backend `
+  --force-new-deployment `
+  --profile careconnect-sso
+```
+
+**One-time per AWS account** (if recording fails with a service-linked-role error and
+`iam:CreateServiceLinkedRole` cannot run from the task role):
+
+```bash
+aws iam create-service-linked-role --aws-service-name mediapipelines.chime.amazonaws.com
+```
+
+See also [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md)
+(sections 7–8) for local-dev IAM parity and troubleshooting.
 
 ### Parameter files
 
