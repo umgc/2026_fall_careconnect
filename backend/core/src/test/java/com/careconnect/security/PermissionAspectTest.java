@@ -1,6 +1,8 @@
 package com.careconnect.security;
 
 import com.careconnect.model.User;
+import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
 import com.careconnect.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class PermissionAspectTest {
 
@@ -116,6 +119,10 @@ class PermissionAspectTest {
     private static final class RecordingAuthorizationService extends AuthorizationService {
         private User lastUser;
         private Permission lastPermission;
+
+        private RecordingAuthorizationService() {
+            super(mock(CaregiverPatientLinkRepository.class), mock(FamilyMemberLinkRepository.class));
+        }
 
         @Override
         public void requirePermission(User user, Permission permission) throws UnauthorizedException {
