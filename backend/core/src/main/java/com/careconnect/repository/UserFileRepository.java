@@ -72,6 +72,20 @@ public interface UserFileRepository extends JpaRepository<UserFile, Long> {
             Long patientId, Collection<UserFile.FileCategory> categories);
 
     /**
+     * Find all active files of an owner type across a set of categories
+     * (compliance dashboard: every employee intake document in one query).
+     */
+    List<UserFile> findByOwnerTypeAndFileCategoryInAndIsActiveTrue(
+            UserFile.OwnerType ownerType, Collection<UserFile.FileCategory> categories);
+
+    /**
+     * Find all active patient-linked files across a set of categories
+     * (compliance dashboard: every care-circle document in one query).
+     */
+    List<UserFile> findByPatientIdIsNotNullAndFileCategoryInAndIsActiveTrue(
+            Collection<UserFile.FileCategory> categories);
+
+    /**
      * Find files that can be accessed by a caregiver for a specific patient
      * Includes files owned by the patient and files uploaded by caregivers for that patient
      */
