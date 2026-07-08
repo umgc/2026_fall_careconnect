@@ -1220,8 +1220,7 @@ void main() {
       expect(find.text('Status: Command not recognized'), findsOneWidget);
       expect(find.text('Heard: "do something random"'), findsOneWidget);
       expect(
-        find.text(
-            'Recognized: "do something random" — command not recognized'),
+        find.text('Recognized: "do something random" — command not recognized'),
         findsOneWidget,
       );
       expect(find.text('Command not recognized \u2014 please try again.'),
