@@ -115,6 +115,12 @@ curl -sf "$BACKEND_URL/v1/api/test/health"
 
 Expect JSON with a healthy status. Wait 2–5 minutes if the service stack just finished.
 
+**ECS task role:** Video calls, recording, Bedrock AI, Transcribe, and related features
+need IAM on `careconnect-{env}-ecsTaskRole`. That policy ships in
+[`03-platform.yaml`](./templates/03-platform.yaml). If you deployed before this policy
+existed, update the platform stack and force a new ECS deployment — see
+[README — ECS task role permissions](./README.md#ecs-task-role-permissions).
+
 ---
 
 ## 3. Deploy the frontend (Amplify)
