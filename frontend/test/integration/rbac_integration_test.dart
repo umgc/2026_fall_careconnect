@@ -56,13 +56,14 @@ void main() {
       // Has limited permissions
       expect(PermissionHelper.hasPermission(role, 'VIEW_TASKS'), true);
       expect(PermissionHelper.hasPermission(role, 'VIEW_HEALTH_DATA'), true);
+      expect(PermissionHelper.hasPermission(role, 'USE_AI_FEATURES'), true);
 
       // Doesn't have create/delete permissions
       expect(PermissionHelper.hasPermission(role, 'CREATE_TASKS'), false);
       expect(PermissionHelper.hasPermission(role, 'DELETE_PATIENTS'), false);
 
       // Verify permission count
-      expect(PermissionHelper.getPermissionCount(role), 6);
+      expect(PermissionHelper.getPermissionCount(role), 7);
     });
 
     test('Complete role and permission flow for Family Member', () {
@@ -89,7 +90,7 @@ void main() {
       expect(PermissionHelper.getPermissionCount('ADMIN'), 26);
       expect(PermissionHelper.getPermissionCount('CAREGIVER'), 19);
       expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 19);
-      expect(PermissionHelper.getPermissionCount('PATIENT'), 6);
+      expect(PermissionHelper.getPermissionCount('PATIENT'), 7);
       expect(PermissionHelper.getPermissionCount('FAMILY_MEMBER'), 3);
     });
 

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../features/telemetry/telemetry.dart';
 import '../../../../providers/user_provider.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/auth_token_manager.dart';
 import '../../../../config/theme/app_theme.dart';
 import '../../../dashboard/models/patient_model.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -120,6 +122,9 @@ class _StartVisitPageState extends State<StartVisitPage> {
     }
 
     // Navigate to Check-In Location page with selected patient and service type
+    unawaited(
+      Telemetry.event('feature_use', {'feature': 'evv_start_visit'}),
+    );
     final scheduledVisitParam = widget.scheduledVisitId != null ? '&scheduledVisitId=${widget.scheduledVisitId}' : '';
     context.push('/evv/checkin-location?patientId=${widget.patientId}&serviceType=${Uri.encodeComponent(_selectedServiceType!)}$scheduledVisitParam');
   }

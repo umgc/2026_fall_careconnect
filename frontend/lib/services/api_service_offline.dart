@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 
+import '../features/telemetry/telemetry.dart';
 import 'local_db/offline_sync_service.dart';
+import 'telemetry_http_client.dart';
 
 export 'local_db/offline_sync_service.dart'
     show OfflineSyncQueueItem, OfflineSyncRunSummary;
@@ -25,7 +29,7 @@ class ApiServiceOffline {
 
   /// HTTP client that automatically routes requests through the offline queue.
   static final http.Client httpClient = OfflineQueueHttpClient(
-    inner: http.Client(),
+    inner: TelemetryHttpClient(http.Client()),
     offlineSyncService: _offlineSyncService,
     canQueueWrites: () => _canQueueOfflineWrites?.call() ?? true,
   );
@@ -81,7 +85,40 @@ class ApiServiceOffline {
       return true;
     }());
 
-    return _offlineSyncService.syncQueuedRequestById(id);
+    final pendingCount = await getPendingCount();
+
+    unawaited(Telemetry.event('sync_started', {
+      'scope': 'single',
+      'pendingCount': pendingCount,
+    }));
+
+    try {
+      final ok = await _offlineSyncService.syncQueuedRequestById(id);
+
+      if (ok) {
+        unawaited(Telemetry.event('sync_completed', {
+          'scope': 'single',
+          'attempted': 1,
+          'succeeded': 1,
+          'failed': 0,
+        }));
+      } else {
+        unawaited(Telemetry.event('sync_failed', {
+          'scope': 'single',
+          'attempted': 1,
+          'failed': 1,
+        }));
+      }
+
+      return ok;
+    } catch (_) {
+      unawaited(Telemetry.event('sync_failed', {
+        'scope': 'single',
+        'attempted': 1,
+        'failed': 1,
+      }));
+      rethrow;
+    }
   }
 
   /// Deletes a queued request by ID.
@@ -103,7 +140,48 @@ class ApiServiceOffline {
       return true;
     }());
 
-    return _offlineSyncService.syncPendingQueue(limit: limit);
+    final pendingCount = await getPendingCount();
+
+    if (pendingCount == 0) {
+      return const OfflineSyncRunSummary(
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+      );
+    }
+
+    unawaited(Telemetry.event('sync_started', {
+      'scope': 'batch',
+      'pendingCount': pendingCount,
+    }));
+
+    try {
+      final summary = await _offlineSyncService.syncPendingQueue(limit: limit);
+
+      unawaited(Telemetry.event('sync_completed', {
+        'scope': 'batch',
+        'attempted': summary.attempted,
+        'succeeded': summary.succeeded,
+        'failed': summary.failed,
+      }));
+
+      if (summary.failed > 0) {
+        unawaited(Telemetry.event('sync_failed', {
+          'scope': 'batch',
+          'attempted': summary.attempted,
+          'failed': summary.failed,
+        }));
+      }
+
+      return summary;
+    } catch (_) {
+      unawaited(Telemetry.event('sync_failed', {
+        'scope': 'batch',
+        'attempted': pendingCount,
+        'failed': pendingCount,
+      }));
+      rethrow;
+    }
   }
 
   /// Checks whether a response was queued offline.

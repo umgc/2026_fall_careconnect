@@ -93,10 +93,10 @@ Each user has **exactly one role**, assigned at registration or by an administra
 | VIEW_ANALYTICS | x | x | | |
 | EXPORT_REPORTS | x | x | | |
 | **Other** | | | | |
-| USE_AI_FEATURES | x | x | | |
+| USE_AI_FEATURES | x | x | x | |
 | MANAGE_DEVICES | x | x | | |
 
-**Summary:** ADMIN has all 26 permissions, CAREGIVER has 18-19, PATIENT has 6, FAMILY_MEMBER has 3 (read-only).
+**Summary:** ADMIN has all 26 permissions, CAREGIVER has 18-19, PATIENT has 7, FAMILY_MEMBER has 3 (read-only).
 
 ---
 
