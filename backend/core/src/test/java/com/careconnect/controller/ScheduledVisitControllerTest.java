@@ -123,7 +123,7 @@ class ScheduledVisitControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 500 when request fails validation")
+        @DisplayName("Returns 400 when request fails validation")
         void returns500WhenRequestInvalid() throws Exception {
             // Arrange
             final ScheduledVisitRequest invalidRequest = new ScheduledVisitRequest(
@@ -141,7 +141,7 @@ class ScheduledVisitControllerTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidRequest)))
-                    .andExpect(status().isInternalServerError());
+                    .andExpect(status().isBadRequest());
 
             // Assert
             verifyNoInteractions(scheduledVisitService);
@@ -420,7 +420,7 @@ class ScheduledVisitControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 500 when update request fails validation")
+        @DisplayName("Returns 400 when update request fails validation")
         void returns500WhenUpdateRequestInvalid() throws Exception {
             // Arrange
             final ScheduledVisitRequest invalidUpdateRequest = new ScheduledVisitRequest(
@@ -438,7 +438,7 @@ class ScheduledVisitControllerTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidUpdateRequest)))
-                    .andExpect(status().isInternalServerError());
+                    .andExpect(status().isBadRequest());
 
             // Assert
             verifyNoInteractions(scheduledVisitService);

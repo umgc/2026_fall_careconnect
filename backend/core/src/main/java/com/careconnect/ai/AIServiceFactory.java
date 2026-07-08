@@ -33,7 +33,7 @@ public class AIServiceFactory {
 
         switch (provider.toLowerCase()) {
             case "bedrock" -> {
-                log.info("Using AWS Bedrock (Nova Lite via Amazon)");
+                log.info("Using AWS Bedrock (Nova Lite / Claude)");
                 if (bedrockService == null) {
                     log.error("======================================");
                     log.error("CONFIGURATION ERROR: AI provider is set to 'bedrock'");
@@ -58,7 +58,7 @@ public class AIServiceFactory {
                 log.error("======================================");
                 log.error("CONFIGURATION ERROR: Unknown AI provider '{}'", provider);
                 log.error("Valid values: 'bedrock', 'deepseek'");
-                log.error("Defaulting will NOT occur — AI features will fail at runtime.");
+                log.error("Defaulting will NOT occur - AI features will fail at runtime.");
                 log.error("======================================");
             }
         }
