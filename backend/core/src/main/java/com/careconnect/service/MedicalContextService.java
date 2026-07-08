@@ -82,7 +82,7 @@ public class MedicalContextService {
             context.append("\n");
         }
         
-        // Process uploaded files if any — gated by the documents data-source flag (WBS 3.15.7 / SAF-6)
+        // Process uploaded files if any — gated by the documents data-source flag (WBS 3.15.7)
         if (shouldIncludeDocuments(aiConfig)
                 && request.getUploadedFiles() != null && !request.getUploadedFiles().isEmpty()) {
             context.append("UPLOADED FILES:\n");
@@ -123,7 +123,7 @@ public class MedicalContextService {
         return request.getIncludeAllergies() != null ? request.getIncludeAllergies() : aiConfig.getIncludeAllergiesByDefault();
     }
 
-    // WBS 3.15.7 / SAF-6: gate uploaded documents on the data-source flag.
+    // WBS 3.15.7: gate uploaded documents on the data-source flag.
     // Null (older configs) defaults to include, preserving prior behavior.
     boolean shouldIncludeDocuments(UserAIConfig aiConfig) {
         Boolean flag = aiConfig.getIncludeDocumentsByDefault();

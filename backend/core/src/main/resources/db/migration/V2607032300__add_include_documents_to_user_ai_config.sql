@@ -1,4 +1,4 @@
--- WBS 3.15.7 / SAF-6: add a data-source exclusion flag for uploaded documents.
+-- WBS 3.15.7: add a data-source exclusion flag for uploaded documents.
 --
 -- The user_ai_config table is created by Hibernate (ddl-auto) in dev/test and
 -- has no prior Flyway migration, so create it defensively before adding the

@@ -540,7 +540,7 @@ class MedicalContextServiceTest {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Documents data-source gate (WBS 3.15.7 / SAF-6)
+    // Documents data-source gate (WBS 3.15.7)
     // ═════════════════════════════════════════════════════════════════════════
 
     @Test
