@@ -4692,56 +4692,16 @@ The CareConnect AI integration provides a comprehensive, healthcare-focused AI s
 
 ### Wearable Device Integration
 
-```dart
-// services/device_integration_service.dart
-class DeviceIntegrationService {
-  final HealthDataService _healthDataService;
+Current semester implementation centers on explicit source/metric scope definition and mapping to existing persisted entities.
 
-  Future<void> syncFitbitData() async {
-    try {
-      final fitbitData = await FitbitConnector.instance.getTodaysActivitySummary();
+- Frontend entrypoint: `frontend/lib/features/integrations/presentation/pages/wearables_screen.dart`
+- Persisted wearable model: `backend/core/src/main/java/com/careconnect/model/WearableMetric.java`
+- Manual vital sample model: `backend/core/src/main/java/com/careconnect/model/VitalSample.java`
+- Wearable metric repository queries: `backend/core/src/main/java/com/careconnect/repository/WearableMetricRepository.java`
 
-      // Convert Fitbit data to our format
-      final healthData = HealthData(
-        steps: fitbitData.summary?.steps,
-        heartRate: fitbitData.summary?.restingHeartRate,
-        calories: fitbitData.summary?.caloriesOut,
-        distance: fitbitData.summary?.distances?.first.distance,
-        timestamp: DateTime.now(),
-      );
+For the semester source-by-source matrix and placeholder policy, see:
 
-      await _healthDataService.saveHealthData(healthData);
-    } catch (e) {
-      throw DeviceIntegrationException('Fitbit sync failed: $e');
-    }
-  }
-
-  Future<void> setupDeviceSync() async {
-    // Setup periodic sync
-    Timer.periodic(Duration(hours: 1), (timer) {
-      syncAllConnectedDevices();
-    });
-  }
-
-  Future<void> syncAllConnectedDevices() async {
-    final connectedDevices = await getConnectedDevices();
-
-    for (final device in connectedDevices) {
-      switch (device.type) {
-        case DeviceType.fitbit:
-          await syncFitbitData();
-          break;
-        case DeviceType.appleWatch:
-          await syncAppleHealthData();
-          break;
-        case DeviceType.bloodPressureMonitor:
-          await syncBloodPressureData();
-          break;
-      }
-    }
-  }
-}
-```
+- `docs/spring2026_guides/WEARABLE_METRICS_SOURCE_MATRIX.md`
 
 ## USPS Integration
 

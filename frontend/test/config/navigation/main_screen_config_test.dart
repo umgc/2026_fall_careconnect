@@ -28,6 +28,28 @@ void main() {
   // the Flutter test binding must be initialised.
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  void expectValidNavItems(List<BottomNavItem> items) {
+    final invalidLabels = items
+        .where((item) => item.label.trim().isEmpty)
+        .map((item) => item.routeName)
+        .toList();
+    final invalidRoutes = items
+        .where((item) => item.routeName.trim().isEmpty)
+        .map((item) => item.label)
+        .toList();
+    final missingTargets = items
+        .where((item) => item.screen == null && item.onPress == null)
+        .map((item) => item.routeName)
+        .toList();
+
+    expect(invalidLabels, isEmpty);
+    expect(invalidRoutes, isEmpty);
+    expect(missingTargets, isEmpty);
+  }
+
+  List<String> routeNames(List<BottomNavItem> items) =>
+      items.map((item) => item.routeName).toList();
+
   // ─── Constructor ──────────────────────────────────────────────────────────
 
   group('MainScreenConfig constructor', () {
@@ -189,6 +211,34 @@ void main() {
       final cfg = MainScreenConfig.forCaregiver(userId: 2);
       final items = cfg.getNavItems();
       expect(items, isNotEmpty);
+    });
+
+    test('role-based configs build valid navigation entries', () {
+      final configs = [
+        MainScreenConfig.forPatient(userId: 1),
+        MainScreenConfig.forCaregiver(userId: 2),
+        MainScreenConfig.forFamilyMember(userId: 3),
+        const MainScreenConfig(userRole: 'ADMIN', userId: 4),
+      ];
+
+      for (final cfg in configs) {
+        final items = cfg.getNavItems();
+        expect(items, isNotEmpty);
+        expectValidNavItems(items);
+      }
+    });
+
+    test('shared main screen roles keep caregiver navigation entries stable',
+        () {
+      final caregiverItems =
+          MainScreenConfig.forCaregiver(userId: 1).getNavItems();
+      final familyItems =
+          MainScreenConfig.forFamilyMember(userId: 2).getNavItems();
+      final adminItems =
+          const MainScreenConfig(userRole: 'ADMIN', userId: 3).getNavItems();
+
+      expect(routeNames(familyItems), routeNames(caregiverItems));
+      expect(routeNames(adminItems), routeNames(caregiverItems));
     });
   });
 }

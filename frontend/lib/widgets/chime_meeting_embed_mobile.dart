@@ -610,7 +610,28 @@ String _buildMobileMeetingHtml(String configJson) {
     <style>
       html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
       #stage { position:relative; width:100%; height:100%; background:#000; }
-      #remoteVideo { width:100%; height:100%; object-fit:cover; background:#000; }
+      #videoGridScroll {
+        position:absolute; top:0; left:0; right:0; bottom:0;
+        overflow-y:auto; overflow-x:hidden; background:#000;
+      }
+      #videoGrid {
+        display:grid; width:100%; height:100%; min-height:100%; background:#000; gap:2px;
+        place-items:stretch;
+      }
+      #videoGrid.layout-single {
+        grid-template-columns:1fr; grid-template-rows:1fr;
+      }
+      #videoGrid.layout-grid {
+        height:100%;
+        grid-auto-rows:1fr;
+      }
+      #videoGrid.layout-grid.layout-scroll {
+        height:auto;
+        min-height:100%;
+        grid-auto-rows:minmax(160px, 1fr);
+        align-content:start;
+      }
+      .remote-video { width:100%; height:100%; object-fit:contain; background:#111; min-height:0; }
       #localVideo {
         position:absolute; right:14px; top:14px; width:18%; max-width:110px;
         aspect-ratio:9/16; object-fit:cover; border-radius:10px;
@@ -620,7 +641,9 @@ String _buildMobileMeetingHtml(String configJson) {
   </head>
   <body>
     <div id="stage">
-      <video id="remoteVideo" autoplay playsinline></video>
+      <div id="videoGridScroll">
+        <div id="videoGrid"></div>
+      </div>
       <video id="localVideo" autoplay playsinline muted></video>
       <audio id="remoteAudio" autoplay></audio>
     </div>
@@ -632,15 +655,16 @@ String _buildMobileMeetingHtml(String configJson) {
 
         const config = $configJson;
         const statusEl = document.getElementById('status');
+        const stage = document.getElementById('stage');
         const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
+        const videoGrid = document.getElementById('videoGrid');
         const remoteAudio = document.getElementById('remoteAudio');
 
         let meetingSession = null;
         let audioVideo = null;
         let chimeSdkNamespace = null;
         let localVideoTileId = null;
-        let remoteVideoTileId = null;
+        const remoteTiles = new Map();
         let remoteParticipantPresent = false;
         let availableVideoInputs = [];
         let currentVideoInputDeviceId = null;
@@ -700,9 +724,80 @@ String _buildMobileMeetingHtml(String configJson) {
           report('info', msg);
         }
 
+        function effectiveEmptySlots(count, cols) {
+          const remainder = count % cols;
+          if (remainder === 0) return 0;
+          if (remainder === 1) return 0;
+          return cols - remainder;
+        }
+
+        function computeGridCols(count) {
+          const width = stage ? (stage.clientWidth || window.innerWidth || 360) : 360;
+          if (count <= 1) return 1;
+          if (count === 2) return width >= 600 ? 2 : 1;
+          if (count === 3) return width >= 600 ? 2 : 1;
+          if (count === 4) return width >= 600 ? 2 : 2;
+
+          const maxCols = width >= 600 ? Math.min(count, 4) : Math.min(count, 2);
+          let bestCols = 1;
+          let bestScore = Infinity;
+          for (let cols = 1; cols <= maxCols; cols++) {
+            const rows = Math.ceil(count / cols);
+            const empty = effectiveEmptySlots(count, cols);
+            const stackPenalty = width >= 600 && cols === 1 ? 30 : 0;
+            const score = empty * 100 + rows * 2 + stackPenalty - (width >= 600 ? cols * 3 : 0);
+            if (score < bestScore) {
+              bestScore = score;
+              bestCols = cols;
+            }
+          }
+          return bestCols;
+        }
+
+        function applyGridOrphans(cols) {
+          const items = Array.from(videoGrid.querySelectorAll('.remote-video'));
+          items.forEach((el) => { el.style.gridColumn = ''; });
+          const count = items.length;
+          if (count <= cols) return;
+          const remainder = count % cols;
+          if (remainder === 1) {
+            items[count - 1].style.gridColumn = '1 / -1';
+          }
+        }
+
+        function updateVideoGridLayout() {
+          const count = remoteTiles.size;
+          videoGrid.style.gridTemplateColumns = '';
+          videoGrid.style.gridTemplateRows = '';
+          videoGrid.style.gridAutoRows = '';
+          if (count === 0) {
+            videoGrid.className = '';
+            return;
+          }
+          if (count === 1) {
+            videoGrid.className = 'layout-single';
+            return;
+          }
+          const cols = computeGridCols(count);
+          const scrollable = count > 6;
+          videoGrid.className = scrollable ? 'layout-grid layout-scroll' : 'layout-grid';
+          videoGrid.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+          applyGridOrphans(cols);
+        }
+
+        if (stage && typeof ResizeObserver !== 'undefined') {
+          new ResizeObserver(() => updateVideoGridLayout()).observe(stage);
+        } else {
+          window.addEventListener('resize', updateVideoGridLayout);
+        }
+
         function updateParticipantStatus() {
-          if (remoteVideoTileId !== null) {
-            setStatus('Connected with participant');
+          if (remoteTiles.size > 0) {
+            setStatus(
+              remoteTiles.size === 1
+                ? 'Connected with participant'
+                : 'Connected with ' + remoteTiles.size + ' participants',
+            );
             return;
           }
 
@@ -2042,9 +2137,13 @@ String _buildMobileMeetingHtml(String configJson) {
           if (localVideo) {
             localVideo.srcObject = null;
           }
-          if (remoteVideo) {
-            remoteVideo.srcObject = null;
-          }
+          remoteTiles.forEach((el) => {
+            try {
+              el.srcObject = null;
+              el.remove();
+            } catch (_) {}
+          });
+          remoteTiles.clear();
 
           if (flutterMessageHandler) {
             try {
@@ -2312,11 +2411,20 @@ String _buildMobileMeetingHtml(String configJson) {
                 bindAndPlayVideo(tileState.tileId, localVideo, 'local');
                 report('info', 'Local video tile bound');
               } else {
-                remoteVideoTileId = tileState.tileId;
                 remoteParticipantPresent = true;
-                bindAndPlayVideo(tileState.tileId, remoteVideo, 'remote');
+                if (!remoteTiles.has(tileState.tileId)) {
+                  const el = document.createElement('video');
+                  el.autoplay = true;
+                  el.playsInline = true;
+                  el.muted = true;
+                  el.className = 'remote-video';
+                  videoGrid.appendChild(el);
+                  remoteTiles.set(tileState.tileId, el);
+                  updateVideoGridLayout();
+                }
+                bindAndPlayVideo(tileState.tileId, remoteTiles.get(tileState.tileId), 'remote');
                 updateParticipantStatus();
-                report('info', 'Remote video tile bound');
+                report('info', 'Remote video tile bound: ' + tileState.tileId + ' (total=' + remoteTiles.size + ')');
               }
             },
             videoTileWasRemoved: (tileId) => {
@@ -2324,8 +2432,13 @@ String _buildMobileMeetingHtml(String configJson) {
                 localVideoTileId = null;
                 localVideo.srcObject = null;
               }
-              if (remoteVideoTileId === tileId) {
-                remoteVideoTileId = null;
+              const remoteEl = remoteTiles.get(tileId);
+              if (remoteEl) {
+                remoteEl.srcObject = null;
+                remoteEl.remove();
+                remoteTiles.delete(tileId);
+                updateVideoGridLayout();
+                remoteParticipantPresent = remoteTiles.size > 0;
                 updateParticipantStatus();
               }
             },
@@ -2339,8 +2452,8 @@ String _buildMobileMeetingHtml(String configJson) {
                 return;
               }
               remoteParticipantPresent = !!present;
-              if (!remoteParticipantPresent) {
-                remoteVideoTileId = null;
+              if (!present) {
+                remoteParticipantPresent = remoteTiles.size > 0;
               }
               updateParticipantStatus();
               report('info', 'Presence update: attendee=' + attendeeId + ', present=' + String(!!present));
