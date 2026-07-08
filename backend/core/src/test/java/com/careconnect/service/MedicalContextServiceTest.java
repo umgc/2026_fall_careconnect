@@ -538,4 +538,57 @@ class MedicalContextServiceTest {
         req.setIncludeAllergies(true);
         assertThat(service.buildPatientContext(1L, req, cfg())).doesNotContain("KNOWN ALLERGIES:");
     }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Documents data-source gate (WBS 3.15.7 / SAF-6)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void shouldIncludeDocuments_flagTrue_true() throws Exception {
+        final UserAIConfig c = cfg();
+        c.setIncludeDocumentsByDefault(true);
+        assertThat(service.shouldIncludeDocuments(c)).isTrue();
+    }
+
+    @Test
+    void shouldIncludeDocuments_flagFalse_false() throws Exception {
+        final UserAIConfig c = cfg();
+        c.setIncludeDocumentsByDefault(false);
+        assertThat(service.shouldIncludeDocuments(c)).isFalse();
+    }
+
+    @Test
+    void shouldIncludeDocuments_flagNull_defaultsTrue() throws Exception {
+        final UserAIConfig c = cfg();
+        c.setIncludeDocumentsByDefault(null);
+        assertThat(service.shouldIncludeDocuments(c)).isTrue();
+    }
+
+    @Test
+    void buildPatientContext_documentsExcluded_uploadedFilesOmitted() throws Exception {
+        when(patientRepository.findById(1L)).thenReturn(Optional.of(patient(1L)));
+        final UploadedFileDTO file = UploadedFileDTO.builder()
+                .filename("report.pdf").contentType("application/pdf").build();
+        final ChatRequest req = bareRequest();
+        req.setUploadedFiles(List.of(file));
+        final UserAIConfig c = cfg();
+        c.setIncludeDocumentsByDefault(false);
+        final String result = service.buildPatientContext(1L, req, c);
+        assertThat(result).doesNotContain("UPLOADED FILES:");
+        assertThat(result).doesNotContain("report.pdf");
+    }
+
+    @Test
+    void buildPatientContext_documentsIncluded_uploadedFilesPresent() throws Exception {
+        when(patientRepository.findById(1L)).thenReturn(Optional.of(patient(1L)));
+        final UploadedFileDTO file = UploadedFileDTO.builder()
+                .filename("report.pdf").contentType("application/pdf").build();
+        when(documentProcessingService.extractTextContent(file)).thenReturn("PDF text");
+        final ChatRequest req = bareRequest();
+        req.setUploadedFiles(List.of(file));
+        final UserAIConfig c = cfg();
+        c.setIncludeDocumentsByDefault(true);
+        final String result = service.buildPatientContext(1L, req, c);
+        assertThat(result).contains("UPLOADED FILES:").contains("report.pdf").contains("PDF text");
+    }
 }
