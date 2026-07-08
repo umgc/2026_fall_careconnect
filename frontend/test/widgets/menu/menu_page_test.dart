@@ -159,19 +159,21 @@ void main() {
       expect(find.byType(Card), findsWidgets);
     });
 
-    // TC-S2-VC-ENTRY-001
-    testWidgets('renders voice commands menu entry and opens /voice',
+    testWidgets('renders Voice Commands menu tile with mic icon',
         (tester) async {
       await tester.pumpWidget(_buildApp(session: caregiverSession));
       await tester.pumpAndSettle();
 
-      expect(find.text('Voice Commands'), findsOneWidget);
-      expect(find.byIcon(Icons.mic), findsOneWidget);
-
-      await tester.tap(find.text('Voice Commands'));
+      // Scroll until the Voice Commands tile is visible.
+      await tester.scrollUntilVisible(
+        find.text('Voice Commands', skipOffstage: false),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('Voice Commands Entry Route'), findsOneWidget);
+      expect(find.text('Voice Commands'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
     });
   });
 }

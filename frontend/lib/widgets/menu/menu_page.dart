@@ -168,6 +168,11 @@ class _MenuPageState extends State<MenuPage> {
         route: '/file-management',
       ),
       _MenuItem(
+        icon: Icons.mic,
+        label: local.voiceCommands,
+        route: '/voice',
+      ),
+      _MenuItem(
         icon: Icons.sensors,
         label: local.fallDetection,
         route: '/alertpage',
