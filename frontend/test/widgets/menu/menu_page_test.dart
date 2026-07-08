@@ -34,7 +34,7 @@ import 'package:care_connect_app/widgets/menu/menu_page.dart';
 
 /// Wraps [child] with all providers and localization needed by MenuPage.
 /// [session] is set on the UserProvider when provided.
-Widget _buildApp({UserSession? session, Widget? child}) {
+Widget _buildApp({UserSession? session, Widget? child, String local = 'en'}) {
   final userProvider = UserProvider();
   if (session != null) userProvider.setUser(session);
 
@@ -61,6 +61,7 @@ Widget _buildApp({UserSession? session, Widget? child}) {
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale(local)
     ),
   );
 }
@@ -120,11 +121,25 @@ void main() {
 
       expect(find.text('Menu'), findsOneWidget);
       expect(find.text('Care Giver'), findsOneWidget);
-      expect(find.text('CAREGIVER'), findsOneWidget);
+      expect(find.text('Caregiver'), findsOneWidget);
       expect(find.text('Tools'), findsOneWidget);
       expect(find.byType(Card), findsWidgets);
       expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
       expect(find.text('Preferences', skipOffstage: false), findsOneWidget);
+    });
+
+    testWidgets('Team C smoke: renders logged-in menu integration surfaces - Spanish',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession, local:'es'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Menú'), findsOneWidget);
+      expect(find.text('Care Giver'), findsOneWidget);
+      expect(find.text('Cuidador'), findsOneWidget);
+      expect(find.text('Herramientas'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
+      expect(find.text('Preferencias', skipOffstage: false), findsOneWidget);
     });
 
     testWidgets('renders the Tools section header', (tester) async {

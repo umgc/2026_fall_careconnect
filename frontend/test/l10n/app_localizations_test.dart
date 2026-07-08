@@ -307,6 +307,13 @@ void main() {
       loc.settings_generalSectionOfflinePersistenceSetting,
       loc.settings_generalSectionOfflinePersistenceSettingEnabled,
       loc.settings_generalSectionOfflinePersistenceSettingDisabled,
+      loc.roles_Patient,
+      loc.roles_Caregiver,
+      loc.roles_Admin,
+      loc.menupage_patientReportItem,
+      loc.menupage_medicationTrackerItem,
+      loc.menupage_addPatientItem,
+      loc.menupage_settingsItem,
     ];
   }
 

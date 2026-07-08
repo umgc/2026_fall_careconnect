@@ -1,6 +1,9 @@
 {
   "am": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -66,11 +69,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "ar": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -136,11 +146,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "bn": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -206,11 +223,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "fa": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -276,11 +300,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "fr": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -346,11 +377,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "hi": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -416,11 +454,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "ja": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -486,11 +531,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "ne": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -556,11 +608,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "pt": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -626,11 +685,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "ru": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -696,11 +762,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "ur": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -766,11 +839,18 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ],
 
   "zh": [
     "voiceCommands",
+    "roles_Patient",
+    "roles_Caregiver",
+    "roles_Admin",
     "settings_telemetryDefaultDialogTitle",
     "settings_telemetryDefaultDialogDescription",
     "settings_telemetryDefaultDialogKeepEnabled",
@@ -836,6 +916,10 @@
     "languagepicker_Portuguese",
     "languagepicker_Bengali",
     "languagepicker_Russian",
-    "languagepicker_Japanese"
+    "languagepicker_Japanese",
+    "menupage_patientReportItem",
+    "menupage_medicationTrackerItem",
+    "menupage_addPatientItem",
+    "menupage_settingsItem"
   ]
 }

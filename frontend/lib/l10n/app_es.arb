@@ -32,6 +32,10 @@
   "systemDefault": "Predeterminado del sistema",
   "fallbackUser": "Usuario",
 
+  "roles_Patient": "Paciente",
+  "roles_Caregiver": "Cuidador",
+  "roles_Admin": "Admin",
+
   "dashboard": "Panel",
 
   "shortcut_dashboard": "Panel",
@@ -198,6 +202,11 @@
   "languagepicker_Portuguese": "Português (Portugués)",
   "languagepicker_Bengali": "বাংলা (Bengalí)",
   "languagepicker_Russian": "Русский (Ruso)",
-  "languagepicker_Japanese": "日本語 (Japonés)"
+  "languagepicker_Japanese": "日本語 (Japonés)",
+
+  "menupage_patientReportItem": "Informe del Paciente",
+  "menupage_medicationTrackerItem": "Registro de medicación",
+  "menupage_addPatientItem": "Añadir paciente",
+  "menupage_settingsItem": "Configuración"
 
 }
