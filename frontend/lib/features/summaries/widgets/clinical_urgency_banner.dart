@@ -2,9 +2,33 @@ import 'package:flutter/material.dart';
 
 /// Banner surfacing SOAP-derived clinical urgency at the top of a summary display.
 ///
-/// Reads a [riskLevel] string emitted by the backend Bedrock summarization
-/// pipeline (see `BedrockSentimentService.extractRiskLevel`). The banner
-/// renders differently by risk:
+/// ## Backend contract
+///
+/// The [riskLevel] input comes from the `riskLevel` field of the Bedrock
+/// summary payload. Normalization lives in the backend at
+/// `backend/core/src/main/java/com/careconnect/service/BedrockSentimentService.java`
+/// (method `extractRiskLevel`), which coerces the raw model output to
+/// exactly one of `"HIGH"`, `"MODERATE"`, or `"LOW"`. Unknown or malformed
+/// values default to `"LOW"` at the backend. A `null` reaches this widget
+/// when the summary payload is absent entirely — for example when the call
+/// summary row's `status` is `NO_TRANSCRIPT` or `ERROR`.
+///
+/// The widget accepts case-insensitive input (`"high"` → HIGH) as defence
+/// in depth, but the backend contract emits uppercase.
+///
+/// The `caregiverVisibility` field on the same payload is enforced at the
+/// API / RBAC layer, not in this widget. Do not use this widget to gate
+/// visibility — only urgency display.
+///
+/// Related backend files:
+///
+///  * `BedrockSentimentService.parseSummaryResponse` — payload assembly
+///  * `BedrockSentimentService.extractRiskLevel` — value normalization
+///  * `CallSummaryService.buildStoredSummary` — persistence wiring (PR #269)
+///
+/// ## Display
+///
+/// The banner renders differently by risk:
 ///
 ///  * `HIGH` — red strip with warning icon and prominent copy urging review.
 ///  * `MODERATE` — amber strip with caution icon.
