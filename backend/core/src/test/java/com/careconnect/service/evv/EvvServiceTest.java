@@ -168,23 +168,19 @@ class EvvServiceTest {
     }
 
     @Test
-    void createRecord_withGpsCheckinNoCoords_skipsSave() throws Exception {
+    void createRecord_withGpsCheckinNoCoords_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkinLocationSource("GPS")
-                // lat/lng intentionally omitted
+                // lat/lng intentionally omitted — service enforces GPS requires both
                 .build();
-
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
 
-        evvService.createRecord(req, 1L);
-
-        verify(locationService, never()).saveLocation(any());
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GPS");
     }
 
     @Test
@@ -192,6 +188,7 @@ class EvvServiceTest {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkinLocationSource("PATIENT_ADDRESS")
+                .checkinNoGpsReason("HOME_VISIT_ADDRESS_USED")
                 .build();
 
         final EvvRecord saved = buildSavedRecord(1L, patient);
@@ -294,23 +291,19 @@ class EvvServiceTest {
     }
 
     @Test
-    void createRecord_withGpsCheckoutNoCoords_skipsSave() throws Exception {
+    void createRecord_withGpsCheckoutNoCoords_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkoutLocationSource("GPS")
-                // lat/lng intentionally omitted
+                // lat/lng intentionally omitted — service enforces GPS requires both
                 .build();
-
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
 
-        evvService.createRecord(req, 1L);
-
-        verify(locationService, never()).saveLocation(any());
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GPS");
     }
 
     @Test
@@ -318,6 +311,7 @@ class EvvServiceTest {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkoutLocationSource("PATIENT_ADDRESS")
+                .checkoutNoGpsReason("HOME_VISIT_ADDRESS_USED")
                 .build();
 
         final EvvRecord saved = buildSavedRecord(1L, patient);
@@ -1058,24 +1052,21 @@ class EvvServiceTest {
     }
 
     @Test
-    void createRecord_checkinGpsLatOnlyNoLng_skipsSaveWithWarning() throws Exception {
+    void createRecord_checkinGpsLatOnlyNoLng_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkinLocationSource("GPS")
                 .checkinLocationLat(38.9072)
-                // checkinLocationLng and legacy locationLng both omitted
+                // lng omitted — service requires both lat+lng for GPS
                 .build();
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L))
                 .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
 
-        evvService.createRecord(req, 1L);
-
-        verify(locationService, never()).saveLocation(any());
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GPS");
     }
 
     @Test
@@ -1110,24 +1101,21 @@ class EvvServiceTest {
     }
 
     @Test
-    void createRecord_checkoutGpsLatOnlyNoLng_skipsSaveWithWarning() throws Exception {
+    void createRecord_checkoutGpsLatOnlyNoLng_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkoutLocationSource("GPS")
                 .checkoutLocationLat(38.91)
-                // checkoutLocationLng omitted
+                // lng omitted — service requires both lat+lng for GPS
                 .build();
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L))
                 .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
 
-        evvService.createRecord(req, 1L);
-
-        verify(locationService, never()).saveLocation(any());
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GPS");
     }
 
     @Test
@@ -1164,75 +1152,55 @@ class EvvServiceTest {
     // ─── saveLocationsForRecord — outer catch blocks ──────────────────────────
 
     @Test
-    void createRecord_checkinInvalidLocationSource_logsWarningAndStillCreatesRecord() throws Exception {
+    void createRecord_checkinInvalidLocationSource_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkinLocationSource("NOT_A_REAL_TYPE")
                 .build();
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L))
                 .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
 
-        final EvvRecord result = evvService.createRecord(req, 1L);
-
-        // EvvLocationType.valueOf() throws inside the try block, caught by the
-        // outer catch — record creation must still succeed.
-        assertThat(result).isNotNull();
-        verify(locationService, never()).saveLocation(any());
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NOT_A_REAL_TYPE");
     }
 
     @Test
-    void createRecord_checkoutInvalidLocationSource_logsWarningAndStillCreatesRecord() throws Exception {
+    void createRecord_checkoutInvalidLocationSource_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkoutLocationSource("NOT_A_REAL_TYPE")
                 .build();
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L))
                 .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
 
-        final EvvRecord result = evvService.createRecord(req, 1L);
-
-        assertThat(result).isNotNull();
-        verify(locationService, never()).saveLocation(any());
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("NOT_A_REAL_TYPE");
     }
 
     // ─── parseNoGpsReason — driven via createRecord's checkin path ────────────
 
     @Test
-    void createRecord_checkinNoGpsReasonBlank_parsesAsNull() throws Exception {
+    void createRecord_checkinPatientAddressBlankNoGpsReason_throwsIllegalArgument() throws Exception {
         final Patient patient = buildPatient(5L);
+        // blank reason is treated same as missing — EVV regulations require a non-blank value
         final EvvRecordRequestDto req = baseReqBuilder()
                 .checkinLocationSource("PATIENT_ADDRESS")
                 .checkinNoGpsReason("   ")
                 .build();
-        final EvvRecord saved = buildSavedRecord(1L, patient);
 
         when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
         when(userRepository.findById(10L))
                 .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
-        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
-        doNothing().when(audit).log(any(), any(), any(), any());
-        when(locationService.saveLocation(any())).thenReturn(
-                EvvLocationResponse.builder()
-                        .evvRecordId(1L)
-                        .role(EvvLocationRole.CHECK_IN)
-                        .type(EvvLocationType.PATIENT_ADDRESS)
-                        .build());
 
-        evvService.createRecord(req, 1L);
-
-        final ArgumentCaptor<EvvLocationRequest> captor = ArgumentCaptor.forClass(EvvLocationRequest.class);
-        verify(locationService).saveLocation(captor.capture());
-        assertThat(captor.getValue().getNoGpsReason()).isNull();
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GPS reason");
     }
 
     @Test
