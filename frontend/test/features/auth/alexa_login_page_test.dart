@@ -11,6 +11,7 @@
 // the source code. We consume those exceptions with tester.takeException()
 // after each pump to keep the tests green.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -37,7 +38,7 @@ Widget _wrap() {
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, routerConfig: router);
 }
 
 /// Drain the RenderFlex overflow exceptions that come from AlexaLoginPage's

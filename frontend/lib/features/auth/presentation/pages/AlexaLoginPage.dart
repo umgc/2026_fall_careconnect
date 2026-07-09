@@ -80,7 +80,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 }
   /// Check if this is an Alexa OAuth flow by looking at URL parameters
   void _checkForAlexaOAuthParams() {
-    _log("🔍 Checking for Alexa OAuth parameters...");
+    final t = AppLocalizations.of(context)!;
+    _log("🔍 ${t.alexalogin_checkForAlexaOAuthParams}...");
     
     try {
       // Try to get URL query parameters from GoRouter
@@ -88,8 +89,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
       final uri = routeState.uri;
       final qp = _mergedQueryParamsFromUriBase();
 
-      _log("Current URI: $uri");
-      _log("Query Parameters: ${uri.queryParameters}");
+      _log("${t.alexalogin_currentURI}: $uri");
+      _log("${t.alexalogin_queryParams}: ${uri.queryParameters}");
       
       _redirectUri = qp['redirect_uri'];
       _state = qp['state'];
@@ -100,13 +101,13 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
         if (extra is Map<String, dynamic>) {
           _redirectUri = extra['redirect_uri'] as String?;
           _state = extra['state'] as String?;
-          _log("✓ Got params from route extra - redirect_uri: $_redirectUri, state: $_state");
+          _log("✓ ${t.alexalogin_receivedParamsFromRoute}: $_redirectUri, ${t.alexalogin_state}: $_state");
         }
       }
       
       // TESTING ONLY: Hardcoded fallback for debugging (remove in production)
       if (_redirectUri == null) {
-        _log("⚠️ No Alexa params found - using hardcoded test values");
+        _log("⚠️ ${t.alexalogin_noAlexaParams}");
         _redirectUri = "https://pitangui.amazon.com/api/skill/link/M1VZ06KRKERWBD";
         _state = "test-state-123";
       }
@@ -114,19 +115,20 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
       _isAlexaFlow = _redirectUri != null && _redirectUri!.isNotEmpty;
       
       if (_isAlexaFlow) {
-        _log("✅ Alexa OAuth Flow Detected");
-        _log("Redirect URI: $_redirectUri");
-        _log("State: $_state");
+        _log("✅ ${t.alexalogin_alexaOAuthFlowDetected}");
+        _log("${t.alexalogin_redirectURI}: $_redirectUri");
+        _log("${t.alexalogin_state}: $_state");
       } else {
-        _log("ℹ️ Standard login flow");
+        _log("ℹ️ ${t.alexalogin_standardLoginFlow}");
       }
     } catch (e) {
-      _log("❌ Error checking OAuth params: $e");
+      _log("❌ ${t.alexalogin_errorCheckingOAuthParams}: $e");
     }
   }
 
   /// Login function that validates email and password
   Future<void> _login() async {
+    final t = AppLocalizations.of(context)!;
     // Clear previous errors
     setState(() {
       _error = null;
@@ -137,15 +139,15 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    _log("🚀 Starting login flow");
-    _log("Email: $email");
+    _log("🚀 ${t.alexalogin_startLoginFlow}");
+    _log("${t.resetpassword_emailTitle}: $email");
 
     // Validate inputs
     if (email.isEmpty || password.isEmpty) {
       setState(() {
-        _error = "Please enter your email and password.";
+        _error = t.alexalogin_missingEmailPassword;
       });
-      _log("❌ Validation failed: empty fields");
+      _log("❌ ${t.alexalogin_validationFailEmptyField}");
       return;
     }
 
@@ -155,43 +157,43 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 
     try {
       // Step 1: Call the auth service to login
-      _log("\n📍 STEP 1: Authenticating with backend...");
+      _log("\n📍 ${t.alexalogin_stepAuthBackend}...");
       
       final authResult = await EnhancedAuthService.loginWithRoleValidation(
         email: email,
         password: password,
-        t: AppLocalizations.of(context)!,
+        t: t,
       );
 
       if (authResult.isSuccess) {
-        _log("✅ Login Successful");
+        _log("✅ ${t.alexalogin_loginSuccessful}");
         
         // Login successful - get the JWT token
         final user = authResult.userSession!;
         final jwtToken = authResult.userSession?.token;
         
-        _log("JWT Token: ${jwtToken?.substring(0, 20)}...${jwtToken?.substring(jwtToken.length - 20)}");
+        _log("${t.alexalogin_jwtToken}: ${jwtToken?.substring(0, 20)}...${jwtToken?.substring(jwtToken.length - 20)}");
         
         if (mounted) {
           Provider.of<UserProvider>(context, listen: false).setUser(user);
           
           // If this is an Alexa OAuth flow, proceed to get authorization code
           if (_isAlexaFlow && jwtToken != null) {
-            _log("\n📍 STEP 2: Handling Alexa OAuth flow...");
+            _log("\n📍 ${t.alexalogin_handlingAlexaOAuth}...");
             await _handleAlexaOAuthFlow(jwtToken);
           }
         }
       } else {
         // Login failed - show error message
-        _log("❌ Login failed: ${authResult.errorMessage}");
+        _log("❌ ${t.login_loginFailedError}: ${authResult.errorMessage}");
         setState(() {
-          _error = authResult.errorMessage ?? "Login failed. Please try again.";
+          _error = authResult.errorMessage ?? t.alexalogin_loginFailedTryAgain;
         });
       }
     } catch (e) {
-      _log("❌ Exception during login: $e");
+      _log("❌ ${t.alexalogin_exceptionDuringLogin}: $e");
       setState(() {
-        _error = "An unexpected error occurred.";
+        _error = "${t.authservice_unexpectedError}.";
       });
     } finally {
       setState(() {
@@ -202,6 +204,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 
   /// Handle Alexa OAuth flow - request temp code and redirect
   Future<void> _handleAlexaOAuthFlow(String jwtToken) async {
+    final t = AppLocalizations.of(context)!;
     try {
       setState(() {
         _error = null;
@@ -212,40 +215,40 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
       
       final codeResult = await AuthService.getAlexaAuthorizationCode(
         token: jwtToken,
-        t: AppLocalizations.of(context)!,
+        t: t,
       );
 
-      _log("Response: ${codeResult['message']}");
+      _log("${t.alexalogin_response}: ${codeResult['message']}");
 
       if (codeResult['isSuccess'] == true && codeResult['code'] != null) {
         final code = codeResult['code'] as String;
-        _log("✅ Authorization code generated: $code");
+        _log("✅ ${t.alexalogin_authCodeGenerated}: $code");
 
         // Step 3: Build redirect URI with code and state
-        _log("\n📍 STEP 3: Redirecting to Alexa...");
+        _log("\n📍 ${t.alexalogin_redirectingToAlexa}...");
         
         String redirectUrl = '$_redirectUri?code=${Uri.encodeComponent(code)}';
         if (_state != null && _state!.isNotEmpty) {
           redirectUrl += '&state=${Uri.encodeComponent(_state!)}';
         }
 
-        _log("Redirect URL: $redirectUrl");
+        _log("${t.alexalogin_redirectURL}: $redirectUrl");
 
         // Redirect to Alexa
         if (mounted) {
-          _log("🔄 Launching Alexa redirect...");
+          _log("🔄 ${t.alexalogin_launchingAlexaRedirect}...");
           await launchUrl(Uri.parse(redirectUrl));
         }
       } else {
-        _log("❌ Failed to generate code: ${codeResult['message']}");
+        _log("❌ ${t.alexalogin_failedToGenerateCode}: ${codeResult['message']}");
         setState(() {
-          _error = codeResult['message'] ?? "Failed to generate authorization code.";
+          _error = codeResult['message'] ?? t.authservice_authFailedToGenCode;
         });
       }
     } catch (e) {
-      _log("❌ Exception during Alexa OAuth: $e");
+      _log("❌ ${t.alexalogin_exceptionDuringAlexaOAuth}: $e");
       setState(() {
-        _error = "Failed to link Alexa account: $e";
+        _error = "${t.alexalogin_failedToLinkAlexaAccount}: $e";
       });
     }
   }
@@ -253,6 +256,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -329,8 +333,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                'Patient Care App',
+                              Text(
+                                t.welcome_subtitle,
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey,
@@ -347,7 +351,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 
                   // Title and Subtitle
                   Text(
-                    'Welcome Back',
+                    t.alexalogin_welcomeBack,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: isMobile ? 24 : 28,
@@ -360,7 +364,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                   const SizedBox(height: 8),
 
                   Text(
-                    'Sign in to your account to manage your health',
+                    t.alexalogin_signInToManage,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -378,8 +382,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Email Address',
+                          Text(
+                            t.alexalogin_emailAddress,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -392,7 +396,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                             keyboardType: TextInputType.emailAddress,
                             style: const TextStyle(fontSize: 14),
                             decoration: InputDecoration(
-                              hintText: 'Enter your email',
+                              hintText: t.alexalogin_enterEmailAddress,
                               hintStyle: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[400],
@@ -428,8 +432,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Password',
+                          Text(
+                            t.login_passwordLabel,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -442,7 +446,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                             obscureText: !_showPassword,
                             style: const TextStyle(fontSize: 14),
                             decoration: InputDecoration(
-                              hintText: 'Enter your password',
+                              hintText: t.login_passwordHint,
                               hintStyle: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[400],
@@ -497,8 +501,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                               vertical: 0,
                             ),
                           ),
-                          child: const Text(
-                            'Forgot Password?',
+                          child: Text(
+                            t.login_forgotPassword,
                             style: TextStyle(
                               color: Color(0xff1e40af),
                               fontSize: 14,
@@ -523,8 +527,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                '📋 Debug Log:',
+                              Text(
+                                '📋 ${t.alexalogin_debugLog}:',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 11,
@@ -595,11 +599,11 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Row(
+                              : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      'Sign In',
+                                      t.login_signInCta,
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
@@ -624,7 +628,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                         child: Column(
                           children: [
                             Text(
-                              "Don't have an account?",
+                              t.login_noAccountPrompt,
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[600],
@@ -639,8 +643,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                                   vertical: 8,
                                 ),
                               ),
-                              child: const Text(
-                                'Create Account',
+                              child: Text(
+                                t.login_createAccountCta,
                                 style: TextStyle(
                                   color: Color(0xff1a2b4a),
                                   fontSize: 16,
@@ -660,11 +664,11 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildSecurityBadge('Secure', Icons.lock),
+                      _buildSecurityBadge(t.login_badgeSecure, Icons.lock),
                       const SizedBox(width: 24),
-                      _buildSecurityBadge('HIPAA Compliant', Icons.verified),
+                      _buildSecurityBadge(t.login_badgeHipaa, Icons.verified),
                       const SizedBox(width: 24),
-                      _buildSecurityBadge('Accessible', Icons.accessibility),
+                      _buildSecurityBadge(t.login_badgeAccessible, Icons.accessibility),
                     ],
                   ),
 
@@ -677,7 +681,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                       Icon(Icons.lock, size: 14, color: Colors.grey[600]),
                       const SizedBox(width: 4),
                       Text(
-                        'End-to-end encrypted',
+                        t.login_e2eEncrypted,
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                       const SizedBox(width: 12),
@@ -702,7 +706,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'WCAG AA compliant',
+                        t.login_wcagAACompliant,
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
