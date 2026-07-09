@@ -1,10 +1,8 @@
 package com.careconnect.controller;
 
-import com.careconnect.security.Permission;
-import com.careconnect.security.RequirePermission;
-
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.User;
+import com.careconnect.security.AuthRequestSupport;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
@@ -22,9 +20,8 @@ import java.util.Map;
 
 /**
  * USPS digest endpoints scoped to a specific patient.
- * <p>All endpoints require a valid JWT ({@code SecurityConfig} enforces authentication).
- * Pass {@code patientEmail} (preferred) or legacy {@code userId} (email or numeric database id).
- * When neither is supplied, the authenticated user's own record is used.
+ * <p>Access is enforced via {@link AuthorizationService#requirePatientAccess} so caregivers,
+ * family members, patients, and admins are authorized by link/role — not a coarse permission gate.
  */
 @RestController
 @RequestMapping("/v1/api/usps")
@@ -43,8 +40,6 @@ public class UspsDigestController {
         this.patientResolver = patientResolver;
     }
 
-    // @RequirePermission gates role-level access; requirePatientAccess enforces link/expiry checks.
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
     @GetMapping("/latest")
     public ResponseEntity<USPSDigest> getLatestDigest(
             @AuthenticationPrincipal Jwt jwt,
@@ -53,7 +48,7 @@ public class UspsDigestController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
 
-        if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
+        AuthRequestSupport.requireAuthenticated(jwt);
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
@@ -68,7 +63,6 @@ public class UspsDigestController {
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
     @GetMapping("/search")
     public ResponseEntity<List<Map<String, Object>>> search(
             @AuthenticationPrincipal Jwt jwt,
@@ -76,7 +70,7 @@ public class UspsDigestController {
             @RequestParam(required = false) String userId,
             @RequestParam String keyword) throws UnauthorizedException {
 
-        if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
+        AuthRequestSupport.requireAuthenticated(jwt);
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
@@ -86,14 +80,13 @@ public class UspsDigestController {
         return ResponseEntity.ok(results);
     }
 
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
     @PostMapping("/clear-cache")
     public ResponseEntity<String> clearCache(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
 
-        if (jwt == null) throw new UnauthorizedException("Missing or invalid authentication token");
+        AuthRequestSupport.requireAuthenticated(jwt);
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());

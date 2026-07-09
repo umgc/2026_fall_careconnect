@@ -42,6 +42,7 @@ class UspsPatientResolverTest {
     @DisplayName("resolves patient by email")
     void resolvePatient_byEmail_returnsPatient() throws Exception {
         User patient = org.mockito.Mockito.mock(User.class);
+        when(patient.isPatient()).thenReturn(true);
         when(userRepository.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
 
         User resolved = resolver.resolvePatient("patient@example.com", null, currentUser);
@@ -52,6 +53,7 @@ class UspsPatientResolverTest {
     @DisplayName("resolves patient by numeric database id via legacy userId param")
     void resolvePatient_byNumericId_returnsPatient() throws Exception {
         User patient = org.mockito.Mockito.mock(User.class);
+        when(patient.isPatient()).thenReturn(true);
         when(userRepository.findByEmail("7")).thenReturn(Optional.empty());
         when(userRepository.findById(7L)).thenReturn(Optional.of(patient));
 
@@ -67,5 +69,25 @@ class UspsPatientResolverTest {
         assertThatThrownBy(() -> resolver.resolvePatient("missing@example.com", null, currentUser))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("No patient found for identifier");
+    }
+
+    @Test
+    @DisplayName("rejects demo-user identifier")
+    void resolvePatient_demoUser_throwsUnauthorized() {
+        assertThatThrownBy(() -> resolver.resolvePatient("demo-user", null, currentUser))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("Invalid patient identifier");
+    }
+
+    @Test
+    @DisplayName("rejects explicit identifier that resolves to a non-patient role")
+    void resolvePatient_nonPatientRole_throwsUnauthorized() {
+        User caregiver = org.mockito.Mockito.mock(User.class);
+        when(caregiver.isPatient()).thenReturn(false);
+        when(userRepository.findByEmail("caregiver@example.com")).thenReturn(Optional.of(caregiver));
+
+        assertThatThrownBy(() -> resolver.resolvePatient("caregiver@example.com", null, currentUser))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("does not refer to a patient");
     }
 }
