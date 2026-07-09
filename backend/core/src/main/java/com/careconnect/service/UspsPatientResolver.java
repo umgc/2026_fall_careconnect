@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Resolves the patient record for USPS digest endpoints from email, numeric database id,
- * or defaults to the authenticated user when no identifier is supplied.
+ * Resolves the patient record for USPS digest and email-credential endpoints from email,
+ * numeric database id, or defaults to the authenticated user when no identifier is supplied.
  */
 @Component
 @RequiredArgsConstructor
@@ -23,10 +23,18 @@ public class UspsPatientResolver {
         if (identifier == null || identifier.isBlank()) {
             return currentUser;
         }
-        return userRepository.findByEmail(identifier)
+        if ("demo-user".equalsIgnoreCase(identifier)) {
+            throw new UnauthorizedException("Invalid patient identifier: " + identifier);
+        }
+        User resolved = userRepository.findByEmail(identifier)
                 .or(() -> parseNumericUserId(identifier).flatMap(userRepository::findById))
                 .orElseThrow(() -> new UnauthorizedException(
                         "No patient found for identifier: " + identifier));
+        if (!resolved.isPatient()) {
+            throw new UnauthorizedException(
+                    "Identifier does not refer to a patient: " + identifier);
+        }
+        return resolved;
     }
 
     public User resolvePatient(String patientIdentifier, User currentUser) throws UnauthorizedException {

@@ -2,6 +2,7 @@ package com.careconnect.controller;
 
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.User;
+import com.careconnect.security.AuthRequestSupport;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.USPSDigestService;
@@ -43,9 +44,7 @@ public class USPSController {
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
-        if (jwt == null) {
-            throw new UnauthorizedException("Missing or invalid authentication token");
-        }
+        AuthRequestSupport.requireAuthenticated(jwt);
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = patientResolver.resolvePatient(patientEmail, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());

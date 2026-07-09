@@ -412,33 +412,11 @@ class USPSDigestServiceTest {
     // ── New: clearCacheForUser ────────────────────────────────────────────────
 
     /**
-     * clearCacheForUser() must set expiresAt to a time in the past for every cache entry
-     * belonging to the specified user, and must not modify entries owned by other users.
+     * clearCacheForUser() must delete every cache entry belonging to the specified user.
      */
     @Test
-    void clearCacheForUserExpiresAllEntries() throws Exception {
-        Instant future = Instant.now().plusSeconds(3600);
-
-        var entry1 = new USPSDigestCache();
-        entry1.setUserId("user-10");
-        entry1.setPayloadJson("{}");
-        entry1.setExpiresAt(future);
-
-        var entry2 = new USPSDigestCache();
-        entry2.setUserId("user-10");
-        entry2.setPayloadJson("{}");
-        entry2.setExpiresAt(future);
-
-        // This entry belongs to a different user and must not be touched
-        var otherEntry = new USPSDigestCache();
-        otherEntry.setUserId("other-user");
-        otherEntry.setPayloadJson("{}");
-        otherEntry.setExpiresAt(future);
-
-        List<USPSDigestCache> savedEntries = new ArrayList<>();
+    void clearCacheForUserDeletesAllEntriesForUser() throws Exception {
         var cacheStub = new CacheRepoStub();
-        cacheStub.allEntries = List.of(entry1, entry2, otherEntry);
-        cacheStub.savedAll  = savedEntries;
 
         USPSDigestService service = buildService(
                 emailCredentialRepositoryByProvider(Optional.empty(), Optional.empty()),
@@ -451,16 +429,8 @@ class USPSDigestServiceTest {
 
         service.clearCacheForUser("user-10");
 
-        // Only the two user-10 entries should have been saved
-        assertEquals(2, savedEntries.size(),
-                "Only the target user's entries should be saved");
-
-        // Every saved entry must now have an expiresAt in the past
-        Instant now = Instant.now();
-        for (USPSDigestCache saved : savedEntries) {
-            assertTrue(saved.getExpiresAt().isBefore(now),
-                    "expiresAt should be set to a time in the past after clearCacheForUser");
-        }
+        assertEquals("user-10", cacheStub.deletedUserId,
+                "deleteByUserId should be called with the target user id");
     }
 
     // ── New: latestForUser Outlook fallback when Gmail fetch empty ────────────
@@ -833,7 +803,10 @@ class USPSDigestServiceTest {
         /** Return value for findByUserIdOrderByDigestDateDesc (search cache-scan path). */
         List<USPSDigestCache> listByUser = List.of();
 
-        /** Return value for findAll (clearCacheForUser path). */
+        /** Records userId passed to deleteByUserId (clearCacheForUser path). */
+        String deletedUserId = null;
+
+        /** Return value for findAll (legacy tests). */
         List<USPSDigestCache> allEntries = List.of();
 
         /** Records the most-recently saved entry (used to assert caching behaviour). */
@@ -866,6 +839,10 @@ class USPSDigestServiceTest {
                                 -> listByUser;
                         case "findAll"
                                 -> allEntries;
+                        case "deleteByUserId" -> {
+                            deletedUserId = (String) args[0];
+                            yield null;
+                        }
                         case "save" -> {
                             saved = (USPSDigestCache) args[0];
                             if (savedAll != null) savedAll.add(saved);

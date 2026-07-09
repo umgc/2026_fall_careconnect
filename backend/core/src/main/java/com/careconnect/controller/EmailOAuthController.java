@@ -4,6 +4,7 @@ import com.careconnect.security.OAuthRedirectValidator;
 import com.careconnect.service.GoogleOAuthService;
 import com.careconnect.security.OAuthStateSigner;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,10 +17,12 @@ import java.nio.charset.StandardCharsets;
 @RestController
 @RequestMapping("/oauth")
 @RequiredArgsConstructor
+@Slf4j
 public class EmailOAuthController {
 
     /** Query param read by {@code usps_test_screen._handleOAuthReturnError()} (also accepts legacy {@code error}). */
     static final String OAUTH_ERROR_PARAM = "oauthError";
+    private static final String OAUTH_ERROR_CODE = "oauth_failed";
 
     private final GoogleOAuthService googleOAuthService;
     private final OAuthStateSigner oauthStateSigner;
@@ -63,7 +66,6 @@ public class EmailOAuthController {
             googleOAuthService.exchange(stateData.userId(), code);
             return ResponseEntity.status(302).location(URI.create(resolveSuccessRedirect(returnUrl))).build();
         } catch (Exception e) {
-            // All failure paths use oauthError — consumed by usps_test_screen on return from Google OAuth.
             return ResponseEntity.status(302).location(URI.create(buildOAuthErrorRedirect(returnUrl, e))).build();
         }
     }
@@ -74,11 +76,9 @@ public class EmailOAuthController {
 
     private String buildOAuthErrorRedirect(String returnUrl, Exception e) {
         String base = resolveSuccessRedirect(returnUrl);
-        String encodedMessage = java.net.URLEncoder.encode(
-                e.getMessage() != null ? e.getMessage() : "OAuth failed",
-                java.nio.charset.StandardCharsets.UTF_8);
+        log.warn("Gmail OAuth callback failed", e);
         String separator = base.contains("?") ? "&" : "?";
-        return base + separator + OAUTH_ERROR_PARAM + "=" + encodedMessage;
+        return base + separator + OAUTH_ERROR_PARAM + "=" + OAUTH_ERROR_CODE;
     }
 }
 
