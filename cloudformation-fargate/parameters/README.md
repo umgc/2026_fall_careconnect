@@ -34,6 +34,25 @@ parameter file is for and what values need to be replaced before deployment.
 8. `cfdemo-service.json`
 - image URI and service/runtime settings for the parallel CloudFormation demo environment
 
+9. `staging-*.json` / `prod-*.json`
+- parameter sets for staging and production (SpringProfile `prod`, AI enabled, pgvector RDS)
+
+### P0 Ask AI deploy unblock (Tasks 0.1)
+
+These CloudFormation changes must be deployed **in stack order** for Bedrock chat and pgvector schema patches to work in ECS:
+
+| Stack | Change |
+|-------|--------|
+| `02-data.yaml` | RDS parameter group allows `vector` extension (`rds.allowed_extensions`); PostgreSQL 17.6 |
+| `03-platform.yaml` | ECS task role: `bedrock:InvokeModel*` + SSM read on `/careconnect/*` |
+| `04-service.yaml` | `SpringProfile=prod`, `CARECONNECT_AI_ENABLED=true`, SendGrid/`FROM_EMAIL`, `ENVIRONMENT` for SSM |
+
+**Existing RDS instances:** updating the data stack attaches a new parameter group; RDS may require a **reboot** before `CREATE EXTENSION vector` succeeds. After deploy, confirm in logs: `Schema patch applied: V2607071920 – enable pgvector extension`.
+
+**SSM secrets (prod profile):** store under `/careconnect/<Environment>/` (e.g. `/careconnect/cfdemo/sendgrid-api-key`). See `SsmPropertySourceInitializer.java` for the full parameter list.
+
+**Bedrock:** enable model access in the AWS account (Model access in Bedrock console) for Nova, Claude, Titan Embed, and any inference profiles in use.
+
 ### Placeholders that must be replaced
 
 #### In the GitHub Secrets or shell environment
@@ -82,11 +101,16 @@ before calling the full deploy script.
 
 ### Runtime notes
 
-- `SpringProfile` is set to `dev` because the backend’s working cloud deployment
-  path currently uses the dev profile with externalized env vars.
-- `ContainerPort` is `8081` because that is the working ECS port for this app.
-- `HealthCheckPath` is `/v1/api/test/health` because that is the endpoint the
+- **`SpringProfile`:** use `prod` for `cfdemo`, `staging`, and `prod` (SSM, SendGrid, WebSocket AWS mode). Keep `dev` only for lightweight cloud experiments (`dev-service.json`).
+- **`CareConnectAiEnabled`:** set to `true` in environments that need `AIChatController` and Bedrock chat (`cfdemo`, `staging`, `prod` parameter files).
+- **`ContainerPort`** is `8081` because that is the working ECS port for this app.
+- **`HealthCheckPath`** is `/v1/api/test/health` because that is the endpoint the
   ALB uses to determine task health.
+- Database schema in ECS is **not** managed by Flyway. New production DDL must be added as
+  idempotent patches in `SchemaPatchRunner` (and/or rely on Hibernate `ddl-auto=update`).
+  Files under `backend/core/src/main/resources/db/migration/` remain the canonical SQL reference.
+- **pgvector:** RDS PostgreSQL 15+ with the data stack parameter group; `SchemaPatchRunner` runs `CREATE EXTENSION vector` at startup.
+- **Bedrock IAM:** ECS task role in `03-platform.yaml` grants `bedrock:InvokeModel` for Nova, Claude, Titan Embed v2, and Voxtral (see template for full list).
 
 ### Parallel deployment guidance
 
