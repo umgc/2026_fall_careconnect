@@ -148,9 +148,9 @@ class EmailOAuthControllerTest {
 
         void rejectsUnsignedStartToken() {
 
-            assertThatThrownBy(() -> controller.start("not-a-valid-token"))
+            ResponseEntity<Void> response = controller.start("not-a-valid-token");
 
-                    .isInstanceOf(IllegalArgumentException.class);
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
 
         }
 
@@ -230,9 +230,7 @@ class EmailOAuthControllerTest {
 
 
 
-            assertThat(location.toString()).contains("oauthError=");
-
-            assertThat(location.toString()).contains("token+exchange+failed");
+            assertThat(location.toString()).contains("oauthError=oauth_failed");
 
             assertThat(location.toString()).contains("/usps-test");
 
@@ -260,7 +258,7 @@ class EmailOAuthControllerTest {
 
             assertThat(location.toString()).startsWith(returnUrl);
 
-            assertThat(location.toString()).contains("oauthError=");
+            assertThat(location.toString()).contains("oauthError=oauth_failed");
 
         }
 
@@ -274,7 +272,7 @@ class EmailOAuthControllerTest {
 
             final URI location = controller.callback(AUTH_CODE, state).getHeaders().getLocation();
 
-            assertThat(location.toString()).contains("oauthError=");
+            assertThat(location.toString()).contains("oauthError=oauth_failed");
 
             verifyNoInteractions(googleOAuthService);
 
@@ -290,7 +288,7 @@ class EmailOAuthControllerTest {
 
             final URI location = controller.callback(AUTH_CODE, state).getHeaders().getLocation();
 
-            assertThat(location.toString()).contains("oauthError=");
+            assertThat(location.toString()).contains("oauthError=oauth_failed");
 
             verifyNoInteractions(googleOAuthService);
 

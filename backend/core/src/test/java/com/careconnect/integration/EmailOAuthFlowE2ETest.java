@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -78,6 +79,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(CareconnectTestConfig.class)
+@TestPropertySource(properties = {
+        "aws.region=us-east-1",
+        "careconnect.ai.provider=mock",
+        "careconnect.ai.api.key=stub-test-key-for-integration",
+        "careconnect.cors_allowed=*",
+        "alexa.oauth.client-id=stub",
+        "alexa.oauth.client-secret=stub",
+        "aws.s3.bucket-name=stub-bucket",
+        "spring.security.oauth2.client.provider.fitbit.authorization-uri=https://www.fitbit.com/oauth2/authorize",
+        "spring.security.oauth2.client.provider.fitbit.token-uri=https://api.fitbit.com/oauth2/token",
+        "spring.security.oauth2.client.provider.fitbit.user-info-uri=https://api.fitbit.com/1/user/-/profile.json",
+        "spring.security.oauth2.client.provider.fitbit.user-name-attribute=user_id",
+        "spring.security.oauth2.client.provider.google.authorization-uri=https://accounts.google.com/o/oauth2/v2/auth",
+        "spring.security.oauth2.client.provider.google.token-uri=https://oauth2.googleapis.com/token",
+        "spring.security.oauth2.client.provider.google.user-info-uri=https://www.googleapis.com/oauth2/v3/userinfo"
+})
 @DisplayName("PR #235 — Gmail OAuth E2E Tests")
 class EmailOAuthFlowE2ETest {
 
@@ -343,7 +360,7 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(status().isFound())
                     .andExpect(result -> {
                         String location = result.getResponse().getHeader("Location");
-                        assertThat(location).contains("oauthError=");
+                        assertThat(location).contains("oauthError=oauth_failed");
                         assertThat(location).doesNotContain("accounts.google.com");
                     });
         }
@@ -360,7 +377,7 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(status().isFound())
                     .andExpect(result -> {
                         String location = result.getResponse().getHeader("Location");
-                        assertThat(location).contains("oauthError=");
+                        assertThat(location).contains("oauthError=oauth_failed");
                     });
         }
 
@@ -376,7 +393,7 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(status().isFound())
                     .andExpect(result -> {
                         String location = result.getResponse().getHeader("Location");
-                        assertThat(location).contains("oauthError=");
+                        assertThat(location).contains("oauthError=oauth_failed");
                     });
         }
 
@@ -395,8 +412,7 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(result -> {
                         String location = result.getResponse().getHeader("Location");
                         assertThat(location).startsWith(RETURN_URL);
-                        assertThat(location).contains("oauthError=");
-                        assertThat(location).contains("token+exchange+failed");
+                        assertThat(location).contains("oauthError=oauth_failed");
                     });
         }
 
@@ -411,7 +427,7 @@ class EmailOAuthFlowE2ETest {
                             .param("state", state))
                     .andExpect(result -> {
                         String location = result.getResponse().getHeader("Location");
-                        assertThat(location).contains("oauthError=");
+                        assertThat(location).contains("oauthError=oauth_failed");
                         // Must not use the old "error=" param that the legacy code emitted
                         assertThat(location).doesNotContain("?error=");
                         assertThat(location).doesNotContain("&error=");
@@ -519,6 +535,63 @@ class EmailOAuthFlowE2ETest {
             mockMvc.perform(get("/v1/api/email-credentials/status")
                             .param("patientEmail", ADMIN_EMAIL))
                     .andExpect(status().isUnauthorized());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 4b. Patient self-service (no VIEW_ASSIGNED_PATIENTS permission required)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Patient self-service — email credential endpoints")
+    class PatientSelfServiceTests {
+
+        @Test
+        @DisplayName("patient_canReadOwnStatus_withoutPatientEmailParam")
+        void patient_canReadOwnStatus_withoutPatientEmailParam() throws Exception {
+            when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    .thenReturn(Optional.empty());
+
+            mockMvc.perform(get("/v1/api/email-credentials/status")
+                            .with(user(PATIENT_EMAIL).roles("PATIENT")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.connected").value(false))
+                    .andExpect(jsonPath("$.status").value(EmailConnectionStatus.STATUS_NOT_CONNECTED));
+        }
+
+        @Test
+        @DisplayName("patient_canRequestConnectUrl_withoutPatientEmailParam")
+        void patient_canRequestConnectUrl_withoutPatientEmailParam() throws Exception {
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/connect-url")
+                            .param("returnUrl", RETURN_URL)
+                            .with(user(PATIENT_EMAIL).roles("PATIENT")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.url").value(org.hamcrest.Matchers.containsString("/oauth/google/start")));
+        }
+
+        @Test
+        @DisplayName("patient_canDisconnectOwnGmail_withoutPatientEmailParam")
+        void patient_canDisconnectOwnGmail_withoutPatientEmailParam() throws Exception {
+            EmailCredential cred = connectedCredentialForUser(patientUser);
+            when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    .thenReturn(Optional.of(cred));
+            doNothing().when(googleOAuthService).revokeIfPossible(cred);
+
+            mockMvc.perform(delete("/v1/api/email-credentials/gmail")
+                            .with(user(PATIENT_EMAIL).roles("PATIENT"))
+                            .with(csrf()))
+                    .andExpect(status().isNoContent());
+        }
+
+        @Test
+        @DisplayName("patient_cannotAccessAnotherPatientsStatus")
+        void patient_cannotAccessAnotherPatientsStatus() throws Exception {
+            mockMvc.perform(get("/v1/api/email-credentials/status")
+                            .param("patientEmail", ADMIN_EMAIL)
+                            .with(user(PATIENT_EMAIL).roles("PATIENT")))
+                    .andExpect(status().isForbidden());
         }
     }
 
@@ -685,7 +758,7 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(status().isFound())
                     .andExpect(result -> {
                         String location = result.getResponse().getHeader("Location");
-                        assertThat(location).contains("oauthError=");
+                        assertThat(location).contains("oauthError=oauth_failed");
                     });
         }
 
@@ -703,8 +776,12 @@ class EmailOAuthFlowE2ETest {
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
     private EmailCredential connectedCredential() {
+        return connectedCredentialForUser(adminUser);
+    }
+
+    private EmailCredential connectedCredentialForUser(User user) {
         EmailCredential cred = new EmailCredential();
-        cred.setUserId(String.valueOf(adminUser.getId()));
+        cred.setUserId(String.valueOf(user.getId()));
         cred.setProvider(EmailCredential.Provider.GMAIL);
         cred.setAccessTokenEnc("encrypted-access-token");
         cred.setRefreshTokenEnc("encrypted-refresh-token");

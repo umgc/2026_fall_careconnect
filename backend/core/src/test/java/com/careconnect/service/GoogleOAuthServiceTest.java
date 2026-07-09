@@ -110,6 +110,32 @@ class GoogleOAuthServiceTest {
         }
 
         @Test
+        @DisplayName("exchange upserts existing credential instead of creating a duplicate row")
+        void exchangeUpsertsExistingCredential() throws Exception {
+            final EmailCredential existing = new EmailCredential();
+            existing.setUserId("user-upsert");
+            existing.setProvider(EmailCredential.Provider.GMAIL);
+            existing.setRefreshTokenEnc(tokenCryptor.encrypt("existing-refresh"));
+            existingCredRef.set(existing);
+
+            final String json = "{\"access_token\": \"new-access\",\"expires_in\": 3600}";
+
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
+
+            service.exchange("user-upsert", "auth-code-upsert");
+
+            final EmailCredential saved = savedRef.get();
+            assertNotNull(saved);
+            assertSame(existing, saved, "Existing credential row should be updated in place");
+            assertEquals("new-access", tokenCryptor.decrypt(saved.getAccessTokenEnc()));
+            assertEquals("existing-refresh", tokenCryptor.decrypt(saved.getRefreshTokenEnc()));
+
+            server.verify();
+        }
+
+        @Test
         @DisplayName("exchange succeeds without refresh token but reuses existing refresh token")
         void exchangeSucceedsWithoutRefreshTokenReusesExisting() throws Exception {
             // Set up existing credential with a refresh token

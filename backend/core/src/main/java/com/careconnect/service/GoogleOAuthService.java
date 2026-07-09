@@ -70,9 +70,11 @@ public class GoogleOAuthService {
                 throw new IllegalStateException("Google token exchange failed - no access token received");
             }
 
-            System.out.println("[GoogleOAuth] Access token received, creating EmailCredential");
+            System.out.println("[GoogleOAuth] Access token received, updating EmailCredential");
 
-            EmailCredential ec = new EmailCredential();
+            EmailCredential ec = credRepo
+                    .findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL)
+                    .orElseGet(EmailCredential::new);
             ec.setUserId(userId);
             ec.setProvider(provider);
             ec.setAccessTokenEnc(tokenCryptor.encrypt(token.accessToken()));
