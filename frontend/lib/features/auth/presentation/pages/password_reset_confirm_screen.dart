@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../services/auth_service.dart';
@@ -70,6 +71,7 @@ class _PasswordResetConfirmScreenState
         email: widget.email,
         resetToken: widget.token,
         newPassword: _passwordController.text.trim(),
+        t: AppLocalizations.of(context)!,
       );
 
       setState(() {

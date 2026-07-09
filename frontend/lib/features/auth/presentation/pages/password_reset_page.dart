@@ -1,5 +1,6 @@
 // Update the existing file - this should handle TOKEN-BASED password reset
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../services/auth_service.dart';
@@ -70,6 +71,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
         email: _emailController.text.trim(),
         resetToken: widget.token ?? '',
         newPassword: _passwordController.text.trim(),
+        t: AppLocalizations.of(context)!,
       );
 
       print('🔍 Password setup result: $result');

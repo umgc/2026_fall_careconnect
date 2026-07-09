@@ -111,8 +111,6 @@
   "settingsDeleteAccountRequested": "Account deletion requested. Please contact support.",
   "settingsDeleteAccountAction": "Delete Account",
 
-
-
   "welcomeInitializingHealthcare": "Initializing your healthcare experience...",
   "welcomeReadyToConnect": "Ready to connect your care!",
   "welcomeBackendNotHealthyWarning": "Backend service is not healthy. The application has limited capabilities.",
@@ -140,7 +138,6 @@
   "login_badgeAccessible": "Accessible",
   "login_e2eEncrypted": "End-to-end encrypted",
   "login_wcagAACompliant": "WCAG AA compliant",
-
   "login_loginFailedError": "Login failed",
 
   "voicecommand_wakeWordError": "Wake word init error",
@@ -179,6 +176,42 @@
   "voicecommand_confirmButton": "Confirm",
   "voicecommand_cancelButton": "Cancel",
 
-  "mainscreen_voiceCommandsTooltip": "Voice commands"
+  "mainscreen_voiceCommandsTooltip": "Voice commands",
+
+  "resetpassword_failedSendReset": "Failed to send reset link. Please try again.",
+  "resetpassword_resetPasswordTitle": "Reset Password",
+  "resetpassword_resetInstructions": "Enter your email to receive a password reset link",
+  "resetpassword_emailTitle": "Email",
+  "resetpassword_missingEmail": "Please enter your email",
+  "resetpassword_invalidEmail": "Please enter a valid email address",
+  "resetpassword_sendLinkButton": "Send Reset Link",
+
+  "authservice_oauthError": "OAuth error",
+  "authservice_jwtTokenMissing": "No JWT token received from backend",
+  "authservice_userDataMissing": "No user data received from backend",
+  "authservice_oauthTimedOut": "OAuth flow timed out",
+  "authservice_loginFailedError": "Login failed",
+  "authservice_emailRegistrationSuccess": "Registration successful! Please check your email to verify your account.",
+  "authservice_emailRegistrationFailed": "Registration failed",
+  "authservice_dataSerialError": "Data serialization error",
+  "authservice_caregiverRegistrationSuccessMessage": "Caregiver registration successful!",
+  "authservice_caregiverRegistrationFailedMessage": "Caregiver registration failed",
+  "authservice_emailVerifiedSuccess": "Email verified successfully!",
+  "authservice_emailVerifiedFailed": "Email verification failed",
+  "authservice_passwordResetLinkSent": "Password reset link sent to your email",
+  "authservice_passwordResetLinkFailed": "Failed to send reset link",
+  "authservice_networkError": "Network error",
+  "authservice_passwordResetSuccess": "Password reset successfully!",
+  "authservice_passwordResetFailed": "Password reset failed",
+  "authservice_passwordResetLinkExpired": "Password reset link has expired. Please request a new one.",
+  "authservice_passwordResetTokenInvalid": "Invalid reset token. Please request a new password reset.",
+  "authservice_failedToProcessOAuthCall": "Failed to process OAuth callback",
+  "authservice_socketTimeout": "Request timeout",
+  "authservice_authCodeGeneratedSuccess": "Authorization code generated successfully",
+  "authservice_authInvalidToken": "Unauthorized: Invalid or expired token",
+  "authservice_authFailedToGenCode": "Failed to generate authorization code",
+  "authservice_alexaUnlinkedSuccess": "Alexa account unlinked successfully",
+  "authservice_alexaUnlinkedFailed": "Failed to unlink Alexa account",
+  "authservice_unexpectedError": "An unexpected error occurred"
 
 }

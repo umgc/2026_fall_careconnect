@@ -46,6 +46,7 @@ class _LoginPageState extends State<LoginPage> {
       final authResult = await EnhancedAuthService.loginWithRoleValidation(
         email: _email.text.trim(),
         password: _pwd.text,
+        t: AppLocalizations.of(context)!,
       );
 
       if (authResult.isSuccess) {

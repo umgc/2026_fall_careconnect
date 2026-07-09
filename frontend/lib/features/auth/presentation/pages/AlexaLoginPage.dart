@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -159,6 +160,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
       final authResult = await EnhancedAuthService.loginWithRoleValidation(
         email: email,
         password: password,
+        t: AppLocalizations.of(context)!,
       );
 
       if (authResult.isSuccess) {
@@ -210,6 +212,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
       
       final codeResult = await AuthService.getAlexaAuthorizationCode(
         token: jwtToken,
+        t: AppLocalizations.of(context)!,
       );
 
       _log("Response: ${codeResult['message']}");

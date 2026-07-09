@@ -121,7 +121,6 @@
   "welcome_description": "Tu compañero de atención médica para",
   "welcome_tagline": "Mejor atención • Mejores resultados • Mejor vida",
 
- 
   "login_tagline": "Conéctate con cuidado, haz seguimiento con confianza",
   "login_signInTitle": "Inicia sesión en tu cuenta",
   "login_signInSubtitle": "Ingresa tus credenciales para acceder a CareConnect",
@@ -138,6 +137,7 @@
   "login_badgeAccessible": "Accesible",
   "login_e2eEncrypted": "Cifrado de extremo a extremo",
   "login_wcagAACompliant": "Cumple con WCAG AA",
+  "login_loginFailedError": "Error al iniciar sesión",
 
   "voicecommand_wakeWordError": "Error de inicialización de la palabra de activación",
   "voicecommand_voiceCommandsUnavailable": "Reconocimiento de voz no disponible",
@@ -175,6 +175,42 @@
   "voicecommand_confirmButton": "Confirmar",
   "voicecommand_cancelButton": "Cancelar",
 
-  "mainscreen_voiceCommandsTooltip": "Comandos de voz"
+  "mainscreen_voiceCommandsTooltip": "Comandos de voz",
+
+  "resetpassword_failedSendReset": "No se ha podido enviar el enlace de restablecimiento. Inténtalo de nuevo.",
+  "resetpassword_resetPasswordTitle": "Restablecer contraseña",
+  "resetpassword_resetInstructions": "Introduce tu correo electrónico para recibir un enlace para restablecer la contraseña",
+  "resetpassword_emailTitle": "Correo electrónico",
+  "resetpassword_missingEmail": "Introduce tu correo electrónico",
+  "resetpassword_invalidEmail": "Introduce una dirección de correo electrónico válida",
+  "resetpassword_sendLinkButton": "Enviar enlace de restablecimiento"
+
+  "authservice_oauthError": "Error de OAuth",
+  "authservice_jwtTokenMissing": "No se ha recibido ningún token JWT del backend",
+  "authservice_userDataMissing": "No se han recibido datos de usuario del backend",
+  "authservice_oauthTimedOut": "Se ha agotado el tiempo de espera del flujo de OAuth",
+  "authservice_loginFailedError": "Error al iniciar sesión",
+  "authservice_emailRegistrationSuccess": "¡El registro se ha realizado correctamente! Por favor, revisa tu correo electrónico para verificar tu cuenta.",
+  "authservice_emailRegistrationFailed": "El registro ha fallado",
+  "authservice_dataSerialError": "Error de serialización de datos",
+  "authservice_caregiverRegistrationSuccessMessage": "¡El registro del cuidador se ha realizado correctamente!",
+  "authservice_caregiverRegistrationFailedMessage": "No se ha podido registrar al cuidador",
+  "authservice_emailVerifiedSuccess": "¡Correo electrónico verificado correctamente!",
+  "authservice_emailVerifiedFailed": "No se ha podido verificar la dirección de correo electrónico",
+  "authservice_passwordResetLinkSent": "Se ha enviado un enlace para restablecer la contraseña a tu correo electrónico",
+  "authservice_passwordResetLinkFailed": "No se ha podido enviar el enlace de restablecimiento",
+  "authservice_networkError": "Error de Red",
+  "authservice_passwordResetSuccess": "¡La contraseña se ha restablecido correctamente!",
+  "authservice_passwordResetFailed": "No se ha podido restablecer la contraseña",
+  "authservice_passwordResetLinkExpired": "El enlace para restablecer la contraseña ha caducado. Solicita uno nuevo.",
+  "authservice_passwordResetTokenInvalid": "Token de restablecimiento no válido. Solicita un nuevo restablecimiento de contraseña.",
+  "authservice_failedToProcessOAuthCall": "No se ha podido procesar la respuesta de OAuth",
+  "authservice_socketTimeout": "Tiempo de espera de la solicitud",
+  "authservice_authCodeGeneratedSuccess": "El código de autorización se ha generado correctamente",
+  "authservice_authInvalidToken": "No autorizado: token no válido o caducado",
+  "authservice_authFailedToGenCode": "No se ha podido generar el código de autorización",
+  "authservice_alexaUnlinkedSuccess": "La cuenta de Alexa se ha desvinculado correctamente",
+  "authservice_alexaUnlinkedFailed": "No se ha podido desvincular la cuenta de Alexa",
+  "authservice_unexpectedError": "Se ha producido un error inesperado"
 
 }
