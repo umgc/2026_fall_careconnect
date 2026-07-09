@@ -10,7 +10,7 @@ INSERT INTO users (
     role,
     email_verified,
     verification_token,
-    payment_customer_id,
+    stripe_customer_id,
     created_at,
     last_login,
     profile_image_url,

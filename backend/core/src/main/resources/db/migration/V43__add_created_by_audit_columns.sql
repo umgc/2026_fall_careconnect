@@ -1,17 +1,22 @@
 -- Audit hardening: add created_by to tables that were missing it (user attribution from session only).
 
 -- activity_log: who created this log record (audit)
-ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS created_by BIGINT;
-UPDATE activity_log SET created_by = caregiver_user_id WHERE created_by IS NULL;
-ALTER TABLE activity_log ALTER COLUMN created_by SET NOT NULL;
 DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints
-        WHERE constraint_name = 'fk_activity_log_created_by'
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'activity_log'
     ) THEN
-        ALTER TABLE activity_log
-            ADD CONSTRAINT fk_activity_log_created_by
-            FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT;
+        ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS created_by BIGINT;
+        UPDATE activity_log SET created_by = caregiver_user_id WHERE created_by IS NULL;
+        ALTER TABLE activity_log ALTER COLUMN created_by SET NOT NULL;
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE constraint_name = 'fk_activity_log_created_by'
+        ) THEN
+            ALTER TABLE activity_log
+                ADD CONSTRAINT fk_activity_log_created_by
+                FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT;
+        END IF;
     END IF;
 END $$;
 
