@@ -4,7 +4,7 @@ This directory contains a clean CloudFormation stack set for the CareConnect
 backend running on:
 
 - Amazon ECS Fargate
-- Application Load Balancer
+- API Gateway HTTP API (VPC Link → Cloud Map → ECS tasks)
 - Amazon RDS PostgreSQL
 - Amazon ECR
 
@@ -257,11 +257,11 @@ The full setup guide is in
 1. `01-networking.yaml`
 
 - VPC
-- public subnets for ALB and ECS
+- public subnets for VPC Link ENIs and ECS tasks
 - private subnets for RDS
 - route tables
 - internet gateway
-- ALB / ECS / RDS security groups
+- VPC Link / ECS / RDS security groups
 
 1. `02-data.yaml`
 
@@ -280,9 +280,9 @@ The full setup guide is in
 
 1. `04-service.yaml`
 
-- Application Load Balancer
-- target group
-- listener
+- Cloud Map namespace and service (ECS service discovery)
+- API Gateway HTTP API, VPC Link, and `$default` route
+- optional custom domain (ACM + Route 53) when `DomainName` is set
 - ECS task definition
 - ECS service
 - app environment variable and secret wiring
@@ -291,7 +291,8 @@ The full setup guide is in
 
 ### Design choices
 
-- ALB is public on HTTP port `80`
+- Public HTTPS entry is **API Gateway** (`ApiEndpoint` output)
+- API Gateway reaches ECS tasks through a **VPC Link** and **Cloud Map** SRV records
 - ECS tasks run in public subnets with public IPs enabled to avoid NAT costs
 - RDS runs in private subnets
 - Database and application secrets are stored in Secrets Manager
@@ -314,7 +315,7 @@ The templates assume the backend uses these environment variables:
 - `SPRING_FLYWAY_ENABLED`
 - `SPRING_JPA_HIBERNATE_DDL_AUTO`
 
-The ALB health check path is:
+The backend health endpoint (smoke tests and welcome-page checks) is:
 
 - `/v1/api/test/health`
 
@@ -562,12 +563,12 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
-Get the ALB DNS name:
+Get the API Gateway invoke URL (`ApiEndpoint` — use as `BACKEND_URL`, no trailing slash):
 
 ```powershell
 aws cloudformation describe-stacks `
   --stack-name careconnect-service-dev `
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" `
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" `
   --output text
 ```
 
@@ -576,7 +577,7 @@ macOS / Linux:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name careconnect-service-dev \
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text
 ```
 
@@ -642,8 +643,8 @@ To test changes without touching an existing environment:
 
 1. use a distinct ECR image tag such as `cfdemo`
 
-This keeps the old and new ALBs, ECS services, clusters, and databases
-separate.
+This keeps the old and new API Gateway endpoints, ECS services, clusters, and
+databases separate.
 
 ### Student Walkthrough: `cfdemo`
 
@@ -954,14 +955,14 @@ unhealthy” ([§11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-af
 
 
 
-#### 11. Get the ALB DNS name
+#### 11. Get the API Gateway invoke URL
 
 ```powershell
 aws cloudformation describe-stacks `
   --profile careconnect-sso `
   --region us-east-1 `
   --stack-name careconnect-service-cfdemo `
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" `
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" `
   --output text
 ```
 
@@ -972,9 +973,12 @@ aws cloudformation describe-stacks \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-service-cfdemo \
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text
 ```
+
+Use this value as `BACKEND_URL` (no trailing slash, no `/v1` suffix). If you set
+`DomainName` on the service stack, `CustomDomainUrl` is the public HTTPS URL instead.
 
 
 
@@ -1598,7 +1602,7 @@ do not form a valid path
 
 Fix:
 
-- ECS, ALB, and RDS must be in the same VPC
+- ECS tasks, VPC Link ENIs, and RDS must be in the same VPC
 - the RDS security group should allow `5432` from the ECS task security group
 - the ECS task security group must actually be attached to the running task
 
@@ -1629,10 +1633,10 @@ macOS / Linux:
 flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
-Do not use:
+Do not use a bare hostname without `https://`:
 
 ```text
-cc-backend-alb-xxxx.us-east-1.elb.amazonaws.com
+abc123.execute-api.us-east-1.amazonaws.com
 ```
 
 
