@@ -176,6 +176,11 @@
   "voicecommand_onClarifyCommandConfirm": "confirm",
   "voicecommand_confirmButton": "Confirm",
   "voicecommand_cancelButton": "Cancel",
+  "voicecommand_micDeniedGuidance": "Enable microphone in device settings or use manual navigation.",
+  "voicecommand_unavailableGuidance": "Voice not supported on this device. Use manual navigation.",
+  "voicecommand_timeoutGuidance": "Tap the microphone to try again.",
+  "voicecommand_noSpeechGuidance": "No speech heard. Tap the microphone to try again.",
+  "voicecommand_intentNotYetSupported": "This action is not yet available. Use manual navigation.",
 
   "mainscreen_voiceCommandsTooltip": "Voice commands"
 
