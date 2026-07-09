@@ -29,9 +29,10 @@ Parameters:
       - prod
 
   # Enables AIChatController and Bedrock chat beans (maps to CARECONNECT_AI_ENABLED).
+  # Default true matches SpringProfile default prod; dev-service.json sets false explicitly.
   CareConnectAiEnabled:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues:
       - 'true'
       - 'false'
@@ -45,6 +46,12 @@ Parameters:
   FromEmail:
     Type: String
     Default: noreply@careconnect.com
+
+  # Required when SpringProfile=prod (application-prod.properties WebSocket AWS mode).
+  WebSocketApiGatewayEndpoint:
+    Type: String
+    Default: ''
+    Description: API Gateway WebSocket API endpoint URL (wss://...)
 
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
@@ -105,6 +112,7 @@ Parameters:
 Conditions:
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -313,11 +321,16 @@ Resources:
               Value: !Ref CareConnectAiEnabled
             - Name: AI_PROVIDER
               Value: !Ref AiProvider
-            # Prod profile email (SendGrid API key via SSM when SpringProfile=prod)
+            # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
             - Name: EMAIL_PROVIDER
-              Value: sendgrid
+              Value: !If [IsProdProfile, 'sendgrid', 'console']
             - Name: FROM_EMAIL
-              Value: !Ref FromEmail
+              Value: !If [IsProdProfile, !Ref FromEmail, 'dev@localhost']
+            # Prod profile WebSocket (application-prod.properties AWS mode)
+            - Name: WEBSOCKET_ENABLED
+              Value: !If [IsProdProfile, 'true', 'false']
+            - Name: AWS_WEBSOCKET_API_GATEWAY_ENDPOINT
+              Value: !Ref WebSocketApiGatewayEndpoint
             # Production schema: Flyway off; SchemaPatchRunner + Hibernate ddl-auto=update at startup.
             - Name: SPRING_FLYWAY_ENABLED
               Value: 'false'

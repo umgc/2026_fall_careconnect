@@ -26,6 +26,10 @@ import java.util.Map;
  *
  * To enable this initializer, add to application-prod.properties:
  * context.initializer.classes=com.careconnect.config.SsmPropertySourceInitializer
+ *
+ * <p>JWT and database credentials are injected by ECS from Secrets Manager ({@code SECURITY_JWT_SECRET},
+ * {@code DB_PASSWORD}, {@code DB_USER}) and are intentionally excluded from SSM loading to avoid
+ * overriding the CloudFormation-managed secret source.
  */
 public class SsmPropertySourceInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
@@ -40,14 +44,11 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
             "stripe-webhook-secret",
             "openai-api-key",
             "deepseek-api-key",
-            "jwt-secret",
             "sendgrid-api-key",
             "google-client-id",
             "google-client-secret",
             "fitbit-client-id",
             "fitbit-client-secret",
-            "db-password",
-            "db-username",
             "firebase-service-account-key",
             "aws-access-key-id",
             "aws-secret-access-key"
@@ -59,14 +60,11 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
         put("stripe-webhook-secret", "stripe.webhook-secret");
         put("openai-api-key", "openai.api-key");
         put("deepseek-api-key", "spring.ai.openai.api-key");
-        put("jwt-secret", "security.jwt.secret");
         put("sendgrid-api-key", "careconnect.email.sendgrid.api-key");
         put("google-client-id", "spring.security.oauth2.client.registration.google.client-id");
         put("google-client-secret", "spring.security.oauth2.client.registration.google.client-secret");
         put("fitbit-client-id", "spring.security.oauth2.client.registration.fitbit.client-id");
         put("fitbit-client-secret", "spring.security.oauth2.client.registration.fitbit.client-secret");
-        put("db-password", "careconnect.db.password");
-        put("db-username", "careconnect.db.username");
         put("firebase-service-account-key", "firebase.service-account-key");
         put("aws-access-key-id", "aws.s3.access-key");
         put("aws-secret-access-key", "aws.s3.secret-key");

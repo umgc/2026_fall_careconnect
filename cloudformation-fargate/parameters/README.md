@@ -49,7 +49,38 @@ These CloudFormation changes must be deployed **in stack order** for Bedrock cha
 
 **Existing RDS instances:** updating the data stack attaches a new parameter group; RDS may require a **reboot** before `CREATE EXTENSION vector` succeeds. After deploy, confirm in logs: `Schema patch applied: V2607071920 – enable pgvector extension`.
 
-**SSM secrets (prod profile):** store under `/careconnect/<Environment>/` (e.g. `/careconnect/cfdemo/sendgrid-api-key`). See `SsmPropertySourceInitializer.java` for the full parameter list.
+**SSM secrets (prod profile):** store under `/careconnect/<Environment>/` (e.g. `/careconnect/cfdemo/sendgrid-api-key`). See `SsmPropertySourceInitializer.java` for the full parameter list. **JWT and DB credentials are not loaded from SSM** — ECS injects `SECURITY_JWT_SECRET`, `DB_PASSWORD`, and `DB_USER` from Secrets Manager (data stack).
+
+**SSM migration checklist (cfdemo / staging / prod cutover to SpringProfile `prod`):**
+
+1. Copy or create parameters under `/careconnect/<Environment>/` before updating the service stack.
+2. Minimum parameters for a smoke test:
+   - `sendgrid-api-key`
+   - `google-client-id`
+   - `google-client-secret`
+3. Optional but commonly needed: `stripe-secret-key`, `stripe-webhook-secret`, `firebase-service-account-key`, OAuth/Fitbit keys.
+4. Set `WebSocketApiGatewayEndpoint` in `*-service.json` when using prod profile (maps to `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT`).
+5. After service stack update, confirm ECS logs: `SSM PropertySource initialized with N parameters`.
+
+Example copy (adjust environment name and region):
+
+```powershell
+$Env = "cfdemo"
+$Region = "us-east-1"
+foreach ($Name in @("sendgrid-api-key","google-client-id","google-client-secret")) {
+  $Val = aws ssm get-parameter --name "/careconnect/prod/$Name" --with-decryption --query Parameter.Value --output text --region $Region
+  aws ssm put-parameter --name "/careconnect/$Env/$Name" --type SecureString --value $Val --overwrite --region $Region
+}
+```
+
+**RDS reboot after pgvector parameter group (data stack update):**
+
+```powershell
+aws rds reboot-db-instance --db-instance-identifier careconnect-<Environment>-db
+```
+
+Wait for the instance to become `available`, then redeploy the ECS service and verify logs contain:
+`Schema patch applied: V2607071920 – enable pgvector extension`.
 
 **Bedrock:** enable model access in the AWS account (Model access in Bedrock console) for Nova, Claude, Titan Embed, and any inference profiles in use.
 

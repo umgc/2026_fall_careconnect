@@ -5,6 +5,7 @@
   { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "true" },
   { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
   { "ParameterKey": "FromEmail", "ParameterValue": "noreply@careconnect.com" },
+  { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "REPLACE_ME_WSS_ENDPOINT" },
   { "ParameterKey": "FrontendBaseUrl", "ParameterValue": "http://localhost:3000" },
   { "ParameterKey": "CorsAllowedList", "ParameterValue": "http://localhost:*,http://127.0.0.1:*" },
   { "ParameterKey": "ContainerPort", "ParameterValue": "8081" },

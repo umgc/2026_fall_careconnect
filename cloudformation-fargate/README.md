@@ -304,7 +304,8 @@ The templates assume the backend uses these environment variables:
 - `CARECONNECT_AI_ENABLED` — `true` for Ask AI chat in cfdemo/staging/prod (`CareConnectAiEnabled` parameter)
 - `ENVIRONMENT` — CloudFormation environment name; drives SSM prefix `/careconnect/<Environment>/`
 - `AI_PROVIDER` — typically `bedrock`
-- `EMAIL_PROVIDER` / `FROM_EMAIL` — SendGrid in prod profile (API key from SSM)
+- `EMAIL_PROVIDER` / `FROM_EMAIL` — SendGrid when `SpringProfile=prod` (API key from SSM)
+- `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_ENABLED` — required for prod profile WebSocket AWS mode
 - `AWS_DEFAULT_REGION` — required for Bedrock and SSM clients
 
 The ALB health check path is:
