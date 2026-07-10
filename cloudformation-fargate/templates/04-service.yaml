@@ -47,11 +47,12 @@ Parameters:
     Type: String
     Default: noreply@careconnect.com
 
-  # Required when SpringProfile=prod (application-prod.properties WebSocket AWS mode).
+  # Optional. Leave empty until a real WebSocket API Gateway endpoint is available.
+  # A placeholder string would be treated as a fake URL by the app/AWS client.
   WebSocketApiGatewayEndpoint:
     Type: String
     Default: ''
-    Description: API Gateway WebSocket API endpoint URL (wss://...)
+    Description: API Gateway WebSocket API endpoint URL (wss://...). Leave empty if not provisioned yet.
 
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:

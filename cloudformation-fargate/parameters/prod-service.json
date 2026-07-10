@@ -5,7 +5,7 @@
   { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "true" },
   { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
   { "ParameterKey": "FromEmail", "ParameterValue": "REPLACE_ME_FROM_EMAIL" },
-  { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "REPLACE_ME_WSS_ENDPOINT" },
+  { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "" },
   { "ParameterKey": "FrontendBaseUrl", "ParameterValue": "REPLACE_ME_FRONTEND_BASE_URL" },
   { "ParameterKey": "CorsAllowedList", "ParameterValue": "REPLACE_ME_CORS_ALLOWED_LIST" },
   { "ParameterKey": "ContainerPort", "ParameterValue": "8081" },

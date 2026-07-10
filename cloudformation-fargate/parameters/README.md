@@ -59,7 +59,10 @@ These CloudFormation changes must be deployed **in stack order** for Bedrock cha
    - `google-client-id`
    - `google-client-secret`
 3. Optional but commonly needed: `stripe-secret-key`, `stripe-webhook-secret`, `firebase-service-account-key`, OAuth/Fitbit keys.
-4. Set `WebSocketApiGatewayEndpoint` in `*-service.json` when using prod profile (maps to `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT`).
+4. Leave `WebSocketApiGatewayEndpoint` empty in checked-in `*-service.json` files (same as `dev`).
+   Set the real `wss://...` value at deploy time when the WebSocket API exists
+   (maps to `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT`). Do not use a placeholder string —
+   it is treated as a fake URL.
 5. After service stack update, confirm ECS logs: `SSM PropertySource initialized with N parameters`.
 
 Example copy (adjust environment name and region):
