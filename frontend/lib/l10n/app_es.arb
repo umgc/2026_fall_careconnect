@@ -325,6 +325,18 @@
   "signup_previousButton": "Anterior",
   "signup_backLoginButton": "Volver al inicio de sesión",
   "signup_signUpButton": "Registrarse",
-  "signup_nextButton": "Siguiente"
+  "signup_nextButton": "Siguiente",
+
+  "oauthcallback_initilizeAuth": "Procesando la autenticación",
+  "oauthcallback_missingAuthData": "Faltan datos de autenticación. Intenta iniciar sesión de nuevo.",
+  "oauthcallback_savingAuthData": "Guardando datos de autenticación",
+  "oauthcallback_completeSignIn": "Completando el inicio de sesión",
+  "oauthcallback_unknownUserRole": "Rol de usuario desconocido",
+  "oauthcallback_failedToProcessAuth": "Error al procesar la autenticación",
+  "oauthcallback_oauthFailed": "Error en la autenticación OAuth. Inténtalo de nuevo.",
+  "oauthcallback_accessDenied": "Se ha denegado el acceso. Concede el permiso para continuar.",
+  "oauthcallback_invalidRequest": "Solicitud no válida. Intenta iniciar sesión de nuevo.",
+  "oauthcallback_serverError": "Se ha producido un error del servidor. Inténtalo de nuevo más tarde.",
+  "oauthcallback_authError": "Error de autenticación"
 
 }

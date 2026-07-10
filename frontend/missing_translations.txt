@@ -182,7 +182,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "ar": [
@@ -368,7 +379,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "bn": [
@@ -554,7 +576,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "fa": [
@@ -740,7 +773,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "fr": [
@@ -926,7 +970,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "hi": [
@@ -1112,7 +1167,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "ja": [
@@ -1298,7 +1364,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "ne": [
@@ -1484,7 +1561,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "pt": [
@@ -1670,7 +1758,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "ru": [
@@ -1856,7 +1955,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "ur": [
@@ -2042,7 +2152,18 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ],
 
   "zh": [
@@ -2228,6 +2349,17 @@
     "signup_previousButton",
     "signup_backLoginButton",
     "signup_signUpButton",
-    "signup_nextButton"
+    "signup_nextButton",
+    "oauthcallback_initilizeAuth",
+    "oauthcallback_missingAuthData",
+    "oauthcallback_savingAuthData",
+    "oauthcallback_completeSignIn",
+    "oauthcallback_unknownUserRole",
+    "oauthcallback_failedToProcessAuth",
+    "oauthcallback_oauthFailed",
+    "oauthcallback_accessDenied",
+    "oauthcallback_invalidRequest",
+    "oauthcallback_serverError",
+    "oauthcallback_authError"
   ]
 }

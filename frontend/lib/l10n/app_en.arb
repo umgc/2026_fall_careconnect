@@ -326,6 +326,18 @@
   "signup_previousButton": "Previous",
   "signup_backLoginButton": "Back to Login",
   "signup_signUpButton": "Sign Up",
-  "signup_nextButton": "Next"
+  "signup_nextButton": "Next",
+
+  "oauthcallback_initilizeAuth": "Processing authentication",
+  "oauthcallback_missingAuthData": "Missing authentication data. Please try signing in again.",
+  "oauthcallback_savingAuthData": "Saving authentication data",
+  "oauthcallback_completeSignIn": "Completing sign in",
+  "oauthcallback_unknownUserRole": "Unknown user role",
+  "oauthcallback_failedToProcessAuth": "Failed to process authentication",
+  "oauthcallback_oauthFailed": "OAuth authentication failed. Please try again.",
+  "oauthcallback_accessDenied": "Access was denied. Please grant permission to continue.",
+  "oauthcallback_invalidRequest": "Invalid request. Please try signing in again.",
+  "oauthcallback_serverError": "Server error occurred. Please try again later.",
+  "oauthcallback_authError": "Authentication error"
 
 }
