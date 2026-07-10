@@ -1,4 +1,5 @@
-﻿import 'package:care_connect_app/providers/user_provider.dart';
+﻿import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -30,8 +31,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
   List<Map<String, dynamic>> moodHistory = [];
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     currentMoodScore = widget.moodScore;
     currentMoodLabel = widget.moodLabel;
     _loadMoodHistory();
@@ -61,24 +62,72 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
     return 'Sad';
   }
 
+  String _translateMood(String mood, AppLocalizations t){
+    switch(mood){
+      case('Sad'):
+        return t.recentcheckinwidget_moodSad;
+      case('Down'):
+        return t.recentcheckinwidget_moodDown;
+      case('Okay'):
+        return t.recentcheckinwidget_moodOkay;
+      case('Happy'):
+        return t.recentcheckinwidget_moodHappy;
+      case('Great'):
+        return t.recentcheckinwidget_moodGreat;
+      case('Excellent'):
+        return t.recentcheckinwidget_moodExcellent;
+      default:
+        return mood;
+    }
+  }
+
+  String _translateMoodTags(String tag, AppLocalizations t){
+    switch(tag){
+      case('happy'):
+        return t.currentmoodwidget_moodTagHappy;
+      case('calm'):
+        return t.currentmoodwidget_moodTagCalm;
+      case('positive'):
+        return t.currentmoodwidget_moodTagPositive;
+      case('comfortable'):
+        return t.currentmoodwidget_moodTagComfortable;
+      case('stable'):
+        return t.currentmoodwidget_moodTagStable;
+      case('neutral'):
+        return t.currentmoodwidget_moodTagNeutral;
+      case('watchful'):
+        return t.currentmoodwidget_moodTagWatchful;
+      case('low'):
+        return t.currentmoodwidget_moodTagLow;
+      case('monitoring'):
+        return t.currentmoodwidget_moodTagMonitoring;
+      case('no recent mood data'):
+        return t.currentmoodwidget_noMoodTags;
+      default:
+        return tag;
+    }
+  }
+
   void _checkForAlerts() {
     // Placeholder for alert logic.
   }
 
   String _formatDate(DateTime date) {
+    final t = AppLocalizations.of(context)!;
     final now = DateTime.now().toUtc();
     final difference = now.difference(date);
 
     if (difference.inDays == 0) {
-      return 'Today';
+      return t.medicationreminderwidget_today;
     } else if (difference.inDays == 1) {
-      return 'Yesterday';
+      return t.currentmoodwidget_yesterday;
     } else {
       return '${date.month}/${date.day}';
     }
   }
 
   Future<void> _loadMoodHistory() async {
+    final t = AppLocalizations.of(context)!;
     final user = Provider.of<UserProvider>(context, listen: false).user;
 
     try {
@@ -88,7 +137,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
             .map<Map<String, dynamic>>(
               (entry) => {
                 'score': entry['score'],
-                'label': entry['label'],
+                'label': _translateMood(entry['label'], t),
                 'date': DateTime.parse(entry['createdAt']),
               },
             )
@@ -200,8 +249,9 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final dateLabel = widget.date == null ? 'Today' : _formatDate(widget.date!);
+    final dateLabel = widget.date == null ? t.medicationreminderwidget_today : _formatDate(widget.date!);
     final latestMoods = _latestMoodEntries();
     final averageMood = _averageMoodScore();
     final trendPoints = _dailyMoodTrendForLast7Days(averageMood);
@@ -233,7 +283,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Current Mood',
+                t.currentmoodwidget_title,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -262,7 +312,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                     ),
                   ),
                   Text(
-                    currentMoodLabel,
+                    _translateMood(currentMoodLabel, t),
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w500,
@@ -287,7 +337,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Rate how you feel right now:',
+                  t.currentmoodwidget_rateCurrentMood,
                   style: theme.textTheme.titleMedium,
                 ),
                 SliderTheme(
@@ -317,7 +367,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                   alignment: Alignment.centerRight,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save Mood'),
+                    label: Text(t.currentmoodwidget_saveMood),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: theme.colorScheme.primary,
                       foregroundColor: theme.colorScheme.onPrimary,
@@ -356,10 +406,10 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                           SnackBar(
                             content: Text(
                               response.headers['x-offline-queued'] == 'true'
-                                  ? 'Mood queued for sync when internet is restored'
+                                  ? t.currentmoodwidget_saveMoodOnSync
                                   : userProvider.isDeviceOnline
-                                      ? 'Mood saved successfully'
-                                      : 'No internet: mood saved locally',
+                                      ? t.currentmoodwidget_moodSaved
+                                      : t.currentmoodwidget_moodSavedLocal,
                             ),
                             duration: const Duration(seconds: 2),
                           ),
@@ -367,7 +417,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                       } catch (e) {
                         messenger.showSnackBar(
                           SnackBar(
-                            content: Text('Error saving mood: $e'),
+                            content: Text('${t.currentmoodwidget_errorSavingMood}: $e'),
                             backgroundColor: errorColor,
                           ),
                         );
@@ -385,7 +435,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
               trendPoints: trendPoints,
             ),
             const SizedBox(height: 14),
-            Text('Last 4 Moods', style: theme.textTheme.titleMedium),
+            Text(t.currentmoodwidget_lastFourMoods, style: theme.textTheme.titleMedium),
             const SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
@@ -401,7 +451,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                 final entry = latestMoods[index];
                 final score = entry['score'] as int;
                 final label = (entry['label'] as String).isEmpty
-                    ? _getMoodLabel(score)
+                    ? _translateMood(_getMoodLabel(score), t)
                     : entry['label'] as String;
                 final date = entry['date'] as DateTime;
 
@@ -469,7 +519,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                       ),
                     ),
                     child: Text(
-                      tag,
+                      _translateMoodTags(tag, t),
                       style: TextStyle(
                         fontSize: 13,
                         color: theme.colorScheme.onPrimaryContainer,
@@ -494,14 +544,14 @@ class _MoodSummaryCard extends StatelessWidget {
   final double averageScore;
   final List<double> trendPoints;
 
-  String _statusText(double score) {
+  String _statusText(double score, AppLocalizations t) {
     if (score <= 5.0) {
-      return 'Low mood trend';
+      return t.currentmoodwidget_lowMoodTrend;
     }
     if (score < 7.0) {
-      return 'Stable mood trend';
+      return t.currentmoodwidget_stableMoodTrend;
     }
-    return 'Positive mood trend';
+    return t.currentmoodwidget_positiveMoodTrend;
   }
 
   Color _statusColor(double score, ThemeData theme) {
@@ -516,6 +566,7 @@ class _MoodSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final clamped = averageScore.clamp(1.0, 10.0);
     final normalized = (clamped / 10.0).clamp(0.0, 1.0);
@@ -585,7 +636,7 @@ class _MoodSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '7-Day Mood Summary',
+                      t.currentmoodwidget_sevenDaySummary,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -594,7 +645,7 @@ class _MoodSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _statusText(clamped),
+                      _statusText(clamped, t),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -603,7 +654,7 @@ class _MoodSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Updated from moods logged in the last 7 days',
+                      t.currentmoodwidget_summaryDescription,
                       style: TextStyle(
                         fontSize: 12,
                         color: theme.colorScheme.onSurface.withValues(
@@ -633,14 +684,14 @@ class _MoodSummaryCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '7 days ago',
+                t.currentmoodwidget_sevenDaysAgo,
                 style: TextStyle(
                   fontSize: 11,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                 ),
               ),
               Text(
-                'Today',
+                t.medicationreminderwidget_today,
                 style: TextStyle(
                   fontSize: 11,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
