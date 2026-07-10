@@ -1,12 +1,13 @@
 // Tests for StripeCheckoutPage
 // (lib/features/payments/presentation/pages/stripe_checkout_page.dart).
 //
-// StripeCheckoutPage receives a PackageModel and renders payment UI.
-// No API calls in initState — _pay() only fires on button press.
-// Tests cover initial render with a sample package.
+// StripeCheckoutPage is now a redirect stub — it renders a loading spinner
+// and navigates to /select-package on the first frame. Tests verify the
+// stub behavior rather than the old Stripe payment UI.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/features/payments/presentation/pages/stripe_checkout_page.dart';
 import 'package:care_connect_app/features/payments/models/package_model.dart';
 
@@ -25,89 +26,124 @@ PackageModel _makePackage({
       id: id,
     );
 
-Widget _wrap({PackageModel? pkg, String? userId}) => MaterialApp(
-      home: StripeCheckoutPage(
-        package: pkg ?? _makePackage(),
-        userId: userId ?? '42',
+Widget _wrap({PackageModel? pkg, String? userId}) {
+  final router = GoRouter(
+    initialLocation: '/checkout',
+    routes: [
+      GoRoute(
+        path: '/checkout',
+        builder: (context, state) => StripeCheckoutPage(
+          package: pkg ?? _makePackage(),
+          userId: userId ?? '42',
+        ),
       ),
-    );
+      GoRoute(
+        path: '/select-package',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Package Selection'))),
+      ),
+    ],
+  );
+  return MaterialApp.router(routerConfig: router);
+}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 void main() {
-  group('StripeCheckoutPage – initial render', () {
+  group('StripeCheckoutPage – redirect stub', () {
     testWidgets('renders without crashing', (tester) async {
       await tester.pumpWidget(_wrap());
       expect(find.byType(StripeCheckoutPage), findsOneWidget);
     });
 
-    testWidgets('shows package name in AppBar', (tester) async {
-      await tester.pumpWidget(_wrap(pkg: _makePackage(name: 'Pro Plan')));
-      expect(find.textContaining('Pro Plan'), findsWidgets);
-    });
-
-    testWidgets('shows package name in body', (tester) async {
+    testWidgets('shows CircularProgressIndicator', (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.text('Basic Plan'), findsWidgets);
-    });
-
-    testWidgets('shows package description', (tester) async {
-      await tester.pumpWidget(_wrap());
-      expect(find.text('Essential care features'), findsOneWidget);
-    });
-
-    testWidgets('shows formatted price', (tester) async {
-      // priceCents=999 → "$9.99 / mo"
-      await tester.pumpWidget(_wrap());
-      expect(find.textContaining('9.99'), findsOneWidget);
-    });
-
-    testWidgets('shows "Pay with Stripe" button', (tester) async {
-      await tester.pumpWidget(_wrap());
-      expect(find.text('Pay with Stripe'), findsOneWidget);
-    });
-
-    testWidgets('"Pay with Stripe" button is enabled initially', (tester) async {
-      await tester.pumpWidget(_wrap());
-      final button = tester.widget<ElevatedButton>(
-        find.widgetWithText(ElevatedButton, 'Pay with Stripe'),
-      );
-      // _isProcessing=false → onPressed is not null.
-      expect(button.onPressed, isNotNull);
-    });
-
-    testWidgets('does NOT show CircularProgressIndicator initially',
-        (tester) async {
-      // _isProcessing=false → no spinner.
-      await tester.pumpWidget(_wrap());
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-    });
-
-    testWidgets('does NOT show status text initially', (tester) async {
-      // _status=null → no status message displayed.
-      await tester.pumpWidget(_wrap());
-      expect(find.textContaining('successful'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
     testWidgets('shows a Scaffold', (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.byType(Scaffold), findsOneWidget);
-    });
-  });
-
-  group('StripeCheckoutPage – package with different prices', () {
-    testWidgets('shows correct price for Premium plan', (tester) async {
-      await tester.pumpWidget(_wrap(
-        pkg: _makePackage(name: 'Premium', priceCents: 2999),
-      ));
-      expect(find.textContaining('29.99'), findsOneWidget);
+      expect(find.byType(Scaffold), findsWidgets);
     });
 
-    testWidgets('shows correct price for free plan', (tester) async {
-      await tester.pumpWidget(_wrap(
-        pkg: _makePackage(name: 'Free', priceCents: 0),
-      ));
-      expect(find.textContaining('0.00'), findsOneWidget);
+    testWidgets('redirects to /select-package after first frame',
+        (tester) async {
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      expect(find.text('Package Selection'), findsOneWidget);
+    });
+
+    testWidgets('accepts package and userId parameters', (tester) async {
+      await tester.pumpWidget(
+        _wrap(pkg: _makePackage(name: 'Pro Plan'), userId: '99'),
+      );
+      expect(find.byType(StripeCheckoutPage), findsOneWidget);
+    });
+
+    testWidgets('accepts fromPortal parameter', (tester) async {
+      final router = GoRouter(
+        initialLocation: '/checkout',
+        routes: [
+          GoRoute(
+            path: '/checkout',
+            builder: (context, state) => StripeCheckoutPage(
+              package: _makePackage(),
+              fromPortal: true,
+            ),
+          ),
+          GoRoute(
+            path: '/select-package',
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('Packages'))),
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      expect(find.byType(StripeCheckoutPage), findsOneWidget);
+    });
+
+    testWidgets('package model fields are accessible', (tester) async {
+      final pkg = _makePackage(
+        name: 'Test Plan',
+        description: 'Desc',
+        priceCents: 1999,
+        id: 'pkg-test',
+      );
+      expect(pkg.name, 'Test Plan');
+      expect(pkg.description, 'Desc');
+      expect(pkg.priceCents, 1999);
+      expect(pkg.id, 'pkg-test');
+    });
+
+    testWidgets('default fromPortal is false', (tester) async {
+      final page = StripeCheckoutPage(
+        package: _makePackage(),
+      );
+      expect(page.fromPortal, isFalse);
+    });
+
+    testWidgets('userId defaults to null', (tester) async {
+      final page = StripeCheckoutPage(
+        package: _makePackage(),
+      );
+      expect(page.userId, isNull);
+    });
+
+    testWidgets('paymentCustomerId defaults to null', (tester) async {
+      final page = StripeCheckoutPage(
+        package: _makePackage(),
+      );
+      expect(page.paymentCustomerId, isNull);
+    });
+
+    testWidgets('package with zero price', (tester) async {
+      await tester.pumpWidget(_wrap(pkg: _makePackage(priceCents: 0)));
+      expect(find.byType(StripeCheckoutPage), findsOneWidget);
+    });
+
+    testWidgets('package with large price', (tester) async {
+      await tester.pumpWidget(_wrap(pkg: _makePackage(priceCents: 99999)));
+      expect(find.byType(StripeCheckoutPage), findsOneWidget);
     });
   });
 }

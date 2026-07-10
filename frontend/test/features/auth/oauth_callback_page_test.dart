@@ -197,4 +197,40 @@ void main() {
       await tester.pump();
     });
   });
+
+  group('OAuthCallbackPage – token+user processing', () {
+    testWidgets('malformed user data shows processing failure', (tester) async {
+      // token + user present, but user is not valid JSON -> jsonDecode throws
+      // -> catch block sets the failure status and redirects.
+      await tester.pumpWidget(
+        _wrap(const OAuthCallbackPage(token: 'jwt-token', user: 'not-json')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600)); // past the 500ms delay
+      await tester.pump();
+
+      expect(
+        find.textContaining('Failed to process authentication'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 4)); // drain the 3s redirect timer
+      await tester.pump();
+    });
+
+    testWidgets('Back to Login button navigates away', (tester) async {
+      await tester.pumpWidget(
+        _wrap(const OAuthCallbackPage(error: 'oauth_failed')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+
+      await tester.tap(find.text('Back to Login')); // covers onPressed -> context.go
+      await tester.pumpAndSettle();
+      expect(find.byType(OAuthCallbackPage), findsNothing);
+
+      await tester.pump(const Duration(seconds: 4)); // drain the pending redirect timer
+      await tester.pump();
+    });
+  });
 }
