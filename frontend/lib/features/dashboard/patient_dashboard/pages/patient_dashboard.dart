@@ -34,12 +34,6 @@ class PatientDashboard extends StatefulWidget {
 }
 
 class _PatientDashboardState extends State<PatientDashboard> {
-  static const String _lowMoodAlertMessage =
-      'Mood score below normal range. Consider contacting your healthcare provider.';
-  static const String _pendingMedicationAlertMessage =
-      'You have medication reminders that are not marked as taken.';
-  static const String _pendingMedicationAlertId =
-      'reminder:pending_medications';
 
   // Patient data
   Map<String, dynamic>? patient;
@@ -684,11 +678,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
     List<AlertNotification> existing,
     double? averageMood,
   ) {
+    final t = AppLocalizations.of(context)!;
     final next = existing
         .where(
           (alert) =>
               !(alert.type == AlertType.important &&
-                  alert.message == _lowMoodAlertMessage),
+                  alert.message == t.ptdashboard_moodScoreLow),
         )
         .toList();
 
@@ -697,7 +692,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
         0,
         AlertNotification(
           type: AlertType.important,
-          message: _lowMoodAlertMessage,
+          message: t.ptdashboard_moodScoreLow,
         ),
       );
     }
@@ -710,13 +705,15 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   bool _isPendingMedicationAlert(AlertNotification alert) {
+    final t = AppLocalizations.of(context)!;
     return alert.type == AlertType.reminder &&
-        alert.message == _pendingMedicationAlertMessage;
+        alert.message == t.ptdashboard_medicationReminders;
   }
 
   String _alertId(AlertNotification alert) {
+    final t = AppLocalizations.of(context)!;
     if (_isPendingMedicationAlert(alert)) {
-      return _pendingMedicationAlertId;
+      return t.ptdashboard_medPendingReminder;
     }
     return '${alert.type.name}:${alert.message}';
   }
@@ -725,19 +722,20 @@ class _PatientDashboardState extends State<PatientDashboard> {
     List<AlertNotification> existing, {
     required bool hasPendingUntaken,
   }) {
+    final t = AppLocalizations.of(context)!;
     final next = existing
         .where((alert) => !_isPendingMedicationAlert(alert))
         .toList();
 
     if (!hasPendingUntaken) {
-      dismissedAlertIds.remove(_pendingMedicationAlertId);
+      dismissedAlertIds.remove(t.ptdashboard_medPendingReminder);
       return next;
     }
 
     next.add(
       AlertNotification(
         type: AlertType.reminder,
-        message: _pendingMedicationAlertMessage,
+        message: t.ptdashboard_medicationReminders,
       ),
     );
     return next;

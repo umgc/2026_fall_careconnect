@@ -2,11 +2,12 @@
 // Uses addPostFrameCallback to show the dialog.
 // Pure StatefulWidget — no HTTP, no Provider needed.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/presentation/mainscreen.dart';
 
-Widget _wrap() => const MaterialApp(home: EmergencyScreen());
+Widget _wrap() => const MaterialApp(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: EmergencyScreen());
 
 void main() {
   group('EmergencyScreen – initial render', () {
