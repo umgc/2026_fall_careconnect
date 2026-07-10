@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/widgets/address_autocomplete_field.dart';
 import 'package:care_connect_app/services/google_places_service.dart';
@@ -133,16 +134,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
   final Map<String, Map<String, dynamic>> _roles = {
     'Patient': {
       'icon': Icons.person,
-      'subtitle': 'Managing my own health',
-      'description':
-          'As a patient, you\'ll have access to track your health, communicate with caregivers, manage medications, and monitor symptoms.',
       'totalSteps': 5,
     },
     'Caregiver': {
       'icon': Icons.favorite,
-      'subtitle': 'Caring for someone else',
-      'description':
-          'As a caregiver, you\'ll be able to monitor and assist with healthcare management for your loved ones, coordinate care, and communicate with healthcare providers.',
       'totalSteps': 5,
     },
   };
@@ -156,6 +151,77 @@ class _RegistrationPageState extends State<RegistrationPage> {
       ((_currentStep + 1) / _totalSteps * 100).round();
 
   bool get _isLastStep => _currentStep == _totalSteps - 1;
+
+  String _untranslateGenderValue(String value){
+    final t = AppLocalizations.of(context)!;
+    if(value == t.signup_accountMale){
+        return 'Male';
+    }
+    else if(value == t.signup_accountFemale){
+        return 'Female';
+    }
+    else if(value == t.signup_accountOther){
+        return 'Other';
+    }
+    else if(value == t.signup_accountNoSay){
+        return 'Prefer not to say';
+    }
+    else{
+      return value;
+    }
+  }
+
+  String _untranslateCaregiverValue(String value){
+    final t = AppLocalizations.of(context)!;
+    if(value == t.signup_accountProfessional){
+        return 'Professional';
+    }
+    else if(value == t.signup_accountFamilyMemb){
+        return 'Family Member';
+    }
+    else if(value == t.signup_accountOther){
+        return 'Other';
+    }
+    else if(value == t.signup_accountFriend){
+        return 'Friend';
+    }
+    else{
+      return value;
+    }
+  }
+
+  String _translateRole(String role){
+    switch(role){
+      case('Patient'):
+        return AppLocalizations.of(context)!.signup_patient;
+      case('Caregiver'):
+        return AppLocalizations.of(context)!.signup_caregiver; 
+      default:
+        return role;
+    }
+  }
+
+  String _translateRoleSubtitle(String role){
+    switch(role){
+      case('Patient'):
+        return AppLocalizations.of(context)!.signup_patientSubtitle;
+      case('Caregiver'):
+        return AppLocalizations.of(context)!.signup_caregiverSubtitle; 
+      default:
+        return role;
+    }
+  }
+
+  String _translateRoleDescription(String role){
+    switch(role){
+      case('Patient'):
+        return AppLocalizations.of(context)!.signup_patientDescription;
+      case('Caregiver'):
+        return AppLocalizations.of(context)!.signup_caregiverDescription; 
+      default:
+        return role;
+    }
+  }
 
   void _nextStep() {
     // Validate current step before proceeding
@@ -283,7 +349,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Registration failed: $e'),
+            content: Text('${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -340,7 +406,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           '❌ Patient registration failed: ${response.statusCode} - ${response.body}',
         );
       }
-      throw Exception('Registration failed: ${response.body}');
+      throw Exception('${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: ${response.body}');
     }
   }
 
@@ -397,7 +463,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           '❌ Caregiver registration failed: ${response.statusCode} - ${response.body}',
         );
       }
-      throw Exception('Registration failed: ${response.body}');
+      throw Exception('${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: ${response.body}');
     }
   }
 
@@ -419,11 +485,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildAccountRoleStep() {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Who is this account for?',
+        Text(
+          t.signup_accountRoleQuestion,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -434,14 +501,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
         const SizedBox(height: 8),
 
         Text(
-          'Choose the role that best describes your relationship to healthcare management',
+          t.signup_accountRoleHint,
           style: TextStyle(fontSize: 14, color: Colors.grey[600]),
         ),
 
         const SizedBox(height: 32),
 
-        const Text(
-          'Account Role *',
+        Text(
+          '${t.signup_accountRole} *',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
@@ -490,7 +557,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          role,
+                          _translateRole(role),
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -499,7 +566,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _roles[role]!['subtitle'],
+                          _translateRoleSubtitle(role),
                           style: TextStyle(
                             fontSize: 12,
                             color: isSelected ? AppTheme.primary.withOpacity(0.7) : Colors.grey[500],
@@ -526,7 +593,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              _roles[_selectedRole]!['description'],
+              _translateRoleDescription(_selectedRole!),
               style: const TextStyle(fontSize: 14, color: AppTheme.primary),
             ),
           ),
@@ -536,13 +603,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildPersonalInformationStep() {
+    final t = AppLocalizations.of(context)!;
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Personal Information',
+          Text(
+            t.signup_accountPersonalInfo,
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -551,7 +619,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Enter your basic details',
+            t.signup_accountEnterDetails,
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
           const SizedBox(height: 32),
@@ -562,11 +630,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
               Expanded(
                 child: _buildTextFormField(
                   controller: _firstNameController,
-                  label: 'First Name',
+                  label: t.signup_accountFirstName,
                   isRequired: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'First name is required';
+                      return t.signup_accountFirstNameMissing;
                     }
                     return null;
                   },
@@ -576,11 +644,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
               Expanded(
                 child: _buildTextFormField(
                   controller: _lastNameController,
-                  label: 'Last Name',
+                  label: t.signup_accountLastName,
                   isRequired: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Last name is required';
+                      return t.signup_accountLastNameMissing;
                     }
                     return null;
                   },
@@ -593,11 +661,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
           // Date of Birth
           _buildDateFormField(
             controller: _dobController,
-            label: 'Date of Birth',
+            label: t.signup_accountDOB,
             isRequired: true,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Date of birth is required';
+                return t.signup_accountDOB;
               }
               return null;
             },
@@ -607,17 +675,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
           // Gender
           _buildDropdownFormField(
             value: _selectedGender,
-            label: 'Gender',
+            label: t.signup_accountGender,
             isRequired: true,
-            items: ['Male', 'Female', 'Other', 'Prefer not to say'],
+            items: [t.signup_accountMale, t.signup_accountFemale, t.signup_accountOther, t.signup_accountNoSay],
             onChanged: (value) {
               setState(() {
-                _selectedGender = value;
+                _selectedGender = _untranslateGenderValue(value!);
               });
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Gender is required';
+                return t.signup_accountGenderMissing;
               }
               return null;
             },
@@ -628,17 +696,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
             const SizedBox(height: 20),
             _buildDropdownFormField(
               value: _selectedCaregiverType,
-              label: 'Caregiver Type',
+              label: t.signup_accountCaregiverType,
               isRequired: true,
-              items: ['Professional', 'Family Member', 'Friend', 'Other'],
+              items: [t.signup_accountProfessional, t.signup_accountFamilyMemb, t.signup_accountFriend, t.signup_accountOther],
               onChanged: (value) {
                 setState(() {
-                  _selectedCaregiverType = value;
+                  _selectedCaregiverType = _untranslateCaregiverValue(value!);
                 });
               },
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Caregiver type is required';
+                  return t.signup_accountCaregiverTypeMissing;
                 }
                 return null;
               },
@@ -650,12 +718,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildContactInformationStep() {
+    final t = AppLocalizations.of(context)!;
     return Form(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Contact Information',
+          Text(
+            t.signup_accountContactInfo,
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -664,7 +733,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Provide your contact details and address',
+            t.signup_accountContactInstruction,
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
           const SizedBox(height: 32),
@@ -672,17 +741,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
           // Email and Phone
           _buildTextFormField(
             controller: _emailController,
-            label: 'Email Address',
+            label: t.alexalogin_emailAddress,
             isRequired: true,
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Email is required';
+                return t.signup_accountEmailRequired;
               }
               if (!RegExp(
                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$',
               ).hasMatch(value)) {
-                return 'Please enter a valid email address';
+                return t.signup_accountEmailInvalid;
               }
               return null;
             },
@@ -691,12 +760,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildTextFormField(
             controller: _phoneController,
-            label: 'Phone Number',
+            label: t.signup_accountPhone,
             isRequired: true,
             keyboardType: TextInputType.phone,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Phone number is required';
+                return t.signup_accountPhoneMissing;
               }
               return null;
             },
@@ -704,8 +773,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
           const SizedBox(height: 24),
 
           // Address Section
-          const Text(
-            'Address',
+          Text(
+            t.signup_accountAddress,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -716,8 +785,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           AddressAutocompleteField(
             controller: _addressLine1Controller,
-            label: 'Address Line 1',
-            hint: 'Start typing your address...',
+            label: t.signup_accountAddressLine1,
+            hint: '${t.signup_accountAddressLine1Hint}...',
             isRequired: true,
             keyboardType: TextInputType.streetAddress,
             googlePlacesApiKey: AppConfig.getGooglePlacesApiKey(),
@@ -732,7 +801,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Address line 1 is required';
+                return t.signup_accountAddressLine1Required;
               }
               return null;
             },
@@ -741,7 +810,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildTextFormField(
             controller: _addressLine2Controller,
-            label: 'Address Line 2 (Optional)',
+            label: t.signup_accountAddressLine2,
             isRequired: false,
           ),
           const SizedBox(height: 20),
@@ -752,11 +821,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 flex: 2,
                 child: _buildTextFormField(
                   controller: _cityController,
-                  label: 'City',
+                  label: t.signup_accountCity,
                   isRequired: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'City is required';
+                      return t.signup_accountCityRequired;
                     }
                     return null;
                   },
@@ -766,11 +835,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
               Expanded(
                 child: _buildTextFormField(
                   controller: _stateController,
-                  label: 'State',
+                  label: t.signup_accountState,
                   isRequired: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'State is required';
+                      return t.signup_accountStateRequired;
                     }
                     return null;
                   },
@@ -780,12 +849,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
               Expanded(
                 child: _buildTextFormField(
                   controller: _zipController,
-                  label: 'ZIP Code',
+                  label: t.signup_accountZIP,
                   isRequired: true,
                   keyboardType: TextInputType.number,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'ZIP code is required';
+                      return t.signup_accountZIPRequired;
                     }
                     return null;
                   },
@@ -798,8 +867,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
           if (_selectedRole == 'Caregiver' &&
               _selectedCaregiverType == 'Professional') ...[
             const SizedBox(height: 32),
-            const Text(
-              'Professional Information',
+            Text(
+              t.signup_accountProfessionalInfo,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -810,11 +879,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
             _buildTextFormField(
               controller: _licenseNumberController,
-              label: 'License Number',
+              label: t.signup_accountLicenseNumber,
               isRequired: true,
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'License number is required for professional caregivers';
+                  return t.signup_accountLicenseNumberRequired;
                 }
                 return null;
               },
@@ -826,11 +895,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 Expanded(
                   child: _buildTextFormField(
                     controller: _issuingStateController,
-                    label: 'Issuing State',
+                    label: t.signup_accountIssueState,
                     isRequired: true,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Issuing state is required';
+                        return t.signup_accountIssueStateRequired;
                       }
                       return null;
                     },
@@ -840,15 +909,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 Expanded(
                   child: _buildTextFormField(
                     controller: _yearsExperienceController,
-                    label: 'Years of Experience',
+                    label: t.signup_accountYearXp,
                     isRequired: true,
                     keyboardType: TextInputType.number,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Years of experience is required';
+                        return t.signup_accountYearXpRequired;
                       }
                       if (int.tryParse(value) == null) {
-                        return 'Please enter a valid number';
+                        return t.signup_accountInvalidNumber;
                       }
                       return null;
                     },
@@ -863,12 +932,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildSecurityStep() {
+    final t = AppLocalizations.of(context)!;
     return Form(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Security Setup',
+          Text(
+            t.signup_accountSecuritySetup,
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -877,14 +947,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Set up your password to secure your account',
+            t.signup_accountSecuritySetupInstruction,
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
           const SizedBox(height: 32),
 
           _buildPasswordFormField(
             controller: _passwordController,
-            label: 'Password',
+            label: t.login_passwordLabel,
             isRequired: true,
             isVisible: _isPasswordVisible,
             onVisibilityToggle: () {
@@ -894,10 +964,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Password is required';
+                return t.signup_accountPasswordRequired;
               }
               if (value.length < 8) {
-                return 'Password must be at least 8 characters';
+                return t.signup_accountPasswordShort;
               }
               return null;
             },
@@ -906,7 +976,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           _buildPasswordFormField(
             controller: _confirmPasswordController,
-            label: 'Confirm Password',
+            label: t.signup_accountConfirmPassword,
             isRequired: true,
             isVisible: _isConfirmPasswordVisible,
             onVisibilityToggle: () {
@@ -916,10 +986,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
             },
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Please confirm your password';
+                return t.signup_accountConfirmPasswordRequired;
               }
               if (value != _passwordController.text) {
-                return 'Passwords do not match';
+                return t.signup_accountConfirmPasswordMismatch;
               }
               return null;
             },
@@ -935,8 +1005,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  'Password Requirements:',
+                Text(
+                  '${t.signup_accountPasReqs}:',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -945,7 +1015,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '• At least 8 characters long\n• Use a combination of letters, numbers, and symbols\n• Avoid using personal information',
+                  '• ${t.signup_accountPasReqs1}\n• ${t.signup_accountPasReqs2}\n• ${t.signup_accountPasReqs3}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
@@ -957,11 +1027,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildReviewStep() {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Review & Confirm',
+        Text(
+          t.signup_accountReviewTitle,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -970,35 +1041,35 @@ class _RegistrationPageState extends State<RegistrationPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Please review your information before creating your account',
+          t.signup_accountReviewInstruction,
           style: TextStyle(fontSize: 14, color: Colors.grey[600]),
         ),
         const SizedBox(height: 32),
 
-        _buildReviewSection('Account Type', _selectedRole ?? ''),
+        _buildReviewSection(t.signup_accountTypeSection, _selectedRole ?? ''),
         _buildReviewSection(
-          'Name',
+          t.signup_accountNameSection,
           '${_firstNameController.text} ${_lastNameController.text}',
         ),
-        _buildReviewSection('Email', _emailController.text),
-        _buildReviewSection('Phone', _phoneController.text),
-        _buildReviewSection('Date of Birth', _dobController.text),
-        _buildReviewSection('Gender', _selectedGender ?? ''),
+        _buildReviewSection(t.resetpassword_emailTitle, _emailController.text),
+        _buildReviewSection(t.signup_accountPhone, _phoneController.text),
+        _buildReviewSection(t.signup_accountDOB, _dobController.text),
+        _buildReviewSection(t.signup_accountGender, _selectedGender ?? ''),
 
         if (_selectedRole == 'Caregiver')
-          _buildReviewSection('Caregiver Type', _selectedCaregiverType ?? ''),
+          _buildReviewSection(t.signup_accountCaregiverType, _selectedCaregiverType ?? ''),
 
         _buildReviewSection(
-          'Address',
+          t.signup_accountAddress,
           '${_addressLine1Controller.text}${_addressLine2Controller.text.isNotEmpty ? ', ${_addressLine2Controller.text}' : ''}\n${_cityController.text}, ${_stateController.text} ${_zipController.text}',
         ),
 
         if (_selectedRole == 'Caregiver' &&
             _selectedCaregiverType == 'Professional') ...[
-          _buildReviewSection('License Number', _licenseNumberController.text),
-          _buildReviewSection('Issuing State', _issuingStateController.text),
+          _buildReviewSection(t.signup_accountLicenseNumber, _licenseNumberController.text),
+          _buildReviewSection(t.signup_accountIssueState, _issuingStateController.text),
           _buildReviewSection(
-            'Years of Experience',
+            t.signup_accountYearXp,
             _yearsExperienceController.text,
           ),
         ],
@@ -1017,7 +1088,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'By creating an account, you agree to our Terms of Service and Privacy Policy.',
+                  t.signup_accountAgreeTOS,
                   style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                 ),
               ),
@@ -1108,6 +1179,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     bool isRequired = false,
     String? Function(String?)? validator,
   }) {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1142,7 +1214,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               vertical: 12,
             ),
             suffixIcon: const Icon(Icons.calendar_today, size: 20),
-            hintText: 'Select date',
+            hintText: t.signup_accountDateSelect,
           ),
           onTap: () async {
             final DateTime? picked = await showDatePicker(
@@ -1171,6 +1243,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     bool isRequired = false,
     String? Function(String?)? validator,
   }) {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1204,7 +1277,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               vertical: 12,
             ),
           ),
-          hint: Text('Select $label'),
+          hint: Text('${t.signup_accountSelect} $label'),
           items: items.map((String item) {
             return DropdownMenuItem<String>(value: item, child: Text(item));
           }).toList(),
@@ -1271,6 +1344,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundSecondary,
@@ -1350,8 +1424,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   const SizedBox(height: 24),
 
                   // Title
-                  const Text(
-                    'Create Your CareConnect Account',
+                  Text(
+                    t.signup_accountCreateTitle,
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
@@ -1364,7 +1438,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
                   // Subtitle
                   Text(
-                    'Join our secure healthcare platform',
+                    t.signup_accountCreateSubtitle,
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey[600],
@@ -1398,7 +1472,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                               ),
                             ),
                             Text(
-                              '$_progressPercentage% Complete',
+                              '$_progressPercentage% ${t.signup_accountCompletionPerct}',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[600],
@@ -1444,8 +1518,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                             const SizedBox(width: 8),
                             Text(
                               _currentStep == 0
-                                  ? 'Account Role'
-                                  : 'Step ${_currentStep + 1}',
+                                  ? t.signup_accountRole
+                                  : '${t.signup_accountStep} ${_currentStep + 1}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -1483,7 +1557,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                             : () => context.go('/login'),
                         icon: const Icon(Icons.arrow_back, size: 18),
                         label: Text(
-                          _currentStep > 0 ? 'Previous' : 'Back to Login',
+                          _currentStep > 0 ? t.signup_previousButton : t.signup_backLoginButton,
                         ),
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.textSecondary,
@@ -1516,7 +1590,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           _isLastStep ? Icons.check : Icons.arrow_forward,
                           size: 18,
                         ),
-                        label: Text(_isLastStep ? 'Sign Up' : 'Next'),
+                        label: Text(_isLastStep ? t.signup_signUpButton : t.signup_nextButton),
                       ),
                     ],
                   ),
