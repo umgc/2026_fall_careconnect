@@ -434,6 +434,19 @@ void main() {
       loc.oauthcallback_invalidRequest,
       loc.oauthcallback_serverError,
       loc.oauthcallback_authError,
+      loc.passwordresetconfirm_missingPsw,
+      loc.passwordresetconfirm_pswLengthShort,
+      loc.passwordresetconfirm_failedToResetPsw,
+      loc.passwordresetconfirm_setNewPassword,
+      loc.passwordresetconfirm_newPasswordDeco,
+      loc.passwordresetconfirm_confirmNewPasswordDeco,
+      loc.passwordresetpage_failedToSetPassword,
+      loc.passwordresetpage_setPasswordFirst,
+      loc.passwordresetpage_resetPasswordExisting,
+      loc.passwordresetpage_firstTimeDescription,
+      loc.passwordresetpage_resetPasswordDescription,
+      loc.passwordresetpage_setPassword,
+      loc.passwordresetpage_missingPassword,
     ];
   }
 

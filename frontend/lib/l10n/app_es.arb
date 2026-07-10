@@ -337,6 +337,21 @@
   "oauthcallback_accessDenied": "Se ha denegado el acceso. Concede el permiso para continuar.",
   "oauthcallback_invalidRequest": "Solicitud no válida. Intenta iniciar sesión de nuevo.",
   "oauthcallback_serverError": "Se ha producido un error del servidor. Inténtalo de nuevo más tarde.",
-  "oauthcallback_authError": "Error de autenticación"
+  "oauthcallback_authError": "Error de autenticación",
+
+  "passwordresetconfirm_missingPsw": "Introduce una nueva contraseña",
+  "passwordresetconfirm_pswLengthShort": "La contraseña debe tener al menos 6 caracteres",
+  "passwordresetconfirm_failedToResetPsw": "No se ha podido restablecer la contraseña",
+  "passwordresetconfirm_setNewPassword": "Establecer Nueva Contraseña",
+  "passwordresetconfirm_newPasswordDeco": "Nueva Contraseña",
+  "passwordresetconfirm_confirmNewPasswordDeco": "Confirmar Nueva Contraseña",
+
+  "passwordresetpage_failedToSetPassword": "No se ha podido establecer la contraseña",
+  "passwordresetpage_setPasswordFirst": "Establece Tu Contraseña",
+  "passwordresetpage_resetPasswordExisting": "Restablece Tu Contraseña",
+  "passwordresetpage_firstTimeDescription": "¡Bienvenido! Establezca su contraseña para acceder a su cuenta.",
+  "passwordresetpage_resetPasswordDescription": "Introduzca su nueva contraseña a continuación.",
+  "passwordresetpage_setPassword": "Establecer Contraseña",
+  "passwordresetpage_missingPassword": "Introduzca una contraseña"
 
 }

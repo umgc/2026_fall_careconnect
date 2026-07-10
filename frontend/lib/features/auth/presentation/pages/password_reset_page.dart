@@ -33,11 +33,12 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
   }
 
   Future<void> _setPassword() async {
+    final t = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
 
     if (_emailController.text.trim().isEmpty) {
       setState(() {
-        _error = 'Email is required';
+        _error = t.signup_accountEmailRequired;
         _message = null;
       });
       return;
@@ -45,7 +46,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
 
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
-        _error = 'Passwords do not match';
+        _error = t.signup_accountConfirmPasswordMismatch;
         _message = null;
       });
       return;
@@ -53,7 +54,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
 
     if (_passwordController.text.length < 6) {
       setState(() {
-        _error = 'Password must be at least 6 characters';
+        _error = t.passwordresetconfirm_pswLengthShort;
         _message = null;
       });
       return;
@@ -89,7 +90,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to set password: ${e.toString()}';
+        _error = '${t.passwordresetpage_failedToSetPassword}: ${e.toString()}';
         _isLoading = false;
       });
     }
@@ -97,16 +98,17 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     // Detect if this is a setup token (family member) based on UUID format
     final isSetupToken =
         widget.token != null &&
         widget.token!.contains('-') &&
         widget.token!.length > 20;
-    final title = isSetupToken ? 'Set Your Password' : 'Reset Your Password';
+    final title = isSetupToken ? t.passwordresetpage_setPasswordFirst : t.passwordresetpage_resetPasswordExisting;
     final description = isSetupToken
-        ? 'Welcome! Please set your password to access your account.'
-        : 'Enter your new password below.';
-    final buttonText = isSetupToken ? 'Set Password' : 'Reset Password';
+        ? t.passwordresetpage_firstTimeDescription
+        : t.passwordresetpage_resetPasswordDescription;
+    final buttonText = isSetupToken ? t.passwordresetpage_setPassword : t.resetpassword_resetPasswordTitle;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -140,8 +142,8 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Closer Connections. Better Care.',
+                  Text(
+                    t.welcome_subtitle,
                     style: TextStyle(fontSize: 14, color: Colors.black54),
                   ),
                   const SizedBox(height: 40),
@@ -164,7 +166,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                   TextFormField(
                     controller: _emailController,
                     decoration: InputDecoration(
-                      labelText: 'Email Address',
+                      labelText: t.alexalogin_emailAddress,
                       labelStyle: const TextStyle(color: Color(0xFF14366E)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -177,10 +179,10 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
+                        return t.resetpassword_missingEmail;
                       }
                       if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                        return 'Please enter a valid email address';
+                        return t.resetpassword_invalidEmail;
                       }
                       return null;
                     },
@@ -189,7 +191,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                   TextFormField(
                     controller: _passwordController,
                     decoration: InputDecoration(
-                      labelText: 'New Password',
+                      labelText: t.passwordresetconfirm_newPasswordDeco,
                       labelStyle: const TextStyle(color: Color(0xFF14366E)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -202,10 +204,10 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                     obscureText: true,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please enter a password';
+                        return t.passwordresetpage_missingPassword;
                       }
                       if (value.length < 6) {
-                        return 'Password must be at least 6 characters';
+                        return t.passwordresetconfirm_pswLengthShort;
                       }
                       return null;
                     },
@@ -214,7 +216,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                   TextFormField(
                     controller: _confirmPasswordController,
                     decoration: InputDecoration(
-                      labelText: 'Confirm New Password',
+                      labelText: t.passwordresetconfirm_confirmNewPasswordDeco,
                       labelStyle: const TextStyle(color: Color(0xFF14366E)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -227,7 +229,7 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                     obscureText: true,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please confirm your password';
+                        return t.signup_accountConfirmPasswordRequired;
                       }
                       return null;
                     },
@@ -319,8 +321,8 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () => context.go('/login'),
-                    child: const Text(
-                      'Back to Login',
+                    child: Text(
+                      t.signup_backLoginButton,
                       style: TextStyle(color: Color(0xFF14366E)),
                     ),
                   ),

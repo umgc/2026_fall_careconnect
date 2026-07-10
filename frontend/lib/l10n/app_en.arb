@@ -338,6 +338,21 @@
   "oauthcallback_accessDenied": "Access was denied. Please grant permission to continue.",
   "oauthcallback_invalidRequest": "Invalid request. Please try signing in again.",
   "oauthcallback_serverError": "Server error occurred. Please try again later.",
-  "oauthcallback_authError": "Authentication error"
+  "oauthcallback_authError": "Authentication error",
+
+  "passwordresetconfirm_missingPsw": "Please enter a new password",
+  "passwordresetconfirm_pswLengthShort": "Password must be at least 6 characters",
+  "passwordresetconfirm_failedToResetPsw": "Failed to reset password",
+  "passwordresetconfirm_setNewPassword": "Set New Password",
+  "passwordresetconfirm_newPasswordDeco": "New Password",
+  "passwordresetconfirm_confirmNewPasswordDeco": "Confirm New Password",
+
+  "passwordresetpage_failedToSetPassword": "Failed to set password",
+  "passwordresetpage_setPasswordFirst": "Set Your Password",
+  "passwordresetpage_resetPasswordExisting": "Reset Your Password",
+  "passwordresetpage_firstTimeDescription": "Welcome! Please set your password to access your account.",
+  "passwordresetpage_resetPasswordDescription": "Enter your new password below.",
+  "passwordresetpage_setPassword": "Set Password",
+  "passwordresetpage_missingPassword": "Please enter a password"
 
 }

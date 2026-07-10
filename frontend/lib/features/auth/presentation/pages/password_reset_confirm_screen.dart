@@ -36,9 +36,10 @@ class _PasswordResetConfirmScreenState
   }
 
   Future<void> _resetPassword() async {
+    final t = AppLocalizations.of(context)!;
     if (_passwordController.text.trim().isEmpty) {
       setState(() {
-        _error = 'Please enter a new password';
+        _error = t.passwordresetconfirm_missingPsw;
         _message = null;
       });
       return;
@@ -46,7 +47,7 @@ class _PasswordResetConfirmScreenState
 
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
-        _error = 'Passwords do not match';
+        _error = t.signup_accountConfirmPasswordMismatch;
         _message = null;
       });
       return;
@@ -54,7 +55,7 @@ class _PasswordResetConfirmScreenState
 
     if (_passwordController.text.length < 6) {
       setState(() {
-        _error = 'Password must be at least 6 characters';
+        _error = t.passwordresetconfirm_pswLengthShort;
         _message = null;
       });
       return;
@@ -71,7 +72,7 @@ class _PasswordResetConfirmScreenState
         email: widget.email,
         resetToken: widget.token,
         newPassword: _passwordController.text.trim(),
-        t: AppLocalizations.of(context)!,
+        t: t,
       );
 
       setState(() {
@@ -87,7 +88,7 @@ class _PasswordResetConfirmScreenState
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to reset password: $e';
+        _error = '${t.passwordresetconfirm_failedToResetPsw}: $e';
         _isLoading = false;
       });
     }
@@ -96,6 +97,7 @@ class _PasswordResetConfirmScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundPrimary,
@@ -103,7 +105,7 @@ class _PasswordResetConfirmScreenState
         backgroundColor: AppTheme.primary,
         foregroundColor: AppTheme.textLight,
         elevation: 2,
-        title: const Text('Reset Password'),
+        title: Text(t.resetpassword_resetPasswordTitle),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -129,14 +131,14 @@ class _PasswordResetConfirmScreenState
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Closer Connections. Better Care.',
+                  t.welcome_subtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: AppTheme.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 40),
                 Text(
-                  'Set New Password',
+                  t.passwordresetconfirm_setNewPassword,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,
@@ -146,13 +148,13 @@ class _PasswordResetConfirmScreenState
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: AppTheme.inputDecoration('New Password'),
+                  decoration: AppTheme.inputDecoration(t.passwordresetconfirm_newPasswordDeco),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: true,
-                  decoration: AppTheme.inputDecoration('Confirm New Password'),
+                  decoration: AppTheme.inputDecoration(t.passwordresetconfirm_confirmNewPasswordDeco),
                 ),
                 const SizedBox(height: 16),
                 if (_error != null) ...[
@@ -229,7 +231,7 @@ class _PasswordResetConfirmScreenState
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text('Reset Password'),
+                        : Text(t.resetpassword_resetPasswordTitle),
                   ),
                 ),
               ],

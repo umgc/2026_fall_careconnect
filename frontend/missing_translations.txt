@@ -193,7 +193,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "ar": [
@@ -390,7 +403,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "bn": [
@@ -587,7 +613,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "fa": [
@@ -784,7 +823,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "fr": [
@@ -981,7 +1033,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "hi": [
@@ -1178,7 +1243,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "ja": [
@@ -1375,7 +1453,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "ne": [
@@ -1572,7 +1663,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "pt": [
@@ -1769,7 +1873,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "ru": [
@@ -1966,7 +2083,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "ur": [
@@ -2163,7 +2293,20 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ],
 
   "zh": [
@@ -2360,6 +2503,19 @@
     "oauthcallback_accessDenied",
     "oauthcallback_invalidRequest",
     "oauthcallback_serverError",
-    "oauthcallback_authError"
+    "oauthcallback_authError",
+    "passwordresetconfirm_missingPsw",
+    "passwordresetconfirm_pswLengthShort",
+    "passwordresetconfirm_failedToResetPsw",
+    "passwordresetconfirm_setNewPassword",
+    "passwordresetconfirm_newPasswordDeco",
+    "passwordresetconfirm_confirmNewPasswordDeco",
+    "passwordresetpage_failedToSetPassword",
+    "passwordresetpage_setPasswordFirst",
+    "passwordresetpage_resetPasswordExisting",
+    "passwordresetpage_firstTimeDescription",
+    "passwordresetpage_resetPasswordDescription",
+    "passwordresetpage_setPassword",
+    "passwordresetpage_missingPassword"
   ]
 }

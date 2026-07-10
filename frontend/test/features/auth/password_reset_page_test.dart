@@ -2,6 +2,7 @@
 // and initial password setup (long token with dash, for family members).
 // No live server needed for form rendering and local validation tests.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/password_reset_page.dart';
@@ -16,7 +17,7 @@ Widget _wrap(Widget child) {
       GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
 }
 
 void main() {
@@ -39,7 +40,7 @@ void main() {
       // The app tagline is shown below the brand name.
       await tester.pumpWidget(_wrap(const PasswordResetPage()));
       await tester.pump();
-      expect(find.text('Closer Connections. Better Care.'), findsOneWidget);
+      expect(find.text('Connecting Care, Empowering Health'), findsOneWidget);
     });
 
     testWidgets('shows lock icon', (tester) async {
