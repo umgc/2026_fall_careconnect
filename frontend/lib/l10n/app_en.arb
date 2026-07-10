@@ -353,6 +353,30 @@
   "passwordresetpage_firstTimeDescription": "Welcome! Please set your password to access your account.",
   "passwordresetpage_resetPasswordDescription": "Enter your new password below.",
   "passwordresetpage_setPassword": "Set Password",
-  "passwordresetpage_missingPassword": "Please enter a password"
+  "passwordresetpage_missingPassword": "Please enter a password",
+
+  "careteamperfmcard_careTeamPerfm": "Care Team Performance",
+  "careteamperfmcard_overallPatSat": "Overall Patient Satisfaction",
+  "careteamperfmcard_basedOnLast30": "Based on last 30 days",
+  "careteamperfmcard_checkInCompRate": "Check-in Completion Rate",
+
+  "ptstatcard_missedCheckInHeader": "# of Missed Check-Ins",
+  "ptstatcard_activePtsHeader": "Active Patients",
+  "ptstatcard_missedCheckIn": "# of Missed\nCheck-Ins",
+  "ptstatcard_activePts": "Active\nPatients",
+
+  "recentptactivity_recentPtActivityTitle": "Recent Patient Activity",
+
+  "upcomingcheckinwidget_missingCaregiverSession": "No caregiver session found.",
+  "upcomingcheckinwidget_failedToLoadVisits": "Failed to load visits",
+  "upcomingcheckinwidget_failedToLoadCheckIns": "Could not load upcoming check-ins.",
+  "upcomingcheckinwidget_todayAt": "Today at",
+  "upcomingcheckinwidget_tomorrowAt": "Tomorrow at",
+  "upcomingcheckinwidget_at": "at",
+  "upcomingcheckinwidget_upcomingCheckInTitle": "Upcoming Check-Ins",
+  "upcomingcheckinwidget_noCheckIns": "No upcoming check-ins.",
+  "upcomingcheckinwidget_viewAllPatients": "View All Patients",
+  "upcomingcheckinwidget_startEVSession": "Start EV Session",
+  "upcomingcheckinwidget_view": "View"
 
 }

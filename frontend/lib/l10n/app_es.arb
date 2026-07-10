@@ -352,6 +352,30 @@
   "passwordresetpage_firstTimeDescription": "¡Bienvenido! Establezca su contraseña para acceder a su cuenta.",
   "passwordresetpage_resetPasswordDescription": "Introduzca su nueva contraseña a continuación.",
   "passwordresetpage_setPassword": "Establecer Contraseña",
-  "passwordresetpage_missingPassword": "Introduzca una contraseña"
+  "passwordresetpage_missingPassword": "Introduzca una contraseña",
+
+  "careteamperfmcard_careTeamPerfm": "Rendimiento del Equipo de Atención",
+  "careteamperfmcard_overallPatSat": "Satisfacción General de los Pacientes",
+  "careteamperfmcard_basedOnLast30": "Basado en los últimos 30 días",
+  "careteamperfmcard_checkInCompRate": "Tasa de Finalización de Registros de Admisión",
+
+  "ptstatcard_missedCheckInHeader": "# de Registros de Admisión no Realizados",
+  "ptstatcard_activePtsHeader": "Pacientes Activos",
+  "ptstatcard_missedCheckIn": "# de Registros de\n Admisión no Realizados",
+  "ptstatcard_activePts": "Pacientes\nActivos",
+
+  "recentptactivity_recentPtActivityTitle": "Actividad Reciente de los Pacientes",
+
+  "upcomingcheckinwidget_missingCaregiverSession": "No se ha encontrado ninguna sesión de cuidador.",
+  "upcomingcheckinwidget_failedToLoadVisits": "No se han podido cargar las visitas",
+  "upcomingcheckinwidget_failedToLoadCheckIns": "No se han podido cargar los registros de asistencia pendientes.",
+  "upcomingcheckinwidget_todayAt": "Hoy a las",
+  "upcomingcheckinwidget_tomorrowAt": "Mañana a las",
+  "upcomingcheckinwidget_at": "a las",
+  "upcomingcheckinwidget_upcomingCheckInTitle": "Próximas Visitas",
+  "upcomingcheckinwidget_noCheckIns": "No hay registros de entrada próximos.",
+  "upcomingcheckinwidget_viewAllPatients": "Ver Todos los Pacientes",
+  "upcomingcheckinwidget_startEVSession": "Iniciar Sesión de EV",
+  "upcomingcheckinwidget_view": "Ver"
 
 }
