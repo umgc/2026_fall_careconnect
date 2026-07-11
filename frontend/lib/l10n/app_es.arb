@@ -207,6 +207,7 @@
   "menupage_patientReportItem": "Informe del Paciente",
   "menupage_medicationTrackerItem": "Registro de medicación",
   "menupage_addPatientItem": "Añadir paciente",
-  "menupage_settingsItem": "Configuración"
+  "menupage_settingsItem": "Configuración",
+  "menupage_mailDigestItem": "Resumen de Correos"
 
 }

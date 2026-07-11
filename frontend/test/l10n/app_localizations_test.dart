@@ -314,6 +314,7 @@ void main() {
       loc.menupage_medicationTrackerItem,
       loc.menupage_addPatientItem,
       loc.menupage_settingsItem,
+      loc.menupage_mailDigestItem,
     ];
   }
 

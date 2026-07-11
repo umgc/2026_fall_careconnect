@@ -233,18 +233,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(context)?.settings_telemetryOptOutDialogTitle ?? 'Opt out of telemetry?'),
+        title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ?? 'Opt out of telemetry?'),
         content: Text(
-          AppLocalizations.of(context)?.settings_telemetryOptOutDialogDescription ?? 'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
+          AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogDescription ?? 'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
+            child: Text(AppLocalizations.of(ctx)?.cancel ?? 'Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(AppLocalizations.of(context)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
+            child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
           ),
         ],
       ),
@@ -261,16 +261,16 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ?? 'Enable telemetry?'),
         content: Text(
-          AppLocalizations.of(context)?.settings_telemetryOptInDialogDescription ?? 'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
+          AppLocalizations.of(ctx)?.settings_telemetryOptInDialogDescription ?? 'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
+            child: Text(AppLocalizations.of(ctx)?.cancel ?? 'Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(AppLocalizations.of(context)?.settings_telemetryOptInDialogEnable ?? 'Enable'),
+            child: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogEnable ?? 'Enable'),
           ),
         ],
       ),

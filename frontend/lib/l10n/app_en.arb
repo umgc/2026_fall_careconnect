@@ -208,6 +208,7 @@
   "menupage_patientReportItem": "Patient Report",
   "menupage_medicationTrackerItem": "Medication Tracker",
   "menupage_addPatientItem": "Add Patient",
-  "menupage_settingsItem": "Settings"
+  "menupage_settingsItem": "Settings",
+  "menupage_mailDigestItem": "Mail Digest"
 
 }

@@ -73,7 +73,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "ar": [
@@ -150,7 +151,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "bn": [
@@ -227,7 +229,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "fa": [
@@ -304,7 +307,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "fr": [
@@ -381,7 +385,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "hi": [
@@ -458,7 +463,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "ja": [
@@ -535,7 +541,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "ne": [
@@ -612,7 +619,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "pt": [
@@ -689,7 +697,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "ru": [
@@ -766,7 +775,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "ur": [
@@ -843,7 +853,8 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ],
 
   "zh": [
@@ -920,6 +931,7 @@
     "menupage_patientReportItem",
     "menupage_medicationTrackerItem",
     "menupage_addPatientItem",
-    "menupage_settingsItem"
+    "menupage_settingsItem",
+    "menupage_mailDigestItem"
   ]
 }

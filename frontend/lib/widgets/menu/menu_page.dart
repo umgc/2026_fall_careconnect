@@ -186,7 +186,7 @@ class _MenuPageState extends State<MenuPage> {
         route: '/alertpage',
       ),
       _MenuItem(
-          icon: Icons.mail, label: 'USPS Mail Digest', route: '/usps-test'),
+          icon: Icons.mail, label: 'USPS ${local.menupage_mailDigestItem}', route: '/usps-test'),
       _MenuItem(
         icon: Icons.person_add,
         label: local.menupage_addPatientItem,
