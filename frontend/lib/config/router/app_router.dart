@@ -10,6 +10,10 @@ import 'package:care_connect_app/features/notetaker/presentation/notetaker_detai
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_search.dart';
 import 'package:care_connect_app/features/informed_delivery/informed_delivery_screen.dart';
 import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
+import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
+import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
+import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
+import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
 import 'package:care_connect_app/features/tasks/presentation/assign_task_screen.dart';
@@ -70,10 +74,81 @@ import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.d
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
 import '../../features/usps/presentation/usps_test_screen.dart';
+import '../../features/telemetry/telemetry.dart';
+import 'dart:async';
 
+GoRouter? _appRouterRef;
+
+/// Logs a [screen_view] telemetry event whenever navigation changes.
+class TelemetryGoRouterObserver extends NavigatorObserver {
+  TelemetryGoRouterObserver({GoRouter? Function()? routerProvider})
+      : _routerProvider = routerProvider;
+
+  final GoRouter? Function()? _routerProvider;
+
+  GoRouter? get _activeRouter =>
+      _routerProvider != null ? _routerProvider() : _appRouterRef;
+
+  Future<void> _logScreenView() async {
+    final router = _activeRouter;
+    if (router == null) return;
+
+    final Uri uri;
+    try {
+      uri = router.state.uri;
+    } on StateError {
+      return;
+    }
+
+    final screen = uri.path.isEmpty ? '/' : uri.path;
+
+    try {
+      await Telemetry.event('screen_view', {'screen': screen});
+    } catch (e) {
+      debugPrint('Telemetry logging failed: $e');
+    }
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    unawaited(_logScreenView());
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    unawaited(_logScreenView());
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    unawaited(_logScreenView());
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    unawaited(_logScreenView());
+  }
+}
+
+final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
 Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+  // Issue #75: if the user authenticated in the middle of accepting an invite,
+  // route them back to the invite landing screen to complete the join instead
+  // of going straight to the dashboard. The landing screen accepts the invite
+  // (now that they're signed in) and then sends them onward.
+  if (PendingInvite.hasPending) {
+    final token = PendingInvite.token!;
+    if (context.mounted) {
+      context.go('/invite/$token');
+      return;
+    }
+  }
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,
@@ -81,10 +156,13 @@ Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
   );
 }
 
-final GoRouter appRouter = GoRouter(
+final GoRouter appRouter = _appRouterRef = GoRouter(
   initialLocation: '/',
+  observers: [_telemetryGoRouterObserver],
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
+    GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
+    GoRoute(path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
     GoRoute(
       path: '/login',
       builder: (context, state) {
@@ -348,6 +426,17 @@ final GoRouter appRouter = GoRouter(
           invitedEmail: extra?['invitedEmail'] as String?,
           inviteReason: extra?['inviteReason'] as String?,
         );
+      },
+    ),
+    // Issue #75: invite-aware entry screen. Opened by an invite link; shows the
+    // "Who Invited Me?" context and hands off into registration/login, then
+    // accepts the invite once the user is authenticated.
+    GoRoute(
+      path: '/invite/:token',
+      name: 'inviteLanding',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        return InviteLandingScreen(token: token);
       },
     ),
     GoRoute(
