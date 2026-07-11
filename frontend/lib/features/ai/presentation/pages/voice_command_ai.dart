@@ -155,7 +155,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     }
   }
 
-    String _commandPhraseToTranslatedString(String commandPhrase){
+  String _commandPhraseToTranslatedString(String commandPhrase) {
     switch (commandPhrase){
       case 'take me home':
         return AppLocalizations.of(context)?.voicecommand_commandPhraseHome ?? 'take me home';
