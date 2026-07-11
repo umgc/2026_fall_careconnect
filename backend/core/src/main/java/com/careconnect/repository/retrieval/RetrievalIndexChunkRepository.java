@@ -30,6 +30,12 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     void deleteBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
 
     /**
+     * Deletes all chunks for a source record (all record types). Used when re-indexing
+     * a summary that emits overview + typed item chunks under the same source id.
+     */
+    void deleteBySourceRecordId(String sourceRecordId);
+
+    /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
      *
      * @param id        chunk primary key

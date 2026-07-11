@@ -51,6 +51,24 @@ public interface IndexingOutboxRepository extends JpaRepository<IndexingOutboxRo
     List<IndexingOutboxRow> findUnprocessedForPolling(Pageable pageable);
 
     /**
+     * Claims a batch of unprocessed outbox rows for the IndexWorker using
+     * {@code FOR UPDATE SKIP LOCKED} so concurrent ECS tasks do not process the
+     * same row. Must be called inside a transaction. Rows that have already
+     * reached {@code maxAttempts} are still claimed so they can be dead-lettered.
+     *
+     * @param limit maximum rows to claim
+     * @return locked unprocessed rows in insertion order
+     */
+    @Query(value = """
+            SELECT * FROM indexing_outbox
+            WHERE processed_at IS NULL
+            ORDER BY id ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<IndexingOutboxRow> claimUnprocessedForPolling(@Param("limit") int limit);
+
+    /**
      * Count of unprocessed rows. Cheap because it uses the partial
      * index. Useful for the poller's monitoring or backlog dashboards.
      */
