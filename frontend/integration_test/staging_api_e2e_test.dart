@@ -230,44 +230,127 @@ void main() {
     });
   });
 
-  // ─── BLOCKED endpoints (Team A backend returning 500) ────────────────────
-  //
-  // These tests are intentionally marked // BLOCKED: so the CI pipeline
-  // skips them until Team A resolves the underlying 500 errors.
-  // Remove the skip() and // BLOCKED: comment once the endpoint is stable.
+  // ─── Schedule ─────────────────────────────────────────────────────────────
+  // Root cause (issue #232): /api/schedule/visits and /api/schedule/caregiver/{id}
+  // do not exist. The actual controller is mapped to
+  // /v1/api/scheduled-visits/caregiver/{caregiverId}.
 
-  group('Schedule — BLOCKED pending Team A fix', () {
-    // BLOCKED: /api/schedule/visits returns 500 — Team A backend error
-    test('GET /api/schedule/visits returns 200', () async {
-      // ignore: dead_code
-      return; // BLOCKED: remove once Team A fixes /api/schedule/visits 500
-    }, skip: 'BLOCKED: /api/schedule/visits returns 500 on staging');
+  group('Schedule — caregiver visits', () {
+    late String caregiverToken;
+    late int caregiverId;
 
-    // BLOCKED: /api/schedule/caregiver/{id} returns 500
-    test('GET /api/schedule/caregiver/1 returns caregiver schedule', () async {
-      return; // BLOCKED: remove once Team A fixes /api/schedule/caregiver/{id} 500
-    }, skip: 'BLOCKED: /api/schedule/caregiver/{id} returns 500 on staging');
-  });
+    setUp(() async {
+      final body = await _login(_caregiverEmail, _demoPassword);
+      caregiverToken = body['token'] as String;
+      caregiverId = (body['caregiverId'] as num).toInt();
+    });
 
-  group('Users — BLOCKED pending Team A fix', () {
-    // BLOCKED: /api/users/me returns 500
-    test('GET /api/users/me returns current user profile', () async {
-      return; // BLOCKED: remove once Team A fixes /api/users/me 500
-    }, skip: 'BLOCKED: /api/users/me returns 500 on staging');
-  });
+    test('GET /api/scheduled-visits/caregiver/{id} returns 200', () async {
+      final resp = await http.get(
+        _uri('/api/scheduled-visits/caregiver/$caregiverId'),
+        headers: _authHeaders(caregiverToken),
+      );
+      expect(resp.statusCode, 200);
+    });
 
-  group('Messaging — BLOCKED pending Team A fix', () {
-    // BLOCKED: /api/messaging/conversations returns 500
-    test('GET /api/messaging/conversations returns conversation list',
+    test('GET /api/scheduled-visits/caregiver/{id} returns a JSON list',
         () async {
-      return; // BLOCKED: remove once Team A fixes /api/messaging/conversations 500
-    }, skip: 'BLOCKED: /api/messaging/conversations returns 500 on staging');
+      final resp = await http.get(
+        _uri('/api/scheduled-visits/caregiver/$caregiverId'),
+        headers: _authHeaders(caregiverToken),
+      );
+      final body = jsonDecode(resp.body);
+      expect(body, isA<List>());
+    });
   });
 
-  group('Health records — BLOCKED pending Team A fix', () {
-    // BLOCKED: /api/health/records returns 500
-    test('GET /api/health/records returns health records list', () async {
-      return; // BLOCKED: remove once Team A fixes /api/health/records 500
-    }, skip: 'BLOCKED: /api/health/records returns 500 on staging');
+  // ─── Users ────────────────────────────────────────────────────────────────
+  // Root cause (issue #232): /api/users/me does not exist. The caregiver
+  // profile is at /v1/api/caregivers/{caregiverId}.
+
+  group('Users — caregiver profile', () {
+    late String caregiverToken;
+    late int caregiverId;
+
+    setUp(() async {
+      final body = await _login(_caregiverEmail, _demoPassword);
+      caregiverToken = body['token'] as String;
+      caregiverId = (body['caregiverId'] as num).toInt();
+    });
+
+    test('GET /api/caregivers/{id} returns 200 with caregiver profile',
+        () async {
+      final resp = await http.get(
+        _uri('/api/caregivers/$caregiverId'),
+        headers: _authHeaders(caregiverToken),
+      );
+      expect(resp.statusCode, 200);
+    });
+  });
+
+  // ─── Messaging ────────────────────────────────────────────────────────────
+  // Root cause (issue #232): /api/messaging/conversations does not exist.
+  // The inbox endpoint is at /v1/api/messages/inbox/{userId}.
+
+  group('Messaging — inbox', () {
+    late String caregiverToken;
+    late int userId;
+
+    setUp(() async {
+      final body = await _login(_caregiverEmail, _demoPassword);
+      caregiverToken = body['token'] as String;
+      userId = (body['id'] as num).toInt();
+    });
+
+    test('GET /api/messages/inbox/{userId} returns 200', () async {
+      final resp = await http.get(
+        _uri('/api/messages/inbox/$userId'),
+        headers: _authHeaders(caregiverToken),
+      );
+      expect(resp.statusCode, 200);
+    });
+  });
+
+  // ─── Health records ───────────────────────────────────────────────────────
+  // Root cause (issue #232): /api/health/records does not exist. Health data
+  // is split across three controllers:
+  //   /v1/api/symptoms/patient/{id}
+  //   /v1/api/allergies/patient/{id}
+  //   /v3/api/patients/{id}/medications  (note: v3 base)
+
+  group('Health records — symptoms, allergies, medications', () {
+    late String patientToken;
+    late int patientId;
+
+    setUp(() async {
+      final body = await _login(_patientEmail, _demoPassword);
+      patientToken = body['token'] as String;
+      patientId = (body['patientId'] as num).toInt();
+    });
+
+    test('GET /api/symptoms/patient/{id} returns 200', () async {
+      final resp = await http.get(
+        _uri('/api/symptoms/patient/$patientId'),
+        headers: _authHeaders(patientToken),
+      );
+      expect(resp.statusCode, 200);
+    });
+
+    test('GET /api/allergies/patient/{id} returns 200', () async {
+      final resp = await http.get(
+        _uri('/api/allergies/patient/$patientId'),
+        headers: _authHeaders(patientToken),
+      );
+      expect(resp.statusCode, 200);
+    });
+
+    test('GET /v3/api/patients/{id}/medications returns 200', () async {
+      // Medications live on the v3 API base — construct URL explicitly.
+      final url = Uri.parse(
+        '${_baseUrl.replaceFirst('/v1', '/v3')}/api/patients/$patientId/medications',
+      );
+      final resp = await http.get(url, headers: _authHeaders(patientToken));
+      expect(resp.statusCode, 200);
+    });
   });
 }
