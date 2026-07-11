@@ -205,7 +205,16 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                   - ssm:GetParametersByPath
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/careconnect/*
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/careconnect/${Environment}/*
+              # SecureString GetParameter (withDecryption=true) needs kms:Decrypt on the SSM CMK.
+              - Sid: KmsDecryptViaSsm
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
               - Sid: IamChimeMediaPipelinesServiceLinkedRole
                 Effect: Allow
                 Action:
@@ -219,6 +228,7 @@ Resources:
                 Action:
                   - sts:GetCallerIdentity
                 Resource: '*'
+
 Outputs:
   # Exported outputs are consumed by the service stack.
   EcrRepositoryUri:

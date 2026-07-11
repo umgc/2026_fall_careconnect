@@ -344,7 +344,8 @@ fails on media pipelines, and AI features fail on `bedrock:InvokeModel`.
 | Transcribe | `transcribe:StartTranscriptionJob`, `GetTranscriptionJob` | Post-call transcription |
 | Textract | `textract:DetectDocumentText`, `StartDocumentTextDetection`, … | Invoice OCR |
 | SES / SNS | `ses:SendEmail`, `sns:Publish` | Email and SMS notifications |
-| SSM | `ssm:GetParameter*` on `/careconnect/*` | KVS pool ARNs, Media Insights config (speaker-ID) |
+| SSM | `ssm:GetParameter*` on `/careconnect/{env}/*` | Env-scoped Parameter Store (prod profile secrets) |
+| KMS (via SSM) | `kms:Decrypt` when `kms:ViaService` is SSM | Decrypt SecureString parameters |
 | IAM (one-time) | `iam:CreateServiceLinkedRole` for `mediapipelines.chime.amazonaws.com` | Chime recording bucket pipelines |
 
 Full policy: [`templates/03-platform.yaml`](./templates/03-platform.yaml) (`EcsTaskRole`).
