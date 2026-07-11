@@ -62,6 +62,9 @@ class ApiConstants {
 
   // Telemetry endpoints
   static final String telemetryV3 = '$_host/v1/api/dev/telemetry';
+
+  // Admin analytics endpoints
+  static final String adminAnalytics = '$_host/v1/api/admin/analytics';
 }
 
 class ApiService {
