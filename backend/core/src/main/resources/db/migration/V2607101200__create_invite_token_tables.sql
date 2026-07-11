@@ -1,5 +1,5 @@
 -- =============================================================================
--- V74__create_invite_token_tables.sql
+-- V2607101200__create_invite_token_tables.sql
 --
 -- Issue #53: Care-circle scoped invite tokens and lifecycle endpoints.
 --

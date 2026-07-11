@@ -70,9 +70,14 @@ public class InviteController {
     }
 
     /**
-     * Public preview of an invite. No authentication required so an invitee can
-     * see the link type / status / expiry before signing up. Expired and revoked
-     * tokens return clear errors.
+     * Public preview ("Who Invited Me?", issue #59). No authentication required
+     * so an invitee can see context before signing up.
+     *
+     * Non-enumerating (issue #81): ALWAYS returns 200 with a stable body; the
+     * {@code status} field (VALID/EXPIRED/REVOKED/ACCEPTED/INVALID) distinguishes
+     * cases and context fields are null for any non-valid token. Unknown and
+     * hash-mismatch tokens are indistinguishable, so this is not an enumeration
+     * oracle.
      */
     @GetMapping("/invite/{token}")
     public ResponseEntity<InvitePreviewResponse> previewInvite(
