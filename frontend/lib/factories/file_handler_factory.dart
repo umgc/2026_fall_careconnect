@@ -4,5 +4,5 @@ import '../utils/file_handler_stub.dart'
     if (dart.library.js_interop) '../utils/file_handler_web.dart';
 
 class FileHandlerFactory {
-  static FileHandler create() => createPlatformFileHandler();
+  static FileHandler create() => createFileHandler();
 }
