@@ -16,6 +16,7 @@ import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChimeService;
 import com.careconnect.service.FamilyMemberService;
 import com.careconnect.dto.FamilyMemberLinkResponse;
+import com.careconnect.notifications.SnsService;
 import com.careconnect.websocket.CallNotificationHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -38,16 +39,17 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -86,6 +88,7 @@ class CallControllerTest {
     @MockitoBean private FamilyMemberService familyMemberService;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;
+    @MockitoBean private SnsService snsService;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -176,6 +179,17 @@ class CallControllerTest {
         event.setCallId(CALL_ID);
         event.setEventType(eventType);
         event.setActorUserId(actorUserId);
+        event.setOccurredAt(occurredAt);
+        return event;
+    }
+
+    private CallTelemetryEvent conferenceInviteEvent(
+            Long actorUserId, Long targetUserId, LocalDateTime occurredAt) {
+        CallTelemetryEvent event = new CallTelemetryEvent();
+        event.setCallId(CALL_ID);
+        event.setEventType("CONFERENCE_INVITE");
+        event.setActorUserId(actorUserId);
+        event.setTargetUserId(targetUserId);
         event.setOccurredAt(occurredAt);
         return event;
     }
@@ -376,6 +390,223 @@ class CallControllerTest {
             verify(chimeService, never()).endMeeting(CALL_ID);
             verify(callNotificationHandler).sendNotificationToUser(eq("1"), any());
             verify(callNotificationHandler).sendNotificationToUser(eq("4"), any());
+        }
+
+        @Test
+        @DisplayName("CHIME-012: POST /invite does not create Chime attendee but records CONFERENCE_INVITE")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void chime012_inviteParticipant_notifyOnlyNoCreateAttendee() throws Exception {
+            mockCurrentCaregiver();
+
+            User familyUser = buildUser(4L, "family@test.com", Role.FAMILY_MEMBER);
+            familyUser.setName("Maria Family");
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            when(userRepository.findById(4L)).thenReturn(Optional.of(familyUser));
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5))
+            ));
+            when(familyMemberService.hasAccessToPatient(4L, 1L)).thenReturn(true);
+            when(callNotificationHandler.isUserOnline("4")).thenReturn(true);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/invite")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"targetUserId\":4}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("invited"))
+                    .andExpect(jsonPath("$.targetUserId").value(4));
+
+            verify(chimeService, never()).createAttendee(anyString(), anyString(), anyString(), anyString());
+            verify(callTelemetryService).recordCallEvent(
+                    eq(CALL_ID),
+                    eq("CONFERENCE_INVITE"),
+                    eq(2L),
+                    eq(4L),
+                    eq("SUCCESS"),
+                    any(),
+                    isNull());
+            verify(callNotificationHandler).sendNotificationToUser(eq("4"), any());
+        }
+
+        @Test
+        @DisplayName("CHIME-016: POST /invite offline with phone sends SMS (L1a)")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void inviteParticipant_offlineWithPhone_sendsSms() throws Exception {
+            mockCurrentCaregiver();
+
+            User familyUser = buildUser(4L, "family@test.com", Role.FAMILY_MEMBER);
+            familyUser.setName("Maria Family");
+            familyUser.setPhone("+15559876543");
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            when(userRepository.findById(4L)).thenReturn(Optional.of(familyUser));
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5))
+            ));
+            when(familyMemberService.hasAccessToPatient(4L, 1L)).thenReturn(true);
+            when(callNotificationHandler.isUserOnline("4")).thenReturn(false);
+            when(snsService.publishSms(eq("+15559876543"), anyString())).thenReturn("sms-msg-id");
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/invite")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"targetUserId\":4}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("offline"))
+                    .andExpect(jsonPath("$.targetUserId").value(4));
+
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("4"), any());
+            verify(snsService).publishSms(
+                    eq("+15559876543"),
+                    argThat(msg -> msg.contains(CALL_ID) && msg.contains("Caregiver")));
+            verify(callTelemetryService).recordCallEvent(
+                    eq(CALL_ID),
+                    eq("CONFERENCE_INVITE"),
+                    eq(2L),
+                    eq(4L),
+                    eq("OFFLINE"),
+                    any(),
+                    isNull());
+        }
+
+        @Test
+        @DisplayName("CHIME-016b: POST /invite offline without phone skips SMS")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void inviteParticipant_offlineWithoutPhone_skipsSms() throws Exception {
+            mockCurrentCaregiver();
+
+            User familyUser = buildUser(4L, "family@test.com", Role.FAMILY_MEMBER);
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            when(userRepository.findById(4L)).thenReturn(Optional.of(familyUser));
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5))
+            ));
+            when(familyMemberService.hasAccessToPatient(4L, 1L)).thenReturn(true);
+            when(callNotificationHandler.isUserOnline("4")).thenReturn(false);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/invite")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"targetUserId\":4}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("offline"));
+
+            verify(snsService, never()).publishSms(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("CHIME-013: POST /end notifies pending conference invitee who never joined")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void endCall_notifiesPendingConferenceInvitee() throws Exception {
+            mockCurrentCaregiver();
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5)),
+                    conferenceInviteEvent(2L, 4L, LocalDateTime.of(2026, 3, 23, 10, 1, 0))
+            ));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .param("otherPartyId", "1")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("1"), argThat(m -> "call-ended".equals(m.get("type"))));
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("4"), argThat(m -> "call-ended".equals(m.get("type"))));
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("2"), any());
+            verify(callRecordingService).stopRecording(CALL_ID);
+            verify(chimeService).endMeeting(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("CHIME-014: partial leave does not notify pending conference invitee")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void endCall_partialLeaveDoesNotNotifyPendingInvitee() throws Exception {
+            mockCurrentCaregiver();
+
+            User joinedFamily = buildUser(5L, "joined-family@test.com", Role.FAMILY_MEMBER);
+            when(userRepository.findById(5L)).thenReturn(Optional.of(joinedFamily));
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5)),
+                    callEvent("CALL_JOIN", 5L, LocalDateTime.of(2026, 3, 23, 10, 0, 10)),
+                    conferenceInviteEvent(2L, 4L, LocalDateTime.of(2026, 3, 23, 10, 1, 0))
+            ));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"otherPartyId\":\"1\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("left"));
+
+            verify(callNotificationHandler).sendNotificationToUser(eq("1"), any());
+            verify(callNotificationHandler).sendNotificationToUser(eq("5"), any());
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("4"), any());
+        }
+
+        @Test
+        @DisplayName("CHIME-015: three-party end notifies all remaining active participants")
+        @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
+        void endCall_threePartyEndNotifiesAllRemaining() throws Exception {
+            mockCurrentPatient();
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5)),
+                    callEvent("CALL_JOIN", 4L, LocalDateTime.of(2026, 3, 23, 10, 0, 10)),
+                    callEvent("CALL_LEAVE", 2L, LocalDateTime.of(2026, 3, 23, 10, 5, 0))
+            ));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("4"), argThat(m -> "call-ended".equals(m.get("type"))));
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("1"), any());
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("2"), any());
+            verify(callRecordingService).stopRecording(CALL_ID);
+            verify(chimeService).endMeeting(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("CHIME-017: POST /end merges participantUserIds from body into notify set (L8a)")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void endCall_mergesParticipantUserIdsFromBody() throws Exception {
+            mockCurrentCaregiver();
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
+                    callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
+                    callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5))
+            ));
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("otherPartyId", "1");
+            body.put("participantUserIds", List.of("4"));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(body)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("left"));
+
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("1"), argThat(m -> "participant-left".equals(m.get("type"))));
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("4"), argThat(m -> "participant-left".equals(m.get("type"))));
         }
 
     }

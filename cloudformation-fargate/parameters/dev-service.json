@@ -9,5 +9,6 @@
   { "ParameterKey": "TaskCpu", "ParameterValue": "1024" },
   { "ParameterKey": "TaskMemory", "ParameterValue": "3072" },
   { "ParameterKey": "HealthCheckPath", "ParameterValue": "/v1/api/test/health" },
-  { "ParameterKey": "HealthCheckGracePeriodSeconds", "ParameterValue": "180" }
+  { "ParameterKey": "DomainName", "ParameterValue": "" },
+  { "ParameterKey": "HostedZoneId", "ParameterValue": "" }
 ]

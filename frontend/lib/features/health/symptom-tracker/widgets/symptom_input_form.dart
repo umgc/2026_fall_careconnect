@@ -2,7 +2,7 @@ import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai
 import 'package:care_connect_app/widgets/ai_chat_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/api_service.dart';
-import 'package:care_connect_app/services/deepseek_service.dart';
+import 'package:care_connect_app/services/ai_analyze_service.dart';
 
 
 class SymptomInputForm extends StatefulWidget {
@@ -99,7 +99,7 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                         return;
                       }
 
-                      final ai = await DeepseekService.extractSymptom(
+                      final ai = await AiAnalyzeService.extractSymptom(
                         patientId: intPidForAI,
                         transcript: t,
                       );

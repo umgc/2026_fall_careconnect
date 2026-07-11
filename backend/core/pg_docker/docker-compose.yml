@@ -14,7 +14,7 @@ services:
       - ./init-scripts:/docker-entrypoint-initdb.d
       - ../src/main/resources/db/migration:/migration-files:ro
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - postgres
     restart: unless-stopped

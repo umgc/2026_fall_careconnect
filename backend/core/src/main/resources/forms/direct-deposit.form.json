@@ -1,0 +1,90 @@
+{
+  "formType": "DIRECT_DEPOSIT",
+  "title": "Direct Deposit Authorization",
+  "description": "Authorizes CareConnect to deposit net pay into the employee's designated bank account(s).",
+  "issuingAuthority": "CareConnect HR / Payroll",
+  "version": "1.0.0",
+  "effectiveDate": "2026-01-01",
+  "sourceDocument": {
+    "name": "Direct Deposit Authorization Agreement",
+    "formNumber": "HR-DD-01",
+    "edition": "2026.1"
+  },
+  "fileAttachment": {
+    "category": "ONBOARDING_FORM",
+    "generatesPdf": true,
+    "supportingDocumentCategories": ["HIRING_DOCUMENT"]
+  },
+  "sections": [
+    {
+      "id": "employee_identity",
+      "title": "Employee Information",
+      "order": 0,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "employee_name", "label": "Employee full name", "fieldType": "TEXT", "required": true, "order": 0,
+          "sourceMapping": { "documentField": "Employee Name", "page": 1 } },
+        { "id": "employee_id", "label": "Employee ID", "fieldType": "TEXT", "required": false, "order": 1,
+          "sourceMapping": { "documentField": "Employee ID", "page": 1 } },
+        { "id": "ssn_last4", "label": "Last 4 of SSN", "fieldType": "TEXT", "required": true, "order": 2, "sensitive": true,
+          "validations": [{ "type": "PATTERN", "pattern": "^\\d{4}$", "message": "Enter the last four digits of the SSN." }],
+          "sourceMapping": { "documentField": "SSN (last 4)", "page": 1 } }
+      ]
+    },
+    {
+      "id": "primary_account",
+      "title": "Primary Bank Account",
+      "order": 1,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "bank_name", "label": "Bank name", "fieldType": "TEXT", "required": true, "order": 0,
+          "sourceMapping": { "documentField": "Financial Institution Name", "page": 1 } },
+        { "id": "account_type", "label": "Account type", "fieldType": "RADIO", "required": true, "order": 1,
+          "options": [ { "value": "CHECKING", "label": "Checking" }, { "value": "SAVINGS", "label": "Savings" } ],
+          "validations": [{ "type": "ENUM", "value": ["CHECKING", "SAVINGS"] }],
+          "sourceMapping": { "documentField": "Account Type", "page": 1 } },
+        { "id": "routing_number", "label": "Routing number (ABA)", "fieldType": "ROUTING_NUMBER", "required": true, "order": 2, "sensitive": true,
+          "validations": [{ "type": "ROUTING_NUMBER", "message": "Enter a valid 9-digit ABA routing number." }],
+          "sourceMapping": { "documentField": "Routing Number", "page": 1 } },
+        { "id": "account_number", "label": "Account number", "fieldType": "ACCOUNT_NUMBER", "required": true, "order": 3, "sensitive": true,
+          "validations": [{ "type": "PATTERN", "pattern": "^\\d{4,17}$", "message": "Enter a valid account number." }],
+          "sourceMapping": { "documentField": "Account Number", "page": 1 } },
+        { "id": "deposit_type", "label": "Deposit type", "fieldType": "RADIO", "required": true, "order": 4,
+          "options": [
+            { "value": "FULL", "label": "Entire net pay" },
+            { "value": "AMOUNT", "label": "Fixed amount" },
+            { "value": "PERCENT", "label": "Percentage" }
+          ],
+          "validations": [{ "type": "ENUM", "value": ["FULL", "AMOUNT", "PERCENT"] }],
+          "sourceMapping": { "documentField": "Deposit Allocation", "page": 1 } },
+        { "id": "deposit_value", "label": "Amount or percentage (if not entire net pay)", "fieldType": "NUMBER", "required": false, "order": 5,
+          "validations": [{ "type": "MIN", "value": 0 }],
+          "visibleWhen": { "fieldId": "deposit_type", "equals": "AMOUNT" },
+          "sourceMapping": { "documentField": "Amount / Percent", "page": 1 } }
+      ]
+    },
+    {
+      "id": "authorization",
+      "title": "Authorization and Signature",
+      "order": 2,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "voided_check_attached", "label": "Voided check or bank letter attached", "fieldType": "FILE_REF", "required": true, "order": 0,
+          "helpText": "Attach a voided check or bank verification letter. Stored as a linked UserFile.",
+          "sourceMapping": { "documentField": "Attach voided check", "page": 1 } },
+        { "id": "authorize", "label": "I authorize CareConnect to deposit pay and, if needed, reverse erroneous deposits", "fieldType": "CHECKBOX", "required": true, "order": 1,
+          "validations": [{ "type": "CHECKED", "message": "Authorization is required." }],
+          "sourceMapping": { "documentField": "Authorization statement", "page": 1 } },
+        { "id": "signature", "label": "Employee signature", "fieldType": "SIGNATURE", "required": true, "order": 2,
+          "validations": [{ "type": "REQUIRED" }],
+          "sourceMapping": { "documentField": "Signature", "page": 1 } },
+        { "id": "signature_date", "label": "Date", "fieldType": "DATE", "required": true, "order": 3,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date", "page": 1 } }
+      ]
+    }
+  ]
+}

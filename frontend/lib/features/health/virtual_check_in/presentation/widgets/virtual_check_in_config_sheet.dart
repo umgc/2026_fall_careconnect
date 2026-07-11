@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:care_connect_app/features/health/virtual_check_in/models/virtual_check_in_question.dart';
 import 'package:care_connect_app/features/health/virtual_check_in/models/virtual_check_in_backend_question_model.dart'
-    show BackendQuestionDto, BackendQuestionType;
+    show BackendQuestionDto;
 import 'package:care_connect_app/features/health/virtual_check_in/models/virtual_check_in_mapper.dart'
 as vmap;
 
@@ -12,12 +12,12 @@ import 'package:care_connect_app/config/env_constant.dart';
 
 /// Bottom sheet that edits the patient's Virtual Check-In questions.
 class VirtualCheckInConfigSheet extends StatefulWidget {
-  final int checkInId;
+  final int? checkInId;
   final List<VirtualCheckInQuestion> initial;
 
   const VirtualCheckInConfigSheet({
     super.key,
-    required this.checkInId,
+    this.checkInId,
     required this.initial,
   });
 
@@ -64,7 +64,11 @@ class _VirtualCheckInConfigSheetState extends State<VirtualCheckInConfigSheet> {
 
     _catalogFilterCtrl.addListener(() => setState(() {}));
     _newTextCtrl.addListener(() => setState(() {}));
-    _loadQuestions();
+    if (widget.checkInId != null) {
+      _loadQuestions();
+    } else {
+      _loading = false;
+    }
     _loadCatalog();
   }
 
@@ -101,12 +105,15 @@ class _VirtualCheckInConfigSheetState extends State<VirtualCheckInConfigSheet> {
   // ---------- Data load ----------
 
   Future<void> _loadQuestions() async {
+    final checkInId = widget.checkInId;
+    if (checkInId == null) return;
+
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final backend = await _api.getQuestions(widget.checkInId.toString());
+      final backend = await _api.getQuestions(checkInId.toString());
       // DTO → UI via mapper, dedupe by prompt, update state
       final mapped =
       backend.map<VirtualCheckInQuestion>(vmap.toUiQuestion).toList();

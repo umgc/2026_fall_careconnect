@@ -40,6 +40,9 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage: ./cdeploy_app_only.sh [options]
 
+Builds the backend, pushes the Docker image to ECR, and deploys the ECS
+service stack with API Gateway HTTP API, VPC Link, and Cloud Map integration.
+
 Options:
   -e, --environment <name>   Environment name: dev, cfdemo, staging, prod
   -p, --profile <profile>    Optional AWS CLI profile for local use
@@ -466,10 +469,9 @@ popd >/dev/null
 step "Deploying service stack: $SERVICE_STACK_NAME"
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "BackendImageUri=${IMAGE_URI}"
 
-step "Reading final backend URL"
-CURRENT_OPERATION="Reading final backend URL"
-ALB_DNS_NAME="$(get_stack_output "$SERVICE_STACK_NAME" "LoadBalancerDnsName" | tr -d '\r')"
-ALB_URL="$(get_stack_output "$SERVICE_STACK_NAME" "LoadBalancerUrl" | tr -d '\r')"
+step "Reading final API endpoint"
+CURRENT_OPERATION="Reading final API endpoint"
+API_ENDPOINT="$(get_stack_output "$SERVICE_STACK_NAME" "ApiEndpoint" | tr -d '\r')"
 CURRENT_STACK_NAME=""
 CURRENT_OPERATION=""
 
@@ -478,7 +480,6 @@ echo "App-only deployment complete."
 echo "Environment:   $ENVIRONMENT"
 echo "Repository:    $REPOSITORY_NAME"
 echo "Image URI:     $IMAGE_URI"
-echo "ALB DNS:       $ALB_DNS_NAME"
-echo "Backend URL:   $ALB_URL"
-echo "Health check:  ${ALB_URL}/v1/api/test/health"
+echo "API Endpoint:  $API_ENDPOINT"
+echo "Health check:  ${API_ENDPOINT}/v1/api/test/health"
 echo "Elapsed time:  $(elapsed_time_text)"
