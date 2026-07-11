@@ -2,7 +2,9 @@ package com.careconnect.controller;
 
 import com.careconnect.ai.ask.dto.AiAskRequest;
 import com.careconnect.ai.ask.dto.AiAskResponse;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.User;
+import com.careconnect.repository.UserRepository;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.AiAskOrchestrator;
 import com.careconnect.service.ai.AiAskOrchestrator.AiAskResult;
@@ -12,7 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,19 +24,26 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/ai/ask")
+@RequestMapping("/v1/api/ai/ask")
 @RequiredArgsConstructor
 public class AiAskController {
 
     private final AiAskOrchestrator aiAskOrchestrator;
+    private final UserRepository userRepository;
+
+    private User getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
+    }
 
     @PostMapping("/{patientId}")
     public ResponseEntity<AiAskResponse> ask(
             @PathVariable Long patientId,
-            @Valid @RequestBody AiAskRequest request,
-            @AuthenticationPrincipal User caller) {
+            @Valid @RequestBody AiAskRequest request) {
 
-        log.info("POST /api/ai/ask/{} — caller={}", patientId, caller.getId());
+        User caller = getCurrentUser();
+        log.info("POST /v1/api/ai/ask/{} — caller={}", patientId, caller.getId());
 
         try {
             AiAskResult result = aiAskOrchestrator.ask(caller, patientId, request.getQuestion());
@@ -49,4 +59,4 @@ public class AiAskController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
     }
-}
+}   
