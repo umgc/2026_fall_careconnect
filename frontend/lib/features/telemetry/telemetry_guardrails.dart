@@ -18,6 +18,12 @@ class TelemetryGuardrails {
     'error_network',
     'error_timeout',
     'offline_toggled',
+    'feature_use',
+    'sync_started',
+    'sync_completed',
+    'sync_failed',
+    'session_start',
+    'session_end',
     // Feature analytics (anonymous)
     'feature.medications.view_all',
     'feature.medications.view_active',

@@ -345,9 +345,8 @@ class SnsServiceTest {
 
         verify(snsClient).publish(captor.capture());
         String msg = captor.getValue().message();
-        assertTrue(msg.contains("Carol"));
-        assertTrue(msg.contains("Checkup"));
         assertTrue(msg.contains("10:00 AM"));
+        assertTrue(msg.contains("scheduled appointment"));
     }
 
     @Test

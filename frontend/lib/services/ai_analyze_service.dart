@@ -3,16 +3,16 @@ import 'package:http/http.dart' as http;
 import 'package:care_connect_app/config/environment_config.dart';
 import 'package:care_connect_app/services/api_service.dart';
 
-class DeepseekService {
+class AiAnalyzeService {
   /// POST /api/ai/analyze/allergy
   static Future<Map<String, dynamic>> extractAllergy({
     required int patientId,
     required String transcript,
     String? allergen,
-    String? severity, // "MILD" | "MODERATE" | "SEVERE" (optional hint)
+    String? severity,
     String? reaction,
   }) async {
-    final base = EnvironmentConfig.baseUrl; // e.g. http://localhost:8080
+    final base = EnvironmentConfig.baseUrl;
     final uri = Uri.parse('$base/api/ai/analyze/allergy');
 
     final jwt = await ApiService.getJwtToken();
@@ -22,15 +22,9 @@ class DeepseekService {
       "patientId": patientId,
       "text": transcript,
       "context": {
-        if (allergen != null && allergen
-            .trim()
-            .isNotEmpty) "allergen": allergen.trim(),
-        if (severity != null && severity
-            .trim()
-            .isNotEmpty) "severity": severity.trim(),
-        if (reaction != null && reaction
-            .trim()
-            .isNotEmpty) "reaction": reaction.trim(),
+        if (allergen != null && allergen.trim().isNotEmpty) "allergen": allergen.trim(),
+        if (severity != null && severity.trim().isNotEmpty) "severity": severity.trim(),
+        if (reaction != null && reaction.trim().isNotEmpty) "reaction": reaction.trim(),
       }
     };
 
@@ -50,18 +44,24 @@ class DeepseekService {
 
     final decoded = json.decode(res.body);
 
-    // Expecting { allergen, reaction, severity }
     if (decoded is Map) {
       final data = (decoded['data'] is Map) ? decoded['data'] : decoded;
       return {
-        "allergen": (data['allergen'] ?? '').toString(),
+        "allergen": _pickAllergyField(data, ['allergen', 'medication', 'drug']),
         "reaction": (data['reaction'] ?? '').toString(),
         "severity": (data['severity'] ?? '').toString().toUpperCase(),
-        // MILD|MODERATE|SEVERE
       };
     }
 
     return {"allergen": "", "reaction": transcript, "severity": ""};
+  }
+
+  static String _pickAllergyField(Map data, List<String> keys) {
+    for (final key in keys) {
+      final value = (data[key] ?? '').toString().trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 
   /// POST /v1/api/ai/analyze/symptom
@@ -71,7 +71,7 @@ class DeepseekService {
     String? symptomKeyHint,
     String? severityHint,
     String? notesHint,
-    Map<String, dynamic>? context, // NEW
+    Map<String, dynamic>? context,
   }) async {
     final base = EnvironmentConfig.baseUrl;
     final uri = Uri.parse('$base/v1/api/ai/analyze/symptom');
@@ -83,16 +83,12 @@ class DeepseekService {
       "patientId": patientId,
       "text": transcript,
       "context": {
-        if (symptomKeyHint != null && symptomKeyHint
-            .trim()
-            .isNotEmpty) "symptomKey": symptomKeyHint.trim(),
-        if (severityHint != null && severityHint
-            .trim()
-            .isNotEmpty) "severity": severityHint.trim(),
-        if (notesHint != null && notesHint
-            .trim()
-            .isNotEmpty) "notes": notesHint.trim(),
-        if (context != null) ...context, // NEW
+        if (symptomKeyHint != null && symptomKeyHint.trim().isNotEmpty)
+          "symptomKey": symptomKeyHint.trim(),
+        if (severityHint != null && severityHint.trim().isNotEmpty)
+          "severity": severityHint.trim(),
+        if (notesHint != null && notesHint.trim().isNotEmpty) "notes": notesHint.trim(),
+        if (context != null) ...context,
       }
     };
 
@@ -107,8 +103,7 @@ class DeepseekService {
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception(
-          'AI symptom analyze failed (${res.statusCode}): ${res.body}');
+      throw Exception('AI symptom analyze failed (${res.statusCode}): ${res.body}');
     }
 
     final decoded = json.decode(res.body);
@@ -121,5 +116,3 @@ class DeepseekService {
     };
   }
 }
-
-

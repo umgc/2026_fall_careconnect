@@ -38,6 +38,28 @@ void main() {
   // lookupAppLocalizations is a top-level function that requires no context.
   final t = lookupAppLocalizations(const Locale('en'));
 
+  void expectValidLabels(List<BottomNavItem> items) {
+    final invalidLabels = items
+        .where((item) => item.label.trim().isEmpty)
+        .map((item) => item.routeName)
+        .toList();
+    final invalidLocalizedLabels = items
+        .where((item) => item.localizedLabel(t).trim().isEmpty)
+        .map((item) => item.routeName)
+        .toList();
+
+    expect(invalidLabels, isEmpty);
+    expect(invalidLocalizedLabels, isEmpty);
+  }
+
+  void expectNoDuplicateLabels(List<BottomNavItem> items) {
+    final labels = items.map((item) => item.localizedLabel(t).trim()).toList();
+    expect(labels.toSet().length, labels.length);
+  }
+
+  List<String> routeNames(List<BottomNavItem> items) =>
+      items.map((item) => item.routeName).toList();
+
   // ─── BottomNavConfig.getNavItemsForRole ───────────────────────────────────
 
   group('BottomNavConfig.getNavItemsForRole', () {
@@ -47,10 +69,10 @@ void main() {
       expect(items.length, 5);
     });
 
-    test('CAREGIVER returns caregiver nav items (5)', () {
+    test('CAREGIVER returns caregiver nav items (6)', () {
       // Verifies the caregiver set has the expected item count.
       final items = BottomNavConfig.getNavItemsForRole('CAREGIVER');
-      expect(items.length, 5);
+      expect(items.length, 6);
     });
 
     test('FAMILY_LINK returns the same items as CAREGIVER', () {
@@ -91,6 +113,28 @@ void main() {
       // Spot-checks that caregiver items contain the patient-list (tasks) route.
       final items = BottomNavConfig.getNavItemsForRole('CAREGIVER');
       expect(items.any((i) => i.routeName == 'tasks'), isTrue);
+    });
+
+    test('patient bottom navigation labels are valid', () {
+      final items = BottomNavConfig.getNavItemsForRole('PATIENT');
+      expectValidLabels(items);
+      expectNoDuplicateLabels(items);
+    });
+
+    test('caregiver bottom navigation labels are valid', () {
+      final items = BottomNavConfig.getNavItemsForRole('CAREGIVER');
+      expectValidLabels(items);
+      expectNoDuplicateLabels(items);
+    });
+
+    test('shared role navigation entries stay aligned with caregiver config',
+        () {
+      final caregiverItems = BottomNavConfig.getNavItemsForRole('CAREGIVER');
+      final familyItems = BottomNavConfig.getNavItemsForRole('FAMILY_LINK');
+      final adminItems = BottomNavConfig.getNavItemsForRole('ADMIN');
+
+      expect(routeNames(familyItems), routeNames(caregiverItems));
+      expect(routeNames(adminItems), routeNames(caregiverItems));
     });
   });
 
@@ -157,7 +201,8 @@ void main() {
     test('unknown labelKey falls back to the item label', () {
       // Verifies an unrecognised key also returns the raw label.
       const fallbackLabel = 'Special';
-      expect(item(fallbackLabel, 'nav_unknown').localizedLabel(t), fallbackLabel);
+      expect(
+          item(fallbackLabel, 'nav_unknown').localizedLabel(t), fallbackLabel);
     });
   });
 }
