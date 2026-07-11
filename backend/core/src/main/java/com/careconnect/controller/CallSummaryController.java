@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * Read-side endpoint for retrieving a call summary by its database identifier.
@@ -47,6 +48,7 @@ public class CallSummaryController {
      * @param id database identifier of the summary row
      * @return 200 with the summary response map, 404 when not found
      */
+    @PreAuthorize("hasAnyRole('CAREGIVER', 'PATIENT', 'ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getSummaryById(
             @PathVariable("id") final Long id) {
