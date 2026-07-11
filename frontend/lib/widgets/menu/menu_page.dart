@@ -46,7 +46,7 @@ class _MenuPageState extends State<MenuPage> {
     }
   }
 
-  String _translateRole(String role, AppLocalizations t){
+  String _translateRole(String role, AppLocalizations t) {
     switch(role){
       case('PATIENT'):
         return t.roles_Patient;
