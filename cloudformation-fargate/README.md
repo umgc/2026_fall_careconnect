@@ -312,8 +312,14 @@ The templates assume the backend uses these environment variables:
 - `SECURITY_JWT_SECRET`
 - `APP_FRONTEND_BASE_URL`
 - `CORS_ALLOWED_LIST`
-- `SPRING_FLYWAY_ENABLED`
-- `SPRING_JPA_HIBERNATE_DDL_AUTO`
+- `SPRING_FLYWAY_ENABLED` — must remain `false`; production schema is applied by `SchemaPatchRunner` and Hibernate `ddl-auto`, not Flyway
+- `SPRING_JPA_HIBERNATE_DDL_AUTO` — typically `update` for ECS deploys
+- `CARECONNECT_AI_ENABLED` — `true` for Ask AI chat in cfdemo/staging/prod (`CareConnectAiEnabled` parameter)
+- `ENVIRONMENT` — CloudFormation environment name; drives SSM prefix `/careconnect/<Environment>/`
+- `AI_PROVIDER` — typically `bedrock`
+- `EMAIL_PROVIDER` / `FROM_EMAIL` — SendGrid when `SpringProfile=prod` (API key from SSM)
+- `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_ENABLED` — optional; leave empty until a real WebSocket API endpoint is set (prod profile uses empty default like dev)
+- `AWS_DEFAULT_REGION` — required for Bedrock and SSM clients
 
 The backend health endpoint (smoke tests and welcome-page checks) is:
 
@@ -530,7 +536,8 @@ aws cloudformation create-stack `
   --parameters `
     ParameterKey=Environment,ParameterValue=dev `
     ParameterKey=BackendImageUri,ParameterValue="$IMAGE_URI" `
-    ParameterKey=SpringProfile,ParameterValue=dev `
+    ParameterKey=SpringProfile,ParameterValue=prod `
+    ParameterKey=CareConnectAiEnabled,ParameterValue=true `
     ParameterKey=FrontendBaseUrl,ParameterValue=http://localhost:3000 `
     ParameterKey=CorsAllowedList,ParameterValue="http://localhost:*,http://127.0.0.1:*" `
     ParameterKey=ContainerPort,ParameterValue=8081 `
@@ -551,7 +558,8 @@ aws cloudformation create-stack \
   --parameters \
     ParameterKey=Environment,ParameterValue=dev \
     ParameterKey=BackendImageUri,ParameterValue="$IMAGE_URI" \
-    ParameterKey=SpringProfile,ParameterValue=dev \
+    ParameterKey=SpringProfile,ParameterValue=prod \
+    ParameterKey=CareConnectAiEnabled,ParameterValue=true \
     ParameterKey=FrontendBaseUrl,ParameterValue=http://localhost:3000 \
     ParameterKey=CorsAllowedList,ParameterValue="http://localhost:*,http://127.0.0.1:*" \
     ParameterKey=ContainerPort,ParameterValue=8081 \

@@ -529,7 +529,7 @@ aws cloudformation deploy `
   --capabilities CAPABILITY_NAMED_IAM `
   --no-fail-on-empty-changeset `
   --parameter-overrides `
-    Environment=cfdemo BackendImageUri=$ImageUri SpringProfile=dev `
+    Environment=cfdemo BackendImageUri=$ImageUri SpringProfile=prod `
     FrontendBaseUrl=$FRONTEND_URL `
     "CorsAllowedList=http://localhost:*,http://127.0.0.1:*,$FRONTEND_URL" `
     ContainerPort=8081 DesiredCount=1 TaskCpu=1024 TaskMemory=3072 `

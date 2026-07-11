@@ -87,7 +87,8 @@ Resources:
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/careconnect/${Environment}/*
 
-  # Task role: runtime permissions for Chime, recording, Bedrock, S3, Transcribe, etc.
+  # Task role: runtime permissions for Chime, recording, Bedrock, S3, Transcribe,
+  # SSM (prod profile), and related AWS SDK clients.
   # See cloudformation-fargate/README.md — ECS task role permissions.
   EcsTaskRole:
     Type: AWS::IAM::Role
@@ -218,7 +219,6 @@ Resources:
                 Action:
                   - sts:GetCallerIdentity
                 Resource: '*'
-
 Outputs:
   # Exported outputs are consumed by the service stack.
   EcrRepositoryUri:
