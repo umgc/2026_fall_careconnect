@@ -1059,8 +1059,8 @@ void main() {
       final navBar = tester.widget<BottomNavigationBar>(
         find.byType(BottomNavigationBar),
       );
-      // Caregiver has 5 nav items
-      expect(navBar.items.length, 5);
+      // Caregiver has 6 nav items
+      expect(navBar.items.length, 6);
     });
   });
 }

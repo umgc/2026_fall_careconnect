@@ -45,8 +45,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Timer? _messageBadgeTimer;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     WidgetsBinding.instance.addObserver(this);
     _initializeConfig();
     _pageController = PageController(initialPage: widget.initialTabIndex ?? 0);
@@ -249,6 +249,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   /// Initialize the MainScreenConfig object.
   void _initializeConfig() {
+    final t = AppLocalizations.of(context)!;
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
     if (widget.config != null) {
@@ -258,7 +259,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
       // Check if user data is missing or invalid
       if (user == null || user.role.isEmpty || user.id <= 0) {
-        _redirectToLoginWithMessage('Please log in again');
+        _redirectToLoginWithMessage(t.mainscreen_loginFailed);
         return;
       }
 
@@ -485,6 +486,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<List<_QuickCallTarget>> _loadQuickCallTargets(UserSession user) async {
+    final t = AppLocalizations.of(context)!;
     final role = user.role.trim().toUpperCase();
     if (role == 'PATIENT') {
       final links = await ApiService.getPatientLinkedCaregiverLinks(user.id);
@@ -501,8 +503,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         return _QuickCallTarget(
           userId: caregiverUserId,
           role: 'CAREGIVER',
-          title: caregiverName.isNotEmpty ? caregiverName : 'Caregiver $caregiverUserId',
-          subtitle: 'Caregiver - Patient calls enabled',
+          title: caregiverName.isNotEmpty ? caregiverName : '${t.signup_caregiver} $caregiverUserId',
+          subtitle: t.mainscreen_cgCallEnabled,
           email: caregiverEmail,
           phone: null,
         );
@@ -552,7 +554,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         _trimmed(patientMap['lastName']),
         _trimmed(linkMap['patientName']).isNotEmpty
             ? _trimmed(linkMap['patientName'])
-            : 'Patient $patientUserId',
+            : '${t.signup_patient} $patientUserId',
       );
       final patientEmail = _trimmed(patientMap['email']).isNotEmpty
           ? _trimmed(patientMap['email'])
@@ -564,7 +566,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           userId: patientUserId,
           role: 'PATIENT',
           title: patientName,
-          subtitle: 'Assigned patient',
+          subtitle: t.mainscreen_assignedPt,
           email: patientEmail.isNotEmpty ? patientEmail : null,
           phone: patientPhone.isNotEmpty ? patientPhone : null,
         ),
@@ -584,7 +586,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           caregiverUserId,
           () => _CareTeamAggregate(
             userId: caregiverUserId,
-            name: caregiverName.isNotEmpty ? caregiverName : 'Caregiver $caregiverUserId',
+            name: caregiverName.isNotEmpty ? caregiverName : '${t.signup_caregiver} $caregiverUserId',
             email: caregiverEmail.isNotEmpty ? caregiverEmail : null,
           ),
         );
@@ -598,7 +600,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     final careTeamTargets = careTeamByUserId.values.map((entry) {
       final context = entry.patientNames.toList()..sort();
-      final summary = context.isEmpty ? 'Care team caregiver' : 'Care team for: ${context.join(', ')}';
+      final summary = context.isEmpty ? t.mainscreen_careTeam : '${t.mainscreen_careTeamFor}: ${context.join(', ')}';
       return _QuickCallTarget(
         userId: entry.userId,
         role: 'CAREGIVER',
@@ -619,6 +621,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     required UserSession currentUser,
     required _QuickCallTarget target,
   }) async {
+    final t = AppLocalizations.of(context)!;
     final role = currentUser.role.trim().toUpperCase();
     final allowed = await ApiService.canInitiateVideoCall(
       currentUserId: currentUser.id,
@@ -631,7 +634,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('You are not allowed to call ${target.title}.'),
+          content: Text('${t.mainscreen_notAllowedToCall} ${target.title}.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -665,6 +668,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showQuickCallPicker() async {
+    final t = AppLocalizations.of(context)!;
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
     if (user == null) return;
@@ -693,7 +697,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     height: 260,
                     child: Center(
                       child: Text(
-                        'Unable to load call contacts.\n${snapshot.error}',
+                        '${t.mainscreen_unableToLoadCall}\n${snapshot.error}',
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -704,8 +708,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 if (targets.isEmpty) {
                   final role = user.role.trim().toUpperCase();
                   final emptyText = role == 'PATIENT'
-                      ? 'No caregivers are available for patient-initiated calls.'
-                      : 'No assigned patients or care-team caregivers are available.';
+                      ? t.mainscreen_noCaregiverAvailable
+                      : t.mainscreen_noAssignedPat;
                   return SizedBox(
                     height: 220,
                     child: Center(
@@ -722,7 +726,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Start Video Call',
+                      t.mainscreen_startVideoCall,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -800,6 +804,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget? _buildGlobalCallFab() {
+    final t = AppLocalizations.of(context)!;
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
     if (user == null || !_isRoleSupportedForGlobalCall(user.role)) {
@@ -811,7 +816,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     return FloatingActionButton(
       heroTag: 'globalCallFab',
-      tooltip: 'Start video call',
+      tooltip: t.mainscreen_videoCallTooltip,
       onPressed: _showQuickCallPicker,
       child: const Icon(Icons.video_call),
     );
@@ -819,6 +824,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
@@ -829,7 +835,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 currentUser.role.isEmpty ||
                 currentUser.id <= 0)) {
           // Return a loading screen while redirecting
-          _redirectToLoginWithMessage('Please log in again');
+          _redirectToLoginWithMessage(t.mainscreen_loginFailed);
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
@@ -894,6 +900,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildGlobalNoInternetBanner(ThemeData theme) {
+    final t = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       color: theme.colorScheme.error, // Use a solid error color (usually Red)
@@ -902,9 +909,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         children: [
           const Icon(Icons.wifi_off, color: Colors.white),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'No Internet Connection.',
+              t.mainscreen_noInternetConnection,
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -917,17 +924,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildSyncCompleteBanner(ThemeData theme) {
+    final t = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       color: Colors.green.shade600,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-      child: const Row(
+      child: Row(
         children: [
           Icon(Icons.check_circle_outline, color: Colors.white),
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Sync complete',
+              t.mainscreen_syncComplete,
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -974,6 +982,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!mounted) {
       return;
     }
+    final t = AppLocalizations.of(context)!;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -987,26 +996,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                       child: Text(
-                        'Queued Sync Items',
+                        t.mainscreen_queueSyncItem,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        'Human-readable, non-sensitive queue preview. Tap the trash icon to remove queued items you do not want to sync. Only the item currently syncing is locked.',
+                        t.mainscreen_humanReadable,
                       ),
                     ),
                     const SizedBox(height: 10),
                     Expanded(
                       child: _pendingSyncQueue.isEmpty
-                          ? const Center(child: Text('No queued items'))
+                          ? Center(child: Text(t.mainscreen_noQueuedItem))
                           : ListView.separated(
                               itemCount: _pendingSyncQueue.length,
                               separatorBuilder: (_, i) =>
@@ -1019,10 +1028,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   item.id,
                                 );
                                 final status = isSyncing
-                                    ? 'Syncing now'
+                                    ? t.mainscreen_syncNow
                                     : isFailed
-                                        ? 'Failed (will retry)'
-                                        : 'Queued';
+                                        ? t.mainscreen_failRetry
+                                        : t.mainscreen_queued;
 
                                 return ListTile(
                                   leading: CircleAvatar(
@@ -1030,7 +1039,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   ),
                                   title: Text(item.displayTitle),
                                   subtitle: Text(
-                                    '${item.displayDetails.join('\n')}\nQueued: ${_formatQueueTimestamp(item.createdAt)}\nStatus: $status${item.retryCount > 0 ? ' (${item.retryCount} retries)' : ''}',
+                                    '${item.displayDetails.join('\n')}\n${t.mainscreen_queued}: ${_formatQueueTimestamp(item.createdAt)}\n${t.voicecommand_phaseLabelStatus}: $status${item.retryCount > 0 ? ' (${item.retryCount} ${t.mainscreen_retries})' : ''}',
                                   ),
                                   isThreeLine: false,
                                   trailing: IconButton(
