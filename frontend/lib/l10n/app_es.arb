@@ -177,6 +177,11 @@
   "voicecommand_commandPhraseHome": "vaya a la página de inicio",
   "voicecommand_commandPhraseCalendar": "vaya al calendario",
   "voicecommand_commandPhraseTracker": "vaya al rastreador",
+  "voicecommand_micDeniedGuidance": "Habilite el micrófono en la configuración del dispositivo o use la navegación manual.",
+  "voicecommand_unavailableGuidance": "Voz no compatible con este dispositivo. Use la navegación manual.",
+  "voicecommand_timeoutGuidance": "Toque el micrófono para intentar de nuevo.",
+  "voicecommand_noSpeechGuidance": "No se detectó voz. Toque el micrófono para intentar de nuevo.",
+  "voicecommand_intentNotYetSupported": "Esta acción aún no está disponible. Use la navegación manual.",
 
   "mainscreen_voiceCommandsTooltip": "Comandos de voz"
 

@@ -20,6 +20,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
+import 'package:care_connect_app/services/voice_intent_service.dart';
 
 /// Matches debug-mode status display delay in VoiceCommandAI (5s + buffer).
 const _statusSettleDelay = Duration(milliseconds: 5050);
@@ -101,6 +102,13 @@ void main() {
   void setupDefaultMocks() {
     speechMethodCalls = [];
 
+    // Default AI intent override: return null to fall through to keyword matching
+    VoiceIntentService.testOverride = ({
+      required String utterance,
+      String locale = 'en',
+      String? screenId,
+    }) => null;
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('flutter.picovoice.ai/porcupine_manager'),
@@ -164,6 +172,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Speech recognition not available'), findsOneWidget);
+      expect(find.text('Status: Error'), findsOneWidget);
+      expect(
+        find.text('Voice not supported on this device. Use manual navigation.'),
+        findsOneWidget,
+      );
 
       await _tearDown(tester);
     });
@@ -191,6 +204,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Reconocimiento de voz no disponible'), findsOneWidget);
+      expect(find.text('Estado: Error'), findsOneWidget);
+      expect(
+        find.text('Voz no compatible con este dispositivo. Use la navegación manual.'),
+        findsOneWidget,
+      );
 
       await _tearDown(tester);
     });
@@ -1220,8 +1238,7 @@ void main() {
       expect(find.text('Status: Command not recognized'), findsOneWidget);
       expect(find.text('Heard: "do something random"'), findsOneWidget);
       expect(
-        find.text(
-            'Recognized: "do something random" — command not recognized'),
+        find.text('Recognized: "do something random" — command not recognized'),
         findsOneWidget,
       );
       expect(find.text('Command not recognized \u2014 please try again.'),
@@ -1274,7 +1291,8 @@ void main() {
       }
 
       expect(sawErrorStatus, isTrue);
-      expect(find.text('Listening timed out.'), findsNWidgets(2));
+      expect(find.text('Listening timed out.'), findsOneWidget);
+      expect(find.text('Tap the microphone to try again.'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -1297,7 +1315,8 @@ void main() {
       }
 
       expect(sawErrorStatus, isTrue);
-      expect(find.text('La escucha ha expirado.'), findsNWidgets(2));
+      expect(find.text('La escucha ha expirado.'), findsOneWidget);
+      expect(find.text('Toque el micrófono para intentar de nuevo.'), findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -2068,6 +2087,574 @@ void main() {
       expect(find.text('Symptoms Page'), findsOneWidget);
 
       await _flush(tester);
+    });
+  });
+
+  // ──────────── T16 hardening: failure, timeout, and fallback tests ────────────
+
+  group('VoiceCommandAI T16 fallback guidance', () {
+    setUp(setupDefaultMocks);
+    tearDown(clearMocks);
+
+    testWidgets('permission denied shows guidance in status detail - English',
+        (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugin.csdcorp.com/speech_to_text'),
+        (call) async {
+          if (call.method == 'has_permission') return false;
+          if (call.method == 'initialize') return true;
+          if (call.method == 'stop') return null;
+          if (call.method == 'cancel') return null;
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Microphone permission denied'), findsOneWidget);
+      expect(find.text('Status: Error'), findsOneWidget);
+      expect(
+        find.text('Enable microphone in device settings or use manual navigation.'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('permission denied shows guidance in status detail - Spanish',
+        (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugin.csdcorp.com/speech_to_text'),
+        (call) async {
+          if (call.method == 'has_permission') return false;
+          if (call.method == 'initialize') return true;
+          if (call.method == 'stop') return null;
+          if (call.method == 'cancel') return null;
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('es'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Permiso de micrófono denegado'), findsOneWidget);
+      expect(find.text('Estado: Error'), findsOneWidget);
+      expect(
+        find.text('Habilite el micrófono en la configuración del dispositivo o use la navegación manual.'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('timeout shows guidance in status detail - English',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.pump(const Duration(seconds: 13));
+
+      expect(find.text('Listening timed out.'), findsWidgets);
+      expect(
+        find.text('Tap the microphone to try again.'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('timeout shows guidance in status detail - Spanish',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('es'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.pump(const Duration(seconds: 13));
+
+      expect(find.text('La escucha ha expirado.'), findsWidgets);
+      expect(
+        find.text('Toque el micrófono para intentar de nuevo.'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('no speech on mic stop shows guidance in status detail - English',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('No speech detected.'), findsOneWidget);
+      expect(
+        find.text('No speech heard. Tap the microphone to try again.'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('no speech on mic stop shows guidance in status detail - Spanish',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('es'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('No se detectó ninguna voz.'), findsOneWidget);
+      expect(
+        find.text('No se detectó voz. Toque el micrófono para intentar de nuevo.'),
+        findsOneWidget,
+      );
+
+      await _tearDown(tester);
+    });
+  });
+
+  group('VoiceCommandAI T16 retry after failure', () {
+    setUp(setupDefaultMocks);
+    tearDown(clearMocks);
+
+    testWidgets('can retry listening after timeout - English', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Wait for timeout
+      await tester.pump(const Duration(seconds: 13));
+      await tester.pump(_statusSettleDelay);
+
+      // Should be back to idle
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      // Retry
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Listening...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('can retry listening after no speech detected - English',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Start listening
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Stop with no speech
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Wait for reset
+      await tester.pump(_statusSettleDelay);
+
+      // Should be back to idle
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      // Retry
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Listening...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('can retry listening after unknown command - English',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'unknown phrase', isFinal: true);
+      await tester.pump(_statusSettleDelay);
+
+      // Should be back to idle
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      // Retry
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Listening...'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+  });
+
+  group('VoiceCommandAI T16 no stuck states', () {
+    setUp(setupDefaultMocks);
+    tearDown(clearMocks);
+
+    testWidgets('unknown command does not leave UI in processing state',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'gibberish words', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Should be in fallback, not stuck in processing
+      expect(find.text('Status: Command not recognized'), findsOneWidget);
+      expect(find.text('Status: Processing'), findsNothing);
+
+      // After delay, resets to idle
+      await tester.pump(_statusSettleDelay);
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('mic button ignored while in confirming state', (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Confirm command'), findsOneWidget);
+
+      // Tap mic while in confirming state — should be ignored
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Still in confirming state, not listening
+      expect(find.text('Status: Confirm command'), findsOneWidget);
+      expect(find.text('Listening...'), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('mic button ignored while in clarifying state', (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Status: Clarify command'), findsOneWidget);
+
+      // Tap mic while in clarifying state — should be ignored
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Still in clarifying state, not listening
+      expect(find.text('Status: Clarify command'), findsOneWidget);
+      expect(find.text('Listening...'), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('timeout resets to idle with usable mic button', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: VoiceCommandAI()));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Timeout fires
+      await tester.pump(const Duration(seconds: 13));
+      await tester.pump(_statusSettleDelay);
+
+      // Confirm UI is in idle state
+      expect(find.text('Status: Ready'), findsOneWidget);
+      expect(find.byIcon(Icons.mic_none), findsOneWidget);
+
+      // FAB shows mic icon (not mic_off)
+      final fab = tester.widget<FloatingActionButton>(
+          find.byType(FloatingActionButton));
+      final fabIcon = fab.child as Icon;
+      expect(fabIcon.icon, equals(Icons.mic));
+
+      await _tearDown(tester);
+    });
+  });
+
+  group('VoiceCommandAI AI intent extraction', () {
+    setUp(setupDefaultMocks);
+
+    testWidgets('AI navigate intent enters confirming state', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'navigate',
+          entities: {'destination': 'calendar'},
+          confidence: 0.95,
+          destination: '/calendar',
+          displayLabel: 'Navigate to calendar',
+          requiresConfirmation: true,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'show me the calendar');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Navigate to calendar'), findsOneWidget);
+      expect(find.text('Confirm'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('AI navigate confirm navigates to destination', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'navigate',
+          entities: {'destination': 'calendar'},
+          confidence: 0.95,
+          destination: '/calendar',
+          displayLabel: 'Navigate to calendar',
+          requiresConfirmation: true,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'show me the calendar');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Calendar Page'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _flush(tester);
+    });
+
+    testWidgets('AI call intent shows confirming then not yet supported', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'call',
+          entities: {'target': 'Dr. Smith'},
+          confidence: 0.88,
+          displayLabel: 'Call Dr. Smith',
+          requiresConfirmation: true,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'call Dr. Smith');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Call Dr. Smith'), findsOneWidget);
+      expect(find.text('Confirm'), findsOneWidget);
+
+      await tester.tap(find.text('Confirm'));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('not yet available'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('AI service returns null falls back to keyword matching', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return null;
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Keyword match should fire - confirming state with "Home"
+      expect(find.textContaining('Home'), findsWidgets);
+      expect(find.text('Confirm'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('AI returns unknown intent falls back to keyword matching', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'unknown',
+          confidence: 0.1,
+          success: false,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to calendar');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Keyword match should fire - confirming state with "Calendar"
+      expect(find.textContaining('Calendar'), findsWidgets);
+      expect(find.text('Confirm'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('AI cancel returns to idle', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'schedule',
+          entities: {'target': 'dentist'},
+          confidence: 0.85,
+          displayLabel: 'Schedule with dentist',
+          requiresConfirmation: true,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'schedule dentist');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Schedule with dentist'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(_statusSettleDelay);
+
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
     });
   });
 }
