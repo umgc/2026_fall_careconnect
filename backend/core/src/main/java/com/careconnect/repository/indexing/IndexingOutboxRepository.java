@@ -53,8 +53,10 @@ public interface IndexingOutboxRepository extends JpaRepository<IndexingOutboxRo
     /**
      * Claims a batch of unprocessed outbox rows for the IndexWorker using
      * {@code FOR UPDATE SKIP LOCKED} so concurrent ECS tasks do not process the
-     * same row. Must be called inside a transaction. Rows that have already
-     * reached {@code maxAttempts} are still claimed so they can be dead-lettered.
+     * same row while the claim transaction is open. Must be called inside a
+     * short claim transaction (not shared with per-row ingest). Rows that have
+     * already reached {@code maxAttempts} are still claimed so they can be
+     * dead-lettered.
      *
      * @param limit maximum rows to claim
      * @return locked unprocessed rows in insertion order

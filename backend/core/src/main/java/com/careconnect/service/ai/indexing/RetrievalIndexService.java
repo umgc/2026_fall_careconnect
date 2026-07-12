@@ -79,11 +79,10 @@ public class RetrievalIndexService {
             return 0;
         }
         if (isVisitSummary(payload)) {
-            log.warn(
-                    "Skipping SUMMARY_CREATED for summaryId={} — visit_summaries indexing "
-                            + "is not implemented yet (Task 1.4)",
-                    payload.summaryId());
-            return 0;
+            // Leave outbox unprocessed until visit_summaries indexing lands (Task 1.4).
+            throw new IndexingDeferredException(
+                    "Visit summary indexing not implemented yet (Task 1.4) for summaryId="
+                            + payload.summaryId());
         }
 
         final String sourceRecordId = String.valueOf(payload.summaryId());

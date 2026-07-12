@@ -80,9 +80,16 @@ class SummaryChunkerTest {
     }
 
     @Test
-    @DisplayName("blank or invalid JSON returns no drafts")
+    @DisplayName("blank, invalid, or overview-less JSON returns no drafts")
     void blankOrInvalidReturnsEmpty() {
         assertThat(chunker.chunk("call", " ", null, null, null)).isEmpty();
         assertThat(chunker.chunk("call", "{not-json", null, null, null)).isEmpty();
+        assertThat(chunker.chunk("call", "{}", null, null, null)).isEmpty();
+        assertThat(chunker.chunk(
+                "call",
+                "{\"actionItems\":[],\"soap\":{}}",
+                null,
+                null,
+                null)).isEmpty();
     }
 }

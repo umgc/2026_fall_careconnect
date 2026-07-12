@@ -13,7 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,9 +23,11 @@ import java.util.List;
  * Polls {@code indexing_outbox} and drives {@link RetrievalIndexService} (Task 4.1).
  *
  * <p>MVP transport: process outbox rows in-process (same pattern as {@code EvvOutboxProcessor}).
- * Rows are claimed with {@code FOR UPDATE SKIP LOCKED} so multiple ECS tasks do not process
- * the same outbox row concurrently. A later change can publish to SNS/SQS and keep this
- * service as the message handler.
+ * Claim and per-row work run in <em>separate</em> transactions so a deferred/failed ingest
+ * cannot mark the batch rollback-only and undo earlier successes. Rows are claimed with
+ * {@code FOR UPDATE SKIP LOCKED} so multiple ECS tasks do not process the same outbox row
+ * concurrently while the claim transaction is open. A later change can publish to SNS/SQS
+ * and keep this service as the message handler.
  */
 @Service
 @ConditionalOnProperty(
@@ -38,6 +41,7 @@ public class IndexWorker {
     private final IndexingOutboxRepository outboxRepository;
     private final RetrievalIndexService retrievalIndexService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
     private final int batchSize;
     private final int maxAttempts;
@@ -46,25 +50,26 @@ public class IndexWorker {
             final IndexingOutboxRepository outboxRepository,
             final RetrievalIndexService retrievalIndexService,
             final ObjectMapper objectMapper,
+            final PlatformTransactionManager transactionManager,
             @Value("${careconnect.indexing.outbox.batch-size:25}") final int batchSize,
             @Value("${careconnect.indexing.outbox.max-attempts:5}") final int maxAttempts) {
         this.outboxRepository = outboxRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.batchSize = Math.max(1, batchSize);
         this.maxAttempts = Math.max(1, maxAttempts);
     }
 
     /**
-     * Claims a batch of unprocessed rows and processes each. Runs in one transaction so
-     * {@code FOR UPDATE SKIP LOCKED} holds until the poll cycle completes.
+     * Claims a batch of unprocessed rows in one short transaction, then processes each row
+     * with ingest and outbox status updates in separate transactions (EvvOutboxProcessor-style).
      */
     @Scheduled(fixedDelayString = "${careconnect.indexing.outbox.poll-interval-ms:15000}")
-    @Transactional
     public void pollAndProcess() {
-        final List<IndexingOutboxRow> pending =
-                outboxRepository.claimUnprocessedForPolling(batchSize);
-        if (pending.isEmpty()) {
+        final List<IndexingOutboxRow> pending = transactionTemplate.execute(
+                status -> outboxRepository.claimUnprocessedForPolling(batchSize));
+        if (pending == null || pending.isEmpty()) {
             return;
         }
         log.info("IndexWorker processing {} outbox row(s)", pending.size());
@@ -79,45 +84,88 @@ public class IndexWorker {
         }
         final int attempts = row.getAttemptCount() == null ? 0 : row.getAttemptCount();
         if (attempts >= maxAttempts) {
-            row.setProcessedAt(LocalDateTime.now());
-            row.setLastError(truncate(
-                    "Exceeded max attempts (" + maxAttempts + "); lastError=" + row.getLastError()));
-            outboxRepository.save(row);
-            log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts",
-                    row.getId(), row.getEventType(), attempts);
+            transactionTemplate.executeWithoutResult(status -> deadLetterExceededMax(row, attempts));
             return;
         }
 
         try {
-            final int written = dispatch(row);
-            row.setAttemptCount(attempts + 1);
-            row.setProcessedAt(LocalDateTime.now());
-            row.setLastError(null);
-            outboxRepository.save(row);
-            log.info("IndexWorker processed outboxId={} eventType={} chunksWritten={}",
-                    row.getId(), row.getEventType(), written);
-        } catch (final IndexingDeferredException ex) {
-            // Leave unprocessed and do not burn attempt budget (e.g. waiting for patientId).
-            log.warn("IndexWorker deferring outboxId={} eventType={}: {}",
-                    row.getId(), row.getEventType(), ex.getMessage());
-        } catch (final Exception ex) {
-            final int nextAttempts = attempts + 1;
-            row.setAttemptCount(nextAttempts);
-            row.setLastError(truncate(ex.getMessage()));
-            if (nextAttempts >= maxAttempts) {
-                row.setProcessedAt(LocalDateTime.now());
-                log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts: {}",
-                        row.getId(), row.getEventType(), nextAttempts, ex.getMessage());
-            } else {
-                log.error("IndexWorker failed outboxId={} eventType={} attempt={}: {}",
-                        row.getId(), row.getEventType(), nextAttempts, ex.getMessage());
-            }
-            outboxRepository.save(row);
+            final int written = transactionTemplate.execute(status -> dispatch(row));
+            transactionTemplate.executeWithoutResult(status -> markProcessed(row, attempts, written));
+        } catch (final RuntimeException ex) {
+            final Throwable root = rootCause(ex);
+            transactionTemplate.executeWithoutResult(status -> {
+                if (root instanceof IndexingDeferredException) {
+                    recordDeferOrDeadLetter(row, attempts, root.getMessage());
+                } else {
+                    recordFailureOrDeadLetter(row, attempts, root.getMessage());
+                }
+            });
         }
     }
 
-    private int dispatch(final IndexingOutboxRow row) throws Exception {
-        final JsonNode envelope = objectMapper.readTree(row.getPayloadJson());
+    private void markProcessed(
+            final IndexingOutboxRow row, final int attempts, final Integer written) {
+        row.setAttemptCount(attempts + 1);
+        row.setProcessedAt(LocalDateTime.now());
+        row.setLastError(null);
+        outboxRepository.save(row);
+        log.info("IndexWorker processed outboxId={} eventType={} chunksWritten={}",
+                row.getId(), row.getEventType(), written == null ? 0 : written);
+    }
+
+    private void deadLetterExceededMax(final IndexingOutboxRow row, final int attempts) {
+        row.setProcessedAt(LocalDateTime.now());
+        row.setLastError(truncate(
+                "Exceeded max attempts (" + maxAttempts + "); lastError=" + row.getLastError()));
+        outboxRepository.save(row);
+        log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts",
+                row.getId(), row.getEventType(), attempts);
+    }
+
+    /**
+     * Deferred rows stay unprocessed but burn attempt budget so they eventually dead-letter
+     * instead of retrying forever every poll interval.
+     */
+    private void recordDeferOrDeadLetter(
+            final IndexingOutboxRow row, final int attempts, final String message) {
+        final int nextAttempts = attempts + 1;
+        row.setAttemptCount(nextAttempts);
+        row.setLastError(truncate(message));
+        if (nextAttempts >= maxAttempts) {
+            row.setProcessedAt(LocalDateTime.now());
+            log.error("IndexWorker dead-lettered deferred outboxId={} eventType={} after {} attempts: {}",
+                    row.getId(), row.getEventType(), nextAttempts, message);
+        } else {
+            log.warn("IndexWorker deferring outboxId={} eventType={} attempt={}/{}: {}",
+                    row.getId(), row.getEventType(), nextAttempts, maxAttempts, message);
+        }
+        outboxRepository.save(row);
+    }
+
+    private void recordFailureOrDeadLetter(
+            final IndexingOutboxRow row, final int attempts, final String message) {
+        final int nextAttempts = attempts + 1;
+        row.setAttemptCount(nextAttempts);
+        row.setLastError(truncate(message));
+        if (nextAttempts >= maxAttempts) {
+            row.setProcessedAt(LocalDateTime.now());
+            log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts: {}",
+                    row.getId(), row.getEventType(), nextAttempts, message);
+        } else {
+            log.error("IndexWorker failed outboxId={} eventType={} attempt={}: {}",
+                    row.getId(), row.getEventType(), nextAttempts, message);
+        }
+        outboxRepository.save(row);
+    }
+
+    private int dispatch(final IndexingOutboxRow row) {
+        final JsonNode envelope;
+        try {
+            envelope = objectMapper.readTree(row.getPayloadJson());
+        } catch (final Exception ex) {
+            throw new IllegalArgumentException(
+                    "Invalid outbox payload JSON for id=" + row.getId() + ": " + ex.getMessage(), ex);
+        }
         final String eventType = firstNonBlank(
                 textOrNull(envelope, "eventType"),
                 row.getEventType());
@@ -126,21 +174,46 @@ public class IndexWorker {
             throw new IllegalArgumentException("Outbox envelope missing payload for id=" + row.getId());
         }
 
-        if (IndexingEventType.SUMMARY_CREATED.equals(eventType)) {
-            final SummaryCreatedPayload payload =
-                    objectMapper.treeToValue(payloadNode, SummaryCreatedPayload.class);
-            return retrievalIndexService.ingestSummaryCreated(payload);
-        }
-        if (IndexingEventType.TRANSCRIPT_INDEXED.equals(eventType)) {
-            final TranscriptIndexedPayload payload =
-                    objectMapper.treeToValue(payloadNode, TranscriptIndexedPayload.class);
-            return retrievalIndexService.ingestTranscriptIndexed(payload);
+        try {
+            if (IndexingEventType.SUMMARY_CREATED.equals(eventType)) {
+                final SummaryCreatedPayload payload =
+                        objectMapper.treeToValue(payloadNode, SummaryCreatedPayload.class);
+                return retrievalIndexService.ingestSummaryCreated(payload);
+            }
+            if (IndexingEventType.TRANSCRIPT_INDEXED.equals(eventType)) {
+                final TranscriptIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, TranscriptIndexedPayload.class);
+                return retrievalIndexService.ingestTranscriptIndexed(payload);
+            }
+        } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
+            throw ex;
+        } catch (final Exception ex) {
+            throw new IllegalStateException(
+                    "Failed to dispatch outboxId=" + row.getId() + " eventType=" + eventType
+                            + ": " + ex.getMessage(),
+                    ex);
         }
 
         // Unknown types: mark processed so the poller does not spin forever.
         log.warn("IndexWorker ignoring unsupported eventType={} outboxId={}",
                 eventType, row.getId());
         return 0;
+    }
+
+    private static Throwable rootCause(final Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (current instanceof IndexingDeferredException) {
+                return current;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        Throwable current = ex;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private static String textOrNull(final JsonNode node, final String field) {

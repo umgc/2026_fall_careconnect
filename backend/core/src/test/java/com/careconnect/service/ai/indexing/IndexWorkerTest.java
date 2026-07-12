@@ -14,6 +14,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,6 +49,7 @@ class IndexWorkerTest {
                 outboxRepository,
                 retrievalIndexService,
                 objectMapper,
+                new ImmediateTransactionManager(),
                 10,
                 3);
     }
@@ -124,8 +130,8 @@ class IndexWorkerTest {
     }
 
     @Test
-    @DisplayName("missing patientId defers without burning attempts")
-    void poll_deferredPatientId_doesNotIncrementAttempts() throws Exception {
+    @DisplayName("missing patientId defers, burns attempt, leaves unprocessed")
+    void poll_deferredPatientId_incrementsAttemptsAndLeavesUnprocessed() throws Exception {
         final TranscriptIndexedPayload payload =
                 new TranscriptIndexedPayload("call-1", null, 1, "CLIENT_TRANSCRIPT");
         final IndexingOutboxRow row = IndexingOutboxRow.builder()
@@ -141,9 +147,38 @@ class IndexWorkerTest {
 
         worker.pollAndProcess();
 
-        verify(outboxRepository, never()).save(any());
-        assertThat(row.getAttemptCount()).isEqualTo(1);
-        assertThat(row.getProcessedAt()).isNull();
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttemptCount()).isEqualTo(2);
+        assertThat(captor.getValue().getProcessedAt()).isNull();
+        assertThat(captor.getValue().getLastError()).contains("patientId is required");
+    }
+
+    @Test
+    @DisplayName("deferred rows eventually dead-letter at max attempts")
+    void poll_deferredAtMaxAttempts_deadLetters() throws Exception {
+        final TranscriptIndexedPayload payload =
+                new TranscriptIndexedPayload("call-1", null, 1, "CLIENT_TRANSCRIPT");
+        final IndexingOutboxRow row = IndexingOutboxRow.builder()
+                .id(106L)
+                .eventType(IndexingEventType.TRANSCRIPT_INDEXED)
+                .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
+                .attemptCount(2)
+                .build();
+        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+                .thenReturn(List.of(row));
+        when(retrievalIndexService.ingestTranscriptIndexed(any()))
+                .thenThrow(new IndexingDeferredException("patientId is required"));
+
+        worker.pollAndProcess();
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttemptCount()).isEqualTo(3);
+        assertThat(captor.getValue().getProcessedAt()).isNotNull();
+        assertThat(captor.getValue().getLastError()).contains("patientId is required");
     }
 
     @Test
@@ -202,5 +237,27 @@ class IndexWorkerTest {
                 "occurredAt", "2026-07-10T12:00:00Z",
                 "schemaVersion", 1,
                 "payload", payload));
+    }
+
+    /**
+     * Runs callbacks immediately with no real transaction resources — enough for unit tests
+     * that assert IndexWorker isolates claim / ingest / status via {@link TransactionTemplate}.
+     */
+    private static final class ImmediateTransactionManager implements PlatformTransactionManager {
+        @Override
+        public TransactionStatus getTransaction(final TransactionDefinition definition)
+                throws TransactionException {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(final TransactionStatus status) throws TransactionException {
+            // no-op
+        }
+
+        @Override
+        public void rollback(final TransactionStatus status) throws TransactionException {
+            // no-op
+        }
     }
 }

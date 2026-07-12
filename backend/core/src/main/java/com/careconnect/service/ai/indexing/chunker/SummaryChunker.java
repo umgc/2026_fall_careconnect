@@ -263,8 +263,9 @@ public class SummaryChunker {
         }
 
         if (sb.isEmpty()) {
-            // Fallback: compact JSON so the summary is still searchable.
-            return root.toString();
+            // Prefer skip over dumping raw JSON (PHI / noise) into the index.
+            // Item/SOAP chunks still cover structured content when present.
+            return "";
         }
         return sb.toString().trim();
     }

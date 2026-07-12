@@ -190,11 +190,8 @@ class RetrievalIndexServiceTest {
                 "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
                 LocalDateTime.now(), 0, "on_consent", null, "sha256:empty");
 
-        // "{}" falls back to compact JSON overview, so drafts may not be empty.
-        // Use unparseable-but-valid empty object with no usable fields via whitespace-only
-        // is not possible after parse; instead use a summary that chunker cannot turn into text
-        // beyond fallback. Force empty by using blank summaryJson after load... blank returns empty.
-        summary.setSummaryJson("   ");
+        // "{}" no longer dumps compact JSON as overview — empty structured fields => no drafts.
+        summary.setSummaryJson("{}");
 
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
@@ -202,8 +199,29 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
-    @DisplayName("ingestSummaryCreated skips visit summaries without loading CallSummary")
-    void ingestSummaryCreated_skipsVisit() {
+    @DisplayName("ingestSummaryCreated leaves existing chunks when summary text is blank")
+    void ingestSummaryCreated_blankSummary_doesNotDelete() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(9L);
+        summary.setPatientId(42L);
+        summary.setSummaryJson("   ");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findById(9L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("9"), any()))
+                .thenReturn(List.of());
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 9L, "c", 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null, "sha256:blank");
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated defers visit summaries until Task 1.4")
+    void ingestSummaryCreated_defersVisit() {
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "visit",
                 "visit_summaries",
@@ -217,7 +235,9 @@ class RetrievalIndexServiceTest {
                 null,
                 "sha256:v");
 
-        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        assertThatThrownBy(() -> service.ingestSummaryCreated(payload))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("Task 1.4");
         verify(callSummaryRepository, never()).findById(any());
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
     }
