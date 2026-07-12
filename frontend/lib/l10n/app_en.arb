@@ -33,6 +33,11 @@
   "systemDefault": "System default",
   "fallbackUser": "User",
 
+  "roles_Patient": "Patient",
+  "roles_Caregiver": "Caregiver",
+  "roles_Admin": "Admin",
+
+
   "dashboard": "Dashboard",
 
   "shortcut_dashboard": "Dashboard",
@@ -57,16 +62,13 @@
   "notetakerAssistant": "Notetaker Assistant",
 
   "settingsTitle": "Settings",
-
   "settingsAppearance": "Appearance",
   "settingsNotifications": "Notifications",
   "settingsLoadingNotificationSettings": "Loading notification settings...",
   "settingsUnableToLoadNotificationSettings": "Unable to load notification settings",
   "settingsRefresh": "Refresh",
-
   "settingsDarkMode": "Dark Mode",
   "settingsToggleThemeDesc": "Toggle between light and dark theme",
-
   "settingsNotifEmergency": "Emergency Alerts",
   "settingsNotifEmergencyDesc": "Critical health alerts and emergencies",
   "settingsNotifVideoCall": "Video Call Notifications",
@@ -79,37 +81,48 @@
   "settingsNotifSMSDesc": "Text message alerts to your phone",
   "settingsNotifGamification": "Gamification",
   "settingsNotifGamificationDesc": "Achievement and progress notifications",
-
   "settingsSnackUpdated": "Notification settings updated",
   "settingsSnackUpdateFailed": "Failed to update settings",
   "settingsCacheCleared": "Cache cleared successfully",
-
   "settingsAIAssistant": "AI Assistant",
   "settingsAIConfiguration": "AI Configuration",
   "settingsAIConfigurationDesc": "Customize your AI assistant settings",
-
   "settingsSubscription": "Subscription",
   "settingsManageSubscription": "Manage Subscription",
   "settingsManageSubscriptionDesc": "View or update your subscription plan",
-
   "settingsNotetakerAssistant": "Notetaker Assistant",
   "settingsNotetakerConfiguration": "Notetaker Configuration",
   "settingsNotetakerConfigurationDesc": "Customize your Notetaker assistant settings",
-
   "settingsGeneral": "General",
   "settingsClearCache": "Clear Cache",
   "settingsClearCacheShortDesc": "Remove temporary files and cache data",
   "settingsClearCacheDesc": "This will clear all temporary files and cache data. The app may take longer to load content initially after clearing cache.",
-
   "settingsSignOut": "Sign Out",
   "settingsSignOutDesc": "Sign out of your account",
   "settingsSignOutConfirmMessage": "Are you sure you want to sign out?",
-
   "settingsDeleteAccount": "Delete Account",
   "settingsDeleteAccountShortDesc": "Permanently delete your account",
   "settingsDeleteAccountDesc": "This action cannot be undone. All your data will be permanently deleted.",
   "settingsDeleteAccountRequested": "Account deletion requested. Please contact support.",
   "settingsDeleteAccountAction": "Delete Account",
+
+  "settings_telemetryDefaultDialogTitle": "Telemetry is enabled",
+  "settings_telemetryDefaultDialogDescription": "CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability.\nYou can opt out at any time.",
+  "settings_telemetryDefaultDialogKeepEnabled": "Keep enabled",
+  "settings_telemetryDefaultDialogOptOut": "Opt out",
+  "settings_telemetryOptOutDialogTitle": "Opt out of telemetry?",
+  "settings_telemetryOptOutDialogDescription": "If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.",
+  "settings_telemetryOptInDialogTitle": "Enable telemetry?",
+  "settings_telemetryOptInDialogDescription": "This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.",
+  "settings_telemetryOptInDialogEnable": "Enable",
+  "settings_privacySectionHeader": "Privacy",
+  "settings_privacySectionTelemetrySetting": "Telemetry",
+  "settings_privacySectionTelemetrySettingDescription": "Anonymous diagnostics and performance metrics",
+  "settings_telemetryFailedToUpdate": "Unable to update telemetry setting.",
+  "settings_generalSectionOfflinePersistenceSetting": "Offline Persistence",
+  "settings_generalSectionOfflinePersistenceSettingEnabled": "Save data locally and sync when reconnected",
+  "settings_generalSectionOfflinePersistenceSettingDisabled": "New data will not be stored locally for offline use.",
+
 
   "welcomeInitializingHealthcare": "Initializing your healthcare experience...",
   "welcomeReadyToConnect": "Ready to connect your care!",
@@ -602,5 +615,33 @@
   "appheaderwidget_greetingPt": "How are you feeling today?",
   "appheaderwidget_greetingNonPt": "Your patients' health summary"
 
+  "voicecommand_micDeniedGuidance": "Enable microphone in device settings or use manual navigation.",
+  "voicecommand_unavailableGuidance": "Voice not supported on this device. Use manual navigation.",
+  "voicecommand_timeoutGuidance": "Tap the microphone to try again.",
+  "voicecommand_noSpeechGuidance": "No speech heard. Tap the microphone to try again.",
+  "voicecommand_intentNotYetSupported": "This action is not yet available. Use manual navigation.",
+
+  "mainscreen_voiceCommandsTooltip": "Voice commands",
+
+  "languagepicker_English": "English",
+  "languagepicker_Spanish": "Español (Spanish)",
+  "languagepicker_Urdu": "اردو (Urdu)",
+  "languagepicker_Arabic": "العربية (Arabic)",
+  "languagepicker_French": "Français (French)",
+  "languagepicker_Amharic": "አማርኛ (Amharic)",
+  "languagepicker_Nepali": "नेपाली (Nepali)",
+  "languagepicker_Hindi": "हिन्दी (Hindi)",
+  "languagepicker_Farsi": "فارسی (Farsi)",
+  "languagepicker_MandarinChinese": "中文 (Mandarin Chinese)",
+  "languagepicker_Portuguese": "Português (Portuguese)",
+  "languagepicker_Bengali": "বাংলা (Bengali)",
+  "languagepicker_Russian": "Русский (Russian)",
+  "languagepicker_Japanese": "日本語 (Japanese)",
+
+  "menupage_patientReportItem": "Patient Report",
+  "menupage_medicationTrackerItem": "Medication Tracker",
+  "menupage_addPatientItem": "Add Patient",
+  "menupage_settingsItem": "Settings",
+  "menupage_mailDigestItem": "Mail Digest"
 
 }

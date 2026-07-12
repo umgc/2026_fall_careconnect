@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/services/voice_intent_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:go_router/go_router.dart';
@@ -39,6 +40,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
   String? _pendingDestination;
   String? _pendingDetail;
+  String? _pendingIntent;
   List<_CommandMatch> _ambiguousMatches = [];
 
   static const _commandTable = [
@@ -46,6 +48,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _CommandMatch(phrase: 'take me to calendar', destination: '/calendar', label: 'Calendar'),
     _CommandMatch(phrase: 'take me to my tracker', destination: '/symptoms', label: 'Symptom Tracker'),
   ];
+
+  static const _routeMap = {
+    'home': '/dashboard',
+    'dashboard': '/dashboard',
+    'calendar': '/calendar',
+    'symptoms': '/symptoms',
+  };
 
   Duration get _statusDisplayDelay =>
       kDebugMode ? const Duration(seconds: 5) : const Duration(milliseconds: 300);
@@ -178,26 +187,65 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
   Future<void> _startListening() async {
     if (!mounted || _isListening) return;
-
-    // Initialize speech recognition - this will request permission if needed
-    bool available = await _speech.initialize(
-      onError: (error) => debugPrint('Speech error: $error'),
-      onStatus: (status) => debugPrint('Speech status: $status'),
-    );
-
-    if (!mounted || !available) {
-      if (!mounted) return;
-      _showError(AppLocalizations.of(context)?.voicecommand_voiceCommandsUnavailable ?? 'Speech recognition not available');
-      _reset();
+    if (_voiceStatus == _VoiceStatus.processing ||
+        _voiceStatus == _VoiceStatus.confirming ||
+        _voiceStatus == _VoiceStatus.clarifying) {
       return;
     }
 
-    // Check if we have permission - initialize() should have requested it
+    bool available;
+    try {
+      available = await _speech.initialize(
+        onError: (error) => debugPrint('Speech error: $error'),
+        onStatus: (status) => debugPrint('Speech status: $status'),
+      );
+    } catch (e) {
+      debugPrint('Speech init exception: $e');
+      if (!mounted) return;
+      _setStatus(
+        status: _VoiceStatus.error,
+        detail: AppLocalizations.of(context)?.voicecommand_unavailableGuidance ??
+            'Voice not supported on this device. Use manual navigation.',
+      );
+      _showError(
+        AppLocalizations.of(context)?.voicecommand_voiceCommandsUnavailable ??
+            'Speech recognition not available',
+        updateStatus: false,
+      );
+      _resetAfterDelay();
+      return;
+    }
+
+    if (!mounted || !available) {
+      if (!mounted) return;
+      _setStatus(
+        status: _VoiceStatus.error,
+        detail: AppLocalizations.of(context)?.voicecommand_unavailableGuidance ??
+            'Voice not supported on this device. Use manual navigation.',
+      );
+      _showError(
+        AppLocalizations.of(context)?.voicecommand_voiceCommandsUnavailable ??
+            'Speech recognition not available',
+        updateStatus: false,
+      );
+      _resetAfterDelay();
+      return;
+    }
+
     final hasPermission = await _speech.hasPermission;
     if (!mounted || !hasPermission) {
       if (!mounted) return;
-      _showError(AppLocalizations.of(context)?.voicecommand_micPermissionsDenied ?? 'Microphone permission denied');
-      _reset();
+      _setStatus(
+        status: _VoiceStatus.error,
+        detail: AppLocalizations.of(context)?.voicecommand_micDeniedGuidance ??
+            'Enable microphone in device settings or use manual navigation.',
+      );
+      _showError(
+        AppLocalizations.of(context)?.voicecommand_micPermissionsDenied ??
+            'Microphone permission denied',
+        updateStatus: false,
+      );
+      _resetAfterDelay();
       return;
     }
 
@@ -209,33 +257,50 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _statusDetail = '';
     });
 
-    _speech.listen(
-      listenFor: const Duration(seconds: 12),
-      pauseFor: const Duration(seconds: 2),
-      onResult: (r) {
-        if (r.recognizedWords.isNotEmpty) {
-          _buffer = r.recognizedWords;
-          if (mounted) {
-            setState(() {
-              _recognizedText = r.recognizedWords;
-              _voiceStatus = _VoiceStatus.listening;
-            });
+    try {
+      _speech.listen(
+        listenFor: const Duration(seconds: 12),
+        pauseFor: const Duration(seconds: 2),
+        onResult: (r) {
+          if (r.recognizedWords.isNotEmpty) {
+            _buffer = r.recognizedWords;
+            if (mounted) {
+              setState(() {
+                _recognizedText = r.recognizedWords;
+                _voiceStatus = _VoiceStatus.listening;
+              });
+            }
           }
-        }
-        if (r.finalResult) {
-          _timeoutTimer?.cancel();
-          _process(_buffer.isNotEmpty ? _buffer : r.recognizedWords);
-        }
-      },
-      listenOptions: stt.SpeechListenOptions(
-        cancelOnError: true,
-        partialResults: true,
-        listenMode: stt.ListenMode.dictation,
-        onDevice: false,
-        autoPunctuation: true,
-        enableHapticFeedback: false,
-      ),
-    );
+          if (r.finalResult) {
+            _timeoutTimer?.cancel();
+            _process(_buffer.isNotEmpty ? _buffer : r.recognizedWords);
+          }
+        },
+        listenOptions: stt.SpeechListenOptions(
+          cancelOnError: true,
+          partialResults: true,
+          listenMode: stt.ListenMode.dictation,
+          onDevice: false,
+          autoPunctuation: true,
+          enableHapticFeedback: false,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Speech listen exception: $e');
+      if (!mounted) return;
+      _setStatus(
+        status: _VoiceStatus.error,
+        detail: AppLocalizations.of(context)?.voicecommand_unavailableGuidance ??
+            'Voice not supported on this device. Use manual navigation.',
+      );
+      _showError(
+        AppLocalizations.of(context)?.voicecommand_voiceCommandsUnavailable ??
+            'Speech recognition not available',
+        updateStatus: false,
+      );
+      _reset();
+      return;
+    }
 
     _timeoutTimer = Timer(const Duration(seconds: 12), _onTimeout);
   }
@@ -256,81 +321,155 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _isListening = false;
     });
 
-    if (widget.singleShot) {
-      _speech.stop();
-      _setStatus(
-        status: _VoiceStatus.captured,
-        recognizedText: words,
-        detail: '${AppLocalizations.of(context)?.voicecommand_speechCaptured ?? 'Speech captured'}: "$words"',
+    try {
+      if (widget.singleShot) {
+        _speech.stop();
+        _setStatus(
+          status: _VoiceStatus.captured,
+          recognizedText: words,
+          detail: '${AppLocalizations.of(context)?.voicecommand_speechCaptured ?? 'Speech captured'}: "$words"',
+        );
+        await Future.delayed(_statusDisplayDelay);
+        if (!mounted) return;
+        Navigator.of(context).pop<String>(words);
+        return;
+      }
+
+      // Try AI intent extraction first
+      final aiResult = await VoiceIntentService.extractIntent(
+        utterance: words,
+        locale: Localizations.localeOf(context).languageCode,
+        screenId: '/voice',
       );
+
+      if (aiResult != null && aiResult.intent != 'unknown') {
+        _speech.stop();
+        _handleAIResult(aiResult, words);
+        return;
+      }
+
+      // Fall through to keyword matching
+      final exactMatches = _commandTable.where((c) => cmd.contains(c.phrase)).toList();
+
+      if (exactMatches.length == 1) {
+        _speech.stop();
+        final match = exactMatches.first;
+        setState(() {
+          _pendingDestination = match.destination;
+          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
+          _voiceStatus = _VoiceStatus.confirming;
+          _statusDetail = _pendingDetail!;
+        });
+        return;
+      }
+
+      if (exactMatches.length > 1) {
+        _speech.stop();
+        setState(() {
+          _ambiguousMatches = exactMatches;
+          _voiceStatus = _VoiceStatus.clarifying;
+          _statusDetail = '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
+        });
+        return;
+      }
+
+      final partialMatches = _commandTable
+          .where((c) => c.phrase.startsWith(cmd) && cmd.length >= 4)
+          .toList();
+
+      if (partialMatches.length > 1) {
+        _speech.stop();
+        setState(() {
+          _ambiguousMatches = partialMatches;
+          _voiceStatus = _VoiceStatus.clarifying;
+          _statusDetail = '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
+        });
+        return;
+      }
+
+      if (partialMatches.length == 1) {
+        _speech.stop();
+        final match = partialMatches.first;
+        setState(() {
+          _pendingDestination = match.destination;
+          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
+          _voiceStatus = _VoiceStatus.confirming;
+          _statusDetail = _pendingDetail!;
+        });
+        return;
+      }
+
+      _setStatus(
+        status: _VoiceStatus.fallback,
+        recognizedText: words,
+        detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+      );
+      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
       await Future.delayed(_statusDisplayDelay);
+      _reset();
+    } catch (e) {
+      debugPrint('Process exception: $e');
       if (!mounted) return;
-      Navigator.of(context).pop<String>(words);
-      return;
+      _setStatus(
+        status: _VoiceStatus.error,
+        detail: AppLocalizations.of(context)?.voicecommand_commandNotRecognized ??
+            'Command not recognized \u2014 please try again.',
+      );
+      _reset();
     }
-
-    final exactMatches = _commandTable.where((c) => cmd.contains(c.phrase)).toList();
-
-    if (exactMatches.length == 1) {
-      _speech.stop();
-      final match = exactMatches.first;
-      setState(() {
-        _pendingDestination = match.destination;
-        _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
-        _voiceStatus = _VoiceStatus.confirming;
-        _statusDetail = _pendingDetail!;
-      });
-      return;
-    }
-
-    if (exactMatches.length > 1) {
-      _speech.stop();
-      setState(() {
-        _ambiguousMatches = exactMatches;
-        _voiceStatus = _VoiceStatus.clarifying;
-        _statusDetail = '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
-      });
-      return;
-    }
-
-    final partialMatches = _commandTable
-        .where((c) => c.phrase.startsWith(cmd) && cmd.length >= 4)
-        .toList();
-
-    if (partialMatches.length > 1) {
-      _speech.stop();
-      setState(() {
-        _ambiguousMatches = partialMatches;
-        _voiceStatus = _VoiceStatus.clarifying;
-        _statusDetail = '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
-      });
-      return;
-    }
-
-    if (partialMatches.length == 1) {
-      _speech.stop();
-      final match = partialMatches.first;
-      setState(() {
-        _pendingDestination = match.destination;
-        _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
-        _voiceStatus = _VoiceStatus.confirming;
-        _statusDetail = _pendingDetail!;
-      });
-      return;
-    }
-
-    _setStatus(
-      status: _VoiceStatus.fallback,
-      recognizedText: words,
-      detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" — ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
-    );
-    _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized — please try again.', updateStatus: false);
-    await Future.delayed(_statusDisplayDelay);
-    _reset();
   }
 
-  Future<void> _finishError(String msg) async {
-    _showError(msg);
+  void _handleAIResult(VoiceIntentResult result, String words) {
+    if (!mounted) return;
+
+    switch (result.intent) {
+      case 'navigate':
+        final destination = result.destination ?? _routeMap[result.entities['destination']?.toLowerCase()];
+        if (destination != null) {
+          setState(() {
+            _pendingDestination = destination;
+            _pendingIntent = 'navigate';
+            _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? result.entities['destination'] ?? 'page'}?';
+            _voiceStatus = _VoiceStatus.confirming;
+            _statusDetail = _pendingDetail!;
+          });
+        } else {
+          _setStatus(
+            status: _VoiceStatus.fallback,
+            recognizedText: words,
+            detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+          );
+          _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+          _resetAfterDelay();
+        }
+      case 'call':
+        setState(() {
+          _pendingDestination = null;
+          _pendingIntent = 'call';
+          _pendingDetail = '${result.displayLabel ?? 'Call contact'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
+          _voiceStatus = _VoiceStatus.confirming;
+          _statusDetail = _pendingDetail!;
+        });
+      case 'schedule':
+        setState(() {
+          _pendingDestination = null;
+          _pendingIntent = 'schedule';
+          _pendingDetail = '${result.displayLabel ?? 'Schedule appointment'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
+          _voiceStatus = _VoiceStatus.confirming;
+          _statusDetail = _pendingDetail!;
+        });
+      default:
+        _setStatus(
+          status: _VoiceStatus.fallback,
+          recognizedText: words,
+          detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+        );
+        _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+        _resetAfterDelay();
+    }
+  }
+
+  Future<void> _resetAfterDelay() async {
     await Future.delayed(_statusDisplayDelay);
     _reset();
   }
@@ -340,12 +479,22 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
     final txt = _buffer.trim().isNotEmpty
         ? _buffer
-        : _speech.lastRecognizedWords; // fallback just in case
+        : _speech.lastRecognizedWords;
 
     if (txt.trim().isNotEmpty) {
       _process(txt);
     } else {
-      _finishError(AppLocalizations.of(context)?.voicecommand_voiceTimedOut ?? 'Listening timed out.');
+      _setStatus(
+        status: _VoiceStatus.error,
+        detail: AppLocalizations.of(context)?.voicecommand_timeoutGuidance ??
+            'Tap the microphone to try again.',
+      );
+      _showError(
+        AppLocalizations.of(context)?.voicecommand_voiceTimedOut ??
+            'Listening timed out.',
+        updateStatus: false,
+      );
+      _resetAfterDelay();
     }
   }
 
@@ -376,22 +525,40 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   }
 
   void _onConfirm() {
-    if (!mounted || _pendingDestination == null) return;
-    final destination = _pendingDestination!;
-    _setStatus(
-      status: _VoiceStatus.success,
-      detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} — ${AppLocalizations.of(context)?.voicecommand_onConfirmedCommandNavigate ?? 'navigating'}',
-    );
-    _pendingDestination = null;
-    _pendingDetail = null;
-    _ambiguousMatches = [];
-    context.go(destination);
-    _reset();
+    if (!mounted) return;
+
+    final intent = _pendingIntent ?? 'navigate';
+
+    if (intent == 'navigate') {
+      if (_pendingDestination == null) return;
+      final destination = _pendingDestination!;
+      _setStatus(
+        status: _VoiceStatus.success,
+        detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onConfirmedCommandNavigate ?? 'navigating'}',
+      );
+      _pendingDestination = null;
+      _pendingDetail = null;
+      _pendingIntent = null;
+      _ambiguousMatches = [];
+      context.go(destination);
+      _reset();
+    } else {
+      _setStatus(
+        status: _VoiceStatus.success,
+        detail: AppLocalizations.of(context)?.voicecommand_intentNotYetSupported ?? 'This action is not yet available. Use manual navigation.',
+      );
+      _pendingDestination = null;
+      _pendingDetail = null;
+      _pendingIntent = null;
+      _ambiguousMatches = [];
+      _resetAfterDelay();
+    }
   }
 
   void _onCancelConfirmation() {
     _pendingDestination = null;
     _pendingDetail = null;
+    _pendingIntent = null;
     _ambiguousMatches = [];
     _reset();
   }
@@ -408,8 +575,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   }
 
   void _onMicPressed() {
+    if (_voiceStatus == _VoiceStatus.processing ||
+        _voiceStatus == _VoiceStatus.confirming ||
+        _voiceStatus == _VoiceStatus.clarifying) {
+      return;
+    }
+
     if (_isListening) {
-      // Stop listening and process what we have
       _timeoutTimer?.cancel();
       _speech.stop();
 
@@ -420,8 +592,17 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (text.trim().isNotEmpty) {
         _process(text);
       } else {
-        _showError(AppLocalizations.of(context)?.voicecommand_noSpeechDetected ?? 'No speech detected.');
-        _reset();
+        _setStatus(
+          status: _VoiceStatus.error,
+          detail: AppLocalizations.of(context)?.voicecommand_noSpeechGuidance ??
+              'No speech heard. Tap the microphone to try again.',
+        );
+        _showError(
+          AppLocalizations.of(context)?.voicecommand_noSpeechDetected ??
+              'No speech detected.',
+          updateStatus: false,
+        );
+        _resetAfterDelay();
       }
     } else {
       setState(() => _wakeDetected = true);

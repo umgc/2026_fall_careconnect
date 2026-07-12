@@ -32,6 +32,10 @@
   "systemDefault": "Predeterminado del sistema",
   "fallbackUser": "Usuario",
 
+  "roles_Patient": "Paciente",
+  "roles_Caregiver": "Cuidador",
+  "roles_Admin": "Admin",
+
   "dashboard": "Panel",
 
   "shortcut_dashboard": "Panel",
@@ -61,10 +65,8 @@
 "settingsLoadingNotificationSettings": "Cargando ajustes de notificaciones...",
 "settingsUnableToLoadNotificationSettings": "No se puede cargar los ajustes de notificaciones",
 "settingsRefresh": "Actualizar",
-
 "settingsDarkMode": "Modo oscuro",
 "settingsToggleThemeDesc": "Alternar entre tema claro y oscuro",
-
 "settingsNotifEmergency": "Alertas de emergencia",
 "settingsNotifEmergencyDesc": "Alertas críticas de salud y emergencias",
 "settingsNotifVideoCall": "Notificaciones de videollamada",
@@ -77,37 +79,47 @@
 "settingsNotifSMSDesc": "Alertas de mensajes de texto a tu teléfono",
 "settingsNotifGamification": "Gamificación",
 "settingsNotifGamificationDesc": "Notificaciones de logros y progreso",
-
 "settingsSnackUpdated": "Ajustes de notificaciones actualizados",
 "settingsSnackUpdateFailed": "Error al actualizar ajustes",
 "settingsCacheCleared": "Caché borrada con éxito",
-
 "settingsAIAssistant": "Asistente de IA",
 "settingsAIConfiguration": "Configuración de IA",
 "settingsAIConfigurationDesc": "Personaliza la configuración de tu asistente de IA",
-
 "settingsSubscription": "Suscripción",
 "settingsManageSubscription": "Administrar suscripción",
 "settingsManageSubscriptionDesc": "Ver o actualizar tu plan de suscripción",
-
 "settingsNotetakerAssistant": "Asistente de toma de notas",
 "settingsNotetakerConfiguration": "Configuración del asistente de notas",
 "settingsNotetakerConfigurationDesc": "Personaliza la configuración del asistente de notas",
-
 "settingsGeneral": "General",
 "settingsClearCache": "Borrar caché",
 "settingsClearCacheShortDesc": "Eliminar archivos temporales y datos de caché",
 "settingsClearCacheDesc": "Esto borrará todos los archivos temporales y datos de caché. La app puede demorar más en cargar contenido al inicio luego de borrar la caché.",
-
 "settingsSignOut": "Cerrar sesión",
 "settingsSignOutDesc": "Cerrar sesión de tu cuenta",
 "settingsSignOutConfirmMessage": "¿Estás seguro de que deseas cerrar sesión?",
-
 "settingsDeleteAccount": "Eliminar cuenta",
 "settingsDeleteAccountShortDesc": "Eliminar permanentemente tu cuenta",
 "settingsDeleteAccountDesc": "Esta acción no se puede deshacer. Todos tus datos serán eliminados permanentemente.",
 "settingsDeleteAccountRequested": "Solicitud de eliminación de cuenta enviada. Por favor contacta soporte.",
 "settingsDeleteAccountAction": "Eliminar cuenta",
+
+"settings_telemetryDefaultDialogTitle": "La telemetría está activada",
+"settings_telemetryDefaultDialogDescription": "CareConnect recopila, de forma predeterminada, datos de diagnóstico y métricas de rendimiento anónimos para ayudar a mejorar la fiabilidad.\nPuedes darte de baja en cualquier momento.",
+"settings_telemetryDefaultDialogKeepEnabled": "Mantener activado",
+"settings_telemetryDefaultDialogOptOut": "Darse de baja",
+"settings_telemetryOptOutDialogTitle": "¿Deseas desactivar la telemetría?",
+"settings_telemetryOptOutDialogDescription": "Si decides no participar, CareConnect dejará de recopilar datos de diagnóstico y métricas de rendimiento anónimos.",
+"settings_telemetryOptInDialogTitle": "¿Activar la telemetría?",
+"settings_telemetryOptInDialogDescription": "Esto permitirá a CareConnect recopilar datos de diagnóstico y métricas de rendimiento anónimos para mejorar la fiabilidad.",
+"settings_telemetryOptInDialogEnable": "Activar",
+"settings_privacySectionHeader": "Privacidad",
+"settings_privacySectionTelemetrySetting": "Telemetría",
+"settings_privacySectionTelemetrySettingDescription": "Diagnósticos anónimos y métricas de rendimiento",
+"settings_telemetryFailedToUpdate": "No se ha podido actualizar la configuración de telemetría.",
+"settings_generalSectionOfflinePersistenceSetting": "Persistencia sin Conexión",
+"settings_generalSectionOfflinePersistenceSettingEnabled": "Guardar los datos localmente y sincronizarlos cuando se vuelva a conectar",
+"settings_generalSectionOfflinePersistenceSettingDisabled": "Los nuevos datos no se almacenarán localmente para su uso sin conexión.",
 
 
   "welcomeInitializingHealthcare": "Iniciando tu experiencia de salud…",
@@ -600,5 +612,33 @@
   "appheaderwidget_welcomeBack": "Bienvenido de nuevo",
   "appheaderwidget_greetingPt": "¿Cómo te encuentras hoy?",
   "appheaderwidget_greetingNonPt": "Resumen de salud de tus pacientes"
+  "voicecommand_micDeniedGuidance": "Habilite el micrófono en la configuración del dispositivo o use la navegación manual.",
+  "voicecommand_unavailableGuidance": "Voz no compatible con este dispositivo. Use la navegación manual.",
+  "voicecommand_timeoutGuidance": "Toque el micrófono para intentar de nuevo.",
+  "voicecommand_noSpeechGuidance": "No se detectó voz. Toque el micrófono para intentar de nuevo.",
+  "voicecommand_intentNotYetSupported": "Esta acción aún no está disponible. Use la navegación manual.",
+
+  "mainscreen_voiceCommandsTooltip": "Comandos de voz",
+
+  "languagepicker_English": "English (Inglés)",
+  "languagepicker_Spanish": "Español",
+  "languagepicker_Urdu": "اردو (Urdu)",
+  "languagepicker_Arabic": "العربية (Árabe)",
+  "languagepicker_French": "Français (Francés)",
+  "languagepicker_Amharic": "አማርኛ (Amárico)",
+  "languagepicker_Nepali": "नेपाली (Nepalí)",
+  "languagepicker_Hindi": "हिन्दी (Hindi)",
+  "languagepicker_Farsi": "فارسی (Farsi)",
+  "languagepicker_MandarinChinese": "中文 (Chino Mandarín)",
+  "languagepicker_Portuguese": "Português (Portugués)",
+  "languagepicker_Bengali": "বাংলা (Bengalí)",
+  "languagepicker_Russian": "Русский (Ruso)",
+  "languagepicker_Japanese": "日本語 (Japonés)",
+
+  "menupage_patientReportItem": "Informe del Paciente",
+  "menupage_medicationTrackerItem": "Registro de medicación",
+  "menupage_addPatientItem": "Añadir paciente",
+  "menupage_settingsItem": "Configuración",
+  "menupage_mailDigestItem": "Resumen de Correos"
 
 }
