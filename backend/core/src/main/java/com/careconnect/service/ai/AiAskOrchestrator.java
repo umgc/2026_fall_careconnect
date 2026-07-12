@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.BedrockRuntimeException;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
+import com.careconnect.security.UnauthorizedException;
 
 @Slf4j
 @Service
@@ -58,7 +59,7 @@ public class AiAskOrchestrator {
     }
 
     public AiAskResult ask(User caller, Long patientId, String question)
-            throws ForbiddenScopeException {
+        throws ForbiddenScopeException, UnauthorizedException {
 
         log.info("Ask AI request — caller={} patientId={} questionLength={}",
                 caller.getId(), patientId, question.length());
