@@ -1,24 +1,19 @@
 package com.careconnect.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.core.annotation.Order;
 import org.flywaydb.core.Flyway;
 
 /**
- * Configuration to resolve circular dependency between Flyway and JPA EntityManagerFactory
- * 
- * The issue occurs when:
- * 1. JPA tries to validate entities against database schema
- * 2. Flyway tries to migrate database schema
- * 3. Both depend on each other creating a circular dependency
- * 
- * This configuration ensures Flyway runs first, then JPA validation happens
+ * Optional Flyway hook for local {@code ./mvnw flyway:migrate} only.
+ * Not used in ECS/production deploys ({@code spring.flyway.enabled=false}).
  */
 @Configuration
 @Order(1)
+@ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true")
 public class FlywayConfig {
 
     /**

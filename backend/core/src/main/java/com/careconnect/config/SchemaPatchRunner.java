@@ -12,7 +12,7 @@ import java.sql.Statement;
 /**
  * Applies one-time schema patches via plain JDBC at startup.
  * Runs before JPA initialisation (@Order(1)) and has no JPA dependency,
- * so it avoids the Flyway ↔ entityManagerFactory circular-dependency issue.
+ * so it avoids coupling schema changes to Flyway/JPA startup order.
  *
  * Each patch is idempotent: safe to execute on every restart.
  */
@@ -107,7 +107,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
 
     /**
      * Tasks 1.5 / 1.6 — pgvector extension and shared Ask AI retrieval index table.
-     * Mirrors Flyway migrations V2607071920 and V2607071921 for dev profile (Flyway disabled).
+     * Mirrors db/migration V2607071920 and V2607071921 (applied via SchemaPatchRunner in all envs).
      */
     private void applyRetrievalIndexChunkPatches() {
         applyPatch(

@@ -106,7 +106,7 @@ The development profile disables external services to simplify local runs. Key f
 - `careconnect.deepseek.enabled=false` — Disable DeepSeek in dev
 - `app.file.storage.use-s3=false` — Use local storage instead of S3
 
-For reference, the dev profile also sets PostgreSQL defaults and uses Flyway for migrations.
+For reference, the dev profile also sets PostgreSQL defaults; schema changes use `SchemaPatchRunner` and Hibernate `ddl-auto=update` (Flyway is not used in deploy).
 
 ## Alternative Setup (IDE Configuration)
 

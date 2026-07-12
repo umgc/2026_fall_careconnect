@@ -20,10 +20,39 @@ Parameters:
     Type: String
     Description: Full ECR image URI including tag
 
-  # Current application convention is to run the cloud deployment with the dev profile.
+  # Spring profile: use prod for cfdemo/staging/prod (SSM, SendGrid, AI); dev for local cloud experiments.
   SpringProfile:
     Type: String
-    Default: dev
+    Default: prod
+    AllowedValues:
+      - dev
+      - prod
+
+  # Enables AIChatController and Bedrock chat beans (maps to CARECONNECT_AI_ENABLED).
+  # Default true matches SpringProfile default prod; dev-service.json sets false explicitly.
+  CareConnectAiEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  # Bedrock provider flag passed through to AI_PROVIDER.
+  AiProvider:
+    Type: String
+    Default: bedrock
+
+  # SendGrid from-address for prod profile email (API key loaded from SSM when SpringProfile=prod).
+  FromEmail:
+    Type: String
+    Default: noreply@careconnect.com
+
+  # Optional. Leave empty until a real WebSocket API Gateway endpoint is available.
+  # A placeholder string would be treated as a fake URL by the app/AWS client.
+  WebSocketApiGatewayEndpoint:
+    Type: String
+    Default: ''
+    Description: API Gateway WebSocket API endpoint URL (wss://...). Leave empty if not provisioned yet.
 
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
@@ -84,6 +113,7 @@ Parameters:
 Conditions:
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -271,6 +301,10 @@ Resources:
             # Non-secret runtime configuration.
             - Name: SPRING_PROFILES_ACTIVE
               Value: !Ref SpringProfile
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
             - Name: SERVER_PORT
               Value: !Sub '${ContainerPort}'
             - Name: JDBC_URI
@@ -283,6 +317,22 @@ Resources:
               Value: !Ref FrontendBaseUrl
             - Name: CORS_ALLOWED_LIST
               Value: !Ref CorsAllowedList
+            # Ask AI / Bedrock (Task 0.1 P0 deploy unblock)
+            - Name: CARECONNECT_AI_ENABLED
+              Value: !Ref CareConnectAiEnabled
+            - Name: AI_PROVIDER
+              Value: !Ref AiProvider
+            # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
+            - Name: EMAIL_PROVIDER
+              Value: !If [IsProdProfile, 'sendgrid', 'console']
+            - Name: FROM_EMAIL
+              Value: !If [IsProdProfile, !Ref FromEmail, 'dev@localhost']
+            # Prod profile WebSocket (application-prod.properties AWS mode)
+            - Name: WEBSOCKET_ENABLED
+              Value: !If [IsProdProfile, 'true', 'false']
+            - Name: AWS_WEBSOCKET_API_GATEWAY_ENDPOINT
+              Value: !Ref WebSocketApiGatewayEndpoint
+            # Production schema: Flyway off; SchemaPatchRunner + Hibernate ddl-auto=update at startup.
             - Name: SPRING_FLYWAY_ENABLED
               Value: 'false'
             - Name: SPRING_JPA_HIBERNATE_DDL_AUTO
