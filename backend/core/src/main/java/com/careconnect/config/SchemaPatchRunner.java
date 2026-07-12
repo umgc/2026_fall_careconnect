@@ -165,6 +165,12 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk " +
             "  FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger()"
         );
+        applyPatch(
+            "V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)",
+            "UPDATE retrieval_index_chunk " +
+            "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
+            "WHERE search_vector IS NULL"
+        );
     }
 
     /**

@@ -55,6 +55,16 @@ class RetrievalIndexChunkMigrationSqlTest {
         assertThat(sql).contains("retrieval_index_chunk_search_vector_trigger");
         assertThat(sql).contains("to_tsvector('english'");
         assertThat(sql).contains("trg_retrieval_index_chunk_search_vector");
+        assertThat(sql).contains("BEFORE INSERT OR UPDATE OF chunk_text");
+    }
+
+    @Test
+    @DisplayName("Task 4.2 backfill migration is on the Flyway classpath")
+    void task42BackfillMigrationPresent() throws Exception {
+        String sql = readMigration("V2607121930__backfill_retrieval_index_chunk_search_vector.sql");
+
+        assertThat(sql).contains("WHERE search_vector IS NULL");
+        assertThat(sql).contains("plainto_tsquery").doesNotContain("SELECT *");
     }
 
     private static String readMigration(String filename) throws Exception {

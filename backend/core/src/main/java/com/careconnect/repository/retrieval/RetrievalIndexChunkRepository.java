@@ -13,8 +13,9 @@ import java.util.UUID;
 /**
  * Persistence access for Ask AI retrieval index chunks (Task 1.5).
  *
- * <p>Vector and FTS columns are populated by the indexing pipeline via Flyway DDL
- * and native SQL helpers in Task 4.1+.
+ * <p>{@code search_vector} is maintained by the PostgreSQL trigger on
+ * {@code chunk_text} writes (Task 4.2). Embeddings are written via
+ * {@link #updateEmbedding} (Task 4.3).
  */
 @Repository
 public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIndexChunk, UUID> {
@@ -34,6 +35,44 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
      * a summary that emits overview + typed item chunks under the same source id.
      */
     void deleteBySourceRecordId(String sourceRecordId);
+
+    /**
+     * Patient-scoped full-text search over {@code search_vector} (Task 4.2).
+     *
+     * <p>Uses {@code plainto_tsquery('english', :query)} and ranks with
+     * {@code ts_rank_cd}. Only portable entity columns are selected so Hibernate
+     * can map rows without binding {@code search_vector} / {@code embedding}.
+     *
+     * @param patientId mandatory RBAC scope key (FR-AI-1)
+     * @param query     keyword query text (already length-capped by the service)
+     * @param limit     max rows to return
+     * @return ranked matches for the patient
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND search_vector @@ plainto_tsquery('english', :query)
+                    ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
+                             indexed_at DESC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> searchByPatientIdFullText(
+            @Param("patientId") Long patientId,
+            @Param("query") String query,
+            @Param("limit") int limit);
+
+    /**
+     * Counts chunks whose {@code search_vector} is still null after indexing.
+     * Should be zero once the Task 4.2 trigger + backfill have run.
+     */
+    @Query(
+            value = "SELECT COUNT(*) FROM retrieval_index_chunk WHERE search_vector IS NULL",
+            nativeQuery = true)
+    long countMissingSearchVector();
 
     /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).

@@ -19,4 +19,11 @@ class RetrievalIndexSchemaTest {
     void tableName() {
         assertThat(RetrievalIndexSchema.TABLE_NAME).isEqualTo("retrieval_index_chunk");
     }
+
+    @Test
+    @DisplayName("FTS text-search config matches trigger and query language")
+    void ftsConfig() {
+        assertThat(RetrievalIndexSchema.FTS_TEXT_SEARCH_CONFIG).isEqualTo("english");
+        assertThat(RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH).isPositive();
+    }
 }

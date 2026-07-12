@@ -32,7 +32,8 @@ import java.util.Optional;
  *
  * <p>Called by {@link IndexWorker} after outbox events are dequeued. Does not publish
  * SNS/SQS itself — that remains a future transport upgrade. Embeddings are left for Task 4.3;
- * FTS {@code search_vector} is maintained by the existing DB trigger.
+ * FTS {@code search_vector} is maintained automatically by the PostgreSQL trigger on
+ * {@code chunk_text} insert/update (Task 4.2) — this service does not set it in application code.
  */
 @Service
 public class RetrievalIndexService {
