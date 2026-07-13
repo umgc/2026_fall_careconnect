@@ -1208,4 +1208,95 @@ class BedrockSentimentServiceTest {
             assertThat(result).containsEntry("riskLevel", "LOW");
         }
     }
+
+// ================================================================
+    // WBS 4.7 — summarizeTranscript dispatch tests
+    // Verifies the four fallback paths in summarizeTranscript:
+    // null/blank transcript, Bedrock disabled, Bedrock throws, and
+    // Bedrock returns empty content. Each path is distinguishable
+    // via the overallLabel that surfaces in the local fallback's
+    // keyConcerns list.
+    // STP mapping: TC-E-SUM-003 (no usable transcript) partial;
+    // reliability paths for TC-SUM-05b-style fault injection.
+    // ================================================================
+
+    @Nested
+    @DisplayName("summarizeTranscript Dispatch Paths (WBS 4.7)")
+    class SummarizeTranscriptDispatchTests {
+
+        private Map<String, SentimentResult> calmChannelResults() {
+            return Map.of("COMBINED",
+                    new SentimentResult(0.62, "CALM", "stable", "COMBINED", CALL_ID, 1L, false));
+        }
+
+        @Test
+        @DisplayName("null transcript returns empty-state default even when channel results provide CALM")
+        void summarizeTranscript_nullTranscript_returnsEmptyStateDefault() {
+            // Even with awsEnabled=true and CALM channel results (which would
+            // normally propagate CALM to the fallback), a null transcript
+            // short-circuits to localTranscriptSummary(Map.of()) which uses
+            // the ANXIOUS default. This confirms the null-transcript branch.
+            // No Bedrock stub — the short-circuit happens before any call.
+            BedrockSentimentService svc = new BedrockSentimentService(
+                    mock(BedrockRuntimeClient.class), new ObjectMapper(), true);
+
+            Map<String, Object> result = svc.summarizeTranscript(CALL_ID, null, calmChannelResults());
+
+            assertThat(result).containsEntry("headline", "Call Summary");
+            assertThat(asList(result.get("keyConcerns")))
+                    .as("null transcript path does not pass channel context to fallback")
+                    .contains("Overall sentiment: ANXIOUS");
+        }
+
+        @Test
+        @DisplayName("Bedrock disabled with sentiment context propagates overallLabel to keyConcerns")
+        void summarizeTranscript_bedrockDisabled_propagatesOverallLabel() {
+            // Default service field has awsEnabled=false, so no Bedrock call
+            // is possible. Local fallback should carry the channel context.
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    calmChannelResults());
+
+            assertThat(asList(result.get("keyConcerns")))
+                    .as("bedrock-disabled fallback should propagate COMBINED sentiment")
+                    .contains("Overall sentiment: CALM");
+        }
+
+        @Test
+        @DisplayName("Bedrock throws → fallback with sentiment context (fault injection)")
+        void summarizeTranscript_bedrockThrows_fallsBackWithSentimentContext() {
+            service = awsBackedServiceThrowing(new RuntimeException("Bedrock 503"));
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    calmChannelResults());
+
+            assertThat(result).containsEntry("headline", "Call Summary");
+            assertThat(asList(result.get("keyConcerns")))
+                    .as("exception fallback should propagate COMBINED sentiment")
+                    .contains("Overall sentiment: CALM");
+        }
+
+        @Test
+        @DisplayName("Bedrock returns empty content → parsed.isEmpty() fallback with sentiment context")
+        void summarizeTranscript_bedrockReturnsEmptyContent_fallsBackWithSentimentContext() {
+            // Response has no headline at root AND no recognizable envelope,
+            // so extractModelContentText returns "" → parseSummaryResponse
+            // returns Map.of() → summarizeTranscript treats that as empty
+            // and falls back with the sentiment context.
+            service = awsBackedService("{\"unexpected\":\"shape\"}");
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    calmChannelResults());
+
+            assertThat(result).containsEntry("headline", "Call Summary");
+            assertThat(asList(result.get("keyConcerns")))
+                    .as("empty-parse fallback should propagate COMBINED sentiment")
+                    .contains("Overall sentiment: CALM");
+        }
+    }
 }
