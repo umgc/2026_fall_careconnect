@@ -26,7 +26,10 @@
         <dependency-check.autoUpdate>true</dependency-check.autoUpdate>
         <dependency-check.skipUpdate>false</dependency-check.skipUpdate>
         <dependency-check.failBuild>false</dependency-check.failBuild>
-        <!-- SonarQube Configuration -->
+        <!-- SonarQube / SonarCloud -->
+        <sonar.projectKey>umgc_2026_summer_careconnect</sonar.projectKey>
+        <sonar.organization>careconnect-summer-2026</sonar.organization>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     </properties>
 
     <dependencyManagement>
@@ -403,11 +406,16 @@
     <build>
         <plugins>
             <!-- Spring Boot plugin -->
+            <!-- Explicit execution id so profiles (assembly-zip-dev, assembly-zip, docker)
+                 can override the repackage binding by id. Without an id, Maven names this
+                 'default', which the profiles' 'repackage' executions never match, leaving
+                 repackage bound to 'package' even when jar creation is disabled. -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <executions>
                     <execution>
+                        <id>repackage</id>
                         <goals>
                             <goal>repackage</goal>
                         </goals>
@@ -793,10 +801,7 @@
                         <executions>
                             <execution>
                                 <id>repackage</id>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>repackage</goal>
-                                </goals>
+                                <phase>none</phase>
                             </execution>
                         </executions>
                     </plugin>

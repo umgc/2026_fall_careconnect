@@ -768,6 +768,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// Global voice control entry point, available across all logged-in tabs.
+  /// Opens the full (non-singleShot) voice command page for navigation commands.
+  Widget _buildGlobalVoiceFab() {
+    return FloatingActionButton(
+      heroTag: 'globalVoiceFab',
+      tooltip: 'Voice commands',
+      onPressed: () => context.push('/voice'),
+      child: const Icon(Icons.mic),
+    );
+  }
+
+  /// Combines the global voice FAB with the optional call FAB into a stacked
+  /// column. The stack is lifted so it sits above any per-page FAB (such as
+  /// the patient dashboard AI chat button) and does not cover it.
+  Widget _buildGlobalFabs() {
+    final callFab = _buildGlobalCallFab();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 78),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (callFab != null) ...[
+            callFab,
+            const SizedBox(height: 12),
+          ],
+          _buildGlobalVoiceFab(),
+        ],
+      ),
+    );
+  }
+
   Widget? _buildGlobalCallFab() {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
@@ -778,14 +809,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return null;
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 78),
-      child: FloatingActionButton(
-        heroTag: 'globalCallFab',
-        tooltip: 'Start video call',
-        onPressed: _showQuickCallPicker,
-        child: const Icon(Icons.video_call),
-      ),
+    return FloatingActionButton(
+      heroTag: 'globalCallFab',
+      tooltip: 'Start video call',
+      onPressed: _showQuickCallPicker,
+      child: const Icon(Icons.video_call),
     );
   }
 
@@ -857,7 +885,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          floatingActionButton: _buildGlobalCallFab(),
+          floatingActionButton: _buildGlobalFabs(),
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           bottomNavigationBar: _buildBottomNavigationBar(),
         );

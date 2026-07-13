@@ -25,6 +25,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -701,6 +702,9 @@ class FileControllerTest {
         user.setId(USER_ID);
         user.setRole(Role.PATIENT);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        // This endpoint serves the S3 listing only when S3 is enabled; otherwise
+        // it falls back to DB listing. Exercise the S3 path here.
+        ReflectionTestUtils.setField(controller, "useS3ForLegacyEndpoints", true);
         when(s3StorageService.listUserFilesDto(USER_ID, "PATIENT")).thenReturn(List.of());
 
         final ResponseEntity<?> response = controller.listUserFiles(USER_ID, null);
@@ -718,6 +722,7 @@ class FileControllerTest {
         user.setRole(Role.PATIENT);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         final UserFileDTO dto = UserFileDTO.builder().s3FullKey("patient_1/documents/doc.pdf").build();
+        ReflectionTestUtils.setField(controller, "useS3ForLegacyEndpoints", true);
         when(s3StorageService.listUserFilesDto(USER_ID, "PATIENT")).thenReturn(List.of(dto));
 
         final ResponseEntity<?> response = controller.listUserFiles(USER_ID, "documents");
@@ -737,6 +742,7 @@ class FileControllerTest {
         user.setRole(Role.PATIENT);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         final UserFileDTO dto = UserFileDTO.builder().s3FullKey("patient_1/documents/doc.pdf").build();
+        ReflectionTestUtils.setField(controller, "useS3ForLegacyEndpoints", true);
         when(s3StorageService.listUserFilesDto(USER_ID, "PATIENT")).thenReturn(List.of(dto));
 
         final ResponseEntity<?> response = controller.listUserFiles(USER_ID, "prescriptions");

@@ -1,0 +1,102 @@
+{
+  "formType": "HEALTH",
+  "title": "Pre-Employment Health Screening and TB Attestation",
+  "description": "Health screening, immunization, and tuberculosis clearance attestation required for direct-care home-care staff.",
+  "issuingAuthority": "CareConnect HR / Occupational Health",
+  "version": "1.0.0",
+  "effectiveDate": "2026-01-01",
+  "sourceDocument": {
+    "name": "Pre-Employment Health Screening Form",
+    "formNumber": "HR-HS-01",
+    "edition": "2026.1"
+  },
+  "fileAttachment": {
+    "category": "ONBOARDING_FORM",
+    "generatesPdf": true,
+    "supportingDocumentCategories": ["MEDICAL_RECORD", "HIRING_DOCUMENT"]
+  },
+  "sections": [
+    {
+      "id": "employee",
+      "title": "Employee Information",
+      "order": 0,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "employee_name", "label": "Employee full name", "fieldType": "TEXT", "required": true, "order": 0,
+          "sourceMapping": { "documentField": "Employee Name", "page": 1 } },
+        { "id": "date_of_birth", "label": "Date of birth", "fieldType": "DATE", "required": true, "order": 1, "sensitive": true,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date of Birth", "page": 1 } },
+        { "id": "position", "label": "Position", "fieldType": "TEXT", "required": false, "order": 2,
+          "sourceMapping": { "documentField": "Position", "page": 1 } }
+      ]
+    },
+    {
+      "id": "tb_clearance",
+      "title": "Tuberculosis Screening",
+      "order": 1,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "tb_test_type", "label": "TB test type", "fieldType": "SELECT", "required": true, "order": 0,
+          "options": [
+            { "value": "TST", "label": "Tuberculin skin test (TST/PPD)" },
+            { "value": "IGRA", "label": "IGRA blood test" },
+            { "value": "CHEST_XRAY", "label": "Chest X-ray" }
+          ],
+          "validations": [{ "type": "ENUM", "value": ["TST", "IGRA", "CHEST_XRAY"] }],
+          "sourceMapping": { "documentField": "TB Test Type", "page": 1 } },
+        { "id": "tb_test_date", "label": "TB test date", "fieldType": "DATE", "required": true, "order": 1,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "TB Test Date", "page": 1 } },
+        { "id": "tb_result", "label": "TB result", "fieldType": "RADIO", "required": true, "order": 2,
+          "options": [ { "value": "NEGATIVE", "label": "Negative" }, { "value": "POSITIVE", "label": "Positive" } ],
+          "validations": [{ "type": "ENUM", "value": ["NEGATIVE", "POSITIVE"] }],
+          "sourceMapping": { "documentField": "TB Result", "page": 1 } },
+        { "id": "tb_documentation", "label": "Attach TB test documentation", "fieldType": "FILE_REF", "required": true, "order": 3,
+          "helpText": "Lab or clinic result stored as a linked UserFile (MEDICAL_RECORD).",
+          "sourceMapping": { "documentField": "Attached documentation", "page": 1 } }
+      ]
+    },
+    {
+      "id": "immunization",
+      "title": "Immunization Attestation",
+      "order": 2,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "influenza_current", "label": "Current-season influenza vaccination", "fieldType": "BOOLEAN", "required": false, "order": 0,
+          "sourceMapping": { "documentField": "Influenza vaccination", "page": 1 } },
+        { "id": "hep_b_status", "label": "Hepatitis B vaccination status", "fieldType": "SELECT", "required": false, "order": 1,
+          "options": [
+            { "value": "COMPLETE", "label": "Series complete" },
+            { "value": "IN_PROGRESS", "label": "In progress" },
+            { "value": "DECLINED", "label": "Declined (waiver on file)" }
+          ],
+          "sourceMapping": { "documentField": "Hepatitis B status", "page": 1 } }
+      ]
+    },
+    {
+      "id": "fitness_attestation",
+      "title": "Fitness for Duty and Signature",
+      "order": 3,
+      "required": true,
+      "completedBy": "EMPLOYEE",
+      "fields": [
+        { "id": "able_to_perform", "label": "I am able to perform the essential functions of the position, with or without accommodation", "fieldType": "CHECKBOX", "required": true, "order": 0,
+          "validations": [{ "type": "CHECKED" }],
+          "sourceMapping": { "documentField": "Fitness attestation", "page": 1 } },
+        { "id": "accommodation_needed", "label": "Reasonable accommodation requested (describe)", "fieldType": "TEXTAREA", "required": false, "order": 1,
+          "validations": [{ "type": "MAX_LENGTH", "value": 2000 }],
+          "sourceMapping": { "documentField": "Accommodation request", "page": 1 } },
+        { "id": "signature", "label": "Employee signature", "fieldType": "SIGNATURE", "required": true, "order": 2,
+          "validations": [{ "type": "REQUIRED" }],
+          "sourceMapping": { "documentField": "Signature", "page": 1 } },
+        { "id": "signature_date", "label": "Date", "fieldType": "DATE", "required": true, "order": 3,
+          "validations": [{ "type": "DATE" }],
+          "sourceMapping": { "documentField": "Date", "page": 1 } }
+      ]
+    }
+  ]
+}

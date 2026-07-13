@@ -14,18 +14,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.careconnect.service.DeepSeekService.DeepSeekChatRequest;
-import static com.careconnect.service.DeepSeekService.DeepSeekResponse;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "careconnect.deepseek.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "careconnect.ai.provider", havingValue = "bedrock")
 public class AiSymptomService {
 
-    private final DeepSeekService deepSeekService;
+    private final BedrockStructuredAnalysisService bedrockAnalysisService;
     private final DeepSeekContextBuilder contextBuilder;
-    private final ObjectMapper objectMapper; // Spring-injected
+    private final ObjectMapper objectMapper;
 
     /**
      * Analyze symptom transcript with both allergy and recent symptom context.
@@ -39,7 +36,6 @@ public class AiSymptomService {
             "{\"symptomKey\":\"...\", \"symptomValue\":\"...\", \"severity\":\"MILD|MODERATE|SEVERE\"}.\n" +
             "If something is missing, leave it as an empty string. Do NOT add extra keys or text.\n";
 
-        // Context blocks
         String allergyBlock = contextBuilder.buildAllergyContext(req.getPatientId(), allergiesForContext);
         String symptomBlock = contextBuilder.buildSymptomContext(req.getPatientId(), symptomsForContext);
 
@@ -56,18 +52,14 @@ public class AiSymptomService {
             "Output JSON only.\n",
             allergyBlock, symptomBlock, req.getText(), ctx);
 
-        // Compose & call DeepSeek
-        DeepSeekChatRequest chat = deepSeekService.buildChatRequest(system, user);
-        DeepSeekResponse resp = deepSeekService.sendChatRequest(chat);
-
-        // Shared parsing helpers
-        String content = AiParsingUtils.extractContent(resp);
+        String content = AiParsingUtils.normalizeModelContent(
+                bedrockAnalysisService.complete(system, user));
 
         AiSymptomDTO.Result out = new AiSymptomDTO.Result();
         out.setSymptomKey("");
         out.setSymptomValue("");
         out.setSeverity("");
-        out.setNotes(Optional.ofNullable(req.getText()).orElse("")); // keep transcript as fallback
+        out.setNotes(Optional.ofNullable(req.getText()).orElse(""));
 
         JsonNode node = AiParsingUtils.tryParseJson(objectMapper, content);
         if (node != null) {

@@ -34,7 +34,7 @@ dependencies:
   flutter_chat_ui: ^2.0.0
   uuid: ^4.2.1
   file_picker: ^10.3.3
-  path: ^1.9.1
+  path: ^1.9.0
   shared_preferences: ^2.5.3
   dio: ^5.9.0
   cookie_jar: ^4.0.8
@@ -176,6 +176,8 @@ dependencies:
   connectivity_plus: ^6.0.5 # For checking network connectivity status
   device_info_plus: ^12.1.0
   flutter_local_notifications: ^17.2.1
+  video_player: ^2.11.1
+  chewie: ^1.13.1
 
   # Team D - Dependencies End
 dependency_overrides:
@@ -201,7 +203,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -212,6 +214,7 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/forms/
     - assets/images/banner.png
     - assets/images/app_icon.png
     - assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/
@@ -221,7 +224,7 @@ flutter:
     - assets/images/CareConnectLogo.png
     - assets/images/CareConnectLogo.svg
     - assets/images/default_avatar.svg
-    - web/amazon-chime-sdk.min.js
+    # - web/amazon-chime-sdk.min.js  # web-only asset; web/ dir not in repo (native chime embed used on Android/iOS)
  
 # -------------------------------------------------------------------
 # Splash Screen configuration

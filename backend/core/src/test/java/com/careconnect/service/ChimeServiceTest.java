@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,6 +125,26 @@ class ChimeServiceTest {
             assertThat(result).containsKey("meetingId");
             assertThat(result).containsKey("attendeeId");
             assertThat(result).containsKey("joinToken");
+        }
+
+        @Test
+        @DisplayName("joinMeeting second call returns cached credentials (L5a)")
+        void joinMeeting_localMode_secondCallReturnsCachedCreds() {
+            Map<String, Object> first = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+            Map<String, Object> second = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(second.get("attendeeId")).isEqualTo(first.get("attendeeId"));
+            assertThat(second.get("joinToken")).isEqualTo(first.get("joinToken"));
+        }
+
+        @Test
+        @DisplayName("joinMeeting after endMeeting issues new attendee credentials")
+        void joinMeeting_localMode_afterEndMeetingNewCreds() {
+            Map<String, Object> first = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+            service.endMeeting(CALL_ID);
+            Map<String, Object> second = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(second.get("attendeeId")).isNotEqualTo(first.get("attendeeId"));
         }
 
         @Test
@@ -288,6 +309,42 @@ class ChimeServiceTest {
 
             assertThat(result).containsKey("meetingId");
             assertThat(result).containsKey("attendeeId");
+        }
+
+        @Test
+        @DisplayName("joinMeeting second call returns cached credentials without second AWS call (L5a)")
+        void joinMeeting_awsMode_secondCallReturnsCachedCreds() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+
+            Attendee attendee = buildAttendee();
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenReturn(CreateAttendeeResponse.builder().attendee(attendee).build());
+
+            Map<String, Object> first = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+            Map<String, Object> second = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(second.get("attendeeId")).isEqualTo(first.get("attendeeId"));
+            verify(chimeSdkMeetingsClient, times(1)).createAttendee(any(CreateAttendeeRequest.class));
+        }
+
+        @Test
+        @DisplayName("joinMeeting after endMeeting calls AWS createAttendee again")
+        void joinMeeting_awsMode_afterEndMeetingCreatesNewAttendee() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+
+            Attendee attendee = buildAttendee();
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenReturn(CreateAttendeeResponse.builder().attendee(attendee).build());
+
+            service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+            service.endMeeting(CALL_ID);
+            service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            verify(chimeSdkMeetingsClient, times(2)).createAttendee(any(CreateAttendeeRequest.class));
         }
 
         @Test
