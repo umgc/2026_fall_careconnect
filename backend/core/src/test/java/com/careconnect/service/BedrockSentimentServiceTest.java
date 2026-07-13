@@ -910,4 +910,188 @@ class BedrockSentimentServiceTest {
                     .contains("Jane Doe");
         }
     }
+
+// ================================================================
+    // WBS 4.7 — extractTypedItems safety-property tests
+    // Covers FR-SUM-4 / REQ-SC-5: the model cannot bypass the
+    // server-forced confirmation gate. itemId is server-generated,
+    // needsConfirmation is forced to true, confidence is clamped,
+    // sourceTurnId falls back to a safe default, and the item list
+    // is truncated to SUMMARY_LIST_LIMIT.
+    // ================================================================
+
+    @Nested
+    @DisplayName("extractTypedItems Safety Properties (WBS 4.7)")
+    class ExtractTypedItemsSafetyTests {
+
+        private Map<String, Object> summarizeWithActionItems(String actionItemsJsonArray) {
+            service = awsBackedService("""
+                    {
+                      "headline": "Test summary",
+                      "overallAssessment": "Test.",
+                      "actionItems": %s,
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """.formatted(actionItemsJsonArray));
+            return service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> firstItem(Map<String, Object> result) {
+            List<Object> items = asList(result.get("actionItems"));
+            assertThat(items).isNotEmpty();
+            return (Map<String, Object>) items.get(0);
+        }
+
+        @Test
+        @DisplayName("Model-supplied itemId is discarded; server generates a UUID (FR-SUM-4)")
+        void extractTypedItems_modelSuppliedItemId_isReplacedWithServerUuid() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"itemId": "attacker-controlled-id", "text": "action A"}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(item.get("itemId"))
+                    .as("server must generate itemId, not accept it from the model")
+                    .isNotEqualTo("attacker-controlled-id");
+            assertThat(item.get("itemId").toString())
+                    .as("server itemId should look like a UUID")
+                    .matches("[0-9a-fA-F-]{36}");
+        }
+
+        @Test
+        @DisplayName("Model-supplied needsConfirmation=false is discarded; server forces true (REQ-SC-5)")
+        void extractTypedItems_modelSuppliedNeedsConfirmationFalse_isForcedToTrue() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "needsConfirmation": false}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(item.get("needsConfirmation"))
+                    .as("confirmation gate cannot be bypassed by the model")
+                    .isEqualTo(Boolean.TRUE);
+        }
+
+        @Test
+        @DisplayName("Item without confidence field gets DEFAULT_ITEM_CONFIDENCE (0.5)")
+        void extractTypedItems_missingConfidence_getsDefault() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "sourceTurnId": "turn-1"}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.5);
+        }
+
+        @Test
+        @DisplayName("Item without sourceTurnId gets default 'transcript' marker")
+        void extractTypedItems_missingSourceTurnId_getsTranscriptDefault() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "confidence": 0.9}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(item.get("sourceTurnId")).isEqualTo("transcript");
+        }
+
+        @Test
+        @DisplayName("Item with blank sourceTurnId gets default 'transcript' marker")
+        void extractTypedItems_blankSourceTurnId_getsTranscriptDefault() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "sourceTurnId": "   ", "confidence": 0.9}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(item.get("sourceTurnId")).isEqualTo("transcript");
+        }
+
+        @Test
+        @DisplayName("Confidence above 1.0 is clamped to 1.0")
+        void extractTypedItems_confidenceAboveRange_clampedToOne() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "confidence": 1.5, "sourceTurnId": "turn-1"}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("Confidence below 0.0 is clamped to 0.0")
+        void extractTypedItems_confidenceBelowRange_clampedToZero() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "confidence": -0.5, "sourceTurnId": "turn-1"}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("Array with more than SUMMARY_LIST_LIMIT (6) items is truncated to 6")
+        void extractTypedItems_arrayExceedsLimit_truncatedToSix() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [
+                      {"text": "a1", "sourceTurnId": "t1"},
+                      {"text": "a2", "sourceTurnId": "t2"},
+                      {"text": "a3", "sourceTurnId": "t3"},
+                      {"text": "a4", "sourceTurnId": "t4"},
+                      {"text": "a5", "sourceTurnId": "t5"},
+                      {"text": "a6", "sourceTurnId": "t6"},
+                      {"text": "a7", "sourceTurnId": "t7"},
+                      {"text": "a8", "sourceTurnId": "t8"},
+                      {"text": "a9", "sourceTurnId": "t9"},
+                      {"text": "a10", "sourceTurnId": "t10"}
+                    ]
+                    """);
+
+            List<Object> items = asList(result.get("actionItems"));
+            assertThat(items).hasSize(6);
+        }
+
+        @Test
+        @DisplayName("Non-object entry inside items array is skipped without throwing")
+        void extractTypedItems_nonObjectEntry_isSkipped() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    ["not-an-object", {"text": "valid item", "sourceTurnId": "t1"}]
+                    """);
+
+            List<Object> items = asList(result.get("actionItems"));
+            assertThat(items).hasSize(1);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> item = (Map<String, Object>) items.get(0);
+            assertThat(item.get("text")).isEqualTo("valid item");
+        }
+
+        @Test
+        @DisplayName("All safety fields are populated together on a well-formed item")
+        void extractTypedItems_wellFormedItem_hasAllSafetyFields() {
+            Map<String, Object> result = summarizeWithActionItems(
+                    """
+                    [{"text": "action A", "confidence": 0.85, "sourceTurnId": "turn-42"}]
+                    """);
+            Map<String, Object> item = firstItem(result);
+
+            assertThat(item)
+                    .containsKey("itemId")
+                    .containsEntry("needsConfirmation", Boolean.TRUE)
+                    .containsEntry("sourceTurnId", "turn-42")
+                    .containsEntry("text", "action A");
+            assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.85);
+        }
+    }
 }
