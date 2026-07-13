@@ -1094,4 +1094,118 @@ class BedrockSentimentServiceTest {
             assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.85);
         }
     }
+
+// ================================================================
+    // WBS 4.7 — parseSummaryResponse envelope + shape tests
+    // Covers Claude / Nova / raw JSON response envelopes, code-fence
+    // handling, malformed content, and risk-level normalization.
+    // STP mapping: TC-SUM-02 (schema-valid structured summary),
+    // and the "response has no headline" fallback path.
+    // ================================================================
+
+    @Nested
+    @DisplayName("parseSummaryResponse Envelope Handling (WBS 4.7)")
+    class ParseSummaryResponseEnvelopeTests {
+
+        @Test
+        @DisplayName("Claude-style envelope (content[].text with embedded JSON) is unwrapped")
+        void parseSummaryResponse_claudeEnvelope_unwrapped() {
+            service = awsBackedService("""
+                    {"content":[{"text":"{\\"headline\\":\\"claude-wrapped\\",\\"riskLevel\\":\\"MODERATE\\"}"}]}
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(result).containsEntry("headline", "claude-wrapped");
+            assertThat(result).containsEntry("riskLevel", "MODERATE");
+        }
+
+        @Test
+        @DisplayName("Nova-style envelope (output.message.content[].text) is unwrapped")
+        void parseSummaryResponse_novaEnvelope_unwrapped() {
+            service = awsBackedService("""
+                    {"output":{"message":{"content":[{"text":"{\\"headline\\":\\"nova-wrapped\\",\\"riskLevel\\":\\"HIGH\\"}"}]}}}
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(result).containsEntry("headline", "nova-wrapped");
+            assertThat(result).containsEntry("riskLevel", "HIGH");
+        }
+
+        @Test
+        @DisplayName("Embedded JSON wrapped in ```json code fences is stripped and parsed")
+        void parseSummaryResponse_codeFencedEmbeddedJson_stripped() {
+            service = awsBackedService("""
+                    {"output":{"message":{"content":[{"text":"```json\\n{\\"headline\\":\\"fenced\\",\\"riskLevel\\":\\"LOW\\"}\\n```"}]}}}
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(result).containsEntry("headline", "fenced");
+        }
+
+        @Test
+        @DisplayName("Envelope with content but no {...} block falls back to local summary")
+        void parseSummaryResponse_contentWithNoJsonObject_fallsBack() {
+            service = awsBackedService("""
+                    {"output":{"message":{"content":[{"text":"no braces here just prose"}]}}}
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.35, "ANXIOUS", "concerned", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            // Local fallback signature: "Call Summary" headline + fallback assessment string.
+            assertThat(result).containsEntry("headline", "Call Summary");
+            assertThat(result.get("overallAssessment").toString())
+                    .contains("Automated Bedrock summary unavailable");
+        }
+
+        @Test
+        @DisplayName("Lowercase riskLevel is normalized to uppercase")
+        void parseSummaryResponse_lowercaseRiskLevel_normalized() {
+            service = awsBackedService("""
+                    {"headline":"case test","riskLevel":"moderate"}
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(result).containsEntry("riskLevel", "MODERATE");
+        }
+
+        @Test
+        @DisplayName("Unrecognized riskLevel value falls back to LOW (urgency banner cannot trip on bad model output)")
+        void parseSummaryResponse_unknownRiskLevel_fallsBackToLow() {
+            service = awsBackedService("""
+                    {"headline":"unknown risk","riskLevel":"CATASTROPHIC"}
+                    """);
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(result).containsEntry("riskLevel", "LOW");
+        }
+    }
 }
