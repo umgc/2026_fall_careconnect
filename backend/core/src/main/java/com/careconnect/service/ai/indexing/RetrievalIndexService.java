@@ -20,6 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -33,7 +35,8 @@ import java.util.Optional;
  *
  * <p>Called by {@link IndexWorker} after outbox events are dequeued. Does not publish
  * SNS/SQS itself — that remains a future transport upgrade. After chunk rows are saved,
- * {@link ChunkEmbeddingService} best-effort writes Bedrock Titan embeddings (Task 4.3).
+ * {@link ChunkEmbeddingService} best-effort writes Bedrock Titan embeddings (Task 4.3)
+ * <em>after</em> the ingest transaction commits so Bedrock I/O does not hold a JDBC connection.
  * FTS {@code search_vector} is maintained automatically by the PostgreSQL trigger on
  * {@code chunk_text} insert/update (Task 4.2) — this service does not set it in application code.
  */
@@ -70,7 +73,9 @@ public class RetrievalIndexService {
     /**
      * Indexes a successful call summary. Replaces prior chunks for the same
      * {@code source_record_id} (summary id) only when new drafts are non-empty.
-     * Skips when {@code contentHash} matches an existing overview chunk.
+     * Skips when {@code contentHash} matches an existing overview chunk <em>and</em>
+     * every chunk for that source already has an embedding. If the hash matches but
+     * embeddings are still NULL (prior Bedrock failure), schedules a retry embed only.
      *
      * @return number of chunks written (0 when skipped or nothing to index)
      */
@@ -97,8 +102,16 @@ public class RetrievalIndexService {
         if (payload.contentHash() != null
                 && !payload.contentHash().isBlank()
                 && hasMatchingContentHash(sourceRecordId, payload.contentHash())) {
-            log.info("Skipping SUMMARY_CREATED for summaryId={} — contentHash unchanged",
-                    payload.summaryId());
+            if (chunkRepository.countMissingEmbeddingForSource(sourceRecordId) > 0) {
+                log.info(
+                        "SUMMARY_CREATED contentHash unchanged for summaryId={} but embeddings missing — retrying embed",
+                        payload.summaryId());
+                scheduleEmbeddingAfterCommit(
+                        chunkRepository.findBySourceRecordIdAndEmbeddingIsNull(sourceRecordId));
+            } else {
+                log.info("Skipping SUMMARY_CREATED for summaryId={} — contentHash unchanged",
+                        payload.summaryId());
+            }
             return 0;
         }
 
@@ -203,8 +216,30 @@ public class RetrievalIndexService {
         final List<RetrievalIndexChunk> saved = chunkRepository.saveAll(entities);
         log.info("Indexed {} chunk(s) for sourceRecordId={} patientId={}",
                 saved.size(), sourceRecordId, patientId);
-        chunkEmbeddingService.embedAndPersist(saved);
+        scheduleEmbeddingAfterCommit(saved);
         return saved.size();
+    }
+
+    /**
+     * Runs Titan embedding after the current transaction commits so Bedrock latency
+     * does not hold a JDBC connection or extend the ingest lock window. When no
+     * synchronization is active (unit tests), embeds immediately.
+     */
+    private void scheduleEmbeddingAfterCommit(final List<RetrievalIndexChunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return;
+        }
+        final List<RetrievalIndexChunk> snapshot = List.copyOf(chunks);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    chunkEmbeddingService.embedAndPersist(snapshot);
+                }
+            });
+        } else {
+            chunkEmbeddingService.embedAndPersist(snapshot);
+        }
     }
 
     private boolean hasMatchingContentHash(final String sourceRecordId, final String contentHash) {

@@ -110,6 +110,33 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     long countMissingEmbedding();
 
     /**
+     * Counts NULL embeddings for a single source record (Task 4.3 contentHash short-circuit).
+     */
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE source_record_id = :sourceRecordId
+                      AND embedding IS NULL
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingForSource(@Param("sourceRecordId") String sourceRecordId);
+
+    /**
+     * Loads portable columns for chunks that still need Titan embeddings (retry path).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE source_record_id = :sourceRecordId
+                      AND embedding IS NULL
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findBySourceRecordIdAndEmbeddingIsNull(
+            @Param("sourceRecordId") String sourceRecordId);
+
+    /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
      *
      * @param id        chunk primary key

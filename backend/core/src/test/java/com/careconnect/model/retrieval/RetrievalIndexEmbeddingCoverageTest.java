@@ -27,6 +27,8 @@ class RetrievalIndexEmbeddingCoverageTest {
                 "src/main/java/com/careconnect/repository/retrieval/RetrievalIndexChunkRepository.java"));
         assertThat(source).contains("updateEmbedding");
         assertThat(source).contains("countMissingEmbedding");
+        assertThat(source).contains("countMissingEmbeddingForSource");
+        assertThat(source).contains("findBySourceRecordIdAndEmbeddingIsNull");
         assertThat(source).contains("CAST(:embedding AS vector)");
         assertThat(source).contains("WHERE embedding IS NULL");
     }
@@ -48,5 +50,7 @@ class RetrievalIndexEmbeddingCoverageTest {
                 "src/main/java/com/careconnect/service/ai/indexing/RetrievalIndexService.java"));
         assertThat(source).contains("ChunkEmbeddingService");
         assertThat(source).contains("chunkEmbeddingService.embedAndPersist");
+        assertThat(source).contains("scheduleEmbeddingAfterCommit");
+        assertThat(source).contains("afterCommit");
     }
 }

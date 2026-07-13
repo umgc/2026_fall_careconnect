@@ -10,14 +10,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.model.BedrockRuntimeException;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -25,13 +28,16 @@ import java.util.Map;
  * and writes {@code embedding} through native SQL.
  *
  * <p>Default model is {@code amazon.titan-embed-text-v1} (1536-d) to match
- * {@link RetrievalIndexSchema#EMBEDDING_DIMENSION}. Failures are logged and left
- * as {@code NULL} so FTS indexing still succeeds; Task 4.4 backfills gaps.
+ * {@link RetrievalIndexSchema#EMBEDDING_DIMENSION}. Callers should invoke
+ * {@link #embedAndPersist} <em>after</em> the ingest transaction commits.
+ * Failures are logged and left as {@code NULL} so FTS indexing still succeeds;
+ * Task 4.4 backfills gaps.
  */
 @Service
 public class ChunkEmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(ChunkEmbeddingService.class);
+    private static final int MAX_INVOKE_ATTEMPTS = 3;
 
     private final RetrievalIndexChunkRepository chunkRepository;
     private final ObjectMapper objectMapper;
@@ -58,6 +64,7 @@ public class ChunkEmbeddingService {
         this.modelId = modelId == null || modelId.isBlank()
                 ? "amazon.titan-embed-text-v1"
                 : modelId.trim();
+        rejectUnsupportedModel(this.modelId);
         this.batchSize = Math.max(1, batchSize);
         this.maxInputChars = Math.max(256, maxInputChars);
     }
@@ -66,9 +73,13 @@ public class ChunkEmbeddingService {
      * Embeds each saved chunk and updates {@code embedding}. No-ops when disabled
      * or when {@link BedrockRuntimeClient} is unavailable (local/test without AWS).
      *
+     * <p>Runs in its own transaction so {@code @Modifying} updates succeed when
+     * invoked from an after-commit callback (no ambient ingest TX).
+     *
      * @param chunks entities returned from {@code saveAll} (must have ids)
      * @return number of chunks successfully embedded
      */
+    @Transactional
     public int embedAndPersist(final List<RetrievalIndexChunk> chunks) {
         if (!enabled) {
             log.debug("Chunk embedding skipped — careconnect.embedding.enabled=false");
@@ -120,8 +131,6 @@ public class ChunkEmbeddingService {
     float[] invokeTitanEmbed(final String chunkText) throws Exception {
         final String inputText = truncate(chunkText, maxInputChars);
         // Titan Embed Text v1 returns 1536-d vectors matching retrieval_index_chunk.embedding.
-        // Titan v2 maxes at 1024-d — do not point careconnect.embedding.model-id at v2
-        // until a dimension migration lands.
         final Map<String, Object> body = new LinkedHashMap<>();
         body.put("inputText", inputText);
 
@@ -132,8 +141,24 @@ public class ChunkEmbeddingService {
                 .accept("application/json")
                 .body(SdkBytes.fromUtf8String(requestJson))
                 .build();
-        final InvokeModelResponse response = bedrockRuntimeClient.invokeModel(request);
-        return parseEmbedding(response.body().asUtf8String());
+
+        Exception last = null;
+        for (int attempt = 1; attempt <= MAX_INVOKE_ATTEMPTS; attempt++) {
+            try {
+                final InvokeModelResponse response = bedrockRuntimeClient.invokeModel(request);
+                return parseEmbedding(response.body().asUtf8String());
+            } catch (final BedrockRuntimeException ex) {
+                last = ex;
+                if (!isRetryableThrottle(ex) || attempt == MAX_INVOKE_ATTEMPTS) {
+                    throw ex;
+                }
+                log.warn(
+                        "Bedrock embedding throttled (attempt {}/{}): {}",
+                        attempt, MAX_INVOKE_ATTEMPTS, ex.getMessage());
+                Thread.sleep(150L * attempt);
+            }
+        }
+        throw last == null ? new IllegalStateException("Bedrock invoke failed") : last;
     }
 
     private float[] parseEmbedding(final String responseJson) throws Exception {
@@ -156,6 +181,24 @@ public class ChunkEmbeddingService {
                             + modelId);
         }
         return values;
+    }
+
+    private static void rejectUnsupportedModel(final String modelId) {
+        final String lower = modelId.toLowerCase(Locale.ROOT);
+        if (lower.contains("titan-embed-text-v2")
+                && RetrievalIndexSchema.EMBEDDING_DIMENSION > 1024) {
+            throw new IllegalStateException(
+                    "Titan Embed Text v2 maxes at 1024-d; schema requires "
+                            + RetrievalIndexSchema.EMBEDDING_DIMENSION
+                            + ". Use amazon.titan-embed-text-v1 or migrate the embedding column.");
+        }
+    }
+
+    private static boolean isRetryableThrottle(final BedrockRuntimeException ex) {
+        final String code = ex.awsErrorDetails() == null ? "" : ex.awsErrorDetails().errorCode();
+        final String message = ex.getMessage() == null ? "" : ex.getMessage();
+        return "ThrottlingException".equalsIgnoreCase(code)
+                || message.toLowerCase(Locale.ROOT).contains("throttl");
     }
 
     private static String truncate(final String text, final int maxChars) {

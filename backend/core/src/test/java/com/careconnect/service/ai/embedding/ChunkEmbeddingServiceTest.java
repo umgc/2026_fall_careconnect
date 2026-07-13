@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.bedrockruntime.model.BedrockRuntimeException;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
@@ -110,6 +111,42 @@ class ChunkEmbeddingServiceTest {
         assertThatThrownBy(() -> service.invokeTitanEmbed("text"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("expected");
+    }
+
+    @Test
+    @DisplayName("constructor rejects Titan v2 while schema requires 1536-d")
+    void constructor_rejectsTitanV2() {
+        assertThatThrownBy(() -> new ChunkEmbeddingService(
+                chunkRepository,
+                objectMapper,
+                bedrockRuntimeClient,
+                true,
+                "amazon.titan-embed-text-v2:0",
+                25,
+                8000))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("titan-embed-text-v1");
+    }
+
+    @Test
+    @DisplayName("invokeTitanEmbed retries on ThrottlingException then succeeds")
+    void invokeTitanEmbed_retriesThrottle() throws Exception {
+        final BedrockRuntimeException throttled = (BedrockRuntimeException) BedrockRuntimeException
+                .builder()
+                .message("Rate exceeded")
+                .awsErrorDetails(software.amazon.awssdk.awscore.exception.AwsErrorDetails.builder()
+                        .errorCode("ThrottlingException")
+                        .build())
+                .build();
+        when(bedrockRuntimeClient.invokeModel(any(InvokeModelRequest.class)))
+                .thenThrow(throttled)
+                .thenReturn(InvokeModelResponse.builder()
+                        .body(SdkBytes.fromUtf8String(embeddingJson(sampleVector(0.2f))))
+                        .build());
+
+        final ChunkEmbeddingService service = newService(true, bedrockRuntimeClient);
+        assertThat(service.invokeTitanEmbed("retry me")).hasSize(RetrievalIndexSchema.EMBEDDING_DIMENSION);
+        verify(bedrockRuntimeClient, times(2)).invokeModel(any(InvokeModelRequest.class));
     }
 
     private ChunkEmbeddingService newService(

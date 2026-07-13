@@ -121,6 +121,7 @@ class RetrievalIndexServiceTest {
                 .thenReturn(List.of(existing));
         when(chunkRepository.findBySourceRecordIdAndRecordType("99", "VISIT_SUMMARY"))
                 .thenReturn(List.of());
+        when(chunkRepository.countMissingEmbeddingForSource("99")).thenReturn(0L);
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call",
@@ -139,6 +140,45 @@ class RetrievalIndexServiceTest {
         verify(callSummaryRepository, never()).findById(any());
         verify(chunkRepository, never()).saveAll(anyList());
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkEmbeddingService, never()).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated retries embed when contentHash matches but embeddings missing")
+    void ingestSummaryCreated_hashMatch_missingEmbeddings_retriesEmbed() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .id(java.util.UUID.randomUUID())
+                .patientId(1L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("99")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha256:same\"}")
+                .build();
+        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "CALL_SUMMARY"))
+                .thenReturn(List.of(existing));
+        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "VISIT_SUMMARY"))
+                .thenReturn(List.of());
+        when(chunkRepository.countMissingEmbeddingForSource("99")).thenReturn(1L);
+        when(chunkRepository.findBySourceRecordIdAndEmbeddingIsNull("99"))
+                .thenReturn(List.of(existing));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                "sha256:same");
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
     }
 
     @Test

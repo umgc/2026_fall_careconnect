@@ -26,7 +26,8 @@ import java.util.List;
  * Claim and per-row work run in <em>separate</em> transactions so a deferred/failed ingest
  * cannot mark the batch rollback-only and undo earlier successes. Rows are claimed with
  * {@code FOR UPDATE SKIP LOCKED} and a durable {@code claimed_at} lease so multiple ECS
- * tasks do not process the same outbox row after the claim transaction commits. A later
+ * tasks do not process the same outbox row after the claim transaction commits. Default
+ * lease is 10 minutes to cover Titan embedding latency after ingest commits. A later
  * change can publish to SNS/SQS and keep this service as the message handler.
  */
 @Service
@@ -54,7 +55,7 @@ public class IndexWorker {
             final PlatformTransactionManager transactionManager,
             @Value("${careconnect.indexing.outbox.batch-size:25}") final int batchSize,
             @Value("${careconnect.indexing.outbox.max-attempts:5}") final int maxAttempts,
-            @Value("${careconnect.indexing.outbox.claim-lease-minutes:2}") final int claimLeaseMinutes) {
+            @Value("${careconnect.indexing.outbox.claim-lease-minutes:10}") final int claimLeaseMinutes) {
         this.outboxRepository = outboxRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.objectMapper = objectMapper;
