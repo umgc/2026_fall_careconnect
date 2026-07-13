@@ -120,6 +120,14 @@ public class IndexingOutboxRow {
     private String lastError;
 
     /**
+     * Set when {@code IndexWorker} claims the row for processing. Other workers
+     * skip rows with a fresh {@code claimed_at} until the lease expires so
+     * {@code FOR UPDATE SKIP LOCKED} is not required across the whole ingest.
+     */
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
+
+    /**
      * Populate defaults when the caller does not set them explicitly.
      * The Flyway defaults would kick in on insert too, but populating
      * here means the returned entity has the values without a reload.
