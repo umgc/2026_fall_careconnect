@@ -88,7 +88,8 @@ class IndexingPipelineE2ETest {
                 new ImmediateTransactionManager(),
                 10,
                 5,
-                2);
+                2,
+                6);
 
         lenient().when(outboxRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> {

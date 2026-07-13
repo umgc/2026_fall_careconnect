@@ -47,6 +47,7 @@ public class IndexWorker {
     private final int batchSize;
     private final int maxAttempts;
     private final int claimLeaseMinutes;
+    private final int noBurnParkHours;
 
     public IndexWorker(
             final IndexingOutboxRepository outboxRepository,
@@ -55,7 +56,8 @@ public class IndexWorker {
             final PlatformTransactionManager transactionManager,
             @Value("${careconnect.indexing.outbox.batch-size:25}") final int batchSize,
             @Value("${careconnect.indexing.outbox.max-attempts:5}") final int maxAttempts,
-            @Value("${careconnect.indexing.outbox.claim-lease-minutes:10}") final int claimLeaseMinutes) {
+            @Value("${careconnect.indexing.outbox.claim-lease-minutes:10}") final int claimLeaseMinutes,
+            @Value("${careconnect.indexing.outbox.no-burn-park-hours:6}") final int noBurnParkHours) {
         this.outboxRepository = outboxRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.objectMapper = objectMapper;
@@ -63,6 +65,7 @@ public class IndexWorker {
         this.batchSize = Math.max(1, batchSize);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.claimLeaseMinutes = Math.max(1, claimLeaseMinutes);
+        this.noBurnParkHours = Math.max(1, noBurnParkHours);
     }
 
     /**
@@ -139,31 +142,36 @@ public class IndexWorker {
 
     /**
      * Known-unimplemented work (e.g. visit summaries until Task 1.4): leave unprocessed
-     * and clear the lease without burning attempt budget.
+     * without burning attempt budget. Sets {@code claimed_at} into the future so the
+     * claim query skips the row for {@code no-burn-park-hours} (default 6h) instead of
+     * reclaiming every poll (~15s) or every short lease window.
      */
     private void releaseClaimWithoutBurn(final IndexingOutboxRow row, final String message) {
-        row.setClaimedAt(null);
+        row.setClaimedAt(LocalDateTime.now().plusHours(noBurnParkHours));
         row.setLastError(truncate(message));
         outboxRepository.save(row);
-        log.warn("IndexWorker parking outboxId={} eventType={} without burning attempts: {}",
-                row.getId(), row.getEventType(), message);
+        log.warn(
+                "IndexWorker parking outboxId={} eventType={} for {}h (no attempt burn): {}",
+                row.getId(), row.getEventType(), noBurnParkHours, message);
     }
 
     /**
-     * Deferred rows stay unprocessed but burn attempt budget so they eventually dead-letter
-     * instead of retrying forever every poll interval.
+     * Deferred rows stay unprocessed but burn attempt budget so they eventually dead-letter.
+     * Refresh {@code claimed_at} on intermediate deferrals so the same bad row is not
+     * reclaimed every poll (~15s); clear the lease when dead-lettering.
      */
     private void recordDeferOrDeadLetter(
             final IndexingOutboxRow row, final int attempts, final String message) {
         final int nextAttempts = attempts + 1;
         row.setAttemptCount(nextAttempts);
-        row.setClaimedAt(null);
         row.setLastError(truncate(message));
         if (nextAttempts >= maxAttempts) {
+            row.setClaimedAt(null);
             row.setProcessedAt(LocalDateTime.now());
             log.error("IndexWorker dead-lettered deferred outboxId={} eventType={} after {} attempts: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         } else {
+            row.setClaimedAt(LocalDateTime.now());
             log.warn("IndexWorker deferring outboxId={} eventType={} attempt={}/{}: {}",
                     row.getId(), row.getEventType(), nextAttempts, maxAttempts, message);
         }
@@ -174,13 +182,14 @@ public class IndexWorker {
             final IndexingOutboxRow row, final int attempts, final String message) {
         final int nextAttempts = attempts + 1;
         row.setAttemptCount(nextAttempts);
-        row.setClaimedAt(null);
         row.setLastError(truncate(message));
         if (nextAttempts >= maxAttempts) {
+            row.setClaimedAt(null);
             row.setProcessedAt(LocalDateTime.now());
             log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         } else {
+            row.setClaimedAt(LocalDateTime.now());
             log.error("IndexWorker failed outboxId={} eventType={} attempt={}: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         }

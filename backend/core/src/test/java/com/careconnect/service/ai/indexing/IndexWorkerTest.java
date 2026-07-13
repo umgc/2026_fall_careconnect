@@ -53,7 +53,8 @@ class IndexWorkerTest {
                 new ImmediateTransactionManager(),
                 10,
                 3,
-                2);
+                2,
+                6);
         when(outboxRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -131,7 +132,7 @@ class IndexWorkerTest {
                 ArgumentCaptor.forClass(IndexingOutboxRow.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getProcessedAt()).isNull();
-        assertThat(captor.getValue().getClaimedAt()).isNull();
+        assertThat(captor.getValue().getClaimedAt()).isNotNull();
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(2);
         assertThat(captor.getValue().getLastError()).contains("CallSummary not found");
     }
@@ -159,7 +160,7 @@ class IndexWorkerTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(2);
         assertThat(captor.getValue().getProcessedAt()).isNull();
-        assertThat(captor.getValue().getClaimedAt()).isNull();
+        assertThat(captor.getValue().getClaimedAt()).isNotNull();
         assertThat(captor.getValue().getLastError()).contains("patientId is required");
     }
 
@@ -188,8 +189,38 @@ class IndexWorkerTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
         assertThat(captor.getValue().getProcessedAt()).isNull();
-        assertThat(captor.getValue().getClaimedAt()).isNull();
+        // Future claimed_at parks until Task 1.4 so polls do not reclaim every 15s.
+        assertThat(captor.getValue().getClaimedAt()).isAfter(LocalDateTime.now().plusHours(5));
         assertThat(captor.getValue().getLastError()).contains("Task 1.4");
+    }
+
+    @Test
+    @DisplayName("burn-attempt deferral refreshes lease instead of clearing it")
+    void poll_deferredMidAttempts_refreshesLease() throws Exception {
+        final TranscriptIndexedPayload payload =
+                new TranscriptIndexedPayload("call-1", null, 1, "CLIENT_TRANSCRIPT");
+        final IndexingOutboxRow row = IndexingOutboxRow.builder()
+                .id(108L)
+                .eventType(IndexingEventType.TRANSCRIPT_INDEXED)
+                .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
+                .attemptCount(0)
+                .claimedAt(LocalDateTime.now().minusMinutes(1))
+                .build();
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+        when(retrievalIndexService.ingestTranscriptIndexed(any()))
+                .thenThrow(new IndexingDeferredException("patientId is required"));
+
+        final LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+        worker.pollAndProcess();
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
+        assertThat(captor.getValue().getProcessedAt()).isNull();
+        assertThat(captor.getValue().getClaimedAt()).isAfter(before);
+        assertThat(captor.getValue().getLastError()).contains("patientId is required");
     }
 
     @Test
@@ -215,6 +246,7 @@ class IndexWorkerTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(3);
         assertThat(captor.getValue().getProcessedAt()).isNotNull();
+        assertThat(captor.getValue().getClaimedAt()).isNull();
         assertThat(captor.getValue().getLastError()).contains("patientId is required");
     }
 
