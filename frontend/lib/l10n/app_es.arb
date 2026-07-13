@@ -343,6 +343,10 @@
   "submangement_checkBackLater": "Vuelve a intentarlo más tarde o ponte en contacto con el servicio de asistencia",
   "submangement_currentActivePlan": "Plan Activo Actual",
   "submangement_switchToNewPlan": "Cambiar a Este Plan",
+  "submangement_activePlan": "Plan Activo",
+  "submangement_inactivePlan": "Plan Inactivo",
+  "submangement_standardPlan": "Plan Estándar",
+  "submangement_premiumPlan": "Plan Premium",
 
   "cancelpay_paymentCancel": "Pago Cancelado",
   "cancelpay_regNotComplete": "Tu registro no se completará sin el pago. Puedes volver a intentarlo o ponerte en contacto con el servicio de asistencia si necesitas ayuda.",

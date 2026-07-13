@@ -344,6 +344,10 @@
   "submangement_checkBackLater": "Please check back later or contact support",
   "submangement_currentActivePlan": "Current Active Plan",
   "submangement_switchToNewPlan": "Switch to This Plan",
+  "submangement_activePlan": "Active Plan",
+  "submangement_inactivePlan": "Inactive Plan",
+  "submangement_standardPlan": "Standard Plan",
+  "submangement_premiumPlan": "Premium Plan",
 
   "cancelpay_paymentCancel": "Payment Cancelled",
   "cancelpay_regNotComplete": "Your registration is not complete without payment. You can try again or contact support if you need assistance.",

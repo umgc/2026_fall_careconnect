@@ -88,10 +88,10 @@ class _SubscriptionManagementPageState
               id:
                   planData['priceId'] ??
                   planData['id'], // Use priceId if available
-              name: planData['nickname'] ?? 'Basic Plan',
+              name: _translatePlanName(planData['nickname']),
               description: planData['active'] == true
-                  ? 'Active Plan'
-                  : 'Inactive Plan',
+                  ? t.submangement_activePlan
+                  : t.submangement_inactivePlan,
               amount:
                   (planData['amount'] ?? 0) / 100, // Convert cents to dollars
               interval: planData['interval'] ?? 'month',
@@ -506,6 +506,18 @@ class _SubscriptionManagementPageState
         ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
       }
 
+    }
+  }
+
+  String _translatePlanName(String name){
+    final t = AppLocalizations.of(context)!;
+    switch(name){
+      case('Standard Plan'):
+        return t.submangement_standardPlan;
+      case('Premium Plan'):
+        return t.submangement_premiumPlan;
+      default:
+        return name;
     }
   }
 
