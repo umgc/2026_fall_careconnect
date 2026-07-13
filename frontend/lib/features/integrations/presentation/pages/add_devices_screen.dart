@@ -66,10 +66,26 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
   List<ConnectedDevice> _connectedDevices = [];
 
-  // Fitbit configuration
-  final fitbitClientId = getFitbitClientId();
-  final fitbitClientSecret =getFitbitClientSecret();
+  // Fitbit configuration (optional at runtime; show graceful message if missing)
+  final String? fitbitClientId = _resolveFitbitClientId();
+  final String? fitbitClientSecret = _resolveFitbitClientSecret();
   static const String redirectUri = 'care-connect://add-device';
+
+  static String? _resolveFitbitClientId() {
+    try {
+      return getFitbitClientId();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _resolveFitbitClientSecret() {
+    try {
+      return getFitbitClientSecret();
+    } catch (_) {
+      return null;
+    }
+  }
 
   // Platform-specific health platforms
   List<Map<String, dynamic>> get healthPlatforms {
@@ -264,6 +280,16 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       isConnecting = true;
       errorMessage = null;
     });
+
+    if (platformId == 'fitbit' &&
+        (fitbitClientId == null || fitbitClientSecret == null)) {
+      setState(() {
+        isConnecting = false;
+        errorMessage =
+            'Fitbit is not configured. Set FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET in --dart-define to connect Fitbit.';
+      });
+      return;
+    }
 
     // Start connection process immediately
     try {
@@ -597,7 +623,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(
+      child: ListView(
         children: [
           const Text(
             'Connect to Platform',
@@ -749,8 +775,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                   ),
                 ],
               ),
-
-          const Spacer(),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -763,9 +788,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(
+      child: ListView(
         children: [
-          const Spacer(),
+          const SizedBox(height: 8),
 
           // Success Animation
           Container(
@@ -857,7 +882,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
             ),
           ),
 
-          const Spacer(),
+          const SizedBox(height: 20),
 
           // Action Buttons
           Column(
@@ -905,6 +930,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -971,10 +997,15 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
   Future<void> _connectToFitbitReal() async {
     try {
+      if (fitbitClientId == null || fitbitClientSecret == null) {
+        throw Exception(
+          'Fitbit is not configured. Missing FITBIT_CLIENT_ID/FITBIT_CLIENT_SECRET.',
+        );
+      }
 
       FitbitCredentials? fitbitCredentials = await FitbitConnector.authorize(
-        clientID: fitbitClientId,
-        clientSecret: fitbitClientSecret,
+        clientID: fitbitClientId!,
+        clientSecret: fitbitClientSecret!,
         redirectUri: redirectUri,
         callbackUrlScheme: 'care-connect',
       );
@@ -982,7 +1013,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       if (fitbitCredentials != null) {
 
         String accessToken = fitbitCredentials.fitbitAccessToken;
-        String? refreshToken = fitbitCredentials.fitbitRefreshToken;
         String userID = fitbitCredentials.userID; // Get the userID
 
         if (accessToken.isNotEmpty && userID.isNotEmpty) {
@@ -1040,51 +1070,54 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         errorMessage = null;
       });
 
-      List<HealthDataType> types = [
+      // Keep authorization scope aligned with the persisted metrics we ingest.
+      final List<HealthDataType> requiredTypes = [
         HealthDataType.STEPS,
-        HealthDataType.ACTIVE_ENERGY_BURNED,
         HealthDataType.HEART_RATE,
-        HealthDataType.BLOOD_GLUCOSE,
         HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
         HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
       ];
 
       bool requested = await Health().requestAuthorization(
-        types,
-        permissions: types.map((type) => HealthDataAccess.READ).toList(),
+        requiredTypes,
+        permissions: requiredTypes.map((type) => HealthDataAccess.READ).toList(),
       );
 
       if (requested) {
-        bool hasPermissions = await Health().hasPermissions(types) ?? false;
-
-        if (hasPermissions) {
-          await _storeAccessToken(
-            'apple_health',
-            'apple_health_authorized_${DateTime.now().millisecondsSinceEpoch}',
+        final hasPermissions = await Health().hasPermissions(requiredTypes) ?? false;
+        if (!hasPermissions) {
+          // iOS can report false here even after an auth success callback.
+          // Continue and let actual sync determine whether data access works.
+          print(
+            '⚠ Apple Health reported partial/unknown permissions after authorization; proceeding with connection.',
           );
-
-          List<String> grantedPermissions = [
-            'steps',
-            'calories',
-            'heart_rate',
-            'blood_glucose',
-            'blood_pressure_diastolic',
-            'blood_pressure_systolic'
-          ];
-
-          await _storeConnectedDevice('apple_health', grantedPermissions);
-
-          setState(() {
-            isConnecting = false;
-            isConnected = true;
-          });
-
-          print('Apple Health connected successfully with ${grantedPermissions.length} permissions');
-        } else {
-          throw Exception('Apple Health permissions were denied');
         }
+
+        await _storeAccessToken(
+          'apple_health',
+          'apple_health_authorized_${DateTime.now().millisecondsSinceEpoch}',
+        );
+
+        List<String> grantedPermissions = [
+          'steps',
+          'heart_rate',
+          'blood_pressure_diastolic',
+          'blood_pressure_systolic'
+        ];
+
+        await _storeConnectedDevice('apple_health', grantedPermissions);
+
+        setState(() {
+          isConnecting = false;
+          isConnected = true;
+        });
+
+        print(
+            'Apple Health connected successfully with ${grantedPermissions.length} required permissions');
       } else {
-        throw Exception('Failed to request Apple Health permissions');
+        throw Exception(
+          'Apple Health permission was denied. Please allow access in the Apple Health prompt or Settings > Health > Data Access & Devices.',
+        );
       }
     } catch (e) {
       print('Apple Health connection error: $e');
@@ -1119,9 +1152,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
       List<HealthDataType> types = [
         HealthDataType.STEPS,
-        HealthDataType.ACTIVE_ENERGY_BURNED,
         HealthDataType.HEART_RATE,
-        HealthDataType.BLOOD_GLUCOSE,
         HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
         HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
       ];
@@ -1148,9 +1179,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
           List<String> grantedPermissions = [
             'steps',
-            'calories',
             'heart_rate',
-            'blood_glucose',
             'blood_pressure_diastolic',
             'blood_pressure_systolic'
           ];
