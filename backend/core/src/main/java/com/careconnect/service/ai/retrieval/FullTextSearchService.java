@@ -53,7 +53,7 @@ public class FullTextSearchService {
 
     /**
      * Same as {@link #search(Long, String, int)} with an optional record-type filter
-     * applied after the FTS query (allowed {@link RetrievalRecordType} names).
+     * applied in SQL before {@code LIMIT} (allowed {@link RetrievalRecordType} names).
      *
      * @param allowedRecordTypes when null or empty, all types for the patient are eligible
      */
@@ -72,26 +72,13 @@ public class FullTextSearchService {
         }
 
         final int effectiveLimit = clampLimit(limit);
-        final List<RetrievalIndexChunk> hits = chunkRepository.searchByPatientIdFullText(
-                patientId, normalized, effectiveLimit);
-
-        if (allowedRecordTypes == null || allowedRecordTypes.isEmpty()) {
-            return hits;
-        }
-
-        final Set<String> allowed = allowedRecordTypes.stream()
-                .filter(Objects::nonNull)
-                .map(t -> t.trim().toUpperCase(Locale.ROOT))
-                .filter(t -> !t.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
+        final Set<String> allowed = normalizeRecordTypes(allowedRecordTypes);
         if (allowed.isEmpty()) {
-            return hits;
+            return chunkRepository.searchByPatientIdFullText(
+                    patientId, normalized, effectiveLimit);
         }
-
-        return hits.stream()
-                .filter(chunk -> chunk.getRecordType() != null
-                        && allowed.contains(chunk.getRecordType().toUpperCase(Locale.ROOT)))
-                .toList();
+        return chunkRepository.searchByPatientIdFullTextAndRecordTypes(
+                patientId, normalized, allowed, effectiveLimit);
     }
 
     /**
@@ -100,6 +87,17 @@ public class FullTextSearchService {
      */
     public long countChunksMissingSearchVector() {
         return chunkRepository.countMissingSearchVector();
+    }
+
+    private static Set<String> normalizeRecordTypes(final Set<String> allowedRecordTypes) {
+        if (allowedRecordTypes == null || allowedRecordTypes.isEmpty()) {
+            return Set.of();
+        }
+        return allowedRecordTypes.stream()
+                .filter(Objects::nonNull)
+                .map(t -> t.trim().toUpperCase(Locale.ROOT))
+                .filter(t -> !t.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private static String normalizeQuery(final String query) {

@@ -48,9 +48,11 @@ class RetrievalIndexFtsCoverageTest {
                 "src/main/java/com/careconnect/config/SchemaPatchRunner.java"));
 
         assertThat(source).contains("V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)");
+        assertThat(source).contains("V2607122000 – indexing_outbox claimed_at lease column");
         assertThat(source).contains("WHERE search_vector IS NULL");
         assertThat(source).contains("to_tsvector('english'");
         assertThat(source).contains("trg_retrieval_index_chunk_search_vector");
+        assertThat(source).contains("claimed_at TIMESTAMPTZ");
     }
 
     @Test
@@ -60,10 +62,12 @@ class RetrievalIndexFtsCoverageTest {
                 "src/main/java/com/careconnect/repository/retrieval/RetrievalIndexChunkRepository.java"));
 
         assertThat(source).contains("searchByPatientIdFullText");
+        assertThat(source).contains("searchByPatientIdFullTextAndRecordTypes");
         assertThat(source).contains("patient_id = :patientId");
         assertThat(source).contains("plainto_tsquery('english', :query)");
         assertThat(source).contains("ts_rank_cd(search_vector");
         assertThat(source).contains("search_vector @@ plainto_tsquery");
+        assertThat(source).contains("record_type IN (:recordTypes)");
         assertThat(source).contains("countMissingSearchVector");
         // Must not SELECT * (entity omits search_vector / embedding).
         assertThat(source).doesNotContain("SELECT * FROM retrieval_index_chunk");

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -63,6 +64,32 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     List<RetrievalIndexChunk> searchByPatientIdFullText(
             @Param("patientId") Long patientId,
             @Param("query") String query,
+            @Param("limit") int limit);
+
+    /**
+     * Patient-scoped FTS with an explicit {@code record_type} filter applied
+     * <em>before</em> {@code LIMIT} so top-k is filled with allowed types only.
+     *
+     * @param recordTypes non-empty set of {@link com.careconnect.service.ai.retrieval.RetrievalRecordType}
+     *                    names
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND search_vector @@ plainto_tsquery('english', :query)
+                      AND record_type IN (:recordTypes)
+                    ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
+                             indexed_at DESC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> searchByPatientIdFullTextAndRecordTypes(
+            @Param("patientId") Long patientId,
+            @Param("query") String query,
+            @Param("recordTypes") Collection<String> recordTypes,
             @Param("limit") int limit);
 
     /**

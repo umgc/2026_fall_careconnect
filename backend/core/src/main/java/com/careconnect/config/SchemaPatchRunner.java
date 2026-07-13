@@ -171,6 +171,13 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
             "WHERE search_vector IS NULL"
         );
+        applyPatch(
+            "V2607122000 – indexing_outbox claimed_at lease column",
+            "ALTER TABLE indexing_outbox " +
+            "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
+            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
+            "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
+        );
     }
 
     /**

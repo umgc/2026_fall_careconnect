@@ -64,7 +64,17 @@ class RetrievalIndexChunkMigrationSqlTest {
         String sql = readMigration("V2607121930__backfill_retrieval_index_chunk_search_vector.sql");
 
         assertThat(sql).contains("WHERE search_vector IS NULL");
-        assertThat(sql).contains("plainto_tsquery").doesNotContain("SELECT *");
+        assertThat(sql).contains("to_tsvector('english'");
+        assertThat(sql).doesNotContain("SELECT * FROM");
+    }
+
+    @Test
+    @DisplayName("claimed_at lease column migration is on the Flyway classpath")
+    void claimedAtLeaseMigrationPresent() throws Exception {
+        String sql = readMigration("V2607122000__add_indexing_outbox_claimed_at.sql");
+
+        assertThat(sql).contains("ADD COLUMN IF NOT EXISTS claimed_at");
+        assertThat(sql).contains("idx_indexing_outbox_claimable");
     }
 
     private static String readMigration(String filename) throws Exception {

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -88,13 +89,13 @@ class FullTextSearchServiceTest {
     }
 
     @Test
-    @DisplayName("search filters by allowed record types after FTS")
-    void search_filtersRecordTypes() {
-        when(chunkRepository.searchByPatientIdFullText(eq(42L), eq("dose"), eq(10)))
+    @DisplayName("search pushes allowed record types into SQL before LIMIT")
+    void search_filtersRecordTypesInSql() {
+        when(chunkRepository.searchByPatientIdFullTextAndRecordTypes(
+                        eq(42L), eq("dose"), anyCollection(), eq(10)))
                 .thenReturn(List.of(
                         chunk("CALL_SUMMARY", "dose change"),
-                        chunk("TRANSCRIPT_SEGMENT", "dose mentioned"),
-                        chunk("DOCUMENT", "dose sheet")));
+                        chunk("TRANSCRIPT_SEGMENT", "dose mentioned")));
 
         final List<RetrievalIndexChunk> hits = service.search(
                 42L,
@@ -102,8 +103,15 @@ class FullTextSearchServiceTest {
                 Set.of("CALL_SUMMARY", "TRANSCRIPT_SEGMENT"),
                 10);
 
-        assertThat(hits).extracting(RetrievalIndexChunk::getRecordType)
-                .containsExactly("CALL_SUMMARY", "TRANSCRIPT_SEGMENT");
+        assertThat(hits).hasSize(2);
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<java.util.Collection<String>> typesCaptor =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(chunkRepository).searchByPatientIdFullTextAndRecordTypes(
+                eq(42L), eq("dose"), typesCaptor.capture(), eq(10));
+        assertThat(typesCaptor.getValue()).containsExactlyInAnyOrder(
+                "CALL_SUMMARY", "TRANSCRIPT_SEGMENT");
+        verify(chunkRepository, never()).searchByPatientIdFullText(anyLong(), anyString(), anyInt());
     }
 
     @Test
