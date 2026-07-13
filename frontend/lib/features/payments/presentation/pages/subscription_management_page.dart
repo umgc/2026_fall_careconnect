@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:convert';
@@ -32,8 +33,8 @@ class _SubscriptionManagementPageState
   List<SubscriptionPlan> _plans = [];
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _loadSubscriptionData();
   }
 
@@ -42,7 +43,7 @@ class _SubscriptionManagementPageState
       _isLoading = true;
       _error = null;
     });
-
+    final t = AppLocalizations.of(context)!;
     try {
       // We no longer need a separate call to get customer ID, as we'll extract it from the subscription data
 
@@ -60,27 +61,27 @@ class _SubscriptionManagementPageState
             final List<String> features = [];
 
             // Basic features for all plans
-            features.add('Core monitoring features');
-            features.add('Email support');
+            features.add(t.submangement_coreMonitorFeature);
+            features.add(t.submangement_emailSupportFeature);
 
             // Additional features based on plan name/nickname
             final nickname = (planData['nickname'] ?? '')
                 .toString()
                 .toLowerCase();
             if (nickname.contains('premium')) {
-              features.add('Unlimited patients');
-              features.add('Premium monitoring features');
-              features.add('Advanced analytics with exports');
-              features.add('24/7 priority support');
-              features.add('AI-powered insights and recommendations');
+              features.add(t.submangement_unlimitedPtFeature);
+              features.add(t.submangement_premMonitorFeature);
+              features.add(t.submangement_advAnlFeature);
+              features.add(t.submangement_prioritySupportFeature);
+              features.add(t.submangement_aiInsightsFeature);
             } else if (nickname.contains('standard')) {
-              features.add('Up to 10 patients');
-              features.add('Advanced monitoring');
-              features.add('Full analytics dashboard');
-              features.add('Priority email support');
+              features.add(t.submangement_tenPtFeature);
+              features.add(t.submangement_advMonitorFeature);
+              features.add(t.submangement_fullAnlFeature);
+              features.add(t.submangement_prioEmailFeature);
             } else {
-              features.add('Up to 3 patients');
-              features.add('Basic analytics');
+              features.add(t.submangement_threePtFeature);
+              features.add(t.submangement_basicAnlFeature);
             }
 
             return SubscriptionPlan(
@@ -247,7 +248,7 @@ class _SubscriptionManagementPageState
       } else {
         setState(() {
           _error =
-              'Failed to load subscription: ${response.statusCode}. Please try again later.';
+              '${t.submangement_failToLoadSub}: ${response.statusCode}. ${t.submangement_pleaseTryAgain}';
         });
         print('Subscription API error: ${response.statusCode}');
         try {
@@ -259,7 +260,7 @@ class _SubscriptionManagementPageState
     } catch (e) {
       setState(() {
         _error =
-            'Error loading subscription data. Please check your connection and try again.';
+            t.submangement_errorLoadingSub;
       });
       print('Exception in _loadSubscriptionData: $e');
     } finally {
@@ -276,6 +277,7 @@ class _SubscriptionManagementPageState
 
     // For existing active subscriptions that need to be changed,
     // first cancel the existing subscription, then redirect to checkout
+    final t = AppLocalizations.of(context)!;
     if (_currentSubscription != null && _currentSubscription!.isActive) {
       // Enhanced confirmation dialog showing plan comparison
       final bool? confirmSwitch = await showDialog<bool>(
@@ -288,7 +290,7 @@ class _SubscriptionManagementPageState
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 8),
-              const Text('Confirm Plan Change'),
+              Text(t.submangement_confirmPlanChange),
             ],
           ),
           content: SingleChildScrollView(
@@ -297,7 +299,7 @@ class _SubscriptionManagementPageState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'You are about to change your subscription plan:',
+                  '${t.submangement_changeSubPlan}:',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 16),
@@ -326,7 +328,7 @@ class _SubscriptionManagementPageState
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Current Plan (to be cancelled)',
+                            t.submangement_currentPlan,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.error,
@@ -336,7 +338,7 @@ class _SubscriptionManagementPageState
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${_currentSubscription!.planName} - ${_currentSubscription!.formattedAmount}/${_currentSubscription!.formattedInterval}',
+                        '${_currentSubscription!.planName} - ${_currentSubscription!.formattedAmount}/${_currentSubscription!.formattedInterval(t)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -371,7 +373,7 @@ class _SubscriptionManagementPageState
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'New Plan (to be activated)',
+                            t.submangement_newPlan,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
@@ -381,7 +383,7 @@ class _SubscriptionManagementPageState
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${newPlan.name} - ${newPlan.formattedAmount}/${newPlan.formattedInterval}',
+                        '${newPlan.name} - ${newPlan.formattedAmount}/${newPlan.formattedInterval(t)}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -410,7 +412,7 @@ class _SubscriptionManagementPageState
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'What happens next:',
+                            '${t.submangement_whatHappensNext}:',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.secondary,
@@ -419,11 +421,8 @@ class _SubscriptionManagementPageState
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        '1. Your current subscription will be cancelled\n'
-                        '2. You\'ll be redirected to checkout for the new plan\n'
-                        '3. No charge for unused time on current plan\n'
-                        '4. New plan starts immediately after payment',
+                      Text(
+                        '${t.submangement_whatNextDescr1}\n ${t.submangement_whatNextDescr2}\n ${t.submangement_whatNextDescr3}\n ${t.submangement_whatNextDescr4}',
                         style: TextStyle(height: 1.4),
                       ),
                     ],
@@ -435,7 +434,7 @@ class _SubscriptionManagementPageState
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('CANCEL'),
+              child: Text(t.submangement_cancelCaps),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -443,7 +442,7 @@ class _SubscriptionManagementPageState
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('CONFIRM CHANGE'),
+              child: Text(t.submangement_confirmCaps),
             ),
           ],
         ),
@@ -464,7 +463,7 @@ class _SubscriptionManagementPageState
         if (response.statusCode != 200) {
           final errorData = jsonDecode(response.body);
           throw Exception(
-            errorData['error'] ?? 'Failed to cancel current subscription',
+            errorData['error'] ?? t.submangement_failedToCancel,
           );
         }
 
@@ -483,7 +482,7 @@ class _SubscriptionManagementPageState
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
         setState(() {
           _processingAction = false;
         });
@@ -504,7 +503,7 @@ class _SubscriptionManagementPageState
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
       }
 
     }
@@ -515,6 +514,7 @@ class _SubscriptionManagementPageState
     String? userId,
     String? customerId,
   ) {
+    final t = AppLocalizations.of(context)!;
     final tierId = int.tryParse(plan.id) ?? 0;
     final userIdInt = userId != null ? int.tryParse(userId) : null;
 
@@ -523,10 +523,10 @@ class _SubscriptionManagementPageState
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Confirm Free Plan'),
-          content: const Text('You have selected the Free Plan. You can upgrade at any time.'),
+          title: Text(t.submangement_confirmFreePlan),
+          content: Text(t.submangement_selectedFreePlan),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(t.cancel)),
             ElevatedButton(onPressed: () async {
               Navigator.of(ctx).pop();
               final session = await AuthTokenManager.getUserSession();
@@ -537,7 +537,7 @@ class _SubscriptionManagementPageState
                 await _loadSubscriptionData();
                 setState(() => _processingAction = false);
               }
-            }, child: const Text('Confirm')),
+            }, child: Text(t.voicecommand_confirmButton)),
           ],
         ),
       );
@@ -563,41 +563,42 @@ class _SubscriptionManagementPageState
     if (_processingAction || _currentSubscription == null) return;
 
     // First confirmation dialog with clear warning about loss of access
+    final t = AppLocalizations.of(context)!;
     final bool? initialConfirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancel Subscription'),
-        content: const Column(
+        title: Text(t.submangement_cancelSub),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Warning: Cancelling your subscription will have the following effects:',
+              t.submangement_warningHeader,
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 16),
-            Text('• You will be automatically logged out of the application'),
+            Text(t.submangement_warningDescr1),
             Text(
-              '• Your access to the application will be immediately removed',
+              t.submangement_warningDescr2,
             ),
             Text(
-              '• You will not receive a refund for the current billing period',
+              t.submangement_warningDescr3,
             ),
             SizedBox(height: 16),
-            Text('Are you sure you want to proceed with cancellation?'),
+            Text(t.submangement_warningDescr4),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('NO, KEEP MY PLAN'),
+            child: Text(t.submangement_noKeepPlan),
           ),
           TextButton(
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('YES, CANCEL'),
+            child: Text(t.submangement_yesCancel),
           ),
         ],
       ),
@@ -612,14 +613,14 @@ class _SubscriptionManagementPageState
         final bool? finalConfirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Final Confirmation'),
-            content: const Text(
-              'This action cannot be undone. You will need to create a new subscription if you want to use the app again. Proceed with cancellation?',
+            title: Text(t.submangement_finalConfirmation),
+            content: Text(
+              t.submangement_finalWarning,
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('NO, GO BACK'),
+                child: Text(t.submangement_noGoBack),
               ),
               TextButton(
                 style: TextButton.styleFrom(
@@ -627,7 +628,7 @@ class _SubscriptionManagementPageState
                   foregroundColor: Colors.white,
                 ),
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('YES, CANCEL MY SUBSCRIPTION'),
+                child: Text(t.submangement_yesFinal),
               ),
             ],
           ),
@@ -646,9 +647,9 @@ class _SubscriptionManagementPageState
       if (response.statusCode == 200) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Subscription cancelled successfully. Logging out...',
+              t.submangement_subCanceledSuccess,
             ),
           ),
         );
@@ -670,13 +671,13 @@ class _SubscriptionManagementPageState
 
       } else {
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['error'] ?? 'Failed to cancel subscription');
+        throw Exception(errorData['error'] ?? t.submangement_subCanceledFailed);
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
 
       setState(() {
         _processingAction = false;
@@ -686,10 +687,11 @@ class _SubscriptionManagementPageState
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'Subscription Management',
+        title: t.submangement_subManagement,
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -706,6 +708,7 @@ class _SubscriptionManagementPageState
   }
 
   Widget _buildErrorState() {
+    final t = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -719,13 +722,13 @@ class _SubscriptionManagementPageState
             ),
             const SizedBox(height: 16),
             Text(
-              'Error Loading Subscription',
+              t.submangement_errorLoadingSubMang,
               style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              _error ?? 'Unknown error occurred',
+              _error ?? t.submangement_unknownErrorOccur,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -736,7 +739,7 @@ class _SubscriptionManagementPageState
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
-              child: const Text('Try Again'),
+              child: Text(t.submangement_tryAgain),
             ),
           ],
         ),
@@ -759,6 +762,7 @@ class _SubscriptionManagementPageState
   }
 
   Widget _buildCurrentSubscription() {
+    final t = AppLocalizations.of(context)!;
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -776,7 +780,7 @@ class _SubscriptionManagementPageState
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Current Subscription',
+                  t.submangement_currentSub,
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -807,7 +811,7 @@ class _SubscriptionManagementPageState
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No Active Subscription',
+                      t.submangement_noActiveSub,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -815,7 +819,7 @@ class _SubscriptionManagementPageState
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose a plan below to get started with CareConnect',
+                      t.submangement_chooseAPlan,
                       style: Theme.of(context).textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
@@ -876,7 +880,7 @@ class _SubscriptionManagementPageState
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
-                            _currentSubscription!.statusDisplay.toUpperCase(),
+                            _currentSubscription!.statusDisplay(t).toUpperCase(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -896,7 +900,7 @@ class _SubscriptionManagementPageState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Amount Paid',
+                                t.submangement_amountPaid,
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color: Theme.of(
@@ -916,7 +920,7 @@ class _SubscriptionManagementPageState
                                     ),
                               ),
                               Text(
-                                '/ ${_currentSubscription!.formattedInterval}',
+                                '/ ${_currentSubscription!.formattedInterval(t)}',
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(
                                       color: Theme.of(
@@ -940,7 +944,7 @@ class _SubscriptionManagementPageState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Next Billing',
+                                t.submangement_nextBilling,
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color: Theme.of(
@@ -970,7 +974,7 @@ class _SubscriptionManagementPageState
               // Additional subscription details
               _buildInfoRow(
                 icon: Icons.event,
-                label: 'Current Period',
+                label: t.submangement_currentPeriod,
                 value:
                     '${_formatDate(_currentSubscription!.currentPeriodStart)} - ${_formatDate(_currentSubscription!.currentPeriodEnd)}',
               ),
@@ -998,7 +1002,7 @@ class _SubscriptionManagementPageState
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Subscription will be cancelled at the end of current period',
+                          t.submangement_subWillBeCancelled,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
                             fontWeight: FontWeight.w500,
@@ -1023,7 +1027,7 @@ class _SubscriptionManagementPageState
                             ? null
                             : _cancelSubscription,
                         icon: const Icon(Icons.cancel_outlined),
-                        label: const Text('Cancel Subscription'),
+                        label: Text(t.submangement_cancelSub),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Theme.of(context).colorScheme.error,
                           side: BorderSide(
@@ -1105,11 +1109,12 @@ class _SubscriptionManagementPageState
   }
 
   Widget _buildAvailablePlans() {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Available Plans',
+          t.submangement_availablePlan,
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -1129,13 +1134,13 @@ class _SubscriptionManagementPageState
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No subscription plans are currently available',
+                    t.submangement_noSubPlan,
                     style: Theme.of(context).textTheme.titleMedium,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Please check back later or contact support',
+                    t.submangement_checkBackLater,
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -1253,7 +1258,7 @@ class _SubscriptionManagementPageState
                                     ),
                               ),
                               Text(
-                                plan.formattedInterval,
+                                plan.formattedInterval(t),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
@@ -1308,7 +1313,7 @@ class _SubscriptionManagementPageState
                                   ).colorScheme.secondary,
                                 ),
                                 const SizedBox(width: 8),
-                                const Text('Current Active Plan'),
+                                Text(t.submangement_currentActivePlan),
                               ],
                             ),
                           ),
@@ -1343,8 +1348,8 @@ class _SubscriptionManagementPageState
                                 : Text(
                                     _currentSubscription != null &&
                                             _currentSubscription!.isActive
-                                        ? 'Switch to This Plan'
-                                        : 'Subscribe Now',
+                                        ? t.submangement_switchToNewPlan
+                                        : t.nativebilling_subscribeNow,
                                   ),
                           ),
                         ),

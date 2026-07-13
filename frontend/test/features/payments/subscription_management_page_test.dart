@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,7 +37,7 @@ Widget _wrap({MockUserProvider? userProvider}) {
   final provider = userProvider ?? MockUserProvider();
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: const MaterialApp(home: SubscriptionManagementPage()),
+    child: const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: SubscriptionManagementPage()),
   );
 }
 
@@ -139,8 +140,8 @@ final _defaultPlans = [
 final _defaultActiveSubscription = [
   {
     'id': '1',
-    'stripeSubscriptionId': 'sub_123',
-    'stripeCustomerId': 'cus_123',
+    'paymentSubscriptionId': 'sub_123',
+    'customerId': 'cus_123',
     'status': 'active',
     'startedAt': '1700000000',
     'currentPeriodEnd': '1702592000',
@@ -544,7 +545,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_1',
+            'paymentSubscriptionId': 'sub_1',
             'stripeCustomerId': 'cus_1',
             'status': 'canceled',
             'startedAt': '1700000000',
@@ -986,7 +987,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_empty',
+            'paymentSubscriptionId': 'sub_empty',
             'stripeCustomerId': 'cus_123',
             'status': 'active',
             'startedAt': '',
@@ -1007,8 +1008,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_bad',
-            'stripeCustomerId': 'cus_123',
+            'paymentSubscriptionId': 'sub_bad',
+            'customerId': 'cus_123',
             'status': 'active',
             'startedAt': 'not_a_number',
             'currentPeriodEnd': 'also_not_a_number',
@@ -1028,7 +1029,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_date',
+            'paymentSubscriptionId': 'sub_date',
             'stripeCustomerId': 'cus_123',
             'status': 'active',
             'startedAt': '1700000000',
@@ -1060,7 +1061,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_s',
+            'paymentSubscriptionId': 'sub_s',
             'stripeCustomerId': 'cus_stripe',
             'status': 'active',
             'startedAt': '1700000000',
@@ -1081,7 +1082,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_c',
+            'paymentSubscriptionId': 'sub_c',
             'customer': 'cus_from_customer',
             'status': 'active',
             'startedAt': '1700000000',
@@ -1102,7 +1103,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_ci',
+            'paymentSubscriptionId': 'sub_ci',
             'customerId': 'cus_from_customerId',
             'status': 'active',
             'startedAt': '1700000000',
@@ -1124,7 +1125,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_inactive',
+            'paymentSubscriptionId': 'sub_inactive',
             'stripeCustomerId': 'cus_first',
             'status': 'canceled',
             'startedAt': '1700000000',
@@ -1161,8 +1162,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_pm',
-            'stripeCustomerId': 'cus_123',
+            'paymentSubscriptionId': 'sub_pm',
+            'customerId': 'cus_123',
             'status': 'active',
             'startedAt': '1700000000',
             'currentPeriodEnd': '1702592000',

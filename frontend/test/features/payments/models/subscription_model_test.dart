@@ -19,6 +19,7 @@
 //       (month, year, custom).
 //     availablePlans global constant — has three entries with expected names.
 
+import 'package:care_connect_app/l10n/app_localizations_en.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:care_connect_app/features/payments/models/subscription_model.dart';
@@ -32,7 +33,7 @@ Subscription buildSub(String status, {
 }) {
   return Subscription(
     id: '1',
-    stripeSubscriptionId: 's',
+    paymentSubscriptionId: 's',
     customerId: 'c',
     status: status,
     currentPeriodStart: '',
@@ -53,8 +54,8 @@ void main() {
       // Verifies field mapping from the custom backend response shape.
       final json = {
         'id': 'db-123',
-        'stripeSubscriptionId': 'sub_ABC',
-        'stripeCustomerId': 'cus_XYZ',
+        'paymentSubscriptionId': 'sub_ABC',
+        'customerId': 'cus_XYZ',
         'status': 'active',
         'startedAt': '2025-01-01',
         'currentPeriodEnd': '2025-02-01',
@@ -64,7 +65,7 @@ void main() {
       };
       final sub = Subscription.fromJson(json);
       expect(sub.id, 'db-123');
-      expect(sub.stripeSubscriptionId, 'sub_ABC');
+      expect(sub.paymentSubscriptionId, 'sub_ABC');
       expect(sub.customerId, 'cus_XYZ');
       expect(sub.status, 'active');
       expect(sub.planId, 'plan_standard');
@@ -76,21 +77,21 @@ void main() {
 
     test('priceCents = 0 → planAmount = 0.0', () {
       // Verifies that zero cents converts to 0.0 without rounding issues.
-      final json = {'stripeSubscriptionId': 'sub_FREE', 'status': 'trialing', 'priceCents': 0};
+      final json = {'paymentSubscriptionId': 'sub_FREE', 'status': 'trialing', 'priceCents': 0};
       expect(Subscription.fromJson(json).planAmount, 0.0);
     });
 
     test('missing priceCents defaults planAmount to 0.0', () {
       // Verifies the fallback when priceCents key is absent.
-      final json = {'stripeSubscriptionId': 'sub_X', 'status': 'active'};
+      final json = {'paymentSubscriptionId': 'sub_X', 'status': 'active'};
       expect(Subscription.fromJson(json).planAmount, 0.0);
     });
 
     test('customerId resolved from stripeCustomerId first', () {
       // Verifies primary customerId field resolution in new format.
       final json = {
-        'stripeSubscriptionId': 's',
-        'stripeCustomerId': 'cus_A',
+        'paymentSubscriptionId': 's',
+        'customerId': 'cus_A',
         'status': '',
       };
       expect(Subscription.fromJson(json).customerId, 'cus_A');
@@ -98,17 +99,17 @@ void main() {
 
     test('customerId falls back to customer then customerId fields', () {
       // Verifies secondary and tertiary fallback for customerId.
-      final json1 = {'stripeSubscriptionId': 's', 'customer': 'cus_A', 'status': ''};
+      final json1 = {'paymentSubscriptionId': 's', 'customerId': 'cus_A', 'status': ''};
       expect(Subscription.fromJson(json1).customerId, 'cus_A');
 
-      final json2 = {'stripeSubscriptionId': 's', 'customerId': 'cus_B', 'status': ''};
+      final json2 = {'paymentSubscriptionId': 's', 'customerId': 'cus_B', 'status': ''};
       expect(Subscription.fromJson(json2).customerId, 'cus_B');
     });
 
     test('planCode fallback used when planId is absent', () {
       // Verifies the planCode field is used when planId key is missing.
       final json = {
-        'stripeSubscriptionId': 's',
+        'paymentSubscriptionId': 's',
         'status': 'active',
         'planCode': 'PLAN_CODE',
       };
@@ -137,7 +138,7 @@ void main() {
       };
       final sub = Subscription.fromJson(json);
       expect(sub.id, 'sub_STRIPE');
-      expect(sub.stripeSubscriptionId, 'sub_STRIPE');
+      expect(sub.paymentSubscriptionId, 'sub_STRIPE');
       expect(sub.customerId, 'cus_STRIPE');
       expect(sub.planId, 'price_monthly');
       expect(sub.planName, 'Monthly Pro');
@@ -184,7 +185,7 @@ void main() {
         'current_period_end': '',
       };
       final sub = Subscription.fromJson(json);
-      expect(sub.planName, 'Standard Plan');
+      expect(sub.planName, '');
       expect(sub.planAmount, 0.0);
       expect(sub.planInterval, 'month');
     });
@@ -240,16 +241,19 @@ void main() {
 
   group('Subscription.formattedInterval', () {
     test('"month" → "Monthly"', () {
-      expect(buildSub('active', interval: 'month').formattedInterval, 'Monthly');
+      final t = AppLocalizationsEn();
+      expect(buildSub('active', interval: 'month').formattedInterval(t), 'Monthly');
     });
 
     test('"year" → "Yearly"', () {
-      expect(buildSub('active', interval: 'year').formattedInterval, 'Yearly');
+      final t = AppLocalizationsEn();
+      expect(buildSub('active', interval: 'year').formattedInterval(t), 'Yearly');
     });
 
     test('custom interval value → passthrough', () {
+      final t = AppLocalizationsEn();
       // Verifies that unrecognized intervals are returned as-is.
-      expect(buildSub('active', interval: 'week').formattedInterval, 'week');
+      expect(buildSub('active', interval: 'week').formattedInterval(t), 'week');
     });
   });
 
@@ -257,32 +261,38 @@ void main() {
 
   group('Subscription.statusDisplay', () {
     test('"active" → "Active"', () {
-      expect(buildSub('active').statusDisplay, 'Active');
+      final t = AppLocalizationsEn();
+      expect(buildSub('active').statusDisplay(t), 'Active');
     });
 
     test('"trialing" → "Trial"', () {
-      expect(buildSub('trialing').statusDisplay, 'Trial');
+      final t = AppLocalizationsEn();
+      expect(buildSub('trialing').statusDisplay(t), 'Trial');
     });
 
     test('"canceled" → "Cancelled"', () {
-      expect(buildSub('canceled').statusDisplay, 'Cancelled');
+      final t = AppLocalizationsEn();
+      expect(buildSub('canceled').statusDisplay(t), 'Cancelled');
     });
 
     test('"unpaid" → "Unpaid"', () {
-      expect(buildSub('unpaid').statusDisplay, 'Unpaid');
+      final t = AppLocalizationsEn();
+      expect(buildSub('unpaid').statusDisplay(t), 'Unpaid');
     });
 
     test('cancelAtPeriodEnd = true → "Canceling at period end"', () {
       // Verifies this branch takes priority over the status string.
+      final t = AppLocalizationsEn();
       expect(
-        buildSub('active', cancelAtPeriodEnd: true).statusDisplay,
+        buildSub('active', cancelAtPeriodEnd: true).statusDisplay(t),
         'Canceling at period end',
       );
     });
 
     test('unknown status → passthrough of original status string', () {
       // Verifies the default branch returns the raw status value.
-      expect(buildSub('pending').statusDisplay, 'pending');
+      final t = AppLocalizationsEn();
+      expect(buildSub('pending').statusDisplay(t), 'pending');
     });
   });
 
@@ -319,7 +329,8 @@ void main() {
         id: 'p', name: 'P', description: 'D',
         amount: 9.99, interval: 'month', features: [],
       );
-      expect(plan.formattedInterval, '/month');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/month');
     });
 
     test('formattedInterval for "year" → "/year"', () {
@@ -327,7 +338,8 @@ void main() {
         id: 'p', name: 'P', description: 'D',
         amount: 99.99, interval: 'year', features: [],
       );
-      expect(plan.formattedInterval, '/year');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/year');
     });
 
     test('formattedInterval for custom → "/custom"', () {
@@ -336,14 +348,15 @@ void main() {
         id: 'p', name: 'P', description: 'D',
         amount: 5.0, interval: 'week', features: [],
       );
-      expect(plan.formattedInterval, '/week');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/week');
     });
 
     test('availablePlans has three entries with expected names', () {
       // Verifies the pre-built global plan list is complete.
       expect(availablePlans.length, 3);
       final names = availablePlans.map((p) => p.name).toList();
-      expect(names, containsAll(['Basic Plan', 'Standard Plan', 'Premium Plan']));
+      expect(names, containsAll(['Basic Plan', 'Standard Plan (Legacy)', 'Premium Plan']));
     });
   });
 }

@@ -2,6 +2,7 @@
 // Subscription, SubscriptionPlan (subscription_model.dart)
 // SubscriptionPlan (subscription_plan_model.dart)
 
+import 'package:care_connect_app/l10n/app_localizations_en.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/payments/models/subscription_model.dart' as sm;
 import 'package:care_connect_app/features/payments/models/subscription_plan_model.dart' as spm;
@@ -16,7 +17,7 @@ void main() {
     }) =>
         sm.Subscription(
           id: 'sub-1',
-          stripeSubscriptionId: 'sub_stripe_1',
+          paymentSubscriptionId: 'sub_stripe_1',
           customerId: 'cus_123',
           status: status,
           currentPeriodStart: '2024-01-01',
@@ -53,34 +54,40 @@ void main() {
     });
 
     test('formattedInterval returns Monthly for month', () {
-      expect(sub0(planInterval: 'month').formattedInterval, 'Monthly');
+      final t = AppLocalizationsEn();
+      expect(sub0(planInterval: 'month').formattedInterval(t), 'Monthly');
     });
 
     test('formattedInterval returns Yearly for year', () {
-      expect(sub0(planInterval: 'year').formattedInterval, 'Yearly');
+      final t = AppLocalizationsEn();
+      expect(sub0(planInterval: 'year').formattedInterval(t), 'Yearly');
     });
 
     test('statusDisplay for active', () {
-      expect(sub0(status: 'active').statusDisplay, 'Active');
+      final t = AppLocalizationsEn();
+      expect(sub0(status: 'active').statusDisplay(t), 'Active');
     });
 
     test('statusDisplay for trialing', () {
-      expect(sub0(status: 'trialing').statusDisplay, 'Trial');
+      final t = AppLocalizationsEn();
+      expect(sub0(status: 'trialing').statusDisplay(t), 'Trial');
     });
 
     test('statusDisplay for canceled', () {
-      expect(sub0(status: 'canceled').statusDisplay, 'Cancelled');
+      final t = AppLocalizationsEn();
+      expect(sub0(status: 'canceled').statusDisplay(t), 'Cancelled');
     });
 
     test('statusDisplay for cancelAtPeriodEnd', () {
-      expect(sub0(cancelAtPeriodEnd: true).statusDisplay, 'Canceling at period end');
+      final t = AppLocalizationsEn();
+      expect(sub0(cancelAtPeriodEnd: true).statusDisplay(t), 'Canceling at period end');
     });
 
     test('fromJson with backend format', () {
       final json = {
         'id': '42',
-        'stripeSubscriptionId': 'sub_abc',
-        'stripeCustomerId': 'cus_xyz',
+        'paymentSubscriptionId': 'sub_abc',
+        'customerId': 'cus_xyz',
         'status': 'active',
         'startedAt': '2024-01-01',
         'currentPeriodEnd': '2024-02-01',
@@ -90,7 +97,7 @@ void main() {
       };
       final sub = sm.Subscription.fromJson(json);
       expect(sub.id, '42');
-      expect(sub.stripeSubscriptionId, 'sub_abc');
+      expect(sub.paymentSubscriptionId, 'sub_abc');
       expect(sub.customerId, 'cus_xyz');
       expect(sub.status, 'active');
       expect(sub.planAmount, closeTo(19.99, 0.01));
@@ -134,14 +141,16 @@ void main() {
       final plan = sm.SubscriptionPlan(
         id: 'p1', name: 'B', description: 'D', amount: 9.99, interval: 'month', features: [],
       );
-      expect(plan.formattedInterval, '/month');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/month');
     });
 
     test('formattedInterval for year', () {
       final plan = sm.SubscriptionPlan(
         id: 'p1', name: 'B', description: 'D', amount: 9.99, interval: 'year', features: [],
       );
-      expect(plan.formattedInterval, '/year');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/year');
     });
   });
 
@@ -179,7 +188,8 @@ void main() {
         id: 'p1', active: true, amount: 999, currency: 'usd',
         interval: 'month', intervalCount: 1, product: 'prod_x', nickname: 'Basic',
       );
-      expect(plan.formattedInterval, 'monthly');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), 'monthly');
     });
 
     test('formattedInterval returns yearly for year', () {
@@ -187,7 +197,8 @@ void main() {
         id: 'p1', active: true, amount: 999, currency: 'usd',
         interval: 'year', intervalCount: 1, product: 'prod_x', nickname: 'Basic',
       );
-      expect(plan.formattedInterval, 'yearly');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), 'yearly');
     });
 
     test('description uses customDescription when provided', () {
@@ -196,7 +207,8 @@ void main() {
         interval: 'month', intervalCount: 1, product: 'prod_x', nickname: 'Basic',
         customDescription: 'My custom desc',
       );
-      expect(plan.description, 'My custom desc');
+      final t = AppLocalizationsEn();
+      expect(plan.description(t), 'My custom desc');
     });
 
     test('description returns standard message for standard nickname', () {
@@ -204,7 +216,8 @@ void main() {
         id: 'p1', active: true, amount: 999, currency: 'usd',
         interval: 'month', intervalCount: 1, product: 'prod_x', nickname: 'Standard Plan',
       );
-      expect(plan.description, contains('Basic features'));
+      final t = AppLocalizationsEn();
+      expect(plan.description(t), contains('Basic features'));
     });
 
     test('fromJson parses all fields', () {
