@@ -207,6 +207,52 @@ Future<void> _goToCaregiverReview(WidgetTester tester) async {
   await _tapNextButton(tester); // step 3 -> step 4 (Review)
 }
 
+/// Navigate a Professional caregiver (with license fields) to the review step.
+Future<void> _goToProfessionalCaregiverReview(WidgetTester tester) async {
+  await _goToStep1(tester, role: 'Caregiver');
+  await _fillCaregiverPersonalInfo(tester, caregiverType: 'Professional');
+  await _tapNextButton(tester); // step 1 -> step 2 (Contact + professional fields)
+
+  final contactFields = find.byType(TextFormField);
+  await tester.enterText(contactFields.at(0), 'pro@caregiver.com');
+  await tester.enterText(contactFields.at(1), '5559876543');
+  await tester.pump();
+  await tester.ensureVisible(contactFields.at(2));
+  await tester.pump();
+  await tester.enterText(contactFields.at(2), '789 Care Blvd');
+  await tester.pump();
+  await tester.ensureVisible(contactFields.at(4));
+  await tester.pump();
+  await tester.enterText(contactFields.at(4), 'Rockville');
+  await tester.enterText(contactFields.at(5), 'MD');
+  await tester.enterText(contactFields.at(6), '20850');
+  await tester.pump();
+
+  // Scroll to and fill the professional license fields (indices 7, 8, 9).
+  await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -500));
+  await tester.pump();
+  final allFields = find.byType(TextFormField);
+  await tester.ensureVisible(allFields.at(7));
+  await tester.pump();
+  await tester.enterText(allFields.at(7), 'LIC-12345');
+  await tester.pump();
+  await tester.ensureVisible(allFields.at(8));
+  await tester.pump();
+  await tester.enterText(allFields.at(8), 'Maryland');
+  await tester.pump();
+  await tester.ensureVisible(allFields.at(9));
+  await tester.pump();
+  await tester.enterText(allFields.at(9), '10');
+  await tester.pump();
+
+  await _tapNextButton(tester); // step 2 -> step 3 (Security)
+  final secFields = find.byType(TextFormField);
+  await tester.enterText(secFields.at(0), 'Password123');
+  await tester.enterText(secFields.at(1), 'Password123');
+  await tester.pump();
+  await _tapNextButton(tester); // step 3 -> step 4 (Review)
+}
+
 void main() {
   // RegistrationPage builds AppConfig.getGooglePlacesApiKey(), which reads
   // dotenv.env. Without this, every build throws NotInitializedError.
@@ -1798,6 +1844,40 @@ void main() {
       await tester.pump(const Duration(seconds: 1)); // let http + navigation run
 
       expect(find.text('Subscription Tier'), findsOneWidget);
+    });
+
+    testWidgets('professional caregiver submit navigates to subscription tier',
+        (tester) async {
+      HttpOverrides.global =
+          FakeHttpOverrides((method, uri) => FakeResponse(201, '{}'));
+      addTearDown(() => HttpOverrides.global = null);
+
+      await _goToProfessionalCaregiverReview(tester);
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Subscription Tier'), findsOneWidget);
+    });
+
+    testWidgets('caregiver submit failure shows a SnackBar', (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(400, '{"error":"bad"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await _goToCaregiverReview(tester);
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.textContaining('Registration failed'), findsOneWidget);
     });
   });
 }
