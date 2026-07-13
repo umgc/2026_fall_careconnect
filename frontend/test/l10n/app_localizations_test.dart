@@ -357,7 +357,6 @@ void main() {
       loc.subscriptionplans_premiumDescription,
       loc.subscriptionplans_yearly,
       loc.subscriptionplans_monthly,
-
       loc.subscriptionmodels_yearly,
       loc.subscriptionmodels_monthly,
       loc.subscriptionmodels_cancelOnPeriod,
@@ -367,7 +366,6 @@ void main() {
       loc.subscriptionmodels_unpaid,
       loc.subscriptionmodels_monthInterval,
       loc.subscriptionmodels_yearInterval,
-
       loc.nativebilling_purchaseFailed,
       loc.nativebilling_purchaseError,
       loc.nativebilling_completeYourPurchase,
@@ -381,7 +379,6 @@ void main() {
       loc.nativebilling_orderSummary,
       loc.nativebilling_taxes,
       loc.nativebilling_total,
-
       loc.submangement_coreMonitorFeature,
       loc.submangement_emailSupportFeature,
       loc.submangement_unlimitedPtFeature,
@@ -442,6 +439,10 @@ void main() {
       loc.submangement_checkBackLater,
       loc.submangement_currentActivePlan,
       loc.submangement_switchToNewPlan,
+      loc.submangement_activePlan,
+      loc.submangement_inactivePlan,
+      loc.submangement_standardPlan,
+      loc.submangement_premiumPlan,
       loc.cancelpay_paymentCancel,
       loc.cancelpay_regNotComplete,
       loc.cancelpay_paymentCanceled,
