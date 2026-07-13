@@ -27,7 +27,7 @@ public class ReminderDispatcher {
         this.snsService = snsService;
     }
 
-    @Scheduled(fixedRateString = "${notifications.reminder.fixedRate:600000}") // Default 10 minutes
+    @Scheduled(cron = "${notifications.reminder.cron:0 0 7 * * *}") // Default 7 AM daily // Default 10 minutes
     public void sendDemoReminder() {
         if (!remindersEnabled) {
             log.debug("Automated reminders are disabled");
