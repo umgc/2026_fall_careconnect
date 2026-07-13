@@ -24,8 +24,9 @@ import java.time.LocalDateTime;
  * event and the source record commit or roll back together. Ravi's
  * poller (backlog 3.4) reads unprocessed rows in insertion order,
  * publishes each to SNS, and stamps {@link #processedAt} on success.
- * An {@code IndexWorker} (backlog 1.5) consumes from SQS and writes to
- * the {@code retrieval_index_chunk} table.
+ * An {@code IndexWorker} (Task 4.1) currently consumes outbox rows in-process
+ * and writes to the {@code retrieval_index_chunk} table (SNS/SQS remains a
+ * future transport upgrade).
  *
  * <p>Known {@link #eventType} values, per the 2026-07-03 Transcript
  * Ingest and SUMMARY_CREATED Indexing Contract:
