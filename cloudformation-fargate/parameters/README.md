@@ -144,7 +144,7 @@ before calling the full deploy script.
   idempotent patches in `SchemaPatchRunner` (and/or rely on Hibernate `ddl-auto=update`).
   Files under `backend/core/src/main/resources/db/migration/` remain the canonical SQL reference.
 - **pgvector:** RDS PostgreSQL 15+ with the data stack parameter group; `SchemaPatchRunner` runs `CREATE EXTENSION vector` at startup.
-- **Bedrock IAM:** ECS task role in `03-platform.yaml` grants `bedrock:InvokeModel` for Nova, Claude, Titan Embed v2, and Voxtral (see template for full list).
+- **Bedrock IAM:** ECS task role in `03-platform.yaml` grants `bedrock:InvokeModel` for Nova, Claude, Titan Embed v1/v2, and Voxtral (see template for full list).
 
 ### Parallel deployment guidance
 

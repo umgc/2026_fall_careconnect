@@ -8,6 +8,7 @@ import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,6 +44,8 @@ class RetrievalIndexServiceTest {
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
     private RetrievalIndexChunkRepository chunkRepository;
+    @Mock
+    private ChunkEmbeddingService chunkEmbeddingService;
 
     private RetrievalIndexService service;
 
@@ -54,7 +58,9 @@ class RetrievalIndexServiceTest {
                 chunkRepository,
                 new SummaryChunker(mapper),
                 new TranscriptSegmentChunker(),
-                mapper);
+                mapper,
+                chunkEmbeddingService);
+        lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -93,6 +99,7 @@ class RetrievalIndexServiceTest {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
         assertThat(captor.getValue())
                 .extracting(RetrievalIndexChunk::getRecordType)
                 .contains(RetrievalRecordType.CALL_SUMMARY.name(),

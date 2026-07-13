@@ -9,6 +9,7 @@ import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
@@ -31,7 +32,8 @@ import java.util.Optional;
  * Ingests Ask AI indexing events into {@code retrieval_index_chunk} (Task 4.1).
  *
  * <p>Called by {@link IndexWorker} after outbox events are dequeued. Does not publish
- * SNS/SQS itself — that remains a future transport upgrade. Embeddings are left for Task 4.3;
+ * SNS/SQS itself — that remains a future transport upgrade. After chunk rows are saved,
+ * {@link ChunkEmbeddingService} best-effort writes Bedrock Titan embeddings (Task 4.3).
  * FTS {@code search_vector} is maintained automatically by the PostgreSQL trigger on
  * {@code chunk_text} insert/update (Task 4.2) — this service does not set it in application code.
  */
@@ -46,6 +48,7 @@ public class RetrievalIndexService {
     private final SummaryChunker summaryChunker;
     private final TranscriptSegmentChunker transcriptSegmentChunker;
     private final ObjectMapper objectMapper;
+    private final ChunkEmbeddingService chunkEmbeddingService;
 
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
@@ -53,13 +56,15 @@ public class RetrievalIndexService {
             final RetrievalIndexChunkRepository chunkRepository,
             final SummaryChunker summaryChunker,
             final TranscriptSegmentChunker transcriptSegmentChunker,
-            final ObjectMapper objectMapper) {
+            final ObjectMapper objectMapper,
+            final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
         this.transcriptSegmentRepository = transcriptSegmentRepository;
         this.chunkRepository = chunkRepository;
         this.summaryChunker = summaryChunker;
         this.transcriptSegmentChunker = transcriptSegmentChunker;
         this.objectMapper = objectMapper;
+        this.chunkEmbeddingService = chunkEmbeddingService;
     }
 
     /**
@@ -195,10 +200,11 @@ public class RetrievalIndexService {
         if (entities.isEmpty()) {
             return 0;
         }
-        chunkRepository.saveAll(entities);
+        final List<RetrievalIndexChunk> saved = chunkRepository.saveAll(entities);
         log.info("Indexed {} chunk(s) for sourceRecordId={} patientId={}",
-                entities.size(), sourceRecordId, patientId);
-        return entities.size();
+                saved.size(), sourceRecordId, patientId);
+        chunkEmbeddingService.embedAndPersist(saved);
+        return saved.size();
     }
 
     private boolean hasMatchingContentHash(final String sourceRecordId, final String contentHash) {
