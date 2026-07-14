@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import org.springframework.http.HttpStatus;
 import java.util.LinkedHashMap;
@@ -65,6 +66,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ex.getStatus())
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(
+            final MethodArgumentTypeMismatchException ex) {
+        final Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "Invalid parameter type");
+        body.put("parameter", ex.getName());
+        body.put("message", "Expected type: " + (ex.getRequiredType() == null
+                ? "unknown"
+                : ex.getRequiredType().getSimpleName()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @ExceptionHandler(Exception.class)
