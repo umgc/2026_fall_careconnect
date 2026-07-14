@@ -126,9 +126,26 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "ON telemetry_events (session_id, event_time DESC) " +
             "WHERE session_id IS NOT NULL"
         );
+        applyEmailCredentialPatches();
         applyRetrievalIndexChunkPatches();
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
+    }
+
+    /**
+     * Aligns local/staging check constraints with current EmailCredential.Provider enum.
+     * Needed because Flyway is disabled in these environments and legacy databases may still
+     * enforce a stale provider allow-list that excludes GOOGLE_HEALTH.
+     */
+    private void applyEmailCredentialPatches() {
+        applyPatch(
+            "V2607221400 – email_credentials provider check allows GOOGLE_HEALTH",
+            "ALTER TABLE email_credentials " +
+            "  DROP CONSTRAINT IF EXISTS email_credentials_provider_check;" +
+            "ALTER TABLE email_credentials " +
+            "  ADD CONSTRAINT email_credentials_provider_check " +
+            "  CHECK (provider IN ('GMAIL', 'OUTLOOK', 'GOOGLE_HEALTH'))"
+        );
     }
 
     /**
@@ -156,6 +173,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
             "  consent_scope     VARCHAR(40)   NULL" +
             ")"
+        );
+        applyPatch(
+            "V2607071921aa – add missing retrieval_index_chunk.embedding column",
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS embedding vector(1536)"
         );
         applyPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
