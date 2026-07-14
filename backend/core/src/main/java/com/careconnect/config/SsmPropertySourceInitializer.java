@@ -53,7 +53,6 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
             "aws-access-key-id",
             "aws-secret-access-key",
             "chime-media-insights-config-arn",
-            "kvs-stream-arns",
             "kvs-stream-pool-arn"
     );
 
@@ -72,7 +71,6 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
         put("aws-access-key-id", "aws.s3.access-key");
         put("aws-secret-access-key", "aws.s3.secret-key");
         put("chime-media-insights-config-arn", "careconnect.chime.media-insights-config-arn");
-        put("kvs-stream-arns", "careconnect.kvs.stream-arns");
         put("kvs-stream-pool-arn", "careconnect.kvs.stream-pool-arn");
     }};
 

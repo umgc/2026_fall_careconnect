@@ -382,7 +382,7 @@ See also [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUIC
 
 ### KVS speaker stream pool (speaker identification)
 
-**F5.5 ingest (required for non-zero per-attendee export):** use a **Chime** `media-pipeline-kinesis-video-stream-pool` (not individual pre-provisioned KVS streams).
+**F5.5 ingest (required for non-zero per-attendee export):** use a **Chime** `media-pipeline-kinesis-video-stream-pool`.
 
 After deploying `03-platform.yaml`, the stack provides:
 

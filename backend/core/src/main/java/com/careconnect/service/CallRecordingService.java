@@ -614,31 +614,24 @@ public class CallRecordingService {
 
   List<RecordingStreamConfiguration> buildAttendeeStreams(
       final String callId, final String meetingId, final String mediaStreamPipelineId) {
+    if (!kvsStreamPoolService.isIngestMode()) {
+      throw new IllegalStateException(
+          "KVS stream pool ARN is not configured (careconnect.kvs.stream-pool-arn)");
+    }
     if (meetingId != null && !meetingId.isBlank()) {
       callAttendeeService.reconcileRosterFromChime(callId, meetingId);
     }
     final List<CallAttendee> attendees = callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId);
     final List<RecordingStreamConfiguration> streams = new ArrayList<>();
 
-    if (kvsStreamPoolService.isIngestMode()) {
-      final Map<String, String> attendeeToStreamArn =
-          kvsAttendeeStreamResolver.resolve(callId, attendees, mediaStreamPipelineId, meetingId);
-      for (final CallAttendee attendee : attendees) {
-        final String streamArn = attendeeToStreamArn.get(attendee.getChimeAttendeeId());
-        if (streamArn == null || streamArn.isBlank()) {
-          throw new IllegalStateException(
-              "No KVS stream assigned for attendee " + attendee.getChimeAttendeeId());
-        }
-        callAttendeeService.recordKvsStreamMapping(
-            callId, attendee.getChimeAttendeeId(), streamArn);
-        streams.add(RecordingStreamConfiguration.builder().streamArn(streamArn).build());
-      }
-      return streams;
-    }
-
+    final Map<String, String> attendeeToStreamArn =
+        kvsAttendeeStreamResolver.resolve(callId, attendees, mediaStreamPipelineId, meetingId);
     for (final CallAttendee attendee : attendees) {
-      final String streamArn =
-          kvsStreamPoolService.checkout(callId, attendee.getChimeAttendeeId());
+      final String streamArn = attendeeToStreamArn.get(attendee.getChimeAttendeeId());
+      if (streamArn == null || streamArn.isBlank()) {
+        throw new IllegalStateException(
+            "No KVS stream assigned for attendee " + attendee.getChimeAttendeeId());
+      }
       callAttendeeService.recordKvsStreamMapping(
           callId, attendee.getChimeAttendeeId(), streamArn);
       streams.add(RecordingStreamConfiguration.builder().streamArn(streamArn).build());
@@ -787,7 +780,6 @@ public class CallRecordingService {
   public Map<String, Object> stopMediaStreamPipeline(final String callId) {
     final String pipelineId = activeMediaStreamPipelineIds.remove(callId);
     kvsAttendeeStreamRegistry.clearCall(callId);
-    kvsStreamPoolService.releaseCall(callId);
 
     String resolvedPipelineId = pipelineId;
     if (resolvedPipelineId == null) {
@@ -938,11 +930,7 @@ public class CallRecordingService {
     try {
       streams = buildAttendeeStreams(callId, meetingId, mediaStreamPipelineId);
     } catch (IllegalStateException e) {
-      if (kvsStreamPoolService.isIngestMode()) {
-        stopMediaStreamPipeline(callId);
-      } else {
-        kvsStreamPoolService.releaseCall(callId);
-      }
+      stopMediaStreamPipeline(callId);
       return Map.of(
           "status", "ERROR",
           "message", e.getMessage(),
@@ -1041,11 +1029,7 @@ public class CallRecordingService {
           streams.size());
 
     } catch (Exception e) {
-      if (kvsStreamPoolService.isIngestMode()) {
-        stopMediaStreamPipeline(callId);
-      } else {
-        kvsStreamPoolService.releaseCall(callId);
-      }
+      stopMediaStreamPipeline(callId);
       if (log.isErrorEnabled()) {
         log.error("Failed to start KVS pipeline for callId={}: {}", callId, e.getMessage(), e);
       }

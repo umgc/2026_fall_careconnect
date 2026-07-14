@@ -107,7 +107,7 @@ public class KvsPoolStreamDiscoveryService {
                 log.warn(
                         "KVS pool prefix '{}' returned 0 streams for callId={}. Chime creates pool"
                                 + " streams only when IndividualAudio is active — keep both users unmuted"
-                                + " and speaking. Legacy manual streams in the account are ignored.",
+                                + " and speaking. Unrelated streams in the account are ignored.",
                         poolListPrefix,
                         callId);
             }
@@ -232,7 +232,7 @@ public class KvsPoolStreamDiscoveryService {
     }
 
     /**
-     * In ingest mode only Chime pool streams (and legacy ChimeSDK streams) are scanned. Unrelated
+     * In ingest mode only Chime pool streams (and other ChimeSDK pool streams) are scanned. Unrelated
      * manual KVS streams in the account are excluded.
      */
     private List<StreamInfo> selectCandidateStreams(final List<StreamInfo> poolStreams) {
