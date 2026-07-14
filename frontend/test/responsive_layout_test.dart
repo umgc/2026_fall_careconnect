@@ -29,11 +29,13 @@ void main() {
           ),
           GoRoute(
             path: '/analytics',
-            builder: (context, state) => const Scaffold(body: Text('Analytics')),
+            builder: (context, state) =>
+                const Scaffold(body: Text('Analytics')),
           ),
           GoRoute(
             path: '/add-patient',
-            builder: (context, state) => const Scaffold(body: Text('Add Patient')),
+            builder: (context, state) =>
+                const Scaffold(body: Text('Add Patient')),
           ),
           GoRoute(
             path: '/evv/select-patient',
@@ -54,7 +56,8 @@ void main() {
       );
     }
 
-    testWidgets('CaregiverDashboard adapts to different screen sizes', (WidgetTester tester) async {
+    testWidgets('CaregiverDashboard adapts to different screen sizes',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestWidget());
 
       // Use pump with duration instead of pumpAndSettle to avoid timeout
@@ -64,32 +67,34 @@ void main() {
       expect(find.byType(CaregiverDashboard), findsOneWidget);
     });
 
-    testWidgets('Patient card actions are responsive', (WidgetTester tester) async {
+    testWidgets(
+        'Team C smoke: dashboard remains usable at responsive breakpoints',
+        (WidgetTester tester) async {
       await tester.pumpWidget(buildTestWidget());
-
       await tester.pump(const Duration(seconds: 2));
 
-      // Test different screen sizes
-      await tester.binding.setSurfaceSize(const Size(300, 600)); // Small screen
-      await tester.pump(const Duration(seconds: 1));
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-      await tester.binding.setSurfaceSize(const Size(600, 800)); // Medium screen
-      await tester.pump(const Duration(seconds: 1));
+      for (final size in const [
+        Size(300, 600),
+        Size(600, 800),
+        Size(1200, 800),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pump(const Duration(seconds: 1));
 
-      await tester.binding.setSurfaceSize(const Size(1200, 800)); // Large screen
-      await tester.pump(const Duration(seconds: 1));
-
-      // Check that the widget tree is still intact
-      expect(find.byType(CaregiverDashboard), findsOneWidget);
-
-      // Reset surface size
-      await tester.binding.setSurfaceSize(null);
-    });
-
-    testWidgets('Analytics summary grid is responsive', (WidgetTester tester) async {
-      // This test would need to navigate to analytics page
-      // For now, we'll just test that the test can run
-      expect(true, isTrue);
+        expect(
+          MediaQuery.sizeOf(
+            tester.element(find.byType(CaregiverDashboard)),
+          ),
+          size,
+          reason: 'App surface should match the $size smoke breakpoint',
+        );
+        expect(find.byType(CaregiverDashboard), findsOneWidget);
+        expect(tester.takeException(), isNull,
+            reason: 'Dashboard should render at $size without layout errors');
+      }
     });
   });
 }
