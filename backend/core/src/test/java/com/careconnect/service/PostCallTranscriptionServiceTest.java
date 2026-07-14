@@ -38,7 +38,9 @@ import software.amazon.awssdk.services.transcribe.model.TranscriptionJob;
 import software.amazon.awssdk.services.transcribe.model.TranscriptionJobStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -149,8 +151,8 @@ class PostCallTranscriptionServiceTest {
     }
 
     @Test
-    @DisplayName("F7: continues after one empty attendee transcript and stores the next attendee")
-    void transcribeAndCleanup_oneEmptyKvsTranscript_continuesToNextAttendee() throws Exception {
+    @DisplayName("F7/F9: partial KVS keeps attendee segments and supplements with mixed MP4")
+    void transcribeAndCleanup_oneEmptyKvsTranscript_supplementsWithMp4() throws Exception {
         final CallRecording recording = recording();
         final CallAttendee emptyAttendee = attendee();
         emptyAttendee.setId(10L);
@@ -181,6 +183,7 @@ class PostCallTranscriptionServiceTest {
                 .thenReturn(completedJob());
         doReturn(emptyTranscriptStream())
                 .doReturn(transcriptStream())
+                .doReturn(transcriptStream())
                 .when(s3Client)
                 .getObject(any(GetObjectRequest.class));
         when(callTranscriptService.recordSegments(
@@ -194,13 +197,37 @@ class PostCallTranscriptionServiceTest {
 
         final ArgumentCaptor<StartTranscriptionJobRequest> captor =
                 ArgumentCaptor.forClass(StartTranscriptionJobRequest.class);
-        verify(transcribeClient, times(2)).startTranscriptionJob(captor.capture());
-        assertThat(captor.getAllValues()).allMatch(request -> request.mediaFormat() == MediaFormat.WAV);
-        verify(callTranscriptService, times(1))
+        verify(transcribeClient, times(3)).startTranscriptionJob(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(StartTranscriptionJobRequest::mediaFormat)
+                .containsExactly(MediaFormat.WAV, MediaFormat.WAV, MediaFormat.MP4);
+        verify(callTranscriptService)
                 .recordSegments(
-                        any(String.class),
-                        any(Long.class),
-                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any());
+                        eq(CALL_ID),
+                        eq(2L),
+                        argThat(
+                                segments ->
+                                        !segments.isEmpty()
+                                                && segments.stream()
+                                                        .allMatch(
+                                                                segment ->
+                                                                        "POST_CALL_KVS_ATTENDEE"
+                                                                                .equals(segment.source()))));
+        verify(callTranscriptService)
+                .recordSegments(
+                        eq(CALL_ID),
+                        eq(2L),
+                        argThat(
+                                segments ->
+                                        !segments.isEmpty()
+                                                && segments.stream()
+                                                        .allMatch(
+                                                                segment ->
+                                                                        "POST_CALL_MP4_MIXED"
+                                                                                .equals(segment.source())
+                                                                                && "Caregiver"
+                                                                                        .equals(
+                                                                                                segment.speakerLabel()))));
 
         Files.deleteIfExists(raw1);
         Files.deleteIfExists(raw2);
@@ -244,7 +271,7 @@ class PostCallTranscriptionServiceTest {
         final String json =
                 """
                 {"results":{"items":[
-                  {"type":"pronunciation","start_time":"0.10","end_time":"0.40","alternatives":[{"content":"hello"}]},
+                  {"type":"pronunciation","speaker_label":"spk_0","start_time":"0.10","end_time":"0.40","alternatives":[{"content":"hello"}]},
                   {"type":"punctuation","alternatives":[{"content":"."}]}
                 ]}}
                 """;
