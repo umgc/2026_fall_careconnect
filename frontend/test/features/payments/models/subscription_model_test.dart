@@ -5,7 +5,7 @@
 //   Both classes are pure Dart data models with no platform channels or I/O.
 //
 //   Branches tested:
-//     Subscription.fromJson — new backend format (contains stripeSubscriptionId
+//     Subscription.fromJson — new backend format (contains paymentSubscriptionId
 //       key), including priceCents→planAmount conversion, customerId field
 //       resolution order, and missing-field defaults.
 //     Subscription.fromJson — Stripe direct format with plan object; items data
@@ -32,7 +32,7 @@ Subscription buildSub(String status, {
 }) {
   return Subscription(
     id: '1',
-    stripeSubscriptionId: 's',
+    paymentSubscriptionId: 's',
     customerId: 'c',
     status: status,
     currentPeriodStart: '',
@@ -49,12 +49,12 @@ void main() {
   // ─── Subscription.fromJson — new backend format ──────────────────────────────
 
   group('Subscription.fromJson (new backend format)', () {
-    test('parses new format with stripeSubscriptionId key', () {
+    test('parses new format with paymentSubscriptionId key', () {
       // Verifies field mapping from the custom backend response shape.
       final json = {
         'id': 'db-123',
-        'stripeSubscriptionId': 'sub_ABC',
-        'stripeCustomerId': 'cus_XYZ',
+        'paymentSubscriptionId': 'sub_ABC',
+        'paymentCustomerId': 'cus_XYZ',
         'status': 'active',
         'startedAt': '2025-01-01',
         'currentPeriodEnd': '2025-02-01',
@@ -64,7 +64,7 @@ void main() {
       };
       final sub = Subscription.fromJson(json);
       expect(sub.id, 'db-123');
-      expect(sub.stripeSubscriptionId, 'sub_ABC');
+      expect(sub.paymentSubscriptionId, 'sub_ABC');
       expect(sub.customerId, 'cus_XYZ');
       expect(sub.status, 'active');
       expect(sub.planId, 'plan_standard');
@@ -76,21 +76,21 @@ void main() {
 
     test('priceCents = 0 → planAmount = 0.0', () {
       // Verifies that zero cents converts to 0.0 without rounding issues.
-      final json = {'stripeSubscriptionId': 'sub_FREE', 'status': 'trialing', 'priceCents': 0};
+      final json = {'paymentSubscriptionId': 'sub_FREE', 'status': 'trialing', 'priceCents': 0};
       expect(Subscription.fromJson(json).planAmount, 0.0);
     });
 
     test('missing priceCents defaults planAmount to 0.0', () {
       // Verifies the fallback when priceCents key is absent.
-      final json = {'stripeSubscriptionId': 'sub_X', 'status': 'active'};
+      final json = {'paymentSubscriptionId': 'sub_X', 'status': 'active'};
       expect(Subscription.fromJson(json).planAmount, 0.0);
     });
 
     test('customerId resolved from stripeCustomerId first', () {
       // Verifies primary customerId field resolution in new format.
       final json = {
-        'stripeSubscriptionId': 's',
-        'stripeCustomerId': 'cus_A',
+        'paymentSubscriptionId': 's',
+        'paymentCustomerId': 'cus_A',
         'status': '',
       };
       expect(Subscription.fromJson(json).customerId, 'cus_A');
@@ -98,17 +98,17 @@ void main() {
 
     test('customerId falls back to customer then customerId fields', () {
       // Verifies secondary and tertiary fallback for customerId.
-      final json1 = {'stripeSubscriptionId': 's', 'customer': 'cus_A', 'status': ''};
+      final json1 = {'paymentSubscriptionId': 's', 'customer': 'cus_A', 'status': ''};
       expect(Subscription.fromJson(json1).customerId, 'cus_A');
 
-      final json2 = {'stripeSubscriptionId': 's', 'customerId': 'cus_B', 'status': ''};
+      final json2 = {'paymentSubscriptionId': 's', 'customerId': 'cus_B', 'status': ''};
       expect(Subscription.fromJson(json2).customerId, 'cus_B');
     });
 
     test('planCode fallback used when planId is absent', () {
       // Verifies the planCode field is used when planId key is missing.
       final json = {
-        'stripeSubscriptionId': 's',
+        'paymentSubscriptionId': 's',
         'status': 'active',
         'planCode': 'PLAN_CODE',
       };
@@ -137,7 +137,7 @@ void main() {
       };
       final sub = Subscription.fromJson(json);
       expect(sub.id, 'sub_STRIPE');
-      expect(sub.stripeSubscriptionId, 'sub_STRIPE');
+      expect(sub.paymentSubscriptionId, 'sub_STRIPE');
       expect(sub.customerId, 'cus_STRIPE');
       expect(sub.planId, 'price_monthly');
       expect(sub.planName, 'Monthly Pro');
@@ -184,7 +184,7 @@ void main() {
         'current_period_end': '',
       };
       final sub = Subscription.fromJson(json);
-      expect(sub.planName, 'Standard Plan');
+      expect(sub.planName, '');
       expect(sub.planAmount, 0.0);
       expect(sub.planInterval, 'month');
     });
@@ -343,7 +343,7 @@ void main() {
       // Verifies the pre-built global plan list is complete.
       expect(availablePlans.length, 3);
       final names = availablePlans.map((p) => p.name).toList();
-      expect(names, containsAll(['Basic Plan', 'Standard Plan', 'Premium Plan']));
+      expect(names, containsAll(['Basic Plan', 'Standard Plan (Legacy)', 'Premium Plan']));
     });
   });
 }

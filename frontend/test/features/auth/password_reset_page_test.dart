@@ -2,10 +2,14 @@
 // and initial password setup (long token with dash, for family members).
 // No live server needed for form rendering and local validation tests.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/password_reset_page.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../helpers/fake_http_overrides.dart';
 
 Widget _wrap(Widget child) {
   // GoRouter is needed because the "Back to Login" TextButton uses context.go.
@@ -184,6 +188,56 @@ void main() {
         find.text('Welcome! Please set your password to access your account.'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('PasswordResetPage – submit network paths', () {
+    Future<void> fillValidForm(WidgetTester tester) async {
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'user@test.com');
+      await tester.enterText(fields.at(1), 'password123');
+      await tester.enterText(fields.at(2), 'password123');
+      await tester.pump();
+    }
+
+    Future<void> submit(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Reset Password'));
+      await tester.tap(find.text('Reset Password'));
+      await tester.pump(); // start the async request
+      await tester.pump(const Duration(seconds: 1)); // let it resolve
+    }
+
+    testWidgets('successful reset shows the backend message', (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(200, '{"message":"Password updated"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrap(const PasswordResetPage()));
+      await tester.pump();
+      await fillValidForm(tester);
+      await submit(tester);
+
+      expect(find.text('Password updated'), findsOneWidget);
+
+      // _setPassword schedules a delayed redirect to /login; advance past it so
+      // no Timer is left pending when the test ends.
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('backend failure shows "Failed to set password"',
+        (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(400, '{"error":"Bad token"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrap(const PasswordResetPage()));
+      await tester.pump();
+      await fillValidForm(tester);
+      await submit(tester);
+
+      expect(find.textContaining('Failed to set password'), findsOneWidget);
     });
   });
 }

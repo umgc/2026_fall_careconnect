@@ -4,7 +4,6 @@ import com.careconnect.dto.*;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.FamilyMemberLink;
 import com.careconnect.model.InviteToken;
-import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.repository.*;
 import com.careconnect.security.Role;

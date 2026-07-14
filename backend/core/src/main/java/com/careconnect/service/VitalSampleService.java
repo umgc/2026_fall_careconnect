@@ -64,6 +64,7 @@ public class VitalSampleService {
         return mapToDTO(saved);
     }
 
+    @Transactional
     public WearableReadingIngestionResponse ingestWearableReadings(User currentUser, WearableReadingIngestionRequest request) {
         Patient patient = resolveTargetPatient(currentUser, request.patientId());
         Long patientId = patient.getId();
@@ -426,7 +427,6 @@ public class VitalSampleService {
             }
         }
     }
-
     private boolean supportsVitalSampleMetric(WearableMetric.MetricType metricType) {
         return switch (metricType) {
             case HEART_RATE, SPO2, BLOOD_PRESSURE_SYS, BLOOD_PRESSURE_DIA, WEIGHT -> true;
