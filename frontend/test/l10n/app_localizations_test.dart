@@ -98,6 +98,17 @@ void main() {
   // ─── supportedLocales list ────────────────────────────────────────────────
 
   group('AppLocalizations.supportedLocales', () {
+    test('TC-S4-REG-L10N-001 English and Spanish expose localized shell labels', () {
+      final english = lookupAppLocalizations(const Locale('en'));
+      final spanish = lookupAppLocalizations(const Locale('es'));
+
+      expect(english.menuTitle, 'Menu');
+      expect(english.voiceCommands, 'Voice Commands');
+      expect(spanish.menuTitle, 'Menú');
+      expect(spanish.voiceCommands, 'Comandos de Voz');
+      expect(spanish.menuTitle, isNot(english.menuTitle));
+    });
+
     test('contains exactly 14 locales', () {
       // Verifies the static list length matches the documented locale count.
       expect(AppLocalizations.supportedLocales.length, 14);
