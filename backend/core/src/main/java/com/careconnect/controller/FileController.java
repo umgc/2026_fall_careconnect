@@ -424,7 +424,7 @@ public class FileController {
             }
 
             StructuredDocumentEntryDTO entry =
-                    fileManagementService.updateStructuredEntry(entryId, request);
+                    fileManagementService.updateStructuredEntry(entryId, request, currentUser.getId());
             return ResponseEntity.ok(Map.of(
                     "data", entry,
                     "message", "Structured entry updated successfully"));

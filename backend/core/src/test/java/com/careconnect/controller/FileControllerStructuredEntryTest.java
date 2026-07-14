@@ -294,7 +294,7 @@ class FileControllerStructuredEntryTest {
         asUser(patientUser);
         when(fileManagementService.getStructuredEntry(5L)).thenReturn(Optional.of(entryDto()));
         when(fileManagementService.getFile(20L)).thenReturn(Optional.of(ownFile()));
-        when(fileManagementService.updateStructuredEntry(eq(5L), any())).thenReturn(entryDto());
+        when(fileManagementService.updateStructuredEntry(eq(5L), any(), anyLong())).thenReturn(entryDto());
 
         mockMvc.perform(put("/v1/api/files/structured-entries/5")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -302,7 +302,7 @@ class FileControllerStructuredEntryTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.fileId").value(20));
 
-        verify(fileManagementService).updateStructuredEntry(eq(5L), any());
+        verify(fileManagementService).updateStructuredEntry(eq(5L), any(), anyLong());
         verify(fileManagementService, never()).createStructuredEntry(anyLong(), any(), anyLong());
     }
 
@@ -317,7 +317,7 @@ class FileControllerStructuredEntryTest {
                         .content(VALID_BODY))
                 .andExpect(status().isNotFound());
 
-        verify(fileManagementService, never()).updateStructuredEntry(anyLong(), any());
+        verify(fileManagementService, never()).updateStructuredEntry(anyLong(), any(), anyLong());
     }
 
     @Test
@@ -326,7 +326,7 @@ class FileControllerStructuredEntryTest {
         asUser(patientUser);
         when(fileManagementService.getStructuredEntry(5L)).thenReturn(Optional.of(entryDto()));
         when(fileManagementService.getFile(20L)).thenReturn(Optional.of(ownFile()));
-        when(fileManagementService.updateStructuredEntry(eq(5L), any()))
+        when(fileManagementService.updateStructuredEntry(eq(5L), any(), anyLong()))
                 .thenThrow(new IllegalArgumentException(
                         "Missing required fields for EMERGENCY_CONTACT: contactName"));
 

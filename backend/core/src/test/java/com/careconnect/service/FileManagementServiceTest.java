@@ -890,11 +890,41 @@ class FileManagementServiceTest {
                 .build();
 
         final StructuredDocumentEntryDTO result =
-                fileManagementService.updateStructuredEntry(5L, request);
+                fileManagementService.updateStructuredEntry(5L, request, 2L);
 
         assertEquals(20L, result.getFileId());
         assertEquals(2L, result.getEmployeeUserId());
         assertEquals("Red Cross", result.getFields().get("issuingAuthority"));
+    }
+
+    @Test
+    @DisplayName("updateStructuredEntry - fires the compliance digitization hook with the actor")
+    void updateStructuredEntry_firesComplianceHook() {
+        final UserFile file = intakeFile();
+        final StructuredDocumentEntry existing = StructuredDocumentEntry.builder()
+                .id(5L)
+                .userFileId(20L)
+                .documentType(UserFile.FileCategory.CERTIFICATION)
+                .employeeUserId(2L)
+                .fieldsJson("{}")
+                .isActive(true)
+                .build();
+        when(structuredEntryRepository.findById(5L)).thenReturn(Optional.of(existing));
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.save(any(StructuredDocumentEntry.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .fields(certificationFields())
+                .build();
+
+        fileManagementService.updateStructuredEntry(5L, request, 7L);
+
+        // A context or type corrected after the initial save must still complete
+        // the checklist requirement, attributed to the editing user.
+        verify(documentComplianceService)
+                .recordStructuredEntrySaved(any(StructuredDocumentEntry.class), eq(file), eq(7L));
     }
 
     @Test
@@ -916,7 +946,7 @@ class FileManagementServiceTest {
                 .build();
 
         assertThrows(IllegalArgumentException.class,
-                () -> fileManagementService.updateStructuredEntry(5L, request));
+                () -> fileManagementService.updateStructuredEntry(5L, request, 2L));
         verify(structuredEntryRepository, never()).save(any());
     }
 
@@ -942,7 +972,7 @@ class FileManagementServiceTest {
                 .build();
 
         final StructuredDocumentEntryDTO result =
-                fileManagementService.updateStructuredEntry(5L, request);
+                fileManagementService.updateStructuredEntry(5L, request, 2L);
 
         final ArgumentCaptor<StructuredDocumentEntry> saved =
                 ArgumentCaptor.forClass(StructuredDocumentEntry.class);

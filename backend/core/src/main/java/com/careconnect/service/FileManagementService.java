@@ -370,9 +370,13 @@ public class FileManagementService {
     /**
      * Update an existing structured form entry. The link to the original file is
      * immutable; document type, context and captured fields may change but are
-     * re-validated against the same rules as creation.
+     * re-validated against the same rules as creation. Saving re-fires the
+     * compliance digitization hook so a context or type added after the initial
+     * save still completes the subject's checklist requirement (audited
+     * transition; existing statuses are never downgraded).
      */
-    public StructuredDocumentEntryDTO updateStructuredEntry(Long entryId, StructuredEntryRequest request) {
+    public StructuredDocumentEntryDTO updateStructuredEntry(Long entryId, StructuredEntryRequest request,
+                                                            Long updatedBy) {
         StructuredDocumentEntry entry = structuredEntryRepository.findById(entryId)
                 .filter(StructuredDocumentEntry::getIsActive)
                 .orElseThrow(() -> new IllegalArgumentException("Structured entry not found: " + entryId));
@@ -398,6 +402,11 @@ public class FileManagementService {
 
         StructuredDocumentEntry saved = structuredEntryRepository.save(entry);
         log.info("Structured entry updated: ID={}, file={}", entryId, saved.getUserFileId());
+
+        // Compliance tracking: edits can add or correct the subject context, so
+        // the digitization hook must fire on update as well as create.
+        documentComplianceService.recordStructuredEntrySaved(saved, file, updatedBy);
+
         return mapEntryToDTO(saved, file);
     }
 
