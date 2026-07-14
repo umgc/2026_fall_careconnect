@@ -26,6 +26,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -51,11 +52,13 @@ class IndexWorkerTest {
                 objectMapper,
                 new ImmediateTransactionManager(),
                 10,
-                3);
+                3,
+                2);
+        when(outboxRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
-    @DisplayName("poll claims rows and dispatches SUMMARY_CREATED")
+    @DisplayName("poll claims rows with lease and dispatches SUMMARY_CREATED")
     void poll_summaryCreated_success() throws Exception {
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 1L, "c1", 9L, "SUCCESS",
@@ -66,18 +69,20 @@ class IndexWorkerTest {
                 .payloadJson(envelope(IndexingEventType.SUMMARY_CREATED, payload))
                 .attemptCount(0)
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(eq(10)))
+        when(outboxRepository.claimUnprocessedForPolling(eq(10), eq(2)))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestSummaryCreated(any())).thenReturn(3);
 
         worker.pollAndProcess();
 
-        verify(outboxRepository).claimUnprocessedForPolling(10);
+        verify(outboxRepository).claimUnprocessedForPolling(10, 2);
+        verify(outboxRepository).saveAll(anyList());
         verify(retrievalIndexService).ingestSummaryCreated(any(SummaryCreatedPayload.class));
         final ArgumentCaptor<IndexingOutboxRow> captor =
                 ArgumentCaptor.forClass(IndexingOutboxRow.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getProcessedAt()).isNotNull();
+        assertThat(captor.getValue().getClaimedAt()).isNull();
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
         assertThat(captor.getValue().getLastError()).isNull();
     }
@@ -93,7 +98,7 @@ class IndexWorkerTest {
                 .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
                 .attemptCount(0)
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestTranscriptIndexed(any())).thenReturn(4);
 
@@ -113,8 +118,9 @@ class IndexWorkerTest {
                 .eventType(IndexingEventType.TRANSCRIPT_INDEXED)
                 .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
                 .attemptCount(1)
+                .claimedAt(LocalDateTime.now())
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestTranscriptIndexed(any()))
                 .thenThrow(new IllegalArgumentException("CallSummary not found"));
@@ -125,6 +131,7 @@ class IndexWorkerTest {
                 ArgumentCaptor.forClass(IndexingOutboxRow.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getProcessedAt()).isNull();
+        assertThat(captor.getValue().getClaimedAt()).isNull();
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(2);
         assertThat(captor.getValue().getLastError()).contains("CallSummary not found");
     }
@@ -140,7 +147,7 @@ class IndexWorkerTest {
                 .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
                 .attemptCount(1)
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestTranscriptIndexed(any()))
                 .thenThrow(new IndexingDeferredException("patientId is required"));
@@ -152,7 +159,37 @@ class IndexWorkerTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(2);
         assertThat(captor.getValue().getProcessedAt()).isNull();
+        assertThat(captor.getValue().getClaimedAt()).isNull();
         assertThat(captor.getValue().getLastError()).contains("patientId is required");
+    }
+
+    @Test
+    @DisplayName("visit deferral parks row without burning attempts")
+    void poll_visitDeferred_doesNotBurnAttempts() throws Exception {
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "visit", "visit_summaries", 50L, null, 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null, "sha256:v");
+        final IndexingOutboxRow row = IndexingOutboxRow.builder()
+                .id(107L)
+                .eventType(IndexingEventType.SUMMARY_CREATED)
+                .payloadJson(envelope(IndexingEventType.SUMMARY_CREATED, payload))
+                .attemptCount(1)
+                .claimedAt(LocalDateTime.now())
+                .build();
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+        when(retrievalIndexService.ingestSummaryCreated(any()))
+                .thenThrow(new IndexingDeferredException("Visit summary indexing not implemented yet (Task 1.4)", false));
+
+        worker.pollAndProcess();
+
+        final ArgumentCaptor<IndexingOutboxRow> captor =
+                ArgumentCaptor.forClass(IndexingOutboxRow.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
+        assertThat(captor.getValue().getProcessedAt()).isNull();
+        assertThat(captor.getValue().getClaimedAt()).isNull();
+        assertThat(captor.getValue().getLastError()).contains("Task 1.4");
     }
 
     @Test
@@ -166,7 +203,7 @@ class IndexWorkerTest {
                 .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
                 .attemptCount(2)
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestTranscriptIndexed(any()))
                 .thenThrow(new IndexingDeferredException("patientId is required"));
@@ -191,7 +228,7 @@ class IndexWorkerTest {
                 .attemptCount(3)
                 .lastError("previous")
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
 
         worker.pollAndProcess();
@@ -215,7 +252,7 @@ class IndexWorkerTest {
                 .payloadJson(envelope(IndexingEventType.TRANSCRIPT_INDEXED, payload))
                 .attemptCount(2)
                 .build();
-        when(outboxRepository.claimUnprocessedForPolling(anyInt()))
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestTranscriptIndexed(any()))
                 .thenThrow(new IllegalStateException("boom"));
@@ -239,10 +276,6 @@ class IndexWorkerTest {
                 "payload", payload));
     }
 
-    /**
-     * Runs callbacks immediately with no real transaction resources — enough for unit tests
-     * that assert IndexWorker isolates claim / ingest / status via {@link TransactionTemplate}.
-     */
     private static final class ImmediateTransactionManager implements PlatformTransactionManager {
         @Override
         public TransactionStatus getTransaction(final TransactionDefinition definition)

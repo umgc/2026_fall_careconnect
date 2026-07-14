@@ -83,8 +83,10 @@ class IndexingPipelineE2ETest {
                 objectMapper,
                 new ImmediateTransactionManager(),
                 10,
-                5);
+                5,
+                2);
 
+        lenient().when(outboxRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> {
             @SuppressWarnings("unchecked")
             final List<RetrievalIndexChunk> saved = inv.getArgument(0);
@@ -129,7 +131,7 @@ class IndexingPipelineE2ETest {
                 "sha256:e2e-summary-1");
         final IndexingOutboxRow row = outboxRow(
                 1001L, IndexingEventType.SUMMARY_CREATED, payload, 0);
-        when(outboxRepository.claimUnprocessedForPolling(anyInt())).thenReturn(List.of(row));
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
 
         worker.pollAndProcess();
 
@@ -169,7 +171,7 @@ class IndexingPipelineE2ETest {
                 new TranscriptIndexedPayload("call-tx", 55L, 1, "CLIENT_TRANSCRIPT");
         final IndexingOutboxRow row = outboxRow(
                 1002L, IndexingEventType.TRANSCRIPT_INDEXED, payload, 0);
-        when(outboxRepository.claimUnprocessedForPolling(anyInt())).thenReturn(List.of(row));
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
 
         worker.pollAndProcess();
 
@@ -215,7 +217,7 @@ class IndexingPipelineE2ETest {
                 "sha256:same-hash");
         final IndexingOutboxRow row = outboxRow(
                 1003L, IndexingEventType.SUMMARY_CREATED, payload, 0);
-        when(outboxRepository.claimUnprocessedForPolling(anyInt())).thenReturn(List.of(row));
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
 
         worker.pollAndProcess();
 
@@ -240,7 +242,7 @@ class IndexingPipelineE2ETest {
                 new TranscriptIndexedPayload("call-pending", null, 2, "CLIENT_TRANSCRIPT");
         final IndexingOutboxRow row = outboxRow(
                 1004L, IndexingEventType.TRANSCRIPT_INDEXED, payload, 1);
-        when(outboxRepository.claimUnprocessedForPolling(anyInt())).thenReturn(List.of(row));
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
 
         worker.pollAndProcess();
 
@@ -279,7 +281,7 @@ class IndexingPipelineE2ETest {
                 "sha256:blank");
         final IndexingOutboxRow row = outboxRow(
                 1005L, IndexingEventType.SUMMARY_CREATED, payload, 0);
-        when(outboxRepository.claimUnprocessedForPolling(anyInt())).thenReturn(List.of(row));
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
 
         worker.pollAndProcess();
 
