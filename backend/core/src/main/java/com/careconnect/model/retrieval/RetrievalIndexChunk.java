@@ -24,7 +24,10 @@ import java.util.UUID;
  *
  * <p>Maps portable columns used by {@link com.careconnect.repository.retrieval.RetrievalIndexChunkRepository}.
  * PostgreSQL-specific columns {@code search_vector} and {@code embedding} are defined in Flyway
- * and maintained or written via native SQL in the indexing pipeline (Tasks 4.2 / 4.3).
+ * and maintained or written via native SQL. {@code search_vector} is auto-maintained by the
+ * {@code trg_retrieval_index_chunk_search_vector} trigger on {@code chunk_text} writes (Task 4.2)
+ * and queried through {@link com.careconnect.service.ai.retrieval.FullTextSearchService}.
+ * Embeddings are written in Task 4.3.
  *
  * <p>{@link #patientId} is the patient entity id ({@code patient.id}) and is the mandatory
  * RBAC scope key for every retrieval query (FR-AI-1).

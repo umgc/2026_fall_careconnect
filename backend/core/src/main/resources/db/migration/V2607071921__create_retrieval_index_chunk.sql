@@ -78,8 +78,10 @@ COMMENT ON COLUMN retrieval_index_chunk.embedding IS
 COMMENT ON COLUMN retrieval_index_chunk.consent_scope IS
     'Caregiver visibility scope at index time: on_consent, auto, or hidden (REQ-SC-8).';
 
--- Maintain search_vector from chunk_text on write (Task 4.2 FTS precursor).
--- Task 4.2 follow-up: add Spanish config (to_tsvector('spanish', ...)) for bilingual FTS.
+-- Maintain search_vector from chunk_text on write (Task 4.2).
+-- Application keyword queries use plainto_tsquery('english', ...) via
+-- RetrievalIndexChunkRepository.searchByPatientIdFullText / FullTextSearchService.
+-- Follow-up: add Spanish config (to_tsvector('spanish', ...)) for bilingual FTS.
 CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger()
 RETURNS TRIGGER AS $$
 BEGIN
