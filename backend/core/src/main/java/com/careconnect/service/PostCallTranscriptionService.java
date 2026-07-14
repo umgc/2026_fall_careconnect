@@ -67,8 +67,11 @@ public class PostCallTranscriptionService {
   /** Maximum wall-clock time to wait for a Transcribe job to finish (ms). */
   private static final long MAX_WAIT_MS = 15 * 60_000L;
 
-  /** Source label stored with each segment so the UI can identify post-call transcripts. */
-  private static final String TRANSCRIPT_SOURCE = "POST_CALL_TRANSCRIBE";
+  /** Source label for direct per-attendee KVS transcripts. */
+  private static final String KVS_TRANSCRIPT_SOURCE = "POST_CALL_KVS_ATTENDEE";
+
+  /** Source label for mixed MP4 transcripts used as fallback or completeness supplement. */
+  private static final String MP4_TRANSCRIPT_SOURCE = "POST_CALL_MP4_MIXED";
 
   /** Transcription status set while the job is in progress. */
   public static final String TRANSCRIPTION_STATUS_PROCESSING = "PROCESSING";
@@ -214,48 +217,20 @@ public class PostCallTranscriptionService {
     }
 
     try {
-      final boolean kvsTranscribed = tryTranscribeKvsAttendeeStreams(callId, rec);
-      if (!kvsTranscribed) {
-        if (log.isInfoEnabled()) {
-          log.info(
-              "Starting fallback Transcribe job {} for call {} media {}", jobName, callId, mediaUri);
-        }
-        try {
-          startTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), outputKey);
-        } catch (software.amazon.awssdk.services.transcribe.model.ConflictException conflict) {
-          // Deterministic job names make restart recovery idempotent: continue polling the
-          // already-created AWS job instead of creating a second pipeline.
-          log.info("Resuming existing Transcribe job {} for call {}", jobName, callId);
-        }
-
-        final boolean completed = pollForCompletion(jobName);
-        if (!completed) {
-          if (log.isWarnEnabled()) {
-            log.warn("Transcribe job {} did not complete in time for call {}", jobName, callId);
-          }
+      final KvsTranscriptionResult kvsResult = tryTranscribeKvsAttendeeStreams(callId, rec);
+      if (!kvsResult.hasStoredSegments()) {
+        final boolean mp4Completed =
+            transcribeMixedMp4(callId, rec, mediaUri, jobName, outputKey, false, kvsResult);
+        if (!mp4Completed) {
           setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_FAILED);
           return;
         }
-
-        // Build speaker label map using participant count from telemetry JOIN events
-        final Map<String, String> speakerMap = buildSpeakerRoleMap(callId);
-        final List<TranscriptSegmentInput> parsed =
-            downloadAndParse(rec.getS3Bucket(), outputKey, rec.getStartedAt(), speakerMap);
-        final List<TranscriptSegmentInput> segments = new ArrayList<>(parsed.size());
-        for (int index = 0; index < parsed.size(); index++) {
-          final TranscriptSegmentInput item = parsed.get(index);
-          final UUID stableId = UUID.nameUUIDFromBytes(
-              (callId + ":" + rec.getId() + ":" + index).getBytes(StandardCharsets.UTF_8));
-          segments.add(new TranscriptSegmentInput(
-              stableId, item.speakerLabel(), item.text(), item.startMs(), item.endMs(),
-              item.source(), item.occurredAt()));
-        }
-        if (!segments.isEmpty()) {
-          final int stored = callTranscriptService.recordSegments(callId, null, segments);
-          if (log.isInfoEnabled()) {
-            log.info("Stored {} fallback transcript segments for call {}", stored, callId);
-          }
-        }
+      } else if (kvsResult.isPartial()) {
+        final String supplementJobName = jobName + "-full";
+        final String supplementOutputKey =
+            rec.getS3Prefix() + "transcripts/" + supplementJobName + ".json";
+        transcribeMixedMp4(
+            callId, rec, mediaUri, supplementJobName, supplementOutputKey, true, kvsResult);
       }
       setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_COMPLETE);
     } catch (Exception e) {
@@ -284,14 +259,31 @@ public class PostCallTranscriptionService {
   // Private helpers
   // ----------------------------------------------------------------
 
-  private record AttendeeSegments(Long userId, List<TranscriptSegmentInput> segments) {}
+  private record AttendeeIdentity(Long userId, String speakerLabel) {}
 
-  private boolean tryTranscribeKvsAttendeeStreams(final String callId, final CallRecording rec) {
+  private record AttendeeSegments(AttendeeIdentity attendee, List<TranscriptSegmentInput> segments) {}
+
+  private record KvsTranscriptionResult(
+      List<AttendeeIdentity> attendees,
+      List<AttendeeSegments> attendeeSegments,
+      int storedSegments) {
+    private boolean hasStoredSegments() {
+      return storedSegments > 0;
+    }
+
+    private boolean isPartial() {
+      return !attendees.isEmpty()
+          && !attendeeSegments.isEmpty()
+          && attendeeSegments.size() < attendees.size();
+    }
+  }
+
+  private KvsTranscriptionResult tryTranscribeKvsAttendeeStreams(final String callId, final CallRecording rec) {
     if (kvsArchivedMediaExportService == null || kvsAudioTranscodeService == null) {
       if (log.isInfoEnabled()) {
         log.info("KVS attendee transcription unavailable for call {}; falling back to MP4", callId);
       }
-      return false;
+      return new KvsTranscriptionResult(List.of(), List.of(), 0);
     }
     final Instant start = toInstant(rec.getStartedAt());
     final Instant end = toInstant(rec.getEndedAt());
@@ -303,7 +295,7 @@ public class PostCallTranscriptionService {
             start,
             end);
       }
-      return false;
+      return new KvsTranscriptionResult(List.of(), List.of(), 0);
     }
 
     final List<CallAttendee> attendees =
@@ -316,8 +308,12 @@ public class PostCallTranscriptionService {
       if (log.isInfoEnabled()) {
         log.info("No KVS attendee stream mappings found for call {}; falling back to MP4", callId);
       }
-      return false;
+      return new KvsTranscriptionResult(List.of(), List.of(), 0);
     }
+    final List<AttendeeIdentity> attendeeIdentities =
+        attendees.stream()
+            .map(attendee -> new AttendeeIdentity(attendee.getUserId(), roleLabel(attendee.getRole())))
+            .toList();
     if (log.isInfoEnabled()) {
       log.info("Processing {} KVS attendee streams for call {}", attendees.size(), callId);
     }
@@ -336,28 +332,247 @@ public class PostCallTranscriptionService {
           }
           continue;
         }
-        pendingSegments.add(new AttendeeSegments(attendee.getUserId(), segments));
+        pendingSegments.add(
+            new AttendeeSegments(
+                new AttendeeIdentity(attendee.getUserId(), roleLabel(attendee.getRole())),
+                segments));
       }
       if (pendingSegments.isEmpty()) {
         if (log.isWarnEnabled()) {
           log.warn("All KVS attendee transcription jobs were empty for call {}; falling back to MP4", callId);
         }
-        return false;
+        return new KvsTranscriptionResult(attendeeIdentities, List.of(), 0);
       }
       int stored = 0;
       for (final AttendeeSegments pending : pendingSegments) {
-        stored += callTranscriptService.recordSegments(callId, pending.userId(), pending.segments());
+        stored += callTranscriptService.recordSegments(callId, pending.attendee().userId(), pending.segments());
       }
       if (log.isInfoEnabled()) {
         log.info("Stored {} KVS attendee transcript segments for call {}", stored, callId);
       }
-      return stored > 0;
+      return new KvsTranscriptionResult(attendeeIdentities, pendingSegments, stored);
     } catch (Exception e) {
       if (log.isWarnEnabled()) {
         log.warn("KVS attendee transcription failed for call {}; falling back to MP4: {}", callId, e.getMessage(), e);
       }
+      return new KvsTranscriptionResult(List.of(), List.of(), 0);
+    }
+  }
+
+  private boolean transcribeMixedMp4(
+      final String callId,
+      final CallRecording rec,
+      final String mediaUri,
+      final String jobName,
+      final String outputKey,
+      final boolean supplement,
+      final KvsTranscriptionResult kvsResult) throws Exception {
+    if (log.isInfoEnabled()) {
+      log.info(
+          "Starting {} Transcribe job {} for call {} media {}",
+          supplement ? "supplemental full-call MP4" : "fallback MP4",
+          jobName,
+          callId,
+          mediaUri);
+    }
+    try {
+      startTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), outputKey);
+    } catch (software.amazon.awssdk.services.transcribe.model.ConflictException conflict) {
+      // Deterministic job names make restart recovery idempotent: continue polling the
+      // already-created AWS job instead of creating a second pipeline.
+      log.info("Resuming existing Transcribe job {} for call {}", jobName, callId);
+    }
+
+    final boolean completed = pollForCompletion(jobName);
+    if (!completed) {
+      if (log.isWarnEnabled()) {
+        log.warn("Transcribe job {} did not complete in time for call {}", jobName, callId);
+      }
       return false;
     }
+
+    final Map<String, String> speakerMap = buildSpeakerRoleMap(callId);
+    final List<TranscriptSegmentInput> segments =
+        downloadAndParse(rec.getS3Bucket(), outputKey, rec.getStartedAt(), speakerMap);
+    if (segments.isEmpty()) {
+      return true;
+    }
+    final int stored = recordMixedMp4Segments(callId, segments, supplement ? kvsResult : null);
+    if (log.isInfoEnabled()) {
+      log.info(
+          "Stored {} {} transcript segments for call {}",
+          stored,
+          supplement ? "supplemental MP4" : "fallback MP4",
+          callId);
+    }
+    return true;
+  }
+
+  private int recordMixedMp4Segments(
+      final String callId,
+      final List<TranscriptSegmentInput> segments,
+      final KvsTranscriptionResult kvsResult) {
+    final Map<String, AttendeeIdentity> speakerIdentities =
+        inferMp4SpeakerIdentities(segments, kvsResult);
+    if (speakerIdentities.isEmpty()) {
+      return callTranscriptService.recordSegments(callId, null, segments);
+    }
+
+    final Map<Long, List<TranscriptSegmentInput>> segmentsByActor = new HashMap<>();
+    for (final TranscriptSegmentInput segment : segments) {
+      final AttendeeIdentity identity = speakerIdentities.get(segment.speakerLabel());
+      final Long actorUserId = identity == null ? null : identity.userId();
+      final TranscriptSegmentInput segmentToStore =
+          identity == null ? segment : withSpeakerLabel(segment, identity.speakerLabel());
+      segmentsByActor.computeIfAbsent(actorUserId, ignored -> new ArrayList<>()).add(segmentToStore);
+    }
+
+    int stored = 0;
+    for (final Map.Entry<Long, List<TranscriptSegmentInput>> entry : segmentsByActor.entrySet()) {
+      stored += callTranscriptService.recordSegments(callId, entry.getKey(), entry.getValue());
+    }
+    return stored;
+  }
+
+  private Map<String, AttendeeIdentity> inferMp4SpeakerIdentities(
+      final List<TranscriptSegmentInput> mp4Segments,
+      final KvsTranscriptionResult kvsResult) {
+    if (kvsResult == null || kvsResult.attendeeSegments().isEmpty()) {
+      return Map.of();
+    }
+
+    final Map<String, Map<AttendeeIdentity, Long>> scoresBySpeaker = new HashMap<>();
+    for (final TranscriptSegmentInput mp4Segment : mp4Segments) {
+      if (mp4Segment == null || mp4Segment.speakerLabel() == null || mp4Segment.speakerLabel().isBlank()) {
+        continue;
+      }
+      for (final AttendeeSegments anchorGroup : kvsResult.attendeeSegments()) {
+        for (final TranscriptSegmentInput anchorSegment : anchorGroup.segments()) {
+          final long score = matchScore(mp4Segment, anchorSegment);
+          if (score > 0L) {
+            scoresBySpeaker
+                .computeIfAbsent(mp4Segment.speakerLabel(), ignored -> new HashMap<>())
+                .merge(anchorGroup.attendee(), score, Long::sum);
+          }
+        }
+      }
+    }
+
+    final Map<String, AttendeeIdentity> mapped = bestNonTiedSpeakerMatches(scoresBySpeaker);
+    applyTwoPartyElimination(mp4Segments, kvsResult.attendees(), mapped);
+    return mapped;
+  }
+
+  private static Map<String, AttendeeIdentity> bestNonTiedSpeakerMatches(
+      final Map<String, Map<AttendeeIdentity, Long>> scoresBySpeaker) {
+    final Map<String, AttendeeIdentity> mapped = new HashMap<>();
+    for (final Map.Entry<String, Map<AttendeeIdentity, Long>> entry : scoresBySpeaker.entrySet()) {
+      AttendeeIdentity best = null;
+      long bestScore = 0L;
+      boolean tied = false;
+      for (final Map.Entry<AttendeeIdentity, Long> score : entry.getValue().entrySet()) {
+        if (score.getValue() > bestScore) {
+          best = score.getKey();
+          bestScore = score.getValue();
+          tied = false;
+        } else if (score.getValue() == bestScore) {
+          tied = true;
+        }
+      }
+      if (best != null && !tied) {
+        mapped.put(entry.getKey(), best);
+      }
+    }
+    return mapped;
+  }
+
+  private static void applyTwoPartyElimination(
+      final List<TranscriptSegmentInput> mp4Segments,
+      final List<AttendeeIdentity> attendees,
+      final Map<String, AttendeeIdentity> mapped) {
+    final Set<String> mp4Speakers = new HashSet<>();
+    for (final TranscriptSegmentInput segment : mp4Segments) {
+      if (segment != null && segment.speakerLabel() != null && !segment.speakerLabel().isBlank()) {
+        mp4Speakers.add(segment.speakerLabel());
+      }
+    }
+    if (mp4Speakers.size() != 2 || attendees.size() != 2 || mapped.size() != 1) {
+      return;
+    }
+
+    final Set<AttendeeIdentity> mappedAttendees = new HashSet<>(mapped.values());
+    AttendeeIdentity remainingAttendee = null;
+    for (final AttendeeIdentity attendee : attendees) {
+      if (!mappedAttendees.contains(attendee)) {
+        remainingAttendee = attendee;
+      }
+    }
+    String remainingSpeaker = null;
+    for (final String speaker : mp4Speakers) {
+      if (!mapped.containsKey(speaker)) {
+        remainingSpeaker = speaker;
+      }
+    }
+    if (remainingAttendee != null && remainingSpeaker != null) {
+      mapped.put(remainingSpeaker, remainingAttendee);
+    }
+  }
+
+  private static long matchScore(
+      final TranscriptSegmentInput mp4Segment, final TranscriptSegmentInput anchorSegment) {
+    return overlapMs(mp4Segment, anchorSegment)
+        + (sharedTokenCount(mp4Segment.text(), anchorSegment.text()) * 1_000L);
+  }
+
+  private static long overlapMs(
+      final TranscriptSegmentInput left, final TranscriptSegmentInput right) {
+    if (left.startMs() == null
+        || left.endMs() == null
+        || right.startMs() == null
+        || right.endMs() == null) {
+      return 0L;
+    }
+    final long start = Math.max(left.startMs(), right.startMs());
+    final long end = Math.min(left.endMs(), right.endMs());
+    return Math.max(0L, end - start);
+  }
+
+  private static int sharedTokenCount(final String left, final String right) {
+    final Set<String> leftTokens = tokens(left);
+    if (leftTokens.isEmpty()) {
+      return 0;
+    }
+    int shared = 0;
+    for (final String token : tokens(right)) {
+      if (leftTokens.contains(token)) {
+        shared++;
+      }
+    }
+    return shared;
+  }
+
+  private static Set<String> tokens(final String text) {
+    final Set<String> tokens = new HashSet<>();
+    if (text == null || text.isBlank()) {
+      return tokens;
+    }
+    for (final String raw : text.toLowerCase(java.util.Locale.ROOT).split("[^a-z0-9]+")) {
+      if (raw.length() > 2) {
+        tokens.add(raw);
+      }
+    }
+    return tokens;
+  }
+
+  private static TranscriptSegmentInput withSpeakerLabel(
+      final TranscriptSegmentInput segment, final String speakerLabel) {
+    return new TranscriptSegmentInput(
+        speakerLabel,
+        segment.text(),
+        segment.startMs(),
+        segment.endMs(),
+        segment.source(),
+        segment.occurredAt());
   }
 
   private List<TranscriptSegmentInput> transcribeSingleAttendee(
@@ -480,7 +695,14 @@ public class PostCallTranscriptionService {
     if (text.length() == 0) {
       return List.of();
     }
-    return List.of(buildSegment(speakerLabel, text.toString().trim(), startMs, endMs, recordingStartedAt));
+    return List.of(
+        buildSegment(
+            speakerLabel,
+            text.toString().trim(),
+            startMs,
+            endMs,
+            recordingStartedAt,
+            KVS_TRANSCRIPT_SOURCE));
   }
 
   private static String buildAttendeeWavKey(final CallRecording rec, final CallAttendee attendee) {
@@ -639,7 +861,7 @@ public class PostCallTranscriptionService {
         if (currentSpeaker != null && currentText.length() > 0) {
           segments.add(buildSegment(
               currentSpeaker, currentText.toString().trim(),
-              currentStart, currentEnd, recordingStartedAt));
+              currentStart, currentEnd, recordingStartedAt, MP4_TRANSCRIPT_SOURCE));
         }
         currentSpeaker = speaker;
         currentText.setLength(0);
@@ -662,7 +884,7 @@ public class PostCallTranscriptionService {
     if (currentSpeaker != null && currentText.length() > 0) {
       segments.add(buildSegment(
           currentSpeaker, currentText.toString().trim(),
-          currentStart, currentEnd, recordingStartedAt));
+          currentStart, currentEnd, recordingStartedAt, MP4_TRANSCRIPT_SOURCE));
     }
     return segments;
   }
@@ -673,11 +895,12 @@ public class PostCallTranscriptionService {
       final String text,
       final Long startMs,
       final Long endMs,
-      final LocalDateTime recordingStartedAt) {
+      final LocalDateTime recordingStartedAt,
+      final String source) {
     final LocalDateTime occurredAt = recordingStartedAt != null && startMs != null
         ? recordingStartedAt.plusNanos(startMs * 1_000_000L)
         : null;
-    return new TranscriptSegmentInput(speaker, text, startMs, endMs, TRANSCRIPT_SOURCE, occurredAt);
+    return new TranscriptSegmentInput(speaker, text, startMs, endMs, source, occurredAt);
   }
 
   /**
