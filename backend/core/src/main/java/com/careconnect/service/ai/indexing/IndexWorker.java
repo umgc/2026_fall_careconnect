@@ -25,9 +25,9 @@ import java.util.List;
  * <p>MVP transport: process outbox rows in-process (same pattern as {@code EvvOutboxProcessor}).
  * Claim and per-row work run in <em>separate</em> transactions so a deferred/failed ingest
  * cannot mark the batch rollback-only and undo earlier successes. Rows are claimed with
- * {@code FOR UPDATE SKIP LOCKED} so multiple ECS tasks do not process the same outbox row
- * concurrently while the claim transaction is open. A later change can publish to SNS/SQS
- * and keep this service as the message handler.
+ * {@code FOR UPDATE SKIP LOCKED} and a durable {@code claimed_at} lease so multiple ECS
+ * tasks do not process the same outbox row after the claim transaction commits. A later
+ * change can publish to SNS/SQS and keep this service as the message handler.
  */
 @Service
 @ConditionalOnProperty(
@@ -45,6 +45,7 @@ public class IndexWorker {
 
     private final int batchSize;
     private final int maxAttempts;
+    private final int claimLeaseMinutes;
 
     public IndexWorker(
             final IndexingOutboxRepository outboxRepository,
@@ -52,23 +53,32 @@ public class IndexWorker {
             final ObjectMapper objectMapper,
             final PlatformTransactionManager transactionManager,
             @Value("${careconnect.indexing.outbox.batch-size:25}") final int batchSize,
-            @Value("${careconnect.indexing.outbox.max-attempts:5}") final int maxAttempts) {
+            @Value("${careconnect.indexing.outbox.max-attempts:5}") final int maxAttempts,
+            @Value("${careconnect.indexing.outbox.claim-lease-minutes:2}") final int claimLeaseMinutes) {
         this.outboxRepository = outboxRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.batchSize = Math.max(1, batchSize);
         this.maxAttempts = Math.max(1, maxAttempts);
+        this.claimLeaseMinutes = Math.max(1, claimLeaseMinutes);
     }
 
     /**
-     * Claims a batch of unprocessed rows in one short transaction, then processes each row
-     * with ingest and outbox status updates in separate transactions (EvvOutboxProcessor-style).
+     * Claims a batch of unprocessed rows in one short transaction (lock + lease), then
+     * processes each row with ingest and outbox status updates in separate transactions.
      */
     @Scheduled(fixedDelayString = "${careconnect.indexing.outbox.poll-interval-ms:15000}")
     public void pollAndProcess() {
-        final List<IndexingOutboxRow> pending = transactionTemplate.execute(
-                status -> outboxRepository.claimUnprocessedForPolling(batchSize));
+        final List<IndexingOutboxRow> pending = transactionTemplate.execute(status -> {
+            final List<IndexingOutboxRow> rows =
+                    outboxRepository.claimUnprocessedForPolling(batchSize, claimLeaseMinutes);
+            final LocalDateTime claimedAt = LocalDateTime.now();
+            for (final IndexingOutboxRow row : rows) {
+                row.setClaimedAt(claimedAt);
+            }
+            return outboxRepository.saveAll(rows);
+        });
         if (pending == null || pending.isEmpty()) {
             return;
         }
@@ -94,7 +104,9 @@ public class IndexWorker {
         } catch (final RuntimeException ex) {
             final Throwable root = rootCause(ex);
             transactionTemplate.executeWithoutResult(status -> {
-                if (root instanceof IndexingDeferredException) {
+                if (root instanceof IndexingDeferredException deferred && !deferred.burnsAttempt()) {
+                    releaseClaimWithoutBurn(row, deferred.getMessage());
+                } else if (root instanceof IndexingDeferredException) {
                     recordDeferOrDeadLetter(row, attempts, root.getMessage());
                 } else {
                     recordFailureOrDeadLetter(row, attempts, root.getMessage());
@@ -107,6 +119,7 @@ public class IndexWorker {
             final IndexingOutboxRow row, final int attempts, final Integer written) {
         row.setAttemptCount(attempts + 1);
         row.setProcessedAt(LocalDateTime.now());
+        row.setClaimedAt(null);
         row.setLastError(null);
         outboxRepository.save(row);
         log.info("IndexWorker processed outboxId={} eventType={} chunksWritten={}",
@@ -115,11 +128,24 @@ public class IndexWorker {
 
     private void deadLetterExceededMax(final IndexingOutboxRow row, final int attempts) {
         row.setProcessedAt(LocalDateTime.now());
+        row.setClaimedAt(null);
         row.setLastError(truncate(
                 "Exceeded max attempts (" + maxAttempts + "); lastError=" + row.getLastError()));
         outboxRepository.save(row);
         log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts",
                 row.getId(), row.getEventType(), attempts);
+    }
+
+    /**
+     * Known-unimplemented work (e.g. visit summaries until Task 1.4): leave unprocessed
+     * and clear the lease without burning attempt budget.
+     */
+    private void releaseClaimWithoutBurn(final IndexingOutboxRow row, final String message) {
+        row.setClaimedAt(null);
+        row.setLastError(truncate(message));
+        outboxRepository.save(row);
+        log.warn("IndexWorker parking outboxId={} eventType={} without burning attempts: {}",
+                row.getId(), row.getEventType(), message);
     }
 
     /**
@@ -130,6 +156,7 @@ public class IndexWorker {
             final IndexingOutboxRow row, final int attempts, final String message) {
         final int nextAttempts = attempts + 1;
         row.setAttemptCount(nextAttempts);
+        row.setClaimedAt(null);
         row.setLastError(truncate(message));
         if (nextAttempts >= maxAttempts) {
             row.setProcessedAt(LocalDateTime.now());
@@ -146,6 +173,7 @@ public class IndexWorker {
             final IndexingOutboxRow row, final int attempts, final String message) {
         final int nextAttempts = attempts + 1;
         row.setAttemptCount(nextAttempts);
+        row.setClaimedAt(null);
         row.setLastError(truncate(message));
         if (nextAttempts >= maxAttempts) {
             row.setProcessedAt(LocalDateTime.now());

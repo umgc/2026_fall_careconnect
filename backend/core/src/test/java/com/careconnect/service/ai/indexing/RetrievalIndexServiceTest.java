@@ -237,7 +237,8 @@ class RetrievalIndexServiceTest {
 
         assertThatThrownBy(() -> service.ingestSummaryCreated(payload))
                 .isInstanceOf(IndexingDeferredException.class)
-                .hasMessageContaining("Task 1.4");
+                .hasMessageContaining("Task 1.4")
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt()).isFalse());
         verify(callSummaryRepository, never()).findById(any());
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
     }

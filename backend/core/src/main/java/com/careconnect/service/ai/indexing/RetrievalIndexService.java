@@ -32,7 +32,8 @@ import java.util.Optional;
  *
  * <p>Called by {@link IndexWorker} after outbox events are dequeued. Does not publish
  * SNS/SQS itself — that remains a future transport upgrade. Embeddings are left for Task 4.3;
- * FTS {@code search_vector} is maintained by the existing DB trigger.
+ * FTS {@code search_vector} is maintained automatically by the PostgreSQL trigger on
+ * {@code chunk_text} insert/update (Task 4.2) — this service does not set it in application code.
  */
 @Service
 public class RetrievalIndexService {
@@ -80,9 +81,11 @@ public class RetrievalIndexService {
         }
         if (isVisitSummary(payload)) {
             // Leave outbox unprocessed until visit_summaries indexing lands (Task 1.4).
+            // Do not burn attempt budget — otherwise the row dead-letters before 1.4 ships.
             throw new IndexingDeferredException(
                     "Visit summary indexing not implemented yet (Task 1.4) for summaryId="
-                            + payload.summaryId());
+                            + payload.summaryId(),
+                    false);
         }
 
         final String sourceRecordId = String.valueOf(payload.summaryId());
@@ -133,7 +136,9 @@ public class RetrievalIndexService {
     /**
      * Indexes all transcript segments for a call. Uses {@code callId} as
      * {@code source_record_id} so re-delivery replaces the prior segment set.
-     * Defers (does not burn attempts) when patientId cannot be resolved.
+     * Defers when patientId cannot be resolved. {@code IndexWorker} burns attempt
+     * budget on {@link IndexingDeferredException} by default so deferred rows
+     * eventually dead-letter.
      *
      * @return number of chunks written
      */
