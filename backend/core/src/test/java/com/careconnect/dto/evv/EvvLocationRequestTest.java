@@ -209,4 +209,98 @@ class EvvLocationRequestTest {
         // Should not throw
         request.validate();
     }
+
+    // ─── validate(): PATIENT_ADDRESS with null noGpsReason ───────────────────
+
+    @Test
+    void validate_patientAddressWithNullNoGpsReason_throwsIllegalArgumentException() throws Exception {
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_OUT)
+                .type(EvvLocationType.PATIENT_ADDRESS)
+                .noGpsReason(null)
+                .build();
+
+        assertThatThrownBy(request::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noGpsReason is required when using PATIENT_ADDRESS");
+    }
+
+    // ─── validate(): MANUAL with valid address and reason ────────────────────
+
+    @Test
+    void validate_manualWithAddressAndReason_doesNotThrow() throws Exception {
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.MANUAL)
+                .manualAddress("123 Main St")
+                .noGpsReason(com.careconnect.model.evv.NoGpsReason.GPS_TIMEOUT)
+                .build();
+
+        // Should not throw
+        request.validate();
+    }
+
+    // ─── validate(): MANUAL with null manualAddress ───────────────────────────
+
+    @Test
+    void validate_manualWithNullAddress_throwsIllegalArgumentException() throws Exception {
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.MANUAL)
+                .manualAddress(null)
+                .build();
+
+        assertThatThrownBy(request::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("MANUAL location type requires a manualAddress");
+    }
+
+    // ─── validate(): MANUAL with blank manualAddress ──────────────────────────
+
+    @Test
+    void validate_manualWithBlankAddress_throwsIllegalArgumentException() throws Exception {
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.MANUAL)
+                .manualAddress("   ")
+                .build();
+
+        assertThatThrownBy(request::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("MANUAL location type requires a manualAddress");
+    }
+
+    // ─── validate(): MANUAL with address but null noGpsReason ─────────────────
+
+    @Test
+    void validate_manualWithAddressButNullNoGpsReason_throwsIllegalArgumentException() throws Exception {
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.MANUAL)
+                .manualAddress("123 Main St")
+                .noGpsReason(null)
+                .build();
+
+        assertThatThrownBy(request::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noGpsReason is required when using MANUAL");
+    }
+
+    // ─── validate(): null type does not throw ─────────────────────────────────
+
+    @Test
+    void validate_nullType_doesNotThrow() throws Exception {
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .build();
+
+        // type is null - no branch matches, method returns normally
+        request.validate();
+    }
 }

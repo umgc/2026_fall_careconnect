@@ -357,10 +357,8 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/caregiver-dashboard',
       builder: (context, state) {
         final caregiverIdStr = state.uri.queryParameters['caregiverId'];
-        final patientIdStr = state.uri.queryParameters['patientId'];
 
         final caregiverId = caregiverIdStr != null ? int.tryParse(caregiverIdStr) : null;
-        final patientId = patientIdStr != null ? int.tryParse(patientIdStr) : null;
 
         if (caregiverId == null || caregiverId <= 0) {
           return Scaffold(
@@ -910,7 +908,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
             body: Center(child: Text('Invalid note ID or missing note data')),
           );
         }
-        final note = extra;
         return NotetakerDetailView();
       },
     ),
@@ -976,8 +973,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/alexaLogin/:redirectUri/:state',
       builder: (context, state) {
-    final redirectUri = state.pathParameters['redirectUri'];
-    final oauthState = state.pathParameters['state'];
     return AlexaLoginPage(
       key: ValueKey('alexaLoginPage'),
       // optionally pass them into your widget if you modify its constructor
