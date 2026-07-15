@@ -115,6 +115,73 @@ class CallSummaryServiceTest {
     }
 
     @Nested
+    @DisplayName("getSummaryById (WBS 3.11.6)")
+    class GetSummaryByIdTests {
+
+        @Test
+        @DisplayName("returns empty when id is null")
+        void getSummaryById_nullId_returnsEmpty() {
+            assertThat(service.getSummaryById(null)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("returns empty when the row does not exist")
+        void getSummaryById_notFound_returnsEmpty() {
+            when(callSummaryRepository.findById(42L)).thenReturn(Optional.empty());
+
+            assertThat(service.getSummaryById(42L)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("returns the response map when the row is found")
+        void getSummaryById_found_returnsResponseMap() {
+            CallSummary summary = new CallSummary();
+            summary.setCallId(CALL_ID);
+            summary.setStatus("SUCCESS");
+            summary.setGeneratedAt(LocalDateTime.now());
+            summary.setTranscriptSegmentCount(3);
+            summary.setGeneratedByUserId(9L);
+            summary.setSummaryJson("""
+                    {"headline":"Stable call","overallAssessment":"Patient remained stable."}
+                    """);
+
+            when(callSummaryRepository.findById(101L)).thenReturn(Optional.of(summary));
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(true);
+
+            Optional<Map<String, Object>> result = service.getSummaryById(101L);
+
+            assertThat(result).isPresent();
+            assertThat(result.get()).containsEntry("callId", CALL_ID);
+            assertThat(result.get()).containsEntry("status", "SUCCESS");
+            assertThat(result.get()).containsEntry("transcriptArchived", true);
+            assertThat(asObjectMap(result.get().get("summary")))
+                    .containsEntry("headline", "Stable call");
+        }
+
+        @Test
+        @DisplayName("returns the response map even when the row status is ERROR")
+        void getSummaryById_errorStatusEntity_stillReturnsResponse() {
+            CallSummary summary = new CallSummary();
+            summary.setCallId(CALL_ID);
+            summary.setStatus("ERROR");
+            summary.setGeneratedAt(LocalDateTime.now());
+            summary.setTranscriptSegmentCount(0);
+            summary.setErrorMessage("bedrock timeout");
+            summary.setSummaryJson("{}");
+
+            when(callSummaryRepository.findById(202L)).thenReturn(Optional.of(summary));
+            when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
+
+            Optional<Map<String, Object>> result = service.getSummaryById(202L);
+
+            assertThat(result).isPresent();
+            assertThat(result.get()).containsEntry("status", "ERROR");
+            assertThat(result.get()).containsEntry("errorMessage", "bedrock timeout");
+            assertThat(result.get()).containsEntry("transcriptArchived", false);
+        }
+    }
+
+    @Nested
     @DisplayName("generateAndStoreSummary")
     class GenerateAndStoreSummaryTests {
 

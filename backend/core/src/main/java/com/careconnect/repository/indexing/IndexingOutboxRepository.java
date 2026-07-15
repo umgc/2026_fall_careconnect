@@ -51,6 +51,30 @@ public interface IndexingOutboxRepository extends JpaRepository<IndexingOutboxRo
     List<IndexingOutboxRow> findUnprocessedForPolling(Pageable pageable);
 
     /**
+     * Selects a batch of claimable outbox rows using {@code FOR UPDATE SKIP LOCKED}.
+     * Callers must stamp {@code claimed_at} in the <em>same</em> short transaction
+     * before commit so the lease survives after the lock is released (multi-ECS safe).
+     * Rows with a non-expired {@code claimed_at} are skipped. Rows that have already
+     * reached {@code maxAttempts} are still selected so they can be dead-lettered.
+     *
+     * @param limit         maximum rows to claim
+     * @param leaseMinutes  rows claimed more recently than this many minutes ago are skipped
+     * @return locked unprocessed rows in insertion order
+     */
+    @Query(value = """
+            SELECT * FROM indexing_outbox
+            WHERE processed_at IS NULL
+              AND (claimed_at IS NULL
+                   OR claimed_at < (NOW() - CAST((:leaseMinutes || ' minutes') AS INTERVAL)))
+            ORDER BY id ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<IndexingOutboxRow> claimUnprocessedForPolling(
+            @Param("limit") int limit,
+            @Param("leaseMinutes") int leaseMinutes);
+
+    /**
      * Count of unprocessed rows. Cheap because it uses the partial
      * index. Useful for the poller's monitoring or backlog dashboards.
      */

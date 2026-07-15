@@ -24,8 +24,9 @@ import java.time.LocalDateTime;
  * event and the source record commit or roll back together. Ravi's
  * poller (backlog 3.4) reads unprocessed rows in insertion order,
  * publishes each to SNS, and stamps {@link #processedAt} on success.
- * An {@code IndexWorker} (backlog 1.5) consumes from SQS and writes to
- * the {@code retrieval_index_chunk} table.
+ * An {@code IndexWorker} (Task 4.1) currently consumes outbox rows in-process
+ * and writes to the {@code retrieval_index_chunk} table (SNS/SQS remains a
+ * future transport upgrade).
  *
  * <p>Known {@link #eventType} values, per the 2026-07-03 Transcript
  * Ingest and SUMMARY_CREATED Indexing Contract:
@@ -117,6 +118,14 @@ public class IndexingOutboxRow {
      */
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
+
+    /**
+     * Set when {@code IndexWorker} claims the row for processing. Other workers
+     * skip rows with a fresh {@code claimed_at} until the lease expires so
+     * {@code FOR UPDATE SKIP LOCKED} is not required across the whole ingest.
+     */
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
 
     /**
      * Populate defaults when the caller does not set them explicitly.
