@@ -31,6 +31,8 @@ public final class QuestionMapper {
         if (src.formVersion() != null) target.setFormVersion(src.formVersion());
         if (src.sectionKey() != null) target.setSectionKey(src.sectionKey());
         if (src.fieldKey() != null) target.setFieldKey(src.fieldKey());
-        target.setScoreWeight(src.scoreWeight() == null ? null : java.math.BigDecimal.valueOf(src.scoreWeight()));
+        if (src.scoreWeight() != null) {
+            target.setScoreWeight(java.math.BigDecimal.valueOf(src.scoreWeight()));
+        }
     }
 }

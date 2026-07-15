@@ -8,15 +8,29 @@ ALTER TABLE questions
   ADD COLUMN IF NOT EXISTS score_weight NUMERIC(8,2);
 
 UPDATE questions
-SET field_key = LOWER(
+SET field_key = LEFT(LOWER(
   REGEXP_REPLACE(
     REGEXP_REPLACE(prompt, '[^a-zA-Z0-9]+', '_', 'g'),
     '^_+|_+$',
     '',
     'g'
   )
-)
+), 128)
 WHERE field_key IS NULL OR field_key = '';
+
+WITH duplicate_field_keys AS (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY form_key, form_version, field_key
+           ORDER BY id
+         ) AS duplicate_rank
+  FROM questions
+)
+UPDATE questions q
+SET field_key = LEFT(q.field_key, 110) || '_' || q.id
+FROM duplicate_field_keys d
+WHERE q.id = d.id
+  AND d.duplicate_rank > 1;
 
 UPDATE questions
 SET field_key = CONCAT('question_', id)
@@ -24,6 +38,9 @@ WHERE field_key IS NULL OR field_key = '';
 
 ALTER TABLE questions
   ALTER COLUMN field_key SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_questions_form_version_field_key
+  ON questions (form_key, form_version, field_key);
 
 ALTER TABLE check_in_questions
   ADD COLUMN IF NOT EXISTS form_key_snapshot VARCHAR(64) NOT NULL DEFAULT 'virtual-checkin',

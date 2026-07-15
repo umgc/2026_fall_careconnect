@@ -22,13 +22,23 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     List<Question> findAllByActiveFalseOrderByOrdinalAsc();
 
-    /** Shift all questions at or above the given ordinal up by 1, excluding the question being updated. */
+    /** Shift ordinals within the same form/version at or above the given ordinal by 1. */
     @Modifying
-    @Query("UPDATE Question q SET q.ordinal = q.ordinal + 1 WHERE q.ordinal >= :fromOrdinal AND q.id <> :excludeId")
-    void shiftOrdinalsUp(@Param("fromOrdinal") int fromOrdinal, @Param("excludeId") Long excludeId);
+    @Query("""
+            UPDATE Question q
+            SET q.ordinal = q.ordinal + 1
+            WHERE q.ordinal >= :fromOrdinal
+              AND q.id <> :excludeId
+              AND q.formKey = :formKey
+              AND q.formVersion = :formVersion
+            """)
+    void shiftOrdinalsUp(@Param("fromOrdinal") int fromOrdinal,
+                         @Param("excludeId") Long excludeId,
+                         @Param("formKey") String formKey,
+                         @Param("formVersion") int formVersion);
 
-    /** Check whether any other question (excluding the current id) occupies the given ordinal. */
-    boolean existsByOrdinalAndIdNot(int ordinal, Long id);
+    /** Check whether any other question in the same form/version occupies the given ordinal. */
+    boolean existsByOrdinalAndFormKeyAndFormVersionAndIdNot(int ordinal, String formKey, int formVersion, Long id);
 
     @Query("""
         SELECT q FROM Question q

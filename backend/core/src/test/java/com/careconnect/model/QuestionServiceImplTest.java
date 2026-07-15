@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -125,7 +126,7 @@ class QuestionServiceImplTest {
     void create_noConflict_savesWithoutShifting() throws Exception {
         // Arrange
         final QuestionUpsertDTO body = new QuestionUpsertDTO("How do you feel?", QuestionType.TEXT, false, 1);
-        when(repo.existsByOrdinalAndIdNot(1, Long.MAX_VALUE)).thenReturn(false);
+        when(repo.existsByOrdinalAndFormKeyAndFormVersionAndIdNot(1, "virtual-checkin", 1, Long.MAX_VALUE)).thenReturn(false);
         final Question saved = Question.builder().id(10L).prompt("How do you feel?")
                 .type(QuestionType.TEXT).required(false).active(true).ordinal(1).build();
         when(repo.save(any(Question.class))).thenReturn(saved);
@@ -136,7 +137,7 @@ class QuestionServiceImplTest {
         // Assert
         assertThat(result.id()).isEqualTo(10L);
         assertThat(result.active()).isTrue();
-        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong());
+        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong(), anyString(), anyInt());
         verify(repo).save(any(Question.class));
     }
 
@@ -144,7 +145,7 @@ class QuestionServiceImplTest {
     void create_ordinalConflict_shiftsExistingQuestionsUp() throws Exception {
         // Arrange – ordinal 2 is already taken
         final QuestionUpsertDTO body = new QuestionUpsertDTO("New Q?", QuestionType.TEXT, false, 2);
-        when(repo.existsByOrdinalAndIdNot(2, Long.MAX_VALUE)).thenReturn(true);
+        when(repo.existsByOrdinalAndFormKeyAndFormVersionAndIdNot(2, "virtual-checkin", 1, Long.MAX_VALUE)).thenReturn(true);
         final Question saved = Question.builder().id(11L).prompt("New Q?")
                 .type(QuestionType.TEXT).active(true).ordinal(2).build();
         when(repo.save(any(Question.class))).thenReturn(saved);
@@ -153,7 +154,7 @@ class QuestionServiceImplTest {
         service.create(body);
 
         // Assert – shift was triggered
-        verify(repo).shiftOrdinalsUp(2, Long.MAX_VALUE);
+        verify(repo).shiftOrdinalsUp(2, Long.MAX_VALUE, "virtual-checkin", 1);
         verify(repo).save(any(Question.class));
     }
 
@@ -176,7 +177,7 @@ class QuestionServiceImplTest {
         // Assert
         assertThat(result).isPresent();
         assertThat(result.get().prompt()).isEqualTo("Updated prompt?");
-        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong());
+        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong(), anyString(), anyInt());
     }
 
     @Test
@@ -188,14 +189,14 @@ class QuestionServiceImplTest {
         final Question updated = Question.builder().id(7L).prompt("Updated prompt?")
                 .type(QuestionType.YES_NO).required(true).active(true).ordinal(2).build();
         when(repo.findById(7L)).thenReturn(Optional.of(existing));
-        when(repo.existsByOrdinalAndIdNot(2, 7L)).thenReturn(true);
+        when(repo.existsByOrdinalAndFormKeyAndFormVersionAndIdNot(2, "virtual-checkin", 1, 7L)).thenReturn(true);
         when(repo.save(any(Question.class))).thenReturn(updated);
 
         // Act
         service.update(7L, body);
 
         // Assert
-        verify(repo).shiftOrdinalsUp(2, 7L);
+        verify(repo).shiftOrdinalsUp(2, 7L, "virtual-checkin", 1);
     }
 
     @Test
@@ -207,14 +208,14 @@ class QuestionServiceImplTest {
         final Question updated = Question.builder().id(8L).prompt("Updated?")
                 .type(QuestionType.TEXT).active(true).ordinal(3).build();
         when(repo.findById(8L)).thenReturn(Optional.of(existing));
-        when(repo.existsByOrdinalAndIdNot(3, 8L)).thenReturn(false);
+        when(repo.existsByOrdinalAndFormKeyAndFormVersionAndIdNot(3, "virtual-checkin", 1, 8L)).thenReturn(false);
         when(repo.save(any(Question.class))).thenReturn(updated);
 
         // Act
         service.update(8L, body);
 
         // Assert
-        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong());
+        verify(repo, never()).shiftOrdinalsUp(anyInt(), anyLong(), anyString(), anyInt());
     }
 
     // ─── update() – not found ────────────────────────────────────────────────

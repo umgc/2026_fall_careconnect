@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Locale;
 
@@ -59,7 +60,7 @@ public class QuestionServiceImpl implements QuestionService {
         QuestionMapper.applyUpsert(q, body);
         applyMetadataDefaults(q, body);
         q.setActive(true);
-        resolveOrdinalConflict(q.getOrdinal(), Long.MAX_VALUE);
+        resolveOrdinalConflict(q.getOrdinal(), Long.MAX_VALUE, q.getFormKey(), q.getFormVersion());
         q = repo.save(q);
         return QuestionMapper.toDto(q);
     }
@@ -67,12 +68,19 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public Optional<QuestionDTO> update(Long id, QuestionUpsertDTO body) {
         return repo.findById(id).map(existing -> {
-            int newOrdinal = body.ordinal();
-            if (newOrdinal != existing.getOrdinal() && repo.existsByOrdinalAndIdNot(newOrdinal, id)) {
-                repo.shiftOrdinalsUp(newOrdinal, id);
-            }
+            int previousOrdinal = existing.getOrdinal();
+            String previousFormKey = existing.getFormKey();
+            int previousFormVersion = existing.getFormVersion();
+
             QuestionMapper.applyUpsert(existing, body);
             applyMetadataDefaults(existing, body);
+
+            boolean ordinalChanged = existing.getOrdinal() != previousOrdinal;
+            boolean formChanged = !Objects.equals(existing.getFormKey(), previousFormKey)
+                    || existing.getFormVersion() != previousFormVersion;
+            if (ordinalChanged || formChanged) {
+                resolveOrdinalConflict(existing.getOrdinal(), id, existing.getFormKey(), existing.getFormVersion());
+            }
             existing = repo.save(existing);
             return QuestionMapper.toDto(existing);
         });
@@ -87,9 +95,9 @@ public class QuestionServiceImpl implements QuestionService {
         });
     }
 
-    private void resolveOrdinalConflict(int targetOrdinal, Long excludeId) {
-        if (repo.existsByOrdinalAndIdNot(targetOrdinal, excludeId)) {
-            repo.shiftOrdinalsUp(targetOrdinal, excludeId);
+    private void resolveOrdinalConflict(int targetOrdinal, Long excludeId, String formKey, int formVersion) {
+        if (repo.existsByOrdinalAndFormKeyAndFormVersionAndIdNot(targetOrdinal, formKey, formVersion, excludeId)) {
+            repo.shiftOrdinalsUp(targetOrdinal, excludeId, formKey, formVersion);
         }
     }
 
@@ -128,7 +136,7 @@ public class QuestionServiceImpl implements QuestionService {
         if (!normalized.isBlank()) {
             return normalized;
         }
-        return "question-field";
+        return "question_field";
     }
 
     private String normalizeKey(String value) {
