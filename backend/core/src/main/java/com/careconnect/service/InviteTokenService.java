@@ -162,40 +162,97 @@ public class InviteTokenService {
     // =====================================================================
 
     /**
-     * Sanitised preview of an invite for a pre-registration user. Returns the
-     * link type, status, and expiration metadata. Expired/revoked/accepted/
-     * unknown tokens are rejected with clear {@link AppException} errors.
+     * Resolve invite context for a pre-registration user ("Who Invited Me?", #59).
      *
-     * (Issue #59 layers richer "Who Invited Me?" context and non-enumerating
-     * behaviour on top of this method.)
+     * Non-enumerating (issues #59 + #81): ALWAYS returns a stable
+     * {@link InvitePreviewResponse}. Whether the token is unknown, expired,
+     * revoked, or already accepted, the caller gets the same shape; only the
+     * {@code status} field differs, and only after the token hash is verified.
+     * Unknown / malformed / hash-mismatch tokens all collapse to status INVALID
+     * with null context, so an attacker cannot probe for valid tokens or learn
+     * whether a care circle exists. Never throws for token state — the controller
+     * returns HTTP 200 in every case.
      */
     @Transactional(readOnly = true)
     public InvitePreviewResponse previewInvite(String rawToken, String actorIp) {
-        // persistExpiry=false: this runs in a read-only tx, so we must NOT write.
-        InviteToken token = resolveUsableToken(rawToken, false);
+        Optional<InviteToken> maybe = resolveTokenQuietly(rawToken);
 
-        FamilyMemberLink link = linkRepository.findById(token.getLinkId())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Care-circle link not found"));
+        if (maybe.isEmpty()) {
+            // Unknown or hash-mismatch — indistinguishable to the caller.
+            return InvitePreviewResponse.notValid("INVALID", "NONE");
+        }
+
+        InviteToken token = maybe.get();
+
+        // Terminal / non-usable states: return a safe status, no context.
+        switch (token.getStatus()) {
+            case REVOKED:
+                return InvitePreviewResponse.notValid("REVOKED", "REQUEST_NEW");
+            case ACCEPTED:
+                auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED,
+                        null, actorIp, "preview-accepted");
+                return InvitePreviewResponse.notValid("ACCEPTED", "SIGN_IN");
+            case EXPIRED:
+                return InvitePreviewResponse.notValid("EXPIRED", "REQUEST_NEW");
+            case PENDING:
+                if (token.isExpired()) {
+                    return InvitePreviewResponse.notValid("EXPIRED", "REQUEST_NEW");
+                }
+                break;
+            default:
+                return InvitePreviewResponse.notValid("INVALID", "NONE");
+        }
+
+        // Valid + usable: surface the inviter / patient / reason context.
+        FamilyMemberLink link = linkRepository.findById(token.getLinkId()).orElse(null);
+        if (link == null) {
+            // Link vanished — treat as invalid rather than leaking a 404.
+            return InvitePreviewResponse.notValid("INVALID", "NONE");
+        }
 
         String inviterName = displayNameForUserId(token.getCreatedByUserId());
         String patientName = link.getPatientUser() != null
                 ? patientDisplayName(link.getPatientUser())
                 : "the patient";
 
-        auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED, null, actorIp, "preview");
+        // Email-scoped invites should route the user through sign-in first so we
+        // can match the email at accept time.
+        boolean requiresSignIn = token.getInvitedEmail() != null && !token.getInvitedEmail().isBlank();
 
-        return new InvitePreviewResponse(
+        auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED,
+                null, actorIp, "preview");
+
+        return InvitePreviewResponse.valid(
                 token.getLinkId(),
                 token.getLinkType().name(),
-                token.getStatus().name(),
                 inviterName,
                 patientName,
                 token.getInviteReason(),
                 token.getInvitedEmail(),
-                token.getExpiresAt()
+                token.getExpiresAt(),
+                requiresSignIn
         );
     }
 
+    /**
+     * Resolve a raw token to its entity WITHOUT throwing — used by the
+     * non-enumerating preview. Returns empty for unknown, malformed, or
+     * hash-mismatched tokens (all treated as INVALID by the caller).
+     */
+    private Optional<InviteToken> resolveTokenQuietly(String rawToken) {
+        if (rawToken == null || rawToken.length() < LOOKUP_LENGTH) {
+            return Optional.empty();
+        }
+        String lookup = rawToken.substring(0, LOOKUP_LENGTH);
+        Optional<InviteToken> maybe = tokenRepository.findByTokenLookup(lookup);
+        if (maybe.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!tokenHashService.verifyToken(rawToken, maybe.get().getTokenHash())) {
+            return Optional.empty();
+        }
+        return maybe;
+    }
     // =====================================================================
     // ACCEPT  — POST /invite/{token}/accept
     // =====================================================================

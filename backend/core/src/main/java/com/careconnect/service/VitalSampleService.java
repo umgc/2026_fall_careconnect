@@ -14,6 +14,7 @@ import com.careconnect.repository.WearableMetricRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.Period;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -76,7 +75,6 @@ public class VitalSampleService {
                 currentUser.getId(), patientId, patientUserId, batchSource, request.readings().size());
 
         List<WearableMetric> wearableMetricsToPersist = new ArrayList<>();
-        Map<Instant, VitalSample> vitalSamplesByTimestamp = new HashMap<>();
         List<WearableReadingIngestionResponse.IngestedReading> accepted = new ArrayList<>();
         List<WearableReadingIngestionResponse.RejectedReading> rejected = new ArrayList<>();
 
@@ -97,14 +95,6 @@ public class VitalSampleService {
                         .build();
                 wearableMetricsToPersist.add(wearableMetric);
 
-                VitalSample vitalSample = vitalSamplesByTimestamp.computeIfAbsent(reading.recordedAt(), timestamp ->
-                        VitalSample.builder()
-                                .patient(patient)
-                                .timestamp(timestamp)
-                                .source(readingSource)
-                                .build());
-                applyMetricToVitalSample(vitalSample, metricType, reading.metricValue());
-
                 accepted.add(new WearableReadingIngestionResponse.IngestedReading(
                         metricType,
                         reading.metricValue(),
@@ -123,13 +113,45 @@ public class VitalSampleService {
             }
         }
 
-        if (!wearableMetricsToPersist.isEmpty()) {
-            wearableMetricRepository.saveAll(wearableMetricsToPersist);
+        List<WearableReadingIngestionResponse.IngestedReading> persistedAccepted = new ArrayList<>();
+        for (int i = 0; i < wearableMetricsToPersist.size(); i++) {
+            WearableMetric metricEntity = wearableMetricsToPersist.get(i);
+            WearableReadingIngestionResponse.IngestedReading acceptedReading = accepted.get(i);
+            try {
+                wearableMetricRepository.save(metricEntity);
+                persistedAccepted.add(acceptedReading);
+            } catch (DataIntegrityViolationException ex) {
+                String reason = rootCauseMessage(ex);
+                rejected.add(new WearableReadingIngestionResponse.RejectedReading(
+                        -1,
+                        acceptedReading.metric().name(),
+                        acceptedReading.metricValue(),
+                        acceptedReading.recordedAt(),
+                        acceptedReading.source(),
+                        "Database rejected reading: " + reason
+                ));
+            } catch (Exception ex) {
+                String reason = rootCauseMessage(ex);
+                rejected.add(new WearableReadingIngestionResponse.RejectedReading(
+                        -1,
+                        acceptedReading.metric().name(),
+                        acceptedReading.metricValue(),
+                        acceptedReading.recordedAt(),
+                        acceptedReading.source(),
+                        "Failed to persist reading: " + reason
+                ));
+            }
         }
 
+        List<VitalSample> vitalSamplesToPersist = buildVitalSamplesFromAccepted(patient, persistedAccepted);
         List<VitalSample> savedVitalSamples = new ArrayList<>();
-        if (!vitalSamplesByTimestamp.isEmpty()) {
-            savedVitalSamples = vitalSampleRepository.saveAll(vitalSamplesByTimestamp.values());
+        if (!vitalSamplesToPersist.isEmpty()) {
+            try {
+                savedVitalSamples = vitalSampleRepository.saveAll(vitalSamplesToPersist);
+            } catch (Exception ex) {
+                LOG.warn("Skipping vital_sample persistence for wearable ingestion due to error: actorUserId={}, patientId={}, reason={}",
+                        currentUser.getId(), patientId, rootCauseMessage(ex));
+            }
         }
 
         for (VitalSample savedVitalSample : savedVitalSamples) {
@@ -137,14 +159,14 @@ public class VitalSampleService {
         }
 
         LOG.info("Completed wearable ingestion: actorUserId={}, patientId={}, patientUserId={}, accepted={}, rejected={}",
-                currentUser.getId(), patientId, patientUserId, accepted.size(), rejected.size());
+                currentUser.getId(), patientId, patientUserId, persistedAccepted.size(), rejected.size());
 
         return WearableReadingIngestionResponse.builder()
                 .patientId(patientId)
                 .source(batchSource)
-                .acceptedCount(accepted.size())
+                .acceptedCount(persistedAccepted.size())
                 .rejectedCount(rejected.size())
-                .acceptedReadings(accepted)
+                .acceptedReadings(persistedAccepted)
                 .rejectedReadings(rejected)
                 .build();
     }
@@ -404,6 +426,47 @@ public class VitalSampleService {
                 // Stored in wearable_metric only for now.
             }
         }
+    }
+    private boolean supportsVitalSampleMetric(WearableMetric.MetricType metricType) {
+        return switch (metricType) {
+            case HEART_RATE, SPO2, BLOOD_PRESSURE_SYS, BLOOD_PRESSURE_DIA, WEIGHT -> true;
+            case TEMPERATURE, STEPS -> false;
+        };
+    }
+
+    private List<VitalSample> buildVitalSamplesFromAccepted(
+            Patient patient,
+            List<WearableReadingIngestionResponse.IngestedReading> acceptedReadings
+    ) {
+        java.util.Map<Instant, VitalSample> byTimestamp = new java.util.HashMap<>();
+        for (WearableReadingIngestionResponse.IngestedReading reading : acceptedReadings) {
+            if (!supportsVitalSampleMetric(reading.metric())) {
+                continue;
+            }
+            VitalSample vitalSample = byTimestamp.computeIfAbsent(reading.recordedAt(), timestamp ->
+                    VitalSample.builder()
+                            .patient(patient)
+                            .timestamp(timestamp)
+                            .source(reading.source())
+                            .build());
+            applyMetricToVitalSample(vitalSample, reading.metric(), reading.metricValue());
+        }
+        return new ArrayList<>(byTimestamp.values());
+    }
+
+    private String rootCauseMessage(Throwable throwable) {
+        Throwable root = throwable;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        if (message == null || message.isBlank()) {
+            message = throwable.getMessage();
+        }
+        if (message == null || message.isBlank()) {
+            return "Unknown persistence error";
+        }
+        return message.length() > 180 ? message.substring(0, 180) + "..." : message;
     }
     
     private String determineHeartRateAlert(Double heartRate) {
