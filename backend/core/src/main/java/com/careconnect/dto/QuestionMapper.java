@@ -10,10 +10,15 @@ public final class QuestionMapper {
         return new QuestionDTO(
                 q.getId(),
                 q.getPrompt(),
-                q.getType().name(),  // Convert QuestionType enum to String
+                q.getType().name(),
                 q.isRequired(),
                 q.isActive(),
-                q.getOrdinal()
+                q.getOrdinal(),
+                q.getFormKey(),
+                q.getFormVersion(),
+                q.getSectionKey(),
+                q.getFieldKey(),
+                q.getScoreWeight()
         );
     }
 
@@ -22,5 +27,10 @@ public final class QuestionMapper {
         target.setType(src.type());
         target.setRequired(src.required());
         target.setOrdinal(src.ordinal());
+        if (src.formKey() != null) target.setFormKey(src.formKey());
+        if (src.formVersion() != null) target.setFormVersion(src.formVersion());
+        if (src.sectionKey() != null) target.setSectionKey(src.sectionKey());
+        if (src.fieldKey() != null) target.setFieldKey(src.fieldKey());
+        target.setScoreWeight(src.scoreWeight() == null ? null : java.math.BigDecimal.valueOf(src.scoreWeight()));
     }
 }

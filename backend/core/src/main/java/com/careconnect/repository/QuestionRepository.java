@@ -12,7 +12,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     // Return all active/inactive questions
     List<Question> findByActive(Boolean active);
-    List<Question> findAllByActiveTrueOrderByOrdinalAsc();
+    List<Question> findAllByActiveTrueAndFormKeyAndFormVersionOrderByOrdinalAsc(String formKey, int formVersion);
 
     // (Optional niceties)
     List<Question> findAllByActiveTrue();
@@ -29,4 +29,17 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     /** Check whether any other question (excluding the current id) occupies the given ordinal. */
     boolean existsByOrdinalAndIdNot(int ordinal, Long id);
+
+    @Query("""
+        SELECT q FROM Question q
+        WHERE (:active IS NULL OR q.active = :active)
+          AND (:formKey IS NULL OR q.formKey = :formKey)
+          AND (:formVersion IS NULL OR q.formVersion = :formVersion)
+        ORDER BY q.formKey ASC, q.formVersion ASC, q.sectionKey ASC, q.ordinal ASC, q.id ASC
+        """)
+    List<Question> findByFilters(
+            @Param("active") Boolean active,
+            @Param("formKey") String formKey,
+            @Param("formVersion") Integer formVersion
+    );
 }

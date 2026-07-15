@@ -42,12 +42,14 @@ public class QuestionController {
         this.authorizationService = authorizationService;
     }
 
-    /** GET /api/questions?active=true|false */
+    /** GET /api/questions?active=true|false&formKey=...&formVersion=... */
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
 
     @GetMapping
-    public List<QuestionDTO> list(@RequestParam(required = false) Boolean active) {
-        return questions.listQuestions(active);
+    public List<QuestionDTO> list(@RequestParam(required = false) Boolean active,
+                                  @RequestParam(required = false) String formKey,
+                                  @RequestParam(required = false) Integer formVersion) {
+        return questions.listQuestions(active, formKey, formVersion);
     }
 
     /** GET /api/questions/{id} */

@@ -37,14 +37,14 @@ class QuestionServiceImplTest {
                 .active(true).ordinal(1).build();
         final Question q2 = Question.builder().id(2L).prompt("Q2").type(QuestionType.YES_NO)
                 .active(false).ordinal(2).build();
-        when(repo.findAllByOrderByOrdinalAsc()).thenReturn(List.of(q1, q2));
+        when(repo.findByFilters(null, null, null)).thenReturn(List.of(q1, q2));
 
         final List<QuestionDTO> result = service.listQuestions(null);
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).prompt()).isEqualTo("Q1");
         assertThat(result.get(1).prompt()).isEqualTo("Q2");
-        verify(repo).findAllByOrderByOrdinalAsc();
+        verify(repo).findByFilters(null, null, null);
     }
 
     // ─── listQuestions(true) – active only ────────────────────────────────────
@@ -53,13 +53,13 @@ class QuestionServiceImplTest {
     void listQuestions_trueActive_returnsActiveOnlyOrdered() throws Exception {
         final Question q = Question.builder().id(1L).prompt("Active Q").type(QuestionType.TEXT)
                 .active(true).ordinal(1).build();
-        when(repo.findAllByActiveTrueOrderByOrdinalAsc()).thenReturn(List.of(q));
+        when(repo.findByFilters(true, null, null)).thenReturn(List.of(q));
 
         final List<QuestionDTO> result = service.listQuestions(true);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).active()).isTrue();
-        verify(repo).findAllByActiveTrueOrderByOrdinalAsc();
+        verify(repo).findByFilters(true, null, null);
     }
 
     // ─── listQuestions(false) – inactive only ────────────────────────────────
@@ -68,13 +68,13 @@ class QuestionServiceImplTest {
     void listQuestions_falseActive_returnsInactiveOnlyOrdered() throws Exception {
         final Question q = Question.builder().id(2L).prompt("Inactive Q").type(QuestionType.YES_NO)
                 .active(false).ordinal(3).build();
-        when(repo.findAllByActiveFalseOrderByOrdinalAsc()).thenReturn(List.of(q));
+        when(repo.findByFilters(false, null, null)).thenReturn(List.of(q));
 
         final List<QuestionDTO> result = service.listQuestions(false);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).active()).isFalse();
-        verify(repo).findAllByActiveFalseOrderByOrdinalAsc();
+        verify(repo).findByFilters(false, null, null);
     }
 
     // ─── findActiveOrdered() ─────────────────────────────────────────────────
@@ -83,14 +83,14 @@ class QuestionServiceImplTest {
     void findActiveOrdered_returnsActiveMappedToDtos() throws Exception {
         final Question q = Question.builder().id(3L).prompt("Active?").type(QuestionType.TRUE_FALSE)
                 .active(true).ordinal(2).build();
-        when(repo.findAllByActiveTrueOrderByOrdinalAsc()).thenReturn(List.of(q));
+        when(repo.findAllByActiveTrueAndFormKeyAndFormVersionOrderByOrdinalAsc("virtual-checkin", 1)).thenReturn(List.of(q));
 
         final List<QuestionDTO> result = service.findActiveOrdered();
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo(3L);
         assertThat(result.get(0).type()).isEqualTo("TRUE_FALSE");
-        verify(repo).findAllByActiveTrueOrderByOrdinalAsc();
+        verify(repo).findAllByActiveTrueAndFormKeyAndFormVersionOrderByOrdinalAsc("virtual-checkin", 1);
     }
 
     // ─── getOne() – found ─────────────────────────────────────────────────────
