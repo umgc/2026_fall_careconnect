@@ -91,7 +91,8 @@ class USPSDigestServiceTest {
                 new OutlookClient(),
                 new StubGmailParser(),
                 new OutlookParser(),
-                new TokenCryptor("test-secret-key")
+                new TokenCryptor("test-secret-key"),
+                noOpMailpiecePersistence()
         );
 
         Optional<USPSDigest> result = service.latestForUser("user-2");
@@ -738,8 +739,18 @@ class USPSDigestServiceTest {
                 outlookClient,
                 gmailParser,
                 outlookParser,
-                new TokenCryptor("unit-test-secret-32-bytes-long!!!")
+                new TokenCryptor("unit-test-secret-32-bytes-long!!!"),
+                noOpMailpiecePersistence()
         );
+    }
+
+    private static UspsMailpiecePersistenceService noOpMailpiecePersistence() {
+        return new UspsMailpiecePersistenceService(null, null, new MailpieceNormalizer(), null) {
+            @Override
+            public int persistAndIndex(String userId, USPSDigest digest) {
+                return 0;
+            }
+        };
     }
 
     /**

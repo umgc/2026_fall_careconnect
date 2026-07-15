@@ -82,6 +82,17 @@ public class IndexingEventEmitter {
     }
 
     /**
+     * Emit a {@code MAILPIECE_INDEXED} event after a USPS mailpiece is
+     * upserted with a new or changed content hash (Task 3.14.5 / #122).
+     *
+     * @param payload MAILPIECE_INDEXED payload body
+     * @return the persisted outbox row
+     */
+    public IndexingOutboxRow emitMailpieceIndexed(final MailpieceIndexedPayload payload) {
+        return emit(IndexingEventType.MAILPIECE_INDEXED, payload);
+    }
+
+    /**
      * General-purpose emit hook. Package-private so type-specific
      * public wrappers enforce the correct payload type at compile time.
      *

@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.IndexingEventType;
+import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.indexing.IndexingOutboxRow;
@@ -105,6 +106,28 @@ class IndexWorkerTest {
         worker.pollAndProcess();
 
         verify(retrievalIndexService).ingestTranscriptIndexed(any(TranscriptIndexedPayload.class));
+        verify(outboxRepository).save(any(IndexingOutboxRow.class));
+    }
+
+    @Test
+    @DisplayName("poll dispatches MAILPIECE_INDEXED")
+    void poll_mailpieceIndexed_success() throws Exception {
+        final MailpieceIndexedPayload payload = new MailpieceIndexedPayload(
+                11L, 42L, "2025-03-03|m-1", "hash-1",
+                "Sender", "Summary", java.time.LocalDate.of(2025, 3, 3), "on_consent");
+        final IndexingOutboxRow row = IndexingOutboxRow.builder()
+                .id(105L)
+                .eventType(IndexingEventType.MAILPIECE_INDEXED)
+                .payloadJson(envelope(IndexingEventType.MAILPIECE_INDEXED, payload))
+                .attemptCount(0)
+                .build();
+        when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+        when(retrievalIndexService.ingestMailpieceIndexed(any())).thenReturn(1);
+
+        worker.pollAndProcess();
+
+        verify(retrievalIndexService).ingestMailpieceIndexed(any(MailpieceIndexedPayload.class));
         verify(outboxRepository).save(any(IndexingOutboxRow.class));
     }
 

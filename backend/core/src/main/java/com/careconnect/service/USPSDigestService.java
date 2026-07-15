@@ -32,6 +32,7 @@ public class USPSDigestService {
     private final GmailParser gmailParser;
     private final OutlookParser outlookParser;
     private final TokenCryptor tokenCryptor;
+    private final UspsMailpiecePersistenceService mailpiecePersistenceService;
     private final ObjectMapper om = new ObjectMapper();
 
     public Optional<USPSDigest> latestForUser(String userId) {
@@ -202,7 +203,19 @@ public class USPSDigestService {
             c.setPayloadJson(om.writeValueAsString(d));
             c.setExpiresAt(Instant.now().plus(Duration.ofHours(24)));
             cacheRepo.save(c);
+            persistMailpieces(userId, d);
         } catch (Exception ignored) {}
+    }
+
+    private void persistMailpieces(String userId, USPSDigest digest) {
+        if (mailpiecePersistenceService == null || digest == null) {
+            return;
+        }
+        try {
+            mailpiecePersistenceService.persistAndIndex(userId, digest);
+        } catch (Exception ex) {
+            System.err.println("[USPSDigestService] Mailpiece persistence failed: " + ex.getMessage());
+        }
     }
 
     public void clearCacheForUser(String userId) {
