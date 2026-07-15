@@ -175,8 +175,21 @@ public class BedrockSentimentService {
    * Counts the number of typed items rejected by
    * {@link #extractTypedItems} because their {@code sourceTurnId} did
    * not appear in {@link #LEGITIMATE_SOURCE_TURN_IDS}. Increments per
-   * rejected item, not per call. Exposed for STP §10 evidence
-   * (TC-E-SUM-003a) and for tests.
+   * rejected item, not per call.
+   *
+   * <p><b>Semantics — lifetime aggregate.</b> This is a
+   * monotonically-increasing counter over the lifetime of this bean
+   * instance, mirroring standard observability counter semantics
+   * (Prometheus, Micrometer, JMX). It intentionally does NOT reset
+   * between {@code summarizeTranscript} calls; rate-per-window is
+   * computed at query time via {@code rate()} / {@code increase()} on
+   * whatever metrics system polls {@link #getItemsRejectedNoCitation()},
+   * not by mutating the counter itself. Tests that need to assert on
+   * per-call behavior should capture a baseline value from
+   * {@link #getItemsRejectedNoCitation()} before the call and assert on
+   * the delta afterward.
+   *
+   * <p>Exposed for STP §10 evidence (TC-E-SUM-003a) and for tests.
    */
   private final AtomicLong itemsRejectedNoCitation = new AtomicLong(0);
 
@@ -1439,7 +1452,15 @@ Respond with ONLY a JSON object in this exact format, no other text:
       // has already been defaulted to "transcript" above, so absence
       // passes validation cleanly — only actively-supplied bogus IDs
       // get rejected.
-      final String citedTurnId = String.valueOf(typed.get("sourceTurnId"));
+      // Defensive cast: current code paths always leave a non-null String
+      // here (extraction loop's asText("") + putIfAbsent above guarantee
+      // it), but String.valueOf(null) would return the literal "null" and
+      // silently reject otherwise-valid items if a future edit ever broke
+      // that invariant. Fall back to DEFAULT_SOURCE_TURN_ID on any
+      // surprise so absence-of-value never trips the fabrication check.
+      final Object rawTurnId = typed.get("sourceTurnId");
+      final String citedTurnId =
+          rawTurnId instanceof String s ? s : DEFAULT_SOURCE_TURN_ID;
       if (!LEGITIMATE_SOURCE_TURN_IDS.contains(citedTurnId)) {
         itemsRejectedNoCitation.incrementAndGet();
         if (log.isWarnEnabled()) {

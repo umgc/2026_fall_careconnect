@@ -1189,6 +1189,51 @@ class BedrockSentimentServiceTest {
                     .as("counter increments once per fabricated item")
                     .isEqualTo(2L);
         }
+
+            @Test
+        @DisplayName("Counter accumulates across summarizeTranscript calls on same service instance (per YgPadawan PR #322 review)")
+        void extractTypedItems_counterAccumulatesAcrossCalls() {
+            // Verifies the lifetime-aggregate semantics called out in the
+            // JavaDoc for itemsRejectedNoCitation. Two summarizeTranscript
+            // calls on the same service instance, each with one fabricated
+            // citation. The counter should reflect both rejections — it does
+            // NOT reset between calls, mirroring Prometheus/Micrometer/JMX
+            // counter conventions where rate-per-window is computed at query
+            // time.
+            service = awsBackedService("""
+                    {
+                      "headline": "Test summary",
+                      "overallAssessment": "Test.",
+                      "actionItems": [{"text": "first fabricated", "sourceTurnId": "turn-99"}],
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """);
+            final long before = service.getItemsRejectedNoCitation();
+
+            // First call — one fabricated item, counter delta should be 1.
+            service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript one.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+            final long afterFirst = service.getItemsRejectedNoCitation();
+            assertThat(afterFirst - before)
+                    .as("first call: counter increments by 1")
+                    .isEqualTo(1L);
+
+            // Second call on the same service instance — another fabricated
+            // item. Counter delta from `before` should now be 2, proving
+            // accumulation across the bean's lifetime.
+            service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript two.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+            assertThat(service.getItemsRejectedNoCitation() - before)
+                    .as("second call: counter accumulates (not reset)")
+                    .isEqualTo(2L);
+        }
     }
 
 // ================================================================
