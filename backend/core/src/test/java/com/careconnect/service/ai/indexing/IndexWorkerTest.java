@@ -195,7 +195,7 @@ class IndexWorkerTest {
     }
 
     @Test
-    @DisplayName("burn-attempt deferral refreshes lease instead of clearing it")
+    @DisplayName("burn-attempt deferral refreshes soft lease (claimed_at=now, not cleared)")
     void poll_deferredMidAttempts_refreshesLease() throws Exception {
         final TranscriptIndexedPayload payload =
                 new TranscriptIndexedPayload("call-1", null, 1, "CLIENT_TRANSCRIPT");
@@ -219,7 +219,12 @@ class IndexWorkerTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
         assertThat(captor.getValue().getProcessedAt()).isNull();
+        // Soft lease: claimed_at=now() is age 0, so claim SQL
+        // (claimed_at < NOW() - make_interval(mins => lease)) will not reclaim until
+        // claim-lease-minutes elapse — not on the next 15s poll.
         assertThat(captor.getValue().getClaimedAt()).isAfter(before);
+        assertThat(captor.getValue().getClaimedAt())
+                .isBefore(LocalDateTime.now().plusSeconds(5));
         assertThat(captor.getValue().getLastError()).contains("patientId is required");
     }
 

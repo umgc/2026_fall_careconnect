@@ -86,7 +86,10 @@ public class ChunkEmbeddingService {
             return 0;
         }
         if (bedrockRuntimeClient == null) {
-            log.debug("Chunk embedding skipped — BedrockRuntimeClient not configured");
+            log.warn(
+                    "Chunk embedding skipped for {} chunk(s) — BedrockRuntimeClient not configured "
+                            + "(embeddings remain NULL until Task 4.4 backfill or re-ingest)",
+                    chunks == null ? 0 : chunks.size());
             return 0;
         }
         if (chunks == null || chunks.isEmpty()) {

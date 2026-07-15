@@ -157,8 +157,9 @@ public class IndexWorker {
 
     /**
      * Deferred rows stay unprocessed but burn attempt budget so they eventually dead-letter.
-     * Refresh {@code claimed_at} on intermediate deferrals so the same bad row is not
-     * reclaimed every poll (~15s); clear the lease when dead-lettering.
+     * Intermediate deferrals call {@link #refreshSoftLease} — not the no-burn park —
+     * so retries wait the normal claim-lease window (default 10m), not ~15s polls.
+     * Dead-letter clears the lease.
      */
     private void recordDeferOrDeadLetter(
             final IndexingOutboxRow row, final int attempts, final String message) {
@@ -171,9 +172,10 @@ public class IndexWorker {
             log.error("IndexWorker dead-lettered deferred outboxId={} eventType={} after {} attempts: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         } else {
-            row.setClaimedAt(LocalDateTime.now());
-            log.warn("IndexWorker deferring outboxId={} eventType={} attempt={}/{}: {}",
-                    row.getId(), row.getEventType(), nextAttempts, maxAttempts, message);
+            refreshSoftLease(row);
+            log.warn("IndexWorker deferring outboxId={} eventType={} attempt={}/{} (lease ~{}m): {}",
+                    row.getId(), row.getEventType(), nextAttempts, maxAttempts,
+                    claimLeaseMinutes, message);
         }
         outboxRepository.save(row);
     }
@@ -189,11 +191,22 @@ public class IndexWorker {
             log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         } else {
-            row.setClaimedAt(LocalDateTime.now());
-            log.error("IndexWorker failed outboxId={} eventType={} attempt={}: {}",
-                    row.getId(), row.getEventType(), nextAttempts, message);
+            refreshSoftLease(row);
+            log.error("IndexWorker failed outboxId={} eventType={} attempt={} (lease ~{}m): {}",
+                    row.getId(), row.getEventType(), nextAttempts, claimLeaseMinutes, message);
         }
         outboxRepository.save(row);
+    }
+
+    /**
+     * Soft lease: stamp {@code claimed_at = now()}. The claim query only reclaims when
+     * {@code claimed_at < NOW() - make_interval(mins => claimLeaseMinutes)}, so setting
+     * {@code now()} (not null) starts a fresh lease window — typically 10 minutes — and
+     * does <em>not</em> allow reclaim on the next 15s poll. This is intentionally shorter
+     * than {@link #releaseClaimWithoutBurn}'s multi-hour park.
+     */
+    private void refreshSoftLease(final IndexingOutboxRow row) {
+        row.setClaimedAt(LocalDateTime.now());
     }
 
     private int dispatch(final IndexingOutboxRow row) {

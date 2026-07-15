@@ -232,6 +232,7 @@ class RetrievalIndexServiceTest {
         when(callSummaryRepository.findById(8L)).thenReturn(Optional.of(summary));
         when(chunkRepository.findBySourceRecordIdAndRecordType(eq("8"), any()))
                 .thenReturn(List.of());
+        when(chunkRepository.countMissingEmbeddingForSource("8")).thenReturn(0L);
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
@@ -243,6 +244,39 @@ class RetrievalIndexServiceTest {
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
         verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkEmbeddingService, never()).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated empty drafts still retries missing embeddings")
+    void ingestSummaryCreated_emptyDrafts_retriesMissingEmbeddings() {
+        final RetrievalIndexChunk orphan = RetrievalIndexChunk.builder()
+                .id(java.util.UUID.randomUUID())
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("8")
+                .chunkText("prior")
+                .chunkMetadata("{\"contentHash\":\"sha256:other\"}")
+                .build();
+        final CallSummary summary = new CallSummary();
+        summary.setId(8L);
+        summary.setPatientId(42L);
+        summary.setSummaryJson("{}");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findById(8L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("8"), any()))
+                .thenReturn(List.of(orphan));
+        when(chunkRepository.countMissingEmbeddingForSource("8")).thenReturn(1L);
+        when(chunkRepository.findBySourceRecordIdAndEmbeddingIsNull("8"))
+                .thenReturn(List.of(orphan));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null, "sha256:empty");
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
     }
 
     @Test

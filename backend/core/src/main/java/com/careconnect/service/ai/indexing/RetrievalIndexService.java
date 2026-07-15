@@ -73,9 +73,17 @@ public class RetrievalIndexService {
     /**
      * Indexes a successful call summary. Replaces prior chunks for the same
      * {@code source_record_id} (summary id) only when new drafts are non-empty.
-     * Skips when {@code contentHash} matches an existing overview chunk <em>and</em>
-     * every chunk for that source already has an embedding. If the hash matches but
-     * embeddings are still NULL (prior Bedrock failure), schedules a retry embed only.
+     *
+     * <p><b>contentHash is the hard idempotency key</b> for re-ingest:
+     * <ul>
+     *   <li>Hash matches and all embeddings present → skip (no re-chunk, no embed).</li>
+     *   <li>Hash matches but any embedding is NULL (prior Bedrock failure) →
+     *       embed-only retry; chunk text/structure are left unchanged.</li>
+     *   <li>Hash differs or is absent → full replace + after-commit embed.</li>
+     * </ul>
+     * Chunker or metadata-only changes that do <em>not</em> change {@code contentHash}
+     * intentionally do not re-chunk. Operators who change chunk shape must bump the
+     * publisher hash (or wait for Task 4.4 backfill for NULL vectors only).
      *
      * @return number of chunks written (0 when skipped or nothing to index)
      */
@@ -102,17 +110,8 @@ public class RetrievalIndexService {
         if (payload.contentHash() != null
                 && !payload.contentHash().isBlank()
                 && hasMatchingContentHash(sourceRecordId, payload.contentHash())) {
-            if (chunkRepository.countMissingEmbeddingForSource(sourceRecordId) > 0) {
-                log.info(
-                        "SUMMARY_CREATED contentHash unchanged for summaryId={} but embeddings missing — retrying embed",
-                        payload.summaryId());
-                scheduleEmbeddingAfterCommit(
-                        chunkRepository.findBySourceRecordIdAndEmbeddingIsNull(sourceRecordId));
-            } else {
-                log.info("Skipping SUMMARY_CREATED for summaryId={} — contentHash unchanged",
-                        payload.summaryId());
-            }
-            return 0;
+            return retryMissingEmbeddingsOrSkip(
+                    sourceRecordId, payload.summaryId(), "contentHash unchanged");
         }
 
         final CallSummary summary = callSummaryRepository.findById(payload.summaryId())
@@ -144,11 +143,32 @@ public class RetrievalIndexService {
             log.warn(
                     "SUMMARY_CREATED produced no drafts for summaryId={}; leaving existing chunks unchanged",
                     payload.summaryId());
-            return 0;
+            // Still recover NULL embeddings from a prior Bedrock failure if chunks remain.
+            return retryMissingEmbeddingsOrSkip(
+                    sourceRecordId,
+                    payload.summaryId(),
+                    "no drafts; existing chunks left unchanged");
         }
 
         chunkRepository.deleteBySourceRecordId(sourceRecordId);
         return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    /**
+     * Embed-only recovery when chunks already exist. Returns 0 (no new chunks written).
+     */
+    private int retryMissingEmbeddingsOrSkip(
+            final String sourceRecordId, final Long summaryId, final String skipReason) {
+        if (chunkRepository.countMissingEmbeddingForSource(sourceRecordId) > 0) {
+            log.info(
+                    "SUMMARY_CREATED for summaryId={} — embeddings missing; retrying embed without re-chunk",
+                    summaryId);
+            scheduleEmbeddingAfterCommit(
+                    chunkRepository.findBySourceRecordIdAndEmbeddingIsNull(sourceRecordId));
+        } else {
+            log.info("Skipping SUMMARY_CREATED for summaryId={} — {}", summaryId, skipReason);
+        }
+        return 0;
     }
 
     /**

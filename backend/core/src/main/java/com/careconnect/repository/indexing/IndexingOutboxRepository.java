@@ -56,7 +56,10 @@ public interface IndexingOutboxRepository extends JpaRepository<IndexingOutboxRo
      * before commit so the lease survives after the lock is released (multi-ECS safe).
      * Rows with a non-expired {@code claimed_at} are skipped using
      * {@code make_interval(mins => :leaseMinutes)} so integer lease params bind safely
-     * (avoids {@code integer || unknown}). Future {@code claimed_at} (no-burn parks)
+     * (avoids {@code integer || unknown}). {@code make_interval} requires PostgreSQL 9.6+;
+     * CareConnect RDS targets PostgreSQL 15+ for pgvector. Soft-lease refreshes set
+     * {@code claimed_at = now()} so reclaim waits a full lease window — not clearing
+     * the column (which would reclaim every poll). Future {@code claimed_at} (no-burn parks)
      * remain unclaimable until that timestamp ages past the lease window.
      * Rows that have already reached {@code maxAttempts} are still selected so they
      * can be dead-lettered.
