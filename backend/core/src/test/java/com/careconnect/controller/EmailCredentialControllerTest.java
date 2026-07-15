@@ -1,8 +1,9 @@
 package com.careconnect.controller;
 
+import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.model.EmailCredential;
-import com.careconnect.repository.EmailCredentialRepository;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.service.EmailCredentialLifecycleService;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -13,7 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.util.Optional;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -22,7 +23,7 @@ import static org.mockito.Mockito.*;
 class EmailCredentialControllerTest {
 
     @Mock
-    private EmailCredentialRepository credRepo;
+    private EmailCredentialLifecycleService credentialLifecycle;
     @Mock
     private SecurityUtil securityUtil;
     @Mock
@@ -31,30 +32,14 @@ class EmailCredentialControllerTest {
     @InjectMocks
     private EmailCredentialController controller;
 
-    // ── shared constants ──────────────────────────────────────────────────────
-
     private static final String USER_ID = "user-123";
-
-    // ── shared helpers ────────────────────────────────────────────────────────
-
-    private EmailCredential credentialWithToken(String accessToken) {
-        final EmailCredential cred = new EmailCredential();
-        cred.setUserId(USER_ID);
-        cred.setProvider(EmailCredential.Provider.GMAIL);
-        cred.setAccessTokenEnc(accessToken);
-        return cred;
-    }
-
-    // ── GET /email-credentials/status ─────────────────────────────────────────
 
     @Nested
     class GetConnectionStatus {
 
         @Test
-        void returnsTrue_whenCredentialExistsWithValidAccessToken() throws Exception {
-            final EmailCredential cred = credentialWithToken("valid-token");
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.of(cred));
+        void returnsTrue_whenActivelyConnected() throws Exception {
+            when(credentialLifecycle.isActivelyConnected(USER_ID)).thenReturn(true);
 
             final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
 
@@ -63,9 +48,8 @@ class EmailCredentialControllerTest {
         }
 
         @Test
-        void returnsFalse_whenNoCredentialFound() throws Exception {
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.empty());
+        void returnsFalse_whenNotConnected() throws Exception {
+            when(credentialLifecycle.isActivelyConnected(USER_ID)).thenReturn(false);
 
             final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
 
@@ -74,74 +58,75 @@ class EmailCredentialControllerTest {
         }
 
         @Test
-        void returnsFalse_whenAccessTokenIsNull() throws Exception {
-            final EmailCredential cred = credentialWithToken(null);
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.of(cred));
-
-            final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(response.getBody()).isFalse();
-        }
-
-        @Test
-        void returnsFalse_whenAccessTokenIsEmpty() throws Exception {
-            final EmailCredential cred = credentialWithToken("");
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.of(cred));
-
-            final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(response.getBody()).isFalse();
-        }
-
-        @Test
-        void alwaysQueriesGmailProvider() throws Exception {
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.empty());
+        void alwaysQueriesLifecycleForUserId() throws Exception {
+            when(credentialLifecycle.isActivelyConnected(USER_ID)).thenReturn(false);
 
             controller.getConnectionStatus(USER_ID);
 
-            verify(credRepo, times(1))
-                    .findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL);
-            verify(credRepo, never())
-                    .findFirstByUserIdAndProviderOrderByIdDesc(anyString(), eq(EmailCredential.Provider.OUTLOOK));
+            verify(credentialLifecycle).isActivelyConnected(USER_ID);
         }
 
         @Test
-        void passesUserIdToRepository() throws Exception {
+        void passesUserIdToLifecycle() throws Exception {
             final String specificUserId = "specific-user-456";
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(specificUserId, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.empty());
+            when(credentialLifecycle.isActivelyConnected(specificUserId)).thenReturn(false);
 
             controller.getConnectionStatus(specificUserId);
 
-            verify(credRepo).findFirstByUserIdAndProviderOrderByIdDesc(specificUserId, EmailCredential.Provider.GMAIL);
-        }
-
-        @Test
-        void returnsTrue_whenAccessTokenIsWhitespace() throws Exception {
-            // Whitespace is non-empty, so the filter passes and result is true
-            final EmailCredential cred = credentialWithToken("   ");
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.of(cred));
-
-            final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
-
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(response.getBody()).isTrue();
+            verify(credentialLifecycle).isActivelyConnected(specificUserId);
         }
 
         @Test
         void responseBodyIsNeverNull() throws Exception {
-            when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc(USER_ID, EmailCredential.Provider.GMAIL))
-                    .thenReturn(Optional.empty());
+            when(credentialLifecycle.isActivelyConnected(USER_ID)).thenReturn(false);
 
             final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
 
             assertThat(response.getBody()).isNotNull();
+        }
+    }
+
+    @Nested
+    class GetConnectionDetails {
+
+        @Test
+        void returnsNeedsReconnectPayload() throws Exception {
+            when(credentialLifecycle.connectionStatus(USER_ID)).thenReturn(
+                    new EmailConnectionStatusResponse(
+                            false,
+                            true,
+                            false,
+                            "NEEDS_REAUTH",
+                            "GMAIL",
+                            null,
+                            "invalid_grant",
+                            "/oauth/google/start"));
+
+            final ResponseEntity<EmailConnectionStatusResponse> response =
+                    controller.getConnectionDetails(USER_ID);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody().needsReconnect()).isTrue();
+            assertThat(response.getBody().reconnectPath()).isEqualTo("/oauth/google/start");
+        }
+    }
+
+    @Nested
+    class Disconnect {
+
+        @Test
+        void disconnectsAndReturnsReconnectPath() throws Exception {
+            final EmailCredential cred = new EmailCredential();
+            cred.setStatus(EmailCredential.Status.DISCONNECTED);
+            cred.setSyncEnabled(false);
+            when(credentialLifecycle.disconnect(USER_ID)).thenReturn(cred);
+
+            final ResponseEntity<Map<String, Object>> response = controller.disconnect(USER_ID);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody().get("disconnected")).isEqualTo(true);
+            assertThat(response.getBody().get("reconnectPath"))
+                    .isEqualTo("/oauth/google/start");
         }
     }
 }

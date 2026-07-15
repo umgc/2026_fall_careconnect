@@ -18,6 +18,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   bool loading = false;
   String? error;
   bool isGoogleConnected = false;
+  bool needsGoogleReconnect = false;
+  String? reconnectMessage;
   DateTime selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> searchResults = [];
@@ -59,6 +61,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
               : json.decode(json.encode(resp.data)) as Map<String, dynamic>;
           searchResults = [];
           searchError = null;
+          needsGoogleReconnect = false;
+          reconnectMessage = null;
           _searchController.clear();
         });
       } else if (resp.statusCode == 204) {
@@ -66,14 +70,39 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
           digest = null;
           error = 'No USPS digest found for $dateString.';
         });
+      } else if (resp.statusCode == 409) {
+        _handleNeedsReauth(resp.data);
       } else {
         setState(() => error = 'HTTP ${resp.statusCode}');
       }
     } catch (e) {
-      setState(() => error = e.toString());
+      if (e is DioException && e.response?.statusCode == 409) {
+        _handleNeedsReauth(e.response?.data);
+      } else {
+        setState(() => error = e.toString());
+      }
     } finally {
       setState(() => loading = false);
     }
+  }
+
+  void _handleNeedsReauth(dynamic data) {
+    String message =
+        'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.';
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final apiMessage = map['message']?.toString();
+      if (apiMessage != null && apiMessage.isNotEmpty) {
+        message = apiMessage;
+      }
+    }
+    setState(() {
+      needsGoogleReconnect = true;
+      isGoogleConnected = false;
+      reconnectMessage = message;
+      error = message;
+      digest = null;
+    });
   }
 
   Future<void> _selectDate() async {
@@ -172,14 +201,47 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final base = getBackendBaseUrl();
     try {
       final dio = Dio();
+      // Prefer rich connection status so revoked tokens surface as reconnect.
+      try {
+        final details = await dio.get(
+            '$base/api/email-credentials/connection?userId=$encodedUser');
+        if (details.statusCode == 200 && details.data is Map) {
+          final map = Map<String, dynamic>.from(details.data as Map);
+          final connected = map['connected'] == true;
+          final needsReconnect = map['needsReconnect'] == true;
+          setState(() {
+            isGoogleConnected = connected;
+            needsGoogleReconnect = needsReconnect;
+            reconnectMessage = needsReconnect
+                ? ((map['lastError'] as String?)?.trim().isNotEmpty == true
+                    ? map['lastError'] as String
+                    : 'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
+                : null;
+          });
+          return;
+        }
+      } catch (_) {
+        // Fall back to legacy boolean status endpoint.
+      }
+
       final resp = await dio
           .get('$base/api/email-credentials/status?userId=$encodedUser');
       if (resp.statusCode == 200 && resp.data == true) {
-        setState(() => isGoogleConnected = true);
+        setState(() {
+          isGoogleConnected = true;
+          needsGoogleReconnect = false;
+          reconnectMessage = null;
+        });
+      } else {
+        setState(() {
+          isGoogleConnected = false;
+        });
       }
     } catch (e) {
       // Connection check failed, assume not connected
-      setState(() => isGoogleConnected = false);
+      setState(() {
+        isGoogleConnected = false;
+      });
     }
   }
 
@@ -605,15 +667,66 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isGoogleConnected
-                          ? '✅ Google account connected! You can now fetch USPS digests automatically.'
-                          : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
+                      needsGoogleReconnect
+                          ? (reconnectMessage ??
+                              'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
+                          : isGoogleConnected
+                              ? '✅ Google account connected! You can now fetch USPS digests automatically.'
+                              : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
                       style: TextStyle(
-                        color: isGoogleConnected ? Colors.green : Colors.grey,
+                        color: needsGoogleReconnect
+                            ? Colors.orange.shade800
+                            : isGoogleConnected
+                                ? Colors.green
+                                : Colors.grey,
                       ),
                     ),
+                    if (needsGoogleReconnect) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        key: const Key('gmailReauthBanner'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mail sync paused',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Reconnect Gmail to restore Informed Delivery sync.',
+                              style: TextStyle(color: Colors.orange.shade900),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                key: const Key('gmailReconnectButton'),
+                                onPressed: _connectGoogleAccount,
+                                icon: const Icon(Icons.link),
+                                label: const Text('Reconnect Gmail'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade800,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
-                    if (!isGoogleConnected)
+                    if (!isGoogleConnected && !needsGoogleReconnect)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -626,12 +739,15 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           ),
                         ),
                       )
-                    else
+                    else if (isGoogleConnected)
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: () {
-                            setState(() => isGoogleConnected = false);
+                            setState(() {
+                              isGoogleConnected = false;
+                              needsGoogleReconnect = false;
+                            });
                             _connectGoogleAccount();
                           },
                           icon: const Icon(Icons.refresh),
