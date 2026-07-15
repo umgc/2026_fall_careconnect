@@ -44,7 +44,7 @@ These CloudFormation changes must be deployed **in stack order** for Bedrock cha
 | Stack | Change |
 |-------|--------|
 | `02-data.yaml` | RDS parameter group allows `vector` extension (`rds.allowed_extensions`); PostgreSQL 17.6 |
-| `03-platform.yaml` | ECS task role: `bedrock:InvokeModel*` + SSM read on `/careconnect/*` |
+| `03-platform.yaml` | ECS task role: `bedrock:InvokeModel*` + SSM read on `/careconnect/<Environment>/*` + `kms:Decrypt` via SSM |
 | `04-service.yaml` | `SpringProfile=prod`, `CARECONNECT_AI_ENABLED=true`, SendGrid/`FROM_EMAIL`, `ENVIRONMENT` for SSM |
 
 **Existing RDS instances:** updating the data stack attaches a new parameter group; RDS may require a **reboot** before `CREATE EXTENSION vector` succeeds. After deploy, confirm in logs: `Schema patch applied: V2607071920 – enable pgvector extension`.

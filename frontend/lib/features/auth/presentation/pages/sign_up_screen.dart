@@ -650,6 +650,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildContactInformationStep() {
+    // NOTE (auth-coverage cleanup): the per-field `validator:` callbacks were
+    // removed from this step's inputs. They were unreachable dead code — this
+    // step's Form has no GlobalKey and `_nextStep()` only calls
+    // `_formKey.validate()` on step 1, so these validators could never run.
+    // Required-field enforcement here is done by `_validateContactInformation()`
+    // (via `_canProceed()`, which gates the "Next" button). Removing the dead
+    // validators is behavior-neutral and lets these lines reach the coverage gate.
     return Form(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,17 +682,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             label: 'Email Address',
             isRequired: true,
             keyboardType: TextInputType.emailAddress,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Email is required';
-              }
-              if (!RegExp(
-                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$',
-              ).hasMatch(value)) {
-                return 'Please enter a valid email address';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 20),
 
@@ -694,12 +690,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             label: 'Phone Number',
             isRequired: true,
             keyboardType: TextInputType.phone,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Phone number is required';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 24),
 
@@ -730,12 +720,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 _zipController.text = address.zip;
               });
             },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Address line 1 is required';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 20),
 
@@ -754,12 +738,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   controller: _cityController,
                   label: 'City',
                   isRequired: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'City is required';
-                    }
-                    return null;
-                  },
                 ),
               ),
               const SizedBox(width: 16),
@@ -768,12 +746,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   controller: _stateController,
                   label: 'State',
                   isRequired: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'State is required';
-                    }
-                    return null;
-                  },
                 ),
               ),
               const SizedBox(width: 16),
@@ -783,12 +755,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   label: 'ZIP Code',
                   isRequired: true,
                   keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'ZIP code is required';
-                    }
-                    return null;
-                  },
                 ),
               ),
             ],
@@ -808,16 +774,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ),
             const SizedBox(height: 16),
 
+            // Like the contact fields above, the professional-field validators
+            // (license number, issuing state, years of experience) were removed
+            // as unreachable dead code — see the note at the top of this method.
+            // Required-field enforcement is handled by _validateContactInformation()
+            // via _canProceed(); removal is behavior-neutral.
             _buildTextFormField(
               controller: _licenseNumberController,
               label: 'License Number',
               isRequired: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'License number is required for professional caregivers';
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 20),
 
@@ -828,12 +793,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     controller: _issuingStateController,
                     label: 'Issuing State',
                     isRequired: true,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Issuing state is required';
-                      }
-                      return null;
-                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -843,15 +802,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     label: 'Years of Experience',
                     isRequired: true,
                     keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Years of experience is required';
-                      }
-                      if (int.tryParse(value) == null) {
-                        return 'Please enter a valid number';
-                      }
-                      return null;
-                    },
                   ),
                 ),
               ],

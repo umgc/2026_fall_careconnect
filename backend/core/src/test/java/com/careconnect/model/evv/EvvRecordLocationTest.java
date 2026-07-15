@@ -163,6 +163,66 @@ class EvvRecordLocationTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void validate_patientAddressNullNoGpsReason_throwsIllegalState() throws Exception {
+        final EvvRecordLocation loc = new EvvRecordLocation();
+        loc.setType(EvvLocationType.PATIENT_ADDRESS);
+        final Map<String, Object> snapshot = new HashMap<>();
+        snapshot.put("street", "1 Main St");
+        loc.setAddressSnapshotJson(snapshot);
+        loc.setNoGpsReason(null);
+
+        assertThatThrownBy(loc::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("noGpsReason");
+    }
+
+    // ─── validate() – MANUAL ──────────────────────────────────────────────────
+
+    @Test
+    void validate_manualWithAddressAndReason_succeeds() throws Exception {
+        final EvvRecordLocation loc = new EvvRecordLocation();
+        loc.setType(EvvLocationType.MANUAL);
+        loc.setManualAddress("123 Main St");
+        loc.setNoGpsReason(NoGpsReason.GPS_TIMEOUT);
+
+        loc.validate(); // should not throw
+    }
+
+    @Test
+    void validate_manualNullAddress_throwsIllegalState() throws Exception {
+        final EvvRecordLocation loc = new EvvRecordLocation();
+        loc.setType(EvvLocationType.MANUAL);
+        loc.setManualAddress(null);
+
+        assertThatThrownBy(loc::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("manual address");
+    }
+
+    @Test
+    void validate_manualBlankAddress_throwsIllegalState() throws Exception {
+        final EvvRecordLocation loc = new EvvRecordLocation();
+        loc.setType(EvvLocationType.MANUAL);
+        loc.setManualAddress("   ");
+
+        assertThatThrownBy(loc::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("manual address");
+    }
+
+    @Test
+    void validate_manualAddressNullNoGpsReason_throwsIllegalState() throws Exception {
+        final EvvRecordLocation loc = new EvvRecordLocation();
+        loc.setType(EvvLocationType.MANUAL);
+        loc.setManualAddress("123 Main St");
+        loc.setNoGpsReason(null);
+
+        assertThatThrownBy(loc::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("noGpsReason");
+    }
+
     // ─── validate() – null type ───────────────────────────────────────────────
 
     @Test
