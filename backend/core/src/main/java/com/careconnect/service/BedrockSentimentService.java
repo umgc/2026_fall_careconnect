@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +61,18 @@ public class BedrockSentimentService {
   private static final String DEFAULT_RISK_LEVEL = "LOW";
   private static final String DEFAULT_SOURCE_TURN_ID = "transcript";
   private static final double DEFAULT_ITEM_CONFIDENCE = 0.5;
+
+  /**
+   * The set of {@code sourceTurnId} values the model is authorized to
+   * cite. Today the transcript is not turn-segmented (see
+   * {@link CallTranscriptService#buildTranscriptTextForSummary}); the
+   * prompt therefore instructs the model to use the literal marker
+   * {@code "transcript"}. Any other value is a fabricated citation.
+   * When per-turn markers are injected into the transcript later, this
+   * set grows and the validation logic below keeps working unchanged.
+   */
+  private static final Set<String> LEGITIMATE_SOURCE_TURN_IDS =
+      Set.of(DEFAULT_SOURCE_TURN_ID);
   /** Score rounding multiplier — two decimal places. */
   private static final double ROUND_TWO_DECIMALS = 100.0;
   /** Score rounding multiplier — three decimal places. */
@@ -156,6 +170,25 @@ public class BedrockSentimentService {
    */
   @Autowired(required = false)
   private MedicalDataAnonymizer medicalDataAnonymizer;
+
+  /**
+   * Counts the number of typed items rejected by
+   * {@link #extractTypedItems} because their {@code sourceTurnId} did
+   * not appear in {@link #LEGITIMATE_SOURCE_TURN_IDS}. Increments per
+   * rejected item, not per call. Exposed for STP §10 evidence
+   * (TC-E-SUM-003a) and for tests.
+   */
+  private final AtomicLong itemsRejectedNoCitation = new AtomicLong(0);
+
+  /**
+   * Returns the running count of typed items rejected because they
+   * carried a fabricated {@code sourceTurnId} (one that does not
+   * appear in the transcript's citable turn set). Test hook and
+   * observability point for the FR-SUM-3 safety property.
+   */
+  public long getItemsRejectedNoCitation() {
+    return itemsRejectedNoCitation.get();
+  }
 
   /** Creates the sentiment service with optional AWS Bedrock support. */
   @Autowired
@@ -1398,6 +1431,24 @@ Respond with ONLY a JSON object in this exact format, no other text:
       typed.putIfAbsent("confidence", DEFAULT_ITEM_CONFIDENCE);
       typed.putIfAbsent("sourceTurnId", DEFAULT_SOURCE_TURN_ID);
       typed.put("needsConfirmation", Boolean.TRUE);
+
+      // Citation validation (TC-E-SUM-003a / FR-SUM-3). Reject items
+      // whose sourceTurnId does not appear in LEGITIMATE_SOURCE_TURN_IDS.
+      // Today the only legitimate value is "transcript"; anything else
+      // is a fabricated citation from the model. Blank/missing sourceTurnId
+      // has already been defaulted to "transcript" above, so absence
+      // passes validation cleanly — only actively-supplied bogus IDs
+      // get rejected.
+      final String citedTurnId = String.valueOf(typed.get("sourceTurnId"));
+      if (!LEGITIMATE_SOURCE_TURN_IDS.contains(citedTurnId)) {
+        itemsRejectedNoCitation.incrementAndGet();
+        if (log.isWarnEnabled()) {
+          log.warn(
+              "Rejecting summary item with fabricated sourceTurnId={}",
+              citedTurnId);
+        }
+        continue;
+      }
       out.add(typed);
       if (out.size() >= SUMMARY_LIST_LIMIT) {
         break;
