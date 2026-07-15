@@ -25,8 +25,25 @@ public class MailpieceChunker {
             final String sourceKey,
             final LocalDate digestDate,
             final String consentScope) {
+        return chunk(sender, summary, ocrText, contentHash, sourceKey, digestDate, consentScope,
+                null, null, null, null);
+    }
+
+    public List<IndexingChunkDraft> chunk(
+            final String sender,
+            final String summary,
+            final String ocrText,
+            final String contentHash,
+            final String sourceKey,
+            final LocalDate digestDate,
+            final String consentScope,
+            final String importanceLevel,
+            final String importanceCategory,
+            final String classificationMethod,
+            final String importanceReasoning) {
         final List<IndexingChunkDraft> drafts = new ArrayList<>(1);
-        final String chunkText = buildChunkText(sender, summary, ocrText);
+        final String chunkText = buildChunkText(
+                sender, summary, ocrText, importanceLevel, importanceCategory, importanceReasoning);
         if (chunkText.isBlank()) {
             return drafts;
         }
@@ -45,6 +62,15 @@ public class MailpieceChunker {
         if (sender != null && !sender.isBlank()) {
             metadata.put("sender", sender);
         }
+        if (importanceLevel != null && !importanceLevel.isBlank()) {
+            metadata.put("importanceLevel", importanceLevel);
+        }
+        if (importanceCategory != null && !importanceCategory.isBlank()) {
+            metadata.put("importanceCategory", importanceCategory);
+        }
+        if (classificationMethod != null && !classificationMethod.isBlank()) {
+            metadata.put("classificationMethod", classificationMethod);
+        }
 
         drafts.add(new IndexingChunkDraft(
                 RetrievalRecordType.USPS_MAIL,
@@ -54,7 +80,13 @@ public class MailpieceChunker {
         return drafts;
     }
 
-    String buildChunkText(final String sender, final String summary, final String ocrText) {
+    String buildChunkText(
+            final String sender,
+            final String summary,
+            final String ocrText,
+            final String importanceLevel,
+            final String importanceCategory,
+            final String importanceReasoning) {
         final StringBuilder sb = new StringBuilder();
         if (sender != null && !sender.isBlank()) {
             sb.append("From: ").append(sender.trim());
@@ -71,6 +103,25 @@ public class MailpieceChunker {
             }
             sb.append(ocrText.trim());
         }
+        if (importanceLevel != null && !importanceLevel.isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append('\n');
+            }
+            sb.append("Importance: ").append(importanceLevel.trim());
+            if (importanceCategory != null && !importanceCategory.isBlank()) {
+                sb.append(" (").append(importanceCategory.trim()).append(')');
+            }
+        }
+        if (importanceReasoning != null && !importanceReasoning.isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append('\n');
+            }
+            sb.append("Reasoning: ").append(importanceReasoning.trim());
+        }
         return sb.toString().trim();
+    }
+
+    String buildChunkText(final String sender, final String summary, final String ocrText) {
+        return buildChunkText(sender, summary, ocrText, null, null, null);
     }
 }

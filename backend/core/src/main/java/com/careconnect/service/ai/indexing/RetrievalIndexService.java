@@ -227,7 +227,11 @@ public class RetrievalIndexService {
                 contentHash,
                 sourceKey,
                 payload.digestDate() != null ? payload.digestDate() : mailpiece.getDigestDate(),
-                consentScope);
+                consentScope,
+                mailpiece.getImportanceLevel(),
+                mailpiece.getImportanceCategory(),
+                mailpiece.getClassificationMethod(),
+                mailpiece.getImportanceReasoning());
 
         if (drafts.isEmpty()) {
             log.warn(

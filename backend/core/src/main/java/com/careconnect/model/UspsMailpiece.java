@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -49,6 +50,12 @@ public class UspsMailpiece {
     private static final int IMAGE_REF_LENGTH = 1024;
     private static final int CONTENT_HASH_LENGTH = 80;
     private static final int CONSENT_SCOPE_LENGTH = 40;
+    private static final int IMPORTANCE_LEVEL_LENGTH = 16;
+    private static final int CLASSIFICATION_METHOD_LENGTH = 32;
+    private static final int CLASSIFICATION_ENGINE_LENGTH = 128;
+    private static final int IMPORTANCE_CATEGORY_LENGTH = 40;
+    private static final int IMPORTANCE_CONFIDENCE_PRECISION = 3;
+    private static final int IMPORTANCE_CONFIDENCE_SCALE = 2;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -89,6 +96,32 @@ public class UspsMailpiece {
 
     @Column(name = "consent_scope", length = CONSENT_SCOPE_LENGTH)
     private String consentScope;
+
+    /** Importance tier: HIGH, MODERATE, LOW, UNKNOWN (Task 3.14.6). */
+    @Column(name = "importance_level", length = IMPORTANCE_LEVEL_LENGTH)
+    private String importanceLevel;
+
+    @Column(name = "importance_confidence",
+            precision = IMPORTANCE_CONFIDENCE_PRECISION,
+            scale = IMPORTANCE_CONFIDENCE_SCALE)
+    private BigDecimal importanceConfidence;
+
+    /** RULES, AI, or HYBRID. */
+    @Column(name = "classification_method", length = CLASSIFICATION_METHOD_LENGTH)
+    private String classificationMethod;
+
+    @Column(name = "classification_engine", length = CLASSIFICATION_ENGINE_LENGTH)
+    private String classificationEngine;
+
+    @Column(name = "importance_reasoning", columnDefinition = "TEXT")
+    private String importanceReasoning;
+
+    /** MEDICAL, FINANCIAL, LEGAL, ADMINISTRATIVE, MARKETING, OTHER. */
+    @Column(name = "importance_category", length = IMPORTANCE_CATEGORY_LENGTH)
+    private String importanceCategory;
+
+    @Column(name = "classified_at")
+    private OffsetDateTime classifiedAt;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

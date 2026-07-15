@@ -745,7 +745,7 @@ class USPSDigestServiceTest {
     }
 
     private static UspsMailpiecePersistenceService noOpMailpiecePersistence() {
-        return new UspsMailpiecePersistenceService(null, null, new MailpieceNormalizer(), null) {
+        return new UspsMailpiecePersistenceService(null, null, new MailpieceNormalizer(), null, null) {
             @Override
             public int persistAndIndex(String userId, USPSDigest digest) {
                 return 0;
