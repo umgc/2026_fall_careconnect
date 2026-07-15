@@ -24,7 +24,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/pages/patient_dashboard.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 
+import 'package:care_connect_app/services/api_service_offline.dart';
+
 import '../../mock_user_provider.dart';
+
+late Future<http.Response> Function(http.Request) _httpHandler;
+
+Future<http.Response> _defaultHandler(http.Request request) async {
+  return http.Response('[]', 200);
+}
 
 Widget _wrap({MockUserProvider? provider}) {
   final p = provider ??
@@ -50,11 +58,9 @@ void _setTabletViewport(WidgetTester tester) {
   tester.view.devicePixelRatio = 1.0;
 }
 
-/// MockClient for the patient_dashboard page API calls.
-MockClient _createMockClient({
-  int evvStatusCode = 200,
-}) {
-  return MockClient((request) async {
+/// Sets _httpHandler to respond like the patient dashboard's API.
+void _setupMockClient({int evvStatusCode = 200}) {
+  _httpHandler = (request) async {
     final path = request.url.path;
 
     // Caregiver list for patient
@@ -101,7 +107,7 @@ MockClient _createMockClient({
 
     // Default
     return http.Response('{}', 200);
-  });
+  };
 }
 
 void _setupMethodChannels() {
@@ -111,10 +117,20 @@ void _setupMethodChannels() {
       .setMockMethodCallHandler(
     const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
     (MethodCall methodCall) async {
-      if (methodCall.method == 'read') return null;
-      if (methodCall.method == 'write') return null;
-      if (methodCall.method == 'readAll') return <String, String>{};
-      if (methodCall.method == 'containsKey') return false;
+      if (methodCall.method == 'readAll') {
+        return <String, String>{'jwt_token': 'mock-jwt-for-test'};
+      }
+      if (methodCall.method == 'read') {
+        final key = (methodCall.arguments as Map?)?['key'] as String?;
+        if (key == 'jwt_token') return 'mock-jwt-for-test';
+        return null;
+      }
+      if (methodCall.method == 'containsKey') {
+        final key = (methodCall.arguments as Map?)?['key'] as String?;
+        if (key == 'jwt_token') return true;
+        return false;
+      }
+      if (methodCall.method == 'write' || methodCall.method == 'delete') return null;
       return null;
     },
   );
@@ -160,7 +176,22 @@ Future<void> _pumpUntilSettled(WidgetTester tester) async {
 }
 
 void main() {
+  setUpAll(() {
+    _httpHandler = _defaultHandler;
+    final delegatingClient =
+        MockClient((request) => _httpHandler(request));
+    http.runWithClient(() {
+      ApiServiceOffline.httpClient;
+    }, () => delegatingClient);
+  });
+
   group('PatientDashboard page - initial render', () {
+    setUp(() {
+      _setupMockClient();
+      _setupMethodChannels();
+    });
+    tearDown(_teardownMethodChannels);
+
     testWidgets('renders without crashing', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
@@ -197,7 +228,7 @@ void main() {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
-      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
       expect(find.text('SOS Emergency'), findsOneWidget);
     });
 
@@ -205,7 +236,7 @@ void main() {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
-      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
       expect(find.byIcon(Icons.sos), findsOneWidget);
     });
 
@@ -213,7 +244,7 @@ void main() {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
-      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
       expect(find.text('Send SMS to Caregiver'), findsOneWidget);
     });
 
@@ -221,7 +252,7 @@ void main() {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
-      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
       expect(find.byIcon(Icons.sms), findsOneWidget);
     });
 
@@ -229,7 +260,7 @@ void main() {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
-      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
       expect(find.byType(RefreshIndicator), findsOneWidget);
     });
   });
@@ -246,272 +277,224 @@ void main() {
     testWidgets('renders mood widget with score after data loads', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Good'), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Good'), findsWidgets);
     });
 
     testWidgets('renders Recent Check-Ins section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Recent Check-Ins'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
     testWidgets('renders check-in status text', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Feeling well today'), findsOneWidget);
-        expect(find.text('Slight headache'), findsOneWidget);
-        expect(find.text('Medications taken'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Feeling well today'), findsOneWidget);
+      expect(find.text('Slight headache'), findsOneWidget);
+      expect(find.text('Medications taken'), findsOneWidget);
     });
 
     testWidgets('renders medication reminder widget', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Blood Pressure Medication'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Blood Pressure Medication'), findsOneWidget);
     });
 
     testWidgets('renders primary care provider widget', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Dr. Sarah Mitchell'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Dr. Sarah Mitchell'), findsOneWidget);
     });
 
     testWidgets('renders provider specialty', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Internal Medicine'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Internal Medicine'), findsOneWidget);
     });
 
     testWidgets('renders Upcoming EVV Appointments section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Upcoming EVV Appointments'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Upcoming EVV Appointments'), findsOneWidget);
     });
 
     testWidgets('renders Past EVV Visits section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Past EVV Visits'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Past EVV Visits'), findsOneWidget);
     });
 
     testWidgets('renders No upcoming appointments text', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('No upcoming appointments.'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('No upcoming appointments.'), findsOneWidget);
     });
 
     testWidgets('renders No past visits found text', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('No past visits found.'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('No past visits found.'), findsOneWidget);
     });
 
     testWidgets('renders SOS Emergency button after data loads', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('SOS Emergency'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('SOS Emergency'), findsOneWidget);
     });
 
     testWidgets('renders Send SMS to Caregiver button after data loads', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Send SMS to Caregiver'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Send SMS to Caregiver'), findsOneWidget);
     });
 
     testWidgets('renders FAB with chat icon', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byType(FloatingActionButton), findsOneWidget);
-        expect(find.byIcon(Icons.chat_bubble_outline), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byIcon(Icons.chat_bubble_outline), findsOneWidget);
     });
 
     testWidgets('renders RefreshIndicator after data loads', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byType(RefreshIndicator), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byType(RefreshIndicator), findsOneWidget);
     });
 
     testWidgets('renders event_available icon for EVV section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byIcon(Icons.event_available), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byIcon(Icons.event_available), findsOneWidget);
     });
 
     testWidgets('renders history icon for past EVV section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byIcon(Icons.history), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byIcon(Icons.history), findsOneWidget);
     });
 
     testWidgets('renders refresh icon in EVV section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byIcon(Icons.refresh), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byIcon(Icons.refresh), findsWidgets);
     });
 
     testWidgets('renders SafeArea in body', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byType(SafeArea), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byType(SafeArea), findsWidgets);
     });
 
     testWidgets('renders SingleChildScrollView', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byType(SingleChildScrollView), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byType(SingleChildScrollView), findsWidgets);
     });
 
     testWidgets('renders check-in emojis', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('\u{1F60A}'), findsWidgets); // smiling face
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('\u{1F60A}'), findsWidgets); // smiling face
     });
 
     testWidgets('tapping SMS button with no caregiver phone shows snackbar', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Send SMS to Caregiver'));
-        await tester.tap(find.text('Send SMS to Caregiver'));
-        await tester.pump();
-        expect(find.text('No caregiver with phone number found.'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Send SMS to Caregiver'));
+      await tester.tap(find.text('Send SMS to Caregiver'));
+      await tester.pump();
+      expect(find.text('No caregiver with phone number found.'), findsOneWidget);
     });
 
     testWidgets('renders appointment type for provider', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Annual Checkup'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Annual Checkup'), findsOneWidget);
     });
 
     testWidgets('renders scheduled reminder status for medication', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Scheduled reminder'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Scheduled reminder'), findsOneWidget);
     });
 
     testWidgets('renders mood tags', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('happy'), findsOneWidget);
-        expect(find.text('calm'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('happy'), findsOneWidget);
+      expect(find.text('calm'), findsOneWidget);
     });
   });
 
@@ -527,46 +510,38 @@ void main() {
     testWidgets('renders provider organization name', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('CareConnect Medical Group'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('CareConnect Medical Group'), findsOneWidget);
     });
 
     testWidgets('renders provider phone number', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('(555) 123-4567'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('(555) 123-4567'), findsOneWidget);
     });
 
     testWidgets('renders provider email', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('sarah.mitchell@careconnect.com'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('sarah.mitchell@careconnect.com'), findsOneWidget);
     });
 
     testWidgets('renders schedule icon in EVV refresh', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.byIcon(Icons.schedule), findsNothing);
-        expect(find.byIcon(Icons.refresh), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.byIcon(Icons.schedule), findsNothing);
+      expect(find.byIcon(Icons.refresh), findsWidgets);
     });
   });
 
@@ -582,83 +557,69 @@ void main() {
     testWidgets('renders tablet layout with two columns when width > 600', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        // In tablet layout, Row with two Expanded children
-        // Both EVV sections and mood widgets should be visible
-        expect(find.text('Upcoming EVV Appointments'), findsOneWidget);
-        expect(find.text('Past EVV Visits'), findsOneWidget);
-        expect(find.textContaining('Good'), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      // In tablet layout, Row with two Expanded children
+      // Both EVV sections and mood widgets should be visible
+      expect(find.text('Upcoming EVV Appointments'), findsOneWidget);
+      expect(find.text('Past EVV Visits'), findsOneWidget);
+      expect(find.textContaining('Good'), findsWidgets);
     });
 
     testWidgets('tablet layout shows medication reminder', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Blood Pressure Medication'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Blood Pressure Medication'), findsOneWidget);
     });
 
     testWidgets('tablet layout shows primary care provider', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.textContaining('Dr. Sarah Mitchell'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.textContaining('Dr. Sarah Mitchell'), findsOneWidget);
     });
 
     testWidgets('tablet layout shows SOS Emergency button', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('SOS Emergency'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('SOS Emergency'), findsOneWidget);
     });
 
     testWidgets('tablet layout shows Send SMS button', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Send SMS to Caregiver'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Send SMS to Caregiver'), findsOneWidget);
     });
 
     testWidgets('tablet layout shows Recent Check-Ins', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('Recent Check-Ins'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
     testWidgets('tablet layout shows mood tags', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        expect(find.text('happy'), findsOneWidget);
-        expect(find.text('calm'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      expect(find.text('happy'), findsOneWidget);
+      expect(find.text('calm'), findsOneWidget);
     });
   });
 
@@ -674,30 +635,26 @@ void main() {
     testWidgets('tapping Mark Taken shows snackbar', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        // Scroll to see the medication widget
-        await tester.ensureVisible(find.text('Mark Taken'));
-        await tester.tap(find.text('Mark Taken'));
-        await tester.pump();
-        expect(find.text('Medication marked as taken'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      // Scroll to see the medication widget
+      await tester.ensureVisible(find.text('Mark Taken'));
+      await tester.tap(find.text('Mark Taken'));
+      await tester.pump();
+      expect(find.text('Medication marked as taken'), findsOneWidget);
     });
 
     testWidgets('tapping Mark Missed shows snackbar', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Mark Missed'));
-        await tester.tap(find.text('Mark Missed'));
-        await tester.pump();
-        expect(find.text('Medication marked as missed'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Mark Missed'));
+      await tester.tap(find.text('Mark Missed'));
+      await tester.pump();
+      expect(find.text('Medication marked as missed'), findsOneWidget);
     });
   });
 
@@ -713,77 +670,67 @@ void main() {
     testWidgets('tapping Contact Provider shows bottom sheet', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Contact Provider'));
-        await tester.tap(find.text('Contact Provider'));
-        await tester.pump();
-        // Bottom sheet should show contact options
-        expect(find.text('Contact Provider'), findsWidgets);
-        expect(find.text('Call'), findsOneWidget);
-        expect(find.text('Email'), findsOneWidget);
-        expect(find.text('Video Call'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Contact Provider'));
+      await tester.tap(find.text('Contact Provider'));
+      await tester.pump();
+      // Bottom sheet should show contact options
+      expect(find.text('Contact Provider'), findsWidgets);
+      expect(find.text('Call'), findsOneWidget);
+      expect(find.text('Email'), findsOneWidget);
+      expect(find.text('Video Call'), findsOneWidget);
     });
 
     testWidgets('contact provider bottom sheet shows phone number', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Contact Provider'));
-        await tester.tap(find.text('Contact Provider'));
-        await tester.pump();
-        expect(find.text('(555) 123-4567'), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Contact Provider'));
+      await tester.tap(find.text('Contact Provider'));
+      await tester.pump();
+      expect(find.text('(555) 123-4567'), findsWidgets);
     });
 
     testWidgets('contact provider bottom sheet shows email', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Contact Provider'));
-        await tester.tap(find.text('Contact Provider'));
-        await tester.pump();
-        expect(find.text('sarah.mitchell@careconnect.com'), findsWidgets);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Contact Provider'));
+      await tester.tap(find.text('Contact Provider'));
+      await tester.pump();
+      expect(find.text('sarah.mitchell@careconnect.com'), findsWidgets);
     });
 
     testWidgets('contact provider bottom sheet shows phone icon', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Contact Provider'));
-        await tester.tap(find.text('Contact Provider'));
-        await tester.pump();
-        expect(find.byIcon(Icons.phone), findsOneWidget);
-        expect(find.byIcon(Icons.email), findsOneWidget);
-        expect(find.byIcon(Icons.video_call), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Contact Provider'));
+      await tester.tap(find.text('Contact Provider'));
+      await tester.pump();
+      expect(find.byIcon(Icons.phone), findsOneWidget);
+      expect(find.byIcon(Icons.email), findsOneWidget);
+      expect(find.byIcon(Icons.video_call), findsOneWidget);
     });
 
     testWidgets('contact provider bottom sheet shows Video Call subtitle', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.ensureVisible(find.text('Contact Provider'));
-        await tester.tap(find.text('Contact Provider'));
-        await tester.pump();
-        expect(find.text('Schedule a video consultation'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Contact Provider'));
+      await tester.tap(find.text('Contact Provider'));
+      await tester.pump();
+      expect(find.text('Schedule a video consultation'), findsOneWidget);
     });
   });
 
@@ -799,15 +746,13 @@ void main() {
     testWidgets('tapping FAB opens bottom sheet', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        await tester.tap(find.byType(FloatingActionButton));
-        await tester.pump();
-        // The bottom sheet should appear with the AI chat
-        expect(find.byType(BottomSheet), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
+      // The bottom sheet should appear with the AI chat
+      expect(find.byType(BottomSheet), findsOneWidget);
     });
   });
 
@@ -832,12 +777,10 @@ void main() {
           child: const PatientDashboard(userId: 42),
         ),
       );
-      final mockClient = _createMockClient();
-      await http.runWithClient(() async {
-        await tester.pumpWidget(widget);
-        await _pumpUntilSettled(tester);
-        expect(find.byType(PatientDashboard), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient();
+      await tester.pumpWidget(widget);
+      await _pumpUntilSettled(tester);
+      expect(find.byType(PatientDashboard), findsOneWidget);
     });
   });
 
@@ -853,14 +796,12 @@ void main() {
     testWidgets('handles EVV API failure gracefully', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      final mockClient = _createMockClient(evvStatusCode: 500);
-      await http.runWithClient(() async {
-        await tester.pumpWidget(_wrap());
-        await _pumpUntilSettled(tester);
-        // Dashboard should still render even if EVV fails
-        expect(find.byType(PatientDashboard), findsOneWidget);
-        expect(find.text('SOS Emergency'), findsOneWidget);
-      }, () => mockClient);
+      _setupMockClient(evvStatusCode: 500);
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      // Dashboard should still render even if EVV fails
+      expect(find.byType(PatientDashboard), findsOneWidget);
+      expect(find.text('SOS Emergency'), findsOneWidget);
     });
   });
 }

@@ -4,7 +4,7 @@ This directory contains a clean CloudFormation stack set for the CareConnect
 backend running on:
 
 - Amazon ECS Fargate
-- Application Load Balancer
+- API Gateway HTTP API (VPC Link → Cloud Map → ECS tasks)
 - Amazon RDS PostgreSQL
 - Amazon ECR
 
@@ -23,6 +23,7 @@ Fargate deployment.
 - [What each stack owns](#what-each-stack-owns)
 - [Design choices](#design-choices)
 - [Required application contract](#required-application-contract)
+- [ECS task role permissions](#ecs-task-role-permissions)
 - [Parameter files](#parameter-files)
 - [Repository root (`APP_ROOT`)](#repository-root-app_root)
 - [Example deploy commands](#example-deploy-commands)
@@ -33,6 +34,7 @@ Fargate deployment.
 - [Important safety note](#important-safety-note)
 - [macOS / Linux teardown translation](#macos--linux-teardown-translation)
 - [Common Failure Modes](#common-failure-modes)
+- [Amplify welcome page / CORS after redeploy](#7-amplify-welcome-page-backend-unhealthy-cors-after-redeploy)
 
 
 
@@ -90,6 +92,10 @@ Teardown:
 - Teardown scripts delete stacks in dependency order and empty the ECR repository before removing the platform stack
 - `cdeploy_cloudformation.ps1` and `cdeploy_cloudformation.sh` skip Maven tests by default; use `-RunTests` in PowerShell or `--run-tests` in bash if you want tests included
 - `cdestroy_cloudformation.ps1` and `cdestroy_cloudformation.sh` support skipping ECR cleanup with `-SkipEcrCleanup` or `--skip-ecr-cleanup`
+- **Amplify / browser:** After backend deploy, plain `curl` health is not enough — once
+  Amplify is live, run [DEPLOY_2026_SUMMER.md §7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url)
+  (CORS + `FrontendBaseUrl`). After **app-only** redeploy, re-run §7 if needed
+  ([§11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy))
 
 
 
@@ -109,6 +115,12 @@ That flow:
 1. builds the backend jar
 2. builds and pushes a uniquely tagged Docker image to ECR
 3. updates only the ECS service stack
+
+**CORS caveat:** App-only deploy reads `parameters/{env}-service.json`. The
+checked-in `cfdemo-service.json` defaults `CorsAllowedList` to localhost only.
+Each app-only run can **reset** Amplify CORS on the service stack. After
+app-only, re-apply your Amplify origin via the service stack ([DEPLOY_2026_SUMMER.md §7 / §11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy)).
+You do not fix this by hardcoding URLs in backend or Flutter source.
 
 
 
@@ -245,11 +257,11 @@ The full setup guide is in
 1. `01-networking.yaml`
 
 - VPC
-- public subnets for ALB and ECS
+- public subnets for VPC Link ENIs and ECS tasks
 - private subnets for RDS
 - route tables
 - internet gateway
-- ALB / ECS / RDS security groups
+- VPC Link / ECS / RDS security groups
 
 1. `02-data.yaml`
 
@@ -268,9 +280,9 @@ The full setup guide is in
 
 1. `04-service.yaml`
 
-- Application Load Balancer
-- target group
-- listener
+- Cloud Map namespace and service (ECS service discovery)
+- API Gateway HTTP API, VPC Link, and `$default` route
+- optional custom domain (ACM + Route 53) when `DomainName` is set
 - ECS task definition
 - ECS service
 - app environment variable and secret wiring
@@ -279,7 +291,8 @@ The full setup guide is in
 
 ### Design choices
 
-- ALB is public on HTTP port `80`
+- Public HTTPS entry is **API Gateway** (`ApiEndpoint` output)
+- API Gateway reaches ECS tasks through a **VPC Link** and **Cloud Map** SRV records
 - ECS tasks run in public subnets with public IPs enabled to avoid NAT costs
 - RDS runs in private subnets
 - Database and application secrets are stored in Secrets Manager
@@ -308,11 +321,62 @@ The templates assume the backend uses these environment variables:
 - `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_ENABLED` — optional; leave empty until a real WebSocket API endpoint is set (prod profile uses empty default like dev)
 - `AWS_DEFAULT_REGION` — required for Bedrock and SSM clients
 
-The ALB health check path is:
+The backend health endpoint (smoke tests and welcome-page checks) is:
 
 - `/v1/api/test/health`
 
+### ECS task role permissions
 
+`03-platform.yaml` attaches an inline IAM policy to **`careconnect-{env}-ecsTaskRole`**
+(the ECS **task** role, not the execution role). The backend uses this role at runtime
+when `careconnect.aws.enabled=true` (default in the `dev` Spring profile used by Fargate).
+
+Without these permissions, video calls fail with `403` on `chime:CreateMeeting`, recording
+fails on media pipelines, and AI features fail on `bedrock:InvokeModel`.
+
+| Area | IAM actions (summary) | Used by |
+| ---- | --------------------- | ------- |
+| Chime meetings | `chime:CreateMeeting`, `CreateAttendee`, `DeleteMeeting`, `StartMeetingTranscription`, … | Video calls, live transcription |
+| Chime media pipelines | `chime:CreateMediaCapturePipeline`, `CreateMediaConcatenationPipeline`, `CreateMediaStreamPipeline`, Media Insights, … | Call recording, sentiment clips, speaker-ID ingest |
+| Kinesis Video | `kinesisvideo:ListStreams`, `GetDataEndpoint`, `GetMediaForFragmentList`, … | Per-attendee speaker export |
+| S3 | `s3:CreateBucket`, `PutObject`, `GetObject`, `PutBucketPolicy`, `PutBucketCors`, … on `careconnect-recordings-*` and `careconnect-uploads-*` | Recordings, uploads, invoice files |
+| Bedrock | `bedrock:InvokeModel`, `InvokeModelWithResponseStream` | AI chat, symptoms/allergies, sentiment, summaries |
+| Transcribe | `transcribe:StartTranscriptionJob`, `GetTranscriptionJob` | Post-call transcription |
+| Textract | `textract:DetectDocumentText`, `StartDocumentTextDetection`, … | Invoice OCR |
+| SES / SNS | `ses:SendEmail`, `sns:Publish` | Email and SMS notifications |
+| SSM | `ssm:GetParameter*` on `/careconnect/{env}/*` | Env-scoped Parameter Store (prod profile secrets) |
+| KMS (via SSM) | `kms:Decrypt` when `kms:ViaService` is SSM | Decrypt SecureString parameters |
+| IAM (one-time) | `iam:CreateServiceLinkedRole` for `mediapipelines.chime.amazonaws.com` | Chime recording bucket pipelines |
+
+Full policy: [`templates/03-platform.yaml`](./templates/03-platform.yaml) (`EcsTaskRole`).
+
+**After updating IAM**, redeploy the platform stack, then force a new ECS deployment so
+tasks assume the updated role:
+
+```powershell
+aws cloudformation deploy `
+  --stack-name careconnect-platform-cfdemo `
+  --template-file "$APP_ROOT\cloudformation-fargate\templates\03-platform.yaml" `
+  --parameter-overrides file://$APP_ROOT/cloudformation-fargate/parameters/cfdemo-platform.json `
+  --capabilities CAPABILITY_NAMED_IAM `
+  --profile careconnect-sso
+
+aws ecs update-service `
+  --cluster careconnect-cfdemo-cluster `
+  --service careconnect-cfdemo-backend `
+  --force-new-deployment `
+  --profile careconnect-sso
+```
+
+**One-time per AWS account** (if recording fails with a service-linked-role error and
+`iam:CreateServiceLinkedRole` cannot run from the task role):
+
+```bash
+aws iam create-service-linked-role --aws-service-name mediapipelines.chime.amazonaws.com
+```
+
+See also [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md)
+(sections 7–8) for local-dev IAM parity and troubleshooting.
 
 ### Parameter files
 
@@ -508,12 +572,12 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
-Get the ALB DNS name:
+Get the API Gateway invoke URL (`ApiEndpoint` — use as `BACKEND_URL`, no trailing slash):
 
 ```powershell
 aws cloudformation describe-stacks `
   --stack-name careconnect-service-dev `
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" `
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" `
   --output text
 ```
 
@@ -522,7 +586,7 @@ macOS / Linux:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name careconnect-service-dev \
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text
 ```
 
@@ -588,13 +652,20 @@ To test changes without touching an existing environment:
 
 1. use a distinct ECR image tag such as `cfdemo`
 
-This keeps the old and new ALBs, ECS services, clusters, and databases
-separate.
+This keeps the old and new API Gateway endpoints, ECS services, clusters, and
+databases separate.
 
 ### Student Walkthrough: `cfdemo`
 
 This is the shortest working path for a second, parallel deployment that does
 not interfere with an existing manual Fargate environment.
+
+**Hosted Flutter web (Amplify):** This walkthrough covers backend stacks only.
+For the full backend + Amplify order (including required CORS after Amplify is
+live), use [DEPLOY_2026_SUMMER.md](./DEPLOY_2026_SUMMER.md) — especially
+[§2 first-time path](./DEPLOY_2026_SUMMER.md#first-time-path-backend-then-amplify-recommended-order),
+[§7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url), and
+[§11 after redeploy](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy).
 
 Set `APP_ROOT` to your local clone before running the commands below (see
 [Repository root](#repository-root-app_root)).
@@ -840,6 +911,16 @@ Set `BackendImageUri` in
 [parameters/cfdemo-service.json](./parameters/cfdemo-service.json)
 to the full URI printed in the previous step.
 
+For **Amplify / browser** access, also set (or apply via CLI after deploy —
+see [DEPLOY_2026_SUMMER.md §7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url)):
+
+- `FrontendBaseUrl` — full `https://…` Amplify URL (auth redirects)
+- `CorsAllowedList` — include `http://localhost:*,http://127.0.0.1:*` **and**
+  your exact Amplify origin (scheme + host, no path)
+
+Do not commit team-specific Amplify URLs unless your process allows it; CLI
+`--parameter-overrides` in the summer deploy guide is the usual path.
+
 #### 10. Create the service stack
 
 ```powershell
@@ -874,16 +955,23 @@ aws cloudformation wait stack-create-complete \
   --stack-name careconnect-service-cfdemo
 ```
 
+**Amplify / browser (after frontend is hosted):** The service stack defaults in
+`cfdemo-service.json` allow localhost CORS only. Once you have an Amplify URL,
+run [DEPLOY_2026_SUMMER.md §7](./DEPLOY_2026_SUMMER.md#7-point-the-backend-at-your-amplify-url)
+to set `FrontendBaseUrl` and `CorsAllowedList`, then [§8 smoke test](./DEPLOY_2026_SUMMER.md#8-smoke-test).
+After any **app-only** redeploy, re-run §7 if the welcome page shows “backend
+unhealthy” ([§11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy)).
 
 
-#### 11. Get the ALB DNS name
+
+#### 11. Get the API Gateway invoke URL
 
 ```powershell
 aws cloudformation describe-stacks `
   --profile careconnect-sso `
   --region us-east-1 `
   --stack-name careconnect-service-cfdemo `
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" `
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" `
   --output text
 ```
 
@@ -894,13 +982,20 @@ aws cloudformation describe-stacks \
   --profile careconnect-sso \
   --region us-east-1 \
   --stack-name careconnect-service-cfdemo \
-  --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDnsName'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text
 ```
+
+Use this value as `BACKEND_URL` (no trailing slash, no `/v1` suffix). If you set
+`DomainName` on the service stack, `CustomDomainUrl` is the public HTTPS URL instead.
 
 
 
 #### 12. Test the backend health endpoint
+
+Plain `curl` confirms the API is up. It does **not** prove CORS for Amplify —
+the browser sends an `Origin` header. Always run [12a](#12a-cors-smoke-test-deployed-environment)
+before sharing the hosted frontend.
 
 ```powershell
 Invoke-RestMethod "https://<api-gateway-endpoint>/v1/api/test/health"
@@ -1010,9 +1105,14 @@ curl -s -D - -o /dev/null "$BACKEND_URL/v1/api/test/health" -H "Origin: $FRONTEN
 
 Expect `HTTP/1.1 200` and `access-control-allow-origin` in the response headers.
 
-If preflight or GET fail, check that `CorsAllowedList` in your service
-parameters includes your `$FRONTEND_URL` pattern (for direct ECS paths) and that
-the API Gateway stage is deployed (`04-service.yaml` sets `AllowOrigins: '*'`).
+If preflight or GET with `Origin` fail, update **`CorsAllowedList`** on the
+service stack so ECS passes `CORS_ALLOWED_LIST` into Spring
+(`careconnect.cors_allowed` in `application-dev.properties`). API Gateway also
+allows `*` in `04-service.yaml`, but **Spring enforces the allow list** on ECS —
+that is what blocks Amplify when the list is localhost-only.
+
+See [DEPLOY_2026_SUMMER.md §11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy)
+for the full fix after redeploy.
 
 
 
@@ -1511,7 +1611,7 @@ do not form a valid path
 
 Fix:
 
-- ECS, ALB, and RDS must be in the same VPC
+- ECS tasks, VPC Link ENIs, and RDS must be in the same VPC
 - the RDS security group should allow `5432` from the ECS task security group
 - the ECS task security group must actually be attached to the running task
 
@@ -1542,10 +1642,37 @@ macOS / Linux:
 flutter run --dart-define=BACKEND_URL=https://<api-gateway-endpoint>
 ```
 
-Do not use:
+Do not use a bare hostname without `https://`:
 
 ```text
-cc-backend-alb-xxxx.us-east-1.elb.amazonaws.com
+abc123.execute-api.us-east-1.amazonaws.com
 ```
+
+
+
+#### 7. Amplify welcome page: backend unhealthy (CORS after redeploy)
+
+Symptoms:
+
+- `curl` / `Invoke-RestMethod` from your PC returns healthy JSON for
+  `/v1/api/test/health`
+- The **Amplify welcome page** warns the backend is unhealthy
+- Browser DevTools shows a failed health request or CORS error
+
+Cause (most common):
+
+- **`cdeploy_app_only`** redeployed the service stack from
+  `parameters/cfdemo-service.json`, resetting `CorsAllowedList` to localhost-only
+- Or Amplify was built without **`BACKEND_URL`** (Flutter web falls back to
+  `http://localhost:8080`)
+
+Fix (no hardcoded URLs in source):
+
+1. Diagnose with `curl` **including** `-H "Origin: https://<amplify-host>"`
+2. Re-apply `FrontendBaseUrl` and `CorsAllowedList` on the service stack
+3. Confirm Amplify env vars `BACKEND_URL`, `APP_DOMAIN`, `APP_PORT` and redeploy
+   the frontend branch if the API URL changed
+
+Full playbook: [DEPLOY_2026_SUMMER.md §11](./DEPLOY_2026_SUMMER.md#11-fix-amplify-backend-unhealthy-after-redeploy).
 
 Do not append `/v1`, because the app already builds those paths.

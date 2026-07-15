@@ -48,7 +48,7 @@ void main() {
 
     testWidgets('shows "My Friends" in the AppBar', (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.text('My Friends'), findsOneWidget);
+      expect(find.text('Contacts'), findsOneWidget);
     });
 
     testWidgets('shows CircularProgressIndicator while loading', (tester) async {
@@ -78,14 +78,14 @@ void main() {
     testWidgets('shows "My Friends" in AppBar when user is null', (tester) async {
       await tester.pumpWidget(_wrap(loggedIn: false));
       await tester.pump();
-      expect(find.text('My Friends'), findsOneWidget);
+      expect(find.text('Contacts'), findsOneWidget);
     });
 
     testWidgets('shows empty-state text when user is null', (tester) async {
       // User is null → no friends fetched → empty-state message.
       await tester.pumpWidget(_wrap(loggedIn: false));
       await tester.pump(); // apply isLoading = false
-      expect(find.text('You have no friends yet.'), findsOneWidget);
+      expect(find.text('No contacts found.'), findsOneWidget);
     });
 
     testWidgets('does NOT show ListView when user is null', (tester) async {

@@ -12,12 +12,19 @@
 // calls flutter_secure_storage which throws MissingPluginException; the
 // resulting Future resolves before tester.pump() renders the spinner frame.
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/login_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 
 GoRouter _makeRouter({String? userType}) {
@@ -227,6 +234,97 @@ void main() {
       await tester.tap(find.byIcon(Icons.visibility_outlined));
       await tester.pump();
       expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+    });
+  });
+
+  group('LoginPage – login submit flow', () {
+    testWidgets('shows error when credentials are rejected', (tester) async {
+      _suppressOverflow();
+      // Drive the login HTTP through the existing ApiService test seam so the
+      // submit handler runs deterministically with no real network.
+      ApiService.debugSetHttpClient(MockClient((req) async {
+        return http.Response('{"error":"Invalid credentials"}', 401);
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      final emailField = find.byType(TextFormField).at(0);
+      final pwdField = find.byType(TextFormField).at(1);
+      await tester.ensureVisible(emailField);
+      await tester.enterText(emailField, 'user@test.com');
+      await tester.ensureVisible(pwdField);
+      await tester.enterText(pwdField, 'wrong-password');
+      await tester.pump();
+
+      final signIn = find.widgetWithText(ElevatedButton, 'Sign In');
+      await tester.ensureVisible(signIn);
+      await tester.tap(signIn);
+      await tester.pump(); // kick off the async login
+      await tester.pump(const Duration(seconds: 1)); // let the future resolve
+
+      expect(find.textContaining('Login failed'), findsWidgets);
+    });
+  });
+
+  group('LoginPage – successful login', () {
+    setUp(() {
+      // AuthService.login persists to secure storage + SharedPreferences on
+      // success; mock those channels so login can complete in the test.
+      SharedPreferences.setMockInitialValues({});
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async {
+          if (call.method == 'readAll') return <String, String>{};
+          if (call.method == 'containsKey') return false;
+          return null; // write / read / delete
+        },
+      );
+    });
+
+    testWidgets('verified login navigates away from the login page',
+        (tester) async {
+      _suppressOverflow();
+      ApiService.debugSetHttpClient(MockClient((req) async {
+        return http.Response(
+          jsonEncode({
+            'id': 1,
+            'email': 'user@test.com',
+            'role': 'PATIENT',
+            'token': 'jwt-token',
+            'name': 'Test User',
+            'emailVerified': true,
+          }),
+          200,
+        );
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      final emailField = find.byType(TextFormField).at(0);
+      final pwdField = find.byType(TextFormField).at(1);
+      await tester.ensureVisible(emailField);
+      await tester.enterText(emailField, 'user@test.com');
+      await tester.ensureVisible(pwdField);
+      await tester.enterText(pwdField, 'password123');
+      await tester.pump();
+
+      final signIn = find.widgetWithText(ElevatedButton, 'Sign In');
+      await tester.ensureVisible(signIn);
+      await tester.tap(signIn);
+      // The success path makes several async storage round-trips, a 100ms
+      // delay, then navigates; pump repeatedly to let them all resolve.
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      // On success the page navigates to the dashboard/login route, so the
+      // LoginPage itself is no longer in the tree.
+      expect(find.byType(LoginPage), findsNothing);
     });
   });
 }

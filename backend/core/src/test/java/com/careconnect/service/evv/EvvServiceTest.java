@@ -11,6 +11,8 @@ import com.careconnect.model.evv.EvvLocationRole;
 import com.careconnect.model.evv.EvvLocationType;
 import com.careconnect.model.evv.EvvOfflineQueue;
 import com.careconnect.model.evv.EvvRecord;
+import com.careconnect.model.evv.NoGpsReason;
+import com.careconnect.dto.evv.EvvLocationRequest;
 import com.careconnect.model.schedule.ScheduledVisit;
 import com.careconnect.model.User;
 import com.careconnect.repository.PatientRepository;
@@ -29,6 +31,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -971,5 +974,390 @@ class EvvServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getCaregiverId()).isEqualTo(10L);
+    }
+
+    // ─── buildLocationDetails (private helper) ────────────────────────────────
+    // Exercised via reflection to drive every lat-only/lng-only combination of
+    // the legacy/checkin/checkout OR-conditions, which the public-API tests
+    // above only ever exercise as "both null" or "both set".
+
+    private Map<String, Object> invokeBuildLocationDetails(EvvRecord record) throws Exception {
+        Method m = EvvService.class.getDeclaredMethod("buildLocationDetails", EvvRecord.class);
+        m.setAccessible(true);
+        return (Map<String, Object>) m.invoke(evvService, record);
+    }
+
+    @Test
+    void buildLocationDetails_allLocationsNull_returnsEmptyMap() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).build();
+
+        assertThat(invokeBuildLocationDetails(record)).isEmpty();
+    }
+
+    @Test
+    void buildLocationDetails_legacyLatOnly_includesLegacyFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).locationLat(38.9).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("locationLat");
+    }
+
+    @Test
+    void buildLocationDetails_legacyLngOnly_includesLegacyFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).locationLng(-77.0).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("locationLng");
+    }
+
+    @Test
+    void buildLocationDetails_checkinLatOnly_includesCheckinFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkinLocationLat(38.9).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkinLocationLat");
+    }
+
+    @Test
+    void buildLocationDetails_checkinLngOnly_includesCheckinFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkinLocationLng(-77.0).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkinLocationLng");
+    }
+
+    @Test
+    void buildLocationDetails_checkoutLatOnly_includesCheckoutFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkoutLocationLat(38.9).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkoutLocationLat");
+    }
+
+    @Test
+    void buildLocationDetails_checkoutLngOnly_includesCheckoutFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkoutLocationLng(-77.0).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkoutLocationLng");
+    }
+
+    // ─── createRecord — remaining branch coverage ─────────────────────────────
+
+    @Test
+    void createRecord_caregiverFoundWithNullName_usesFallbackCaregiverName() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder().build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name(null).build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        evvService.createRecord(req, 1L);
+
+        final ArgumentCaptor<EvvRecord> captor = ArgumentCaptor.forClass(EvvRecord.class);
+        verify(recordRepository).save(captor.capture());
+        assertThat(captor.getValue().getCaregiverName()).isEqualTo("Caregiver #10");
+    }
+
+    @Test
+    void createRecord_checkinGpsLatOnlyNoLng_skipsSaveWithWarning() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("GPS")
+                .checkinLocationLat(38.9072)
+                // checkinLocationLng and legacy locationLng both omitted
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        evvService.createRecord(req, 1L);
+
+        verify(locationService, never()).saveLocation(any());
+    }
+
+    @Test
+    void createRecord_checkinGpsWithAccuracy_includesAccuracyInCoords() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("GPS")
+                .checkinLocationLat(38.9072)
+                .checkinLocationLng(-77.0369)
+                .checkinAccuracyM(5.0)
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any())).thenReturn(
+                EvvLocationResponse.builder()
+                        .evvRecordId(1L)
+                        .role(EvvLocationRole.CHECK_IN)
+                        .type(EvvLocationType.GPS)
+                        .build());
+
+        evvService.createRecord(req, 1L);
+
+        final ArgumentCaptor<EvvLocationRequest> captor = ArgumentCaptor.forClass(EvvLocationRequest.class);
+        verify(locationService).saveLocation(captor.capture());
+        assertThat(captor.getValue().getCoords().getAccuracyM())
+                .isEqualByComparingTo(BigDecimal.valueOf(5.0));
+    }
+
+    @Test
+    void createRecord_checkoutGpsLatOnlyNoLng_skipsSaveWithWarning() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkoutLocationSource("GPS")
+                .checkoutLocationLat(38.91)
+                // checkoutLocationLng omitted
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        evvService.createRecord(req, 1L);
+
+        verify(locationService, never()).saveLocation(any());
+    }
+
+    @Test
+    void createRecord_checkoutGpsWithAccuracy_includesAccuracyInCoords() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkoutLocationSource("GPS")
+                .checkoutLocationLat(38.91)
+                .checkoutLocationLng(-77.04)
+                .checkoutAccuracyM(4.0)
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any())).thenReturn(
+                EvvLocationResponse.builder()
+                        .evvRecordId(1L)
+                        .role(EvvLocationRole.CHECK_OUT)
+                        .type(EvvLocationType.GPS)
+                        .build());
+
+        evvService.createRecord(req, 1L);
+
+        final ArgumentCaptor<EvvLocationRequest> captor = ArgumentCaptor.forClass(EvvLocationRequest.class);
+        verify(locationService).saveLocation(captor.capture());
+        assertThat(captor.getValue().getCoords().getAccuracyM())
+                .isEqualByComparingTo(BigDecimal.valueOf(4.0));
+    }
+
+    // ─── saveLocationsForRecord — outer catch blocks ──────────────────────────
+
+    @Test
+    void createRecord_checkinInvalidLocationSource_logsWarningAndStillCreatesRecord() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("NOT_A_REAL_TYPE")
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        final EvvRecord result = evvService.createRecord(req, 1L);
+
+        // EvvLocationType.valueOf() throws inside the try block, caught by the
+        // outer catch — record creation must still succeed.
+        assertThat(result).isNotNull();
+        verify(locationService, never()).saveLocation(any());
+    }
+
+    @Test
+    void createRecord_checkoutInvalidLocationSource_logsWarningAndStillCreatesRecord() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkoutLocationSource("NOT_A_REAL_TYPE")
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        final EvvRecord result = evvService.createRecord(req, 1L);
+
+        assertThat(result).isNotNull();
+        verify(locationService, never()).saveLocation(any());
+    }
+
+    // ─── parseNoGpsReason — driven via createRecord's checkin path ────────────
+
+    @Test
+    void createRecord_checkinNoGpsReasonBlank_parsesAsNull() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("PATIENT_ADDRESS")
+                .checkinNoGpsReason("   ")
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any())).thenReturn(
+                EvvLocationResponse.builder()
+                        .evvRecordId(1L)
+                        .role(EvvLocationRole.CHECK_IN)
+                        .type(EvvLocationType.PATIENT_ADDRESS)
+                        .build());
+
+        evvService.createRecord(req, 1L);
+
+        final ArgumentCaptor<EvvLocationRequest> captor = ArgumentCaptor.forClass(EvvLocationRequest.class);
+        verify(locationService).saveLocation(captor.capture());
+        assertThat(captor.getValue().getNoGpsReason()).isNull();
+    }
+
+    @Test
+    void createRecord_checkinNoGpsReasonValid_parsesEnumCaseInsensitively() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("PATIENT_ADDRESS")
+                .checkinNoGpsReason("gps_timeout")
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any())).thenReturn(
+                EvvLocationResponse.builder()
+                        .evvRecordId(1L)
+                        .role(EvvLocationRole.CHECK_IN)
+                        .type(EvvLocationType.PATIENT_ADDRESS)
+                        .build());
+
+        evvService.createRecord(req, 1L);
+
+        final ArgumentCaptor<EvvLocationRequest> captor = ArgumentCaptor.forClass(EvvLocationRequest.class);
+        verify(locationService).saveLocation(captor.capture());
+        assertThat(captor.getValue().getNoGpsReason()).isEqualTo(NoGpsReason.GPS_TIMEOUT);
+    }
+
+    @Test
+    void createRecord_checkinNoGpsReasonInvalid_fallsBackToOther() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("PATIENT_ADDRESS")
+                .checkinNoGpsReason("not_a_real_reason")
+                .build();
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any())).thenReturn(
+                EvvLocationResponse.builder()
+                        .evvRecordId(1L)
+                        .role(EvvLocationRole.CHECK_IN)
+                        .type(EvvLocationType.PATIENT_ADDRESS)
+                        .build());
+
+        evvService.createRecord(req, 1L);
+
+        final ArgumentCaptor<EvvLocationRequest> captor = ArgumentCaptor.forClass(EvvLocationRequest.class);
+        verify(locationService).saveLocation(captor.capture());
+        assertThat(captor.getValue().getNoGpsReason()).isEqualTo(NoGpsReason.OTHER);
+    }
+
+    // ─── correctRecord — remaining branch coverage ────────────────────────────
+
+    @Test
+    void correctRecord_withNewDeviceInfo_usesNewValue() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecord original = buildSavedRecord(1L, patient);
+
+        final EvvCorrectionRequestDto req = EvvCorrectionRequestDto.builder()
+                .originalRecordId(1L)
+                .reasonCode("CORRECTION")
+                .explanation("Fixing data")
+                .deviceInfo(Map.of("os", "iOS"))
+                .build();
+
+        final EvvRecord savedCorrected = buildSavedRecord(2L, patient);
+        savedCorrected.setIsCorrected(true);
+
+        when(recordRepository.findByIdWithPatient(1L)).thenReturn(Optional.of(original));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(savedCorrected);
+        when(correctionRepository.save(any(EvvCorrection.class))).thenReturn(null);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        evvService.correctRecord(req, 1L);
+
+        // correctRecord saves twice: the new corrected record first, then the
+        // original record (marked rejected) second — capture both and check
+        // the first (the corrected record carries the new deviceInfo).
+        final ArgumentCaptor<EvvRecord> captor = ArgumentCaptor.forClass(EvvRecord.class);
+        verify(recordRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).getDeviceInfo()).isEqualTo(Map.of("os", "iOS"));
+    }
+
+    // ─── populateLocationFields — non-GPS (null coordinates) branch ──────────
+
+    @Test
+    void review_populatesLocationFields_withNonGpsLocations_leavesCoordinatesNull() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecord rec = buildSavedRecord(1L, patient);
+
+        final EvvLocationResponse checkIn = EvvLocationResponse.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.PATIENT_ADDRESS)
+                .latitude(null)
+                .longitude(null)
+                .build();
+
+        final EvvLocationResponse checkOut = EvvLocationResponse.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_OUT)
+                .type(EvvLocationType.PATIENT_ADDRESS)
+                .latitude(null)
+                .longitude(null)
+                .build();
+
+        when(recordRepository.findByIdWithPatient(1L)).thenReturn(Optional.of(rec));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(rec);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.getLocationsForRecord(1L)).thenReturn(List.of(checkIn, checkOut));
+
+        final EvvRecord result = evvService.review(1L, true, 99L, "OK");
+
+        assertThat(result.getCheckinLocationLat()).isNull();
+        assertThat(result.getCheckinLocationLng()).isNull();
+        assertThat(result.getCheckoutLocationLat()).isNull();
+        assertThat(result.getCheckoutLocationLng()).isNull();
+        assertThat(result.getCheckinLocationSource()).isEqualTo("PATIENT_ADDRESS");
+        assertThat(result.getCheckoutLocationSource()).isEqualTo("PATIENT_ADDRESS");
     }
 }
