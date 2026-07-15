@@ -42,7 +42,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final currentLabel = localeProvider.locale == null
         ? t.systemDefault
-        : LanguagePicker.labelFor(localeProvider.locale!);
+        : LanguagePicker.labelFor(localeProvider.locale!, t);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -129,19 +129,18 @@ class _SettingsPageState extends State<SettingsPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Telemetry is enabled'),
-          content: const Text(
-            'CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability. '
-                'You can opt out at any time.',
+          title: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ?? 'Telemetry is enabled'),
+          content: Text(
+            AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogDescription ?? 'CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability.\nYou can opt out at any time.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Opt out'),
+              child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Keep enabled'),
+              child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogKeepEnabled ?? 'Keep enabled'),
             ),
           ],
         );
@@ -235,18 +234,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Opt out of telemetry?'),
-        content: const Text(
-          'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
+        title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ?? 'Opt out of telemetry?'),
+        content: Text(
+          AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogDescription ?? 'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(ctx)?.cancel ?? 'Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Opt out'),
+            child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
           ),
         ],
       ),
@@ -261,18 +260,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Enable telemetry?'),
-        content: const Text(
-          'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
+        title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ?? 'Enable telemetry?'),
+        content: Text(
+          AppLocalizations.of(ctx)?.settings_telemetryOptInDialogDescription ?? 'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(ctx)?.cancel ?? 'Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Enable'),
+            child: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogEnable ?? 'Enable'),
           ),
         ],
       ),
@@ -790,6 +789,58 @@ class _SettingsPageState extends State<SettingsPage> {
                       context.push('/notetaker-configuration');
                     },
                   ),
+              const SizedBox(height: 24),
+
+              // Privacy
+              _buildSectionHeader(context, t.settings_privacySectionHeader),
+              _buildToggleCard(
+                context,
+                icon: Icons.privacy_tip,
+                title: t.settings_privacySectionTelemetrySetting,
+                subtitle: t.settings_privacySectionTelemetrySettingDescription,
+                value: _telemetryEnabled,
+                loading: _loadingTelemetry,
+                onChanged: (enabled) async {
+                  if (_loadingTelemetry) return;
+
+                  final messenger = ScaffoldMessenger.of(context);
+                  final errorColor = Theme.of(context).colorScheme.error;
+
+                  final allowed =
+                      enabled ? await _confirmOptIn() : await _confirmOptOut();
+                  if (!allowed) return;
+
+                  setState(() => _loadingTelemetry = true);
+
+                  try {
+                    await TelemetrySettings.setOptedOut(!enabled);
+
+                    if (!mounted) return;
+                    setState(() {
+                      _telemetryEnabled = enabled;
+                      _loadingTelemetry = false;
+                    });
+
+                    if (_telemetryEnabled) {
+                      await Telemetry.event('privacy_telemetry_toggle', {
+                        'enabled': enabled,
+                      });
+                    }
+                  } catch (_) {
+                    if (!mounted) return;
+                    setState(() => _loadingTelemetry = false);
+
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          t.settings_telemetryFailedToUpdate,
+                        ),
+                        backgroundColor: errorColor,
+                      ),
+                    );
+                  }
+                },
+              ),
 
                   const SizedBox(height: 24),
 
@@ -860,6 +911,31 @@ class _SettingsPageState extends State<SettingsPage> {
                     textColor: Theme.of(context).colorScheme.error,
                     iconColor: Theme.of(context).colorScheme.error,
                   ),
+              const SizedBox(height: 24),
+
+              // General
+              _buildSectionHeader(context, t.settingsGeneral),
+
+              // User-Controlled Persistence Toggle (BNS 5)
+              _buildToggleCard(
+                context,
+                icon: Icons.cloud_off,
+                title: t.settings_generalSectionOfflinePersistenceSetting,
+                subtitle: userProvider.offlineModeEnabled
+                    ? t.settings_generalSectionOfflinePersistenceSettingEnabled
+                    : t.settings_generalSectionOfflinePersistenceSettingDisabled,
+                value: userProvider.offlineModeEnabled,
+                // loading: _loadingPersistence,
+                onChanged: (enabled) async {
+                  userProvider.setOfflineMode(enabled);
+                  // BNS 7: Privacy-Preserving Observability and Telemetry.
+                  if (_telemetryEnabled) {
+                    await Telemetry.event('offline_toggled', {
+                      'enabled': enabled,
+                    });
+                  }
+                },
+              ),
 
                   const SizedBox(height: 24),
                 ],

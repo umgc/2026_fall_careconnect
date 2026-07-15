@@ -181,7 +181,6 @@ static List<BottomNavItem> getCaregiverNavItems() {
       ),
       BottomNavItem(
         label: 'Schedule',
-        labelKey: 'nav_schedule',
         icon: Icons.calendar_month_outlined,
         activeIcon: Icons.calendar_month,
         routeName: 'schedule',
