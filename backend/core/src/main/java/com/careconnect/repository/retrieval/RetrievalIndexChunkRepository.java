@@ -137,6 +137,53 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("sourceRecordId") String sourceRecordId);
 
     /**
+     * Patient-scoped vector similarity search (Task 5.1).
+     *
+     * <p>Orders by cosine distance ({@code <=>}) using the ivfflat cosine ops index.
+     * Only rows with a non-null {@code embedding} are eligible.
+     *
+     * @param queryEmbedding pgvector literal from {@link com.careconnect.service.ai.embedding.EmbeddingVectorFormat}
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND embedding IS NOT NULL
+                    ORDER BY embedding <=> CAST(:queryEmbedding AS vector),
+                             indexed_at DESC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> searchByPatientIdVector(
+            @Param("patientId") Long patientId,
+            @Param("queryEmbedding") String queryEmbedding,
+            @Param("limit") int limit);
+
+    /**
+     * Patient-scoped vector search with {@code record_type} filter applied before {@code LIMIT}.
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND embedding IS NOT NULL
+                      AND record_type IN (:recordTypes)
+                    ORDER BY embedding <=> CAST(:queryEmbedding AS vector),
+                             indexed_at DESC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> searchByPatientIdVectorAndRecordTypes(
+            @Param("patientId") Long patientId,
+            @Param("queryEmbedding") String queryEmbedding,
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("limit") int limit);
+
+    /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
      *
      * @param id        chunk primary key
