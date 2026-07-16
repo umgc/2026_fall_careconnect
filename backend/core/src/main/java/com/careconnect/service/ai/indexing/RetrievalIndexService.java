@@ -201,21 +201,21 @@ public class RetrievalIndexService {
         }
 
         final String sourceRecordId = String.valueOf(payload.mailpieceId());
-        if (payload.contentHash() != null
-                && !payload.contentHash().isBlank()
-                && hasMatchingUspsMailContentHash(sourceRecordId, payload.contentHash())) {
-            log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash unchanged",
-                    payload.mailpieceId());
-            return 0;
-        }
-
         final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
 
+        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
+        if (contentHash != null
+                && !contentHash.isBlank()
+                && shouldSkipUspsMailReindex(sourceRecordId, contentHash, mailpiece)) {
+            log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash+importance unchanged",
+                    payload.mailpieceId());
+            return 0;
+        }
+
         final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
         final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
-        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
         final String sourceKey = firstNonBlank(payload.sourceKey(), mailpiece.getSourceKey());
         final String consentScope = firstNonBlank(
                 payload.consentScope(), mailpiece.getConsentScope());
@@ -291,17 +291,63 @@ public class RetrievalIndexService {
         return false;
     }
 
-    private boolean hasMatchingUspsMailContentHash(
-            final String sourceRecordId, final String contentHash) {
+    /**
+     * Skip only when an existing USPS_MAIL chunk already has the same contentHash
+     * <em>and</em> the same importance fingerprint. Classification-only backfills
+     * (hash unchanged, importance newly present on the entity) must rebuild chunks.
+     */
+    private boolean shouldSkipUspsMailReindex(
+            final String sourceRecordId,
+            final String contentHash,
+            final UspsMailpiece mailpiece) {
         final List<RetrievalIndexChunk> existing =
                 chunkRepository.findBySourceRecordIdAndRecordType(
                         sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        if (existing == null || existing.isEmpty()) {
+            return false;
+        }
+        final String expectedFingerprint = MailpieceChunker.importanceFingerprint(
+                mailpiece.getImportanceLevel(),
+                mailpiece.getImportanceCategory(),
+                mailpiece.getClassificationMethod(),
+                mailpiece.getImportanceReasoning());
         for (final RetrievalIndexChunk chunk : existing) {
-            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
-                return true;
+            if (!contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
+                continue;
             }
+            if (uspsMailNeedsClassificationRefresh(chunk.getChunkMetadata(), expectedFingerprint)) {
+                return false;
+            }
+            return true;
         }
         return false;
+    }
+
+    /**
+     * Force rebuild when the entity has classification but chunk metadata is missing
+     * it (or the fingerprint differs).
+     */
+    private boolean uspsMailNeedsClassificationRefresh(
+            final String chunkMetadataJson,
+            final String expectedFingerprint) {
+        if (expectedFingerprint == null || expectedFingerprint.isBlank()) {
+            return false;
+        }
+        if (chunkMetadataJson == null || chunkMetadataJson.isBlank()) {
+            return true;
+        }
+        try {
+            final JsonNode meta = objectMapper.readTree(chunkMetadataJson);
+            final String storedFingerprint = meta.path("importanceFingerprint").asText(null);
+            if (storedFingerprint != null && !storedFingerprint.isBlank()) {
+                return !expectedFingerprint.equals(storedFingerprint);
+            }
+            final String storedLevel = meta.path("importanceLevel").asText(null);
+            return storedLevel == null || storedLevel.isBlank();
+        } catch (final Exception ex) {
+            log.debug("Unable to parse chunk metadata for importance compare: {}", ex.getMessage());
+            return true;
+        }
     }
 
     private boolean contentHashEquals(final String chunkMetadataJson, final String contentHash) {

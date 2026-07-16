@@ -71,6 +71,14 @@ public class MailpieceChunker {
         if (classificationMethod != null && !classificationMethod.isBlank()) {
             metadata.put("classificationMethod", classificationMethod);
         }
+        if (importanceReasoning != null && !importanceReasoning.isBlank()) {
+            metadata.put("importanceReasoning", importanceReasoning);
+        }
+        final String importanceFingerprint = importanceFingerprint(
+                importanceLevel, importanceCategory, classificationMethod, importanceReasoning);
+        if (importanceFingerprint != null) {
+            metadata.put("importanceFingerprint", importanceFingerprint);
+        }
 
         drafts.add(new IndexingChunkDraft(
                 RetrievalRecordType.USPS_MAIL,
@@ -78,6 +86,33 @@ public class MailpieceChunker {
                 metadata,
                 consentScope));
         return drafts;
+    }
+
+    /**
+     * Stable classification fingerprint stored in chunk metadata so ingest can
+     * distinguish content-only hashes from classification backfills.
+     */
+    public static String importanceFingerprint(
+            final String importanceLevel,
+            final String importanceCategory,
+            final String classificationMethod,
+            final String importanceReasoning) {
+        if ((importanceLevel == null || importanceLevel.isBlank())
+                && (importanceCategory == null || importanceCategory.isBlank())
+                && (classificationMethod == null || classificationMethod.isBlank())
+                && (importanceReasoning == null || importanceReasoning.isBlank())) {
+            return null;
+        }
+        return String.join(
+                "|",
+                nullToEmpty(importanceLevel),
+                nullToEmpty(importanceCategory),
+                nullToEmpty(classificationMethod),
+                nullToEmpty(importanceReasoning));
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value.trim();
     }
 
     String buildChunkText(

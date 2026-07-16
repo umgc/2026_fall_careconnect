@@ -356,8 +356,14 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
-    @DisplayName("ingestMailpieceIndexed skips when contentHash matches existing USPS_MAIL chunk")
+    @DisplayName("ingestMailpieceIndexed skips when contentHash and importance fingerprint match")
     void ingestMailpieceIndexed_skipsUnchangedHash() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setContentHash("sha-abc");
+        when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
+
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
                 .recordType(RetrievalRecordType.USPS_MAIL.name())
                 .sourceRecordId("55")
@@ -373,7 +379,49 @@ class RetrievalIndexServiceTest {
                 "Acme", "Statement", java.time.LocalDate.of(2025, 3, 3), "on_consent"));
 
         assertThat(written).isZero();
-        verify(uspsMailpieceRepository, never()).findById(any());
         verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+    }
+
+    @Test
+    @DisplayName("ingestMailpieceIndexed rebuilds when hash matches but classification is missing from chunk")
+    void ingestMailpieceIndexed_rebuildsOnClassificationBackfill() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setSender("Acme Bank");
+        mailpiece.setSummary("Monthly statement");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setConsentScope("on_consent");
+        mailpiece.setImportanceLevel("HIGH");
+        mailpiece.setImportanceCategory("FINANCIAL");
+        mailpiece.setClassificationMethod("RULES");
+        mailpiece.setImportanceReasoning("Matched bank keyword.");
+        when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
+
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.USPS_MAIL.name())
+                .sourceRecordId("55")
+                .chunkText("old without importance")
+                .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
+                .build();
+        when(chunkRepository.findBySourceRecordIdAndRecordType(
+                "55", RetrievalRecordType.USPS_MAIL.name()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 42L, "2025-03-03|m-1", "sha-abc",
+                "Acme Bank", "Monthly statement",
+                java.time.LocalDate.of(2025, 3, 3), "on_consent"));
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
+                "55", RetrievalRecordType.USPS_MAIL.name());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getChunkText()).contains("Importance: HIGH");
+        assertThat(captor.getValue().get(0).getChunkMetadata()).contains("importanceFingerprint");
     }
 }

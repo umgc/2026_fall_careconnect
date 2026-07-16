@@ -64,5 +64,8 @@ class MailpieceChunkerTest {
         assertThat(drafts.get(0).chunkText()).contains("Reasoning: Matched pharmacy keyword.");
         assertThat(drafts.get(0).metadata()).containsEntry("importanceLevel", "HIGH");
         assertThat(drafts.get(0).metadata()).containsEntry("classificationMethod", "RULES");
+        assertThat(drafts.get(0).metadata()).containsEntry(
+                "importanceFingerprint",
+                "HIGH|MEDICAL|RULES|Matched pharmacy keyword.");
     }
 }

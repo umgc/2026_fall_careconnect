@@ -5,6 +5,13 @@
 -- live here so IndexWorker can emit USPS_MAIL chunks into
 -- retrieval_index_chunk (pgvector + FTS already provisioned).
 --
+-- Prod contract (application-prod.properties): Flyway is disabled; schema is
+-- applied via SchemaPatchRunner + Hibernate ddl-auto=update. This script is
+-- the source of truth and is mirrored in SchemaPatchRunner (idempotent
+-- CREATE TABLE IF NOT EXISTS + guarded FK/unique, same pattern as
+-- retrieval_index_chunk). Entity uses bare Long patientId (no @ManyToOne),
+-- so Hibernate will not create the FK documented here — SchemaPatchRunner must.
+--
 -- Ownership: Team E (USPS / mail agent).
 -- Related: RetrievalRecordType.USPS_MAIL, indexing_outbox, V2607071921.
 
@@ -26,13 +33,21 @@ CREATE TABLE IF NOT EXISTS usps_mailpiece (
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
 
-ALTER TABLE usps_mailpiece
-    ADD CONSTRAINT fk_usps_mailpiece_patient
-    FOREIGN KEY (patient_id) REFERENCES patient (id);
+-- Guarded: entity has no @ManyToOne, so Hibernate ddl-auto will not create this FK.
+DO $$ BEGIN
+    ALTER TABLE usps_mailpiece
+        ADD CONSTRAINT fk_usps_mailpiece_patient
+        FOREIGN KEY (patient_id) REFERENCES patient (id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE usps_mailpiece
-    ADD CONSTRAINT uq_usps_mailpiece_patient_source_key
-    UNIQUE (patient_id, source_key);
+-- Guarded unique: safe on re-run even if @UniqueConstraint already applied via Hibernate.
+DO $$ BEGIN
+    ALTER TABLE usps_mailpiece
+        ADD CONSTRAINT uq_usps_mailpiece_patient_source_key
+        UNIQUE (patient_id, source_key);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_digest_date
     ON usps_mailpiece (patient_id, digest_date);

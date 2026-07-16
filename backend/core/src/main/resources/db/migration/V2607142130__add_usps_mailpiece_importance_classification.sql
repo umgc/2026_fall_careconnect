@@ -3,15 +3,30 @@
 -- Task 3.14.6 (#123) — Rule-based + AI-assist importance classification
 -- with recorded reasoning on usps_mailpiece (depends on V2607142100 / #122).
 --
+-- Prod contract: Flyway is disabled; mirrored in SchemaPatchRunner
+-- (ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS).
+--
 -- Ownership: Team E (USPS / mail agent).
 
 ALTER TABLE usps_mailpiece
-    ADD COLUMN IF NOT EXISTS importance_level VARCHAR(16) NULL,
-    ADD COLUMN IF NOT EXISTS importance_confidence NUMERIC(3, 2) NULL,
-    ADD COLUMN IF NOT EXISTS classification_method VARCHAR(32) NULL,
-    ADD COLUMN IF NOT EXISTS classification_engine VARCHAR(128) NULL,
-    ADD COLUMN IF NOT EXISTS importance_reasoning TEXT NULL,
-    ADD COLUMN IF NOT EXISTS importance_category VARCHAR(40) NULL,
+    ADD COLUMN IF NOT EXISTS importance_level VARCHAR(16) NULL;
+
+ALTER TABLE usps_mailpiece
+    ADD COLUMN IF NOT EXISTS importance_confidence NUMERIC(3, 2) NULL;
+
+ALTER TABLE usps_mailpiece
+    ADD COLUMN IF NOT EXISTS classification_method VARCHAR(32) NULL;
+
+ALTER TABLE usps_mailpiece
+    ADD COLUMN IF NOT EXISTS classification_engine VARCHAR(128) NULL;
+
+ALTER TABLE usps_mailpiece
+    ADD COLUMN IF NOT EXISTS importance_reasoning TEXT NULL;
+
+ALTER TABLE usps_mailpiece
+    ADD COLUMN IF NOT EXISTS importance_category VARCHAR(40) NULL;
+
+ALTER TABLE usps_mailpiece
     ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance
