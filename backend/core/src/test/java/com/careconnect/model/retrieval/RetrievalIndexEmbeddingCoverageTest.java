@@ -29,6 +29,7 @@ class RetrievalIndexEmbeddingCoverageTest {
         assertThat(source).contains("countMissingEmbedding");
         assertThat(source).contains("countMissingEmbeddingForSource");
         assertThat(source).contains("findBySourceRecordIdAndEmbeddingIsNull");
+        assertThat(source).contains("findMissingEmbeddingsForBackfill");
         assertThat(source).contains("CAST(:embedding AS vector)");
         assertThat(source).contains("WHERE embedding IS NULL");
     }
@@ -52,5 +53,16 @@ class RetrievalIndexEmbeddingCoverageTest {
         assertThat(source).contains("chunkEmbeddingService.embedAndPersist");
         assertThat(source).contains("scheduleEmbeddingAfterCommit");
         assertThat(source).contains("afterCommit");
+    }
+
+    @Test
+    @DisplayName("ChunkEmbeddingBackfillWorker polls NULL embeddings via repository batch query")
+    void backfillWorker_contract() throws Exception {
+        final String source = Files.readString(Path.of(
+                "src/main/java/com/careconnect/service/ai/embedding/ChunkEmbeddingBackfillWorker.java"));
+        assertThat(source).contains("findMissingEmbeddingsForBackfill");
+        assertThat(source).contains("chunkEmbeddingService.embedAndPersist");
+        assertThat(source).contains("countMissingEmbedding");
+        assertThat(source).contains("careconnect.embedding.backfill.enabled");
     }
 }

@@ -137,6 +137,23 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("sourceRecordId") String sourceRecordId);
 
     /**
+     * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    ORDER BY indexed_at ASC NULLS LAST, id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForBackfill(@Param("limit") int limit);
+
+    /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
      *
      * @param id        chunk primary key
