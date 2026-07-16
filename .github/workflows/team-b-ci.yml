@@ -88,6 +88,13 @@ jobs:
         working-directory: backend/core
         run: mvn -B clean compile -DskipTests
 
+      # Web uses different conditional imports (dart.library.js_interop)
+      # than the native path, so web-only breakage is invisible to the
+      # other build/test steps. Compile check only — no artifacts kept.
+      - name: Flutter build web (compile check)
+        working-directory: frontend
+        run: flutter build web --release
+
       # ----------------------------------------------------------------
       # Stage 3: Unit tests
       # ----------------------------------------------------------------
