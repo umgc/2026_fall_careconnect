@@ -1,5 +1,5 @@
-/// Permission checking helper based on roles
-/// Permissions match backend exactly: 26 total permissions
+/// Permission checking helper based on roles.
+/// Permission strings match backend RolePermissionService; see [Permission] enum for all 28 values.
 class PermissionHelper {
   /// Check if role has specific permission
   static bool hasPermission(String role, String permission) {
@@ -84,7 +84,7 @@ class PermissionHelper {
         };
 
       case 'PATIENT':
-        // Patient has 6 permissions
+        // Patient has 7 permissions (includes USE_AI_FEATURES for Ask AI on own records)
         return {
           'VIEW_TASKS',
           'COMPLETE_TASKS',
@@ -92,6 +92,7 @@ class PermissionHelper {
           'RECORD_HEALTH_DATA',
           'SEND_MESSAGES',
           'VIEW_MESSAGES',
+          'USE_AI_FEATURES',
         };
 
       case 'FAMILY_MEMBER':

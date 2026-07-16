@@ -53,7 +53,7 @@ void main() {
     test('constructor stores fields', () {
       final dt = DateTime(2025, 8, 1);
       final cp = ConversationPreviewDto(
-        peerId: 3, peerName: 'Carol', content: 'Hey!', timestamp: dt,
+        peerId: 3, peerName: 'Carol', peerRole: 'CAREGIVER', content: 'Hey!', timestamp: dt,
       );
       expect(cp.peerId, 3);
       expect(cp.peerName, 'Carol');

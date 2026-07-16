@@ -2,9 +2,13 @@
 // No network is needed for form-rendering and validation tests.
 // tester.runAsync is used for the submit path to allow real HTTP to fail fast.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/reset_password_screen.dart';
+
+import '../../helpers/fake_http_overrides.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
@@ -112,6 +116,24 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       // The screen should still be rendered after submission.
       expect(find.byType(ResetPasswordScreen), findsOneWidget);
+    });
+
+    testWidgets('successful request shows the backend success message',
+        (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(200, '{"message":"Reset link sent"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrap(const ResetPasswordScreen()));
+      await tester.pump();
+      await tester.enterText(
+          find.byType(TextFormField), 'valid@example.com');
+      await tester.tap(find.text('Send Reset Link'));
+      await tester.pump(); // start the async request
+      await tester.pump(const Duration(seconds: 1)); // let it resolve
+
+      expect(find.text('Reset link sent'), findsOneWidget);
     });
   });
 }

@@ -9,22 +9,40 @@ import 'api_service.dart';
 import 'auth_token_manager.dart';
 import 'enhanced_file_service.dart';
 
-/// File upload categories based on healthcare requirements
+/// File upload categories based on healthcare requirements.
+///
+/// The [value] of each entry is a backend-recognized token: either a canonical
+/// `com.careconnect.model.UserFile.FileCategory` enum name, or one of its
+/// accepted aliases (e.g. AI_CHAT_UPLOAD, HEALTH_DATA_IMPORT and BACKUP_FILE
+/// intentionally resolve to OTHER_DOCUMENT on the backend). Unknown values are
+/// rejected by the backend with a 400 rather than silently miscategorized, so
+/// keeping this list aligned guarantees a file is stored under the category
+/// the user selected.
 enum FileCategory {
   // Core Healthcare
-  medicalReport('MEDICAL_REPORT', 'Medical Report', '🏥'),
+  medicalReport('MEDICAL_RECORD', 'Medical Report', '🏥'),
   labResult('LAB_RESULT', 'Lab Result', '🧪'),
   prescription('PRESCRIPTION', 'Prescription', '💊'),
-  clinicalNotes('CLINICAL_NOTES', 'Clinical Notes', '📋'),
+  clinicalNotes('CLINICAL_NOTE', 'Clinical Notes', '📋'),
 
   // Personal
-  profilePicture('PROFILE_PICTURE', 'Profile Picture', '👤'),
+  profilePicture('PROFILE_IMAGE', 'Profile Picture', '👤'),
   emergencyContact('EMERGENCY_CONTACT', 'Emergency Contact', '🚨'),
-  insuranceDoc('INSURANCE', 'Insurance Document', '🛡️'),
+  insuranceDoc('INSURANCE_DOCUMENT', 'Insurance Document', '🛡️'),
+
+  // Employment & Onboarding (Home Care Document Digitization)
+  employmentApplication('EMPLOYMENT_APPLICATION', 'Employment Application', '📝'),
+  onboardingForm('ONBOARDING_FORM', 'Onboarding Form', '🗂️'),
+  backgroundCheck('BACKGROUND_CHECK', 'Background Check', '🔎'),
+  certification('CERTIFICATION', 'Certification / License', '📜'),
+  reference('REFERENCE', 'Reference', '🧾'),
+  employmentContract('EMPLOYMENT_CONTRACT', 'Employment Contract', '✍️'),
+  taxForm('TAX_FORM', 'Tax Form (W-4)', '💵'),
+  workAuthorization('WORK_AUTHORIZATION', 'Work Authorization (I-9)', '🆔'),
 
   // AI & Communication
   aiChatUpload('AI_CHAT_UPLOAD', 'AI Chat File', '🤖'),
-  generalDocument('documents', 'General Document', '📄'),
+  generalDocument('OTHER_DOCUMENT', 'General Document', '📄'),
 
   // Data Management
   healthDataImport('HEALTH_DATA_IMPORT', 'Health Data Import', '📊'),
@@ -34,6 +52,22 @@ enum FileCategory {
   final String value;
   final String displayName;
   final String icon;
+
+  /// Document types that belong to the employment / home-care intake workflow.
+  /// Mirrors `UserFile.FileCategory.EMPLOYMENT_INTAKE` on the backend.
+  static const List<FileCategory> employmentIntake = [
+    employmentApplication,
+    onboardingForm,
+    backgroundCheck,
+    certification,
+    reference,
+    employmentContract,
+    taxForm,
+    workAuthorization,
+  ];
+
+  /// Whether this category is a hiring / onboarding intake document type.
+  bool get isEmploymentIntake => employmentIntake.contains(this);
 }
 
 class FileCategoryDropdown extends StatefulWidget {
@@ -83,6 +117,63 @@ class _FileCategoryDropdownState extends State<FileCategoryDropdown> {
       },
       initialValue: _selectedCategory,
       decoration: const InputDecoration(labelText: 'Select Category'),
+    );
+  }
+}
+
+
+/// Document-type selector for the employment / home-care intake workflow.
+///
+/// Shows only hiring and onboarding document types (see
+/// [FileCategory.employmentIntake]) and reports the current selection back to
+/// the parent via [onChanged] so it can be submitted with the upload.
+class EmploymentDocumentTypeDropdown extends StatefulWidget {
+  const EmploymentDocumentTypeDropdown({
+    super.key,
+    this.initialType,
+    this.onChanged,
+  });
+
+  final FileCategory? initialType;
+  final ValueChanged<FileCategory>? onChanged;
+
+  @override
+  State<EmploymentDocumentTypeDropdown> createState() =>
+      _EmploymentDocumentTypeDropdownState();
+}
+
+class _EmploymentDocumentTypeDropdownState
+    extends State<EmploymentDocumentTypeDropdown> {
+  late FileCategory _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType =
+        (widget.initialType != null && widget.initialType!.isEmploymentIntake)
+            ? widget.initialType!
+            : FileCategory.employmentIntake.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<FileCategory>(
+      initialValue: _selectedType,
+      decoration: const InputDecoration(
+        labelText: 'Document Type',
+        hintText: 'Select a hiring or onboarding document',
+      ),
+      items: FileCategory.employmentIntake.map((category) {
+        return DropdownMenuItem<FileCategory>(
+          value: category,
+          child: Text('${category.icon} ${category.displayName}'),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() => _selectedType = value);
+        widget.onChanged?.call(value);
+      },
     );
   }
 }
@@ -165,7 +256,7 @@ class ComprehensiveFileService {
         description: 'Profile picture for user $userId',
       );
     } catch (e) {
-      print('❌ Error uploading profile image: $e');
+      debugPrint('❌ Error uploading profile image: $e');
       return null;
     }
   }
@@ -198,7 +289,7 @@ class ComprehensiveFileService {
         additionalFields: {'patientId': patientId.toString()},
       );
     } catch (e) {
-      print('❌ Error uploading medical document: $e');
+      debugPrint('❌ Error uploading medical document: $e');
       return null;
     }
   }
@@ -218,7 +309,7 @@ class ComprehensiveFileService {
         additionalFields: {'patientId': patientId.toString()},
       );
     } catch (e) {
-      print('❌ Error uploading clinical notes attachment: $e');
+      debugPrint('❌ Error uploading clinical notes attachment: $e');
       return null;
     }
   }
@@ -242,7 +333,7 @@ class ComprehensiveFileService {
         additionalFields: additionalFields,
       );
     } catch (e) {
-      print('❌ Error uploading chat file: $e');
+      debugPrint('❌ Error uploading chat file: $e');
       return null;
     }
   }
@@ -275,7 +366,7 @@ class ComprehensiveFileService {
         additionalFields: {'patientId': patientId.toString()},
       );
     } catch (e) {
-      print('❌ Error uploading prescription: $e');
+      debugPrint('❌ Error uploading prescription: $e');
       return null;
     }
   }
@@ -294,7 +385,7 @@ class ComprehensiveFileService {
         description: description ?? 'Emergency contact document',
       );
     } catch (e) {
-      print('❌ Error uploading emergency contact document: $e');
+      debugPrint('❌ Error uploading emergency contact document: $e');
       return null;
     }
   }
@@ -314,7 +405,51 @@ class ComprehensiveFileService {
         additionalFields: {'patientId': patientId.toString()},
       );
     } catch (e) {
-      print('❌ Error uploading insurance document: $e');
+      debugPrint('❌ Error uploading insurance document: $e');
+      return null;
+    }
+  }
+
+  /// 7b. Employment / Home-Care Intake Document Upload
+  ///
+  /// Dedicated intake flow for hiring and onboarding forms. The selected
+  /// [documentType] must be an employment intake category; the file is linked
+  /// to the uploading owner and, when supplied, to the [patientId] /
+  /// [careCircleId] it pertains to (care-circle context).
+  ///
+  /// Returns `null` (without a network call) when [documentType] is not an
+  /// employment intake type, so callers get a clear, early rejection.
+  static Future<FileUploadResponse?> uploadEmploymentDocument({
+    required File documentFile,
+    required FileCategory documentType,
+    int? patientId,
+    int? careCircleId,
+    String? description,
+  }) async {
+    if (!documentType.isEmploymentIntake) {
+      debugPrint('❌ Invalid intake document type: ${documentType.value}. '
+          'Expected one of: '
+          '${FileCategory.employmentIntake.map((c) => c.value).join(', ')}');
+      return null;
+    }
+
+    try {
+      final additionalFields = <String, String>{
+        'documentType': documentType.value,
+        if (patientId != null) 'patientId': patientId.toString(),
+        if (careCircleId != null) 'careCircleId': careCircleId.toString(),
+      };
+
+      return await _uploadToEndpoint(
+        endpoint: '/intake',
+        file: documentFile,
+        category: documentType.value,
+        description:
+            description ?? '${documentType.displayName} (intake document)',
+        additionalFields: additionalFields,
+      );
+    } catch (e) {
+      debugPrint('❌ Error uploading intake document: $e');
       return null;
     }
   }
@@ -347,7 +482,7 @@ class ComprehensiveFileService {
         throw Exception(errorData['error'] ?? 'Failed to export data');
       }
     } catch (e) {
-      print('❌ Error exporting user data: $e');
+      debugPrint('❌ Error exporting user data: $e');
       return null;
     }
   }
@@ -382,7 +517,7 @@ class ComprehensiveFileService {
       }
       return null;
     } catch (e) {
-      print('❌ Error importing bulk data: $e');
+      debugPrint('❌ Error importing bulk data: $e');
       return null;
     }
   }
@@ -402,7 +537,7 @@ class ComprehensiveFileService {
         additionalFields: {if (backupType != null) 'backupType': backupType},
       );
     } catch (e) {
-      print('❌ Error uploading backup file: $e');
+      debugPrint('❌ Error uploading backup file: $e');
       return null;
     }
   }
@@ -416,7 +551,6 @@ class ComprehensiveFileService {
   }) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
-      final queryString = params?.toQueryString() ?? '';
 
       final response = await http
           .get(
@@ -435,7 +569,7 @@ class ComprehensiveFileService {
         throw Exception(errorData['error'] ?? 'Failed to get user files');
       }
     } catch (e) {
-      print('❌ Error getting user files: $e');
+      debugPrint('❌ Error getting user files: $e');
       return [];
     }
   }
@@ -446,9 +580,7 @@ class ComprehensiveFileService {
         FileQueryParams? params,
       }) async {
     try {
-      List<String> allFiles = [];
       final headers = await AuthTokenManager.getAuthHeaders();
-      final queryString = params?.toQueryString() ?? '';
 
       final response = await http
           .get(
@@ -459,14 +591,14 @@ class ComprehensiveFileService {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        print('Response data returned: $responseData');
+        debugPrint('Response data returned: $responseData');
         return UserFileDTO.fromJson(responseData);
       } else {
         final errorData = json.decode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to get user files');
       }
     } catch (e) {
-      print('❌ Error getting user files: $e');
+      debugPrint('❌ Error getting user files: $e');
       return null;
     }
   }
@@ -519,7 +651,7 @@ class ComprehensiveFileService {
         );
       }
     } catch (e) {
-      print('❌ Error getting patient documents: $e');
+      debugPrint('❌ Error getting patient documents: $e');
       return [];
     }
   }
@@ -562,7 +694,7 @@ class ComprehensiveFileService {
         throw Exception(errorData['error'] ?? 'Failed to search files');
       }
     } catch (e) {
-      print('❌ Error searching files: $e');
+      debugPrint('❌ Error searching files: $e');
       return [];
     }
   }
@@ -642,10 +774,18 @@ class ComprehensiveFileService {
       // Add form fields
       request.files.add(multipartFile);
       request.fields['category'] = category;
+      if (description != null) {
+        request.fields['description'] = description;
+      }
+      // Include any context fields (e.g. documentType, patientId, careCircleId)
+      // so uploads are linked to the correct owner / patient / care circle.
+      if (additionalFields != null) {
+        request.fields.addAll(additionalFields);
+      }
 
-      print('📤 Uploading to: ${request.url}');
-      print('📤 Category: $category');
-      print('📤 File: ${file.path.split('/').last}');
+      debugPrint('📤 Uploading to: ${request.url}');
+      debugPrint('📤 Category: $category');
+      debugPrint('📤 File: ${file.path.split('/').last}');
 
       // Send the request
       var streamedResponse = await request.send().timeout(
@@ -653,8 +793,8 @@ class ComprehensiveFileService {
       );
       var response = await http.Response.fromStream(streamedResponse);
 
-      print('📥 Response status: ${response.statusCode}');
-      print('📥 Response body: ${response.body}');
+      debugPrint('📥 Response status: ${response.statusCode}');
+      debugPrint('📥 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
@@ -664,7 +804,7 @@ class ComprehensiveFileService {
         throw Exception(errorData['error'] ?? 'Failed to upload file');
       }
     } catch (e) {
-      print('❌ Error uploading to $endpoint: $e');
+      debugPrint('❌ Error uploading to $endpoint: $e');
       return null;
     }
   }
@@ -706,13 +846,11 @@ class ComprehensiveFileService {
           if (kIsWeb) {
             // On Web version: Use bytes and filename
             Uint8List? fileBytes = result.files.single.bytes;
-            String fileName = result.files.single.name;
 
             if (fileBytes != null) {
-              File a = File(result.files.first.path!);
               return File(result.files.first.path!);
             } else {
-              print('No file bytes found.');
+              debugPrint('No file bytes found.');
               return null;
             }
           }
@@ -726,18 +864,17 @@ class ComprehensiveFileService {
           if (kIsWeb) {
             // On Web: Use bytes and filename
             Uint8List? fileBytes = result.files.single.bytes;
-            String fileName = result.files.single.name;
 
             if (fileBytes != null) {
               return File(result.files.first.path!);
             } else {
-              print('No file bytes found.');
+              debugPrint('No file bytes found.');
               return null;
             }
           }
       }
     } catch (e) {
-      print('❌ Error picking file for category ${category.displayName}: $e');
+      debugPrint('❌ Error picking file for category ${category.displayName}: $e');
       return null;
     }
     return null;
@@ -769,7 +906,7 @@ class ComprehensiveFileService {
             if (fileBytes != null) {
               return (fileBytes, fileName);
             } else {
-              print('No file bytes found.');
+              debugPrint('No file bytes found.');
               return null;
             }
           }
@@ -788,13 +925,13 @@ class ComprehensiveFileService {
             if (fileBytes != null) {
               return (fileBytes, fileName);
             } else {
-              print('No file bytes found.');
+              debugPrint('No file bytes found.');
               return null;
             }
           }
       }
     } catch (e) {
-      print('❌ Error picking file for category ${category.displayName}: $e');
+      debugPrint('❌ Error picking file for category ${category.displayName}: $e');
       return null;
     }
     return null;
@@ -807,7 +944,7 @@ class ComprehensiveFileService {
 
     // General size limit: 50MB
     if (fileSize > 50 * 1024 * 1024) {
-      print('❌ File too large: ${fileSize / 1024 / 1024}MB');
+      debugPrint('❌ File too large: ${fileSize / 1024 / 1024}MB');
       return false;
     }
 

@@ -456,10 +456,10 @@ void main() {
       expect(find.text('Pending Items'), findsNothing);
     });
 
-    testWidgets('does NOT show Visit History for patient', (tester) async {
+    testWidgets('shows Visit History for patient', (tester) async {
       await tester.pumpWidget(_wrap(role: 'PATIENT'));
       await _pumpUntilLoaded(tester);
-      expect(find.text('Visit History'), findsNothing);
+      expect(find.text('Visit History'), findsOneWidget);
     });
 
     testWidgets('does NOT show Manage Corrections for patient',
@@ -475,10 +475,10 @@ void main() {
       expect(find.text('Review Records'), findsNothing);
     });
 
-    testWidgets('does NOT show Visit Schedules for patient', (tester) async {
+    testWidgets('shows Visit Schedules for patient', (tester) async {
       await tester.pumpWidget(_wrap(role: 'PATIENT'));
       await _pumpUntilLoaded(tester);
-      expect(find.text('Visit Schedules'), findsNothing);
+      expect(find.text('Visit Schedules'), findsOneWidget);
     });
 
     testWidgets('shows Recent Activities for patient', (tester) async {
