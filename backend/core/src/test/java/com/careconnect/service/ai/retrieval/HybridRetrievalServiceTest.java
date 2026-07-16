@@ -46,7 +46,9 @@ class HybridRetrievalServiceTest {
                 20,
                 20,
                 10,
-                60);
+                60,
+                3,
+                2);
     }
 
     @Test
@@ -113,7 +115,7 @@ class HybridRetrievalServiceTest {
     void search_appliesVisibilityFilter() {
         final UUID allowed = UUID.randomUUID();
         final UUID hidden = UUID.randomUUID();
-        when(fullTextSearchService.search(eq(42L), eq("note"), anySet(), eq(20)))
+        when(fullTextSearchService.search(eq(42L), eq("note"), anySet(), eq(60)))
                 .thenReturn(List.of(
                         chunk(allowed, "CALL_SUMMARY", "auto"),
                         chunk(hidden, "CALL_SUMMARY", "hidden")));
@@ -133,6 +135,7 @@ class HybridRetrievalServiceTest {
         assertThat(result.chunks()).hasSize(1);
         assertThat(result.chunks().get(0).chunkId()).isEqualTo(allowed);
         assertThat(result.ftsHitCount()).isEqualTo(1);
+        verify(fullTextSearchService).search(eq(42L), eq("note"), anySet(), eq(60));
     }
 
     private static RetrievalScope scope(final Long patientId) {

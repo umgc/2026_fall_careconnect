@@ -24,8 +24,18 @@ final class ReciprocalRankFusion {
             final List<RetrievalIndexChunk> vectorHits,
             final int rrfK,
             final int finalTopK) {
+        return merge(ftsHits, vectorHits, rrfK, finalTopK, Integer.MAX_VALUE);
+    }
+
+    static List<MergedHit> merge(
+            final List<RetrievalIndexChunk> ftsHits,
+            final List<RetrievalIndexChunk> vectorHits,
+            final int rrfK,
+            final int finalTopK,
+            final int maxChunksPerSource) {
         final int k = Math.max(1, rrfK);
         final int topK = Math.max(1, finalTopK);
+        final int sourceCap = Math.max(1, maxChunksPerSource);
 
         final Map<UUID, MergedHit> byId = new LinkedHashMap<>();
         accumulate(byId, ftsHits, true, k);
@@ -46,10 +56,33 @@ final class ReciprocalRankFusion {
             return a.chunk().getId().compareTo(b.chunk().getId());
         });
 
-        if (ranked.size() <= topK) {
-            return ranked;
+        final List<MergedHit> diverse = capChunksPerSource(ranked, sourceCap, topK);
+        return List.copyOf(diverse);
+    }
+
+    private static List<MergedHit> capChunksPerSource(
+            final List<MergedHit> ranked, final int sourceCap, final int topK) {
+        final Map<String, Integer> countBySource = new LinkedHashMap<>();
+        final List<MergedHit> diverse = new ArrayList<>(Math.min(ranked.size(), topK));
+        for (final MergedHit hit : ranked) {
+            final String sourceKey = sourceKey(hit.chunk());
+            final int sourceCount = countBySource.merge(sourceKey, 1, Integer::sum);
+            if (sourceCount <= sourceCap) {
+                diverse.add(hit);
+                if (diverse.size() == topK) {
+                    break;
+                }
+            }
         }
-        return List.copyOf(ranked.subList(0, topK));
+        return diverse;
+    }
+
+    private static String sourceKey(final RetrievalIndexChunk chunk) {
+        final String sourceRecordId = chunk.getSourceRecordId();
+        if (sourceRecordId == null || sourceRecordId.isBlank()) {
+            return "chunk:" + chunk.getId();
+        }
+        return "source:" + sourceRecordId;
     }
 
     private static void accumulate(

@@ -141,6 +141,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
      *
      * <p>Orders by cosine distance ({@code <=>}) using the ivfflat cosine ops index.
      * Only rows with a non-null {@code embedding} are eligible.
+     * Production must tune PostgreSQL {@code ivfflat.probes} at the session or database
+     * level and validate the recall/latency trade-off with representative data.
      *
      * @param queryEmbedding pgvector literal from {@link com.careconnect.service.ai.embedding.EmbeddingVectorFormat}
      */

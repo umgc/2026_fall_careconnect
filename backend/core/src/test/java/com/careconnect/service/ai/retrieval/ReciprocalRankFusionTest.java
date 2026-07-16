@@ -54,12 +54,32 @@ class ReciprocalRankFusionTest {
         assertThat(ReciprocalRankFusion.merge(List.of(), List.of(), 60, 10)).isEmpty();
     }
 
+    @Test
+    @DisplayName("RRF caps chunks per source before applying final top-k")
+    void merge_capsChunksPerSource() {
+        final RetrievalIndexChunk sourceA1 = chunk(UUID.randomUUID(), "source-a");
+        final RetrievalIndexChunk sourceA2 = chunk(UUID.randomUUID(), "source-a");
+        final RetrievalIndexChunk sourceB = chunk(UUID.randomUUID(), "source-b");
+
+        final List<ReciprocalRankFusion.MergedHit> merged = ReciprocalRankFusion.merge(
+                List.of(sourceA1, sourceA2, sourceB), List.of(), 60, 2, 1);
+
+        assertThat(merged).hasSize(2);
+        assertThat(merged)
+                .extracting(hit -> hit.chunk().getSourceRecordId())
+                .containsExactly("source-a", "source-b");
+    }
+
     private static RetrievalIndexChunk chunk(final UUID id) {
+        return chunk(id, "s1");
+    }
+
+    private static RetrievalIndexChunk chunk(final UUID id, final String sourceRecordId) {
         return RetrievalIndexChunk.builder()
                 .id(id)
                 .patientId(1L)
                 .recordType("CALL_SUMMARY")
-                .sourceRecordId("s1")
+                .sourceRecordId(sourceRecordId)
                 .chunkText("text")
                 .build();
     }

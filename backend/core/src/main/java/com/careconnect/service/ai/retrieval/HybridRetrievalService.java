@@ -2,6 +2,7 @@ package com.careconnect.service.ai.retrieval;
 
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
+import com.careconnect.security.Role;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,13 +12,14 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * Task 5.1 — hybrid Ask AI retrieval merge layer.
  *
- * <p>Pipeline: resolve patient + {@link RetrievalScope} → parallel FTS + vector arms →
+ * <p>Pipeline: resolve patient + {@link RetrievalScope} → FTS and vector arms →
  * Reciprocal Rank Fusion → final top-k {@link RankedChunk}s with citation refs {@code C1..Cn}.
  *
  * <p>When query embedding fails or embeddings are disabled, degrades to FTS-only with an
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 public class HybridRetrievalService {
 
     private static final Logger log = LoggerFactory.getLogger(HybridRetrievalService.class);
+    private static final int MAX_ARM_FETCH = 100;
 
     private final FullTextSearchService fullTextSearchService;
     private final VectorSimilaritySearchService vectorSimilaritySearchService;
@@ -36,6 +39,8 @@ public class HybridRetrievalService {
     private final int vectorTopK;
     private final int finalTopK;
     private final int rrfK;
+    private final int visibilityOverfetchFactor;
+    private final int maxChunksPerSource;
 
     public HybridRetrievalService(
             final FullTextSearchService fullTextSearchService,
@@ -44,7 +49,11 @@ public class HybridRetrievalService {
             @Value("${careconnect.ai.ask.retrieval.fts-top-k:20}") final int ftsTopK,
             @Value("${careconnect.ai.ask.retrieval.vector-top-k:20}") final int vectorTopK,
             @Value("${careconnect.ai.ask.retrieval.final-top-k:10}") final int finalTopK,
-            @Value("${careconnect.ai.ask.retrieval.rrf-k:60}") final int rrfK) {
+            @Value("${careconnect.ai.ask.retrieval.rrf-k:60}") final int rrfK,
+            @Value("${careconnect.ai.ask.retrieval.visibility-overfetch-factor:3}")
+                    final int visibilityOverfetchFactor,
+            @Value("${careconnect.ai.ask.retrieval.max-chunks-per-source:2}")
+                    final int maxChunksPerSource) {
         this.fullTextSearchService = fullTextSearchService;
         this.vectorSimilaritySearchService = vectorSimilaritySearchService;
         this.chunkEmbeddingService = chunkEmbeddingService;
@@ -52,6 +61,8 @@ public class HybridRetrievalService {
         this.vectorTopK = Math.max(1, vectorTopK);
         this.finalTopK = Math.max(1, finalTopK);
         this.rrfK = Math.max(1, rrfK);
+        this.visibilityOverfetchFactor = Math.max(1, visibilityOverfetchFactor);
+        this.maxChunksPerSource = Math.max(1, maxChunksPerSource);
     }
 
     /**
@@ -85,8 +96,12 @@ public class HybridRetrievalService {
             return HybridRetrievalResult.empty(normalizedQuery);
         }
 
-        final List<RetrievalIndexChunk> ftsRaw =
-                fullTextSearchService.search(patientId, normalizedQuery, allowedTypes, ftsTopK);
+        final int effectiveFtsTopK =
+                visibilityAwareLimit(ftsTopK, scope.visibilityFilter());
+        final int effectiveVectorTopK =
+                visibilityAwareLimit(vectorTopK, scope.visibilityFilter());
+        final List<RetrievalIndexChunk> ftsRaw = fullTextSearchService.search(
+                patientId, normalizedQuery, allowedTypes, effectiveFtsTopK);
         final List<RetrievalIndexChunk> ftsHits = applyVisibility(ftsRaw, scope.visibilityFilter());
 
         boolean vectorDegraded = false;
@@ -99,12 +114,13 @@ public class HybridRetrievalService {
                     patientId);
         } else {
             final List<RetrievalIndexChunk> vectorRaw = vectorSimilaritySearchService.search(
-                    patientId, queryEmbedding.get(), allowedTypes, vectorTopK);
+                    patientId, queryEmbedding.get(), allowedTypes, effectiveVectorTopK);
             vectorHits = applyVisibility(vectorRaw, scope.visibilityFilter());
         }
 
         final List<ReciprocalRankFusion.MergedHit> merged =
-                ReciprocalRankFusion.merge(ftsHits, vectorHits, rrfK, finalTopK);
+                ReciprocalRankFusion.merge(
+                        ftsHits, vectorHits, rrfK, finalTopK, maxChunksPerSource);
         final List<RankedChunk> ranked = toRankedChunks(merged);
 
         log.info(
@@ -154,12 +170,29 @@ public class HybridRetrievalService {
                 .toList();
     }
 
+    private int visibilityAwareLimit(
+            final int configuredLimit, final CaregiverVisibilityFilter filter) {
+        if (!requiresVisibilityFiltering(filter)) {
+            return configuredLimit;
+        }
+        final long overfetch = (long) configuredLimit * visibilityOverfetchFactor;
+        return (int) Math.min(MAX_ARM_FETCH, overfetch);
+    }
+
+    private static boolean requiresVisibilityFiltering(
+            final CaregiverVisibilityFilter filter) {
+        if (filter == null) {
+            return false;
+        }
+        return filter.callerRole() != Role.ADMIN && filter.callerRole() != Role.PATIENT;
+    }
+
     private static Set<String> toRecordTypeNames(final Set<RetrievalRecordType> types) {
         if (types == null || types.isEmpty()) {
             return Set.of();
         }
         return types.stream()
-                .filter(t -> t != null)
+                .filter(Objects::nonNull)
                 .map(Enum::name)
                 .collect(Collectors.toUnmodifiableSet());
     }
