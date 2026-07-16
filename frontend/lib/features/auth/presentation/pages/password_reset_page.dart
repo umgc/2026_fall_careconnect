@@ -34,25 +34,12 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
   Future<void> _setPassword() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_emailController.text.trim().isEmpty) {
-      setState(() {
-        _error = 'Email is required';
-        _message = null;
-      });
-      return;
-    }
-
+    // Note: email-empty and password-length are already enforced by the form
+    // field validators above (validate() returns false first), so only the
+    // cross-field password match needs an explicit check here.
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
         _error = 'Passwords do not match';
-        _message = null;
-      });
-      return;
-    }
-
-    if (_passwordController.text.length < 6) {
-      setState(() {
-        _error = 'Password must be at least 6 characters';
         _message = null;
       });
       return;

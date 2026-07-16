@@ -96,6 +96,97 @@ void main() {
         });
         expect(schedule.daysOfWeek, isEmpty);
       });
+
+      test('parses midnight start and end times', () {
+        final schedule = ShiftSchedule.fromJson({
+          'id': 12,
+          'caretakerId': 'ct-7',
+          'title': 'Overnight',
+          'description': 'Night shift',
+          'startDate': '2026-03-17T00:00:00Z',
+          'startTime': {'hour': 0, 'minute': 0},
+          'endTime': {'hour': 23, 'minute': 59},
+        });
+        expect(schedule.startTime, const TimeOfDay(hour: 0, minute: 0));
+        expect(schedule.endTime, const TimeOfDay(hour: 23, minute: 59));
+      });
+
+      test('parses date-only ISO string', () {
+        final schedule = ShiftSchedule.fromJson({
+          'id': 13,
+          'caretakerId': 'ct-8',
+          'title': 'Test',
+          'description': 'Test',
+          'startDate': '2026-06-15',
+          'startTime': {'hour': 9, 'minute': 30},
+          'endTime': {'hour': 17, 'minute': 0},
+        });
+        expect(schedule.startDate.year, 2026);
+        expect(schedule.startDate.month, 6);
+        expect(schedule.startDate.day, 15);
+      });
+
+      test('all days true for 7-day schedule', () {
+        final schedule = ShiftSchedule.fromJson({
+          'id': 14,
+          'caretakerId': 'ct-9',
+          'title': 'Every Day',
+          'description': '7-day coverage',
+          'recurring': true,
+          'daysOfWeek': [true, true, true, true, true, true, true],
+          'startDate': '2026-01-01T00:00:00Z',
+          'startTime': {'hour': 6, 'minute': 0},
+          'endTime': {'hour': 14, 'minute': 0},
+        });
+        expect(schedule.daysOfWeek.every((d) => d), isTrue);
+        expect(schedule.daysOfWeek.length, 7);
+      });
+    });
+
+    test('constructor with all weekdays selected', () {
+      final schedule = ShiftSchedule(
+        id: 20,
+        caretakerId: 'ct-20',
+        title: 'Weekday Shift',
+        description: 'Mon-Fri',
+        recurring: true,
+        daysOfWeek: [true, true, true, true, true, false, false],
+        startDate: DateTime(2026, 1, 5),
+        startTime: const TimeOfDay(hour: 7, minute: 0),
+        endTime: const TimeOfDay(hour: 15, minute: 0),
+      );
+      expect(schedule.daysOfWeek.where((d) => d).length, 5);
+    });
+
+    test('constructor with weekend-only schedule', () {
+      final schedule = ShiftSchedule(
+        id: 21,
+        caretakerId: 'ct-21',
+        title: 'Weekend Shift',
+        description: 'Sat-Sun only',
+        recurring: true,
+        daysOfWeek: [false, false, false, false, false, true, true],
+        startDate: DateTime(2026, 1, 3),
+        startTime: const TimeOfDay(hour: 8, minute: 0),
+        endTime: const TimeOfDay(hour: 20, minute: 0),
+      );
+      expect(schedule.daysOfWeek.where((d) => d).length, 2);
+    });
+
+    test('short duration shift (1 hour)', () {
+      final schedule = ShiftSchedule(
+        id: 22,
+        caretakerId: 'ct-22',
+        title: 'Quick Check',
+        description: 'Brief visit',
+        daysOfWeek: [true, false, false, false, false, false, false],
+        startDate: DateTime(2026, 3, 2),
+        startTime: const TimeOfDay(hour: 10, minute: 0),
+        endTime: const TimeOfDay(hour: 11, minute: 0),
+      );
+      expect(schedule.title, 'Quick Check');
+      expect(schedule.startTime.hour, 10);
+      expect(schedule.endTime.hour, 11);
     });
   });
 }

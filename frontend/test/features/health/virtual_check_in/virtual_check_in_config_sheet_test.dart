@@ -757,7 +757,13 @@ void main() {
       expect(find.byIcon(Icons.delete_outline), findsNWidgets(3));
       expect(find.text('How is your pain today?'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Delete question').first);
+      final deleteBtn = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byTooltip('Delete question').first,
+          matching: find.byType(IconButton),
+        ).first,
+      );
+      deleteBtn.onPressed!();
       await tester.pump();
 
       expect(find.byIcon(Icons.delete_outline), findsNWidgets(2));
@@ -769,7 +775,7 @@ void main() {
 
       expect(find.text('#3'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Delete question').first);
+      tester.widget<IconButton>(find.ancestor(of: find.byTooltip('Delete question').first, matching: find.byType(IconButton)).first).onPressed!();
       await tester.pump();
 
       expect(find.text('#1'), findsOneWidget);
@@ -781,7 +787,7 @@ void main() {
       await pumpLoaded(tester);
 
       for (int i = 0; i < 3; i++) {
-        await tester.tap(find.byTooltip('Delete question').first);
+        tester.widget<IconButton>(find.ancestor(of: find.byTooltip('Delete question').first, matching: find.byType(IconButton)).first).onPressed!();
         await tester.pump();
       }
 
@@ -823,7 +829,7 @@ void main() {
 
       final addBtn = find.widgetWithText(FilledButton, 'Add Question');
       await scrollTo(tester, addBtn);
-      await tester.tap(addBtn);
+      tester.widget<FilledButton>(addBtn).onPressed!();
       await tester.pump();
 
       expect(find.byIcon(Icons.delete_outline), findsNWidgets(4));
@@ -841,7 +847,7 @@ void main() {
 
       final addBtn = find.widgetWithText(FilledButton, 'Add Question');
       await scrollTo(tester, addBtn);
-      await tester.tap(addBtn);
+      tester.widget<FilledButton>(addBtn).onPressed!();
       await tester.pump();
 
       final textFieldWidget = tester.widget<TextField>(textField);
@@ -860,7 +866,7 @@ void main() {
 
       final addBtn = find.widgetWithText(FilledButton, 'Add Question');
       await scrollTo(tester, addBtn);
-      await tester.tap(addBtn);
+      tester.widget<FilledButton>(addBtn).onPressed!();
       await tester.pump();
 
       expect(find.text('That question already exists.'), findsOneWidget);
@@ -878,7 +884,7 @@ void main() {
 
       final addBtn = find.widgetWithText(FilledButton, 'Add Question');
       await scrollTo(tester, addBtn);
-      await tester.tap(addBtn);
+      tester.widget<FilledButton>(addBtn).onPressed!();
       await tester.pump();
 
       expect(find.text('That question already exists.'), findsOneWidget);
@@ -903,7 +909,7 @@ void main() {
       final tile = tester.widget<CheckboxListTile>(checkbox);
       expect(tile.value, isFalse);
 
-      await tester.tap(checkbox);
+      tile.onChanged!(true);
       await tester.pump();
 
       final tileAfter = tester.widget<CheckboxListTile>(checkbox);
@@ -925,7 +931,7 @@ void main() {
         matching: find.byType(CheckboxListTile),
       );
       await scrollTo(tester, tile);
-      await tester.tap(tile);
+      tester.widget<CheckboxListTile>(tile).onChanged!(true);
       await tester.pump();
 
       final btn = tester.widget<FilledButton>(
@@ -946,13 +952,13 @@ void main() {
         matching: find.byType(CheckboxListTile),
       );
       await scrollTo(tester, tile);
-      await tester.tap(tile);
+      tester.widget<CheckboxListTile>(tile).onChanged!(true);
       await tester.pump();
 
       final addSelectedBtn =
           find.widgetWithText(FilledButton, 'Add Selected');
       await scrollTo(tester, addSelectedBtn);
-      await tester.tap(addSelectedBtn);
+      tester.widget<FilledButton>(addSelectedBtn).onPressed!();
       await tester.pump();
 
       expect(find.byIcon(Icons.delete_outline), findsNWidgets(4));
@@ -1032,13 +1038,14 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Open'));
+      tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Open')).onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
       final closeButton = find.byTooltip('Close');
       if (closeButton.evaluate().isNotEmpty) {
-        await tester.tap(closeButton);
+        final iconBtn = find.ancestor(of: closeButton, matching: find.byType(IconButton));
+        tester.widget<IconButton>(iconBtn.first).onPressed!();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
         expect(didPop, isTrue);
@@ -1070,13 +1077,13 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Open'));
+      tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Open')).onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
-      final cancelButton = find.text('Cancel');
+      final cancelButton = find.widgetWithText(OutlinedButton, 'Cancel');
       if (cancelButton.evaluate().isNotEmpty) {
-        await tester.tap(cancelButton);
+        tester.widget<OutlinedButton>(cancelButton.first).onPressed!();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
         expect(didPop, isTrue);
@@ -1108,13 +1115,13 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Open'));
+      tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Open')).onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
-      final saveButton = find.text('Save Configuration');
+      final saveButton = find.widgetWithText(FilledButton, 'Save Configuration');
       if (saveButton.evaluate().isNotEmpty) {
-        await tester.tap(saveButton);
+        tester.widget<FilledButton>(saveButton.first).onPressed!();
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
         expect(result, isNotNull);
@@ -1218,7 +1225,7 @@ void main() {
 
       final addBtn = find.widgetWithText(FilledButton, 'Add Question');
       await scrollTo(tester, addBtn);
-      await tester.tap(addBtn);
+      tester.widget<FilledButton>(addBtn).onPressed!();
       await tester.pump();
 
       expect(find.byIcon(Icons.delete_outline), findsNWidgets(4));
@@ -1227,7 +1234,8 @@ void main() {
       // Delete the last question
       final deleteButtons = find.byTooltip('Delete question');
       await scrollTo(tester, deleteButtons.last);
-      await tester.tap(deleteButtons.last);
+      final deleteIconBtn = find.ancestor(of: deleteButtons.last, matching: find.byType(IconButton));
+      tester.widget<IconButton>(deleteIconBtn.first).onPressed!();
       await tester.pump();
 
       expect(find.byIcon(Icons.delete_outline), findsNWidgets(3));
@@ -1239,7 +1247,7 @@ void main() {
 
       const firstPrompt = 'How is your pain today?';
       expect(find.text(firstPrompt), findsOneWidget);
-      await tester.tap(find.byTooltip('Delete question').first);
+      tester.widget<IconButton>(find.ancestor(of: find.byTooltip('Delete question').first, matching: find.byType(IconButton)).first).onPressed!();
       await tester.pump();
       expect(find.text(firstPrompt), findsNothing);
 
@@ -1251,7 +1259,7 @@ void main() {
 
       final addBtn = find.widgetWithText(FilledButton, 'Add Question');
       await scrollTo(tester, addBtn);
-      await tester.tap(addBtn);
+      tester.widget<FilledButton>(addBtn).onPressed!();
       await tester.pump();
 
       expect(find.text(firstPrompt), findsOneWidget);

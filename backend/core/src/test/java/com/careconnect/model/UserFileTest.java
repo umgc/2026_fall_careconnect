@@ -148,12 +148,61 @@ class UserFileTest {
 
     @Test
     void fileCategory_allValues() throws Exception {
-        // 9 base categories + ONBOARDING_FORM + HIRING_DOCUMENT (hiring-form digitization).
-        assertThat(FileCategory.values()).hasSize(11);
+        // 8 core + 9 employment/home-care intake + HIRING_DOCUMENT + OTHER_DOCUMENT
+        assertThat(FileCategory.values()).hasSize(19);
         assertThat(FileCategory.valueOf("PROFILE_IMAGE")).isEqualTo(FileCategory.PROFILE_IMAGE);
         assertThat(FileCategory.valueOf("OTHER_DOCUMENT")).isEqualTo(FileCategory.OTHER_DOCUMENT);
-        assertThat(FileCategory.valueOf("ONBOARDING_FORM")).isEqualTo(FileCategory.ONBOARDING_FORM);
+        assertThat(FileCategory.valueOf("EMPLOYMENT_APPLICATION"))
+                .isEqualTo(FileCategory.EMPLOYMENT_APPLICATION);
         assertThat(FileCategory.valueOf("HIRING_DOCUMENT")).isEqualTo(FileCategory.HIRING_DOCUMENT);
+    }
+
+    // ─── fromClientValue(): typed category alignment ──────────────────────────
+
+    @Test
+    void fromClientValue_canonicalNames_resolveDirectly() {
+        assertThat(FileCategory.fromClientValue("MEDICAL_RECORD")).isEqualTo(FileCategory.MEDICAL_RECORD);
+        assertThat(FileCategory.fromClientValue("ONBOARDING_FORM")).isEqualTo(FileCategory.ONBOARDING_FORM);
+    }
+
+    @Test
+    void fromClientValue_frontendAliases_mapToBackendCategories() {
+        // Frontend historically sent these values; they must map to the right backend category.
+        assertThat(FileCategory.fromClientValue("MEDICAL_REPORT")).isEqualTo(FileCategory.MEDICAL_RECORD);
+        assertThat(FileCategory.fromClientValue("CLINICAL_NOTES")).isEqualTo(FileCategory.CLINICAL_NOTE);
+        assertThat(FileCategory.fromClientValue("PROFILE_PICTURE")).isEqualTo(FileCategory.PROFILE_IMAGE);
+        assertThat(FileCategory.fromClientValue("INSURANCE")).isEqualTo(FileCategory.INSURANCE_DOCUMENT);
+    }
+
+    @Test
+    void fromClientValue_isCaseAndSeparatorInsensitive() {
+        assertThat(FileCategory.fromClientValue("medical-report")).isEqualTo(FileCategory.MEDICAL_RECORD);
+        assertThat(FileCategory.fromClientValue("Onboarding Form")).isEqualTo(FileCategory.ONBOARDING_FORM);
+    }
+
+    @Test
+    void fromClientValue_blankOrNull_defaultsToOtherDocument() {
+        assertThat(FileCategory.fromClientValue(null)).isEqualTo(FileCategory.OTHER_DOCUMENT);
+        assertThat(FileCategory.fromClientValue("  ")).isEqualTo(FileCategory.OTHER_DOCUMENT);
+    }
+
+    @Test
+    void fromClientValue_unknownValue_throwsWithClearMessage() {
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> FileCategory.fromClientValue("NOT_A_REAL_CATEGORY"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid file category")
+                .hasMessageContaining("NOT_A_REAL_CATEGORY");
+    }
+
+    @Test
+    void isEmploymentIntake_identifiesHiringAndOnboardingTypes() {
+        assertThat(FileCategory.EMPLOYMENT_APPLICATION.isEmploymentIntake()).isTrue();
+        assertThat(FileCategory.WORK_AUTHORIZATION.isEmploymentIntake()).isTrue();
+        assertThat(FileCategory.MEDICAL_RECORD.isEmploymentIntake()).isFalse();
+        assertThat(FileCategory.EMERGENCY_CONTACT.isEmploymentIntake()).isFalse();
+        assertThat(FileCategory.HIRING_DOCUMENT.isEmploymentIntake()).isFalse();
+        assertThat(FileCategory.EMPLOYMENT_INTAKE).hasSize(8);
     }
 
     @Test

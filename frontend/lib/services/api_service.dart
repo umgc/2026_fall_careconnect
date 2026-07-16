@@ -51,6 +51,12 @@ class ApiConstants {
   // Invoices endpoints
   static final String invoices = '$_host/v1/api/invoices';
 
+  // Home Care Document Digitization endpoints
+  static final String homeCareDocuments = '$_host/v1/api/homecare-documents';
+
+  // Document Completion & Compliance Tracking endpoints
+  static final String documentCompliance = '$_host/v1/api/document-compliance';
+
   // EVV endpoints
   static final String evv = '$_host/v1/api/evv';
 

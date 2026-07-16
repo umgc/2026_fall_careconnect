@@ -38,6 +38,10 @@
 		<string>Location access needed for emergency features and nearby services.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Photo library access needed to share images during conversations.</string>
+		<key>NSHealthShareUsageDescription</key>
+		<string>This app reads your health data to sync vitals and analytics trends.</string>
+		<key>NSHealthUpdateUsageDescription</key>
+		<string>This app may write selected health records to keep your care timeline current.</string>
 		<key>UISupportedInterfaceOrientations</key>
 		<array>
 			<string>UIInterfaceOrientationPortrait</string>

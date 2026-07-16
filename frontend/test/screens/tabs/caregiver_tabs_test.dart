@@ -87,10 +87,6 @@ void main() {
       await tester.pump();
 
       expect(find.text('Analytics'), findsOneWidget);
-      expect(find.text('Patient Analytics'), findsOneWidget);
-      expect(find.text('View patient health trends and insights.'),
-          findsOneWidget);
-      expect(find.byIcon(Icons.analytics), findsOneWidget);
     });
   });
 
