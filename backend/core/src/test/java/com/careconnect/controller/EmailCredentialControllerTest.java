@@ -2,9 +2,12 @@ package com.careconnect.controller;
 
 import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.model.EmailCredential;
+import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.EmailCredentialLifecycleService;
 import com.careconnect.util.SecurityUtil;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,7 +36,15 @@ class EmailCredentialControllerTest {
     @InjectMocks
     private EmailCredentialController controller;
 
-    private static final String USER_ID = "user-123";
+    private static final String USER_ID = "123";
+    private User currentUser;
+
+    @BeforeEach
+    void setUp() {
+        currentUser = new User();
+        currentUser.setId(123L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(currentUser);
+    }
 
     @Nested
     class GetConnectionStatus {
@@ -45,6 +57,8 @@ class EmailCredentialControllerTest {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isTrue();
+            verify(authorizationService).requireAdminOrCaregiver(currentUser);
+            verify(authorizationService).requireSelfOrAdmin(currentUser, 123L);
         }
 
         @Test
@@ -68,12 +82,13 @@ class EmailCredentialControllerTest {
 
         @Test
         void passesUserIdToLifecycle() throws Exception {
-            final String specificUserId = "specific-user-456";
+            final String specificUserId = "456";
             when(credentialLifecycle.isActivelyConnected(specificUserId)).thenReturn(false);
 
             controller.getConnectionStatus(specificUserId);
 
             verify(credentialLifecycle).isActivelyConnected(specificUserId);
+            verify(authorizationService).requireSelfOrAdmin(currentUser, 456L);
         }
 
         @Test
@@ -83,6 +98,14 @@ class EmailCredentialControllerTest {
             final ResponseEntity<Boolean> response = controller.getConnectionStatus(USER_ID);
 
             assertThat(response.getBody()).isNotNull();
+        }
+
+        @Test
+        void rejectsNonNumericUserId() {
+            assertThatThrownBy(() -> controller.getConnectionStatus("not-a-number"))
+                    .isInstanceOf(UnauthorizedException.class)
+                    .hasMessageContaining("Invalid userId");
+            verify(credentialLifecycle, never()).isActivelyConnected(any());
         }
     }
 
@@ -108,6 +131,7 @@ class EmailCredentialControllerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody().needsReconnect()).isTrue();
             assertThat(response.getBody().reconnectPath()).isEqualTo("/oauth/google/start");
+            verify(authorizationService).requireSelfOrAdmin(currentUser, 123L);
         }
     }
 
@@ -127,6 +151,7 @@ class EmailCredentialControllerTest {
             assertThat(response.getBody().get("disconnected")).isEqualTo(true);
             assertThat(response.getBody().get("reconnectPath"))
                     .isEqualTo("/oauth/google/start");
+            verify(authorizationService).requireSelfOrAdmin(currentUser, 123L);
         }
     }
 }

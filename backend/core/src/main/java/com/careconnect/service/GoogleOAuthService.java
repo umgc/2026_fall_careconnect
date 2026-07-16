@@ -22,6 +22,9 @@ import java.util.Optional;
 public class GoogleOAuthService {
 
     private static final String TOKEN_URL = "https://oauth2.googleapis.com/token";
+    private static final int TOKEN_REFRESH_MAX_ATTEMPTS = 3;
+    /** Short backoff keeps unit tests fast while still spacing retries. */
+    private static final long TOKEN_REFRESH_BACKOFF_MS = 25L;
 
     private final RestTemplate http;
     private final EmailCredentialRepository credRepo;
@@ -102,8 +105,10 @@ public class GoogleOAuthService {
     }
 
     /**
-     * Refresh access token when near expiry. On {@code invalid_grant} / 4xx from Google,
-     * halts sync and signals reconnect.
+     * Refresh access token when near expiry. Halts sync only on auth-revocation
+     * signals from the token endpoint ({@code invalid_grant}, HTTP 401). Transient
+     * failures (429 / 5xx) are retried with backoff and do not set NEEDS_REAUTH.
+     * Gmail API 401/403 → halt remains in {@link GmailClient}.
      */
     public EmailCredential ensureFreshToken(EmailCredential current) {
         if (current == null) {
@@ -140,43 +145,97 @@ public class GoogleOAuthService {
                     EmailCredentialLifecycleService.RECONNECT_PATH);
         }
 
-        try {
-            GoogleTokenResponse token = postForToken(formForRefresh(refresh));
+        final MultiValueMap<String, String> refreshForm = formForRefresh(refresh);
+        HttpStatusCodeException lastTransient = null;
+        for (int attempt = 1; attempt <= TOKEN_REFRESH_MAX_ATTEMPTS; attempt++) {
+            try {
+                GoogleTokenResponse token = postForToken(refreshForm);
 
-            if (token != null && token.accessToken() != null) {
-                current.setAccessTokenEnc(tokenCryptor.encrypt(token.accessToken()));
-                current.setExpiresAt(token.computeExpiryFromNow());
-                current.setStatus(EmailCredential.Status.ACTIVE);
-                current.setSyncEnabled(true);
-                credRepo.save(current);
-                return current;
-            }
+                if (token != null && token.accessToken() != null) {
+                    current.setAccessTokenEnc(tokenCryptor.encrypt(token.accessToken()));
+                    current.setExpiresAt(token.computeExpiryFromNow());
+                    current.setStatus(EmailCredential.Status.ACTIVE);
+                    current.setSyncEnabled(true);
+                    credRepo.save(current);
+                    return current;
+                }
 
-            credentialLifecycle.markNeedsReauth(current, "Google token refresh returned no access token");
-            throw new EmailCredentialNeedsReauthException(
-                    current.getUserId(),
-                    "Gmail token refresh failed. Reconnect to resume mail sync.",
-                    EmailCredentialLifecycleService.RECONNECT_PATH);
-        } catch (EmailCredentialNeedsReauthException ex) {
-            throw ex;
-        } catch (HttpStatusCodeException ex) {
-            final String body = ex.getResponseBodyAsString();
-            final String reason = "Google token refresh rejected (" + ex.getStatusCode().value() + ")"
-                    + (body == null || body.isBlank() ? "" : ": " + body);
-            credentialLifecycle.markNeedsReauth(current, reason);
-            throw new EmailCredentialNeedsReauthException(
-                    current.getUserId(),
-                    "Gmail access was revoked or expired. Reconnect to resume mail sync.",
-                    EmailCredentialLifecycleService.RECONNECT_PATH);
-        } catch (RuntimeException ex) {
-            if (ex.getMessage() != null && ex.getMessage().toLowerCase().contains("invalid_grant")) {
-                credentialLifecycle.markNeedsReauth(current, ex.getMessage());
+                credentialLifecycle.markNeedsReauth(current, "Google token refresh returned no access token");
                 throw new EmailCredentialNeedsReauthException(
                         current.getUserId(),
-                        "Gmail access was revoked or expired. Reconnect to resume mail sync.",
+                        "Gmail token refresh failed. Reconnect to resume mail sync.",
                         EmailCredentialLifecycleService.RECONNECT_PATH);
+            } catch (EmailCredentialNeedsReauthException ex) {
+                throw ex;
+            } catch (HttpStatusCodeException ex) {
+                if (isAuthRevocationSignal(ex)) {
+                    haltOnTokenRevocation(current, ex);
+                }
+                if (!isTransientTokenHttpError(ex) || attempt == TOKEN_REFRESH_MAX_ATTEMPTS) {
+                    throw new IllegalStateException(
+                            "Google token refresh temporarily unavailable ("
+                                    + ex.getStatusCode().value() + ")",
+                            ex);
+                }
+                lastTransient = ex;
+                sleepBeforeTokenRetry(attempt);
+            } catch (RuntimeException ex) {
+                if (ex.getMessage() != null && ex.getMessage().toLowerCase().contains("invalid_grant")) {
+                    credentialLifecycle.markNeedsReauth(current, ex.getMessage());
+                    throw new EmailCredentialNeedsReauthException(
+                            current.getUserId(),
+                            "Gmail access was revoked or expired. Reconnect to resume mail sync.",
+                            EmailCredentialLifecycleService.RECONNECT_PATH);
+                }
+                throw ex;
             }
-            throw ex;
+        }
+        throw new IllegalStateException(
+                "Google token refresh temporarily unavailable",
+                lastTransient);
+    }
+
+    private void haltOnTokenRevocation(
+            final EmailCredential current, final HttpStatusCodeException ex) {
+        final String body = ex.getResponseBodyAsString();
+        final String reason = "Google token refresh rejected (" + ex.getStatusCode().value() + ")"
+                + (body == null || body.isBlank() ? "" : ": " + body);
+        credentialLifecycle.markNeedsReauth(current, reason);
+        throw new EmailCredentialNeedsReauthException(
+                current.getUserId(),
+                "Gmail access was revoked or expired. Reconnect to resume mail sync.",
+                EmailCredentialLifecycleService.RECONNECT_PATH);
+    }
+
+    /**
+     * Token-endpoint auth revocation: {@code invalid_grant} body and/or HTTP 401.
+     * Non-{@code invalid_grant} 400s are not treated as revocation.
+     */
+    static boolean isAuthRevocationSignal(final HttpStatusCodeException ex) {
+        if (ex == null) {
+            return false;
+        }
+        if (ex.getStatusCode().value() == 401) {
+            return true;
+        }
+        final String body = ex.getResponseBodyAsString();
+        return body != null && body.toLowerCase().contains("invalid_grant");
+    }
+
+    static boolean isTransientTokenHttpError(final HttpStatusCodeException ex) {
+        if (ex == null) {
+            return false;
+        }
+        final int status = ex.getStatusCode().value();
+        return status == 429 || ex.getStatusCode().is5xxServerError();
+    }
+
+    private void sleepBeforeTokenRetry(final int attempt) {
+        try {
+            Thread.sleep(TOKEN_REFRESH_BACKOFF_MS * (long) attempt);
+        } catch (final InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted during Google token refresh backoff", ie);
         }
     }
 

@@ -395,6 +395,120 @@ class GoogleOAuthServiceTest {
         }
 
         @Test
+        @DisplayName("halts sync on HTTP 401 from Google token endpoint")
+        void haltsOnUnauthorized() throws Exception {
+            final EmailCredential credential = expiredCredential("43");
+
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
+                            .body("{\"error\":\"unauthorized_client\"}")
+                            .contentType(MediaType.APPLICATION_JSON));
+
+            assertThrows(EmailCredentialNeedsReauthException.class,
+                    () -> service.ensureFreshToken(credential));
+            assertEquals(EmailCredential.Status.NEEDS_REAUTH, credential.getStatus());
+            assertFalse(credential.isSyncEnabled());
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("does not halt on transient 429 — retries then surfaces without NEEDS_REAUTH")
+        void doesNotHaltOnTooManyRequests() throws Exception {
+            final EmailCredential credential = expiredCredential("44");
+
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+            final IllegalStateException ex = assertThrows(
+                    IllegalStateException.class,
+                    () -> service.ensureFreshToken(credential));
+
+            assertTrue(ex.getMessage().toLowerCase().contains("temporarily unavailable"));
+            assertEquals(EmailCredential.Status.ACTIVE, credential.getStatus());
+            assertTrue(credential.isSyncEnabled());
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("does not halt on 5xx — retries then surfaces without NEEDS_REAUTH")
+        void doesNotHaltOnServerError() throws Exception {
+            final EmailCredential credential = expiredCredential("45");
+
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+            assertThrows(IllegalStateException.class, () -> service.ensureFreshToken(credential));
+            assertEquals(EmailCredential.Status.ACTIVE, credential.getStatus());
+            assertTrue(credential.isSyncEnabled());
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("does not halt on non-invalid_grant 400 from token endpoint")
+        void doesNotHaltOnNonInvalidGrantBadRequest() throws Exception {
+            final EmailCredential credential = expiredCredential("46");
+
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                            .body("{\"error\":\"invalid_request\"}")
+                            .contentType(MediaType.APPLICATION_JSON));
+
+            assertThrows(IllegalStateException.class, () -> service.ensureFreshToken(credential));
+            assertEquals(EmailCredential.Status.ACTIVE, credential.getStatus());
+            assertTrue(credential.isSyncEnabled());
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("retries after 429 then succeeds without marking NEEDS_REAUTH")
+        void retriesTransientThenSucceeds() throws Exception {
+            final EmailCredential credential = expiredCredential("47");
+
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+            server.expect(requestTo("https://oauth2.googleapis.com/token"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withSuccess(
+                            "{\"access_token\":\"recovered\",\"expires_in\":3600,\"token_type\":\"Bearer\"}",
+                            MediaType.APPLICATION_JSON));
+
+            final EmailCredential result = service.ensureFreshToken(credential);
+
+            assertEquals(EmailCredential.Status.ACTIVE, result.getStatus());
+            assertTrue(result.isSyncEnabled());
+            assertEquals("recovered", tokenCryptor.decrypt(result.getAccessTokenEnc()));
+            server.verify();
+        }
+
+        private EmailCredential expiredCredential(final String userId) {
+            final EmailCredential credential = new EmailCredential();
+            credential.setUserId(userId);
+            credential.setAccessTokenEnc(tokenCryptor.encrypt("stale"));
+            credential.setRefreshTokenEnc(tokenCryptor.encrypt("refresh-" + userId));
+            credential.setExpiresAt(Instant.now().minusSeconds(5));
+            credential.setStatus(EmailCredential.Status.ACTIVE);
+            credential.setSyncEnabled(true);
+            return credential;
+        }
+
+        @Test
         @DisplayName("skips refresh and throws when sync already halted")
         void throwsWhenSyncAlreadyHalted() {
             final EmailCredential credential = new EmailCredential();

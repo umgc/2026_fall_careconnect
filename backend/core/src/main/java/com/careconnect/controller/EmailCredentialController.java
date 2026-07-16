@@ -34,9 +34,7 @@ public class EmailCredentialController {
     @GetMapping("/status")
     public ResponseEntity<Boolean> getConnectionStatus(@RequestParam String userId)
             throws UnauthorizedException {
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
-
+        requireCredentialOwnerAccess(userId);
         return ResponseEntity.ok(credentialLifecycle.isActivelyConnected(userId));
     }
 
@@ -47,8 +45,7 @@ public class EmailCredentialController {
     @GetMapping("/connection")
     public ResponseEntity<EmailConnectionStatusResponse> getConnectionDetails(
             @RequestParam String userId) throws UnauthorizedException {
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        requireCredentialOwnerAccess(userId);
         return ResponseEntity.ok(credentialLifecycle.connectionStatus(userId));
     }
 
@@ -59,8 +56,7 @@ public class EmailCredentialController {
     @PostMapping("/disconnect")
     public ResponseEntity<Map<String, Object>> disconnect(@RequestParam String userId)
             throws UnauthorizedException {
-        User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        requireCredentialOwnerAccess(userId);
 
         EmailCredential disconnected = credentialLifecycle.disconnect(userId);
         Map<String, Object> body = new LinkedHashMap<>();
@@ -69,5 +65,19 @@ public class EmailCredentialController {
         body.put("syncEnabled", false);
         body.put("reconnectPath", EmailCredentialLifecycleService.RECONNECT_PATH);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Caregivers may only inspect/disconnect their own Gmail credential; admins may
+     * act on any userId. Prevents cross-user lastError reads and forced disconnects.
+     */
+    private void requireCredentialOwnerAccess(final String userId) throws UnauthorizedException {
+        final User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+        try {
+            authorizationService.requireSelfOrAdmin(currentUser, Long.parseLong(userId));
+        } catch (final NumberFormatException ex) {
+            throw new UnauthorizedException("Invalid userId");
+        }
     }
 }
