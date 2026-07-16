@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -107,13 +108,14 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   }
 
   Widget _buildHeader() {
+    final t = AppLocalizations.of(context)!;
     return Row(
       children: [
         Icon(Icons.cloud_upload, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            widget.customTitle ?? 'Upload File',
+            widget.customTitle ?? t.fileuploadwidget_uploadFile,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
@@ -121,18 +123,49 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     );
   }
 
+  String _translateCategory(String name){
+    final t = AppLocalizations.of(context)!;
+    switch(name){
+      case('Medical Report'):
+        return t.filemanage_medReport;
+      case('Lab Result'):
+        return t.filemanage_labResult;
+      case('Prescription'):
+        return t.filemanage_prescription;
+      case('Clinical Notes'): 
+        return t.filemanage_clinicNotes;
+      case('Profile Picture'): 
+        return t.filemanage_profilePic;
+      case('Emergency Contact'):
+        return t.filemanage_emgContact;
+      case('Insurance Document'):
+        return t.filemanage_insurDocument;
+      case('AI Chat File'):
+        return t.filemanage_aiChatFile;
+      case('General Document'):
+        return t.filemanage_genDocument;
+      case('Health Data Import'):
+        return t.filemanage_hlthDataImport;
+      case('Backup File'):
+        return t.filemanage_backupFile;
+      default:
+        return name;
+    }
+  }
+
   Widget _buildCategorySelector() {
     final categories = _availableCategories;
+    final t = AppLocalizations.of(context)!;
 
     if (categories.isEmpty) {
-      return const Text('No categories available.');
+      return Text(t.manualentrywidget_noCateAvail);
     }
 
     return DropdownButtonFormField<FileCategory>(
       items: categories.map((category) {
         return DropdownMenuItem<FileCategory>(
           value: category,
-          child: Text('${category.icon} ${category.displayName}'),
+          child: Text('${category.icon} ${_translateCategory(category.displayName)}'),
         );
       }).toList(),
       onChanged: (value) {
@@ -142,12 +175,12 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       },
       validator: (value) {
         if (value == null) {
-          return 'Please select a file category';
+          return t.manualentrywidget_noCateSelected;
         }
         return null;
       },
       initialValue: _selectedCategory,  // Starts as null!
-      hint: const Text('Select Category'),  // This shows when value is null
+      hint: Text(t.manualentrywidget_selectCat),  // This shows when value is null
       decoration: InputDecoration(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -156,11 +189,12 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   }
 
   Widget _buildFileSelector() {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Select File',
+        Text(
+          t.fileuploadwidget_selectFile,
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
@@ -198,8 +232,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                 const SizedBox(height: 8),
                 Text(
                   _selectedFile != null
-                      ? 'File Selected: ${_selectedFile!.path}'
-                      : _selectedFileName != null ? 'File Selected: $_selectedFileName' :
+                      ? '${t.fileuploadwidget_fileSelected}: ${_selectedFile!.path}'
+                      : _selectedFileName != null ? '${t.fileuploadwidget_fileSelected}: $_selectedFileName' :
                   _getFileInstructions(),
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -275,19 +309,20 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   }
 
   Widget _buildDescriptionField() {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Description (Optional)',
+        Text(
+          t.fileuploadwidget_descriptionOpti,
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: _descriptionController,
           decoration: InputDecoration(
-            labelText: 'Enter file description',
-            hintText: 'Provide additional details about this file...',
+            labelText: t.fileuploadwidget_descriptionDescr,
+            hintText: '${t.fileuploadwidget_descriptionHint}...',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -302,6 +337,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   }
 
   Widget _buildUploadButton() {
+    final t = AppLocalizations.of(context)!;
     final canUpload =
         _selectedCategory != null &&
             (_selectedFile != null ||
@@ -325,27 +361,28 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         child: CircularProgressIndicator(strokeWidth: 2),
       )
           : const Icon(Icons.cloud_upload),
-      label: Text(_isUploading ? 'Uploading...' : 'Upload File'),
+      label: Text(_isUploading ? '${t.fileuploadwidget_uploading}...' : t.fileuploadwidget_uploadFile),
     );
   }
 
   String _getFileInstructions() {
+    final t = AppLocalizations.of(context)!;
     if (_selectedCategory == null) {
-      return 'Select a category first, then tap to choose file';
+      return t.fileuploadwidget_selectCatFirst;
     }
 
     switch (_selectedCategory!) {
       case FileCategory.profilePicture:
-        return 'Tap to select profile picture\n(JPG, PNG - max 5MB)';
+        return t.fileuploadwidget_tapSelectPFP;
       case FileCategory.prescription:
-        return 'Tap to take photo or select prescription\n(JPG, PNG, PDF - max 10MB)';
+        return t.fileuploadwidget_tapSelectPrescrip;
       case FileCategory.medicalReport:
       case FileCategory.labResult:
-        return 'Tap to select medical document\n(PDF, DOC, JPG, PNG - max 25MB)';
+        return t.fileuploadwidget_tapSelectMedDoc;
       case FileCategory.insuranceDoc:
-        return 'Tap to select insurance document\n(PDF, DOC, JPG, PNG - max 25MB)';
+        return t.fileuploadwidget_tapSelectInsurance;
       default:
-        return 'Tap to select file\n(Any format - max 50MB)';
+        return t.fileuploadwidget_tapSelectFile;
     }
   }
 
@@ -382,10 +419,11 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   }
 
   Future<void> _selectFile() async {
+    final t = AppLocalizations.of(context)!;
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a file category first'),
+        SnackBar(
+          content: Text(t.manualentrywidget_selectCatFirst),
           backgroundColor: AppTheme.warning,
         ),
       );
@@ -417,7 +455,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error selecting file: $e'),
+          content: Text('${t.fileuploadwidget_errorSelectingFile}: $e'),
           backgroundColor: AppTheme.error,
         ),
       );
@@ -434,8 +472,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
+      final t = AppLocalizations.of(context)!;
       if (user == null) {
-        throw Exception('User not logged in');
+        throw Exception(t.manualentrywidget_userNotLogged);
       }
 
       FileUploadResponse? response;
@@ -455,7 +494,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'File uploaded successfully: ${response.originalFilename}',
+              '${t.manualentrywidget_fileUploadedSuccess}: ${response.originalFilename}',
             ),
             backgroundColor: AppTheme.success,
           ),
@@ -472,10 +511,11 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           widget.onUploadSuccess!(response);
         }
       } else {
-        throw Exception('Upload failed - no response received');
+        throw Exception(t.manualentrywidget_uploadFailedNoResp);
       }
     } catch (e) {
-      final errorMessage = 'Upload failed: $e';
+      final t = AppLocalizations.of(context)!;
+      final errorMessage = '${t.manualentrywidget_uploadFailed}: $e';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMessage), backgroundColor: AppTheme.error),
       );
@@ -505,8 +545,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
+      final t = AppLocalizations.of(context)!;
       if (user == null) {
-        throw Exception('User not logged in');
+        throw Exception(t.manualentrywidget_userNotLogged);
       }
 
       FileUploadResponse? response;
@@ -527,7 +568,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'File uploaded successfully: ${response.fileName}',
+              '${t.manualentrywidget_fileUploadedSuccess}: ${response.fileName}',
             ),
             backgroundColor: AppTheme.success,
           ),
@@ -546,12 +587,13 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           widget.onUploadSuccess!(response);
         }
       } else {
-        throw Exception('Upload failed - no response received');
+        throw Exception(t.manualentrywidget_uploadFailedNoResp);
       }
     } catch (e, stacktrace) {
       print('Upload Exception: $e');
       print('Stacktrace: $stacktrace');
-      final errorMessage = 'Upload failed: $e';
+      final t = AppLocalizations.of(context)!;
+      final errorMessage = '${t.manualentrywidget_uploadFailed}: $e';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMessage), backgroundColor: AppTheme.error),
       );
@@ -578,10 +620,11 @@ class QuickUploadButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Quick File Upload', style: AppTheme.headingSmall),
+        Text(t.fileuploadwidget_quickFileUpload, style: AppTheme.headingSmall),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -590,37 +633,37 @@ class QuickUploadButtons extends StatelessWidget {
             _buildQuickButton(
               context,
               icon: Icons.person,
-              label: 'Profile Photo',
+              label: t.fileuploadwidget_profilePhoto,
               category: FileCategory.profilePicture,
             ),
             _buildQuickButton(
               context,
               icon: Icons.medical_services,
-              label: 'Medical Report',
+              label: t.filemanage_medReport,
               category: FileCategory.medicalReport,
             ),
             _buildQuickButton(
               context,
               icon: Icons.medication,
-              label: 'Prescription',
+              label: t.filemanage_prescription,
               category: FileCategory.prescription,
             ),
             _buildQuickButton(
               context,
               icon: Icons.science,
-              label: 'Lab Result',
+              label: t.filemanage_labResult,
               category: FileCategory.labResult,
             ),
             _buildQuickButton(
               context,
               icon: Icons.security,
-              label: 'Insurance',
+              label: t.ptfiles_insuranceItem,
               category: FileCategory.insuranceDoc,
             ),
             _buildQuickButton(
               context,
               icon: Icons.smart_toy,
-              label: 'AI Chat File',
+              label: t.filemanage_aiChatFile,
               category: FileCategory.aiChatUpload,
             ),
           ],
@@ -644,11 +687,12 @@ class QuickUploadButtons extends StatelessWidget {
   }
 
   void _showUploadDialog(BuildContext context, FileCategory category) {
+    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Upload ${category.displayName}'),
+          title: Text('${t.fileuploadwidget_upload} ${category.displayName}'),
           content: SizedBox(
             width: 400,
             child: FileUploadWidget(
@@ -666,7 +710,7 @@ class QuickUploadButtons extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(t.cancel),
             ),
           ],
         );

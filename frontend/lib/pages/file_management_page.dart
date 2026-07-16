@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -79,9 +80,10 @@ class _FileManagementPageState extends State<FileManagementPage>
       setState(() {
         _isLoading = false;
       });
+      final t = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error loading files: $e'),
+          content: Text('${t.filemanage_errorLoadingFiles}: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -114,13 +116,14 @@ class _FileManagementPageState extends State<FileManagementPage>
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
+    final t = AppLocalizations.of(context)!;
     if (user == null) {
       Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('File Management'),
+        title: Text(t.fileManagement),
         bottom: TabBar(
           controller: _tabController,
           // Size each tab to its label and allow horizontal scrolling so the
@@ -129,12 +132,12 @@ class _FileManagementPageState extends State<FileManagementPage>
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           tabs: [
-            const Tab(icon: Icon(Icons.folder), text: 'My Files'),
-            const Tab(icon: Icon(Icons.cloud_upload), text: 'Upload'),
-            const Tab(icon: Icon(Icons.analytics), text: 'Analytics'),
+            Tab(icon: Icon(Icons.folder), text: t.filemanage_myFiles),
+            Tab(icon: Icon(Icons.cloud_upload), text: t.filemanage_upload),
+            Tab(icon: Icon(Icons.analytics), text: t.navAnalytics),
             // Hiring/onboarding forms are caregiver-only.
             if (_isCaregiver)
-              const Tab(icon: Icon(Icons.assignment), text: 'Hiring Forms'),
+              Tab(icon: Icon(Icons.assignment), text: t.filemanage_hiringForms),
           ],
         ),
       ),
@@ -165,7 +168,38 @@ class _FileManagementPageState extends State<FileManagementPage>
     );
   }
 
+  String _translateCategory(String name){
+    final t = AppLocalizations.of(context)!;
+    switch(name){
+      case('Medical Report'):
+        return t.filemanage_medReport;
+      case('Lab Result'):
+        return t.filemanage_labResult;
+      case('Prescription'):
+        return t.filemanage_prescription;
+      case('Clinical Notes'): 
+        return t.filemanage_clinicNotes;
+      case('Profile Picture'): 
+        return t.filemanage_profilePic;
+      case('Emergency Contact'):
+        return t.filemanage_emgContact;
+      case('Insurance Document'):
+        return t.filemanage_insurDocument;
+      case('AI Chat File'):
+        return t.filemanage_aiChatFile;
+      case('General Document'):
+        return t.filemanage_genDocument;
+      case('Health Data Import'):
+        return t.filemanage_hlthDataImport;
+      case('Backup File'):
+        return t.filemanage_backupFile;
+      default:
+        return name;
+    }
+  }
+
   Widget _buildSearchAndFilter() {
+    final t = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -174,8 +208,8 @@ class _FileManagementPageState extends State<FileManagementPage>
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Search files...',
-              hintText: 'Search by filename or description',
+              labelText: '${t.filemanage_searchFiles}...',
+              hintText: t.filemanage_searchByDescr,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
@@ -212,11 +246,11 @@ class _FileManagementPageState extends State<FileManagementPage>
               Expanded(
                 child: DropdownButtonFormField<FileCategory?>(
                   initialValue: _selectedCategory,
-                  decoration: AppTheme.inputDecoration('Filter by category'),
+                  decoration: AppTheme.inputDecoration(t.filemanage_filterByCat),
                   items: [
-                    const DropdownMenuItem<FileCategory?>(
+                    DropdownMenuItem<FileCategory?>(
                       value: null,
-                      child: Text('All Categories'),
+                      child: Text(t.filemanage_allCats),
                     ),
                     ...FileCategory.values.map((category) {
                       return DropdownMenuItem<FileCategory?>(
@@ -225,7 +259,7 @@ class _FileManagementPageState extends State<FileManagementPage>
                           children: [
                             Text(category.icon),
                             const SizedBox(width: 8),
-                            Text(category.displayName),
+                            Text(_translateCategory(category.displayName)),
                           ],
                         ),
                       );
@@ -243,7 +277,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               IconButton(
                 onPressed: _loadFiles,
                 icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh files',
+                tooltip: t.filemanage_refreshFiles,
               ),
             ],
           ),
@@ -253,6 +287,7 @@ class _FileManagementPageState extends State<FileManagementPage>
   }
 
   Widget _buildEmptyState() {
+    final t = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -265,8 +300,8 @@ class _FileManagementPageState extends State<FileManagementPage>
           const SizedBox(height: 16),
           Text(
             _searchQuery.isNotEmpty || _selectedCategory != null
-                ? 'No files match your filters'
-                : 'No files uploaded yet',
+                ? t.filemanage_noFilesMatchFilter
+                : t.ptfiles_noFilesUploaded,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
@@ -274,8 +309,8 @@ class _FileManagementPageState extends State<FileManagementPage>
           const SizedBox(height: 8),
           Text(
             _searchQuery.isNotEmpty || _selectedCategory != null
-                ? 'Try adjusting your search or filter criteria'
-                : 'Start by uploading your first file using the Upload tab',
+                ? t.filemanage_tryAdjustingCriteria
+                : t.filemanage_uploadFirstFile,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
@@ -287,7 +322,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               onPressed: () => _tabController.animateTo(1),
               style: AppTheme.primaryButtonStyle,
               icon: const Icon(Icons.cloud_upload),
-              label: const Text('Upload Files'),
+              label: Text(t.ptfiles_uploadFilesButton),
             ),
           ],
         ],
@@ -333,6 +368,7 @@ class _FileManagementPageState extends State<FileManagementPage>
     String extensionWithoutDot = fileExtension.replaceFirst('.', ''); // txt
 
     final theme = Theme.of(context);
+    final t = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -390,8 +426,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               case 'download':
                 // TODO: Implement download functionality
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Download file feature coming soon.'),
+                  SnackBar(
+                    content: Text(t.filemanage_downloadFeatureComingSoon),
                     backgroundColor: AppTheme.info,
                   ),
                 );
@@ -399,8 +435,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               case 'delete':
                 // TODO: Implement delete functionality
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Delete file feature coming soon.'),
+                  SnackBar(
+                    content: Text(t.filemanage_deleteFeatureComingSoon),
                     backgroundColor: AppTheme.info,
                   ),
                 );
@@ -412,7 +448,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               value: 'download',
               child: ListTile(
                 leading: Icon(Icons.download, color: theme.iconTheme.color),
-                title: Text('Download', style: theme.textTheme.bodyMedium),
+                title: Text(t.ptfiles_downloadButton, style: theme.textTheme.bodyMedium),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -421,7 +457,7 @@ class _FileManagementPageState extends State<FileManagementPage>
                 value: 'preview',
                 child: ListTile(
                   leading: Icon(Icons.visibility, color: theme.iconTheme.color),
-                  title: Text('Preview', style: theme.textTheme.bodyMedium),
+                  title: Text(t.ptfiles_previewButton, style: theme.textTheme.bodyMedium),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -430,7 +466,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               child: ListTile(
                 leading: Icon(Icons.delete, color: theme.colorScheme.error),
                 title: Text(
-                  'Delete',
+                  t.ptfiles_deleteButton,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.error,
                   ),
@@ -445,13 +481,14 @@ class _FileManagementPageState extends State<FileManagementPage>
   }
 
   Widget _buildUploadTab() {
+    final t = AppLocalizations.of(context)!;
     return Container(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('File Upload', style: AppTheme.headingMedium),
+            Text(t.filemanage_fileUpload, style: AppTheme.headingMedium),
             const SizedBox(height: 24),
             // Upload Instructions Card
             Card(
@@ -468,7 +505,7 @@ class _FileManagementPageState extends State<FileManagementPage>
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Use File Upload for files, Manual Text Entry for notes, or Speech-to-Text to convert voice into text files.',
+                        t.filemanage_fileUploadDescr,
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                     ),
@@ -553,12 +590,13 @@ class _FileManagementPageState extends State<FileManagementPage>
           (categories[file.categoryDisplayName] ?? 0) + 1;
     }
 
+    final t = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('File Analytics', style: AppTheme.headingMedium),
+          Text(t.filemanage_fileAnalytics, style: AppTheme.headingMedium),
           const SizedBox(height: 24),
 
           // Overview cards
@@ -566,7 +604,7 @@ class _FileManagementPageState extends State<FileManagementPage>
             children: [
               Expanded(
                 child: _buildAnalyticsCard(
-                  title: 'Total Files',
+                  title: t.filemanage_totalFiles,
                   value: '${_allFiles.length}',
                   icon: Icons.folder,
                   color: AppTheme.primary,
@@ -575,7 +613,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               const SizedBox(width: 16),
               Expanded(
                 child: _buildAnalyticsCard(
-                  title: 'Total Size',
+                  title: t.filemanage_totalSize,
                   value: _formatFileSize(totalSize),
                   icon: Icons.storage,
                   color: AppTheme.info,
@@ -586,12 +624,12 @@ class _FileManagementPageState extends State<FileManagementPage>
           const SizedBox(height: 24),
 
           // Category breakdown
-          const Text('Files by Category', style: AppTheme.headingSmall),
+          Text(t.filemanage_filtersByCat, style: AppTheme.headingSmall),
           const SizedBox(height: 12),
           ...categories.entries.map((entry) {
             return Card(
               child: ListTile(
-                title: Text(entry.key),
+                title: Text(_translateCategory(entry.key)),
                 trailing: CircleAvatar(
                   backgroundColor: AppTheme.primary,
                   radius: 16,
@@ -651,10 +689,11 @@ class _FileManagementPageState extends State<FileManagementPage>
   }
 
   Future<void> _downloadFile(UserFileDTO file) async {
+    final t = AppLocalizations.of(context)!;
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Downloading ${file.fileName}...'),
+          content: Text('${t.filemanage_downloading} ${file.fileName}...'),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -687,20 +726,20 @@ class _FileManagementPageState extends State<FileManagementPage>
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('File saved to ${newFile.path}'),
+              content: Text('${t.filemanage_fileSavedTo} ${newFile.path}'),
               backgroundColor: AppTheme.success,
             ),
           );
         } else {
-          throw Exception('Could not access device storage');
+          throw Exception(t.filemanage_couldNotAccessStorage);
         }
       } else {
-        throw Exception('Failed to download file');
+        throw Exception(t.ptfiles_fileDownloadFailed);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Download failed: $e'),
+          content: Text('${t.filemanage_downloadFailed}: $e'),
           backgroundColor: AppTheme.error,
         ),
       );
@@ -709,15 +748,16 @@ class _FileManagementPageState extends State<FileManagementPage>
 
   void _previewFile(UserFileDTO file) {
     // In a real app, you'd implement file preview
+    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(file.originalFilename),
-        content: const Text('Preview functionality would be implemented here'),
+        content: Text(t.filemanage_previewFunction),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text('Close'),
           ),
         ],
       ),
@@ -726,6 +766,7 @@ class _FileManagementPageState extends State<FileManagementPage>
 
   void _showFileInfo(UserFileDTO file) {
     String extensionWithoutDot = file.fileName.replaceFirst('.', ''); // txt
+    final t = AppLocalizations.of(context)!;
 
     showDialog(
       context: context,
@@ -736,21 +777,21 @@ class _FileManagementPageState extends State<FileManagementPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildInfoRow('Category', file.categoryDisplayName),
-              _buildInfoRow('Size', _formatFileSize(file.fileSize)),
-              _buildInfoRow('Type', extensionWithoutDot),
+              _buildInfoRow(t.filemanage_category, file.categoryDisplayName),
+              _buildInfoRow(t.ptfiles_size, _formatFileSize(file.fileSize)),
+              _buildInfoRow(t.filemanage_type, extensionWithoutDot),
               // Comment out created and updated date as they are not passed in from the API for now.
               // _buildInfoRow('Created', _formatDate(file.createdAt)),
               // _buildInfoRow('Updated', _formatDate(file.updatedAt)),
               if (file.description != null && file.description!.isNotEmpty)
-                _buildInfoRow('Description', file.description!),
+                _buildInfoRow(t.ptfiles_descrip, file.description!),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(t.filemanage_close),
           ),
         ],
       ),
@@ -777,17 +818,18 @@ class _FileManagementPageState extends State<FileManagementPage>
   }
 
   void _deleteFile(UserFileDTO file) {
+    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete File'),
+        title: Text(t.ptfiles_deleteFile),
         content: Text(
-          'Are you sure you want to delete "${file.originalFilename}"? This action cannot be undone.',
+          '${t.ptfiles_deleteFileDialog} "${file.originalFilename}"? ${t.filemanage_cannotBeUndone}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(t.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -797,7 +839,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Deleted ${file.originalFilename}'),
+                    content: Text('${t.filemanage_deleted} ${file.originalFilename}'),
                     backgroundColor: AppTheme.success,
                   ),
                 );
@@ -805,14 +847,14 @@ class _FileManagementPageState extends State<FileManagementPage>
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Failed to delete ${file.originalFilename}'),
+                    content: Text('${t.filemanage_failedToDelete} ${file.originalFilename}'),
                     backgroundColor: AppTheme.error,
                   ),
                 );
               }
             },
             style: AppTheme.dangerButtonStyle,
-            child: const Text('Delete'),
+            child: Text(t.ptfiles_deleteButton),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -71,15 +72,17 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
 
     final fileName = _fileNameController.text.trim();
     final fileBytes = Uint8List.fromList(_recognizedText.codeUnits);
+    final t = AppLocalizations.of(context)!;
 
     await _uploadSpeechToTextFileToWeb(fileName, fileBytes);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Speech-to-text file saved')),
+      SnackBar(content: Text(t.speechtextwidget_speechToTextSaved)),
     );
   }
 
   Widget _buildHeader() {
+    final t = AppLocalizations.of(context)!;
     return Row(
       children: [
         Icon(Icons.mic, color: Theme
@@ -89,7 +92,7 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Speech to Text',
+            t.speechtextwidget_speechToText,
             style: Theme
                 .of(context)
                 .textTheme
@@ -100,18 +103,49 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
     );
   }
 
+String _translateCategory(String name){
+    final t = AppLocalizations.of(context)!;
+    switch(name){
+      case('Medical Report'):
+        return t.filemanage_medReport;
+      case('Lab Result'):
+        return t.filemanage_labResult;
+      case('Prescription'):
+        return t.filemanage_prescription;
+      case('Clinical Notes'): 
+        return t.filemanage_clinicNotes;
+      case('Profile Picture'): 
+        return t.filemanage_profilePic;
+      case('Emergency Contact'):
+        return t.filemanage_emgContact;
+      case('Insurance Document'):
+        return t.filemanage_insurDocument;
+      case('AI Chat File'):
+        return t.filemanage_aiChatFile;
+      case('General Document'):
+        return t.filemanage_genDocument;
+      case('Health Data Import'):
+        return t.filemanage_hlthDataImport;
+      case('Backup File'):
+        return t.filemanage_backupFile;
+      default:
+        return name;
+    }
+  }
+
   Widget _buildCategorySelector() {
     final categories = _availableCategories;
+    final t = AppLocalizations.of(context)!;
 
     if (categories.isEmpty) {
-      return const Text('No categories available.');
+      return Text(t.manualentrywidget_noCateAvail);
     }
 
     return DropdownButtonFormField<FileCategory>(
       items: categories.map((category) {
         return DropdownMenuItem<FileCategory>(
           value: category,
-          child: Text('${category.icon} ${category.displayName}'),
+          child: Text('${category.icon} ${_translateCategory(category.displayName)}'),
         );
       }).toList(),
       onChanged: (value) {
@@ -121,13 +155,13 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
       },
       validator: (value) {
         if (value == null) {
-          return 'Please select a file category';
+          return t.manualentrywidget_noCateSelected;
         }
         return null;
       },
       initialValue: _selectedCategory,
       // Starts as null!
-      hint: const Text('Select Category'),
+      hint: Text(t.manualentrywidget_selectCat),
       // This shows when value is null
       decoration: InputDecoration(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -138,10 +172,11 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
   }
 
   Future<void> _selectCategory() async {
+    final t = AppLocalizations.of(context)!;
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a file category first'),
+        SnackBar(
+          content: Text(t.manualentrywidget_selectCatFirst),
           backgroundColor: AppTheme.warning,
         ),
       );
@@ -157,8 +192,9 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
+      final t = AppLocalizations.of(context)!;
       if (user == null) {
-        throw Exception('User not logged in');
+        throw Exception(t.manualentrywidget_userNotLogged);
       }
 
       FileUploadResponse? response;
@@ -175,7 +211,7 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'File uploaded successfully: ${response.fileName}',
+              '${t.manualentrywidget_fileUploadedSuccess}: ${response.fileName}',
             ),
             backgroundColor: AppTheme.success,
           ),
@@ -194,12 +230,13 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
           widget.onUploadSuccess!(response);
         }
       } else {
-        throw Exception('Upload failed - no response received');
+        throw Exception(t.manualentrywidget_uploadFailedNoResp);
       }
     } catch (e, stacktrace) {
       print('Upload Exception: $e');
       print('Stacktrace: $stacktrace');
-      final errorMessage = 'Upload failed: $e';
+      final t = AppLocalizations.of(context)!;
+      final errorMessage = '${t.manualentrywidget_uploadFailed}: $e';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMessage), backgroundColor: AppTheme.error),
       );
@@ -217,6 +254,7 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
 
     @override
     Widget build(BuildContext context) {
+      final t = AppLocalizations.of(context)!;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -226,18 +264,18 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _fileNameController,
-            decoration: const InputDecoration(
-              labelText: 'File Name',
-              hintText: 'Enter file name (no extension)',
+            decoration: InputDecoration(
+              labelText: t.manualentrywidget_fileName,
+              hintText: t.manualentrywidget_enterFileName,
             ),
             validator: (value) {
               if (value == null || value
                   .trim()
                   .isEmpty) {
-                return 'File name cannot be empty';
+                return t.manualentrywidget_fileNameEmpty;
               }
               if (!RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(value.trim())) {
-                return 'Invalid characters in file name';
+                return t.manualentrywidget_invalidCharacters;
               }
               return null;
             },
@@ -264,8 +302,8 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
               children: [
                 Text(
                   _recognizedText.isNotEmpty
-                      ? 'Recognized Text:\n$_recognizedText'
-                      : 'Tap the button below to start Speech-to-Text',
+                      ? '${t.speechtextwidget_recoginizedText}:\n$_recognizedText'
+                      : t.speechtextwidget_tapButtonToStart,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 14),
                 ),
@@ -283,14 +321,14 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
                     }
                   },
                   child: Text(
-                      _isListening ? 'Stop Listening' : 'Start Listening'),
+                      _isListening ? t.speechtextwidget_stopListening : t.speechtextwidget_startListening),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: _recognizedText.isNotEmpty
                       ? _saveRecognizedText
                       : null,
-                  child: const Text('Save to File'),
+                  child: Text(t.manualentrywidget_saveToFile),
                 ),
               ],
             ),
