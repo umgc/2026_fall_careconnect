@@ -122,7 +122,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
 
     /**
      * Tasks 1.5 / 1.6 — pgvector extension and shared Ask AI retrieval index table.
-     * Mirrors db/migration V2607071920 and V2607071921 (applied via SchemaPatchRunner in all envs).
+     * Task 4.2 — search_vector trigger + backfill. Task 4.4 — optional partial index for
+     * NULL-embedding backfill scans (idx_retrieval_chunk_embedding_null_backfill).
+     * Mirrors db/migration reference SQL (applied via SchemaPatchRunner in all envs; not Flyway at ECS deploy).
      */
     private void applyRetrievalIndexChunkPatches() {
         applyPatch(
@@ -192,6 +194,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
             "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
             "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
+        );
+        applyPatch(
+            "V2607161317 – partial index for embedding backfill scans (Task 4.4, optional DBA follow-up)",
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding_null_backfill " +
+            "  ON retrieval_index_chunk (indexed_at ASC NULLS LAST, id ASC) " +
+            "  WHERE embedding IS NULL " +
+            "    AND chunk_text IS NOT NULL " +
+            "    AND TRIM(BOTH FROM chunk_text) <> ''"
         );
     }
 

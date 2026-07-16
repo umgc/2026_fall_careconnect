@@ -49,6 +49,8 @@ class RetrievalIndexFtsCoverageTest {
 
         assertThat(source).contains("V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)");
         assertThat(source).contains("V2607122000 – indexing_outbox claimed_at lease column");
+        assertThat(source).contains("V2607161317 – partial index for embedding backfill scans (Task 4.4");
+        assertThat(source).contains("idx_retrieval_chunk_embedding_null_backfill");
         assertThat(source).contains("WHERE search_vector IS NULL");
         assertThat(source).contains("to_tsvector('english'");
         assertThat(source).contains("trg_retrieval_index_chunk_search_vector");

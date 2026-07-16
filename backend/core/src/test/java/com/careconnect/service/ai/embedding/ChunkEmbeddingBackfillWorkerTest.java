@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -30,20 +29,7 @@ class ChunkEmbeddingBackfillWorkerTest {
 
     @BeforeEach
     void setUp() {
-        worker = new ChunkEmbeddingBackfillWorker(chunkRepository, chunkEmbeddingService);
-        ReflectionTestUtils.setField(worker, "embeddingEnabled", true);
-        ReflectionTestUtils.setField(worker, "batchSize", 50);
-    }
-
-    @Test
-    @DisplayName("pollAndBackfill no-ops when embedding is disabled")
-    void skipsWhenEmbeddingDisabled() {
-        ReflectionTestUtils.setField(worker, "embeddingEnabled", false);
-
-        worker.pollAndBackfill();
-
-        verify(chunkRepository, never()).findMissingEmbeddingsForBackfill(anyInt());
-        verify(chunkEmbeddingService, never()).embedAndPersist(org.mockito.ArgumentMatchers.anyList());
+        worker = new ChunkEmbeddingBackfillWorker(chunkRepository, chunkEmbeddingService, 50);
     }
 
     @Test
@@ -67,11 +53,23 @@ class ChunkEmbeddingBackfillWorkerTest {
                 .build();
         when(chunkRepository.findMissingEmbeddingsForBackfill(50)).thenReturn(List.of(chunk));
         when(chunkEmbeddingService.embedAndPersist(List.of(chunk))).thenReturn(1);
-        when(chunkRepository.countMissingEmbedding()).thenReturn(0L);
+        when(chunkRepository.countMissingEmbeddingsForBackfill()).thenReturn(0L);
 
         worker.pollAndBackfill();
 
         verify(chunkEmbeddingService).embedAndPersist(List.of(chunk));
-        verify(chunkRepository).countMissingEmbedding();
+        verify(chunkRepository).countMissingEmbeddingsForBackfill();
+    }
+
+    @Test
+    @DisplayName("batch size is clamped to at least 1")
+    void batchSizeClampedToMinimum() {
+        final ChunkEmbeddingBackfillWorker smallBatchWorker =
+                new ChunkEmbeddingBackfillWorker(chunkRepository, chunkEmbeddingService, 0);
+        when(chunkRepository.findMissingEmbeddingsForBackfill(1)).thenReturn(List.of());
+
+        smallBatchWorker.pollAndBackfill();
+
+        verify(chunkRepository).findMissingEmbeddingsForBackfill(1);
     }
 }

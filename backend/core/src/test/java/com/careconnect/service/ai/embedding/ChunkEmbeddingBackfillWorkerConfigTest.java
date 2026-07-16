@@ -21,20 +21,31 @@ class ChunkEmbeddingBackfillWorkerConfigTest {
 
     @Test
     @DisplayName("backfill worker is not created when careconnect.embedding.backfill.enabled=false")
-    void workerDisabledWhenPropertyFalse() {
+    void workerDisabledWhenBackfillPropertyFalse() {
         runner.withPropertyValues("careconnect.embedding.backfill.enabled=false")
                 .run(context -> assertThat(context).doesNotHaveBean(ChunkEmbeddingBackfillWorker.class));
     }
 
     @Test
-    @DisplayName("backfill worker is created when careconnect.embedding.backfill.enabled=true")
-    void workerEnabledWhenPropertyTrue() {
-        runner.withPropertyValues("careconnect.embedding.backfill.enabled=true")
+    @DisplayName("backfill worker is not created when careconnect.embedding.enabled=false")
+    void workerDisabledWhenEmbeddingPropertyFalse() {
+        runner.withPropertyValues(
+                        "careconnect.embedding.enabled=false",
+                        "careconnect.embedding.backfill.enabled=true")
+                .run(context -> assertThat(context).doesNotHaveBean(ChunkEmbeddingBackfillWorker.class));
+    }
+
+    @Test
+    @DisplayName("backfill worker is created when both embedding flags are true")
+    void workerEnabledWhenBothPropertiesTrue() {
+        runner.withPropertyValues(
+                        "careconnect.embedding.enabled=true",
+                        "careconnect.embedding.backfill.enabled=true")
                 .run(context -> assertThat(context).hasSingleBean(ChunkEmbeddingBackfillWorker.class));
     }
 
     @Test
-    @DisplayName("backfill worker is created by default when property is omitted (matchIfMissing)")
+    @DisplayName("backfill worker is created by default when properties are omitted (matchIfMissing)")
     void workerEnabledByDefault() {
         runner.run(context -> assertThat(context).hasSingleBean(ChunkEmbeddingBackfillWorker.class));
     }
