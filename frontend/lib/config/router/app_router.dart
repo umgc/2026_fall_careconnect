@@ -9,6 +9,9 @@ import 'package:care_connect_app/features/notetaker/models/patient_note_model.da
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_detail_view.dart';
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_search.dart';
 import 'package:care_connect_app/features/informed_delivery/informed_delivery_screen.dart';
+import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
+import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
+import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
@@ -34,8 +37,6 @@ import '../../config/navigation/main_screen_config.dart';
 import '../../config/navigation/navigation_helper.dart';
 import '../../services/user_role_storage_service.dart';
 import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_page_entry.dart';
-import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_detail_page.dart';
-import 'package:care_connect_app/features/health/virtual_check_in/models/virtual_check_in_backend_question_model.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/caregiver-patient-list.dart';
 import '../../features/welcome/presentation/pages/welcome_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -73,11 +74,81 @@ import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.d
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
 import '../../features/usps/presentation/usps_test_screen.dart';
-import 'dart:convert';
+import '../../features/telemetry/telemetry.dart';
+import 'dart:async';
 
+GoRouter? _appRouterRef;
+
+/// Logs a [screen_view] telemetry event whenever navigation changes.
+class TelemetryGoRouterObserver extends NavigatorObserver {
+  TelemetryGoRouterObserver({GoRouter? Function()? routerProvider})
+      : _routerProvider = routerProvider;
+
+  final GoRouter? Function()? _routerProvider;
+
+  GoRouter? get _activeRouter =>
+      _routerProvider != null ? _routerProvider() : _appRouterRef;
+
+  Future<void> _logScreenView() async {
+    final router = _activeRouter;
+    if (router == null) return;
+
+    final Uri uri;
+    try {
+      uri = router.state.uri;
+    } on StateError {
+      return;
+    }
+
+    final screen = uri.path.isEmpty ? '/' : uri.path;
+
+    try {
+      await Telemetry.event('screen_view', {'screen': screen});
+    } catch (e) {
+      debugPrint('Telemetry logging failed: $e');
+    }
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    unawaited(_logScreenView());
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    unawaited(_logScreenView());
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    unawaited(_logScreenView());
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    unawaited(_logScreenView());
+  }
+}
+
+final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
 Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+  // Issue #75: if the user authenticated in the middle of accepting an invite,
+  // route them back to the invite landing screen to complete the join instead
+  // of going straight to the dashboard. The landing screen accepts the invite
+  // (now that they're signed in) and then sends them onward.
+  if (PendingInvite.hasPending) {
+    final token = PendingInvite.token!;
+    if (context.mounted) {
+      context.go('/invite/$token');
+      return;
+    }
+  }
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,
@@ -85,8 +156,9 @@ Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
   );
 }
 
-final GoRouter appRouter = GoRouter(
+final GoRouter appRouter = _appRouterRef = GoRouter(
   initialLocation: '/',
+  observers: [_telemetryGoRouterObserver],
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
@@ -285,10 +357,8 @@ final GoRouter appRouter = GoRouter(
       path: '/caregiver-dashboard',
       builder: (context, state) {
         final caregiverIdStr = state.uri.queryParameters['caregiverId'];
-        final patientIdStr = state.uri.queryParameters['patientId'];
 
         final caregiverId = caregiverIdStr != null ? int.tryParse(caregiverIdStr) : null;
-        final patientId = patientIdStr != null ? int.tryParse(patientIdStr) : null;
 
         if (caregiverId == null || caregiverId <= 0) {
           return Scaffold(
@@ -336,6 +406,37 @@ final GoRouter appRouter = GoRouter(
       builder: (_, __) => const PatientRegistrationPage(),
     ),
     GoRoute(path: '/add-patient', builder: (_, __) => const AddPatientScreen()),
+    // Issue #69: QR-based invite share for caregivers. Scoped to a care-circle
+    // link id in the path; optional invitedEmail / inviteReason via `extra`.
+    GoRoute(
+      path: '/care-circle/:linkId/invite',
+      name: 'inviteShare',
+      builder: (context, state) {
+        final linkId = int.tryParse(state.pathParameters['linkId'] ?? '');
+        if (linkId == null) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid care-circle link.')),
+          );
+        }
+        final extra = state.extra as Map<String, dynamic>?;
+        return InviteQrScreen(
+          linkId: linkId,
+          invitedEmail: extra?['invitedEmail'] as String?,
+          inviteReason: extra?['inviteReason'] as String?,
+        );
+      },
+    ),
+    // Issue #75: invite-aware entry screen. Opened by an invite link; shows the
+    // "Who Invited Me?" context and hands off into registration/login, then
+    // accepts the invite once the user is authenticated.
+    GoRoute(
+      path: '/invite/:token',
+      name: 'inviteLanding',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        return InviteLandingScreen(token: token);
+      },
+    ),
     GoRoute(
       path: '/social-feed',
       builder: (context, state) {
@@ -807,7 +908,6 @@ final GoRouter appRouter = GoRouter(
             body: Center(child: Text('Invalid note ID or missing note data')),
           );
         }
-        final note = extra;
         return NotetakerDetailView();
       },
     ),
@@ -863,43 +963,6 @@ final GoRouter appRouter = GoRouter(
       path: '/virtual-checkin',
       builder: (context, state) => const PatientVirtualCheckIn(),
     ),
-    GoRoute(
-      path: '/checkin-detail/:checkInId',
-      builder: (context, state) {
-        final checkInId = int.tryParse(state.pathParameters['checkInId'] ?? '');
-
-        if (checkInId == null) {
-          return const Scaffold(
-            body: Center(child: Text('Invalid check-in ID')),
-          );
-        }
-
-        // Prefer questions passed via state.extra (in-app navigation).
-        // Fall back to query parameter for deep links / web URLs.
-        List<BackendQuestionDto> questions = [];
-        final extra = state.extra;
-        if (extra is List<BackendQuestionDto>) {
-          questions = extra;
-        } else {
-          final questionsJson = state.uri.queryParameters['questions'] ?? '[]';
-          try {
-            final decoded = jsonDecode(questionsJson);
-            if (decoded is List) {
-              questions = (decoded as List<dynamic>)
-                  .map((q) => BackendQuestionDto.fromJson(q as Map<String, dynamic>))
-                  .toList();
-            }
-          } catch (e) {
-            // Failed to parse questions; continue with empty list
-          }
-        }
-
-        return PatientCheckInDetailPage(
-          checkInId: checkInId,
-          questions: questions,
-        );
-      },
-    ),
         //Adding Alexa login route
      GoRoute(
       path: '/alexaLogin',
@@ -910,8 +973,6 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/alexaLogin/:redirectUri/:state',
       builder: (context, state) {
-    final redirectUri = state.pathParameters['redirectUri'];
-    final oauthState = state.pathParameters['state'];
     return AlexaLoginPage(
       key: ValueKey('alexaLoginPage'),
       // optionally pass them into your widget if you modify its constructor

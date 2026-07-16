@@ -9,6 +9,7 @@ class CheckInSummary {
   final int patientId;
   final DateTime? createdAt;
   final DateTime? submittedAt;
+  final DateTime? reviewedAt;
   final int questionCount;
 
   const CheckInSummary({
@@ -16,7 +17,68 @@ class CheckInSummary {
     required this.patientId,
     required this.createdAt,
     required this.submittedAt,
+    required this.reviewedAt,
     required this.questionCount,
+  });
+}
+
+class CheckInAnswerDetail {
+  final int questionId;
+  final String prompt;
+  final String type;
+  final bool required;
+  final int ordinal;
+  final String? valueText;
+  final bool? valueBoolean;
+  final num? valueNumber;
+  final DateTime? answeredAt;
+
+  const CheckInAnswerDetail({
+    required this.questionId,
+    required this.prompt,
+    required this.type,
+    required this.required,
+    required this.ordinal,
+    required this.valueText,
+    required this.valueBoolean,
+    required this.valueNumber,
+    required this.answeredAt,
+  });
+}
+
+class CheckInDetail {
+  final int checkInId;
+  final int patientId;
+  final DateTime? createdAt;
+  final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final String status;
+  final List<CheckInAnswerDetail> answers;
+
+  const CheckInDetail({
+    required this.checkInId,
+    required this.patientId,
+    required this.createdAt,
+    required this.submittedAt,
+    required this.reviewedAt,
+    required this.status,
+    required this.answers,
+  });
+}
+
+class CheckInPage {
+  final List<CheckInSummary> items;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  const CheckInPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+    required this.totalPages,
   });
 }
 
@@ -140,6 +202,7 @@ class CheckinService {
       patientId: patientId,
       createdAt: _tryParseDate(raw['createdAt']),
       submittedAt: _tryParseDate(raw['submittedAt']),
+      reviewedAt: _tryParseDate(raw['reviewedAt']),
       questionCount: raw['questionCount'] is int
           ? raw['questionCount'] as int
           : int.tryParse(raw['questionCount']?.toString() ?? '') ?? 0,
@@ -161,6 +224,136 @@ class CheckinService {
     final decoded = jsonDecode(response.body);
     if (decoded is! List) return const [];
     return decoded.map(_toSummary).whereType<CheckInSummary>().toList();
+  }
+
+  static Future<CheckInPage?> fetchCheckInsForPatientFiltered({
+    required String patientId,
+    String? status,
+    DateTime? startDate,
+    DateTime? endDate,
+    int page = 0,
+    int size = 20,
+  }) async {
+    final parsedPatientId = _parseIntId(patientId);
+    if (parsedPatientId == null) return null;
+
+    final query = <String, String>{
+      'page': page.toString(),
+      'size': size.toString(),
+    };
+    if (status != null && status.isNotEmpty && status != 'all') {
+      query['status'] = status;
+    }
+    if (startDate != null) {
+      query['startDate'] =
+          '${startDate.year.toString().padLeft(4, '0')}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
+    }
+    if (endDate != null) {
+      query['endDate'] =
+          '${endDate.year.toString().padLeft(4, '0')}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}';
+    }
+
+    final url = Uri.parse('$_baseUrl/patients/$parsedPatientId/search')
+        .replace(queryParameters: query);
+    final headers = await AuthTokenManager.getAuthHeaders();
+    headers['Accept'] = 'application/json';
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode != 200) return null;
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) return null;
+    final rawItems = decoded['items'];
+    final items = rawItems is List
+        ? rawItems.map(_toSummary).whereType<CheckInSummary>().toList()
+        : const <CheckInSummary>[];
+    return CheckInPage(
+      items: items,
+      page: decoded['page'] is int
+          ? decoded['page'] as int
+          : int.tryParse(decoded['page']?.toString() ?? '') ?? 0,
+      size: decoded['size'] is int
+          ? decoded['size'] as int
+          : int.tryParse(decoded['size']?.toString() ?? '') ?? size,
+      totalElements: decoded['totalElements'] is int
+          ? decoded['totalElements'] as int
+          : int.tryParse(decoded['totalElements']?.toString() ?? '') ??
+              items.length,
+      totalPages: decoded['totalPages'] is int
+          ? decoded['totalPages'] as int
+          : int.tryParse(decoded['totalPages']?.toString() ?? '') ?? 0,
+    );
+  }
+
+  static Future<CheckInDetail?> fetchCheckInDetail(int checkInId) async {
+    final url = Uri.parse('$_baseUrl/$checkInId/detail');
+    final headers = await AuthTokenManager.getAuthHeaders();
+    headers['Accept'] = 'application/json';
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode != 200) return null;
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) return null;
+
+    final rawAnswers = decoded['answers'];
+    final answers = rawAnswers is List
+        ? rawAnswers
+            .whereType<Map<String, dynamic>>()
+            .map((entry) {
+              final rawQuestionId = entry['questionId'];
+              final questionId = rawQuestionId is int
+                  ? rawQuestionId
+                  : int.tryParse(rawQuestionId?.toString() ?? '');
+              if (questionId == null) return null;
+
+              return CheckInAnswerDetail(
+                questionId: questionId,
+                prompt: entry['prompt']?.toString() ?? '',
+                type: entry['type']?.toString() ?? '',
+                required: entry['required'] == true,
+                ordinal: entry['ordinal'] is int
+                    ? entry['ordinal'] as int
+                    : int.tryParse(entry['ordinal']?.toString() ?? '') ?? 0,
+                valueText: entry['valueText']?.toString(),
+                valueBoolean: entry['valueBoolean'] is bool
+                    ? entry['valueBoolean'] as bool
+                    : null,
+                valueNumber: entry['valueNumber'] is num
+                    ? entry['valueNumber'] as num
+                    : num.tryParse(entry['valueNumber']?.toString() ?? ''),
+                answeredAt: _tryParseDate(entry['answeredAt']),
+              );
+            })
+            .whereType<CheckInAnswerDetail>()
+            .toList()
+        : const <CheckInAnswerDetail>[];
+
+    final rawCheckInId = decoded['checkInId'];
+    final rawPatientId = decoded['patientId'];
+    final parsedCheckInId = rawCheckInId is int
+        ? rawCheckInId
+        : int.tryParse(rawCheckInId?.toString() ?? '');
+    final parsedPatientId = rawPatientId is int
+        ? rawPatientId
+        : int.tryParse(rawPatientId?.toString() ?? '');
+    if (parsedCheckInId == null || parsedPatientId == null) return null;
+
+    return CheckInDetail(
+      checkInId: parsedCheckInId,
+      patientId: parsedPatientId,
+      createdAt: _tryParseDate(decoded['createdAt']),
+      submittedAt: _tryParseDate(decoded['submittedAt']),
+      reviewedAt: _tryParseDate(decoded['reviewedAt']),
+      status: decoded['status']?.toString() ?? 'draft',
+      answers: answers,
+    );
+  }
+
+  static Future<bool> markCheckInReviewed(int checkInId) async {
+    final url = Uri.parse('$_baseUrl/$checkInId/review');
+    final headers = await AuthTokenManager.getAuthHeaders();
+    headers['Accept'] = 'application/json';
+    final response = await http.post(url, headers: headers);
+    return response.statusCode == 200;
   }
 
   /// Fetches the total number of check-ins tied to a caregiver.

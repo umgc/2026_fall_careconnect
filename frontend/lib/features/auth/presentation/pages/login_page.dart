@@ -8,7 +8,6 @@ import '../../../../config/theme/app_theme.dart';
 import '../../../../providers/user_provider.dart';
 import '../../../../services/enhanced_auth_service.dart';
 import '../../../../widgets/email_verification_dialog.dart';
-import '../../../../widgets/role_mismatch_dialog.dart';
 
 class LoginPage extends StatefulWidget {
   final String? userType;
@@ -65,19 +64,11 @@ class _LoginPageState extends State<LoginPage> {
         await Future.delayed(const Duration(milliseconds: 100));
         navigateToDashboard(context);
       } else {
-        if (authResult.errorType == AuthErrorType.roleValidation) {
-          await RoleMismatchDialog.show(
-            context: context,
-            actualRole: authResult.actualRole!,
-            expectedRole: authResult.expectedRole!,
-            correctLoginRoute: authResult.correctLoginRoute!,
-            message: authResult.errorMessage!,
-          );
-        } else {
-          setState(() {
-            _error = authResult.errorMessage;
-          });
-        }
+        // loginWithRoleValidation only ever returns success or an authentication
+        // failure (role validation is not performed here), so surface the error.
+        setState(() {
+          _error = authResult.errorMessage;
+        });
       }
     } catch (e) {
       setState(() {
