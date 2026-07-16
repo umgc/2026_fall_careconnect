@@ -100,6 +100,11 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   List<MoodHistoryEntry> _moodEntries = [];
   List<sympt.SymptomEntry> _symptomEntries = [];
   List<VirtualCheckIn> _virtualCheckIns = [];
+  String _checkInStatusFilter = 'all';
+  DateTimeRange? _checkInDateRange;
+  int _checkInPage = 0;
+  int _checkInTotalPages = 0;
+  static const int _checkInPageSize = 5;
   List<Map<String, dynamic>> _callHistoryEvents = [];
   bool _isDeletingCallHistory = false;
   int _callHistoryPatientUserId = 0;
@@ -125,11 +130,13 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
   // Known Risks
   List<Map<String, dynamic>> _riskTypes = [];
-  Map<int, int> _riskIdByTypeId = {}; // riskTypeId -> patient_risk id (for DELETE)
+  Map<int, int> _riskIdByTypeId =
+      {}; // riskTypeId -> patient_risk id (for DELETE)
   bool _isLoadingRisks = false;
   String? _risksError;
   bool _isEditingRisks = false;
-  Set<int> _editingCheckedTypeIds = {}; // while editing, which risk type ids are checked
+  Set<int> _editingCheckedTypeIds =
+      {}; // while editing, which risk type ids are checked
   bool _isSavingRisks = false;
 
   Future<void> _startVideoCall(String patientName) async {
@@ -352,8 +359,13 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       final symptomData = await symptomsFuture;
       final telemetryData = await telemetryFuture;
       final caregiverData = await caregiverViewFuture;
-      final checkInSummaries = await CheckinService.fetchCheckInsForPatient(
-        widget.patientId,
+      final checkInPage = await CheckinService.fetchCheckInsForPatientFiltered(
+        patientId: widget.patientId,
+        status: _checkInStatusFilter,
+        startDate: _checkInDateRange?.start,
+        endDate: _checkInDateRange?.end,
+        page: _checkInPage,
+        size: _checkInPageSize,
       );
       await medsFuture;
 
@@ -382,6 +394,17 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       _applyCaregiverCallPolicy(caregiverData);
       _applyMoodData(moodData);
       _applySymptomData(symptomData);
+      List<CheckInSummary> checkInSummaries = const <CheckInSummary>[];
+      if (checkInPage != null) {
+        checkInSummaries = checkInPage.items;
+        _checkInTotalPages = checkInPage.totalPages;
+      } else {
+        // Backward-compatible fallback if filtered endpoint is unavailable.
+        checkInSummaries = await CheckinService.fetchCheckInsForPatient(
+          widget.patientId,
+        );
+        _checkInTotalPages = checkInSummaries.isEmpty ? 0 : 1;
+      }
       if (checkInSummaries.isNotEmpty) {
         _applyVirtualCheckInSummaries(checkInSummaries);
       } else {
@@ -614,7 +637,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
             Padding(
               padding: const EdgeInsets.only(top: 10, right: 8),
               child: Icon(icon,
-                  size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.8)),
+                  size: 20,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.8)),
             ),
             Expanded(
               child: TextField(
@@ -634,7 +658,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
             Padding(
               padding: const EdgeInsets.only(top: 2, right: 8),
               child: Icon(icon,
-                  size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.8)),
+                  size: 20,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.8)),
             ),
             Expanded(
               child: Column(
@@ -677,129 +702,125 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                     ),
                   ),
                 ),
-                    if (canEdit)
-                      ElevatedButton.icon(
-                        onPressed: _isSavingPersonalization
-                            ? null
-                            : () {
-                                if (_isEditingPersonalization) {
-                                  _savePersonalization();
-                                } else {
-                                  setState(() {
-                                    _isEditingPersonalization = true;
-                                  });
-                                }
-                              },
-                        icon: _isSavingPersonalization
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(
-                                _isEditingPersonalization
-                                    ? Icons.check
-                                    : Icons.edit,
-                              ),
-                        label: Text(
-                          _isEditingPersonalization ? 'Save' : 'Edit',
-                        ),
-                      ),
+                if (canEdit)
+                  ElevatedButton.icon(
+                    onPressed: _isSavingPersonalization
+                        ? null
+                        : () {
+                            if (_isEditingPersonalization) {
+                              _savePersonalization();
+                            } else {
+                              setState(() {
+                                _isEditingPersonalization = true;
+                              });
+                            }
+                          },
+                    icon: _isSavingPersonalization
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            _isEditingPersonalization
+                                ? Icons.check
+                                : Icons.edit,
+                          ),
+                    label: Text(
+                      _isEditingPersonalization ? 'Save' : 'Edit',
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
-                row(
-                  icon: Icons.thumb_up_alt_outlined,
-                  label: 'Likes',
-                  controller: _likesController,
+            row(
+              icon: Icons.thumb_up_alt_outlined,
+              label: 'Likes',
+              controller: _likesController,
+            ),
+            const SizedBox(height: 12),
+            row(
+              icon: Icons.thumb_down_alt_outlined,
+              label: 'Dislikes',
+              controller: _dislikesController,
+            ),
+            const SizedBox(height: 12),
+            row(
+              icon: Icons.repeat_rounded,
+              label: 'Habits',
+              controller: _habitsController,
+            ),
+            const SizedBox(height: 12),
+            row(
+              icon: Icons.warning_amber_outlined,
+              label: 'Phobias',
+              controller: _phobiasController,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 10, right: 8),
+                  child: Icon(
+                    Icons.chat_bubble_outline,
+                    size: 20,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                row(
-                  icon: Icons.thumb_down_alt_outlined,
-                  label: 'Dislikes',
-                  controller: _dislikesController,
-                ),
-                const SizedBox(height: 12),
-                row(
-                  icon: Icons.repeat_rounded,
-                  label: 'Habits',
-                  controller: _habitsController,
-                ),
-                const SizedBox(height: 12),
-                row(
-                  icon: Icons.warning_amber_outlined,
-                  label: 'Phobias',
-                  controller: _phobiasController,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10, right: 8),
-                      child: Icon(
-                        Icons.chat_bubble_outline,
-                        size: 20,
-                        color: theme.colorScheme.primary.withValues(alpha: 0.8),
-                      ),
-                    ),
-                    Expanded(
-                      child: _isEditingPersonalization && canEdit
-                          ? DropdownButtonFormField<String>(
-                              initialValue: _preferredCommunicationMethod,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'verbal',
-                                  child: Text('Verbal'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'visual',
-                                  child: Text('Visual'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'written',
-                                  child: Text('Written'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'gesture',
-                                  child: Text('Gesture'),
-                                ),
-                              ],
-                              onChanged: (v) => setState(
-                                () => _preferredCommunicationMethod = v,
+                Expanded(
+                  child: _isEditingPersonalization && canEdit
+                      ? DropdownButtonFormField<String>(
+                          initialValue: _preferredCommunicationMethod,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'verbal',
+                              child: Text('Verbal'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'visual',
+                              child: Text('Visual'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'written',
+                              child: Text('Written'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'gesture',
+                              child: Text('Gesture'),
+                            ),
+                          ],
+                          onChanged: (v) => setState(
+                            () => _preferredCommunicationMethod = v,
+                          ),
+                          decoration: deco('Preferred communication method'),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Preferred communication method',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w600,
                               ),
-                              decoration:
-                                  deco('Preferred communication method'),
-                            )
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Preferred communication method',
-                                  style:
-                                      theme.textTheme.bodySmall?.copyWith(
-                                    color: Colors.grey.shade700,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  (_preferredCommunicationMethod ?? '')
-                                          .isEmpty
-                                      ? 'Not set'
-                                      : _preferredCommunicationMethod!
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              (_preferredCommunicationMethod ?? '').isEmpty
+                                  ? 'Not set'
+                                  : _preferredCommunicationMethod!
                                           .substring(0, 1)
                                           .toUpperCase() +
-                                          _preferredCommunicationMethod!
-                                              .substring(1),
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ],
+                                      _preferredCommunicationMethod!
+                                          .substring(1),
+                              style: theme.textTheme.bodyMedium,
                             ),
-                    ),
-                  ],
+                          ],
+                        ),
                 ),
+              ],
+            ),
           ],
         ),
       ),
@@ -973,9 +994,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     }
     _emergencyPhones = emergencyPhones;
     _emergencyPhone = emergencyPhone.isNotEmpty ? emergencyPhone : null;
-    _emergencyContactName = emergencyName.isNotEmpty
-        ? emergencyName
-        : 'Emergency Contact';
+    _emergencyContactName =
+        emergencyName.isNotEmpty ? emergencyName : 'Emergency Contact';
     _emergencyRelationship = emergencyRelationship.isNotEmpty
         ? emergencyRelationship
         : 'Primary Contact';
@@ -1031,8 +1051,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
   void _applyMoodData(List<dynamic> moodData) {
     final entries = moodData.whereType<Map<String, dynamic>>().map((entry) {
-      final date =
-          _parseDate(
+      final date = _parseDate(
             entry['createdAt'] ?? entry['timestamp'] ?? entry['date'],
           ) ??
           DateTime.now();
@@ -1040,9 +1059,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       final score = scoreRaw is int
           ? scoreRaw
           : int.tryParse(scoreRaw?.toString() ?? '') ?? 5;
-      final score5 = score <= 5
-          ? score.clamp(1, 5)
-          : ((score / 2).round()).clamp(1, 5);
+      final score5 =
+          score <= 5 ? score.clamp(1, 5) : ((score / 2).round()).clamp(1, 5);
       final label = _firstNonEmpty([
         entry['label'],
         _moodLabelFromScore(score),
@@ -1141,12 +1159,16 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   void _applyVirtualCheckInSummaries(List<CheckInSummary> summaries) {
     _virtualCheckIns = summaries.map((entry) {
       final startedAt = entry.createdAt ?? DateTime.now();
-      final status = entry.submittedAt == null
-          ? CheckInStatus.missed
-          : CheckInStatus.completed;
+      final status = entry.reviewedAt != null
+          ? CheckInStatus.reviewed
+          : (entry.submittedAt == null
+              ? CheckInStatus.draft
+              : CheckInStatus.submitted);
       final summaryText = entry.submittedAt == null
           ? '${entry.questionCount} configured questions pending patient submission.'
-          : '${entry.questionCount} question responses submitted.';
+          : (entry.reviewedAt == null
+              ? '${entry.questionCount} question responses submitted and pending caregiver review.'
+              : '${entry.questionCount} question responses reviewed by caregiver.');
 
       return VirtualCheckIn(
         id: entry.checkInId.toString(),
@@ -1172,7 +1194,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     return null;
   }
 
-  List<int>? _extractCatalogQuestionIds(List<VirtualCheckInQuestion> questions) {
+  List<int>? _extractCatalogQuestionIds(
+      List<VirtualCheckInQuestion> questions) {
     final ids = <int>{};
     for (final question in questions) {
       final parsed = int.tryParse(question.id.trim());
@@ -1184,7 +1207,163 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
   void _showConfigureFeedback(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _pickCheckInDateRange() async {
+    final now = DateTime.now();
+    final initial = _checkInDateRange ??
+        DateTimeRange(start: now.subtract(const Duration(days: 30)), end: now);
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: initial,
+    );
+    if (range == null) return;
+    setState(() {
+      _checkInDateRange = range;
+      _checkInPage = 0;
+    });
+    await _loadPatientData();
+  }
+
+  Future<void> _setCheckInStatusFilter(String status) async {
+    if (_checkInStatusFilter == status) return;
+    setState(() {
+      _checkInStatusFilter = status;
+      _checkInPage = 0;
+    });
+    await _loadPatientData();
+  }
+
+  Future<void> _clearCheckInDateRange() async {
+    if (_checkInDateRange == null) return;
+    setState(() {
+      _checkInDateRange = null;
+      _checkInPage = 0;
+    });
+    await _loadPatientData();
+  }
+
+  Future<void> _changeCheckInPage(int nextPage) async {
+    if (nextPage < 0 ||
+        nextPage >= _checkInTotalPages ||
+        nextPage == _checkInPage) {
+      return;
+    }
+    setState(() {
+      _checkInPage = nextPage;
+    });
+    await _loadPatientData();
+  }
+
+  Future<void> _showCheckInDetailDialog(VirtualCheckIn entry) async {
+    final checkInId = int.tryParse(entry.id);
+    if (checkInId == null) return;
+
+    final detail = await CheckinService.fetchCheckInDetail(checkInId);
+    if (!mounted) return;
+    if (detail == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load check-in details')),
+      );
+      return;
+    }
+
+    String formatDate(DateTime? value) {
+      if (value == null) return 'N/A';
+      final month = value.month.toString().padLeft(2, '0');
+      final day = value.day.toString().padLeft(2, '0');
+      final hour = value.hour.toString().padLeft(2, '0');
+      final minute = value.minute.toString().padLeft(2, '0');
+      return '${value.year}-$month-$day $hour:$minute';
+    }
+
+    String answerValue(CheckInAnswerDetail answer) {
+      if (answer.valueText != null && answer.valueText!.isNotEmpty) {
+        return answer.valueText!;
+      }
+      if (answer.valueBoolean != null) {
+        return answer.valueBoolean! ? 'Yes' : 'No';
+      }
+      if (answer.valueNumber != null) {
+        return answer.valueNumber.toString();
+      }
+      return 'No answer submitted';
+    }
+
+    final markedReviewed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Check-in #${detail.checkInId} details'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Status: ${detail.status}'),
+                  Text('Submitted at: ${formatDate(detail.submittedAt)}'),
+                  Text('Reviewed at: ${formatDate(detail.reviewedAt)}'),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Answers',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  ...detail.answers.map((answer) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${answer.ordinal}. ${answer.prompt}'),
+                          Text('Type: ${answer.type}'),
+                          Text('Answer: ${answerValue(answer)}'),
+                          Text('Answered at: ${formatDate(answer.answeredAt)}'),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            if (widget.isCaregiver && detail.status == 'submitted')
+              ElevatedButton(
+                onPressed: () async {
+                  final success = await CheckinService.markCheckInReviewed(
+                      detail.checkInId);
+                  if (!context.mounted) return;
+                  if (!success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to mark check-in as reviewed'),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop(true);
+                },
+                child: const Text('Mark as reviewed'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    if (markedReviewed == true) {
+      await _loadPatientData();
+    }
   }
 
   Future<bool> _saveVirtualCheckInConfiguration(
@@ -1202,7 +1381,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       return false;
     }
 
-    final createdCheckInId = await CheckinService.createCheckinWithSelectedQuestions(
+    final createdCheckInId =
+        await CheckinService.createCheckinWithSelectedQuestions(
       patientId: widget.patientId,
       selectedQuestionIds: selectedQuestionIds,
     );
@@ -1376,7 +1556,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to update patient messaging policy. Please retry.'),
+          content:
+              Text('Unable to update patient messaging policy. Please retry.'),
         ),
       );
     } else {
@@ -1500,13 +1681,13 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     if (patientUserId <= 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No patient call history is available to delete.')),
+        const SnackBar(
+            content: Text('No patient call history is available to delete.')),
       );
       return;
     }
 
-    final confirmed =
-        await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Delete Call History (Dev Only)'),
@@ -1564,8 +1745,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       await _loadPatientData();
 
       if (!mounted) return;
-      final footprintNote =
-          ' Removed $deletedSummaries summary row(s), '
+      final footprintNote = ' Removed $deletedSummaries summary row(s), '
           '$deletedTranscriptSegments transcript segment(s), '
           '$deletedTranscriptArchives transcript archive(s), '
           '$deletedRecordingRows recording row(s), and '
@@ -1628,21 +1808,33 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   }
 
   Future<void> _fetchRiskTypes() async {
-    setState(() { _isLoadingRisks = true; _risksError = null; });
+    setState(() {
+      _isLoadingRisks = true;
+      _risksError = null;
+    });
     try {
       final resp = await ApiService.getRiskTypes();
       if (resp.statusCode == 200) {
         final list = (jsonDecode(resp.body) as List<dynamic>)
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
-        setState(() { _riskTypes = list; });
+        setState(() {
+          _riskTypes = list;
+        });
       } else {
-        setState(() { _risksError = 'Failed to load risk types'; });
+        setState(() {
+          _risksError = 'Failed to load risk types';
+        });
       }
     } catch (e) {
-      setState(() { _risksError = 'Error: $e'; });
+      setState(() {
+        _risksError = 'Error: $e';
+      });
     }
-    if (mounted) setState(() { _isLoadingRisks = false; });
+    if (mounted)
+      setState(() {
+        _isLoadingRisks = false;
+      });
   }
 
   Future<void> _fetchPatientRisks() async {
@@ -1655,11 +1847,17 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         final map = <int, int>{};
         for (final e in list) {
           final m = e as Map<String, dynamic>;
-          final rtId = m['riskTypeId'] is int ? m['riskTypeId'] as int : int.tryParse(m['riskTypeId'].toString());
-          final id = m['id'] is int ? m['id'] as int : int.tryParse(m['id'].toString());
+          final rtId = m['riskTypeId'] is int
+              ? m['riskTypeId'] as int
+              : int.tryParse(m['riskTypeId'].toString());
+          final id = m['id'] is int
+              ? m['id'] as int
+              : int.tryParse(m['id'].toString());
           if (rtId != null && id != null) map[rtId] = id;
         }
-        setState(() { _riskIdByTypeId = map; });
+        setState(() {
+          _riskIdByTypeId = map;
+        });
       }
     } catch (_) {}
   }
@@ -1668,7 +1866,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   List<String> get _flaggedRiskNames {
     final names = <String>[];
     for (final rt in _riskTypes) {
-      final id = rt['id'] is int ? rt['id'] as int : int.tryParse(rt['id'].toString());
+      final id =
+          rt['id'] is int ? rt['id'] as int : int.tryParse(rt['id'].toString());
       if (id != null && _riskIdByTypeId.containsKey(id)) {
         final name = rt['name']?.toString();
         if (name != null && name.isNotEmpty) names.add(name);
@@ -1690,7 +1889,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         bottom: false,
         child: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24),
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.white, size: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -1731,7 +1931,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.dashboard_outlined, color: theme.colorScheme.primary, size: 28),
+              Icon(Icons.dashboard_outlined,
+                  color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -1754,7 +1955,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -1785,7 +1987,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.fact_check_outlined, color: theme.colorScheme.primary, size: 28),
+              Icon(Icons.fact_check_outlined,
+                  color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -1808,7 +2011,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -1839,7 +2043,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.self_improvement, color: theme.colorScheme.primary, size: 28),
+              Icon(Icons.self_improvement,
+                  color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -1862,7 +2067,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -1892,7 +2098,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.report_problem_outlined, color: theme.colorScheme.primary, size: 28),
+              Icon(Icons.report_problem_outlined,
+                  color: theme.colorScheme.primary, size: 28),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -1915,7 +2122,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -1968,7 +2176,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -2021,7 +2230,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -2074,7 +2284,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -2096,9 +2307,13 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Known Risks', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    Text('Known Risks',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Text(_risksError!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+                    Text(_risksError!,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.error)),
                   ],
                 )
               : const Center(child: CircularProgressIndicator()),
@@ -2110,7 +2325,9 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     if (!_isEditingRisks) {
       final selectedNames = <String>[];
       for (final rt in _riskTypes) {
-        final id = rt['id'] is int ? rt['id'] as int : int.tryParse(rt['id'].toString());
+        final id = rt['id'] is int
+            ? rt['id'] as int
+            : int.tryParse(rt['id'].toString());
         if (id != null && _riskIdByTypeId.containsKey(id)) {
           selectedNames.add(rt['name']?.toString() ?? '');
         }
@@ -2124,12 +2341,14 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: theme.colorScheme.primary, size: 22),
+                  Icon(Icons.warning_amber_rounded,
+                      color: theme.colorScheme.primary, size: 22),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Known Risks',
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   if (canEdit)
@@ -2147,18 +2366,23 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
               ),
               const SizedBox(height: 12),
               if (selectedNames.isEmpty)
-                Text('No risks flagged.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant))
+                Text('No risks flagged.',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant))
               else
                 ...selectedNames.map((name) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, size: 18, color: theme.colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(name, style: theme.textTheme.bodyMedium)),
-                    ],
-                  ),
-                )),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                              child: Text(name,
+                                  style: theme.textTheme.bodyMedium)),
+                        ],
+                      ),
+                    )),
             ],
           ),
         ),
@@ -2175,19 +2399,24 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: theme.colorScheme.primary, size: 22),
+                Icon(Icons.warning_amber_rounded,
+                    color: theme.colorScheme.primary, size: 22),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Known Risks',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
                 if (canEdit)
                   ElevatedButton.icon(
                     onPressed: _isSavingRisks ? null : () => _saveKnownRisks(),
                     icon: _isSavingRisks
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.check, size: 18),
                     label: const Text('Save'),
                   ),
@@ -2198,7 +2427,9 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
               Text('No risk types available.', style: theme.textTheme.bodySmall)
             else
               ..._riskTypes.map((rt) {
-                final id = rt['id'] is int ? rt['id'] as int : int.tryParse(rt['id'].toString());
+                final id = rt['id'] is int
+                    ? rt['id'] as int
+                    : int.tryParse(rt['id'].toString());
                 final name = rt['name']?.toString() ?? '';
                 if (id == null) return const SizedBox.shrink();
                 final isChecked = _editingCheckedTypeIds.contains(id);
@@ -2230,13 +2461,19 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
     setState(() => _isSavingRisks = true);
     try {
-      final toAdd = _editingCheckedTypeIds.where((id) => !_riskIdByTypeId.containsKey(id)).toList();
-      final toRemove = _riskIdByTypeId.keys.where((id) => !_editingCheckedTypeIds.contains(id)).toList();
+      final toAdd = _editingCheckedTypeIds
+          .where((id) => !_riskIdByTypeId.containsKey(id))
+          .toList();
+      final toRemove = _riskIdByTypeId.keys
+          .where((id) => !_editingCheckedTypeIds.contains(id))
+          .toList();
 
       for (final riskTypeId in toAdd) {
         final res = await ApiService.flagPatientRisk(patientIdInt, riskTypeId);
         if (res.statusCode != 201 && res.statusCode != 200) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add risk: ${res.statusCode}')));
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Failed to add risk: ${res.statusCode}')));
           return;
         }
       }
@@ -2245,7 +2482,9 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         if (riskId != null) {
           final res = await ApiService.unflagPatientRisk(patientIdInt, riskId);
           if (res.statusCode != 204 && res.statusCode != 200) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove risk: ${res.statusCode}')));
+            if (mounted)
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Failed to remove risk: ${res.statusCode}')));
             return;
           }
         }
@@ -2257,12 +2496,14 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           _isEditingRisks = false;
           _isSavingRisks = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Known risks saved')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Known risks saved')));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSavingRisks = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     }
   }
@@ -2296,8 +2537,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
               Text(
                 _medicationError!,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -2328,9 +2569,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final subtitlePrefix = _patientError == null
-        ? 'Patient Details • $_mrn'
-        : 'Patient Details';
+    final subtitlePrefix =
+        _patientError == null ? 'Patient Details • $_mrn' : 'Patient Details';
 
     return DefaultTabController(
       length: 5,
@@ -2343,265 +2583,374 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                 ),
               )
             : _patientError != null
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _patientError!,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: _loadPatientData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Column(
                     children: [
-                      Icon(
-                        Icons.error_outline,
-                        color: Theme.of(context).colorScheme.error,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _patientError!,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        onPressed: _loadPatientData,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : Column(
-                children: [
-                  _buildRiskBanner(),
-                  PatientHeaderCard(
-                    fullName: _patientName,
-                    mrn: _mrn,
-                    age: _age,
-                    sex: _sex,
-                    currentMoodLabel: _currentMoodLabel,
-                    currentMoodEmoji: _currentMoodEmoji,
-                    diagnoses: _diagnoses,
-                    allergies: _allergies,
-                    /*heartRateBpm: 72,
+                      _buildRiskBanner(),
+                      PatientHeaderCard(
+                        fullName: _patientName,
+                        mrn: _mrn,
+                        age: _age,
+                        sex: _sex,
+                        currentMoodLabel: _currentMoodLabel,
+                        currentMoodEmoji: _currentMoodEmoji,
+                        diagnoses: _diagnoses,
+                        allergies: _allergies,
+                        /*heartRateBpm: 72,
               bpSystolic: 120,
               bpDiastolic: 80,
               oxygenPercent: 98,
               temperatureF: 98.0,*/
-                    emergencyPhones: _emergencyPhones,
-                    onStartVideoCall: () => _startVideoCall(_patientName),
-                  ),
+                        emergencyPhones: _emergencyPhones,
+                        onStartVideoCall: () => _startVideoCall(_patientName),
+                      ),
 
-                  // Tab bar row (like your mock)
-                  const _TabsStrip(),
+                      // Tab bar row (like your mock)
+                      const _TabsStrip(),
 
-                  // Tab views
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        // Info
-                        ListView(
-                          padding: const EdgeInsets.only(top: 12, bottom: 16),
+                      // Tab views
+                      Expanded(
+                        child: TabBarView(
                           children: [
-                            ContactInfoCard(
-                              phone: _phone,
-                              email: _email,
-                              dateOfBirth: _dob,
-                              addressLine1: _addressLine1,
-                              addressLine2: _addressLine2,
-                              city: _city,
-                              state: _state,
-                              postalCode: _postalCode,
-                            ),
-                            EmergencyContactCard(
-                              contactName: _emergencyContactName,
-                              relationship: _emergencyRelationship,
-                              phone: _emergencyPhone,
-                            ),
-                            _buildPersonalizationCard(),
-                            if (_canDeleteCallHistoryInThisBuild)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  4,
+                            // Info
+                            ListView(
+                              padding:
+                                  const EdgeInsets.only(top: 12, bottom: 16),
+                              children: [
+                                ContactInfoCard(
+                                  phone: _phone,
+                                  email: _email,
+                                  dateOfBirth: _dob,
+                                  addressLine1: _addressLine1,
+                                  addressLine2: _addressLine2,
+                                  city: _city,
+                                  state: _state,
+                                  postalCode: _postalCode,
                                 ),
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: OutlinedButton.icon(
-                                    onPressed: _isDeletingCallHistory
-                                        ? null
-                                        : _deleteCallHistoryForPatientDevOnly,
-                                    icon: const Icon(Icons.delete_outline),
-                                    label: Text(
-                                      _isDeletingCallHistory
-                                          ? 'Deleting call history...'
-                                          : 'Delete Call History (Dev)',
+                                EmergencyContactCard(
+                                  contactName: _emergencyContactName,
+                                  relationship: _emergencyRelationship,
+                                  phone: _emergencyPhone,
+                                ),
+                                _buildPersonalizationCard(),
+                                if (_canDeleteCallHistoryInThisBuild)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      0,
+                                      16,
+                                      4,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _isDeletingCallHistory
+                                            ? null
+                                            : _deleteCallHistoryForPatientDevOnly,
+                                        icon: const Icon(Icons.delete_outline),
+                                        label: Text(
+                                          _isDeletingCallHistory
+                                              ? 'Deleting call history...'
+                                              : 'Delete Call History (Dev)',
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            if (widget.isCaregiver && _caregiverLinkId != null)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                                child: Card(
-                                  margin: EdgeInsets.zero,
-                                  child: SwitchListTile.adaptive(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 4,
+                                if (widget.isCaregiver &&
+                                    _caregiverLinkId != null)
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                    child: Card(
+                                      margin: EdgeInsets.zero,
+                                      child: SwitchListTile.adaptive(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 4,
+                                        ),
+                                        title: const Text(
+                                            'Allow Patient-Initiated Video Calls'),
+                                        subtitle: Text(
+                                          _patientInitiatedCallsEnabled
+                                              ? 'This patient can initiate video calls to their care team.'
+                                              : 'Patient-initiated video calls are currently blocked.',
+                                        ),
+                                        value: _patientInitiatedCallsEnabled,
+                                        onChanged: _isSavingPatientCallPolicy
+                                            ? null
+                                            : _togglePatientInitiatedCalls,
+                                      ),
                                     ),
-                                    title: const Text('Allow Patient-Initiated Video Calls'),
-                                    subtitle: Text(
-                                      _patientInitiatedCallsEnabled
-                                          ? 'This patient can initiate video calls to their care team.'
-                                          : 'Patient-initiated video calls are currently blocked.',
-                                    ),
-                                    value: _patientInitiatedCallsEnabled,
-                                    onChanged: _isSavingPatientCallPolicy
-                                        ? null
-                                        : _togglePatientInitiatedCalls,
                                   ),
-                                ),
-                              ),
-                            if (widget.isCaregiver && _caregiverLinkId != null)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                                child: Card(
-                                  margin: EdgeInsets.zero,
-                                  child: SwitchListTile.adaptive(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 4,
+                                if (widget.isCaregiver &&
+                                    _caregiverLinkId != null)
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                    child: Card(
+                                      margin: EdgeInsets.zero,
+                                      child: SwitchListTile.adaptive(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 4,
+                                        ),
+                                        title: const Text(
+                                            'Allow Patient Messaging'),
+                                        subtitle: Text(
+                                          _patientMessagingEnabled
+                                              ? 'This patient can send messages to their care team.'
+                                              : 'Patient messaging is currently blocked.',
+                                        ),
+                                        value: _patientMessagingEnabled,
+                                        onChanged:
+                                            _isSavingPatientMessagingPolicy
+                                                ? null
+                                                : _togglePatientMessaging,
+                                      ),
                                     ),
-                                    title: const Text('Allow Patient Messaging'),
-                                    subtitle: Text(
-                                      _patientMessagingEnabled
-                                          ? 'This patient can send messages to their care team.'
-                                          : 'Patient messaging is currently blocked.',
-                                    ),
-                                    value: _patientMessagingEnabled,
-                                    onChanged: _isSavingPatientMessagingPolicy
-                                        ? null
-                                        : _togglePatientMessaging,
                                   ),
+                                CommunicationHistoryCard(
+                                  events: _callHistoryEvents,
+                                  onCallTap: _openCallHistoryDetail,
                                 ),
-                              ),
-                            CommunicationHistoryCard(
-                              events: _callHistoryEvents,
-                              onCallTap: _openCallHistoryDetail,
+                              ],
                             ),
-                          ],
-                        ),
 
-                        // Mood
-                        ListView(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          children: [MoodHistorySection(entries: _moodEntries)],
-                        ),
-
-                        // Health
-                        ListView(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          children: [
-                            _buildKnownRisksCard(),
-                            const SizedBox(height: 8),
-                            PainLevelCard(
-                              lastReportedText: _lastReportedPain,
-                              currentPain: _currentPain,
-                              location: _painLocation,
-                              dizziness: _dizziness,
-                              fatigue: _fatigue,
+                            // Mood
+                            ListView(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              children: [
+                                MoodHistorySection(entries: _moodEntries)
+                              ],
                             ),
-                            // Recent Symptoms (UI-typed list)
-                            sympt.RecentSymptomsSection(
-                              entries: _symptomEntries,
+
+                            // Health
+                            ListView(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              children: [
+                                _buildKnownRisksCard(),
+                                const SizedBox(height: 8),
+                                PainLevelCard(
+                                  lastReportedText: _lastReportedPain,
+                                  currentPain: _currentPain,
+                                  location: _painLocation,
+                                  dizziness: _dizziness,
+                                  fatigue: _fatigue,
+                                ),
+                                // Recent Symptoms (UI-typed list)
+                                sympt.RecentSymptomsSection(
+                                  entries: _symptomEntries,
+                                ),
+                                const SizedBox(height: 8),
+                                _buildMedicationsSection(),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            _buildMedicationsSection(),
-                          ],
-                        ),
 
-                        // In-home
-                        ListView(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          children: [
-                            if (int.tryParse(widget.patientId) != null)
-                              _buildAdlIadlManagementCard(_patientName),
-                            const SizedBox(height: 8),
-                            if (int.tryParse(widget.patientId) != null)
-                              _buildBehaviorLogCard(_patientName),
-                            const SizedBox(height: 8),
-                            if (int.tryParse(widget.patientId) != null)
-                              _buildIncidentReportsCard(_patientName),
-                            const SizedBox(height: 8),
-                            if (int.tryParse(widget.patientId) != null)
-                              _buildDashboardsCard(_patientName),
-                            const SizedBox(height: 8),
-                            if (int.tryParse(widget.patientId) != null)
-                              _buildBehaviorHistoryCard(_patientName),
-                            const SizedBox(height: 8),
-                            if (int.tryParse(widget.patientId) != null)
-                              _buildIncidentHistoryCard(_patientName),
-                            const SizedBox(height: 8),
-                            if (int.tryParse(widget.patientId) != null &&
-                                widget.isCaregiver)
-                              _buildAuditLogCard(_patientName),
-                          ],
-                        ),
+                            // In-home
+                            ListView(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              children: [
+                                if (int.tryParse(widget.patientId) != null)
+                                  _buildAdlIadlManagementCard(_patientName),
+                                const SizedBox(height: 8),
+                                if (int.tryParse(widget.patientId) != null)
+                                  _buildBehaviorLogCard(_patientName),
+                                const SizedBox(height: 8),
+                                if (int.tryParse(widget.patientId) != null)
+                                  _buildIncidentReportsCard(_patientName),
+                                const SizedBox(height: 8),
+                                if (int.tryParse(widget.patientId) != null)
+                                  _buildDashboardsCard(_patientName),
+                                const SizedBox(height: 8),
+                                if (int.tryParse(widget.patientId) != null)
+                                  _buildBehaviorHistoryCard(_patientName),
+                                const SizedBox(height: 8),
+                                if (int.tryParse(widget.patientId) != null)
+                                  _buildIncidentHistoryCard(_patientName),
+                                const SizedBox(height: 8),
+                                if (int.tryParse(widget.patientId) != null &&
+                                    widget.isCaregiver)
+                                  _buildAuditLogCard(_patientName),
+                              ],
+                            ),
 
-                        // ---- Virtual Check-In tab ----
-                        // ---- Virtual Check-In tab ----
-                        ListView(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          children: [
-                            VirtualCheckInHistoryCard(
-                              entries: _virtualCheckIns,
-                              showConfigure:
-                                  widget.isCaregiver, // caregivers only
-                              onConfigure: widget.isCaregiver
-                                  ? () async {
-                                      // Seed with your current config if you have it:
-                                      final initialQuestions =
-                                          <VirtualCheckInQuestion>[];
-                                      final checkInId = _latestVirtualCheckInId();
+                            // ---- Virtual Check-In tab ----
+                            // ---- Virtual Check-In tab ----
+                            ListView(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              children: [
+                                if (widget.isCaregiver)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: Wrap(
+                                      spacing: 12,
+                                      runSpacing: 8,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 190,
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            value: _checkInStatusFilter,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Status filter',
+                                              border: OutlineInputBorder(),
+                                              isDense: true,
+                                            ),
+                                            items: const [
+                                              DropdownMenuItem(
+                                                  value: 'all',
+                                                  child: Text('All')),
+                                              DropdownMenuItem(
+                                                  value: 'draft',
+                                                  child: Text('Draft')),
+                                              DropdownMenuItem(
+                                                  value: 'submitted',
+                                                  child: Text('Submitted')),
+                                              DropdownMenuItem(
+                                                  value: 'reviewed',
+                                                  child: Text('Reviewed')),
+                                            ],
+                                            onChanged: (value) {
+                                              if (value == null) return;
+                                              _setCheckInStatusFilter(value);
+                                            },
+                                          ),
+                                        ),
+                                        OutlinedButton.icon(
+                                          onPressed: _pickCheckInDateRange,
+                                          icon: const Icon(Icons.date_range),
+                                          label: Text(
+                                            _checkInDateRange == null
+                                                ? 'Date range'
+                                                : '${_checkInDateRange!.start.month}/${_checkInDateRange!.start.day} - ${_checkInDateRange!.end.month}/${_checkInDateRange!.end.day}',
+                                          ),
+                                        ),
+                                        if (_checkInDateRange != null)
+                                          TextButton(
+                                            onPressed: _clearCheckInDateRange,
+                                            child: const Text('Clear dates'),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                VirtualCheckInHistoryCard(
+                                  entries: _virtualCheckIns,
+                                  showConfigure:
+                                      widget.isCaregiver, // caregivers only
+                                  onEntryTap: widget.isCaregiver
+                                      ? (entry) =>
+                                          _showCheckInDetailDialog(entry)
+                                      : null,
+                                  onConfigure: widget.isCaregiver
+                                      ? () async {
+                                          // Seed with your current config if you have it:
+                                          final initialQuestions =
+                                              <VirtualCheckInQuestion>[];
+                                          final checkInId =
+                                              _latestVirtualCheckInId();
 
-                                      final updated =
-                                          await showModalBottomSheet<
-                                            List<VirtualCheckInQuestion>?
-                                          >(
+                                          final updated =
+                                              await showModalBottomSheet<
+                                                  List<
+                                                      VirtualCheckInQuestion>?>(
                                             context: context,
                                             isScrollControlled: true,
                                             useSafeArea: true,
                                             shape: const RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.vertical(
-                                                    top: Radius.circular(16),
-                                                  ),
+                                                top: Radius.circular(16),
+                                              ),
                                             ),
                                             builder: (_) =>
                                                 VirtualCheckInConfigSheet(
-                                                  checkInId: checkInId,
-                                                  initial: initialQuestions,
-                                                ),
+                                              checkInId: checkInId,
+                                              initial: initialQuestions,
+                                            ),
                                           );
 
-                                      if (!context.mounted) return;
-                                      if (updated != null) {
-                                        await _saveVirtualCheckInConfiguration(
-                                          updated,
-                                        );
-                                      }
-                                    }
-                                  : null, // patients: no button
+                                          if (!context.mounted) return;
+                                          if (updated != null) {
+                                            await _saveVirtualCheckInConfiguration(
+                                              updated,
+                                            );
+                                          }
+                                        }
+                                      : null, // patients: no button
+                                ),
+                                if (widget.isCaregiver)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          _checkInTotalPages == 0
+                                              ? 'No pages'
+                                              : 'Page ${_checkInPage + 1} of $_checkInTotalPages',
+                                        ),
+                                        const SizedBox(width: 12),
+                                        IconButton(
+                                          icon: const Icon(Icons.chevron_left),
+                                          onPressed: _checkInPage > 0
+                                              ? () => _changeCheckInPage(
+                                                  _checkInPage - 1)
+                                              : null,
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.chevron_right),
+                                          onPressed: (_checkInTotalPages > 0 &&
+                                                  _checkInPage <
+                                                      _checkInTotalPages - 1)
+                                              ? () => _changeCheckInPage(
+                                                  _checkInPage + 1)
+                                              : null,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
       ),
     );
   }
@@ -2631,9 +2980,9 @@ class _DetailsAppBar extends StatelessWidget implements PreferredSizeWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
           Text(
             subtitle,

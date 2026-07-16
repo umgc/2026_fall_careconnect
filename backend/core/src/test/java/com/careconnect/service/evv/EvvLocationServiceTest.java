@@ -311,6 +311,82 @@ class EvvLocationServiceTest {
         assertThat(response.getType()).isEqualTo(EvvLocationType.PATIENT_ADDRESS);
     }
 
+    // NOTE: EvvLocationService's own GPS-missing-coords (lines 63-68) and
+    // MANUAL-missing-address (lines 111-114) guard clauses are unreachable
+    // through saveLocation()'s public API: request.validate() (line 37) is
+    // called first and throws IllegalArgumentException for the identical
+    // condition before these re-checks could ever run. That branch coverage
+    // gap is a documented, accepted dead-code finding (see EvvLocationRequestTest
+    // for direct coverage of request.validate()'s own GPS/MANUAL branches).
+
+    @Test
+    void saveLocation_MANUAL_withAddress_savesAndReturnsResponse() throws Exception {
+        final EvvRecord evvRecord = EvvRecord.builder().id(1L).build();
+
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.MANUAL)
+                .manualAddress("123 Community Center Dr")
+                .noGpsReason(NoGpsReason.COMMUNITY_VISIT)
+                .build();
+
+        when(evvRecordRepository.findById(1L)).thenReturn(Optional.of(evvRecord));
+        when(locationRepository.findByEvvRecordIdAndRole(1L, EvvLocationRole.CHECK_IN))
+                .thenReturn(Optional.empty());
+
+        final EvvRecordLocation savedLocation = EvvRecordLocation.builder()
+                .id(UUID.randomUUID())
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(EvvLocationType.MANUAL)
+                .manualAddress("123 Community Center Dr")
+                .noGpsReason(NoGpsReason.COMMUNITY_VISIT)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        when(locationRepository.save(any(EvvRecordLocation.class))).thenReturn(savedLocation);
+
+        final EvvLocationResponse response = evvLocationService.saveLocation(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getType()).isEqualTo(EvvLocationType.MANUAL);
+        assertThat(response.getManualAddress()).isEqualTo("123 Community Center Dr");
+    }
+
+    @Test
+    void saveLocation_nullType_skipsTypeSpecificHandlingAndSaves() throws Exception {
+        // Arrange: request.validate() and location.validate() both no-op when
+        // type is null, so the if/else-if chain in saveLocation falls through
+        // entirely (reachable, since EvvLocationRequest permits a null type).
+        final EvvRecord evvRecord = EvvRecord.builder().id(1L).build();
+
+        final EvvLocationRequest request = EvvLocationRequest.builder()
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(null)
+                .build();
+
+        when(evvRecordRepository.findById(1L)).thenReturn(Optional.of(evvRecord));
+        when(locationRepository.findByEvvRecordIdAndRole(1L, EvvLocationRole.CHECK_IN))
+                .thenReturn(Optional.empty());
+
+        final EvvRecordLocation savedLocation = EvvRecordLocation.builder()
+                .id(UUID.randomUUID())
+                .evvRecordId(1L)
+                .role(EvvLocationRole.CHECK_IN)
+                .type(null)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        when(locationRepository.save(any(EvvRecordLocation.class))).thenReturn(savedLocation);
+
+        final EvvLocationResponse response = evvLocationService.saveLocation(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getType()).isNull();
+    }
+
     // =========== getLocationsForRecord tests ===========
 
     @Test

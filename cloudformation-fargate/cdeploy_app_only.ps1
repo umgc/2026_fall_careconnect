@@ -362,7 +362,7 @@ try {
 
         Write-Step "Building Docker image"
         $script:CurrentOperation = "Building Docker image"
-        & docker build -t $LocalImageName .
+        & docker build --platform linux/amd64 -t $LocalImageName .
         Assert-LastExitCode "Docker build"
 
         Write-Step "Tagging and pushing Docker image to ECR"

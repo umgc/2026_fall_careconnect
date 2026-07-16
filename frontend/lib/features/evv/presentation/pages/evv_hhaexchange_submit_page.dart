@@ -147,7 +147,7 @@ class _EvvHhaExchangeSubmitPageState extends State<EvvHhaExchangeSubmitPage> {
       final bytes = Uint8List.fromList(utf8.encode(pretty));
 
       // Use the platform-appropriate file handler (web download vs. native save)
-      final fileHandler = createFileHandler();
+      final fileHandler = createPlatformFileHandler();
       await fileHandler.downloadFile(filename, bytes, 'application/json');
 
       debugPrint('[HHAExchange] Payload download completed successfully');

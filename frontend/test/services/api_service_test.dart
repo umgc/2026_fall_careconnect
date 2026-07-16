@@ -264,8 +264,8 @@ void main() {
       expect(ApiConstants.baseUrl, contains('/v1/api/'));
     });
 
-    test('familyMembers contains /v1/api/family-members', () {
-      expect(ApiConstants.familyMembers, contains('/v1/api/family-members'));
+    test('familyMembers contains /v3/api/family-members', () {
+      expect(ApiConstants.familyMembers, contains('/v3/api/family-members'));
     });
 
     test('patients contains /v1/api/patients', () {
@@ -285,12 +285,12 @@ void main() {
           contains('/v1/api/connection-requests'));
     });
 
-    test('subscriptions contains /v1/api/subscriptions', () {
-      expect(ApiConstants.subscriptions, contains('/v1/api/subscriptions'));
+    test('subscriptions contains /v3/api/subscriptions', () {
+      expect(ApiConstants.subscriptions, contains('/v3/api/subscriptions'));
     });
 
-    test('tasks contains /v1/api/tasks', () {
-      expect(ApiConstants.tasks, contains('/v1/api/tasks'));
+    test('tasks contains /v3/api/tasks', () {
+      expect(ApiConstants.tasks, contains('/v3/api/tasks'));
     });
 
     test('allergies contains /v1/api/allergies', () {

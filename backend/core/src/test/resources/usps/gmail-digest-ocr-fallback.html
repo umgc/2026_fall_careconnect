@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>USPS Informed Delivery Daily Digest</title>
+  <meta name="date" content="Mon, 03 Mar 2025 08:30:00 -0500">
+</head>
+<body>
+  <div class="hero">
+    <h1>Informed Delivery&reg; Daily Digest for Monday, March 3, 2025</h1>
+    <time class="digest-date" datetime="2025-03-03T13:30:00Z">Monday, March 3, 2025</time>
+  </div>
+
+  <section id="mailpieces">
+    <h2>Mailpieces</h2>
+
+    <!-- Mailpiece 1: NO sender/summary text metadata -> OCR must supply sender -->
+    <div class="mailpiece" data-mailpiece-id="ocr-only-1">
+      <img src="data:image/png;base64,QUJDREVG" alt="mail">
+    </div>
+
+    <!-- Mailpiece 2: generic summary only -> OCR must enrich summary -->
+    <div class="mailpiece" data-mailpiece-id="ocr-only-2">
+      <img src="data:image/jpeg;base64,R0lGT0RM" alt="image">
+    </div>
+
+    <!-- Mailpiece 3: full metadata present -> OCR must NOT run -->
+    <div class="mailpiece" data-mailpiece-id="metadata-complete-3">
+      <img src="data:image/png;base64,SEVMTE8x" alt="Image of letter">
+      <p class="sender">Trusted Insurance Co</p>
+      <p class="summary">Your policy documents are enclosed.</p>
+    </div>
+  </section>
+</body>
+</html>
