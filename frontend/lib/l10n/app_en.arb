@@ -13,6 +13,8 @@
   "invoiceAssistant": "Invoice Assistant",
   "evv": "EVV",
   "voiceCommands": "Voice Commands",
+  "askAi": "Ask AI",
+  "dailyBrief": "Daily Brief",
   "calendarAssistant": "Calendar Assistant",
   "medicationManagement": "Medication Management",
   "socialFeed": "Social Feed",
