@@ -35,7 +35,7 @@ public class AdminAnalyticsService {
   private static final Pattern SAFE_BUCKET = Pattern.compile("^[a-zA-Z0-9._-]+$");
 
   private final TelemetryEventRepository telemetryEventRepository;
-  private final Clock clock = Clock.systemUTC();
+  private final Clock clock;
 
   /**
    * Builds an anonymous telemetry summary for the inclusive-exclusive window
@@ -102,9 +102,9 @@ public class AdminAnalyticsService {
         telemetryEventRepository.countEventsNamedBetween("sync_failed", from, to);
 
     final SyncCompletedSumProjection sums = telemetryEventRepository.sumSyncCompletedBetween(from, to);
-    final long attempted = sums != null ? sums.getAttempted() : 0L;
-    final long succeeded = sums != null ? sums.getSucceeded() : 0L;
-    final long failed = sums != null ? sums.getFailed() : 0L;
+    final long attempted = sums != null && sums.getAttempted() != null ? sums.getAttempted().longValue() : 0L;
+    final long succeeded = sums != null && sums.getSucceeded() != null ? sums.getSucceeded().longValue() : 0L;
+    final long failed = sums != null && sums.getFailed() != null ? sums.getFailed().longValue() : 0L;
 
     final long denominator = succeeded + failed;
     final Double successRate =
@@ -127,8 +127,8 @@ public class AdminAnalyticsService {
       if (endpoint == null) {
         continue;
       }
-      sanitized.add(new EndpointErrorCountDTO(endpoint, row.getCount(), 0.0d));
-      totalErrors += row.getCount();
+      sanitized.add(new EndpointErrorCountDTO(endpoint, row.getCount().longValue(), 0.0d));
+      totalErrors += row.getCount().longValue();
     }
 
     if (totalErrors == 0L) {
@@ -154,7 +154,7 @@ public class AdminAnalyticsService {
     if (eventName == null) {
       return null;
     }
-    return new EventNameCountDTO(eventName, projection.getCount());
+    return new EventNameCountDTO(eventName, projection.getCount().longValue());
   }
 
   private FeatureUsageCountDTO toFeatureUsageCount(final FeatureUsageCountProjection projection) {
@@ -162,7 +162,7 @@ public class AdminAnalyticsService {
     if (feature == null) {
       return null;
     }
-    return new FeatureUsageCountDTO(feature, projection.getCount());
+    return new FeatureUsageCountDTO(feature, projection.getCount().longValue());
   }
 
   private void validateRange(final OffsetDateTime from, final OffsetDateTime to) {

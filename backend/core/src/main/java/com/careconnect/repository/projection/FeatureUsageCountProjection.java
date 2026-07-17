@@ -5,5 +5,5 @@ public interface FeatureUsageCountProjection {
 
   String getFeature();
 
-  long getCount();
+  Number getCount();
 }

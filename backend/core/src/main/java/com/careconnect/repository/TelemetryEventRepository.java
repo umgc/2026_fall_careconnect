@@ -92,9 +92,24 @@ public interface TelemetryEventRepository extends JpaRepository<TelemetryEvent, 
       value =
           """
           SELECT
-            COALESCE(SUM((details->>'attempted')::bigint), 0) AS attempted,
-            COALESCE(SUM((details->>'succeeded')::bigint), 0) AS succeeded,
-            COALESCE(SUM((details->>'failed')::bigint), 0) AS failed
+            COALESCE(SUM(
+              CASE
+                WHEN (details->>'attempted') ~ '^[0-9]+$' THEN (details->>'attempted')::bigint
+                ELSE 0
+              END
+            ), 0) AS attempted,
+            COALESCE(SUM(
+              CASE
+                WHEN (details->>'succeeded') ~ '^[0-9]+$' THEN (details->>'succeeded')::bigint
+                ELSE 0
+              END
+            ), 0) AS succeeded,
+            COALESCE(SUM(
+              CASE
+                WHEN (details->>'failed') ~ '^[0-9]+$' THEN (details->>'failed')::bigint
+                ELSE 0
+              END
+            ), 0) AS failed
           FROM telemetry_events
           WHERE event_time >= :from AND event_time < :to
             AND event_name = 'sync_completed'

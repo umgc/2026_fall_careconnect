@@ -13,6 +13,7 @@ import com.careconnect.repository.projection.EndpointErrorCountProjection;
 import com.careconnect.repository.projection.EventNameCountProjection;
 import com.careconnect.repository.projection.FeatureUsageCountProjection;
 import com.careconnect.repository.projection.SyncCompletedSumProjection;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -37,7 +38,7 @@ class AdminAnalyticsServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new AdminAnalyticsService(telemetryEventRepository);
+    service = new AdminAnalyticsService(telemetryEventRepository, Clock.systemUTC());
   }
 
   @Test
@@ -153,7 +154,7 @@ class AdminAnalyticsServiceTest {
       }
 
       @Override
-      public long getCount() {
+      public Number getCount() {
         return count;
       }
     };
@@ -167,7 +168,7 @@ class AdminAnalyticsServiceTest {
       }
 
       @Override
-      public long getCount() {
+      public Number getCount() {
         return count;
       }
     };
@@ -182,7 +183,7 @@ class AdminAnalyticsServiceTest {
       }
 
       @Override
-      public long getCount() {
+      public Number getCount() {
         return count;
       }
     };
@@ -192,17 +193,17 @@ class AdminAnalyticsServiceTest {
       final long attempted, final long succeeded, final long failed) {
     return new SyncCompletedSumProjection() {
       @Override
-      public long getAttempted() {
+      public Number getAttempted() {
         return attempted;
       }
 
       @Override
-      public long getSucceeded() {
+      public Number getSucceeded() {
         return succeeded;
       }
 
       @Override
-      public long getFailed() {
+      public Number getFailed() {
         return failed;
       }
     };

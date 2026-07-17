@@ -5,5 +5,5 @@ public interface EventNameCountProjection {
 
   String getEventName();
 
-  long getCount();
+  Number getCount();
 }

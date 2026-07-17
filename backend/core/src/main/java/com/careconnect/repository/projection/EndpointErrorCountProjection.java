@@ -5,5 +5,5 @@ public interface EndpointErrorCountProjection {
 
   String getEndpoint();
 
-  long getCount();
+  Number getCount();
 }
