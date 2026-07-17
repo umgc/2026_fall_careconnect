@@ -95,6 +95,13 @@ void main() {
       expect(find.byIcon(Icons.videocam), findsWidgets);
     });
 
+    testWidgets('accepts callId parameter', (tester) async {
+      // callId is stored but no longer displayed in the UI.
+      await tester.pumpWidget(_popup(callId: 'abc123456789'));
+      await tester.pump();
+      expect(find.byType(IncomingCallPopup), findsOneWidget);
+    });
+
     testWidgets('shows conference invite header when isConferenceInvite=true',
         (tester) async {
       await tester.pumpWidget(

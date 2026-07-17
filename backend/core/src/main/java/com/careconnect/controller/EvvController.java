@@ -5,7 +5,6 @@ import com.careconnect.repository.PatientRepository;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.Role;
-
 import com.careconnect.dto.evv.*;
 import com.careconnect.model.User;
 import com.careconnect.model.evv.EvvRecord;
@@ -19,15 +18,15 @@ import com.careconnect.service.evv.EvvSubmissionService;
 import com.careconnect.service.evv.HhaExchangeBatchSubmissionService;
 import com.careconnect.service.evv.EvvOfflineSyncService;
 import com.careconnect.util.SecurityUtil;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController @RequestMapping("/v1/api/evv") @RequiredArgsConstructor
 public class EvvController {
@@ -40,27 +39,23 @@ public class EvvController {
     private final AuthorizationService authorizationService;
     private final PatientRepository patientRepository;
 
-    private static final Long DEFAULT_USER_ID = 1L;
-
     @RequirePermission(Permission.CREATE_TASKS)
 
-
     @PostMapping("/records")
-    public ResponseEntity<EvvRecord> create(@RequestBody EvvRecordRequestDto req) throws UnauthorizedException {
+    public ResponseEntity<EvvRecord> create(@Valid @RequestBody EvvRecordRequestDto req) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(evvService.createRecord(req, DEFAULT_USER_ID));
+        return ResponseEntity.ok(evvService.createRecord(req, currentUser.getId()));
     }
 
     @RequirePermission(Permission.CREATE_TASKS)
-
 
     @PostMapping("/records/{id}/review")
     public ResponseEntity<EvvRecord> review(@PathVariable Long id, @RequestBody EvvReviewRequest action) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        var rec = evvService.review(id, action.isApprove(), DEFAULT_USER_ID, action.getComment());
-        if (action.isApprove()) submitter.queueForSubmission(rec, DEFAULT_USER_ID);
+        var rec = evvService.review(id, action.isApprove(), currentUser.getId(), action.getComment());
+        if (action.isApprove()) submitter.queueForSubmission(rec, currentUser.getId());
         return ResponseEntity.ok(rec);
     }
 
@@ -68,35 +63,32 @@ public class EvvController {
 
 
     @PostMapping("/records/offline")
-    public ResponseEntity<EvvRecord> createOfflineRecord(@RequestBody EvvRecordRequestDto req,
+    public ResponseEntity<EvvRecord> createOfflineRecord(@Valid @RequestBody EvvRecordRequestDto req,
                                                          @RequestHeader("X-Device-ID") String deviceId) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(evvService.createOfflineRecord(req, DEFAULT_USER_ID, deviceId));
+        return ResponseEntity.ok(evvService.createOfflineRecord(req, currentUser.getId(), deviceId));
     }
 
     @RequirePermission(Permission.CREATE_TASKS)
-
 
     @PostMapping("/records/correct")
-    public ResponseEntity<EvvRecord> correctRecord(@RequestBody EvvCorrectionRequestDto req) throws UnauthorizedException {
+    public ResponseEntity<EvvRecord> correctRecord(@Valid @RequestBody EvvCorrectionRequestDto req) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(evvService.correctRecord(req, DEFAULT_USER_ID));
+        return ResponseEntity.ok(evvService.correctRecord(req, currentUser.getId()));
     }
 
     @RequirePermission(Permission.CREATE_TASKS)
-
 
     @PostMapping("/records/eor-approve")
     public ResponseEntity<EvvRecord> approveEor(@RequestBody EorApprovalRequestDto req) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(evvService.approveEor(req, DEFAULT_USER_ID));
+        return ResponseEntity.ok(evvService.approveEor(req, currentUser.getId()));
     }
 
     @RequirePermission(Permission.VIEW_TASKS)
-
 
     @GetMapping("/records/search")
     public ResponseEntity<Page<EvvRecord>> searchRecords(EvvSearchRequestDto searchRequest) throws UnauthorizedException {
@@ -139,7 +131,7 @@ public class EvvController {
                                                            @RequestParam(required = false) String comment) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(evvService.approveCorrection(id, DEFAULT_USER_ID, comment));
+        return ResponseEntity.ok(evvService.approveCorrection(id, currentUser.getId(), comment));
     }
 
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
@@ -149,7 +141,7 @@ public class EvvController {
     public ResponseEntity<List<EvvOfflineQueue>> getOfflineQueue() throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(evvService.getOfflineQueue(DEFAULT_USER_ID));
+        return ResponseEntity.ok(evvService.getOfflineQueue(currentUser.getId()));
     }
 
     @RequirePermission(Permission.CREATE_TASKS)
@@ -159,7 +151,7 @@ public class EvvController {
     public ResponseEntity<String> syncOfflineData() throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        offlineSyncService.syncCaregiverOfflineData(DEFAULT_USER_ID);
+        offlineSyncService.syncCaregiverOfflineData(currentUser.getId());
         return ResponseEntity.ok("Offline data sync initiated");
     }
 
@@ -170,7 +162,7 @@ public class EvvController {
     public ResponseEntity<List<EvvOfflineQueue>> getOfflineStatus() throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        return ResponseEntity.ok(offlineSyncService.getOfflineQueueStatus(DEFAULT_USER_ID));
+        return ResponseEntity.ok(offlineSyncService.getOfflineQueueStatus(currentUser.getId()));
     }
 
     /**

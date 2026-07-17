@@ -773,7 +773,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget _buildGlobalVoiceFab() {
     return FloatingActionButton(
       heroTag: 'globalVoiceFab',
-      tooltip: 'Voice commands',
+      tooltip: AppLocalizations.of(context)!.mainscreen_voiceCommandsTooltip,
       onPressed: () => context.push('/voice'),
       child: const Icon(Icons.mic),
     );

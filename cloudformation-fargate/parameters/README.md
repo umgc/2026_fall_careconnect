@@ -44,7 +44,7 @@ These CloudFormation changes must be deployed **in stack order** for Bedrock cha
 | Stack | Change |
 |-------|--------|
 | `02-data.yaml` | RDS parameter group allows `vector` extension (`rds.allowed_extensions`); PostgreSQL 17.6 |
-| `03-platform.yaml` | ECS task role: `bedrock:InvokeModel*` + SSM read on `/careconnect/*` |
+| `03-platform.yaml` | ECS task role: `bedrock:InvokeModel*` + SSM read on `/careconnect/<Environment>/*` + `kms:Decrypt` via SSM |
 | `04-service.yaml` | `SpringProfile=prod`, `CARECONNECT_AI_ENABLED=true`, SendGrid/`FROM_EMAIL`, `ENVIRONMENT` for SSM |
 
 **Existing RDS instances:** updating the data stack attaches a new parameter group; RDS may require a **reboot** before `CREATE EXTENSION vector` succeeds. After deploy, confirm in logs: `Schema patch applied: V2607071920 – enable pgvector extension`.
@@ -144,7 +144,8 @@ before calling the full deploy script.
   idempotent patches in `SchemaPatchRunner` (and/or rely on Hibernate `ddl-auto=update`).
   Files under `backend/core/src/main/resources/db/migration/` remain the canonical SQL reference.
 - **pgvector:** RDS PostgreSQL 15+ with the data stack parameter group; `SchemaPatchRunner` runs `CREATE EXTENSION vector` at startup.
-- **Bedrock IAM:** ECS task role in `03-platform.yaml` grants `bedrock:InvokeModel` for Nova, Claude, Titan Embed v2, and Voxtral (see template for full list).
+- **Indexing outbox claim lease:** `IndexWorker` claim SQL uses PostgreSQL `make_interval(mins => :leaseMinutes)` (available since PostgreSQL 9.6). CareConnect already requires **PostgreSQL 15+** for pgvector; do not run the Ask AI worker against older engines.
+- **Bedrock IAM:** ECS task role in `03-platform.yaml` grants `bedrock:InvokeModel` for Nova, Claude, Titan Embed v1/v2, and Voxtral (see template for full list).
 
 ### Parallel deployment guidance
 

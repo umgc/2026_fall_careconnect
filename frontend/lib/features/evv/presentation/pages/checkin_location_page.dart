@@ -15,7 +15,7 @@ class CheckinLocationPage extends StatefulWidget {
   final int patientId;
   final String serviceType;
   final int? scheduledVisitId;
-  
+
   const CheckinLocationPage({
     super.key,
     required this.patientId,
@@ -37,17 +37,21 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
   // EVV federal compliance: track GPS failures and capture reason
   bool _gpsAttemptFailed = false;
   String? _selectedNoGpsReason;
-  final TextEditingController _manualAddressController = TextEditingController();
+  final TextEditingController _manualAddressController =
+      TextEditingController();
   final bool _showManualEntry = false;
 
   static const List<Map<String, String>> _noGpsReasons = [
-    {'value': 'HOME_VISIT_ADDRESS_USED', 'label': 'Home visit – patient address used'},
-    {'value': 'GPS_SERVICE_DISABLED',   'label': 'GPS/location service disabled'},
-    {'value': 'PERMISSION_DENIED',       'label': 'Location permission not granted'},
-    {'value': 'GPS_TIMEOUT',             'label': 'GPS signal timed out'},
-    {'value': 'INDOOR_LOCATION',         'label': 'Indoors – no GPS signal'},
-    {'value': 'COMMUNITY_VISIT',         'label': 'Community or facility visit'},
-    {'value': 'OTHER',                   'label': 'Other'},
+    {
+      'value': 'HOME_VISIT_ADDRESS_USED',
+      'label': 'Home visit – patient address used'
+    },
+    {'value': 'GPS_SERVICE_DISABLED', 'label': 'GPS/location service disabled'},
+    {'value': 'PERMISSION_DENIED', 'label': 'Location permission not granted'},
+    {'value': 'GPS_TIMEOUT', 'label': 'GPS signal timed out'},
+    {'value': 'INDOOR_LOCATION', 'label': 'Indoors – no GPS signal'},
+    {'value': 'COMMUNITY_VISIT', 'label': 'Community or facility visit'},
+    {'value': 'OTHER', 'label': 'Other'},
   ];
 
   @override
@@ -71,7 +75,7 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
 
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
-      
+
       if (user == null) {
         throw Exception('User not authenticated');
       }
@@ -82,7 +86,7 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        
+
         // Find the specific patient
         for (var json in data) {
           try {
@@ -110,10 +114,11 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
             print('Error parsing patient: $e');
           }
         }
-        
+
         throw Exception('Patient not found');
       } else {
-        throw Exception('Failed to load patient details: ${response.statusCode}');
+        throw Exception(
+            'Failed to load patient details: ${response.statusCode}');
       }
     } catch (e) {
       setState(() {
@@ -136,7 +141,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
           _isGettingLocation = false;
           _gpsAttemptFailed = true;
         });
-        _showLocationError('Location services are disabled. Please enable location services in your device settings.');
+        _showLocationError(
+            'Location services are disabled. Please enable location services in your device settings.');
         return;
       }
 
@@ -149,7 +155,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
             _isGettingLocation = false;
             _gpsAttemptFailed = true;
           });
-          _showLocationError('Location permissions are denied. Please enable location permissions to use GPS location.');
+          _showLocationError(
+              'Location permissions are denied. Please enable location permissions to use GPS location.');
           return;
         }
       }
@@ -159,7 +166,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
           _isGettingLocation = false;
           _gpsAttemptFailed = true;
         });
-        _showLocationError('Location permissions are permanently denied. Please enable location permissions in your device settings.');
+        _showLocationError(
+            'Location permissions are permanently denied. Please enable location permissions in your device settings.');
         return;
       }
 
@@ -174,20 +182,43 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
         _isGettingLocation = false;
       });
 
-      // Navigate to Visit in Progress with GPS coordinates and accuracy
+      //EVV Quality Guardrail (Issue #62) - warn if GPS accuracy exceeds 500m threshold
+      if (position.accuracy > 500) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'GPS accuracy is ${position.accuracy.toStringAsFixed(0)}m which may not meet EVV compliance requirements (threshold: 500m). Consider using patient address instead.'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 6),
+              action: SnackBarAction(
+                label: 'Use Address',
+                textColor: Colors.white,
+                onPressed: _usePatientAddress,
+              ),
+            ),
+          );
+          setState(() {
+            _isGettingLocation = false;
+            _gpsAttemptFailed = true;
+          });
+          return;
+        }
+      }
+
       _navigateToVisitProgress(
         locationType: 'GPS',
         latitude: position.latitude,
         longitude: position.longitude,
         accuracyM: position.accuracy,
       );
-
     } catch (e) {
       setState(() {
         _isGettingLocation = false;
         _gpsAttemptFailed = true;
       });
-      _showLocationError('Failed to get current location: ${e.toString()}. Please select an alternative location option.');
+      _showLocationError(
+          'Failed to get current location: ${e.toString()}. Please select an alternative location option.');
     }
   }
 
@@ -254,12 +285,16 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
                 decoration: const InputDecoration(
                   labelText: 'Reason *',
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                items: _noGpsReasons.map((r) => DropdownMenuItem(
-                  value: r['value'],
-                  child: Text(r['label']!, style: const TextStyle(fontSize: 13)),
-                )).toList(),
+                items: _noGpsReasons
+                    .map((r) => DropdownMenuItem(
+                          value: r['value'],
+                          child: Text(r['label']!,
+                              style: const TextStyle(fontSize: 13)),
+                        ))
+                    .toList(),
                 onChanged: (v) => setDialogState(() => selected = v),
               ),
             ],
@@ -379,15 +414,15 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    
+
     if (_error != null) {
       return _buildErrorState();
     }
-    
+
     if (_selectedPatient == null) {
       return _buildPatientNotFoundState();
     }
-    
+
     return _buildLocationSelection();
   }
 
@@ -557,7 +592,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.edit_location_alt, color: Colors.orange[600]!, size: 24),
+                    Icon(Icons.edit_location_alt,
+                        color: Colors.orange[600]!, size: 24),
                     const SizedBox(width: 12),
                     Text(
                       'Enter Manual Location',
@@ -580,7 +616,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
                   decoration: InputDecoration(
                     labelText: 'Visit Address',
                     hintText: '123 Main St, City, State 12345',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                     prefixIcon: const Icon(Icons.home_work),
                   ),
                   maxLines: 2,
@@ -590,7 +627,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
                   initialValue: _selectedNoGpsReason,
                   decoration: InputDecoration(
                     labelText: 'Reason GPS Not Used',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                     prefixIcon: const Icon(Icons.info_outline),
                   ),
                   items: _noGpsReasons
@@ -599,7 +637,8 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
                             child: Text(r['label']!),
                           ))
                       .toList(),
-                  onChanged: (val) => setState(() => _selectedNoGpsReason = val),
+                  onChanged: (val) =>
+                      setState(() => _selectedNoGpsReason = val),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
