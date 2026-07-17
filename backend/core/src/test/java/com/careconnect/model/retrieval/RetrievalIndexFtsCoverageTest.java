@@ -69,6 +69,7 @@ class RetrievalIndexFtsCoverageTest {
         assertThat(source).contains("search_vector @@ plainto_tsquery");
         assertThat(source).contains("record_type IN (:recordTypes)");
         assertThat(source).contains("countMissingSearchVector");
+        assertThat(source).contains("countMissingEmbedding");
         // Must not SELECT * (entity omits search_vector / embedding).
         assertThat(source).doesNotContain("SELECT * FROM retrieval_index_chunk");
     }
