@@ -950,21 +950,10 @@ public class CallRecordingService {
     }
 
     final CallRecording rec = opt.get();
-    // READY rows are already reconciled by the background cleaner. Re-listing S3 + raw cleanup
-    // on every status poll made this endpoint ~15–20s and Flutter's 15s client timed out to null
-    // (no Call Recording card / no sentiment clips). Only refresh while still stitching.
-    if (!CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())) {
-      try {
-        refreshConcatenationStatus(rec);
-      } catch (Exception e) {
-        if (log.isWarnEnabled()) {
-          log.warn(
-              "Concatenation refresh failed for callId={}; returning DB recording metadata: {}",
-              callId,
-              e.getMessage());
-        }
-      }
-    }
+
+    // Status polls must stay cheap: skip raw S3 cleanup (bucket-root discovery). The scheduled
+    // reconciler and explicit cleanup endpoint still run full refresh+cleanup.
+    refreshConcatenationStatus(rec, false);
     final Map<String, Object> result = buildRecordingMap(rec);
 
     // Enrich with live pipeline status if still active and AWS available
@@ -1033,7 +1022,7 @@ public class CallRecordingService {
           "playbackReady", false,
           "message", "System capture is retained for transcription only");
     }
-    refreshConcatenationStatus(rec);
+    refreshConcatenationStatus(rec, false);
     if (rec.getS3Bucket() == null || rec.getS3Prefix() == null) {
       return Map.of("status", "ERROR", "message", "Recording has no S3 location stored");
     }
@@ -1044,7 +1033,8 @@ public class CallRecordingService {
     }
 
     try {
-      final String videoKey = resolvePlayableVideoKey(rec);
+      // Already refreshed above — avoid a second refresh (and raw cleanup) on this request path.
+      final String videoKey = resolvePlayableVideoKeyWithoutRefresh(rec);
       if (videoKey == null) {
         final Map<String, Object> processing = new HashMap<>();
         processing.put("callId", callId);
@@ -1181,8 +1171,13 @@ public class CallRecordingService {
     m.put("concatenationStatus", rec.getConcatenationStatus());
     m.put("transcriptionStatus", rec.getTranscriptionStatus());
     // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
-    // Do not hit S3 here — metadata reads must stay fast (see getRecordingStatus).
-    m.put("playbackReady", isPlaybackReadyFromMetadata(rec));
+    // Trust concatenationStatus=READY for playbackReady so status GET does not need another S3
+    // round-trip after refresh. Playback-url still resolves the key in S3 before signing.
+    m.put(
+        "playbackReady",
+        rec.getInitiatedByUserId() != null
+            && (CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())
+                || resolvePlayableVideoKeyWithoutRefresh(rec) != null));
     m.put("initiatedByUserId", rec.getInitiatedByUserId());
     m.put("ownerUserId", rec.getOwnerUserId());
     m.put("consentedAt", rec.getConsentedAt());
@@ -1289,7 +1284,20 @@ public class CallRecordingService {
   }
 
   private void refreshConcatenationStatus(final CallRecording rec) {
+    refreshConcatenationStatus(rec, true);
+  }
+
+  /**
+   * @param runRawCleanup when false (status/playback polls), skip expensive raw-artifact S3 cleanup
+   *     that lists the bucket root. Scheduled reconcile and explicit cleanup keep runRawCleanup=true.
+   */
+  private void refreshConcatenationStatus(final CallRecording rec, final boolean runRawCleanup) {
     if (rec == null || rec.getS3Bucket() == null || rec.getS3Prefix() == null) {
+      return;
+    }
+
+    // Status polls for recordings already marked READY do not need Chime/S3 discovery.
+    if (!runRawCleanup && CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())) {
       return;
     }
 
@@ -1305,7 +1313,9 @@ public class CallRecordingService {
               "Concatenation pipeline completed but no stitched video was found")) {
         nextErrorMessage = null;
       }
-      cleanupRawArtifactsAfterConcatenation(rec, playableKey);
+      if (runRawCleanup) {
+        cleanupRawArtifactsAfterConcatenation(rec, playableKey);
+      }
       // Trigger post-call transcription for all recordings.
       // For system recordings (initiatedByUserId == null) the service also deletes the
       // concatenated file after transcription; user recordings are kept for playback.

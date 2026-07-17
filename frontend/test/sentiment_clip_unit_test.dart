@@ -164,6 +164,15 @@ void main() {
   });
 
   group('SENT-CLIP-001 recording status + tap policy', () {
+    test('isUserInitiatedCallRecording treats numeric and non-empty string ids', () {
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': 42}), isTrue);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': '2'}), isTrue);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': null}), isFalse);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': ''}), isFalse);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': 'null'}), isFalse);
+      expect(isUserInitiatedCallRecording(null), isFalse);
+    });
+
     test('status messages for available / processing / unavailable', () {
       expect(
         sentimentClipRecordingStatusMessage({
