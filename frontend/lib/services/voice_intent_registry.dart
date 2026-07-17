@@ -99,9 +99,25 @@ void registerDefaultVoiceIntents() {
 }
 
 const _defaultIntents = [
+  // --- Generic navigate (AI returns destination dynamically) ---
+  IntentRegistration(
+    intentName: 'navigate',
+    displayLabel: 'Navigate',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+  ),
+
+  // --- Core navigation (Patient & Caregiver) ---
   IntentRegistration(
     intentName: 'navigate_home',
     displayLabel: 'Home',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/dashboard',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_dashboard',
+    displayLabel: 'Dashboard',
     riskLevel: IntentRiskLevel.low,
     requiresConfirmation: true,
     routeDestination: '/dashboard',
@@ -114,6 +130,36 @@ const _defaultIntents = [
     routeDestination: '/calendar',
   ),
   IntentRegistration(
+    intentName: 'navigate_messages',
+    displayLabel: 'Messages',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/dashboard?tab=messages',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_profile',
+    displayLabel: 'Profile',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/profile',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_settings',
+    displayLabel: 'Settings',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/settings',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_menu',
+    displayLabel: 'Menu',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/dashboard?tab=menu',
+  ),
+
+  // --- Health & Wellness ---
+  IntentRegistration(
     intentName: 'navigate_symptoms',
     displayLabel: 'Symptom Tracker',
     riskLevel: IntentRiskLevel.low,
@@ -121,11 +167,151 @@ const _defaultIntents = [
     routeDestination: '/symptoms',
   ),
   IntentRegistration(
-    intentName: 'navigate',
-    displayLabel: 'Navigate',
+    intentName: 'navigate_medication',
+    displayLabel: 'Medication Tracker',
     riskLevel: IntentRiskLevel.low,
     requiresConfirmation: true,
+    routeDestination: '/medication',
   ),
+  IntentRegistration(
+    intentName: 'navigate_virtual_checkin',
+    displayLabel: 'Virtual Check-In',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/virtual-checkin',
+  ),
+
+  // --- Integrations & Devices ---
+  IntentRegistration(
+    intentName: 'navigate_wearables',
+    displayLabel: 'Wearables',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/wearables',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_home_monitoring',
+    displayLabel: 'Home Monitoring',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/home-monitoring',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_smart_devices',
+    displayLabel: 'Smart Devices',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/smart-devices',
+  ),
+
+  // --- Social & Communication ---
+  IntentRegistration(
+    intentName: 'navigate_social_feed',
+    displayLabel: 'Social Feed',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/social-feed',
+  ),
+
+  // --- Caregiver-specific ---
+  IntentRegistration(
+    intentName: 'navigate_patient_list',
+    displayLabel: 'Patient List',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/tasks',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_evv',
+    displayLabel: 'EVV Dashboard',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/evv',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_notetaker',
+    displayLabel: 'Medical Notetaker',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/notetaker-search',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_invoice',
+    displayLabel: 'Invoice Assistant',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/invoice-assistant',
+  ),
+
+  // --- Files & Documents ---
+  IntentRegistration(
+    intentName: 'navigate_files',
+    displayLabel: 'File Management',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/file-management',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_informed_delivery',
+    displayLabel: 'Informed Delivery',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/informed-delivery',
+  ),
+
+  // --- Gamification ---
+  IntentRegistration(
+    intentName: 'navigate_gamification',
+    displayLabel: 'Gamification',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/gamification',
+  ),
+
+  // --- Configuration & AI ---
+  IntentRegistration(
+    intentName: 'navigate_ai_config',
+    displayLabel: 'AI Configuration',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/ai-configuration',
+  ),
+  IntentRegistration(
+    intentName: 'navigate_notetaker_config',
+    displayLabel: 'Notetaker Configuration',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/notetaker-configuration',
+  ),
+
+  // --- Payments & Subscription ---
+  IntentRegistration(
+    intentName: 'navigate_subscription',
+    displayLabel: 'Subscription',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/subscription',
+  ),
+
+  // --- Search ---
+  IntentRegistration(
+    intentName: 'navigate_search',
+    displayLabel: 'Search',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: true,
+    routeDestination: '/search',
+  ),
+
+  // --- Voice ---
+  IntentRegistration(
+    intentName: 'navigate_voice',
+    displayLabel: 'Voice Commands',
+    riskLevel: IntentRiskLevel.low,
+    requiresConfirmation: false,
+    routeDestination: '/voice',
+  ),
+
+  // --- Action intents (non-navigation, require confirmation) ---
   IntentRegistration(
     intentName: 'call',
     displayLabel: 'Call Contact',
@@ -136,6 +322,42 @@ const _defaultIntents = [
     intentName: 'schedule',
     displayLabel: 'Schedule Appointment',
     riskLevel: IntentRiskLevel.high,
+    requiresConfirmation: true,
+  ),
+  IntentRegistration(
+    intentName: 'sos',
+    displayLabel: 'SOS Emergency Alert',
+    riskLevel: IntentRiskLevel.high,
+    requiresConfirmation: true,
+  ),
+  IntentRegistration(
+    intentName: 'start_video_call',
+    displayLabel: 'Start Video Call',
+    riskLevel: IntentRiskLevel.high,
+    requiresConfirmation: true,
+  ),
+  IntentRegistration(
+    intentName: 'log_symptom',
+    displayLabel: 'Log Symptom',
+    riskLevel: IntentRiskLevel.medium,
+    requiresConfirmation: true,
+  ),
+  IntentRegistration(
+    intentName: 'log_medication',
+    displayLabel: 'Log Medication',
+    riskLevel: IntentRiskLevel.medium,
+    requiresConfirmation: true,
+  ),
+  IntentRegistration(
+    intentName: 'send_message',
+    displayLabel: 'Send Message',
+    riskLevel: IntentRiskLevel.medium,
+    requiresConfirmation: true,
+  ),
+  IntentRegistration(
+    intentName: 'check_in',
+    displayLabel: 'Start Check-In',
+    riskLevel: IntentRiskLevel.medium,
     requiresConfirmation: true,
   ),
 ];

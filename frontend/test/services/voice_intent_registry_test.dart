@@ -113,6 +113,51 @@ void main() {
       expect(VoiceIntentRegistry().lookup('schedule'), isNotNull);
     });
 
+    test('default registry covers all major app features', () {
+      registerDefaultVoiceIntents();
+
+      // Core navigation
+      expect(VoiceIntentRegistry().lookup('navigate_dashboard'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_messages'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_profile'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_settings'), isNotNull);
+
+      // Health
+      expect(VoiceIntentRegistry().lookup('navigate_medication'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_virtual_checkin'), isNotNull);
+
+      // Integrations
+      expect(VoiceIntentRegistry().lookup('navigate_wearables'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_smart_devices'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_home_monitoring'), isNotNull);
+
+      // Caregiver
+      expect(VoiceIntentRegistry().lookup('navigate_patient_list'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_evv'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_notetaker'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_invoice'), isNotNull);
+
+      // Files & docs
+      expect(VoiceIntentRegistry().lookup('navigate_files'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_informed_delivery'), isNotNull);
+
+      // Other features
+      expect(VoiceIntentRegistry().lookup('navigate_gamification'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_social_feed'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_search'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_voice'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_subscription'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('navigate_ai_config'), isNotNull);
+
+      // Action intents
+      expect(VoiceIntentRegistry().lookup('sos'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('start_video_call'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('log_symptom'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('log_medication'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('send_message'), isNotNull);
+      expect(VoiceIntentRegistry().lookup('check_in'), isNotNull);
+    });
+
     test('default navigate intents have correct routes', () {
       registerDefaultVoiceIntents();
 
@@ -128,6 +173,18 @@ void main() {
         VoiceIntentRegistry().lookup('navigate_symptoms')!.routeDestination,
         '/symptoms',
       );
+      expect(
+        VoiceIntentRegistry().lookup('navigate_messages')!.routeDestination,
+        '/dashboard?tab=messages',
+      );
+      expect(
+        VoiceIntentRegistry().lookup('navigate_medication')!.routeDestination,
+        '/medication',
+      );
+      expect(
+        VoiceIntentRegistry().lookup('navigate_evv')!.routeDestination,
+        '/evv',
+      );
     });
 
     test('default navigate intents are low risk with confirmation', () {
@@ -138,7 +195,7 @@ void main() {
       expect(home.requiresConfirmation, isTrue);
     });
 
-    test('call and schedule intents are high risk with confirmation', () {
+    test('action intents are high or medium risk with confirmation', () {
       registerDefaultVoiceIntents();
 
       final call = VoiceIntentRegistry().lookup('call')!;
@@ -148,6 +205,14 @@ void main() {
       final schedule = VoiceIntentRegistry().lookup('schedule')!;
       expect(schedule.riskLevel, IntentRiskLevel.high);
       expect(schedule.requiresConfirmation, isTrue);
+
+      final sos = VoiceIntentRegistry().lookup('sos')!;
+      expect(sos.riskLevel, IntentRiskLevel.high);
+      expect(sos.requiresConfirmation, isTrue);
+
+      final logSymptom = VoiceIntentRegistry().lookup('log_symptom')!;
+      expect(logSymptom.riskLevel, IntentRiskLevel.medium);
+      expect(logSymptom.requiresConfirmation, isTrue);
     });
 
     test('registerDefaultVoiceIntents is idempotent', () {
