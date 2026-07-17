@@ -25,6 +25,25 @@ public class MailpieceChunker {
             final String sourceKey,
             final LocalDate digestDate,
             final String consentScope) {
+        return chunk(sender, summary, ocrText, contentHash, sourceKey, digestDate, consentScope,
+                null, null, null, null);
+    }
+
+    public List<IndexingChunkDraft> chunk(
+            final String sender,
+            final String summary,
+            final String ocrText,
+            final String contentHash,
+            final String sourceKey,
+            final LocalDate digestDate,
+            final String consentScope,
+            final String importanceLevel,
+            final String importanceCategory,
+            final String classificationMethod,
+            final String importanceReasoning) {
+        final List<IndexingChunkDraft> drafts = new ArrayList<>(1);
+        final String chunkText = buildChunkText(
+                sender, summary, ocrText, importanceLevel, importanceCategory, importanceReasoning);
         final List<IndexingChunkDraft> drafts = new ArrayList<>(1);
         final String chunkText = buildChunkText(sender, summary, ocrText);
         if (chunkText.isBlank()) {
@@ -45,6 +64,23 @@ public class MailpieceChunker {
         if (sender != null && !sender.isBlank()) {
             metadata.put("sender", sender);
         }
+        if (importanceLevel != null && !importanceLevel.isBlank()) {
+            metadata.put("importanceLevel", importanceLevel);
+        }
+        if (importanceCategory != null && !importanceCategory.isBlank()) {
+            metadata.put("importanceCategory", importanceCategory);
+        }
+        if (classificationMethod != null && !classificationMethod.isBlank()) {
+            metadata.put("classificationMethod", classificationMethod);
+        }
+        if (importanceReasoning != null && !importanceReasoning.isBlank()) {
+            metadata.put("importanceReasoning", importanceReasoning);
+        }
+        final String importanceFingerprint = importanceFingerprint(
+                importanceLevel, importanceCategory, classificationMethod, importanceReasoning);
+        if (importanceFingerprint != null) {
+            metadata.put("importanceFingerprint", importanceFingerprint);
+        }
 
         drafts.add(new IndexingChunkDraft(
                 RetrievalRecordType.USPS_MAIL,
@@ -54,6 +90,40 @@ public class MailpieceChunker {
         return drafts;
     }
 
+    /**
+     * Stable classification fingerprint stored in chunk metadata so ingest can
+     * distinguish content-only hashes from classification backfills.
+     */
+    public static String importanceFingerprint(
+            final String importanceLevel,
+            final String importanceCategory,
+            final String classificationMethod,
+            final String importanceReasoning) {
+        if ((importanceLevel == null || importanceLevel.isBlank())
+                && (importanceCategory == null || importanceCategory.isBlank())
+                && (classificationMethod == null || classificationMethod.isBlank())
+                && (importanceReasoning == null || importanceReasoning.isBlank())) {
+            return null;
+        }
+        return String.join(
+                "|",
+                nullToEmpty(importanceLevel),
+                nullToEmpty(importanceCategory),
+                nullToEmpty(classificationMethod),
+                nullToEmpty(importanceReasoning));
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    String buildChunkText(
+            final String sender,
+            final String summary,
+            final String ocrText,
+            final String importanceLevel,
+            final String importanceCategory,
+            final String importanceReasoning) {
     String buildChunkText(final String sender, final String summary, final String ocrText) {
         final StringBuilder sb = new StringBuilder();
         if (sender != null && !sender.isBlank()) {
@@ -71,6 +141,27 @@ public class MailpieceChunker {
             }
             sb.append(ocrText.trim());
         }
+        if (importanceLevel != null && !importanceLevel.isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append('\n');
+            }
+            sb.append("Importance: ").append(importanceLevel.trim());
+            if (importanceCategory != null && !importanceCategory.isBlank()) {
+                sb.append(" (").append(importanceCategory.trim()).append(')');
+            }
+        }
+        if (importanceReasoning != null && !importanceReasoning.isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append('\n');
+            }
+            sb.append("Reasoning: ").append(importanceReasoning.trim());
+        }
+        return sb.toString().trim();
+    }
+
+    String buildChunkText(final String sender, final String summary, final String ocrText) {
+        return buildChunkText(sender, summary, ocrText, null, null, null);
+    }
         return sb.toString().trim();
     }
 }

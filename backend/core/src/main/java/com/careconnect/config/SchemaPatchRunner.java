@@ -197,6 +197,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
     }
 
     /**
+     * Tasks 3.14.5 / 3.14.6 — canonical USPS mailpiece table + importance columns.
+     * Mirrors V2607142100 and V2607142130. Prod uses SchemaPatchRunner (Flyway off);
      * Task 3.14.5 (#122) — canonical USPS mailpiece table.
      * Mirrors db/migration V2607142100. Prod uses SchemaPatchRunner (Flyway off);
      * entity stores bare Long patientId (no @ManyToOne), so FK must be applied here.
@@ -244,6 +246,28 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  ON usps_mailpiece (patient_id, digest_date);" +
             "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_content_hash " +
             "  ON usps_mailpiece (patient_id, content_hash)"
+        );
+        applyPatch(
+            "V2607142130a – usps_mailpiece importance classification columns",
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_level VARCHAR(16) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_confidence NUMERIC(3, 2) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS classification_method VARCHAR(32) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS classification_engine VARCHAR(128) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_reasoning TEXT NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_category VARCHAR(40) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ NULL"
+        );
+        applyPatch(
+            "V2607142130b – usps_mailpiece importance index",
+            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance " +
+            "  ON usps_mailpiece (patient_id, importance_level, digest_date)"
         );
     }
 

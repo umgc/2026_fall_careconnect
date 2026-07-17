@@ -9,6 +9,9 @@ import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
+import com.careconnect.service.mail.MailpieceImportanceAiAssist;
+import com.careconnect.service.mail.MailpieceImportanceClassifier;
+import com.careconnect.service.mail.MailpieceImportanceRuleEngine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+
+import com.careconnect.ai.AIServiceFactory;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -42,10 +49,17 @@ class UspsMailpiecePersistenceServiceTest {
 
     @BeforeEach
     void setUp() {
+        @SuppressWarnings("unchecked")
+        final ObjectProvider<AIServiceFactory> aiFactoryProvider = org.mockito.Mockito.mock(ObjectProvider.class);
+        final MailpieceImportanceClassifier classifier = new MailpieceImportanceClassifier(
+                new MailpieceImportanceRuleEngine(),
+                new MailpieceImportanceAiAssist(
+                        aiFactoryProvider, new ObjectMapper(), "test-model", false));
         service = new UspsMailpiecePersistenceService(
                 patientRepository,
                 mailpieceRepository,
                 new MailpieceNormalizer(),
+                classifier,
                 indexingEventEmitter);
     }
 
@@ -95,6 +109,12 @@ class UspsMailpiecePersistenceServiceTest {
         assertThat(payloadCaptor.getValue().patientId()).isEqualTo(42L);
         assertThat(payloadCaptor.getValue().mailpieceId()).isNotNull();
         assertThat(payloadCaptor.getValue().contentHash()).isNotBlank();
+
+        final ArgumentCaptor<UspsMailpiece> savedCaptor = ArgumentCaptor.forClass(UspsMailpiece.class);
+        verify(mailpieceRepository).save(savedCaptor.capture());
+        assertThat(savedCaptor.getValue().getImportanceLevel()).isNotBlank();
+        assertThat(savedCaptor.getValue().getImportanceReasoning()).isNotBlank();
+        assertThat(savedCaptor.getValue().getClassificationMethod()).isNotBlank();
     }
 
     @Test
@@ -113,6 +133,9 @@ class UspsMailpiecePersistenceServiceTest {
         existing.setPatientId(42L);
         existing.setSourceKey(normalized.sourceKey());
         existing.setContentHash(normalized.contentHash());
+        existing.setImportanceLevel("MODERATE");
+        existing.setImportanceReasoning("Prior classification");
+        existing.setClassificationMethod("RULES");
         when(mailpieceRepository.findByPatientIdAndSourceKey(42L, normalized.sourceKey()))
                 .thenReturn(Optional.of(existing));
         when(mailpieceRepository.save(any(UspsMailpiece.class))).thenAnswer(inv -> inv.getArgument(0));

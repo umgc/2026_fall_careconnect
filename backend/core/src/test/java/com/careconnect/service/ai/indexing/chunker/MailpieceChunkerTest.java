@@ -51,4 +51,21 @@ class MailpieceChunkerTest {
 
         assertThat(drafts.get(0).chunkText()).contains("Regional Medical Center");
     }
+
+    @Test
+    @DisplayName("chunk includes importance level and reasoning in text and metadata")
+    void chunk_includesImportance() {
+        final List<IndexingChunkDraft> drafts = chunker.chunk(
+                "Hospital", "Lab results", null, "h", "k",
+                LocalDate.of(2025, 1, 1), "on_consent",
+                "HIGH", "MEDICAL", "RULES", "Matched pharmacy keyword.");
+
+        assertThat(drafts.get(0).chunkText()).contains("Importance: HIGH (MEDICAL)");
+        assertThat(drafts.get(0).chunkText()).contains("Reasoning: Matched pharmacy keyword.");
+        assertThat(drafts.get(0).metadata()).containsEntry("importanceLevel", "HIGH");
+        assertThat(drafts.get(0).metadata()).containsEntry("classificationMethod", "RULES");
+        assertThat(drafts.get(0).metadata()).containsEntry(
+                "importanceFingerprint",
+                "HIGH|MEDICAL|RULES|Matched pharmacy keyword.");
+    }
 }

@@ -8,12 +8,16 @@ import com.careconnect.model.USPSDigest;
 import com.careconnect.model.UspsMailpiece;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
+import com.careconnect.service.mail.MailpieceImportanceClassifier;
+import com.careconnect.service.mail.MailpieceImportanceResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
+ * Normalizes, upserts, classifies importance, and queues indexing for USPS
+ * mailpieces (Tasks 3.14.5 / #122, 3.14.6 / #123).
  * Normalizes, upserts, and queues indexing for USPS mailpieces (Task 3.14.5 / #122).
  */
 @Service
@@ -24,16 +28,19 @@ public class UspsMailpiecePersistenceService {
     private final PatientRepository patientRepository;
     private final UspsMailpieceRepository mailpieceRepository;
     private final MailpieceNormalizer normalizer;
+    private final MailpieceImportanceClassifier importanceClassifier;
     private final IndexingEventEmitter indexingEventEmitter;
 
     public UspsMailpiecePersistenceService(
             final PatientRepository patientRepository,
             final UspsMailpieceRepository mailpieceRepository,
             final MailpieceNormalizer normalizer,
+            final MailpieceImportanceClassifier importanceClassifier,
             final IndexingEventEmitter indexingEventEmitter) {
         this.patientRepository = patientRepository;
         this.mailpieceRepository = mailpieceRepository;
         this.normalizer = normalizer;
+        this.importanceClassifier = importanceClassifier;
         this.indexingEventEmitter = indexingEventEmitter;
     }
 
@@ -69,6 +76,19 @@ public class UspsMailpiecePersistenceService {
             final boolean hashChanged = isNew
                     || entity.getContentHash() == null
                     || !entity.getContentHash().equals(normalized.contentHash());
+            final boolean needsClassification = hashChanged
+                    || entity.getImportanceLevel() == null
+                    || entity.getImportanceLevel().isBlank();
+
+            applyNormalized(entity, patientId, userId, normalized);
+            if (needsClassification && importanceClassifier != null) {
+                applyImportance(entity, importanceClassifier.classify(
+                        entity.getSender(), entity.getSummary(), entity.getOcrText()));
+            }
+            final UspsMailpiece saved = mailpieceRepository.save(entity);
+            upserted++;
+
+            if (hashChanged || needsClassification) {
 
             applyNormalized(entity, patientId, userId, normalized);
             final UspsMailpiece saved = mailpieceRepository.save(entity);
@@ -120,5 +140,20 @@ public class UspsMailpiecePersistenceService {
         entity.setDigestDate(normalized.digestDate());
         entity.setContentHash(normalized.contentHash());
         entity.setConsentScope(normalized.consentScope());
+    }
+
+    private static void applyImportance(
+            final UspsMailpiece entity,
+            final MailpieceImportanceResult result) {
+        if (result == null) {
+            return;
+        }
+        entity.setImportanceLevel(result.level() == null ? null : result.level().name());
+        entity.setImportanceConfidence(result.confidence());
+        entity.setClassificationMethod(result.method());
+        entity.setClassificationEngine(result.engine());
+        entity.setImportanceReasoning(result.reasoning());
+        entity.setImportanceCategory(result.category());
+        entity.setClassifiedAt(result.classifiedAt());
     }
 }

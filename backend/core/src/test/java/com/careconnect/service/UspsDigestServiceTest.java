@@ -93,6 +93,7 @@ class USPSDigestServiceTest {
                 new StubGmailParser(),
                 new OutlookParser(),
                 new TokenCryptor("test-secret-key"),
+                noOpMailpiecePersistence()
                 persistence
         );
 
@@ -755,6 +756,12 @@ class USPSDigestServiceTest {
     }
 
     private static UspsMailpiecePersistenceService noOpMailpiecePersistence() {
+        return new UspsMailpiecePersistenceService(null, null, new MailpieceNormalizer(), null, null) {
+            @Override
+            public int persistAndIndex(String userId, USPSDigest digest) {
+                return 0;
+            }
+        };
         return new RecordingMailpiecePersistence();
     }
 
