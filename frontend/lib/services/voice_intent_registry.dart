@@ -6,38 +6,56 @@ import 'package:flutter/foundation.dart';
 /// - [high]: detailed modal confirmation required before execution
 enum IntentRiskLevel { low, medium, high }
 
-/// A single registered voice intent with metadata and execution info.
-class IntentRegistration {
+/// Defines a voice intent (verb) with metadata about how it should be handled.
+class IntentDefinition {
   final String intentName;
   final String displayLabel;
   final IntentRiskLevel riskLevel;
   final bool requiresConfirmation;
-  final String? routeDestination;
+  final String? entityKey;
   final Future<void> Function(Map<String, String> entities)? handler;
 
-  const IntentRegistration({
+  const IntentDefinition({
     required this.intentName,
     required this.displayLabel,
     this.riskLevel = IntentRiskLevel.low,
     this.requiresConfirmation = false,
-    this.routeDestination,
+    this.entityKey,
     this.handler,
   });
 }
 
-/// App-wide singleton registry for voice intents.
+/// A navigation destination that can be reached via the "navigate" intent.
+class NavigationDestination {
+  final String name;
+  final String route;
+  final String displayLabel;
+
+  const NavigationDestination({
+    required this.name,
+    required this.route,
+    required this.displayLabel,
+  });
+}
+
+/// App-wide singleton registry for voice intents using an intent + entity model.
 ///
-/// Any team can register intents at startup or lazily. The voice command page
-/// resolves recognized intents through this registry rather than hardcoded
-/// switch statements.
+/// Intents are verbs (navigate, call, schedule). Entities are nouns resolved
+/// per-intent (destination for navigate, contact for call, etc.).
 ///
 /// Usage:
 /// ```dart
-/// VoiceIntentRegistry().register(IntentRegistration(
-///   intentName: 'navigate_home',
-///   displayLabel: 'Home',
-///   routeDestination: '/dashboard',
+/// final registry = VoiceIntentRegistry();
+/// registry.registerIntent(IntentDefinition(
+///   intentName: 'navigate',
+///   displayLabel: 'Navigate',
+///   entityKey: 'destination',
 ///   requiresConfirmation: true,
+/// ));
+/// registry.registerDestination(NavigationDestination(
+///   name: 'home',
+///   route: '/dashboard',
+///   displayLabel: 'Home',
 /// ));
 /// ```
 class VoiceIntentRegistry {
@@ -45,319 +63,217 @@ class VoiceIntentRegistry {
   factory VoiceIntentRegistry() => _instance;
   VoiceIntentRegistry._internal();
 
-  final Map<String, IntentRegistration> _registry = {};
+  final Map<String, IntentDefinition> _intents = {};
+  final Map<String, NavigationDestination> _destinations = {};
 
-  /// Register a single intent. Overwrites if the same intentName exists.
-  void register(IntentRegistration intent) {
-    _registry[intent.intentName] = intent;
+  /// Register an intent definition (verb).
+  void registerIntent(IntentDefinition intent) {
+    _intents[intent.intentName] = intent;
   }
 
-  /// Register multiple intents at once.
-  void registerAll(List<IntentRegistration> intents) {
+  /// Register multiple intent definitions at once.
+  void registerIntents(List<IntentDefinition> intents) {
     for (final intent in intents) {
-      _registry[intent.intentName] = intent;
+      _intents[intent.intentName] = intent;
     }
   }
 
-  /// Look up an intent by name. Returns null if not registered.
-  IntentRegistration? lookup(String intentName) {
-    return _registry[intentName];
+  /// Register a navigation destination (entity for the "navigate" intent).
+  void registerDestination(NavigationDestination destination) {
+    _destinations[destination.name.toLowerCase()] = destination;
   }
 
-  /// Look up an intent by its route destination. Returns null if none match.
-  IntentRegistration? lookupByRoute(String route) {
-    for (final entry in _registry.values) {
-      if (entry.routeDestination == route) return entry;
+  /// Register multiple navigation destinations at once.
+  void registerDestinations(List<NavigationDestination> destinations) {
+    for (final dest in destinations) {
+      _destinations[dest.name.toLowerCase()] = dest;
+    }
+  }
+
+  /// Resolve an intent by name. Returns null if not registered.
+  IntentDefinition? resolveIntent(String intentName) {
+    return _intents[intentName];
+  }
+
+  /// Resolve a navigation destination by entity value.
+  /// Tries exact match first, then checks aliases.
+  NavigationDestination? resolveDestination(String entityValue) {
+    final key = entityValue.toLowerCase().trim();
+    return _destinations[key];
+  }
+
+  /// Resolve a navigation destination by its route path.
+  NavigationDestination? resolveDestinationByRoute(String route) {
+    for (final dest in _destinations.values) {
+      if (dest.route == route) return dest;
     }
     return null;
   }
 
-  /// All currently registered intents.
-  List<IntentRegistration> get allIntents =>
-      List.unmodifiable(_registry.values);
+  /// All registered intent definitions.
+  List<IntentDefinition> get allIntents =>
+      List.unmodifiable(_intents.values);
 
-  /// Whether the registry has any intents registered.
-  bool get isEmpty => _registry.isEmpty;
+  /// All registered navigation destinations.
+  List<NavigationDestination> get allDestinations =>
+      List.unmodifiable(_destinations.values);
 
-  /// Number of registered intents.
-  int get length => _registry.length;
+  /// Whether any intents are registered.
+  bool get isEmpty => _intents.isEmpty && _destinations.isEmpty;
 
-  /// Clear registry. Exposed for test isolation.
+  /// Total registered intents.
+  int get intentCount => _intents.length;
+
+  /// Total registered destinations.
+  int get destinationCount => _destinations.length;
+
+  /// Clear all registrations. Exposed for test isolation.
   @visibleForTesting
   void clear() {
-    _registry.clear();
+    _intents.clear();
+    _destinations.clear();
   }
 }
 
-/// Registers the default set of voice intents for the app.
+/// Registers all default intents and destinations for the app.
 /// Call once at app startup or lazily on first voice page open.
 void registerDefaultVoiceIntents() {
   final registry = VoiceIntentRegistry();
-  if (registry.isEmpty) {
-    registry.registerAll(_defaultIntents);
-  }
+  if (!registry.isEmpty) return;
+
+  registry.registerIntents(_defaultIntents);
+  registry.registerDestinations(_defaultDestinations);
 }
 
+// --- Intent definitions (verbs) ---
+
 const _defaultIntents = [
-  // --- Generic navigate (AI returns destination dynamically) ---
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'navigate',
     displayLabel: 'Navigate',
     riskLevel: IntentRiskLevel.low,
     requiresConfirmation: true,
+    entityKey: 'destination',
   ),
-
-  // --- Core navigation (Patient & Caregiver) ---
-  IntentRegistration(
-    intentName: 'navigate_home',
-    displayLabel: 'Home',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/dashboard',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_dashboard',
-    displayLabel: 'Dashboard',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/dashboard',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_calendar',
-    displayLabel: 'Calendar',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/calendar',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_messages',
-    displayLabel: 'Messages',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/dashboard?tab=messages',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_profile',
-    displayLabel: 'Profile',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/profile',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_settings',
-    displayLabel: 'Settings',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/settings',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_menu',
-    displayLabel: 'Menu',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/dashboard?tab=menu',
-  ),
-
-  // --- Health & Wellness ---
-  IntentRegistration(
-    intentName: 'navigate_symptoms',
-    displayLabel: 'Symptom Tracker',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/symptoms',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_medication',
-    displayLabel: 'Medication Tracker',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/medication',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_virtual_checkin',
-    displayLabel: 'Virtual Check-In',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/virtual-checkin',
-  ),
-
-  // --- Integrations & Devices ---
-  IntentRegistration(
-    intentName: 'navigate_wearables',
-    displayLabel: 'Wearables',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/wearables',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_home_monitoring',
-    displayLabel: 'Home Monitoring',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/home-monitoring',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_smart_devices',
-    displayLabel: 'Smart Devices',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/smart-devices',
-  ),
-
-  // --- Social & Communication ---
-  IntentRegistration(
-    intentName: 'navigate_social_feed',
-    displayLabel: 'Social Feed',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/social-feed',
-  ),
-
-  // --- Caregiver-specific ---
-  IntentRegistration(
-    intentName: 'navigate_patient_list',
-    displayLabel: 'Patient List',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/tasks',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_evv',
-    displayLabel: 'EVV Dashboard',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/evv',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_notetaker',
-    displayLabel: 'Medical Notetaker',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/notetaker-search',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_invoice',
-    displayLabel: 'Invoice Assistant',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/invoice-assistant',
-  ),
-
-  // --- Files & Documents ---
-  IntentRegistration(
-    intentName: 'navigate_files',
-    displayLabel: 'File Management',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/file-management',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_informed_delivery',
-    displayLabel: 'Informed Delivery',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/informed-delivery',
-  ),
-
-  // --- Gamification ---
-  IntentRegistration(
-    intentName: 'navigate_gamification',
-    displayLabel: 'Gamification',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/gamification',
-  ),
-
-  // --- Configuration & AI ---
-  IntentRegistration(
-    intentName: 'navigate_ai_config',
-    displayLabel: 'AI Configuration',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/ai-configuration',
-  ),
-  IntentRegistration(
-    intentName: 'navigate_notetaker_config',
-    displayLabel: 'Notetaker Configuration',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/notetaker-configuration',
-  ),
-
-  // --- Payments & Subscription ---
-  IntentRegistration(
-    intentName: 'navigate_subscription',
-    displayLabel: 'Subscription',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/subscription',
-  ),
-
-  // --- Search ---
-  IntentRegistration(
-    intentName: 'navigate_search',
-    displayLabel: 'Search',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: true,
-    routeDestination: '/search',
-  ),
-
-  // --- Voice ---
-  IntentRegistration(
-    intentName: 'navigate_voice',
-    displayLabel: 'Voice Commands',
-    riskLevel: IntentRiskLevel.low,
-    requiresConfirmation: false,
-    routeDestination: '/voice',
-  ),
-
-  // --- Action intents (non-navigation, require confirmation) ---
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'call',
     displayLabel: 'Call Contact',
     riskLevel: IntentRiskLevel.high,
     requiresConfirmation: true,
+    entityKey: 'contact',
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'schedule',
     displayLabel: 'Schedule Appointment',
     riskLevel: IntentRiskLevel.high,
     requiresConfirmation: true,
+    entityKey: 'person',
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'sos',
     displayLabel: 'SOS Emergency Alert',
     riskLevel: IntentRiskLevel.high,
     requiresConfirmation: true,
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'start_video_call',
     displayLabel: 'Start Video Call',
     riskLevel: IntentRiskLevel.high,
     requiresConfirmation: true,
+    entityKey: 'contact',
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'log_symptom',
     displayLabel: 'Log Symptom',
     riskLevel: IntentRiskLevel.medium,
     requiresConfirmation: true,
+    entityKey: 'symptom',
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'log_medication',
     displayLabel: 'Log Medication',
     riskLevel: IntentRiskLevel.medium,
     requiresConfirmation: true,
+    entityKey: 'medication',
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'send_message',
     displayLabel: 'Send Message',
     riskLevel: IntentRiskLevel.medium,
     requiresConfirmation: true,
+    entityKey: 'recipient',
   ),
-  IntentRegistration(
+  IntentDefinition(
     intentName: 'check_in',
     displayLabel: 'Start Check-In',
     riskLevel: IntentRiskLevel.medium,
     requiresConfirmation: true,
   ),
+];
+
+// --- Navigation destinations (entities for "navigate" intent) ---
+
+const _defaultDestinations = [
+  // Core
+  NavigationDestination(name: 'home', route: '/dashboard', displayLabel: 'Home'),
+  NavigationDestination(name: 'dashboard', route: '/dashboard', displayLabel: 'Dashboard'),
+  NavigationDestination(name: 'calendar', route: '/calendar', displayLabel: 'Calendar'),
+  NavigationDestination(name: 'messages', route: '/dashboard?tab=messages', displayLabel: 'Messages'),
+  NavigationDestination(name: 'profile', route: '/profile', displayLabel: 'Profile'),
+  NavigationDestination(name: 'settings', route: '/settings', displayLabel: 'Settings'),
+  NavigationDestination(name: 'menu', route: '/dashboard?tab=menu', displayLabel: 'Menu'),
+
+  // Health & Wellness
+  NavigationDestination(name: 'symptoms', route: '/symptoms', displayLabel: 'Symptom Tracker'),
+  NavigationDestination(name: 'symptom tracker', route: '/symptoms', displayLabel: 'Symptom Tracker'),
+  NavigationDestination(name: 'medication', route: '/medication', displayLabel: 'Medication Tracker'),
+  NavigationDestination(name: 'medications', route: '/medication', displayLabel: 'Medication Tracker'),
+  NavigationDestination(name: 'medication tracker', route: '/medication', displayLabel: 'Medication Tracker'),
+  NavigationDestination(name: 'virtual check-in', route: '/virtual-checkin', displayLabel: 'Virtual Check-In'),
+  NavigationDestination(name: 'virtual checkin', route: '/virtual-checkin', displayLabel: 'Virtual Check-In'),
+  NavigationDestination(name: 'check-in', route: '/virtual-checkin', displayLabel: 'Virtual Check-In'),
+
+  // Integrations & Devices
+  NavigationDestination(name: 'wearables', route: '/wearables', displayLabel: 'Wearables'),
+  NavigationDestination(name: 'smart devices', route: '/smart-devices', displayLabel: 'Smart Devices'),
+  NavigationDestination(name: 'home monitoring', route: '/home-monitoring', displayLabel: 'Home Monitoring'),
+
+  // Social
+  NavigationDestination(name: 'social feed', route: '/social-feed', displayLabel: 'Social Feed'),
+  NavigationDestination(name: 'social', route: '/social-feed', displayLabel: 'Social Feed'),
+
+  // Caregiver
+  NavigationDestination(name: 'patient list', route: '/tasks', displayLabel: 'Patient List'),
+  NavigationDestination(name: 'patients', route: '/tasks', displayLabel: 'Patient List'),
+  NavigationDestination(name: 'evv', route: '/evv', displayLabel: 'EVV Dashboard'),
+  NavigationDestination(name: 'evv dashboard', route: '/evv', displayLabel: 'EVV Dashboard'),
+  NavigationDestination(name: 'notetaker', route: '/notetaker-search', displayLabel: 'Medical Notetaker'),
+  NavigationDestination(name: 'medical notetaker', route: '/notetaker-search', displayLabel: 'Medical Notetaker'),
+  NavigationDestination(name: 'invoice', route: '/invoice-assistant', displayLabel: 'Invoice Assistant'),
+  NavigationDestination(name: 'invoice assistant', route: '/invoice-assistant', displayLabel: 'Invoice Assistant'),
+
+  // Files & Documents
+  NavigationDestination(name: 'files', route: '/file-management', displayLabel: 'File Management'),
+  NavigationDestination(name: 'file management', route: '/file-management', displayLabel: 'File Management'),
+  NavigationDestination(name: 'informed delivery', route: '/informed-delivery', displayLabel: 'Informed Delivery'),
+  NavigationDestination(name: 'mail', route: '/informed-delivery', displayLabel: 'Informed Delivery'),
+
+  // Gamification
+  NavigationDestination(name: 'gamification', route: '/gamification', displayLabel: 'Gamification'),
+  NavigationDestination(name: 'achievements', route: '/gamification', displayLabel: 'Gamification'),
+
+  // Configuration
+  NavigationDestination(name: 'ai configuration', route: '/ai-configuration', displayLabel: 'AI Configuration'),
+  NavigationDestination(name: 'ai config', route: '/ai-configuration', displayLabel: 'AI Configuration'),
+  NavigationDestination(name: 'notetaker configuration', route: '/notetaker-configuration', displayLabel: 'Notetaker Configuration'),
+
+  // Payments
+  NavigationDestination(name: 'subscription', route: '/subscription', displayLabel: 'Subscription'),
+
+  // Search
+  NavigationDestination(name: 'search', route: '/search', displayLabel: 'Search'),
+
+  // Voice
+  NavigationDestination(name: 'voice', route: '/voice', displayLabel: 'Voice Commands'),
+  NavigationDestination(name: 'voice commands', route: '/voice', displayLabel: 'Voice Commands'),
 ];
