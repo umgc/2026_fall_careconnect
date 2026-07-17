@@ -31,9 +31,14 @@ import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.transcribe.TranscribeClient;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobRequest;
@@ -94,6 +99,9 @@ public class PostCallTranscriptionService {
 
   /** Transcription status set when the job fails. */
   public static final String TRANSCRIPTION_STATUS_FAILED = "FAILED";
+
+  /** Maximum objects to delete in a single S3 DeleteObjects call. */
+  private static final int S3_DELETE_BATCH = 1000;
 
   @Autowired(required = false)
   private TranscribeClient transcribeClient;
@@ -252,6 +260,9 @@ public class PostCallTranscriptionService {
       }
       setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_FAILED);
       return;
+    } finally {
+      // Always scrub per-attendee WAVs / Transcribe JSON (PHI), including claimed-playback keeps.
+      cleanupSpeakerIdArtifacts(rec);
     }
 
     // Only delete the S3 recording if it is still system-initiated (not claimed for playback).
@@ -1061,5 +1072,60 @@ public class PostCallTranscriptionService {
     if (key != null && !key.isBlank()) {
       s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     }
+  }
+
+  /**
+   * Deletes per-attendee speaker-ID artifacts under {@code {s3Prefix}speaker-id/} (WAVs + Transcribe
+   * JSON). Always safe to call after primary or fallback transcription — empty prefix is a no-op.
+   */
+  private void cleanupSpeakerIdArtifacts(final CallRecording rec) {
+    if (rec == null || rec.getS3Bucket() == null || rec.getS3Prefix() == null) {
+      return;
+    }
+    try {
+      final String speakerIdPrefix = rec.getS3Prefix() + "speaker-id/";
+      deletePrefix(rec.getS3Bucket(), speakerIdPrefix);
+      if (log.isInfoEnabled()) {
+        log.info(
+            "Deleted speaker-id S3 artifacts for call {} under prefix {}",
+            rec.getCallId(),
+            speakerIdPrefix);
+      }
+    } catch (Exception e) {
+      if (log.isWarnEnabled()) {
+        log.warn(
+            "Failed to delete speaker-id S3 artifacts for call {}: {}",
+            rec.getCallId(),
+            e.getMessage(),
+            e);
+      }
+    }
+  }
+
+  private void deletePrefix(final String bucket, final String prefix) {
+    String continuationToken = null;
+    do {
+      final ListObjectsV2Request.Builder listBuilder =
+          ListObjectsV2Request.builder()
+              .bucket(bucket)
+              .prefix(prefix)
+              .maxKeys(S3_DELETE_BATCH);
+      if (continuationToken != null) {
+        listBuilder.continuationToken(continuationToken);
+      }
+      final ListObjectsV2Response listing = s3Client.listObjectsV2(listBuilder.build());
+      if (!listing.contents().isEmpty()) {
+        final List<ObjectIdentifier> toDelete =
+            listing.contents().stream()
+                .map(obj -> ObjectIdentifier.builder().key(obj.key()).build())
+                .toList();
+        s3Client.deleteObjects(
+            DeleteObjectsRequest.builder()
+                .bucket(bucket)
+                .delete(Delete.builder().objects(toDelete).quiet(true).build())
+                .build());
+      }
+      continuationToken = listing.isTruncated() ? listing.nextContinuationToken() : null;
+    } while (continuationToken != null);
   }
 }

@@ -46,4 +46,18 @@ class KvsAttendeeStreamRegistryTest {
         assertThat(aliased).isFalse();
         assertThat(registry.getStreamArn(CALL_ID, ROSTER_ID)).isNull();
     }
+
+    @Test
+    @DisplayName("P5: clearCall removes all attendee stream mappings for the call")
+    void clearCall_removesMappings() {
+        registry.register(CALL_ID, ROSTER_ID, STREAM_ARN);
+        registry.register(CALL_ID, "other", STREAM_ARN + "/2");
+        registry.register("other-call", ROSTER_ID, STREAM_ARN + "/3");
+
+        registry.clearCall(CALL_ID);
+
+        assertThat(registry.getStreamArn(CALL_ID, ROSTER_ID)).isNull();
+        assertThat(registry.getStreamArn(CALL_ID, "other")).isNull();
+        assertThat(registry.getStreamArn("other-call", ROSTER_ID)).isEqualTo(STREAM_ARN + "/3");
+    }
 }

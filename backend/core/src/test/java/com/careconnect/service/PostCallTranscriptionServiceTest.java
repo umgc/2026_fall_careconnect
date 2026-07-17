@@ -24,10 +24,14 @@ import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.transcribe.TranscribeClient;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobRequest;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobResponse;
@@ -286,6 +290,128 @@ class PostCallTranscriptionServiceTest {
         return new ResponseInputStream<>(
                 GetObjectResponse.builder().build(),
                 AbortableInputStream.create(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    private void stubSpeakerIdListing(final String... keys) {
+        final ListObjectsV2Response speakerIdListing =
+                ListObjectsV2Response.builder()
+                        .contents(
+                                java.util.Arrays.stream(keys)
+                                        .map(key -> S3Object.builder().key(key).build())
+                                        .toList())
+                        .isTruncated(false)
+                        .build();
+        final ListObjectsV2Response emptyListing =
+                ListObjectsV2Response.builder().contents(List.of()).isTruncated(false).build();
+        when(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
+                .thenAnswer(
+                        invocation -> {
+                            final ListObjectsV2Request req = invocation.getArgument(0);
+                            final String prefix = req.prefix();
+                            if (prefix != null && prefix.endsWith("speaker-id/")) {
+                                return speakerIdListing;
+                            }
+                            return emptyListing;
+                        });
+    }
+
+    @Test
+    @DisplayName("P5: deletes speaker-id/ S3 artifacts after successful KVS transcription")
+    void transcribeAndCleanup_kvsSuccess_deletesSpeakerIdPrefix() throws Exception {
+        final CallRecording recording = recording();
+        final CallAttendee attendee = attendee();
+        final Path raw = Files.createTempFile("kvs-test", ".mkv");
+        final Path wav = Files.createTempFile("kvs-test", ".wav");
+        final String speakerIdPrefix = PREFIX + "speaker-id/";
+        final String wavKey = speakerIdPrefix + "audio/att-caregiver.wav";
+        final String transcriptKey = speakerIdPrefix + "transcripts/job.json";
+
+        when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
+        when(kvsArchivedMediaExportService.exportAttendeeRange(
+                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                .thenReturn(raw);
+        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
+                .thenReturn(StartTranscriptionJobResponse.builder().build());
+        when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
+                .thenReturn(completedJob());
+        when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
+        when(callTranscriptService.recordSegments(
+                        any(String.class),
+                        any(Long.class),
+                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                .thenReturn(1);
+        when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
+        stubSpeakerIdListing(wavKey, transcriptKey);
+
+        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+
+        final ArgumentCaptor<ListObjectsV2Request> listCaptor =
+                ArgumentCaptor.forClass(ListObjectsV2Request.class);
+        verify(s3Client, org.mockito.Mockito.atLeastOnce()).listObjectsV2(listCaptor.capture());
+        assertThat(listCaptor.getAllValues())
+                .extracting(ListObjectsV2Request::prefix)
+                .anyMatch(prefix -> prefix != null && prefix.equals(speakerIdPrefix));
+
+        final ArgumentCaptor<DeleteObjectsRequest> deleteCaptor =
+                ArgumentCaptor.forClass(DeleteObjectsRequest.class);
+        verify(s3Client, org.mockito.Mockito.atLeastOnce()).deleteObjects(deleteCaptor.capture());
+        assertThat(
+                        deleteCaptor.getAllValues().stream()
+                                .flatMap(req -> req.delete().objects().stream())
+                                .map(obj -> obj.key())
+                                .toList())
+                .contains(wavKey, transcriptKey);
+
+        Files.deleteIfExists(raw);
+        Files.deleteIfExists(wav);
+    }
+
+    @Test
+    @DisplayName("P5: deletes speaker-id/ even when recording is claimed for playback")
+    void transcribeAndCleanup_claimedPlayback_stillDeletesSpeakerIdPrefix() throws Exception {
+        final CallRecording recording = recording();
+        recording.setInitiatedByUserId(99L);
+        final CallAttendee attendee = attendee();
+        final Path raw = Files.createTempFile("kvs-claimed", ".mkv");
+        final Path wav = Files.createTempFile("kvs-claimed", ".wav");
+        final String speakerIdPrefix = PREFIX + "speaker-id/";
+        final String wavKey = speakerIdPrefix + "audio/att-caregiver.wav";
+
+        when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
+        when(kvsArchivedMediaExportService.exportAttendeeRange(
+                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                .thenReturn(raw);
+        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
+                .thenReturn(StartTranscriptionJobResponse.builder().build());
+        when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
+                .thenReturn(completedJob());
+        when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
+        when(callTranscriptService.recordSegments(
+                        any(String.class),
+                        any(Long.class),
+                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                .thenReturn(1);
+        when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
+        stubSpeakerIdListing(wavKey);
+
+        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+
+        final ArgumentCaptor<ListObjectsV2Request> listCaptor =
+                ArgumentCaptor.forClass(ListObjectsV2Request.class);
+        verify(s3Client, org.mockito.Mockito.atLeastOnce()).listObjectsV2(listCaptor.capture());
+        assertThat(listCaptor.getAllValues())
+                .extracting(ListObjectsV2Request::prefix)
+                .contains(speakerIdPrefix)
+                .doesNotContain(PREFIX + "concatenated/");
+
+        Files.deleteIfExists(raw);
+        Files.deleteIfExists(wav);
     }
 
     @Test
