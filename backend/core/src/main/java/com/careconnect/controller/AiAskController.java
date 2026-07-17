@@ -28,6 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Caller is resolved from JWT. Patient access and source-type RBAC are enforced by
  * {@link com.careconnect.service.ai.retrieval.RetrievalScopeService}.
+ *
+ * <p>All failure modes return {@link AiAskResponse} with {@code deliveryStatus=WITHHELD}
+ * (including {@link ForbiddenScopeException}) so clients share one error contract.
  */
 @Slf4j
 @RestController
@@ -45,22 +48,33 @@ public class AiAskController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AiAskResponse> ask(@Valid @RequestBody final AiAskRequest request)
-            throws UnauthorizedException, ForbiddenScopeException {
+            throws UnauthorizedException {
         final User caller = securityUtil.resolveCurrentUser();
+        final java.util.UUID sessionId = request == null ? null : request.sessionId();
         try {
             final AiAskResponse response = aiAskService.ask(caller, request);
             return ResponseEntity.ok(response);
+        } catch (final ForbiddenScopeException ex) {
+            log.warn("Ask AI forbidden scope code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(AiAskService.withheld(
+                            null,
+                            ex.getAuditId(),
+                            sessionId,
+                            ForbiddenScopeException.ERROR_CODE,
+                            ex.getMessage(),
+                            null));
         } catch (final AskAiRejectedException ex) {
             log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());
             return ResponseEntity.status(ex.getHttpStatus())
                     .body(AiAskService.withheld(
-                            null, null, request == null ? null : request.sessionId(),
+                            null, null, sessionId,
                             ex.getErrorCode(), ex.getMessage(), null));
         } catch (final AskAiUnavailableException ex) {
             log.warn("Ask AI unavailable: {}", ex.getMessage());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(AiAskService.withheld(
-                            null, null, request == null ? null : request.sessionId(),
+                            null, null, sessionId,
                             ex.getErrorCode(), ex.getMessage(), null));
         }
     }

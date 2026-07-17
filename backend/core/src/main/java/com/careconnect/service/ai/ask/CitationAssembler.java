@@ -11,6 +11,10 @@ import java.util.Set;
 
 /**
  * Maps LLM citationRefs (C1..Cn) onto API citation chips (Task 5.3 / 5.5).
+ *
+ * <p>Does not fabricate citations when the model omits refs — empty model citations
+ * surface as {@link CitationResult#modelCited()}{@code false} so the gateway can
+ * mark the answer low-confidence instead of attaching every retrieved chunk.
  */
 final class CitationAssembler {
 
@@ -19,10 +23,10 @@ final class CitationAssembler {
     private CitationAssembler() {
     }
 
-    static List<AiCitation> assemble(
+    static CitationResult assemble(
             final List<String> citationRefs, final Map<String, RankedChunk> refMap) {
         if (refMap == null || refMap.isEmpty()) {
-            return List.of();
+            return new CitationResult(List.of(), false);
         }
 
         final Set<String> orderedRefs = new LinkedHashSet<>();
@@ -33,10 +37,8 @@ final class CitationAssembler {
                 }
             }
         }
-        if (orderedRefs.isEmpty()) {
-            orderedRefs.addAll(refMap.keySet());
-        }
 
+        final boolean modelCited = !orderedRefs.isEmpty();
         final List<AiCitation> out = new ArrayList<>(orderedRefs.size());
         for (final String ref : orderedRefs) {
             final RankedChunk chunk = refMap.get(ref);
@@ -45,7 +47,7 @@ final class CitationAssembler {
             }
             out.add(toCitation(chunk));
         }
-        return List.copyOf(out);
+        return new CitationResult(List.copyOf(out), modelCited);
     }
 
     static AiCitation toCitation(final RankedChunk chunk) {
@@ -74,5 +76,12 @@ final class CitationAssembler {
             return trimmed;
         }
         return trimmed.substring(0, maxChars) + "…";
+    }
+
+    /**
+     * @param citations citations the model actually referenced (never backfilled)
+     * @param modelCited {@code true} when at least one valid citationRef was returned
+     */
+    record CitationResult(List<AiCitation> citations, boolean modelCited) {
     }
 }

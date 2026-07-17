@@ -23,6 +23,8 @@ class AiAskCoverageTest {
         assertThat(source).contains("USE_AI_FEATURES");
         assertThat(source).contains("careconnect.ai.ask.enabled");
         assertThat(source).contains("resolveCurrentUser");
+        assertThat(source).contains("ForbiddenScopeException");
+        assertThat(source).contains("deliveryStatus=WITHHELD");
     }
 
     @Test
@@ -34,6 +36,8 @@ class AiAskCoverageTest {
         assertThat(source).contains("HybridRetrievalService");
         assertThat(source).contains("GroundedAskLlmService");
         assertThat(source).contains("NO_RECORDS");
+        assertThat(source).contains("low_confidence_uncited");
+        assertThat(source).contains("TODO(Task 6.x)");
         assertThat(source).doesNotContain("MedicalContextService");
     }
 }

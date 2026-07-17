@@ -117,8 +117,41 @@ class AiAskServiceTest {
         assertThat(response.citations().get(0).sourceRecordId()).isEqualTo("99");
         assertThat(response.disclaimer().recordsBasedFraming()).isTrue();
         assertThat(response.confirmation().promptConfirmWithProvider()).isTrue();
+        assertThat(response.escalation().reason()).isEqualTo("Tier1_auto_deliver");
         assertThat(response.retrievalMeta().chunksUsed()).isEqualTo(1);
         assertThat(response.retrievalMeta().model().provider()).isEqualTo("bedrock");
+    }
+
+    @Test
+    @DisplayName("ask delivers low-confidence when LLM omits citationRefs")
+    void ask_deliveredUncited_lowConfidence() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                "Started metformin 500mg twice daily",
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Patient started metformin 500mg.",
+                        List.of(),
+                        "amazon.nova-lite-v1:0")));
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.citations()).isEmpty();
+        assertThat(response.escalation().reason()).isEqualTo("low_confidence_uncited");
+        assertThat(response.confirmation().message()).contains("could not be fully cited");
     }
 
     @Test
@@ -192,8 +225,6 @@ class AiAskServiceTest {
                 null,
                 InputModality.TEXT,
                 "en-US",
-                null,
-                null,
-                false);
+                null);
     }
 }

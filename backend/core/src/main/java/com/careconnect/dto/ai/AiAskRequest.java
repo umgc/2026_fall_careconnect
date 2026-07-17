@@ -20,8 +20,6 @@ public record AiAskRequest(
         UUID conversationId,
         InputModality inputModality,
         @Size(max = 16) String locale,
-        List<RetrievalRecordType> sourceTypes,
-        @Size(max = 64) String clientRequestId,
-        Boolean includeDebugRetrieval
+        List<RetrievalRecordType> sourceTypes
 ) {
 }

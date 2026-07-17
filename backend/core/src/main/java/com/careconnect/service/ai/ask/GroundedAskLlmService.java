@@ -50,7 +50,7 @@ public class GroundedAskLlmService {
         this.objectMapper = objectMapper;
         this.defaultModelId = defaultModelId;
         this.awsEnabled = awsEnabled;
-        this.maxTokens = Math.max(256, maxTokens);
+        this.maxTokens = Math.min(4096, Math.max(256, maxTokens));
         this.temperature = temperature;
         this.topP = topP;
     }
@@ -103,14 +103,6 @@ public class GroundedAskLlmService {
         } catch (final RuntimeException ex) {
             log.warn("Grounded Ask AI inference failed: {}", ex.getMessage());
             return Optional.empty();
-        }
-    }
-
-    public String resolvedModelId() {
-        try {
-            return BedrockModelSupport.resolveModelId(null, defaultModelId);
-        } catch (final RuntimeException ex) {
-            return defaultModelId;
         }
     }
 

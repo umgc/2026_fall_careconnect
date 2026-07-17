@@ -39,6 +39,10 @@ import java.util.UUID;
  * {@link HybridRetrievalService} → min-necessary prompt → grounded Bedrock → citations.
  *
  * <p>Safety Tier-2 hold (SCC-3) is Task 6.x; this path delivers Tier 1 with mandatory disclaimer.
+ *
+ * <p>TODO(Task 6.x): persist Ask AI audit rows (requestId/auditId, scope, retrieval meta,
+ * delivery status) via the Ask AI audit pipeline. Until then {@code auditId} is a
+ * pre-allocated correlation id only — it does not dereference a stored record.
  */
 @Service
 public class AiAskService {
@@ -49,6 +53,9 @@ public class AiAskService {
             "This answer is based on your stored health records and is not medical advice.";
     private static final String CONFIRM_EN =
             "Please confirm important details with your care provider before acting on this information.";
+    private static final String CONFIRM_LOW_CONFIDENCE_EN =
+            "This answer could not be fully cited to your records. "
+                    + "Please confirm important details with your care provider before acting on this information.";
     private static final String NO_RECORDS_EN =
             "No matching records were found for this question. "
                     + "CareConnect Ask AI only answers from your stored health records "
@@ -84,6 +91,7 @@ public class AiAskService {
         }
 
         final UUID requestId = UUID.randomUUID();
+        // Correlation id only until Task 6.x persists audit rows.
         final UUID auditId = UUID.randomUUID();
         final UUID sessionId = request.sessionId() != null ? request.sessionId() : UUID.randomUUID();
         final String locale = normalizeLocale(request.locale());
@@ -152,19 +160,29 @@ public class AiAskService {
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
-        final List<AiCitation> citations =
+        final CitationAssembler.CitationResult citationResult =
                 CitationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
+        final List<AiCitation> citations = citationResult.citations();
+        final boolean modelCited = citationResult.modelCited();
 
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
         log.info(
-                "Ask AI DELIVERED requestId={} patientId={} chunks={} citations={} modality={} degraded={}",
+                "Ask AI DELIVERED requestId={} patientId={} chunks={} citations={} modelCited={} modality={} degraded={}",
                 requestId,
                 request.patientId(),
                 context.usedChunks().size(),
                 citations.size(),
+                modelCited,
                 modality,
                 retrieval.vectorDegraded());
+
+        final AiEscalation escalation = modelCited
+                ? new AiEscalation(1, "Tier1_auto_deliver", false)
+                : new AiEscalation(1, "low_confidence_uncited", false);
+        final AiConfirmationHint confirmation = modelCited
+                ? new AiConfirmationHint(true, CONFIRM_EN)
+                : new AiConfirmationHint(true, CONFIRM_LOW_CONFIDENCE_EN);
 
         return new AiAskResponse(
                 true,
@@ -179,8 +197,8 @@ public class AiAskService {
                 new AiAnswerBlock(llm.answerText(), locale),
                 citations,
                 disclaimer(locale),
-                new AiEscalation(1, "Tier1_auto_deliver", false),
-                new AiConfirmationHint(true, CONFIRM_EN),
+                escalation,
+                confirmation,
                 new AiRetrievalMeta(
                         retrieval.chunks().size(),
                         context.usedChunks().size(),
