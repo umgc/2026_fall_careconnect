@@ -29,6 +29,8 @@ class RetrievalIndexEmbeddingCoverageTest {
         assertThat(source).contains("countMissingEmbedding");
         assertThat(source).contains("countMissingEmbeddingForSource");
         assertThat(source).contains("findBySourceRecordIdAndEmbeddingIsNull");
+        assertThat(source).contains("findMissingEmbeddingsForBackfill");
+        assertThat(source).contains("countMissingEmbeddingsForBackfill");
         assertThat(source).contains("CAST(:embedding AS vector)");
         assertThat(source).contains("WHERE embedding IS NULL");
     }
@@ -52,5 +54,32 @@ class RetrievalIndexEmbeddingCoverageTest {
         assertThat(source).contains("chunkEmbeddingService.embedAndPersist");
         assertThat(source).contains("scheduleEmbeddingAfterCommit");
         assertThat(source).contains("afterCommit");
+    }
+
+    @Test
+    @DisplayName("ChunkEmbeddingBackfillWorker polls NULL embeddings via repository batch query")
+    void backfillWorker_contract() throws Exception {
+        final String source = Files.readString(Path.of(
+                "src/main/java/com/careconnect/service/ai/embedding/ChunkEmbeddingBackfillWorker.java"));
+        assertThat(source).contains("findMissingEmbeddingsForBackfill");
+        assertThat(source).contains("chunkEmbeddingService.embedAndPersist");
+        assertThat(source).contains("countMissingEmbeddingsForBackfill");
+        assertThat(source).contains("careconnect.embedding.backfill.enabled");
+        assertThat(source).contains("careconnect.embedding.enabled");
+    }
+
+    @Test
+    @DisplayName("SchemaPatchRunner optional partial index supports embedding backfill (Task 4.4)")
+    void schemaPatchRunner_embeddingBackfillIndex() throws Exception {
+        final String patchRunner = Files.readString(Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java"));
+        assertThat(patchRunner).contains("V2607161317 – partial index for embedding backfill scans (Task 4.4");
+        assertThat(patchRunner).contains("idx_retrieval_chunk_embedding_null_backfill");
+        assertThat(patchRunner).contains("WHERE embedding IS NULL");
+
+        final String referenceSql = Files.readString(Path.of(
+                "src/main/resources/db/migration/V2607161317__add_retrieval_chunk_embedding_backfill_index.sql"));
+        assertThat(referenceSql).contains("idx_retrieval_chunk_embedding_null_backfill");
+        assertThat(referenceSql).contains("SchemaPatchRunner");
     }
 }

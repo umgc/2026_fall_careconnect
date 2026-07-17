@@ -111,18 +111,22 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     /**
      * Counts NULL embeddings for a single source record (Task 4.3 contentHash short-circuit).
+     * Only counts embeddable rows (non-blank {@code chunk_text}) — same filter as backfill/retry.
      */
     @Query(
             value = """
                     SELECT COUNT(*) FROM retrieval_index_chunk
                     WHERE source_record_id = :sourceRecordId
                       AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
                     """,
             nativeQuery = true)
     long countMissingEmbeddingForSource(@Param("sourceRecordId") String sourceRecordId);
 
     /**
      * Loads portable columns for chunks that still need Titan embeddings (retry path).
+     * Only embeddable rows (non-blank {@code chunk_text}) — aligned with backfill batch query.
      */
     @Query(
             value = """
@@ -131,10 +135,42 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     FROM retrieval_index_chunk
                     WHERE source_record_id = :sourceRecordId
                       AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
                     """,
             nativeQuery = true)
     List<RetrievalIndexChunk> findBySourceRecordIdAndEmbeddingIsNull(
             @Param("sourceRecordId") String sourceRecordId);
+
+    /**
+     * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    ORDER BY indexed_at ASC NULLS LAST, id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForBackfill(@Param("limit") int limit);
+
+    /**
+     * Counts embeddable chunks still missing an embedding (Task 4.4 ops / backfill progress).
+     */
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingsForBackfill();
 
     /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
