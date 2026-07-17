@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/services/voice_intent_registry.dart';
 import 'package:care_connect_app/services/voice_intent_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -44,26 +45,20 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   List<_CommandMatch> _ambiguousMatches = [];
 
   static const _commandTable = [
-    _CommandMatch(phrase: 'take me home', destination: '/dashboard', label: 'Home'),
-    _CommandMatch(phrase: 'take me to calendar', destination: '/calendar', label: 'Calendar'),
-    _CommandMatch(phrase: 'take me to my tracker', destination: '/symptoms', label: 'Symptom Tracker'),
+    _CommandMatch(phrase: 'take me home', intent: 'navigate_home'),
+    _CommandMatch(phrase: 'take me to calendar', intent: 'navigate_calendar'),
+    _CommandMatch(phrase: 'take me to my tracker', intent: 'navigate_symptoms'),
   ];
-
-  static const _routeMap = {
-    'home': '/dashboard',
-    'dashboard': '/dashboard',
-    'calendar': '/calendar',
-    'symptoms': '/symptoms',
-  };
-
-  Duration get _statusDisplayDelay =>
-      kDebugMode ? const Duration(seconds: 5) : const Duration(milliseconds: 300);
 
   @override
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
+    registerDefaultVoiceIntents();
   }
+
+  Duration get _statusDisplayDelay =>
+      kDebugMode ? const Duration(seconds: 5) : const Duration(milliseconds: 300);
 
   @override
   void didChangeDependencies() {
@@ -354,13 +349,17 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (exactMatches.length == 1) {
         _speech.stop();
         final match = exactMatches.first;
-        setState(() {
-          _pendingDestination = match.destination;
-          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
-          _voiceStatus = _VoiceStatus.confirming;
-          _statusDetail = _pendingDetail!;
-        });
-        return;
+        final registration = VoiceIntentRegistry().lookup(match.intent);
+        if (registration != null) {
+          setState(() {
+            _pendingDestination = registration.routeDestination;
+            _pendingIntent = match.intent;
+            _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(registration.displayLabel)}?';
+            _voiceStatus = _VoiceStatus.confirming;
+            _statusDetail = _pendingDetail!;
+          });
+          return;
+        }
       }
 
       if (exactMatches.length > 1) {
@@ -390,13 +389,17 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (partialMatches.length == 1) {
         _speech.stop();
         final match = partialMatches.first;
-        setState(() {
-          _pendingDestination = match.destination;
-          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(match.label)}?';
-          _voiceStatus = _VoiceStatus.confirming;
-          _statusDetail = _pendingDetail!;
-        });
-        return;
+        final registration = VoiceIntentRegistry().lookup(match.intent);
+        if (registration != null) {
+          setState(() {
+            _pendingDestination = registration.routeDestination;
+            _pendingIntent = match.intent;
+            _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(registration.displayLabel)}?';
+            _voiceStatus = _VoiceStatus.confirming;
+            _statusDetail = _pendingDetail!;
+          });
+          return;
+        }
       }
 
       _setStatus(
@@ -422,43 +425,31 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   void _handleAIResult(VoiceIntentResult result, String words) {
     if (!mounted) return;
 
-    switch (result.intent) {
-      case 'navigate':
-        final destination = result.destination ?? _routeMap[result.entities['destination']?.toLowerCase()];
-        if (destination != null) {
-          setState(() {
-            _pendingDestination = destination;
-            _pendingIntent = 'navigate';
-            _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? result.entities['destination'] ?? 'page'}?';
-            _voiceStatus = _VoiceStatus.confirming;
-            _statusDetail = _pendingDetail!;
-          });
-        } else {
-          _setStatus(
-            status: _VoiceStatus.fallback,
-            recognizedText: words,
-            detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
-          );
-          _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
-          _resetAfterDelay();
-        }
-      case 'call':
+    final registry = VoiceIntentRegistry();
+    final registration = registry.lookup(result.intent);
+
+    if (registration == null) {
+      _setStatus(
+        status: _VoiceStatus.fallback,
+        recognizedText: words,
+        detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+      );
+      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+      _resetAfterDelay();
+      return;
+    }
+
+    if (registration.routeDestination != null || result.destination != null) {
+      final destination = result.destination ?? registration.routeDestination;
+      if (destination != null) {
         setState(() {
-          _pendingDestination = null;
-          _pendingIntent = 'call';
-          _pendingDetail = '${result.displayLabel ?? 'Call contact'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
+          _pendingDestination = destination;
+          _pendingIntent = result.intent;
+          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? registration.displayLabel}?';
           _voiceStatus = _VoiceStatus.confirming;
           _statusDetail = _pendingDetail!;
         });
-      case 'schedule':
-        setState(() {
-          _pendingDestination = null;
-          _pendingIntent = 'schedule';
-          _pendingDetail = '${result.displayLabel ?? 'Schedule appointment'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
-          _voiceStatus = _VoiceStatus.confirming;
-          _statusDetail = _pendingDetail!;
-        });
-      default:
+      } else {
         _setStatus(
           status: _VoiceStatus.fallback,
           recognizedText: words,
@@ -466,6 +457,23 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         );
         _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
         _resetAfterDelay();
+      }
+    } else if (registration.requiresConfirmation) {
+      setState(() {
+        _pendingDestination = null;
+        _pendingIntent = result.intent;
+        _pendingDetail = '${result.displayLabel ?? registration.displayLabel} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
+        _voiceStatus = _VoiceStatus.confirming;
+        _statusDetail = _pendingDetail!;
+      });
+    } else {
+      _setStatus(
+        status: _VoiceStatus.fallback,
+        recognizedText: words,
+        detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+      );
+      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+      _resetAfterDelay();
     }
   }
 
@@ -528,9 +536,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (!mounted) return;
 
     final intent = _pendingIntent ?? 'navigate';
+    final registration = VoiceIntentRegistry().lookup(intent);
 
-    if (intent == 'navigate') {
-      if (_pendingDestination == null) return;
+    if (_pendingDestination != null) {
       final destination = _pendingDestination!;
       _setStatus(
         status: _VoiceStatus.success,
@@ -542,6 +550,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _ambiguousMatches = [];
       context.go(destination);
       _reset();
+    } else if (registration != null && registration.handler != null) {
+      _setStatus(
+        status: _VoiceStatus.success,
+        detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} \u2014 ${registration.displayLabel}',
+      );
+      _pendingDestination = null;
+      _pendingDetail = null;
+      _pendingIntent = null;
+      _ambiguousMatches = [];
+      _resetAfterDelay();
     } else {
       _setStatus(
         status: _VoiceStatus.success,
@@ -565,10 +583,12 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
   void _onClarifyChoice(_CommandMatch choice) {
     if (!mounted) return;
+    final registration = VoiceIntentRegistry().lookup(choice.intent);
     setState(() {
       _ambiguousMatches = [];
-      _pendingDestination = choice.destination;
-      _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_onClarifyCommand ?? 'Selected'}: ${_commandLabelToDisplayText(choice.label)} — ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
+      _pendingDestination = registration?.routeDestination;
+      _pendingIntent = choice.intent;
+      _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_onClarifyCommand ?? 'Selected'}: ${_commandLabelToDisplayText(registration?.displayLabel ?? choice.intent)} — ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
       _voiceStatus = _VoiceStatus.confirming;
       _statusDetail = _pendingDetail!;
     });
@@ -739,10 +759,11 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             runSpacing: 8,
             alignment: WrapAlignment.center,
             children: _ambiguousMatches.map((match) {
+              final registration = VoiceIntentRegistry().lookup(match.intent);
               return ActionChip(
-                key: Key('voice_clarify_${match.destination}'),
+                key: Key('voice_clarify_${registration?.routeDestination ?? match.intent}'),
                 avatar: const Icon(Icons.arrow_forward, size: 18),
-                label: Text(_commandLabelToDisplayText(match.label)),
+                label: Text(_commandLabelToDisplayText(registration?.displayLabel ?? match.intent)),
                 onPressed: () => _onClarifyChoice(match),
               );
             }).toList(),
@@ -762,12 +783,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
 class _CommandMatch {
   final String phrase;
-  final String destination;
-  final String label;
+  final String intent;
 
   const _CommandMatch({
     required this.phrase,
-    required this.destination,
-    required this.label,
+    required this.intent,
   });
 }
