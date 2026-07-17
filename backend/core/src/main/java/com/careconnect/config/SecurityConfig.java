@@ -143,12 +143,16 @@ public class SecurityConfig {
                         /* ---------- Admin-only endpoints ---------------------- */
                         .requestMatchers("/v1/api/debug/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/email-test/**").hasRole(ROLE_ADMIN)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/v1/api/invite/*").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
+                        .requestMatchers("/v1/api/care-circle/**").authenticated()
 
                         /* ---------- Authenticated endpoints ------------------- */
                         .requestMatchers("/v1/api/subscriptions/**").authenticated()
                         .requestMatchers("/v3/api/subscriptions/**").authenticated()
                         .requestMatchers("/v1/api/invoices/extract-llm").authenticated()
                         .requestMatchers("/v1/api/invoices/**").authenticated()
+                        .requestMatchers("/v1/api/homecare-documents/**").authenticated()
                         .requestMatchers("/v1/api/notification-settings/**").authenticated()
                         .requestMatchers("/v1/api/patients/**").authenticated()
                         .requestMatchers("/v1/api/caregivers/**").authenticated()

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/environment_config.dart';
@@ -32,6 +33,7 @@ class VideoCallService {
   bool _isPatientSentimentSource = false;
   String? _currentCallId;
   String? _otherPartyId;
+  final Set<String> _participantUserIds = <String>{};
   Map<String, dynamic>? _callContextMetadata;
   String? _jwtToken;
   DateTime? _callStartedAt;
@@ -122,6 +124,8 @@ class VideoCallService {
 
     _currentCallId = normalizedCallId;
     _otherPartyId = otherPartyId;
+    _participantUserIds.clear();
+    trackParticipant(otherPartyId);
     _callContextMetadata = callContextMetadata == null
         ? null
         : Map<String, dynamic>.from(callContextMetadata);
@@ -216,6 +220,8 @@ class VideoCallService {
         },
         body: jsonEncode({
           'otherPartyId': _otherPartyId,
+          if (_participantUserIds.isNotEmpty)
+            'participantUserIds': _participantUserIds.toList(),
           ...?_callContextMetadata,
         }),
       );
@@ -473,6 +479,7 @@ class VideoCallService {
     _isInCall = false;
     _currentCallId = null;
     _otherPartyId = null;
+    _participantUserIds.clear();
     _callContextMetadata = null;
     _callStartedAt = null;
     _lastTranscriptEndMs = 0;
@@ -934,6 +941,18 @@ class VideoCallService {
     _isPatientSentimentSource = enabled;
   }
 
+  /// Records a user ID known to be in (or invited to) the active conference.
+  void trackParticipant(String userId) {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    _participantUserIds.add(normalized);
+  }
+
+  @visibleForTesting
+  Set<String> get participantUserIdsForTest => Set<String>.unmodifiable(_participantUserIds);
+
   void dispose() {
     _sentimentTimer?.cancel();
     _stopTranscriptFlushTimer();
@@ -946,6 +965,7 @@ class VideoCallService {
     _isInCall = false;
     _currentCallId = null;
     _otherPartyId = null;
+    _participantUserIds.clear();
     _callContextMetadata = null;
     _callStartedAt = null;
     _lastTranscriptEndMs = 0;

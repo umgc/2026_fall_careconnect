@@ -401,9 +401,9 @@ The following sections describe each feature in operational detail. Screenshots 
 ### 4.9 Device & Third-Party Integrations
 
 #### 4.9.1 Wearables & Remote Monitoring
-1. Open `Integrations > Wearables` to connect Fitbit, Apple Health, Garmin, or proprietary devices.
-2. Authorize data sharing. Vital metrics sync into the patient dashboard and trigger alerts when out of range.
-3. Remote monitoring devices (glucometers, BP cuffs) pair via Bluetooth/Wi-Fi; configure thresholds and escalation rules in the setup wizard.
+1. Open `Integrations > Wearables` to connect Fitbit, Apple Health (iOS), or Health Connect (Android).
+2. Authorize data sharing. The semester implementation demonstrates local wearable metric display and status labels for persisted mapping vs placeholder/demo-only metrics.
+3. Supported metric/source scope is documented in `docs/spring2026_guides/WEARABLE_METRICS_SOURCE_MATRIX.md`.
 
 #### 4.9.2 Smart Home & Safety Sensors
 1. Access `Integrations > Smart Home` to link fall-detection mats, motion sensors, or voice assistants.

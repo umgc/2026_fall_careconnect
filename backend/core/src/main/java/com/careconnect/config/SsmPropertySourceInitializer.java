@@ -26,12 +26,17 @@ import java.util.Map;
  *
  * To enable this initializer, add to application-prod.properties:
  * context.initializer.classes=com.careconnect.config.SsmPropertySourceInitializer
+ *
+ * <p>JWT and database credentials are injected by ECS from Secrets Manager ({@code SECURITY_JWT_SECRET},
+ * {@code DB_PASSWORD}, {@code DB_USER}) and are intentionally excluded from SSM loading to avoid
+ * overriding the CloudFormation-managed secret source.
  */
 public class SsmPropertySourceInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SsmPropertySourceInitializer.class);
-    private static final String SSM_PARAMETER_PREFIX = "/careconnect/prod/";
     private static final String PROPERTY_SOURCE_NAME = "ssmPropertySource";
+    private static final String ENVIRONMENT_PROPERTY = "ENVIRONMENT";
+    private static final String SSM_PREFIX_PROPERTY = "CARECONNECT_SSM_PREFIX";
 
     // List of parameter names to load from SSM
     private static final List<String> SSM_PARAMETERS = Arrays.asList(
@@ -39,14 +44,11 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
             "stripe-webhook-secret",
             "openai-api-key",
             "deepseek-api-key",
-            "jwt-secret",
             "sendgrid-api-key",
             "google-client-id",
             "google-client-secret",
             "fitbit-client-id",
             "fitbit-client-secret",
-            "db-password",
-            "db-username",
             "firebase-service-account-key",
             "aws-access-key-id",
             "aws-secret-access-key"
@@ -58,14 +60,11 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
         put("stripe-webhook-secret", "stripe.webhook-secret");
         put("openai-api-key", "openai.api-key");
         put("deepseek-api-key", "spring.ai.openai.api-key");
-        put("jwt-secret", "security.jwt.secret");
         put("sendgrid-api-key", "careconnect.email.sendgrid.api-key");
         put("google-client-id", "spring.security.oauth2.client.registration.google.client-id");
         put("google-client-secret", "spring.security.oauth2.client.registration.google.client-secret");
         put("fitbit-client-id", "spring.security.oauth2.client.registration.fitbit.client-id");
         put("fitbit-client-secret", "spring.security.oauth2.client.registration.fitbit.client-secret");
-        put("db-password", "careconnect.db.password");
-        put("db-username", "careconnect.db.username");
         put("firebase-service-account-key", "firebase.service-account-key");
         put("aws-access-key-id", "aws.s3.access-key");
         put("aws-secret-access-key", "aws.s3.secret-key");
@@ -89,6 +88,8 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
 
         LOGGER.info("Initializing SSM Parameter Store property source for production...");
 
+        String ssmPrefix = resolveSsmPrefix(environment);
+
         try {
             // Create SSM client
             Region region = new DefaultAwsRegionProviderChain().getRegion();
@@ -98,7 +99,7 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
                     .build();
 
             // Load parameters from SSM
-            Map<String, Object> ssmProperties = loadParametersFromSsm(ssmClient);
+            Map<String, Object> ssmProperties = loadParametersFromSsm(ssmClient, ssmPrefix);
 
             // Add SSM property source to environment
             if (!ssmProperties.isEmpty()) {
@@ -118,11 +119,24 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
         }
     }
 
-    private Map<String, Object> loadParametersFromSsm(SsmClient ssmClient) {
+    /**
+     * Resolves the SSM path prefix for secrets. ECS sets {@code ENVIRONMENT} from CloudFormation;
+     * override entirely with {@code CARECONNECT_SSM_PREFIX} (must end with {@code /}).
+     */
+    static String resolveSsmPrefix(ConfigurableEnvironment environment) {
+        String explicitPrefix = environment.getProperty(SSM_PREFIX_PROPERTY);
+        if (explicitPrefix != null && !explicitPrefix.isBlank()) {
+            return explicitPrefix.endsWith("/") ? explicitPrefix : explicitPrefix + "/";
+        }
+        String envName = environment.getProperty(ENVIRONMENT_PROPERTY, "prod");
+        return "/careconnect/" + envName.trim() + "/";
+    }
+
+    private Map<String, Object> loadParametersFromSsm(SsmClient ssmClient, String ssmPrefix) {
         Map<String, Object> properties = new HashMap<>();
 
         for (String parameterName : SSM_PARAMETERS) {
-            String fullParameterName = SSM_PARAMETER_PREFIX + parameterName;
+            String fullParameterName = ssmPrefix + parameterName;
             String springPropertyName = PARAMETER_MAPPING.get(parameterName);
 
             if (springPropertyName == null) {

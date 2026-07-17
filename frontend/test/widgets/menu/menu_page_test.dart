@@ -13,9 +13,6 @@
 //     logged-in build    — menu scaffold renders with the Tools section header
 //                          and at least one tool tile.
 //
-//   Note: interactive callbacks (context.push, context.go) are NOT triggered
-//   in these tests, so GoRouter is only needed for the logged-in tree.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -34,7 +31,7 @@ import 'package:care_connect_app/widgets/menu/menu_page.dart';
 
 /// Wraps [child] with all providers and localization needed by MenuPage.
 /// [session] is set on the UserProvider when provided.
-Widget _buildApp({UserSession? session, Widget? child}) {
+Widget _buildApp({UserSession? session, Widget? child, String local = 'en'}) {
   final userProvider = UserProvider();
   if (session != null) userProvider.setUser(session);
 
@@ -48,6 +45,11 @@ Widget _buildApp({UserSession? session, Widget? child}) {
       GoRoute(path: '/login', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/profile', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/subscription', builder: (_, __) => const SizedBox()),
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) =>
+            const Scaffold(body: Text('Voice Commands Entry Route')),
+      ),
     ],
   );
 
@@ -61,6 +63,7 @@ Widget _buildApp({UserSession? session, Widget? child}) {
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale(local)
     ),
   );
 }
@@ -113,6 +116,34 @@ void main() {
       );
     });
 
+    testWidgets('Team C smoke: renders logged-in menu integration surfaces',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('Care Giver'), findsOneWidget);
+      expect(find.text('Caregiver'), findsOneWidget);
+      expect(find.text('Tools'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
+      expect(find.text('Preferences', skipOffstage: false), findsOneWidget);
+    });
+
+    testWidgets('Team C smoke: renders logged-in menu integration surfaces - Spanish',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession, local:'es'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Menú'), findsOneWidget);
+      expect(find.text('Care Giver'), findsOneWidget);
+      expect(find.text('Cuidador'), findsOneWidget);
+      expect(find.text('Herramientas'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
+      expect(find.text('Preferencias', skipOffstage: false), findsOneWidget);
+    });
+
     testWidgets('renders the Tools section header', (tester) async {
       // Verifies that the grid section header for Tools is present.
       await tester.pumpWidget(_buildApp(session: caregiverSession));
@@ -138,6 +169,28 @@ void main() {
 
       // Each tool tile is a Card inside an InkWell.
       expect(find.byType(Card), findsWidgets);
+    });
+
+    testWidgets('renders Voice Commands menu tile with mic icon',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession));
+      await tester.pumpAndSettle();
+
+      // Scroll until the Voice Commands tile is visible.
+      await tester.scrollUntilVisible(
+        find.text('Voice Commands', skipOffstage: false),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Voice Commands'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+
+      await tester.tap(find.text('Voice Commands'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Voice Commands Entry Route'), findsOneWidget);
     });
   });
 }

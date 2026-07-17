@@ -2,12 +2,18 @@ package com.careconnect.service;
 
 import com.careconnect.dto.UserFileDTO;
 import com.careconnect.dto.FileUploadResponse;
+import com.careconnect.dto.StructuredDocumentEntryDTO;
+import com.careconnect.dto.StructuredEntryRequest;
+import com.careconnect.model.StructuredDocumentEntry;
 import com.careconnect.model.UserFile;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
+import com.careconnect.repository.StructuredDocumentEntryRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 //@Service
@@ -29,22 +38,29 @@ import java.util.stream.Collectors;
 public class FileManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(FileManagementService.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final UserFileRepository userFileRepository;
+    private final StructuredDocumentEntryRepository structuredEntryRepository;
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
     private final DatabaseStorageService databaseStorageService;
     private final S3StorageService s3StorageService;
+    private final DocumentComplianceService documentComplianceService;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
+                               StructuredDocumentEntryRepository structuredEntryRepository,
                                UserRepository userRepository,
                                PatientRepository patientRepository,
                                DatabaseStorageService databaseStorageService,
+                               DocumentComplianceService documentComplianceService,
                                @Autowired(required = false) S3StorageService s3StorageService) {
         this.userFileRepository = userFileRepository;
+        this.structuredEntryRepository = structuredEntryRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.databaseStorageService = databaseStorageService;
+        this.documentComplianceService = documentComplianceService;
         this.s3StorageService = s3StorageService;
     }
     
@@ -103,10 +119,15 @@ public class FileManagementService {
                 userFile = userFileRepository.save(userFile);
             }
             
-            // Handle profile image updates
-            if (UserFile.FileCategory.PROFILE_IMAGE.name().equals(category.toUpperCase())) {
+            // Handle profile image updates (resolve aliases so PROFILE/PROFILE_PICTURE also match)
+            if (mapCategoryToEnum(category) == UserFile.FileCategory.PROFILE_IMAGE) {
                 updateUserProfileImage(userId, filePath);
             }
+
+            // Compliance tracking: an uploaded required document moves its
+            // checklist entry forward (MISSING -> IN_PROGRESS), audited with
+            // the uploader and filename. Never fails the upload itself.
+            documentComplianceService.recordDocumentUploaded(userFile, userId);
             
             return FileUploadResponse.builder()
                     .fileId(userFile.getId())
@@ -126,6 +147,38 @@ public class FileManagementService {
         }
     }
     
+    /**
+     * Store an application-generated document (e.g., a submitted form's PDF copy)
+     * as a database-backed {@link UserFile} owned by {@code ownerId}. The file
+     * then appears in that user's File Management ("My Files").
+     */
+    public UserFile storeGeneratedDocument(byte[] data,
+                                           String originalFilename,
+                                           String contentType,
+                                           Long ownerId,
+                                           UserFile.OwnerType ownerType,
+                                           String category,
+                                           String description,
+                                           Long patientId) {
+        UserFile userFile = UserFile.builder()
+                .filename(generateUniqueFilename(originalFilename, ownerId, ownerType.name(), category))
+                .originalFilename(originalFilename)
+                .contentType(contentType)
+                .fileSize((long) data.length)
+                .fileData(data)
+                .ownerId(ownerId)
+                .ownerType(ownerType)
+                .fileCategory(mapCategoryToEnum(category))
+                .patientId(patientId)
+                .storageType(UserFile.StorageType.DATABASE)
+                .description(description)
+                .build();
+        UserFile saved = userFileRepository.save(userFile);
+        log.info("Stored generated document {} ({} bytes) for {} {}",
+                saved.getId(), data.length, ownerType, ownerId);
+        return saved;
+    }
+
     /**
      * Get file by ID
      */
@@ -238,6 +291,220 @@ public class FileManagementService {
                 .map(this::mapToDTO);
     }
     
+    /**
+     * List employment / home-care intake documents owned by a user (e.g. a caregiver's
+     * hiring and onboarding forms).
+     */
+    public List<UserFileDTO> listEmploymentDocumentsForUser(Long userId, String userType) {
+        UserFile.OwnerType ownerType = UserFile.OwnerType.valueOf(userType.toUpperCase());
+        return userFileRepository
+                .findByOwnerIdAndOwnerTypeAndFileCategoryInAndIsActiveTrue(
+                        userId, ownerType, UserFile.FileCategory.EMPLOYMENT_INTAKE)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * List employment / home-care intake documents linked to a specific patient
+     * (the care recipient at the center of a care circle).
+     */
+    public List<UserFileDTO> listEmploymentDocumentsForPatient(Long patientId) {
+        return userFileRepository
+                .findByPatientIdAndFileCategoryInAndIsActiveTrue(
+                        patientId, UserFile.FileCategory.EMPLOYMENT_INTAKE)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    // ==================== STRUCTURED FORM ENTRIES ====================
+
+    /**
+     * Create a structured form entry for an uploaded document. The original file
+     * remains linked to the record as supporting evidence. Fails with
+     * {@link IllegalArgumentException} when the document type is unsupported,
+     * neither patient nor employee context is supplied, or required fields are
+     * missing (see {@link StructuredDocumentEntry#REQUIRED_FIELDS}).
+     */
+    public StructuredDocumentEntryDTO createStructuredEntry(Long fileId,
+                                                            StructuredEntryRequest request,
+                                                            Long createdBy) {
+        UserFile file = userFileRepository.findById(fileId)
+                .filter(UserFile::getIsActive)
+                .orElseThrow(() -> new IllegalArgumentException("File not found: " + fileId));
+
+        if (structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(fileId).isPresent()) {
+            throw new IllegalArgumentException(
+                    "A structured entry already exists for this file; update it instead");
+        }
+
+        // Default the document type to the linked file's category when omitted.
+        UserFile.FileCategory documentType = resolveDocumentType(request.getDocumentType(), file);
+        // Default the patient context to the file's linked patient when omitted.
+        Long patientId = request.getPatientId() != null ? request.getPatientId() : file.getPatientId();
+        Long employeeUserId = request.getEmployeeUserId();
+
+        validateStructuredEntry(documentType, patientId, employeeUserId, request.getFields());
+
+        StructuredDocumentEntry entry = StructuredDocumentEntry.builder()
+                .userFileId(fileId)
+                .documentType(documentType)
+                .patientId(patientId)
+                .employeeUserId(employeeUserId)
+                .fieldsJson(writeFieldsJson(request.getFields()))
+                .createdBy(createdBy)
+                .build();
+
+        entry = structuredEntryRepository.save(entry);
+        log.info("Structured entry created: ID={}, file={}, type={}, patient={}, employee={}",
+                entry.getId(), fileId, documentType, patientId, employeeUserId);
+
+        // Compliance tracking: a digitized structured record completes the
+        // requirement on the subject's checklist (audited transition).
+        documentComplianceService.recordStructuredEntrySaved(entry, file, createdBy);
+
+        return mapEntryToDTO(entry, file);
+    }
+
+    /**
+     * Update an existing structured form entry. The link to the original file is
+     * immutable; document type, context and captured fields may change but are
+     * re-validated against the same rules as creation.
+     */
+    public StructuredDocumentEntryDTO updateStructuredEntry(Long entryId, StructuredEntryRequest request) {
+        StructuredDocumentEntry entry = structuredEntryRepository.findById(entryId)
+                .filter(StructuredDocumentEntry::getIsActive)
+                .orElseThrow(() -> new IllegalArgumentException("Structured entry not found: " + entryId));
+
+        UserFile file = userFileRepository.findById(entry.getUserFileId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Linked file not found: " + entry.getUserFileId()));
+
+        UserFile.FileCategory documentType = request.getDocumentType() != null
+                ? resolveDocumentType(request.getDocumentType(), file)
+                : entry.getDocumentType();
+        Long patientId = request.getPatientId() != null ? request.getPatientId() : entry.getPatientId();
+        Long employeeUserId = request.getEmployeeUserId() != null
+                ? request.getEmployeeUserId()
+                : entry.getEmployeeUserId();
+
+        validateStructuredEntry(documentType, patientId, employeeUserId, request.getFields());
+
+        entry.setDocumentType(documentType);
+        entry.setPatientId(patientId);
+        entry.setEmployeeUserId(employeeUserId);
+        entry.setFieldsJson(writeFieldsJson(request.getFields()));
+
+        StructuredDocumentEntry saved = structuredEntryRepository.save(entry);
+        log.info("Structured entry updated: ID={}, file={}", entryId, saved.getUserFileId());
+        return mapEntryToDTO(saved, file);
+    }
+
+    /** Get a structured entry by its ID. */
+    public Optional<StructuredDocumentEntryDTO> getStructuredEntry(Long entryId) {
+        return structuredEntryRepository.findById(entryId)
+                .filter(StructuredDocumentEntry::getIsActive)
+                .flatMap(entry -> userFileRepository.findById(entry.getUserFileId())
+                        .map(file -> mapEntryToDTO(entry, file)));
+    }
+
+    /** Get the structured entry captured from a specific uploaded file, if any. */
+    public Optional<StructuredDocumentEntryDTO> getStructuredEntryForFile(Long fileId) {
+        return structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(fileId)
+                .flatMap(entry -> userFileRepository.findById(entry.getUserFileId())
+                        .map(file -> mapEntryToDTO(entry, file)));
+    }
+
+    /** List structured entries linked to a patient (care-circle context). */
+    public List<StructuredDocumentEntryDTO> listStructuredEntriesForPatient(Long patientId) {
+        List<StructuredDocumentEntry> entries = structuredEntryRepository.findByPatientIdAndIsActiveTrue(patientId);
+        Set<Long> fileIds = entries.stream()
+                .map(StructuredDocumentEntry::getUserFileId)
+                .collect(Collectors.toSet());
+        Map<Long, UserFile> fileMap = userFileRepository.findAllById(fileIds)
+                .stream()
+                .collect(Collectors.toMap(UserFile::getId, f -> f));
+        return entries.stream()
+                .filter(entry -> fileMap.containsKey(entry.getUserFileId()))
+                .map(entry -> mapEntryToDTO(entry, fileMap.get(entry.getUserFileId())))
+                .collect(Collectors.toList());
+    }
+
+    private UserFile.FileCategory resolveDocumentType(String rawType, UserFile file) {
+        UserFile.FileCategory documentType = (rawType != null && !rawType.isBlank())
+                ? mapCategoryToEnum(rawType)
+                : file.getFileCategory();
+        if (!StructuredDocumentEntry.SUPPORTED_TYPES.contains(documentType)) {
+            throw new IllegalArgumentException(
+                    "'" + documentType + "' does not support structured entries. Supported types: "
+                            + StructuredDocumentEntry.supportedTypeNames());
+        }
+        return documentType;
+    }
+
+    /**
+     * Enforce the structured-entry invariants: patient or employee context must be
+     * present, and every required field for the document type must be filled in.
+     */
+    private void validateStructuredEntry(UserFile.FileCategory documentType,
+                                         Long patientId, Long employeeUserId,
+                                         Map<String, String> fields) {
+        if (patientId == null && employeeUserId == null) {
+            throw new IllegalArgumentException(
+                    "A patient or employee context is required before saving a structured entry");
+        }
+
+        Set<String> required = StructuredDocumentEntry.REQUIRED_FIELDS
+                .getOrDefault(documentType, Set.of());
+        List<String> missing = required.stream()
+                .filter(key -> fields == null
+                        || fields.get(key) == null
+                        || fields.get(key).isBlank())
+                .sorted()
+                .collect(Collectors.toList());
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Missing required fields for " + documentType + ": " + String.join(", ", missing));
+        }
+    }
+
+    private String writeFieldsJson(Map<String, String> fields) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(fields != null ? fields : Map.of());
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize structured entry fields", e);
+        }
+    }
+
+    private Map<String, String> readFieldsJson(String fieldsJson) {
+        if (fieldsJson == null || fieldsJson.isBlank()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(fieldsJson, new TypeReference<LinkedHashMap<String, String>>() {});
+        } catch (IOException e) {
+            log.error("Failed to parse structured entry fields JSON", e);
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private StructuredDocumentEntryDTO mapEntryToDTO(StructuredDocumentEntry entry, UserFile file) {
+        return StructuredDocumentEntryDTO.builder()
+                .id(entry.getId())
+                .fileId(entry.getUserFileId())
+                .documentType(entry.getDocumentType().name())
+                .patientId(entry.getPatientId())
+                .employeeUserId(entry.getEmployeeUserId())
+                .fields(readFieldsJson(entry.getFieldsJson()))
+                .createdBy(entry.getCreatedBy())
+                .createdAt(entry.getCreatedAt())
+                .updatedAt(entry.getUpdatedAt())
+                .originalFilename(file != null ? file.getOriginalFilename() : null)
+                .fileUrl(file != null ? resolveFileUrl(file) : null)
+                .build();
+    }
+
     // Helper methods
     private void validateFile(MultipartFile file) {
         if (file.isEmpty()) {
@@ -270,22 +537,14 @@ public class FileManagementService {
         return filename.substring(filename.lastIndexOf("."));
     }
     
+    /**
+     * Map a client-supplied category string to the canonical {@link UserFile.FileCategory}.
+     * Delegates to the single source of truth on the enum so the frontend and backend stay
+     * aligned. Unknown values throw {@link IllegalArgumentException} (callers that take user
+     * input should validate up-front so the message can be surfaced as a 400).
+     */
     private UserFile.FileCategory mapCategoryToEnum(String category) {
-        if (category == null) {
-            return UserFile.FileCategory.OTHER_DOCUMENT;
-        }
-        
-        return switch (category.toUpperCase()) {
-            case "PROFILE_IMAGE", "PROFILE" -> UserFile.FileCategory.PROFILE_IMAGE;
-            case "MEDICAL_RECORD", "MEDICAL" -> UserFile.FileCategory.MEDICAL_RECORD;
-            case "CLINICAL_NOTE", "CLINICAL" -> UserFile.FileCategory.CLINICAL_NOTE;
-            case "PRESCRIPTION" -> UserFile.FileCategory.PRESCRIPTION;
-            case "LAB_RESULT", "LAB" -> UserFile.FileCategory.LAB_RESULT;
-            case "INSURANCE_DOCUMENT", "INSURANCE" -> UserFile.FileCategory.INSURANCE_DOCUMENT;
-            case "CONSENT_FORM", "CONSENT" -> UserFile.FileCategory.CONSENT_FORM;
-            case "CARE_PLAN", "CARE" -> UserFile.FileCategory.CARE_PLAN;
-            default -> UserFile.FileCategory.OTHER_DOCUMENT;
-        };
+        return UserFile.FileCategory.fromClientValue(category);
     }
     
     private Long determinePatientId(Long userId, String userType) {
@@ -335,18 +594,19 @@ public class FileManagementService {
         return null;
     }
     
-    private UserFileDTO mapToDTO(UserFile userFile) {
-        String fileUrl;
+    private String resolveFileUrl(UserFile userFile) {
         if (userFile.getStorageType() == UserFile.StorageType.DATABASE) {
-            fileUrl = databaseStorageService.getFileUrl("db://files/" + userFile.getId());
-        } else {
-            if (s3StorageService == null) {
-                fileUrl = "unavailable://s3-service-not-configured";
-            } else {
-                fileUrl = s3StorageService.getFileUrl(userFile.getS3Path());
-            }
+            return databaseStorageService.getFileUrl("db://files/" + userFile.getId());
         }
-        
+        if (s3StorageService == null) {
+            return "unavailable://s3-service-not-configured";
+        }
+        return s3StorageService.getFileUrl(userFile.getS3Path());
+    }
+
+    private UserFileDTO mapToDTO(UserFile userFile) {
+        String fileUrl = resolveFileUrl(userFile);
+
         return UserFileDTO.builder()
                 .id(userFile.getId())
                 .filename(userFile.getFilename())

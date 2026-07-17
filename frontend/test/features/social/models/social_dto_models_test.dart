@@ -145,11 +145,13 @@ void main() {
       final cp = ConversationPreviewDto(
         peerId: 3,
         peerName: 'Carol',
+        peerRole: 'CAREGIVER',
         content: 'Hey!',
         timestamp: dt,
       );
       expect(cp.peerId, 3);
       expect(cp.peerName, 'Carol');
+      expect(cp.peerRole, 'CAREGIVER');
       expect(cp.content, 'Hey!');
       expect(cp.timestamp, dt);
     });
@@ -171,6 +173,7 @@ void main() {
       final cp = ConversationPreviewDto(
         peerId: 0,
         peerName: '',
+        peerRole: '',
         content: '',
         timestamp: DateTime(2020),
       );

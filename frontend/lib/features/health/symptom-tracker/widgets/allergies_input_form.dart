@@ -2,7 +2,7 @@ import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai
 import 'package:care_connect_app/features/health/Shared/Data/health_api.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/api_service.dart';
-import 'package:care_connect_app/services/deepseek_service.dart';
+import 'package:care_connect_app/services/ai_analyze_service.dart';
 
 
 class AllergyInputForm extends StatefulWidget {
@@ -55,9 +55,20 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
     }
   }
 
-  void _applyAiResult(Map<String, dynamic> ai) {
-    final allergen = (ai['allergen'] ?? '').toString().trim();
-    final reaction = (ai['reaction'] ?? '').toString().trim();
+  void _applyAiResult(Map<String, dynamic> ai, {required String transcript}) {
+    String allergen = _firstNonEmpty([
+      ai['allergen'],
+      ai['medication'],
+      ai['drug'],
+    ]);
+    if (allergen.isEmpty) {
+      allergen = _inferDrugFromTranscript(transcript);
+    }
+
+    String reaction = (ai['reaction'] ?? '').toString().trim();
+    if (reaction.isEmpty && transcript.isNotEmpty) {
+      reaction = transcript;
+    }
     final sevRaw   = (ai['severity'] ?? '').toString().toUpperCase();
 
     String dropdownLabel = 'Mild (Minor symptoms)';
@@ -78,6 +89,28 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
       if (reaction.isNotEmpty) _reactionController.text = reaction;
       _selectedSeverity = dropdownLabel;
     });
+  }
+
+  String _firstNonEmpty(List<dynamic> values) {
+    for (final value in values) {
+      final text = (value ?? '').toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+
+  String _inferDrugFromTranscript(String transcript) {
+    final patterns = <RegExp>[
+      RegExp(r'(?i)allergic to\s+([^,.;]+)'),
+      RegExp(r'(?i)allergy to\s+([^,.;]+)'),
+      RegExp(r'(?i)(?:drug|medication)\s+([^,.;]+)\s+allerg'),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(transcript.trim());
+      final drug = match?.group(1)?.trim() ?? '';
+      if (drug.isNotEmpty) return drug;
+    }
+    return '';
   }
 
   Future<void> _submitAllergy() async {
@@ -207,10 +240,7 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
                     if (!mounted) return;
                     if (transcript == null || transcript.trim().isEmpty) return;
 
-                    // Fill reaction as fallback
-                    setState(() {
-                      _reactionController.text = transcript.trim();
-                    });
+                    final trimmedTranscript = transcript.trim();
 
                     // Send to DeepSeek AI
                     try {
@@ -224,19 +254,15 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
                         return;
                       }
 
-                      final ai = await DeepseekService.extractAllergy(
+                      final ai = await AiAnalyzeService.extractAllergy(
                         patientId: intPid,
-                        transcript: transcript.trim(),
+                        transcript: trimmedTranscript,
                         allergen: _drugController.text.trim().isEmpty
                             ? null
                             : _drugController.text.trim(),
-                        severity: null,
-                        reaction: _reactionController.text.trim().isNotEmpty
-                            ? _reactionController.text.trim()
-                            : null,
                       );
 
-                      _applyAiResult(ai);
+                      _applyAiResult(ai, transcript: trimmedTranscript);
 
                       messenger.showSnackBar(
                         const SnackBar(content: Text('✅ AI filled the fields')),

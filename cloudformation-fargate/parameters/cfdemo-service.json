@@ -1,7 +1,11 @@
 [
   { "ParameterKey": "Environment", "ParameterValue": "cfdemo" },
   { "ParameterKey": "BackendImageUri", "ParameterValue": "752824437392.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo" },
-  { "ParameterKey": "SpringProfile", "ParameterValue": "dev" },
+  { "ParameterKey": "SpringProfile", "ParameterValue": "prod" },
+  { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "true" },
+  { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
+  { "ParameterKey": "FromEmail", "ParameterValue": "noreply@careconnect.com" },
+  { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "" },
   { "ParameterKey": "FrontendBaseUrl", "ParameterValue": "http://localhost:3000" },
   { "ParameterKey": "CorsAllowedList", "ParameterValue": "http://localhost:*,http://127.0.0.1:*" },
   { "ParameterKey": "ContainerPort", "ParameterValue": "8081" },
@@ -9,5 +13,6 @@
   { "ParameterKey": "TaskCpu", "ParameterValue": "1024" },
   { "ParameterKey": "TaskMemory", "ParameterValue": "3072" },
   { "ParameterKey": "HealthCheckPath", "ParameterValue": "/v1/api/test/health" },
-  { "ParameterKey": "HealthCheckGracePeriodSeconds", "ParameterValue": "180" }
+  { "ParameterKey": "DomainName", "ParameterValue": "" },
+  { "ParameterKey": "HostedZoneId", "ParameterValue": "" }
 ]

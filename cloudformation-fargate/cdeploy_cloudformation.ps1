@@ -18,6 +18,7 @@ $script:StartTime = Get-Date
 
 # Track the active stack/operation so the catch block can print useful context.
 $script:CurrentStackName = $null
+$script:CurrentOperation = $null
 $script:HadNativePreference = $false
 $nativePreferenceVar = Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue
 if ($null -ne $nativePreferenceVar) {
@@ -56,6 +57,10 @@ $ServiceParameters = Join-Path $ParameterDir "$Environment-service.json"
 $script:DataEffectiveParameters = $DataParameters
 $script:TemporaryFiles = New-Object System.Collections.Generic.List[string]
 
+# Remove parameter override temp files left by interrupted previous runs.
+Get-ChildItem -Path ([System.IO.Path]::GetTempPath()) -Filter "careconnect-*-data-*.json" -File -ErrorAction SilentlyContinue |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+
 function Write-Step {
     param([string]$Message)
     Write-Host ""
@@ -82,10 +87,15 @@ function Get-ElapsedTimeText {
 function Test-StackExists {
     param([string]$StackName)
 
-    & aws cloudformation describe-stacks `
-        --profile $Profile `
-        --region $Region `
-        --stack-name $StackName 2>$null 1>$null
+    try {
+        & aws cloudformation describe-stacks `
+            --profile $Profile `
+            --region $Region `
+            --stack-name $StackName 2>$null 1>$null
+    }
+    catch {
+        return $false
+    }
 
     return ($LASTEXITCODE -eq 0)
 }
@@ -93,10 +103,15 @@ function Test-StackExists {
 function Test-EcrRepositoryExists {
     param([string]$RepositoryName)
 
-    & aws ecr describe-repositories `
-        --profile $Profile `
-        --region $Region `
-        --repository-names $RepositoryName 2>$null 1>$null
+    try {
+        & aws ecr describe-repositories `
+            --profile $Profile `
+            --region $Region `
+            --repository-names $RepositoryName 2>$null 1>$null
+    }
+    catch {
+        return $false
+    }
 
     return ($LASTEXITCODE -eq 0)
 }
@@ -104,18 +119,67 @@ function Test-EcrRepositoryExists {
 function Get-StackStatus {
     param([string]$StackName)
 
-    $status = & aws cloudformation describe-stacks `
-        --profile $Profile `
-        --region $Region `
-        --stack-name $StackName `
-        --query "Stacks[0].StackStatus" `
-        --output text 2>$null
+    try {
+        $status = & aws cloudformation describe-stacks `
+            --profile $Profile `
+            --region $Region `
+            --stack-name $StackName `
+            --query "Stacks[0].StackStatus" `
+            --output text 2>$null
+    }
+    catch {
+        return $null
+    }
 
     if ($LASTEXITCODE -ne 0) {
         return $null
     }
 
     return [string]$status
+}
+
+function Wait-ForStackStable {
+    param([string]$StackName)
+
+    $status = Get-StackStatus -StackName $StackName
+    if (-not $status) {
+        return
+    }
+
+    if ($status -eq "CREATE_IN_PROGRESS") {
+        Write-Host "Stack '$StackName' is still being created (RDS can take 10-20 minutes). Waiting for CREATE_COMPLETE..." -ForegroundColor Yellow
+        $script:CurrentOperation = "Waiting for stack '$StackName' to finish creating"
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & aws cloudformation wait stack-create-complete `
+                --profile $Profile `
+                --region $Region `
+                --stack-name $StackName 2>&1 | Out-Null
+            Assert-LastExitCode "CloudFormation wait stack-create-complete for '$StackName'"
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        return
+    }
+
+    if ($status -in @("UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS")) {
+        Write-Host "Stack '$StackName' is still updating. Waiting..." -ForegroundColor Yellow
+        $script:CurrentOperation = "Waiting for stack '$StackName' to finish updating"
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & aws cloudformation wait stack-update-complete `
+                --profile $Profile `
+                --region $Region `
+                --stack-name $StackName 2>&1 | Out-Null
+            Assert-LastExitCode "CloudFormation wait stack-update-complete for '$StackName'"
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+    }
 }
 
 function Get-ParameterMap {
@@ -273,7 +337,8 @@ function Get-ParameterOverrides {
             $value = [string]$Overrides[$key]
         }
 
-        $result.Add("$key=$value")
+        $escapedValue = $value.Replace('"', '\"')
+        $result.Add("$key=`"$escapedValue`"")
     }
 
     return $result.ToArray()
@@ -361,6 +426,8 @@ function Invoke-CloudFormationDeploy {
     # CloudFormation deploy handles both create and update. We still detect the
     # current state so the user can see which path is happening.
     $script:CurrentStackName = $StackName
+    $script:CurrentOperation = "Preparing deployment for '$StackName'"
+    Wait-ForStackStable -StackName $StackName
     Remove-RollbackCompleteStack -StackName $StackName
     $parameterOverrides = Get-ParameterOverrides -ParameterFile $ParameterFile -Overrides $Overrides
     $operation = if (Test-StackExists -StackName $StackName) { "Updating" } else { "Creating" }
@@ -378,15 +445,56 @@ function Invoke-CloudFormationDeploy {
         "--parameter-overrides"
     ) + $parameterOverrides
 
-    & aws @args
-    if ($LASTEXITCODE -ne 0) {
+    $hadNativePref = $false
+    $previousNativePreference = $null
+    $nativePreferenceVar = Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue
+    if ($null -ne $nativePreferenceVar) {
+        $hadNativePref = $true
+        $previousNativePreference = $nativePreferenceVar.Value
+        $global:PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $awsOutput = $null
+    $deployExitCode = 1
+    try {
+        # AWS CLI writes progress to stderr. Some PowerShell versions still surface
+        # that as a terminating error, so catch it and rely on LASTEXITCODE.
+        try {
+            $awsOutput = & aws @args 2>&1
+            $deployExitCode = $LASTEXITCODE
+        }
+        catch {
+            if ($null -eq $awsOutput) {
+                $awsOutput = @()
+            }
+            $awsOutput += $_.Exception.Message
+            $awsOutput += $_.ToString()
+            if ($LASTEXITCODE -ne 0) {
+                $deployExitCode = $LASTEXITCODE
+            }
+        }
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($hadNativePref) {
+            $global:PSNativeCommandUseErrorActionPreference = $previousNativePreference
+        }
+    }
+
+    if ($awsOutput) {
+        Write-Host $awsOutput
+    }
+
+    if ($deployExitCode -ne 0) {
         try {
             Write-StackFailureDetails -StackName $StackName
         }
         catch {
             Write-Host "Unable to read CloudFormation failure details for '$StackName'." -ForegroundColor Yellow
         }
-        throw "CloudFormation deploy for stack '$StackName' failed with exit code $LASTEXITCODE."
+        throw "CloudFormation deploy for stack '$StackName' failed with exit code $deployExitCode."
     }
 
     $finalStatus = Get-StackStatus -StackName $StackName
@@ -437,6 +545,15 @@ Write-Step "Checking prerequisites"
     $dataSecretOverrides = Get-DataSecretOverrides
     if ($dataSecretOverrides.Count -gt 0) {
         Write-Host "Using data stack secrets from environment variables." -ForegroundColor DarkCyan
+    }
+    if (-not $env:CARECONNECT_DATABASE_MASTER_PASSWORD) {
+        throw "Missing CARECONNECT_DATABASE_MASTER_PASSWORD. Set it in this PowerShell session before running the deploy script."
+    }
+    if (-not $env:CARECONNECT_JWT_SECRET) {
+        throw "Missing CARECONNECT_JWT_SECRET. Set it in this PowerShell session (at least 32 random characters) before running the deploy script."
+    }
+    if ($env:CARECONNECT_JWT_SECRET.Length -lt 32) {
+        throw "CARECONNECT_JWT_SECRET must be at least 32 characters (current length: $($env:CARECONNECT_JWT_SECRET.Length))."
     }
     $script:DataEffectiveParameters = New-EffectiveParameterFile -BaseParameterFile $DataParameters -Overrides $dataSecretOverrides
 
@@ -499,7 +616,7 @@ Write-Step "Checking prerequisites"
 
         Write-Step "Building Docker image"
         $script:CurrentOperation = "Building Docker image"
-        & docker build -t $LocalImageName .
+        & docker build --platform linux/amd64 -t $LocalImageName .
         Assert-LastExitCode "Docker build"
 
         Write-Step "Tagging and pushing Docker image to ECR"
@@ -520,11 +637,10 @@ Write-Step "Checking prerequisites"
     }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 
-    # Print the final ALB endpoint so the frontend or health checks can use it.
-    Write-Step "Reading final backend URL"
-    $script:CurrentOperation = "Reading final backend URL"
-    $AlbDnsName = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "LoadBalancerDnsName").Trim()
-    $AlbUrl = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "LoadBalancerUrl").Trim()
+    # Print the final API Gateway endpoint so the frontend or health checks can use it.
+    Write-Step "Reading final API endpoint"
+    $script:CurrentOperation = "Reading final API endpoint"
+    $ApiEndpoint = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "ApiEndpoint").Trim()
     $script:CurrentStackName = $null
     $script:CurrentOperation = $null
 
@@ -533,22 +649,27 @@ Write-Step "Checking prerequisites"
     Write-Host "Environment:   $Environment"
     Write-Host "Repository:    $RepositoryName"
     Write-Host "Image URI:     $ImageUri"
-    Write-Host "ALB DNS:       $AlbDnsName"
-    Write-Host "Backend URL:   $AlbUrl"
-    Write-Host "Health check:  $AlbUrl/v1/api/test/health"
+    Write-Host "API Endpoint:  $ApiEndpoint"
+    Write-Host "Health check:  $ApiEndpoint/v1/api/test/health"
     Write-Host "Elapsed time:  $(Get-ElapsedTimeText)"
 }
 catch {
     Write-Host ""
     Write-Host "Deployment failed." -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
+    $errorMessage = if ($_.Exception.Message) { $_.Exception.Message } else { $_.ToString() }
+    if ($errorMessage) {
+        Write-Host $errorMessage -ForegroundColor Red
+    }
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+        Write-Host $_.ErrorDetails.Message -ForegroundColor Red
+    }
     Write-Host "Elapsed time: $(Get-ElapsedTimeText)" -ForegroundColor Yellow
 
-    if ($script:CurrentOperation) {
+    if ($null -ne $script:CurrentOperation -and $script:CurrentOperation) {
         Write-Host "Last operation: $script:CurrentOperation" -ForegroundColor Yellow
     }
 
-    if ($script:CurrentStackName) {
+    if ($null -ne $script:CurrentStackName -and $script:CurrentStackName) {
         Write-Host ""
         Write-Host "Troubleshoot this stack with:" -ForegroundColor Yellow
         Write-Host "aws cloudformation describe-stack-events --profile $Profile --region $Region --stack-name $script:CurrentStackName --query `"StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]`" --output table" -ForegroundColor Yellow

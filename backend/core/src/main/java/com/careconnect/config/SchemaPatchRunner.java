@@ -12,7 +12,7 @@ import java.sql.Statement;
 /**
  * Applies one-time schema patches via plain JDBC at startup.
  * Runs before JPA initialisation (@Order(1)) and has no JPA dependency,
- * so it avoids the Flyway ↔ entityManagerFactory circular-dependency issue.
+ * so it avoids coupling schema changes to Flyway/JPA startup order.
  *
  * Each patch is idempotent: safe to execute on every restart.
  */
@@ -101,7 +101,184 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "WHERE user_id IN (SELECT id FROM users WHERE email IN ('caregiver@careconnect.com', 'sarah.mitchell@careconnect.com')) " +
             "AND city IN ('Springfield', 'Chicago')"
         );
+        applyPatch(
+            "V75 – align user_files.file_category CHECK constraint with typed category model",
+            // Recreate the constraint so the employment / home-care intake categories are
+            // accepted. Superset of the previous allow-list (legacy HIRING_DOCUMENT retained
+            // for backward compatibility), so all existing rows remain valid. Idempotent.
+            "ALTER TABLE user_files DROP CONSTRAINT IF EXISTS user_files_file_category_check;" +
+            "ALTER TABLE user_files ADD CONSTRAINT user_files_file_category_check CHECK (" +
+            "file_category IN (" +
+            "  'PROFILE_IMAGE','MEDICAL_RECORD','CLINICAL_NOTE','PRESCRIPTION','LAB_RESULT'," +
+            "  'INSURANCE_DOCUMENT','CONSENT_FORM','CARE_PLAN'," +
+            "  'EMPLOYMENT_APPLICATION','ONBOARDING_FORM','BACKGROUND_CHECK','CERTIFICATION'," +
+            "  'REFERENCE','EMPLOYMENT_CONTRACT','TAX_FORM','WORK_AUTHORIZATION','EMERGENCY_CONTACT'," +
+            "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
+            "))"
+        );
+        applyRetrievalIndexChunkPatches();
+        applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
+    }
+
+    /**
+     * Tasks 1.5 / 1.6 — pgvector extension and shared Ask AI retrieval index table.
+     * Task 4.2 — search_vector trigger + backfill. Task 4.4 — optional partial index for
+     * NULL-embedding backfill scans (idx_retrieval_chunk_embedding_null_backfill).
+     * Mirrors db/migration reference SQL (applied via SchemaPatchRunner in all envs; not Flyway at ECS deploy).
+     */
+    private void applyRetrievalIndexChunkPatches() {
+        applyPatch(
+            "V2607071920 – enable pgvector extension",
+            "CREATE EXTENSION IF NOT EXISTS vector"
+        );
+        applyPatch(
+            "V2607071921a – create retrieval_index_chunk table",
+            "CREATE TABLE IF NOT EXISTS retrieval_index_chunk (" +
+            "  id                UUID          PRIMARY KEY DEFAULT gen_random_uuid()," +
+            "  patient_id        BIGINT        NOT NULL," +
+            "  record_type       VARCHAR(40)   NOT NULL," +
+            "  source_record_id  VARCHAR(120)  NOT NULL," +
+            "  chunk_text        TEXT          NOT NULL," +
+            "  chunk_metadata    JSONB         NULL," +
+            "  search_vector     TSVECTOR      NULL," +
+            "  embedding         vector(1536)  NULL," +
+            "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
+            "  consent_scope     VARCHAR(40)   NULL" +
+            ")"
+        );
+        applyPatch(
+            "V2607071921b – retrieval_index_chunk patient FK",
+            "DO $$ BEGIN " +
+            "  ALTER TABLE retrieval_index_chunk " +
+            "    ADD CONSTRAINT fk_retrieval_chunk_patient " +
+            "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
+            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+        );
+        applyPatch(
+            "V2607071921c – retrieval_index_chunk indexes",
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id " +
+            "  ON retrieval_index_chunk (patient_id);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_record_type " +
+            "  ON retrieval_index_chunk (patient_id, record_type);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source " +
+            "  ON retrieval_index_chunk (source_record_id, record_type);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_fts " +
+            "  ON retrieval_index_chunk USING GIN (search_vector);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding " +
+            "  ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) " +
+            "  WITH (lists = 100)"
+        );
+        applyPatch(
+            "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
+            "CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger() " +
+            "RETURNS TRIGGER AS $$ " +
+            "BEGIN " +
+            "  NEW.search_vector := to_tsvector('english', COALESCE(NEW.chunk_text, '')); " +
+            "  RETURN NEW; " +
+            "END; " +
+            "$$ LANGUAGE plpgsql;" +
+            "DROP TRIGGER IF EXISTS trg_retrieval_index_chunk_search_vector ON retrieval_index_chunk;" +
+            "CREATE TRIGGER trg_retrieval_index_chunk_search_vector " +
+            "  BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk " +
+            "  FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger()"
+        );
+        applyPatch(
+            "V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)",
+            "UPDATE retrieval_index_chunk " +
+            "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
+            "WHERE search_vector IS NULL"
+        );
+        applyPatch(
+            "V2607122000 – indexing_outbox claimed_at lease column",
+            "ALTER TABLE indexing_outbox " +
+            "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
+            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
+            "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
+        );
+        applyPatch(
+            "V2607161317 – partial index for embedding backfill scans (Task 4.4, optional DBA follow-up)",
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding_null_backfill " +
+            "  ON retrieval_index_chunk (indexed_at ASC NULLS LAST, id ASC) " +
+            "  WHERE embedding IS NULL " +
+            "    AND chunk_text IS NOT NULL " +
+            "    AND TRIM(BOTH FROM chunk_text) <> ''"
+        );
+    }
+
+    /**
+     * Tasks 3.14.5 / 3.14.6 — canonical USPS mailpiece table + importance columns.
+     * Mirrors V2607142100 and V2607142130. Prod uses SchemaPatchRunner (Flyway off);
+     * Task 3.14.5 (#122) — canonical USPS mailpiece table.
+     * Mirrors db/migration V2607142100. Prod uses SchemaPatchRunner (Flyway off);
+     * entity stores bare Long patientId (no @ManyToOne), so FK must be applied here.
+     */
+    private void applyUspsMailpiecePatches() {
+        applyPatch(
+            "V2607142100a – create usps_mailpiece table",
+            "CREATE TABLE IF NOT EXISTS usps_mailpiece (" +
+            "  id              BIGSERIAL       PRIMARY KEY," +
+            "  patient_id      BIGINT          NOT NULL," +
+            "  user_id         VARCHAR(120)    NULL," +
+            "  source_key      VARCHAR(160)    NOT NULL," +
+            "  external_id     VARCHAR(120)    NULL," +
+            "  sender          VARCHAR(512)    NULL," +
+            "  summary         TEXT            NULL," +
+            "  image_ref       VARCHAR(1024)   NULL," +
+            "  received_at     TIMESTAMPTZ     NULL," +
+            "  digest_date     DATE            NULL," +
+            "  ocr_text        TEXT            NULL," +
+            "  content_hash    VARCHAR(80)     NOT NULL," +
+            "  consent_scope   VARCHAR(40)     NULL," +
+            "  created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()," +
+            "  updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()" +
+            ")"
+        );
+        applyPatch(
+            "V2607142100b – usps_mailpiece patient FK",
+            "DO $$ BEGIN " +
+            "  ALTER TABLE usps_mailpiece " +
+            "    ADD CONSTRAINT fk_usps_mailpiece_patient " +
+            "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
+            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+        );
+        applyPatch(
+            "V2607142100c – usps_mailpiece unique (patient_id, source_key)",
+            "DO $$ BEGIN " +
+            "  ALTER TABLE usps_mailpiece " +
+            "    ADD CONSTRAINT uq_usps_mailpiece_patient_source_key " +
+            "    UNIQUE (patient_id, source_key); " +
+            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+        );
+        applyPatch(
+            "V2607142100d – usps_mailpiece indexes",
+            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_digest_date " +
+            "  ON usps_mailpiece (patient_id, digest_date);" +
+            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_content_hash " +
+            "  ON usps_mailpiece (patient_id, content_hash)"
+        );
+        applyPatch(
+            "V2607142130a – usps_mailpiece importance classification columns",
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_level VARCHAR(16) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_confidence NUMERIC(3, 2) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS classification_method VARCHAR(32) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS classification_engine VARCHAR(128) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_reasoning TEXT NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS importance_category VARCHAR(40) NULL;" +
+            "ALTER TABLE usps_mailpiece " +
+            "  ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ NULL"
+        );
+        applyPatch(
+            "V2607142130b – usps_mailpiece importance index",
+            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance " +
+            "  ON usps_mailpiece (patient_id, importance_level, digest_date)"
+        );
     }
 
     /**
