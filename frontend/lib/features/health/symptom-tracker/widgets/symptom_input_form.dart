@@ -101,7 +101,7 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                           return;
                         }
 
-                        final ai = await DeepseekService.extractSymptom(
+                        final ai = await AiAnalyzeService.extractSymptom(
                           patientId: intPidForAI,
                           transcript: t,
                         );
