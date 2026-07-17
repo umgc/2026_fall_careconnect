@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.config.VitalAlertThresholdProperties;
 import com.careconnect.dto.VitalSampleDTO;
 import com.careconnect.dto.WearableReadingIngestionRequest;
 import com.careconnect.dto.WearableReadingIngestionResponse;
@@ -35,6 +36,8 @@ public class VitalSampleService {
     private final PatientRepository patientRepository;
     private final WearableMetricRepository wearableMetricRepository;
     private final CaregiverService caregiverService;
+    private final NotificationService notificationService;
+    private final VitalAlertThresholdProperties vitalAlertThresholdProperties;
 
     /**
      * Create a new vital sample
@@ -279,16 +282,20 @@ public class VitalSampleService {
      */
     private void checkAndSendVitalAlerts(VitalSample vitalSample) {
         try {
-            Long patientId = vitalSample.getPatient().getId();
+            if (vitalSample.getPatient() == null || vitalSample.getPatient().getUser() == null) {
+                LOG.warn("Skipping vital alert dispatch because patient/user linkage is missing for sample {}", vitalSample.getId());
+                return;
+            }
+            Long patientUserId = vitalSample.getPatient().getUser().getId();
             
             // Check heart rate alerts
             if (vitalSample.getHeartRate() != null) {
                 String alertLevel = determineHeartRateAlert(vitalSample.getHeartRate());
                 if (!"NORMAL".equals(alertLevel)) {
                     sendVitalAlertIfEnabled(
-                        patientId, 
-                        "Heart Rate", 
-                        vitalSample.getHeartRate() + " bpm", 
+                        patientUserId,
+                        "heart_rate",
+                        vitalSample.getHeartRate() + " bpm",
                         alertLevel
                     );
                 }
@@ -299,9 +306,9 @@ public class VitalSampleService {
                 String alertLevel = determineSpO2Alert(vitalSample.getSpo2());
                 if (!"NORMAL".equals(alertLevel)) {
                     sendVitalAlertIfEnabled(
-                        patientId, 
-                        "Blood Oxygen (SpO2)", 
-                        vitalSample.getSpo2() + "%", 
+                        patientUserId,
+                        "spo2",
+                        vitalSample.getSpo2() + "%",
                         alertLevel
                     );
                 }
@@ -314,9 +321,9 @@ public class VitalSampleService {
                     String bpValue = (vitalSample.getSystolic() != null ? vitalSample.getSystolic() : "?") + 
                                    "/" + (vitalSample.getDiastolic() != null ? vitalSample.getDiastolic() : "?");
                     sendVitalAlertIfEnabled(
-                        patientId, 
-                        "Blood Pressure", 
-                        bpValue + " mmHg", 
+                        patientUserId,
+                        "blood_pressure",
+                        bpValue + " mmHg",
                         alertLevel
                     );
                 }
@@ -325,9 +332,9 @@ public class VitalSampleService {
             // Check mood alerts (severe depression or anxiety)
             if (vitalSample.getMoodValue() != null && vitalSample.getMoodValue() <= 2) {
                 sendVitalAlertIfEnabled(
-                    patientId, 
-                    "Mood", 
-                    "Low mood score: " + vitalSample.getMoodValue(), 
+                    patientUserId,
+                    "mood",
+                    "score=" + vitalSample.getMoodValue(),
                     "HIGH"
                 );
             }
@@ -335,16 +342,16 @@ public class VitalSampleService {
             // Check pain alerts (severe pain)
             if (vitalSample.getPainValue() != null && vitalSample.getPainValue() >= 8) {
                 sendVitalAlertIfEnabled(
-                    patientId, 
-                    "Pain Level", 
-                    "High pain score: " + vitalSample.getPainValue(), 
+                    patientUserId,
+                    "pain",
+                    "score=" + vitalSample.getPainValue(),
                     "HIGH"
                 );
             }
             
         } catch (Exception e) {
             // Log error but don't fail the vital recording
-            System.err.println("Error sending vital alerts: " + e.getMessage());
+            LOG.warn("Error sending vital alerts: {}", e.getMessage(), e);
         }
     }
 
@@ -471,33 +478,48 @@ public class VitalSampleService {
     
     private String determineHeartRateAlert(Double heartRate) {
         if (heartRate == null) return "NORMAL";
-        if (heartRate < 60) return "LOW";
-        if (heartRate > 120) return "CRITICAL";
-        if (heartRate > 100) return "HIGH";
+        VitalAlertThresholdProperties.HeartRate policy = vitalAlertThresholdProperties.getHeartRate();
+        if (heartRate > policy.getCriticalMin()) return "CRITICAL";
+        if (heartRate > policy.getHighMin()) return "HIGH";
+        if (heartRate < policy.getLowMax()) return "LOW";
         return "NORMAL";
     }
     
     private String determineSpO2Alert(Double spo2) {
         if (spo2 == null) return "NORMAL";
-        if (spo2 < 90) return "CRITICAL";
-        if (spo2 < 95) return "HIGH";
+        VitalAlertThresholdProperties.Spo2 policy = vitalAlertThresholdProperties.getSpo2();
+        if (spo2 < policy.getCriticalMax()) return "CRITICAL";
+        if (spo2 < policy.getHighMax()) return "HIGH";
         return "NORMAL";
     }
     
     private String determineBPAlert(Integer systolic, Integer diastolic) {
-        if (systolic != null && systolic > 180) return "CRITICAL";
-        if (diastolic != null && diastolic > 110) return "CRITICAL";
-        if (systolic != null && systolic > 140) return "HIGH";
-        if (diastolic != null && diastolic > 90) return "HIGH";
-        if (systolic != null && systolic < 90) return "LOW";
-        if (diastolic != null && diastolic < 60) return "LOW";
+        VitalAlertThresholdProperties.Thresholds systolicPolicy = vitalAlertThresholdProperties.getBloodPressure().getSystolic();
+        VitalAlertThresholdProperties.Thresholds diastolicPolicy = vitalAlertThresholdProperties.getBloodPressure().getDiastolic();
+        if (systolic != null && systolic > systolicPolicy.getCriticalMin()) return "CRITICAL";
+        if (diastolic != null && diastolic > diastolicPolicy.getCriticalMin()) return "CRITICAL";
+        if (systolic != null && systolic > systolicPolicy.getHighMin()) return "HIGH";
+        if (diastolic != null && diastolic > diastolicPolicy.getHighMin()) return "HIGH";
+        if (systolic != null && systolic < systolicPolicy.getLowMax()) return "LOW";
+        if (diastolic != null && diastolic < diastolicPolicy.getLowMax()) return "LOW";
         return "NORMAL";
     }
     
     /**
      * Helper method to send vital alerts only if Firebase is enabled
      */
-    private void sendVitalAlertIfEnabled(Long patientId, String type, String value, String alertLevel) {
-        // Firebase notification logic removed
+    private void sendVitalAlertIfEnabled(Long patientUserId, String metricType, String measuredValue, String alertLevel) {
+        notificationService.sendVitalAlert(patientUserId, metricType, measuredValue, alertLevel)
+            .exceptionally(ex -> {
+                LOG.warn(
+                    "Failed to send vital alert notification for user {} (metricType={}, measuredValue={}, severity={})",
+                    patientUserId,
+                    metricType,
+                    measuredValue,
+                    alertLevel,
+                    ex
+                );
+                return java.util.List.of();
+            });
     }
 }
