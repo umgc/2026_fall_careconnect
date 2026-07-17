@@ -143,6 +143,36 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("sourceRecordId") String sourceRecordId);
 
     /**
+     * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    ORDER BY indexed_at ASC NULLS LAST, id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForBackfill(@Param("limit") int limit);
+
+    /**
+     * Counts embeddable chunks still missing an embedding (Task 4.4 ops / backfill progress).
+     */
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingsForBackfill();
+
+    /**
      * Patient-scoped vector similarity search (Task 5.1).
      *
      * <p>Orders by cosine distance ({@code <=>}) using the ivfflat cosine ops index.

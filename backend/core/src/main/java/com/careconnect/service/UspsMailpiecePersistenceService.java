@@ -89,12 +89,6 @@ public class UspsMailpiecePersistenceService {
             upserted++;
 
             if (hashChanged || needsClassification) {
-
-            applyNormalized(entity, patientId, userId, normalized);
-            final UspsMailpiece saved = mailpieceRepository.save(entity);
-            upserted++;
-
-            if (hashChanged) {
                 indexingEventEmitter.emitMailpieceIndexed(new MailpieceIndexedPayload(
                         saved.getId(),
                         patientId,

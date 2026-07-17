@@ -66,7 +66,6 @@ class RetrievalIndexServiceTest {
                 new SummaryChunker(mapper),
                 new TranscriptSegmentChunker(),
                 new MailpieceChunker(),
-                mapper);
                 mapper,
                 chunkEmbeddingService);
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
@@ -446,8 +445,6 @@ class RetrievalIndexServiceTest {
         mailpiece.setContentHash("sha-abc");
         when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
 
-    @DisplayName("ingestMailpieceIndexed skips when contentHash matches existing USPS_MAIL chunk")
-    void ingestMailpieceIndexed_skipsUnchangedHash() {
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
                 .recordType(RetrievalRecordType.USPS_MAIL.name())
                 .sourceRecordId("55")
@@ -507,7 +504,5 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getChunkText()).contains("Importance: HIGH");
         assertThat(captor.getValue().get(0).getChunkMetadata()).contains("importanceFingerprint");
-        verify(uspsMailpieceRepository, never()).findById(any());
-        verify(chunkRepository, never()).saveAll(anyList());
     }
 }
