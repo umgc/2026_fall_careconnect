@@ -28,7 +28,15 @@ bool isUserInitiatedCallRecording(Map<String, dynamic>? recording) {
   if (recording == null) {
     return false;
   }
-  return recording['initiatedByUserId'] != null;
+  final raw = recording['initiatedByUserId'];
+  if (raw == null) {
+    return false;
+  }
+  if (raw is num) {
+    return true;
+  }
+  final asString = raw.toString().trim();
+  return asString.isNotEmpty && asString.toLowerCase() != 'null';
 }
 
 String? sentimentClipRecordingStatusMessage(Map<String, dynamic>? recording) {

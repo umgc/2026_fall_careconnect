@@ -1251,7 +1251,7 @@ class _PostCallTelemetrySummaryScreenState
 
     // A system-initiated recording (initiatedByUserId == null) is for transcription only —
     // the S3 file is deleted after transcription so playback is never available for it.
-    final isSystemRecording = rec['initiatedByUserId'] == null;
+    final isSystemRecording = !isUserInitiatedCallRecording(rec);
 
     String startedText = '—';
     if (!isSystemRecording && startedAt != null) {
