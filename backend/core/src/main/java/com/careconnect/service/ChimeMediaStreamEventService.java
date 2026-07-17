@@ -82,6 +82,22 @@ public class ChimeMediaStreamEventService {
             return;
         }
 
+        // Capture/concat pipelines join the meeting as aws:MediaPipeline-* attendees and get their
+        // own IndividualAudio KVS streams (often silence). Never register or orphan-alias those onto
+        // real roster rows — that mis-binds the second user (usually patient) to a blank track.
+        if (ChimeExternalUserIdParser.isPipelineInternal(externalUserId)) {
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Ignoring pipeline-internal KVS stream callId={} attendeeId={}"
+                                + " externalUserId={} streamArn={}",
+                        callId,
+                        attendeeId,
+                        externalUserId,
+                        streamArn);
+            }
+            return;
+        }
+
         if (meetingId != null) {
             callAttendeeService.reconcileRosterFromChime(callId, meetingId);
         }

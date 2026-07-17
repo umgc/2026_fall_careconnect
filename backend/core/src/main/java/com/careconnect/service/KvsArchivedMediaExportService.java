@@ -25,7 +25,7 @@ import software.amazon.awssdk.services.kinesisvideoarchivedmedia.model.GetMediaF
 import software.amazon.awssdk.services.kinesisvideoarchivedmedia.model.ListFragmentsRequest;
 import software.amazon.awssdk.services.kinesisvideoarchivedmedia.model.TimestampRange;
 
-/** Exports archived KVS fragments for one Chime attendee stream. */
+/** Exports archived KVS fragments for one Chime attendee stream into a single media file. */
 @Service
 public class KvsArchivedMediaExportService {
 
@@ -37,7 +37,8 @@ public class KvsArchivedMediaExportService {
   private KinesisVideoClient kinesisVideoClient;
 
   /**
-   * Exports the attendee stream fragment range to a temporary WebM/MKV file.
+   * Lists fragments in the call window ({@code SERVER_TIMESTAMP}), concatenates them via {@code
+   * GetMediaForFragmentList}, and writes one temporary WebM/MKV file for ffmpeg → WAV.
    *
    * @return temporary raw media path
    */

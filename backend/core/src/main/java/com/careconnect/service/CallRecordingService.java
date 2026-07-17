@@ -11,7 +11,6 @@ import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -49,22 +48,16 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaC
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineResponse;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaInsightsPipelineRequest;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaInsightsPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaPipelineRequest;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.FragmentSelector;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.FragmentSelectorType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GridViewConfiguration;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.KinesisVideoStreamRecordingSourceRuntimeConfiguration;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.LayoutOption;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaInsightsPipeline;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipelineSinkType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipelineSourceType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipelineStatus;
@@ -74,10 +67,6 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamS
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamSource;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.ResolutionOption;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.RecordingFileFormat;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.RecordingStreamConfiguration;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.S3RecordingSinkRuntimeConfiguration;
-import software.amazon.awssdk.services.chimesdkmediapipelines.model.TimestampRange;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.VideoArtifactsConfiguration;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.VideoMuxType;
 import software.amazon.awssdk.services.iam.IamClient;
@@ -120,11 +109,17 @@ import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 public class CallRecordingService {
 
   private static final Logger log = LoggerFactory.getLogger(CallRecordingService.class);
-  /** Max streams per Chime KVS recording runtime config (API limit). */
-  private static final int KVS_RECORDING_STREAM_LIMIT = 2;
 
-  /** Default fragment window when starting a KVS Media Insights pipeline. */
-  private static final Duration KVS_FRAGMENT_WINDOW = Duration.ofHours(3);
+  /** Max reserved capacity for Chime media stream pipeline IndividualAudio sinks. */
+  private static final int MEDIA_STREAM_RESERVED_CAPACITY_MAX = 10;
+
+  /**
+   * Extra IndividualAudio slots beyond app roster size. Capture/concatenation pipelines join the
+   * meeting as {@code aws:MediaPipeline-*} attendees and consume pool streams; without slack, a
+   * 2-party call with {@code reservedCapacity=2} often assigns only the pipeline bot + caregiver,
+   * leaving the patient with no real KVS stream.
+   */
+  private static final int MEDIA_PIPELINE_INTERNAL_STREAM_SLACK = 2;
 
   /** Retry post-call transcription shortly after a ready recording if the original trigger was missed. */
   private static final Duration POST_CALL_TRANSCRIPTION_LATE_TRIGGER_WINDOW = Duration.ofMinutes(30);
@@ -149,10 +144,7 @@ public class CallRecordingService {
   // tracks active pipeline IDs so we can stop them cleanly
   private final Map<String, String> activePipelineIds = new ConcurrentHashMap<>();
 
-  // tracks active KVS Media Insights pipeline IDs per call
-  private final Map<String, String> activeKvsPipelineIds = new ConcurrentHashMap<>();
-
-  // tracks active media stream pipeline IDs per call (meeting → KVS ingest)
+  // tracks active media stream pipeline IDs per call (meeting → KVS stream pool ingest)
   private final Map<String, String> activeMediaStreamPipelineIds = new ConcurrentHashMap<>();
 
   @Autowired(required = false)
@@ -590,29 +582,16 @@ public class CallRecordingService {
   }
 
   // ================================================================
-  // KVS / MEDIA INSIGHTS (speaker identification)
+  // KVS STREAM POOL (speaker identification ingest)
   // ================================================================
 
   /**
-   * Maps active {@code call_attendees} rows to checked-out KVS stream ARNs from the pool.
+   * Resolves Chime pool-assigned stream ARNs for active attendees and persists {@code
+   * call_attendees.kvs_stream_arn} for post-call fragment assemble → WAV → Transcribe.
    *
-   * @param callId call identifier
-   * @return stream configurations for Media Insights pipeline creation
+   * @return attendeeId → streamArn map
    */
-  private FragmentSelector buildKvsRecordingFragmentSelector() {
-    final Instant start = Instant.now();
-    final Instant end = start.plus(KVS_FRAGMENT_WINDOW);
-    return FragmentSelector.builder()
-        .fragmentSelectorType(FragmentSelectorType.SERVER_TIMESTAMP)
-        .timestampRange(
-            TimestampRange.builder()
-                .startTimestamp(start)
-                .endTimestamp(end)
-                .build())
-        .build();
-  }
-
-  List<RecordingStreamConfiguration> buildAttendeeStreams(
+  Map<String, String> resolveAndPersistAttendeeStreams(
       final String callId, final String meetingId, final String mediaStreamPipelineId) {
     if (!kvsStreamPoolService.isIngestMode()) {
       throw new IllegalStateException(
@@ -622,10 +601,9 @@ public class CallRecordingService {
       callAttendeeService.reconcileRosterFromChime(callId, meetingId);
     }
     final List<CallAttendee> attendees = callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId);
-    final List<RecordingStreamConfiguration> streams = new ArrayList<>();
-
     final Map<String, String> attendeeToStreamArn =
         kvsAttendeeStreamResolver.resolve(callId, attendees, mediaStreamPipelineId, meetingId);
+    final Map<String, String> persisted = new HashMap<>();
     for (final CallAttendee attendee : attendees) {
       final String streamArn = attendeeToStreamArn.get(attendee.getChimeAttendeeId());
       if (streamArn == null || streamArn.isBlank()) {
@@ -634,14 +612,14 @@ public class CallRecordingService {
       }
       callAttendeeService.recordKvsStreamMapping(
           callId, attendee.getChimeAttendeeId(), streamArn);
-      streams.add(RecordingStreamConfiguration.builder().streamArn(streamArn).build());
+      persisted.put(attendee.getChimeAttendeeId(), streamArn);
     }
-    return streams;
+    return persisted;
   }
 
   /**
    * Starts a Chime media stream pipeline that ingests per-attendee meeting audio into the
-   * configured KVS Stream Pool. Must run before Media Insights when ingest mode is enabled.
+   * configured KVS Stream Pool ({@code IndividualAudio}).
    */
   public Map<String, Object> startMediaStreamPipeline(final String callId) {
     if (!kvsStreamPoolService.isIngestMode()) {
@@ -702,7 +680,9 @@ public class CallRecordingService {
     }
 
     final int reservedCapacity =
-        Math.min(Math.max(attendees.size(), 1), KVS_RECORDING_STREAM_LIMIT);
+        Math.min(
+            Math.max(attendees.size() + MEDIA_PIPELINE_INTERNAL_STREAM_SLACK, 1),
+            MEDIA_STREAM_RESERVED_CAPACITY_MAX);
     final String sourceArn = chimeService.buildMeetingSourceArn(callId, meetingId, accountId);
     final String streamPoolArn = kvsStreamPoolService.getStreamPoolArn();
 
@@ -833,8 +813,8 @@ public class CallRecordingService {
   }
 
   /**
-   * Starts KVS ingest + Media Insights on a background thread so call join is not blocked by
-   * attendee→stream discovery polling (can take tens of seconds).
+   * Starts KVS pool ingest on a background thread so call join is not blocked by attendee→stream
+   * discovery polling (can take tens of seconds).
    */
   @Async
   public void startKvsPipelineAsync(final String callId) {
@@ -866,8 +846,9 @@ public class CallRecordingService {
   }
 
   /**
-   * Starts a per-attendee KVS Media Insights pipeline for speaker capture.
-   * Persists {@code kvs_pipeline_id} on the system recording row when present.
+   * Starts speaker-ID ingest: {@code CreateMediaStreamPipeline} → KVS Stream Pool → resolve and
+   * persist attendee→stream ARNs. Post-call transcription assembles fragments per stream into WAV
+   * and runs Transcribe (no Media Insights S3 export on this path).
    */
   public Map<String, Object> startKvsPipeline(final String callId) {
     if (!kvsStreamPoolService.isEnabled()) {
@@ -876,24 +857,14 @@ public class CallRecordingService {
           "message", "KVS stream pool is not enabled in this environment");
     }
 
-    if (activeKvsPipelineIds.containsKey(callId)) {
+    if (activeMediaStreamPipelineIds.containsKey(callId)) {
       return Map.of(
           "status",
           "ALREADY_STARTED",
-          "kvsPipelineId",
-          activeKvsPipelineIds.get(callId),
+          "mediaStreamPipelineId",
+          activeMediaStreamPipelineIds.get(callId),
           "callId",
           callId);
-    }
-
-    final String configArn;
-    try {
-      configArn = mediaInsightsConfig.requireMediaInsightsConfigArn();
-    } catch (IllegalStateException e) {
-      if (log.isWarnEnabled()) {
-        log.warn("Cannot start KVS pipeline for call {}: {}", callId, e.getMessage());
-      }
-      return Map.of("status", "ERROR", "message", e.getMessage(), "callId", callId);
     }
 
     final String meetingId = chimeService.getMeetingId(callId);
@@ -913,22 +884,20 @@ public class CallRecordingService {
           callId);
     }
 
-    String mediaStreamPipelineId = activeMediaStreamPipelineIds.get(callId);
-    if (kvsStreamPoolService.isIngestMode()) {
-      final Map<String, Object> ingestResult = startMediaStreamPipeline(callId);
-      final String ingestStatus = ingestResult.get("status").toString();
-      if ("ERROR".equals(ingestStatus) || "UNAVAILABLE".equals(ingestStatus)) {
-        return ingestResult;
-      }
-      mediaStreamPipelineId =
-          ingestResult.containsKey("mediaStreamPipelineId")
-              ? ingestResult.get("mediaStreamPipelineId").toString()
-              : activeMediaStreamPipelineIds.get(callId);
+    final Map<String, Object> ingestResult = startMediaStreamPipeline(callId);
+    final String ingestStatus = ingestResult.get("status").toString();
+    if (!"STARTED".equals(ingestStatus) && !"ALREADY_STARTED".equals(ingestStatus)) {
+      return ingestResult;
     }
 
-    final List<RecordingStreamConfiguration> streams;
+    final String mediaStreamPipelineId =
+        ingestResult.containsKey("mediaStreamPipelineId")
+            ? ingestResult.get("mediaStreamPipelineId").toString()
+            : activeMediaStreamPipelineIds.get(callId);
+
+    final Map<String, String> streams;
     try {
-      streams = buildAttendeeStreams(callId, meetingId, mediaStreamPipelineId);
+      streams = resolveAndPersistAttendeeStreams(callId, meetingId, mediaStreamPipelineId);
     } catch (IllegalStateException e) {
       stopMediaStreamPipeline(callId);
       return Map.of(
@@ -937,6 +906,7 @@ public class CallRecordingService {
           "callId", callId);
     }
     if (streams.isEmpty()) {
+      stopMediaStreamPipeline(callId);
       return Map.of(
           "status",
           "ERROR",
@@ -945,102 +915,24 @@ public class CallRecordingService {
           "callId",
           callId);
     }
-    if (streams.size() > KVS_RECORDING_STREAM_LIMIT) {
-      if (log.isWarnEnabled()) {
-        log.warn(
-            "KVS pipeline supports at most {} streams; call {} has {} active attendees",
-            KVS_RECORDING_STREAM_LIMIT,
-            callId,
-            streams.size());
-      }
-      return Map.of(
-          "status",
-          "ERROR",
-          "message",
-          "KVS Media Insights supports at most "
-              + KVS_RECORDING_STREAM_LIMIT
-              + " streams per pipeline",
-          "callId",
-          callId);
-    }
 
-    final String bucket = resolveOrCreateRecordingBucket();
-    if (bucket == null) {
-      return Map.of(
-          "status",
-          "ERROR",
-          "message",
-          "Could not resolve or create the recording bucket for KVS pipeline sink",
-          "callId",
-          callId);
-    }
-    final String sinkArn = "arn:aws:s3:::" + bucket;
-
-    try {
-      final CreateMediaInsightsPipelineRequest request =
-          CreateMediaInsightsPipelineRequest.builder()
-              .mediaInsightsPipelineConfigurationArn(configArn)
-              .mediaInsightsRuntimeMetadata(Map.of("meetingId", meetingId, "callId", callId))
-              .kinesisVideoStreamRecordingSourceRuntimeConfiguration(
-                  KinesisVideoStreamRecordingSourceRuntimeConfiguration.builder()
-                      .streams(streams)
-                      .fragmentSelector(buildKvsRecordingFragmentSelector())
-                      .build())
-              .s3RecordingSinkRuntimeConfiguration(
-                  S3RecordingSinkRuntimeConfiguration.builder()
-                      .destination(sinkArn)
-                      .recordingFileFormat(RecordingFileFormat.OPUS)
-                      .build())
-              .build();
-
-      final CreateMediaInsightsPipelineResponse response =
-          pipelinesClient.createMediaInsightsPipeline(request);
-      final MediaInsightsPipeline pipeline = response.mediaInsightsPipeline();
-      final String kvsPipelineId = pipeline.mediaPipelineId();
-
-      activeKvsPipelineIds.put(callId, kvsPipelineId);
-
-      recordingRepository
-          .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
-          .ifPresent(
-              recording -> {
-                recording.setKvsPipelineId(kvsPipelineId);
-                recordingRepository.save(recording);
-              });
-
-      if (log.isInfoEnabled()) {
-        log.info(
-            "KVS Media Insights pipeline started callId={} kvsPipelineId={} attendeeStreams={}",
-            callId,
-            kvsPipelineId,
-            streams.size());
-      }
-
-      return Map.of(
-          "status",
-          "STARTED",
-          "callId",
+    if (log.isInfoEnabled()) {
+      log.info(
+          "KVS pool ingest ready callId={} mediaStreamPipelineId={} attendeeStreams={}",
           callId,
-          "kvsPipelineId",
-          kvsPipelineId,
-          "configArn",
-          configArn,
-          "attendeeStreamCount",
+          mediaStreamPipelineId,
           streams.size());
-
-    } catch (Exception e) {
-      stopMediaStreamPipeline(callId);
-      if (log.isErrorEnabled()) {
-        log.error("Failed to start KVS pipeline for callId={}: {}", callId, e.getMessage(), e);
-      }
-      return Map.of(
-          "status",
-          "ERROR",
-          "message",
-          "Failed to start KVS pipeline: " + e.getMessage(),
-          "callId",
-          callId);
     }
+
+    return Map.of(
+        "status",
+        "STARTED",
+        "callId",
+        callId,
+        "mediaStreamPipelineId",
+        mediaStreamPipelineId,
+        "attendeeStreamCount",
+        streams.size());
   }
 
   // ================================================================

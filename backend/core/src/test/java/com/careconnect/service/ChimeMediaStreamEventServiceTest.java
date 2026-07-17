@@ -81,6 +81,19 @@ class ChimeMediaStreamEventServiceTest {
                 .recordJoinFromStreamEvent(CALL_ID, EVENT_ATTENDEE_ID, "CAREGIVER_Test_2");
     }
 
+    @Test
+    @DisplayName("ignores aws:MediaPipeline-* streams so they are not orphan-aliased to patient")
+    void handleEventDetail_ignoresPipelineInternalExternalUserId() {
+        service.handleEventDetail(
+                streamStartDetail(EVENT_ATTENDEE_ID, "aws:MediaPipeline-99ebf"));
+
+        assertThat(registry.getMappings(CALL_ID)).isEmpty();
+        verify(callAttendeeService, never()).reconcileRosterFromChime(anyString(), anyString());
+        verify(callAttendeeService, never())
+                .recordJoinFromStreamEvent(anyString(), anyString(), anyString());
+        verify(callAttendeeService, never()).findActiveChimeAttendeeIds(anyString());
+    }
+
     private static Map<String, Object> streamStartDetail(
             final String attendeeId, final String externalUserId) {
         final Map<String, Object> detail =

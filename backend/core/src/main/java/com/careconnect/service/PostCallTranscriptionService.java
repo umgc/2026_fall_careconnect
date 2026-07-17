@@ -48,10 +48,14 @@ import software.amazon.awssdk.services.transcribe.model.TranscriptionJobStatus;
 /**
  * Handles post-call transcription using AWS Transcribe.
  *
- * <p>When a system-initiated recording finishes concatenation, this service starts an AWS
- * Transcribe job with speaker diarization, waits for it to complete, stores the resulting segments
- * via {@link CallTranscriptService}, and then deletes the concatenated recording from S3 so that
- * calls are not permanently stored.
+ * <p>Primary speaker-ID path (KVS Stream Pool): for each attendee with a mapped stream ARN,
+ * concatenate archived KVS fragments ({@link KvsArchivedMediaExportService}), transcode to WAV
+ * ({@link KvsAudioTranscodeService}), run one Transcribe job per attendee with diarization off, then
+ * store role-labeled segments. Falls back to mixed MP4 + diarization when the KVS path yields no
+ * segments.
+ *
+ * <p>When a system-initiated recording finishes concatenation, this service also deletes the
+ * concatenated recording from S3 when it was not claimed for playback.
  */
 @Service
 public class PostCallTranscriptionService {
@@ -72,6 +76,15 @@ public class PostCallTranscriptionService {
 
   /** Source label for mixed MP4 transcripts used as fallback or completeness supplement. */
   private static final String MP4_TRANSCRIPT_SOURCE = "POST_CALL_MP4_MIXED";
+
+  /** Pause between words that starts a new KVS utterance when audio_segments is absent. */
+  private static final long UTTERANCE_PAUSE_SPLIT_MS = 750L;
+
+  /**
+   * When true, map MP4 diarization labels (spk_0/…) onto KVS attendee roles. Temporarily false —
+   * partial KVS success was rewriting all supplemental segments to the one successful attendee.
+   */
+  private static final boolean REMAP_MP4_SPEAKERS_FROM_KVS = false;
 
   /** Transcription status set while the job is in progress. */
   public static final String TRANSCRIPTION_STATUS_PROCESSING = "PROCESSING";
@@ -428,6 +441,10 @@ public class PostCallTranscriptionService {
       final String callId,
       final List<TranscriptSegmentInput> segments,
       final KvsTranscriptionResult kvsResult) {
+    if (!REMAP_MP4_SPEAKERS_FROM_KVS) {
+      return callTranscriptService.recordSegments(callId, null, segments);
+    }
+
     final Map<String, AttendeeIdentity> speakerIdentities =
         inferMp4SpeakerIdentities(segments, kvsResult);
     if (speakerIdentities.isEmpty()) {
@@ -680,13 +697,64 @@ public class PostCallTranscriptionService {
       final JsonNode root,
       final LocalDateTime recordingStartedAt,
       final String speakerLabel) {
+    final List<TranscriptSegmentInput> fromAudioSegments =
+        parseAudioSegments(root, recordingStartedAt, speakerLabel, KVS_TRANSCRIPT_SOURCE);
+    if (!fromAudioSegments.isEmpty()) {
+      return fromAudioSegments;
+    }
+    return parseItemsAsUtterances(root, recordingStartedAt, speakerLabel, KVS_TRANSCRIPT_SOURCE);
+  }
+
+  /**
+   * Prefer Transcribe {@code results.audio_segments} — natural pause-bounded utterances with
+   * start/end times (same granularity the UI expects from the mixed-MP4 path).
+   */
+  private List<TranscriptSegmentInput> parseAudioSegments(
+      final JsonNode root,
+      final LocalDateTime recordingStartedAt,
+      final String speakerLabel,
+      final String source) {
+    final JsonNode audioSegments = root.path("results").path("audio_segments");
+    if (!audioSegments.isArray() || audioSegments.isEmpty()) {
+      return List.of();
+    }
+    final List<TranscriptSegmentInput> segments = new ArrayList<>();
+    for (final JsonNode segment : audioSegments) {
+      final String text = segment.path("transcript").asText("").trim();
+      if (text.isBlank()) {
+        continue;
+      }
+      segments.add(
+          buildSegment(
+              speakerLabel,
+              text,
+              toMs(segment.path("start_time").asText("0")),
+              toMs(segment.path("end_time").asText("0")),
+              recordingStartedAt,
+              source));
+    }
+    return segments;
+  }
+
+  /**
+   * Fallback when {@code audio_segments} is absent: group word items into utterances, splitting on
+   * pauses longer than {@link #UTTERANCE_PAUSE_SPLIT_MS}.
+   */
+  private List<TranscriptSegmentInput> parseItemsAsUtterances(
+      final JsonNode root,
+      final LocalDateTime recordingStartedAt,
+      final String speakerLabel,
+      final String source) {
     final JsonNode items = root.path("results").path("items");
     if (!items.isArray() || items.isEmpty()) {
       return List.of();
     }
+
+    final List<TranscriptSegmentInput> segments = new ArrayList<>();
     final StringBuilder text = new StringBuilder();
     Long startMs = null;
     Long endMs = null;
+
     for (final JsonNode item : items) {
       final String type = item.path("type").asText();
       final String content = item.path("alternatives").path(0).path("content").asText("");
@@ -694,12 +762,24 @@ public class PostCallTranscriptionService {
         continue;
       }
       if ("pronunciation".equals(type)) {
+        final long itemStartMs = toMs(item.path("start_time").asText("0"));
+        final long itemEndMs = toMs(item.path("end_time").asText("0"));
+        if (endMs != null && itemStartMs - endMs >= UTTERANCE_PAUSE_SPLIT_MS && text.length() > 0) {
+          segments.add(
+              buildSegment(
+                  speakerLabel,
+                  text.toString().trim(),
+                  startMs,
+                  endMs,
+                  recordingStartedAt,
+                  source));
+          text.setLength(0);
+          startMs = null;
+        }
         if (text.length() > 0) {
           text.append(' ');
         }
         text.append(content);
-        final long itemStartMs = toMs(item.path("start_time").asText("0"));
-        final long itemEndMs = toMs(item.path("end_time").asText("0"));
         if (startMs == null) {
           startMs = itemStartMs;
         }
@@ -708,17 +788,12 @@ public class PostCallTranscriptionService {
         text.append(content);
       }
     }
-    if (text.length() == 0) {
-      return List.of();
+    if (text.length() > 0) {
+      segments.add(
+          buildSegment(
+              speakerLabel, text.toString().trim(), startMs, endMs, recordingStartedAt, source));
     }
-    return List.of(
-        buildSegment(
-            speakerLabel,
-            text.toString().trim(),
-            startMs,
-            endMs,
-            recordingStartedAt,
-            KVS_TRANSCRIPT_SOURCE));
+    return segments;
   }
 
   private static String buildAttendeeWavKey(final CallRecording rec, final CallAttendee attendee) {

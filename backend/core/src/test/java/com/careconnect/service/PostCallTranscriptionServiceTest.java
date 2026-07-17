@@ -41,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -216,7 +217,7 @@ class PostCallTranscriptionServiceTest {
         verify(callTranscriptService)
                 .recordSegments(
                         eq(CALL_ID),
-                        eq(2L),
+                        isNull(),
                         argThat(
                                 segments ->
                                         !segments.isEmpty()
@@ -224,10 +225,7 @@ class PostCallTranscriptionServiceTest {
                                                         .allMatch(
                                                                 segment ->
                                                                         "POST_CALL_MP4_MIXED"
-                                                                                .equals(segment.source())
-                                                                                && "Caregiver"
-                                                                                        .equals(
-                                                                                                segment.speakerLabel()))));
+                                                                                .equals(segment.source()))));
 
         Files.deleteIfExists(raw1);
         Files.deleteIfExists(raw2);
@@ -288,5 +286,39 @@ class PostCallTranscriptionServiceTest {
         return new ResponseInputStream<>(
                 GetObjectResponse.builder().build(),
                 AbortableInputStream.create(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    @Test
+    @DisplayName("KVS attendee parse splits on audio_segments timestamps")
+    @SuppressWarnings("unchecked")
+    void parseSingleAttendeeTranscript_usesAudioSegments() throws Exception {
+        final String json =
+                """
+                {"results":{"audio_segments":[
+                  {"id":0,"transcript":"Hello there.","start_time":"1.00","end_time":"2.50"},
+                  {"id":1,"transcript":"This is later.","start_time":"5.00","end_time":"6.20"}
+                ],"items":[]}}
+                """;
+        final var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+        final LocalDateTime started = LocalDateTime.of(2026, 7, 17, 14, 0);
+
+        final List<TranscriptSegmentInput> segments =
+                (List<TranscriptSegmentInput>)
+                        ReflectionTestUtils.invokeMethod(
+                                service,
+                                "parseSingleAttendeeTranscript",
+                                root,
+                                started,
+                                "Caregiver");
+
+        assertThat(segments).hasSize(2);
+        assertThat(segments.get(0).text()).isEqualTo("Hello there.");
+        assertThat(segments.get(0).startMs()).isEqualTo(1000L);
+        assertThat(segments.get(0).endMs()).isEqualTo(2500L);
+        assertThat(segments.get(0).speakerLabel()).isEqualTo("Caregiver");
+        assertThat(segments.get(0).source()).isEqualTo("POST_CALL_KVS_ATTENDEE");
+        assertThat(segments.get(1).text()).isEqualTo("This is later.");
+        assertThat(segments.get(1).startMs()).isEqualTo(5000L);
+        assertThat(segments.get(1).endMs()).isEqualTo(6200L);
     }
 }
