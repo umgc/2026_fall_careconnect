@@ -1,5 +1,7 @@
 package com.careconnect.service;
 
+import com.careconnect.exception.EmailAuthException;
+import com.careconnect.exception.EmailCredentialNeedsReauthException;
 import com.careconnect.model.*;
 import com.careconnect.repository.EmailCredentialRepo;
 import com.careconnect.repository.USPSDigestCacheRepo;
@@ -35,6 +37,8 @@ public class USPSDigestService {
     private final GmailParser gmailParser;
     private final OutlookParser outlookParser;
     private final TokenCryptor tokenCryptor;
+    private final GoogleOAuthService googleOAuthService;
+    private final EmailCredentialLifecycleService credentialLifecycle;
     private final UspsMailpiecePersistenceService mailpiecePersistenceService;
     private final ObjectMapper om = new ObjectMapper();
 
@@ -55,14 +59,18 @@ public class USPSDigestService {
         }
 
         // 2) Gmail
-        var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+        var g = prepareGmailCredential(userId);
         if (g.isPresent()) {
-            var at = decrypt(g.get().getAccessTokenEnc());
-            var raw = gmailClient.fetchLatestDigest(at);
-            if (raw.isPresent()) {
-                var digest = gmailParser.toDomain(raw.get());
-                cache(userId, digest);
-                return Optional.of(digest);
+            try {
+                var at = decrypt(g.get().getAccessTokenEnc());
+                var raw = gmailClient.fetchLatestDigest(at);
+                if (raw.isPresent()) {
+                    var digest = gmailParser.toDomain(raw.get());
+                    cache(userId, digest);
+                    return Optional.of(digest);
+                }
+            } catch (EmailAuthException authEx) {
+                haltForAuthFailure(g.get(), authEx.getMessage());
             }
         }
 
@@ -105,14 +113,18 @@ public class USPSDigestService {
             }
         }
 
-        var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+        var g = prepareGmailCredential(userId);
         if (g.isPresent()) {
-            var at = decrypt(g.get().getAccessTokenEnc());
-            var raw = gmailClient.fetchDigestForDate(at, date);
-            if (raw.isPresent()) {
-                var digest = gmailParser.toDomain(raw.get());
-                cache(userId, digest, date);
-                return Optional.of(digest);
+            try {
+                var at = decrypt(g.get().getAccessTokenEnc());
+                var raw = gmailClient.fetchDigestForDate(at, date);
+                if (raw.isPresent()) {
+                    var digest = gmailParser.toDomain(raw.get());
+                    cache(userId, digest, date);
+                    return Optional.of(digest);
+                }
+            } catch (EmailAuthException authEx) {
+                haltForAuthFailure(g.get(), authEx.getMessage());
             }
         }
 
@@ -263,6 +275,43 @@ public class USPSDigestService {
 
     private String decrypt(String s) {
         return tokenCryptor.decrypt(s);
+    }
+
+    /**
+     * Loads Gmail credentials, refreshes if needed, and refuses remote sync when
+     * revoked/expired (halts further provider calls).
+     */
+    private Optional<EmailCredential> prepareGmailCredential(final String userId) {
+        final Optional<EmailCredential> found = credRepo
+                .findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        EmailCredential credential = found.get();
+        if (!credentialLifecycle.allowsSync(credential)) {
+            throw new EmailCredentialNeedsReauthException(
+                    userId,
+                    credential.getLastError() != null
+                            ? credential.getLastError()
+                            : "Gmail access revoked or expired. Reconnect to resume mail sync.",
+                    EmailCredentialLifecycleService.RECONNECT_PATH);
+        }
+        credential = googleOAuthService.ensureFreshToken(credential);
+        if (!credentialLifecycle.allowsSync(credential)) {
+            throw new EmailCredentialNeedsReauthException(
+                    userId,
+                    "Gmail access revoked or expired. Reconnect to resume mail sync.",
+                    EmailCredentialLifecycleService.RECONNECT_PATH);
+        }
+        return Optional.of(credential);
+    }
+
+    private void haltForAuthFailure(final EmailCredential credential, final String reason) {
+        credentialLifecycle.markNeedsReauth(credential, reason);
+        throw new EmailCredentialNeedsReauthException(
+                credential.getUserId(),
+                "Gmail access revoked or expired. Reconnect to resume mail sync.",
+                EmailCredentialLifecycleService.RECONNECT_PATH);
     }
 
     private USPSDigest readDigest(USPSDigestCache cache) {

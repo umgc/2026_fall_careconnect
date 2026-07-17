@@ -84,13 +84,15 @@ class USPSDigestServiceTest {
         cached.setPayloadJson("{\"digestDate\":null,\"mailpieces\":[],\"packages\":[]}");
         cacheStub.nextLookup = Optional.of(cached);
 
+        USPSDigestService service = buildService(
         final RecordingMailpiecePersistence persistence = new RecordingMailpiecePersistence();
         USPSDigestService service = new USPSDigestService(
                 emailCredentialRepository(Optional.empty()),
-                cacheStub.asRepo(),
+                cacheStub,
                 new StubGmailClient(),
                 new OutlookClient(),
                 new StubGmailParser(),
+                new OutlookParser()
                 new OutlookParser(),
                 new TokenCryptor("test-secret-key"),
                 noOpMailpiecePersistence()
@@ -743,6 +745,13 @@ class USPSDigestServiceTest {
             GmailParser gmailParser,
             OutlookParser outlookParser
     ) throws Exception {
+        final GoogleOAuthService oauth = org.mockito.Mockito.mock(GoogleOAuthService.class);
+        org.mockito.Mockito.when(oauth.ensureFreshToken(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        final EmailCredentialLifecycleService lifecycle =
+                new EmailCredentialLifecycleService(
+                        org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
+                        org.mockito.Mockito.mock(NotificationService.class));
         return new USPSDigestService(
                 credRepo,
                 cacheStub.asRepo(),
@@ -751,6 +760,8 @@ class USPSDigestServiceTest {
                 gmailParser,
                 outlookParser,
                 new TokenCryptor("unit-test-secret-32-bytes-long!!!"),
+                oauth,
+                lifecycle
                 noOpMailpiecePersistence()
         );
     }
