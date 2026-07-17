@@ -45,6 +45,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+
 
 @RestController
 @RequestMapping("/api/v3/calls")
@@ -1034,7 +1036,7 @@ public class CallController {
             "savedSegments", saved,
             "status", "saved"));
   }
-
+  @PreAuthorize("@careCircleSecurity.isCaregiverForCall(authentication, #callId)")
   @GetMapping("/{callId}/summary")
   @Operation(summary = "Get latest stored call summary")
   /** Returns the latest stored call summary for the given call. */
@@ -1076,6 +1078,7 @@ public class CallController {
                         "message", "No stored summary found for this call")));
   }
 
+  @PreAuthorize("@careCircleSecurity.isCaregiverForCall(authentication, #callId)")
   @GetMapping("/{callId}/transcript/segments")
   @Operation(summary = "Get stored transcript segments for a call")
   /** Returns stored transcript segments for the given call. */
