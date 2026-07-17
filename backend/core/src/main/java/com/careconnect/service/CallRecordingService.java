@@ -477,6 +477,8 @@ public class CallRecordingService {
       if (log.isDebugEnabled()) {
         log.debug("No active recording pipeline found for callId={}", callId);
       }
+      // Capture may already be stopped while the KVS media stream pipeline is still live.
+      stopMediaStreamPipeline(callId);
       return Map.of("status", "NOT_RECORDING", "callId", callId);
     }
     final String pipelineId = effectivePipelineId(recording);

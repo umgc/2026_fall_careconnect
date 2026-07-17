@@ -25,6 +25,7 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaS
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineResponse;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipelineResponse;
@@ -385,6 +386,21 @@ class CallRecordingServiceTest {
         }
 
         @Test
+        @DisplayName("P5: still tears down media stream pipeline when capture already stopped")
+        void stopRecording_captureAlreadyStopped_stillStopsMediaStreamPipeline() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setMediaStreamPipelineId("media-stream-pipeline-001");
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.stopRecording(CALL_ID);
+
+            assertThat(result).containsEntry("status", "NOT_RECORDING");
+            verify(kvsAttendeeStreamRegistry).clearCall(CALL_ID);
+            verify(pipelinesClient).deleteMediaPipeline(any(DeleteMediaPipelineRequest.class));
+        }
+
+        @Test
         @DisplayName("deletes pipeline and returns STOPPED when active pipeline found in DB")
         void stopRecording_whenActive_deletesPipelineAndReturnsStopped() {
             CallRecording rec = buildRecording("STARTED");
@@ -426,6 +442,7 @@ class CallRecordingServiceTest {
             assertThat(rec.getStatus()).isEqualTo("STOPPED");
             verify(pipelinesClient).deleteMediaCapturePipeline(
                     any(DeleteMediaCapturePipelineRequest.class));
+            verify(kvsAttendeeStreamRegistry).clearCall(CALL_ID);
         }
     }
 
