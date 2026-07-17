@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Normalizes, upserts, classifies importance, and queues indexing for USPS
  * mailpieces (Tasks 3.14.5 / #122, 3.14.6 / #123).
+ * Normalizes, upserts, and queues indexing for USPS mailpieces (Task 3.14.5 / #122).
  */
 @Service
 public class UspsMailpiecePersistenceService {
@@ -88,6 +89,12 @@ public class UspsMailpiecePersistenceService {
             upserted++;
 
             if (hashChanged || needsClassification) {
+
+            applyNormalized(entity, patientId, userId, normalized);
+            final UspsMailpiece saved = mailpieceRepository.save(entity);
+            upserted++;
+
+            if (hashChanged) {
                 indexingEventEmitter.emitMailpieceIndexed(new MailpieceIndexedPayload(
                         saved.getId(),
                         patientId,

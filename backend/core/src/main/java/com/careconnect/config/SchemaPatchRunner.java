@@ -199,6 +199,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
     /**
      * Tasks 3.14.5 / 3.14.6 — canonical USPS mailpiece table + importance columns.
      * Mirrors V2607142100 and V2607142130. Prod uses SchemaPatchRunner (Flyway off);
+     * Task 3.14.5 (#122) — canonical USPS mailpiece table.
+     * Mirrors db/migration V2607142100. Prod uses SchemaPatchRunner (Flyway off);
      * entity stores bare Long patientId (no @ManyToOne), so FK must be applied here.
      */
     private void applyUspsMailpiecePatches() {

@@ -56,6 +56,6 @@ class NativeFileHandler implements FileHandler {
 }
 
 // Platform-specific implementation for native platforms
-FileHandler createPlatformFileHandler() {
+FileHandler createFileHandler() {
   return NativeFileHandler();
 }

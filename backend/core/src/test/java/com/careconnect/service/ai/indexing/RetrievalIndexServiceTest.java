@@ -12,6 +12,7 @@ import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +50,8 @@ class RetrievalIndexServiceTest {
     private UspsMailpieceRepository uspsMailpieceRepository;
     @Mock
     private RetrievalIndexChunkRepository chunkRepository;
+    @Mock
+    private ChunkEmbeddingService chunkEmbeddingService;
 
     private RetrievalIndexService service;
 
@@ -63,6 +67,9 @@ class RetrievalIndexServiceTest {
                 new TranscriptSegmentChunker(),
                 new MailpieceChunker(),
                 mapper);
+                mapper,
+                chunkEmbeddingService);
+        lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -101,6 +108,7 @@ class RetrievalIndexServiceTest {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
         assertThat(captor.getValue())
                 .extracting(RetrievalIndexChunk::getRecordType)
                 .contains(RetrievalRecordType.CALL_SUMMARY.name(),
@@ -122,6 +130,7 @@ class RetrievalIndexServiceTest {
                 .thenReturn(List.of(existing));
         when(chunkRepository.findBySourceRecordIdAndRecordType("99", "VISIT_SUMMARY"))
                 .thenReturn(List.of());
+        when(chunkRepository.countMissingEmbeddingForSource("99")).thenReturn(0L);
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call",
@@ -140,6 +149,45 @@ class RetrievalIndexServiceTest {
         verify(callSummaryRepository, never()).findById(any());
         verify(chunkRepository, never()).saveAll(anyList());
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkEmbeddingService, never()).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated retries embed when contentHash matches but embeddings missing")
+    void ingestSummaryCreated_hashMatch_missingEmbeddings_retriesEmbed() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .id(java.util.UUID.randomUUID())
+                .patientId(1L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("99")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha256:same\"}")
+                .build();
+        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "CALL_SUMMARY"))
+                .thenReturn(List.of(existing));
+        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "VISIT_SUMMARY"))
+                .thenReturn(List.of());
+        when(chunkRepository.countMissingEmbeddingForSource("99")).thenReturn(1L);
+        when(chunkRepository.findBySourceRecordIdAndEmbeddingIsNull("99"))
+                .thenReturn(List.of(existing));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                "sha256:same");
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
     }
 
     @Test
@@ -193,6 +241,7 @@ class RetrievalIndexServiceTest {
         when(callSummaryRepository.findById(8L)).thenReturn(Optional.of(summary));
         when(chunkRepository.findBySourceRecordIdAndRecordType(eq("8"), any()))
                 .thenReturn(List.of());
+        when(chunkRepository.countMissingEmbeddingForSource("8")).thenReturn(0L);
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
@@ -204,6 +253,39 @@ class RetrievalIndexServiceTest {
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(chunkRepository, never()).deleteBySourceRecordId(any());
         verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkEmbeddingService, never()).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated empty drafts still retries missing embeddings")
+    void ingestSummaryCreated_emptyDrafts_retriesMissingEmbeddings() {
+        final RetrievalIndexChunk orphan = RetrievalIndexChunk.builder()
+                .id(java.util.UUID.randomUUID())
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("8")
+                .chunkText("prior")
+                .chunkMetadata("{\"contentHash\":\"sha256:other\"}")
+                .build();
+        final CallSummary summary = new CallSummary();
+        summary.setId(8L);
+        summary.setPatientId(42L);
+        summary.setSummaryJson("{}");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findById(8L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("8"), any()))
+                .thenReturn(List.of(orphan));
+        when(chunkRepository.countMissingEmbeddingForSource("8")).thenReturn(1L);
+        when(chunkRepository.findBySourceRecordIdAndEmbeddingIsNull("8"))
+                .thenReturn(List.of(orphan));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null, "sha256:empty");
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).deleteBySourceRecordId(any());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
     }
 
     @Test
@@ -364,6 +446,8 @@ class RetrievalIndexServiceTest {
         mailpiece.setContentHash("sha-abc");
         when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
 
+    @DisplayName("ingestMailpieceIndexed skips when contentHash matches existing USPS_MAIL chunk")
+    void ingestMailpieceIndexed_skipsUnchangedHash() {
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
                 .recordType(RetrievalRecordType.USPS_MAIL.name())
                 .sourceRecordId("55")
@@ -423,5 +507,7 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getChunkText()).contains("Importance: HIGH");
         assertThat(captor.getValue().get(0).getChunkMetadata()).contains("importanceFingerprint");
+        verify(uspsMailpieceRepository, never()).findById(any());
+        verify(chunkRepository, never()).saveAll(anyList());
     }
 }

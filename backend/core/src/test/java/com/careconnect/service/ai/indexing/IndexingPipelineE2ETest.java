@@ -13,6 +13,7 @@ import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
@@ -65,6 +66,8 @@ class IndexingPipelineE2ETest {
     private UspsMailpieceRepository uspsMailpieceRepository;
     @Mock
     private RetrievalIndexChunkRepository chunkRepository;
+    @Mock
+    private ChunkEmbeddingService chunkEmbeddingService;
 
     private ObjectMapper objectMapper;
     private IndexWorker worker;
@@ -83,6 +86,8 @@ class IndexingPipelineE2ETest {
                 new TranscriptSegmentChunker(),
                 new MailpieceChunker(),
                 objectMapper);
+                objectMapper,
+                chunkEmbeddingService);
         worker = new IndexWorker(
                 outboxRepository,
                 retrievalIndexService,
@@ -90,7 +95,8 @@ class IndexingPipelineE2ETest {
                 new ImmediateTransactionManager(),
                 10,
                 5,
-                2);
+                2,
+                6);
 
         lenient().when(outboxRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> {
