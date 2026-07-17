@@ -9,6 +9,7 @@ import '../models/notification_settings.dart';
 import '../services/notification_settings_service.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/language/language_picker.dart';
+import '../utils/responsive_utils.dart';
 
 import '../features/telemetry/telemetry.dart';
 import '../features/telemetry/telemetry_settings.dart';
@@ -82,7 +83,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (user != null) {
       final settings =
-          await NotificationSettingsService.getNotificationSettings(user.id);
+      await NotificationSettingsService.getNotificationSettings(user.id);
       if (!mounted) return;
       setState(() {
         _notificationSettings = settings;
@@ -285,22 +286,22 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
 
   Widget _buildSettingsCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    Color? textColor,
-    Color? iconColor,
-  }) {
+      BuildContext context, {
+        required IconData icon,
+        required String title,
+        required String subtitle,
+        required VoidCallback onTap,
+        Color? textColor,
+        Color? iconColor,
+      }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -312,9 +313,9 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: textColor,
-                fontWeight: FontWeight.w500,
-              ),
+            color: textColor,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
         trailing: Icon(
@@ -327,14 +328,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildNotificationToggleCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required Function(bool) onChanged,
-    Color? iconColor,
-  }) {
+      BuildContext context, {
+        required IconData icon,
+        required String title,
+        required String subtitle,
+        required bool value,
+        required Function(bool) onChanged,
+        Color? iconColor,
+      }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -360,15 +361,15 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildToggleCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    Color? iconColor,
-    bool loading = false,
-  }) {
+      BuildContext context, {
+        required IconData icon,
+        required String title,
+        required String subtitle,
+        required bool value,
+        required ValueChanged<bool> onChanged,
+        Color? iconColor,
+        bool loading = false,
+      }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -386,15 +387,15 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
         trailing: loading
             ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )
             : Switch(
-                value: value,
-                onChanged: onChanged,
-                activeThumbColor: Theme.of(context).colorScheme.primary,
-              ),
+          value: value,
+          onChanged: onChanged,
+          activeThumbColor: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
@@ -527,9 +528,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
 
-    final shouldHideSubscription = user != null &&
-        (user.role.toLowerCase() == 'patient' ||
-            user.role.toLowerCase() == 'family member');
+    final shouldHideSubscription =
+        user != null &&
+            (user.role.toLowerCase() == 'patient' ||
+                user.role.toLowerCase() == 'family member');
 
     return Scaffold(
       appBar: AppBar(
@@ -540,146 +542,253 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: ListView(
-            children: [
-              const SizedBox(height: 16),
-              Center(
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.1),
-                      child: (user != null &&
+        // Center and cap the content width so cards don't stretch edge-to-edge
+        // on tablet / mobile-landscape widths; keep a comfortable margin on
+        // narrow (mobile-portrait) screens.
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 700),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.isMobile ? 16.0 : 24.0,
+              ),
+              child: ListView(
+                children: [
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 36,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.1),
+                          child:
+                          (user != null &&
                               user.name != null &&
                               user.name!.isNotEmpty)
-                          ? Text(
-                              user.name![0].toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 32,
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : Icon(
-                              Icons.person,
-                              size: 32,
-                              color: Theme.of(context).colorScheme.primary,
+                              ? Text(
+                            user.name![0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 32,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
                             ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      (user != null &&
+                          )
+                              : Icon(
+                            Icons.person,
+                            size: 32,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          (user != null &&
                               user.name != null &&
                               user.name!.isNotEmpty)
-                          ? user.name!
-                          : t.fallbackUser,
-                      style: Theme.of(context).textTheme.titleMedium,
+                              ? user.name!
+                              : t.fallbackUser,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          (user != null && user.email.isNotEmpty)
+                              ? user.email
+                              : '',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                     ),
-                    Text(
-                      (user != null && user.email.isNotEmpty) ? user.email : '',
-                      style: Theme.of(context).textTheme.bodySmall,
+                  ),
+
+                  // Appearance
+                  _buildSectionHeader(context, t.settingsAppearance),
+                  _buildThemeCard(context),
+                  _buildLanguageCard(context),
+                  const SizedBox(height: 24),
+
+                  // Notifications
+                  _buildSectionHeader(context, t.settingsNotifications),
+                  if (_loadingSettings)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        title: Text(t.settingsLoadingNotificationSettings),
+                      ),
+                    )
+                  else if (_notificationSettings != null) ...[
+                    _buildNotificationToggleCard(
+                      context,
+                      icon: Icons.emergency,
+                      title: t.settingsNotifEmergency,
+                      subtitle: t.settingsNotifEmergencyDesc,
+                      value: _notificationSettings!.emergency,
+                      onChanged: (value) =>
+                          _updateNotificationSetting('emergency', value),
+                      iconColor: Theme.of(context).colorScheme.error,
+                    ),
+                    _buildNotificationToggleCard(
+                      context,
+                      icon: Icons.video_call,
+                      title: t.settingsNotifVideoCall,
+                      subtitle: t.settingsNotifVideoCallDesc,
+                      value: _notificationSettings!.videoCall,
+                      onChanged: (value) =>
+                          _updateNotificationSetting('videoCall', value),
+                    ),
+                    _buildNotificationToggleCard(
+                      context,
+                      icon: Icons.call,
+                      title: t.settingsNotifAudioCall,
+                      subtitle: t.settingsNotifAudioCallDesc,
+                      value: _notificationSettings!.audioCall,
+                      onChanged: (value) =>
+                          _updateNotificationSetting('audioCall', value),
+                    ),
+                    _buildNotificationToggleCard(
+                      context,
+                      icon: Icons.favorite,
+                      title: t.settingsNotifSignificantVitals,
+                      subtitle: t.settingsNotifSignificantVitalsDesc,
+                      value: _notificationSettings!.significantVitals,
+                      onChanged: (value) => _updateNotificationSetting(
+                        'significantVitals',
+                        value,
+                      ),
+                    ),
+                    _buildNotificationToggleCard(
+                      context,
+                      icon: Icons.sms,
+                      title: t.settingsNotifSMS,
+                      subtitle: t.settingsNotifSMSDesc,
+                      value: _notificationSettings!.sms,
+                      onChanged: (value) =>
+                          _updateNotificationSetting('sms', value),
+                    ),
+                    _buildNotificationToggleCard(
+                      context,
+                      icon: Icons.stars,
+                      title: t.settingsNotifGamification,
+                      subtitle: t.settingsNotifGamificationDesc,
+                      value: _notificationSettings!.gamification,
+                      onChanged: (value) =>
+                          _updateNotificationSetting('gamification', value),
+                    ),
+                  ] else
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.error_outline,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        title: Text(t.settingsUnableToLoadNotificationSettings),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: _loadNotificationSettings,
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // Privacy
+                  _buildSectionHeader(context, 'Privacy'),
+                  _buildToggleCard(
+                    context,
+                    icon: Icons.privacy_tip,
+                    title: 'Telemetry',
+                    subtitle: 'Anonymous diagnostics and performance metrics',
+                    value: _telemetryEnabled,
+                    loading: _loadingTelemetry,
+                    onChanged: (enabled) async {
+                      if (_loadingTelemetry) return;
+
+                      final messenger = ScaffoldMessenger.of(context);
+                      final errorColor = Theme.of(context).colorScheme.error;
+
+                      final allowed = enabled
+                          ? await _confirmOptIn()
+                          : await _confirmOptOut();
+                      if (!allowed) return;
+
+                      setState(() => _loadingTelemetry = true);
+
+                      try {
+                        await TelemetrySettings.setOptedOut(!enabled);
+
+                        if (!mounted) return;
+                        setState(() {
+                          _telemetryEnabled = enabled;
+                          _loadingTelemetry = false;
+                        });
+
+                        if (_telemetryEnabled) {
+                          await Telemetry.event('privacy_telemetry_toggle', {
+                            'enabled': enabled,
+                          });
+                        }
+                      } catch (_) {
+                        if (!mounted) return;
+                        setState(() => _loadingTelemetry = false);
+
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                              'Unable to update telemetry setting.',
+                            ),
+                            backgroundColor: errorColor,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Subscription (hide for patient/family member)
+                  if (!shouldHideSubscription) ...[
+                    _buildSectionHeader(context, t.settingsSubscription),
+                    _buildSettingsCard(
+                      context,
+                      icon: Icons.subscriptions,
+                      title: t.settingsManageSubscription,
+                      subtitle: t.settingsManageSubscriptionDesc,
+                      onTap: () {
+                        Telemetry.event('button_tap', {
+                          'screen': 'settings',
+                          'target': 'manage_subscription',
+                          'route': '/select-package',
+                        });
+                        context.push('/select-package');
+                      },
                     ),
                     const SizedBox(height: 24),
                   ],
-                ),
-              ),
 
-              // Appearance
-              _buildSectionHeader(context, t.settingsAppearance),
-              _buildThemeCard(context),
-              _buildLanguageCard(context),
-              const SizedBox(height: 24),
-
-              // Notifications
-              _buildSectionHeader(context, t.settingsNotifications),
-              if (_loadingSettings)
-                Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    title: Text(t.settingsLoadingNotificationSettings),
+                  // Notetaker
+                  _buildSectionHeader(context, t.settingsNotetakerAssistant),
+                  _buildSettingsCard(
+                    context,
+                    icon: Icons.edit_note,
+                    title: t.settingsNotetakerConfiguration,
+                    subtitle: t.settingsNotetakerConfigurationDesc,
+                    onTap: () {
+                      Telemetry.event('button_tap', {
+                        'screen': 'settings',
+                        'target': 'notetaker_configuration',
+                        'route': '/notetaker-configuration',
+                      });
+                      context.push('/notetaker-configuration');
+                    },
                   ),
-                )
-              else if (_notificationSettings != null) ...[
-                _buildNotificationToggleCard(
-                  context,
-                  icon: Icons.emergency,
-                  title: t.settingsNotifEmergency,
-                  subtitle: t.settingsNotifEmergencyDesc,
-                  value: _notificationSettings!.emergency,
-                  onChanged: (value) =>
-                      _updateNotificationSetting('emergency', value),
-                  iconColor: Theme.of(context).colorScheme.error,
-                ),
-                _buildNotificationToggleCard(
-                  context,
-                  icon: Icons.video_call,
-                  title: t.settingsNotifVideoCall,
-                  subtitle: t.settingsNotifVideoCallDesc,
-                  value: _notificationSettings!.videoCall,
-                  onChanged: (value) =>
-                      _updateNotificationSetting('videoCall', value),
-                ),
-                _buildNotificationToggleCard(
-                  context,
-                  icon: Icons.call,
-                  title: t.settingsNotifAudioCall,
-                  subtitle: t.settingsNotifAudioCallDesc,
-                  value: _notificationSettings!.audioCall,
-                  onChanged: (value) =>
-                      _updateNotificationSetting('audioCall', value),
-                ),
-                _buildNotificationToggleCard(
-                  context,
-                  icon: Icons.favorite,
-                  title: t.settingsNotifSignificantVitals,
-                  subtitle: t.settingsNotifSignificantVitalsDesc,
-                  value: _notificationSettings!.significantVitals,
-                  onChanged: (value) =>
-                      _updateNotificationSetting('significantVitals', value),
-                ),
-                _buildNotificationToggleCard(
-                  context,
-                  icon: Icons.sms,
-                  title: t.settingsNotifSMS,
-                  subtitle: t.settingsNotifSMSDesc,
-                  value: _notificationSettings!.sms,
-                  onChanged: (value) =>
-                      _updateNotificationSetting('sms', value),
-                ),
-                _buildNotificationToggleCard(
-                  context,
-                  icon: Icons.stars,
-                  title: t.settingsNotifGamification,
-                  subtitle: t.settingsNotifGamificationDesc,
-                  value: _notificationSettings!.gamification,
-                  onChanged: (value) =>
-                      _updateNotificationSetting('gamification', value),
-                ),
-              ] else
-                Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.error_outline,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    title: Text(t.settingsUnableToLoadNotificationSettings),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _loadNotificationSettings,
-                    ),
-                  ),
-                ),
-
               const SizedBox(height: 24),
 
               // Privacy
@@ -733,45 +842,75 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
 
-              const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-              // Subscription (hide for patient/family member)
-              if (!shouldHideSubscription) ...[
-                _buildSectionHeader(context, t.settingsSubscription),
-                _buildSettingsCard(
-                  context,
-                  icon: Icons.subscriptions,
-                  title: t.settingsManageSubscription,
-                  subtitle: t.settingsManageSubscriptionDesc,
-                  onTap: () {
-                    Telemetry.event('button_tap', {
-                      'screen': 'settings',
-                      'target': 'manage_subscription',
-                      'route': '/select-package',
-                    });
-                    context.push('/select-package');
-                  },
-                ),
-                const SizedBox(height: 24),
-              ],
+                  // General
+                  _buildSectionHeader(context, t.settingsGeneral),
 
-              // Notetaker
-              _buildSectionHeader(context, t.settingsNotetakerAssistant),
-              _buildSettingsCard(
-                context,
-                icon: Icons.edit_note,
-                title: t.settingsNotetakerConfiguration,
-                subtitle: t.settingsNotetakerConfigurationDesc,
-                onTap: () {
-                  Telemetry.event('button_tap', {
-                    'screen': 'settings',
-                    'target': 'notetaker_configuration',
-                    'route': '/notetaker-configuration',
-                  });
-                  context.push('/notetaker-configuration');
-                },
-              ),
+                  // User-Controlled Persistence Toggle (BNS 5)
+                  _buildToggleCard(
+                    context,
+                    icon: Icons.cloud_off,
+                    title: 'Offline Persistence',
+                    subtitle: userProvider.offlineModeEnabled
+                        ? 'Save data locally and sync when reconnected'
+                        : 'New data will not be stored locally for offline use.',
+                    value: userProvider.offlineModeEnabled,
+                    // loading: _loadingPersistence,
+                    onChanged: (enabled) async {
+                      userProvider.setOfflineMode(enabled);
+                      // BNS 7: Privacy-Preserving Observability and Telemetry.
+                      if (_telemetryEnabled) {
+                        await Telemetry.event('offline_toggled', {
+                          'enabled': enabled,
+                        });
+                      }
+                    },
+                  ),
 
+                  _buildSettingsCard(
+                    context,
+                    icon: Icons.cleaning_services,
+                    title: t.settingsClearCache,
+                    subtitle: t.settingsClearCacheShortDesc,
+                    onTap: () {
+                      Telemetry.event('button_tap', {
+                        'screen': 'settings',
+                        'target': 'clear_cache',
+                      });
+                      _showClearCacheDialog(context);
+                    },
+                  ),
+                  _buildSettingsCard(
+                    context,
+                    icon: Icons.logout,
+                    title: t.settingsSignOut,
+                    subtitle: t.settingsSignOutDesc,
+                    onTap: () {
+                      Telemetry.event('button_tap', {
+                        'screen': 'settings',
+                        'target': 'sign_out',
+                      });
+                      _showSignOutDialog(context);
+                    },
+                    textColor: Theme.of(context).colorScheme.error,
+                    iconColor: Theme.of(context).colorScheme.error,
+                  ),
+                  _buildSettingsCard(
+                    context,
+                    icon: Icons.delete_forever,
+                    title: t.settingsDeleteAccount,
+                    subtitle: t.settingsDeleteAccountShortDesc,
+                    onTap: () {
+                      Telemetry.event('button_tap', {
+                        'screen': 'settings',
+                        'target': 'delete_account',
+                      });
+                      _showDeleteAccountDialog(context);
+                    },
+                    textColor: Theme.of(context).colorScheme.error,
+                    iconColor: Theme.of(context).colorScheme.error,
+                  ),
               const SizedBox(height: 24),
 
               // General
@@ -798,52 +937,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
 
-              _buildSettingsCard(
-                context,
-                icon: Icons.cleaning_services,
-                title: t.settingsClearCache,
-                subtitle: t.settingsClearCacheShortDesc,
-                onTap: () {
-                  Telemetry.event('button_tap', {
-                    'screen': 'settings',
-                    'target': 'clear_cache',
-                  });
-                  _showClearCacheDialog(context);
-                },
+                  const SizedBox(height: 24),
+                ],
               ),
-              _buildSettingsCard(
-                context,
-                icon: Icons.logout,
-                title: t.settingsSignOut,
-                subtitle: t.settingsSignOutDesc,
-                onTap: () {
-                  Telemetry.event('button_tap', {
-                    'screen': 'settings',
-                    'target': 'sign_out',
-                  });
-                  _showSignOutDialog(context);
-                },
-                textColor: Theme.of(context).colorScheme.error,
-                iconColor: Theme.of(context).colorScheme.error,
-              ),
-              _buildSettingsCard(
-                context,
-                icon: Icons.delete_forever,
-                title: t.settingsDeleteAccount,
-                subtitle: t.settingsDeleteAccountShortDesc,
-                onTap: () {
-                  Telemetry.event('button_tap', {
-                    'screen': 'settings',
-                    'target': 'delete_account',
-                  });
-                  _showDeleteAccountDialog(context);
-                },
-                textColor: Theme.of(context).colorScheme.error,
-                iconColor: Theme.of(context).colorScheme.error,
-              ),
-
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
         ),
       ),
