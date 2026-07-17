@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
+import 'package:care_connect_app/features/usps/domain/models/mail_image_availability.dart';
+import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_image.dart';
 
 class UspsTestScreen extends StatefulWidget {
   const UspsTestScreen({super.key});
@@ -333,88 +335,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     double width = 48,
     double height = 32,
     BoxFit fit = BoxFit.cover,
+    bool expanded = false,
+    String? sender,
+    String? summary,
   }) {
-    final iconSize = height.clamp(16, 48).toDouble();
-    Widget placeholder(IconData icon) => SizedBox(
-          width: width,
-          height: height,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: Icon(
-                icon,
-                color: Colors.grey.shade600,
-                size: iconSize,
-              ),
-            ),
-          ),
-        );
-
-    if (imageDataUrl == null || imageDataUrl.isEmpty) {
-      return placeholder(Icons.mail_outline);
-    }
-
-    if (imageDataUrl.startsWith('cid:')) {
-      return placeholder(Icons.mail_outline);
-    }
-
-    if (imageDataUrl.startsWith('data:')) {
-      try {
-        final uri = Uri.parse(imageDataUrl);
-        final data = uri.data;
-        if (data != null) {
-          final bytes = data.contentAsBytes();
-          return Image.memory(
-            bytes,
-            width: width,
-            height: height,
-            fit: fit,
-            errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
-          );
-        }
-      } catch (_) {
-        // fall through to manual base64 decode
-      }
-
-      try {
-        final base64Data = imageDataUrl.split(',').last;
-        final bytes = const Base64Decoder().convert(base64Data);
-        return Image.memory(
-          bytes,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
-        );
-      } catch (_) {
-        return placeholder(Icons.mail_outline);
-      }
-    }
-
-    if (imageDataUrl.startsWith('http')) {
-      return Image.network(
-        imageDataUrl,
-        width: width,
-        height: height,
-        fit: fit,
-        errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
-      );
-    }
-
-    return placeholder(Icons.mail_outline);
+    return MailPieceImage(
+      imageRef: imageDataUrl,
+      sender: sender,
+      summary: summary,
+      width: width,
+      height: height,
+      fit: fit,
+      expanded: expanded,
+    );
   }
 
-  bool _hasAttachment(String? imageDataUrl) {
-    if (imageDataUrl == null || imageDataUrl.isEmpty) {
-      return false;
-    }
-    if (imageDataUrl.startsWith('cid:')) {
-      return false;
-    }
-    return true;
+  bool _hasAttachment(String? imageDataUrl, {String? summary}) {
+    return MailImageClassifier.hasDisplayableImage(
+      imageDataUrl,
+      summary: summary,
+    );
   }
 
   void _showMailItemDetails(Map<String, dynamic> item) {
@@ -423,7 +363,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
 
     final imageSource =
         (item['imageDataUrl'] as String?) ?? (item['thumbnailUrl'] as String?);
-    final hasAttachment = !isPackage && _hasAttachment(imageSource);
     final actions = item['actions'];
     final Map<String, dynamic> actionsMap = actions is Map<String, dynamic>
         ? Map<String, dynamic>.from(actions as Map)
@@ -434,11 +373,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final sender = (rawSender != null && rawSender.isNotEmpty)
         ? rawSender
         : (isPackage ? 'USPS Package' : 'Unknown sender');
-    final subject = (item['summary'] as String?) ??
-        (item['subject'] as String?) ??
+    final rawSubject = (item['summary'] as String?) ??
+        (item['subject'] as String?);
+    final subject = rawSubject ??
         (isPackage && item['trackingNumber'] != null
             ? 'Tracking ${item['trackingNumber']}'
             : 'No subject available');
+    final hasAttachment =
+        !isPackage && _hasAttachment(imageSource, summary: rawSubject);
+    final missingImageNormal = !isPackage &&
+        MailImageClassifier.classify(imageSource, summary: rawSubject)
+            .isMissingNormalState;
+    final displaySubject =
+        missingImageNormal &&
+                (rawSubject == null ||
+                    rawSubject.trim().isEmpty ||
+                    rawSubject.trim().toLowerCase() == 'image not available')
+            ? 'Details from mail metadata'
+            : subject;
     final trackingNumber = item['trackingNumber'] as String?;
     final delivered =
         (item['deliveryDate'] as String?) ?? (item['receivedAt'] as String?);
@@ -500,11 +452,21 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                       child: _buildMailImage(
                         imageSource,
                         width: 260,
-                        height: 180,
+                        height: missingImageNormal ? 168 : 180,
                         fit: BoxFit.contain,
+                        expanded: missingImageNormal,
+                        sender: rawSender,
+                        summary: rawSubject,
                       ),
                     ),
                   ),
+                  if (missingImageNormal) ...[
+                    const SizedBox(height: 12),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: MailMetadataOnlyBadge(),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     isPackage ? 'Details' : 'Subject',
@@ -519,7 +481,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          subject,
+                          displaySubject,
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       ),
@@ -1008,15 +970,20 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           final trailingIcon = isPackage
                               ? Icons.local_shipping
                               : Icons.open_in_new;
-                          final summary = result['summary'] ??
-                              result['subject'] ??
-                              'No summary';
+                          final summaryText = (result['summary'] as String?) ??
+                              (result['subject'] as String?);
+                          final summary = summaryText ?? 'No summary';
                           final from = result['sender'] as String?;
                           final attachmentSource =
                               (result['imageDataUrl'] as String?) ??
                                   (result['thumbnailUrl'] as String?);
-                          final hasAttachment =
-                              !isPackage && _hasAttachment(attachmentSource);
+                          final hasAttachment = !isPackage &&
+                              _hasAttachment(attachmentSource,
+                                  summary: summaryText);
+                          final missingImageNormal = !isPackage &&
+                              MailImageClassifier.classify(attachmentSource,
+                                      summary: summaryText)
+                                  .isMissingNormalState;
                           final deliveryLabel = isPackage
                               ? (result['expectedDate'] as String?) ??
                                   (result['deliveryDate'] as String?)
@@ -1029,8 +996,9 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               onTap: () => _showMailItemDetails(
                                   Map<String, dynamic>.from(result)),
                               leading: _buildMailImage(
-                                (result['imageDataUrl'] as String?) ??
-                                    (result['thumbnailUrl'] as String?),
+                                attachmentSource,
+                                sender: from,
+                                summary: summaryText,
                               ),
                               title: Row(
                                 children: [
@@ -1041,6 +1009,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.attachment, size: 16),
+                                  ],
+                                  if (missingImageNormal) ...[
+                                    const SizedBox(width: 6),
+                                    const MailMetadataOnlyBadge(),
                                   ],
                                   const SizedBox(width: 8),
                                   Container(
@@ -1328,17 +1300,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           final imageSource =
                               (mailPiece['imageDataUrl'] as String?) ??
                                   (mailPiece['thumbnailUrl'] as String?);
-                          final hasAttachment = _hasAttachment(imageSource);
                           final summary = ((mailPiece['summary'] as String?) ??
                                   (mailPiece['subject'] as String?) ??
                                   '')
                               .trim();
+                          final hasAttachment =
+                              _hasAttachment(imageSource, summary: summary);
+                          final missingImageNormal =
+                              MailImageClassifier.classify(imageSource,
+                                      summary: summary)
+                                  .isMissingNormalState;
                           final senderName =
                               (mailPiece['sender'] as String?)?.trim();
                           final displayTitle =
                               (senderName != null && senderName.isNotEmpty)
                                   ? senderName
-                                  : (summary.isNotEmpty ? summary : 'Mail');
+                                  : (summary.isNotEmpty &&
+                                          summary.toLowerCase() !=
+                                              'image not available'
+                                      ? summary
+                                      : 'Mail');
                           mailPiece['type'] ??= 'mail';
                           final actions = mailPiece['actions'];
                           final actionsMap = actions is Map<String, dynamic>
@@ -1348,12 +1329,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               actionsMap['dashboard'] as String?;
                           final trackUrl = actionsMap['track'] as String?;
                           final trailingUrl = dashboardUrl ?? trackUrl;
+                          final subtitleText = summary.isNotEmpty &&
+                                  summary != displayTitle &&
+                                  summary.toLowerCase() !=
+                                      'image not available'
+                              ? summary
+                              : (missingImageNormal
+                                  ? 'Details from mail metadata'
+                                  : null);
 
                           return Card(
                             child: ListTile(
                               onTap: () => _showMailItemDetails(
                                   Map<String, dynamic>.from(mailPiece)),
-                              leading: _buildMailImage(imageSource),
+                              leading: _buildMailImage(
+                                imageSource,
+                                sender: senderName,
+                                summary: summary,
+                              ),
                               title: Row(
                                 children: [
                                   Expanded(
@@ -1362,6 +1355,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.attachment, size: 16),
+                                  ],
+                                  if (missingImageNormal) ...[
+                                    const SizedBox(width: 6),
+                                    const MailMetadataOnlyBadge(),
                                   ],
                                   const SizedBox(width: 8),
                                   Container(
@@ -1382,10 +1379,9 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   ),
                                 ],
                               ),
-                              subtitle:
-                                  summary.isNotEmpty && summary != displayTitle
-                                      ? Text(summary)
-                                      : const SizedBox.shrink(),
+                              subtitle: subtitleText != null
+                                  ? Text(subtitleText)
+                                  : const SizedBox.shrink(),
                               trailing: IconButton(
                                 icon: const Icon(Icons.open_in_new),
                                 onPressed:

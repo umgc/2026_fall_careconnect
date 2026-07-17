@@ -35,7 +35,7 @@ class LanguagePicker {
              final selected = current == locale;
              return ListTile(
                leading: const Icon(Icons.translate),
-            title: Text(labelFor(locale)),
+            title: Text(labelFor(locale, t)),
                subtitle: Text(locale.toLanguageTag()),
                trailing: selected ? const Icon(Icons.check) : null,
                onTap: () {
@@ -50,21 +50,21 @@ class LanguagePicker {
    } 
 
   // Minimal labels. Expand as you add locales, or derive from your ARB metadata.
-  static String labelFor(Locale l) {
-if (l.languageCode == 'en') return 'English';
-if (l.languageCode == 'es') return 'Español (Spanish)';
-if (l.languageCode == 'ur') return 'اردو (Urdu)';        // Urdu
-if (l.languageCode == 'ar') return 'العربية (Arabic)';     // Arabic
-if (l.languageCode == 'fr') return 'Français (French)';
-if (l.languageCode == 'am') return 'አማርኛ (Amharic)';       // Amharic
-if (l.languageCode == 'ne') return 'नेपाली (Nepali)';       // Nepali
-if (l.languageCode == 'hi') return 'हिन्दी (Hindi)';       // Hindi 
-if (l.languageCode == 'fa') return 'فارسی (Farsi)';
-if (l.languageCode == 'zh') return '中文 (Mandarin Chinese)'; // Mandarin Chinese
-if (l.languageCode == 'pt') return 'Português (Portuguese)'; // Portuguese
-if (l.languageCode == 'bn') return 'বাংলা (Bengali)';      // Bengali
-if (l.languageCode == 'ru') return 'Русский (Russian)';    // Russian
-if (l.languageCode == 'ja') return '日本語 (Japanese)';
+  static String labelFor(Locale l, AppLocalizations t) {
+if (l.languageCode == 'en') return t.languagepicker_English;
+if (l.languageCode == 'es') return t.languagepicker_Spanish;
+if (l.languageCode == 'ur') return t.languagepicker_Urdu;
+if (l.languageCode == 'ar') return t.languagepicker_Arabic;
+if (l.languageCode == 'fr') return t.languagepicker_French;
+if (l.languageCode == 'am') return t.languagepicker_Amharic;
+if (l.languageCode == 'ne') return t.languagepicker_Nepali;
+if (l.languageCode == 'hi') return t.languagepicker_Hindi;
+if (l.languageCode == 'fa') return t.languagepicker_Farsi;
+if (l.languageCode == 'zh') return t.languagepicker_MandarinChinese;
+if (l.languageCode == 'pt') return t.languagepicker_Portuguese;
+if (l.languageCode == 'bn') return t.languagepicker_Bengali;
+if (l.languageCode == 'ru') return t.languagepicker_Russian;
+if (l.languageCode == 'ja') return t.languagepicker_Japanese;
  
     return l.toLanguageTag();
   }

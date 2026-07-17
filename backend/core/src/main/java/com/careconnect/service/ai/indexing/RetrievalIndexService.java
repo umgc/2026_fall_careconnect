@@ -1,14 +1,19 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
@@ -19,6 +24,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -31,7 +38,9 @@ import java.util.Optional;
  * Ingests Ask AI indexing events into {@code retrieval_index_chunk} (Task 4.1).
  *
  * <p>Called by {@link IndexWorker} after outbox events are dequeued. Does not publish
- * SNS/SQS itself — that remains a future transport upgrade. Embeddings are left for Task 4.3;
+ * SNS/SQS itself — that remains a future transport upgrade. After chunk rows are saved,
+ * {@link ChunkEmbeddingService} best-effort writes Bedrock Titan embeddings (Task 4.3)
+ * <em>after</em> the ingest transaction commits so Bedrock I/O does not hold a JDBC connection.
  * FTS {@code search_vector} is maintained automatically by the PostgreSQL trigger on
  * {@code chunk_text} insert/update (Task 4.2) — this service does not set it in application code.
  */
@@ -42,30 +51,50 @@ public class RetrievalIndexService {
 
     private final CallSummaryRepository callSummaryRepository;
     private final CallTranscriptSegmentRepository transcriptSegmentRepository;
+    private final UspsMailpieceRepository uspsMailpieceRepository;
     private final RetrievalIndexChunkRepository chunkRepository;
     private final SummaryChunker summaryChunker;
     private final TranscriptSegmentChunker transcriptSegmentChunker;
+    private final MailpieceChunker mailpieceChunker;
     private final ObjectMapper objectMapper;
+    private final ChunkEmbeddingService chunkEmbeddingService;
 
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
             final CallTranscriptSegmentRepository transcriptSegmentRepository,
+            final UspsMailpieceRepository uspsMailpieceRepository,
             final RetrievalIndexChunkRepository chunkRepository,
             final SummaryChunker summaryChunker,
             final TranscriptSegmentChunker transcriptSegmentChunker,
+            final MailpieceChunker mailpieceChunker,
             final ObjectMapper objectMapper) {
+            final ObjectMapper objectMapper,
+            final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
         this.transcriptSegmentRepository = transcriptSegmentRepository;
+        this.uspsMailpieceRepository = uspsMailpieceRepository;
         this.chunkRepository = chunkRepository;
         this.summaryChunker = summaryChunker;
         this.transcriptSegmentChunker = transcriptSegmentChunker;
+        this.mailpieceChunker = mailpieceChunker;
         this.objectMapper = objectMapper;
+        this.chunkEmbeddingService = chunkEmbeddingService;
     }
 
     /**
      * Indexes a successful call summary. Replaces prior chunks for the same
      * {@code source_record_id} (summary id) only when new drafts are non-empty.
-     * Skips when {@code contentHash} matches an existing overview chunk.
+     *
+     * <p><b>contentHash is the hard idempotency key</b> for re-ingest:
+     * <ul>
+     *   <li>Hash matches and all embeddings present → skip (no re-chunk, no embed).</li>
+     *   <li>Hash matches but any embedding is NULL (prior Bedrock failure) →
+     *       embed-only retry; chunk text/structure are left unchanged.</li>
+     *   <li>Hash differs or is absent → full replace + after-commit embed.</li>
+     * </ul>
+     * Chunker or metadata-only changes that do <em>not</em> change {@code contentHash}
+     * intentionally do not re-chunk. Operators who change chunk shape must bump the
+     * publisher hash (or wait for Task 4.4 backfill for NULL vectors only).
      *
      * @return number of chunks written (0 when skipped or nothing to index)
      */
@@ -92,9 +121,8 @@ public class RetrievalIndexService {
         if (payload.contentHash() != null
                 && !payload.contentHash().isBlank()
                 && hasMatchingContentHash(sourceRecordId, payload.contentHash())) {
-            log.info("Skipping SUMMARY_CREATED for summaryId={} — contentHash unchanged",
-                    payload.summaryId());
-            return 0;
+            return retryMissingEmbeddingsOrSkip(
+                    sourceRecordId, payload.summaryId(), "contentHash unchanged");
         }
 
         final CallSummary summary = callSummaryRepository.findById(payload.summaryId())
@@ -126,11 +154,32 @@ public class RetrievalIndexService {
             log.warn(
                     "SUMMARY_CREATED produced no drafts for summaryId={}; leaving existing chunks unchanged",
                     payload.summaryId());
-            return 0;
+            // Still recover NULL embeddings from a prior Bedrock failure if chunks remain.
+            return retryMissingEmbeddingsOrSkip(
+                    sourceRecordId,
+                    payload.summaryId(),
+                    "no drafts; existing chunks left unchanged");
         }
 
         chunkRepository.deleteBySourceRecordId(sourceRecordId);
         return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    /**
+     * Embed-only recovery when chunks already exist. Returns 0 (no new chunks written).
+     */
+    private int retryMissingEmbeddingsOrSkip(
+            final String sourceRecordId, final Long summaryId, final String skipReason) {
+        if (chunkRepository.countMissingEmbeddingForSource(sourceRecordId) > 0) {
+            log.info(
+                    "SUMMARY_CREATED for summaryId={} — embeddings missing; retrying embed without re-chunk",
+                    summaryId);
+            scheduleEmbeddingAfterCommit(
+                    chunkRepository.findBySourceRecordIdAndEmbeddingIsNull(sourceRecordId));
+        } else {
+            log.info("Skipping SUMMARY_CREATED for summaryId={} — {}", summaryId, skipReason);
+        }
+        return 0;
     }
 
     /**
@@ -172,6 +221,81 @@ public class RetrievalIndexService {
         return persistDrafts(patientId, callId, drafts);
     }
 
+    /**
+     * Indexes a persisted USPS mailpiece into {@code retrieval_index_chunk}
+     * with {@link RetrievalRecordType#USPS_MAIL} (Task 3.14.5). Embedding
+     * remains null until Task 4.3; FTS is maintained by the DB trigger.
+     *
+     * @return number of chunks written (0 when skipped)
+     */
+    @Transactional
+    public int ingestMailpieceIndexed(final MailpieceIndexedPayload payload) {
+        if (payload == null || payload.mailpieceId() == null) {
+            throw new IllegalArgumentException("MAILPIECE_INDEXED payload requires mailpieceId");
+        }
+        if (payload.patientId() == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index mailpieceId=" + payload.mailpieceId()
+                            + " — patientId is required on retrieval_index_chunk");
+        }
+
+        final String sourceRecordId = String.valueOf(payload.mailpieceId());
+        final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
+
+        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
+        if (contentHash != null
+                && !contentHash.isBlank()
+                && shouldSkipUspsMailReindex(sourceRecordId, contentHash, mailpiece)) {
+            log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash+importance unchanged",
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && hasMatchingUspsMailContentHash(sourceRecordId, payload.contentHash())) {
+            log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash unchanged",
+                    payload.mailpieceId());
+            return 0;
+        }
+
+        final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
+        final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
+        final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
+
+        final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
+        final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
+        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
+        final String sourceKey = firstNonBlank(payload.sourceKey(), mailpiece.getSourceKey());
+        final String consentScope = firstNonBlank(
+                payload.consentScope(), mailpiece.getConsentScope());
+
+        final List<IndexingChunkDraft> drafts = mailpieceChunker.chunk(
+                sender,
+                summary,
+                mailpiece.getOcrText(),
+                contentHash,
+                sourceKey,
+                payload.digestDate() != null ? payload.digestDate() : mailpiece.getDigestDate(),
+                consentScope,
+                mailpiece.getImportanceLevel(),
+                mailpiece.getImportanceCategory(),
+                mailpiece.getClassificationMethod(),
+                mailpiece.getImportanceReasoning());
+                consentScope);
+
+        if (drafts.isEmpty()) {
+            log.warn(
+                    "MAILPIECE_INDEXED produced no drafts for mailpieceId={}; leaving existing chunks unchanged",
+                    payload.mailpieceId());
+            return 0;
+        }
+
+        chunkRepository.deleteBySourceRecordIdAndRecordType(
+                sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        return persistDrafts(payload.patientId(), sourceRecordId, drafts);
+    }
+
     private int persistDrafts(
             final Long patientId,
             final String sourceRecordId,
@@ -195,10 +319,33 @@ public class RetrievalIndexService {
         if (entities.isEmpty()) {
             return 0;
         }
-        chunkRepository.saveAll(entities);
+        final List<RetrievalIndexChunk> saved = chunkRepository.saveAll(entities);
         log.info("Indexed {} chunk(s) for sourceRecordId={} patientId={}",
-                entities.size(), sourceRecordId, patientId);
-        return entities.size();
+                saved.size(), sourceRecordId, patientId);
+        scheduleEmbeddingAfterCommit(saved);
+        return saved.size();
+    }
+
+    /**
+     * Runs Titan embedding after the current transaction commits so Bedrock latency
+     * does not hold a JDBC connection or extend the ingest lock window. When no
+     * synchronization is active (unit tests), embeds immediately.
+     */
+    private void scheduleEmbeddingAfterCommit(final List<RetrievalIndexChunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return;
+        }
+        final List<RetrievalIndexChunk> snapshot = List.copyOf(chunks);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    chunkEmbeddingService.embedAndPersist(snapshot);
+                }
+            });
+        } else {
+            chunkEmbeddingService.embedAndPersist(snapshot);
+        }
     }
 
     private boolean hasMatchingContentHash(final String sourceRecordId, final String contentHash) {
@@ -216,6 +363,74 @@ public class RetrievalIndexService {
             }
         }
         return false;
+    }
+
+    /**
+     * Skip only when an existing USPS_MAIL chunk already has the same contentHash
+     * <em>and</em> the same importance fingerprint. Classification-only backfills
+     * (hash unchanged, importance newly present on the entity) must rebuild chunks.
+     */
+    private boolean shouldSkipUspsMailReindex(
+            final String sourceRecordId,
+            final String contentHash,
+            final UspsMailpiece mailpiece) {
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findBySourceRecordIdAndRecordType(
+                        sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        if (existing == null || existing.isEmpty()) {
+            return false;
+        }
+        final String expectedFingerprint = MailpieceChunker.importanceFingerprint(
+                mailpiece.getImportanceLevel(),
+                mailpiece.getImportanceCategory(),
+                mailpiece.getClassificationMethod(),
+                mailpiece.getImportanceReasoning());
+        for (final RetrievalIndexChunk chunk : existing) {
+            if (!contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
+                continue;
+            }
+            if (uspsMailNeedsClassificationRefresh(chunk.getChunkMetadata(), expectedFingerprint)) {
+                return false;
+            }
+            return true;
+    private boolean hasMatchingUspsMailContentHash(
+            final String sourceRecordId, final String contentHash) {
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findBySourceRecordIdAndRecordType(
+                        sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        for (final RetrievalIndexChunk chunk : existing) {
+            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Force rebuild when the entity has classification but chunk metadata is missing
+     * it (or the fingerprint differs).
+     */
+    private boolean uspsMailNeedsClassificationRefresh(
+            final String chunkMetadataJson,
+            final String expectedFingerprint) {
+        if (expectedFingerprint == null || expectedFingerprint.isBlank()) {
+            return false;
+        }
+        if (chunkMetadataJson == null || chunkMetadataJson.isBlank()) {
+            return true;
+        }
+        try {
+            final JsonNode meta = objectMapper.readTree(chunkMetadataJson);
+            final String storedFingerprint = meta.path("importanceFingerprint").asText(null);
+            if (storedFingerprint != null && !storedFingerprint.isBlank()) {
+                return !expectedFingerprint.equals(storedFingerprint);
+            }
+            final String storedLevel = meta.path("importanceLevel").asText(null);
+            return storedLevel == null || storedLevel.isBlank();
+        } catch (final Exception ex) {
+            log.debug("Unable to parse chunk metadata for importance compare: {}", ex.getMessage());
+            return true;
+        }
     }
 
     private boolean contentHashEquals(final String chunkMetadataJson, final String contentHash) {

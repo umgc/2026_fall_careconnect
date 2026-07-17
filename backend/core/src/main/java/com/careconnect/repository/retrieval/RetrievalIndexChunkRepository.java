@@ -102,13 +102,48 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     long countMissingSearchVector();
 
     /**
+     * Counts chunks still missing an embedding after Task 4.3 ingest (ops / Task 4.4 backfill).
+     */
+    @Query(
+            value = "SELECT COUNT(*) FROM retrieval_index_chunk WHERE embedding IS NULL",
+            nativeQuery = true)
+    long countMissingEmbedding();
+
+    /**
+     * Counts NULL embeddings for a single source record (Task 4.3 contentHash short-circuit).
+     */
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE source_record_id = :sourceRecordId
+                      AND embedding IS NULL
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingForSource(@Param("sourceRecordId") String sourceRecordId);
+
+    /**
+     * Loads portable columns for chunks that still need Titan embeddings (retry path).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE source_record_id = :sourceRecordId
+                      AND embedding IS NULL
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findBySourceRecordIdAndEmbeddingIsNull(
+            @Param("sourceRecordId") String sourceRecordId);
+
+    /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
      *
      * @param id        chunk primary key
      * @param embedding pgvector literal, e.g. {@code [0.1,0.2,...]} with
      *                  {@link com.careconnect.model.retrieval.RetrievalIndexSchema#EMBEDDING_DIMENSION} values
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query(
             value = "UPDATE retrieval_index_chunk SET embedding = CAST(:embedding AS vector) WHERE id = :id",
             nativeQuery = true)

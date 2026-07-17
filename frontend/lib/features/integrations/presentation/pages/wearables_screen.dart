@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:health/health.dart';
 import 'package:fitbitter/fitbitter.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
+import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/services/auth_service.dart' as auth_service;
+import 'package:care_connect_app/services/user_role_storage_service.dart';
+import 'package:care_connect_app/config/env_constant.dart';
 
 import 'add_devices_screen.dart';
 
@@ -88,6 +93,27 @@ class SemesterMetricDefinition {
   });
 }
 
+class _IngestReading {
+  final String metric;
+  final double metricValue;
+  final DateTime recordedAt;
+  final String source;
+
+  _IngestReading({
+    required this.metric,
+    required this.metricValue,
+    required this.recordedAt,
+    required this.source,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'metric': metric,
+        'metricValue': metricValue,
+        'recordedAt': recordedAt.toUtc().toIso8601String(),
+        'source': source,
+      };
+}
+
 class WearablesScreen extends StatefulWidget {
   const WearablesScreen({super.key});
 
@@ -99,6 +125,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
   List<ConnectedDevice> connectedDevices = [];
   Map<String, HealthData> latestHealthData = {};
   bool isLoadingData = false;
+  bool hasSyncError = false;
+  String? syncStatusMessage;
+  int _lastCollectedCount = 0;
+  int _lastAcceptedCount = 0;
+  int _lastRejectedCount = 0;
   final FlutterSecureStorage _secureStorage =
       const FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
 
@@ -272,15 +303,35 @@ class _WearablesScreenState extends State<WearablesScreen> {
     ],
   };
 
-  // Fitbit configuration
-  static const String fitbitClientId = '23QG9C';
-  static const String fitbitClientSecret = 'c77f0a7a3839a9307674b893fae14934';
+  // Fitbit configuration is required only for Fitbit OAuth-backed reads.
+  final String? fitbitClientId = _resolveFitbitClientId();
+  final String? fitbitClientSecret = _resolveFitbitClientSecret();
+
+  static String? _resolveFitbitClientId() {
+    try {
+      return getFitbitClientId();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _resolveFitbitClientSecret() {
+    try {
+      return getFitbitClientSecret();
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _loadConnectedDevices();
-    _fetchLatestHealthData();
+    _initializeWearables();
+  }
+
+  Future<void> _initializeWearables() async {
+    await _loadConnectedDevices();
+    await _fetchLatestHealthData();
   }
 
   Future<void> _loadConnectedDevices() async {
@@ -308,25 +359,533 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
     setState(() {
       isLoadingData = true;
+      hasSyncError = false;
+      syncStatusMessage = null;
+      _lastCollectedCount = 0;
+      _lastAcceptedCount = 0;
+      _lastRejectedCount = 0;
     });
 
     try {
+      final patientId = await _resolvePatientId();
+      if (patientId == null) {
+        setState(() {
+          latestHealthData.clear();
+          hasSyncError = false;
+          syncStatusMessage =
+              'Select a patient first (Analytics patient dropdown), then tap refresh.';
+        });
+        return;
+      }
+
       DateTime now = DateTime.now();
-      DateTime yesterday = now.subtract(const Duration(days: 1));
+      // Use a wider window so recently-added manual Apple Health samples
+      // are not excluded by timestamp granularity differences.
+      DateTime recentWindowStart = now.subtract(const Duration(days: 7));
 
-      // Fetch Fitbit data
-      await _fetchFitbitData(yesterday, now);
+      final readings = <_IngestReading>[];
+      await _collectFitbitReadings(readings, recentWindowStart, now);
+      await _collectGoogleAppleReadings(readings, recentWindowStart, now);
+      setState(() {
+        _lastCollectedCount = readings.length;
+      });
 
-      // Fetch Google Health/Apple Health data
-      await _fetchGoogleAppleHealthData(yesterday, now);
-
-      print('✓ Fetched health data: ${latestHealthData.length} metrics');
+      final acceptedReadings =
+          await _ingestReadings(patientId: patientId, readings: readings);
+      final hasPersistedData =
+          await _loadPersistedReadings(patientId: patientId);
+      if (!hasPersistedData && acceptedReadings.isNotEmpty) {
+        _applyAcceptedIngestionSnapshot(acceptedReadings);
+      } else if (!hasPersistedData && readings.isEmpty) {
+        setState(() {
+          syncStatusMessage =
+              'No Apple Health samples were collected in the last 7 days. '
+              'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
+        });
+      }
     } catch (e) {
-      print('✗ Error fetching health data: $e');
+      setState(() {
+        hasSyncError = true;
+        syncStatusMessage = 'Failed to synchronize wearable data: $e';
+      });
+      print('✗ Error syncing wearable health data: $e');
     } finally {
       setState(() {
         isLoadingData = false;
       });
+    }
+  }
+
+  Future<int?> _resolvePatientId() async {
+    final selectedPatientId = await UserRoleStorageService.instance.getPatientId();
+    if (selectedPatientId != null) {
+      return selectedPatientId;
+    }
+
+    final session = await auth_service.AuthService.getCurrentUser();
+    if (session == null) return null;
+
+    if (session.patientId != null) {
+      return session.patientId;
+    }
+
+    if (session.isCaregiver && session.caregiverId != null) {
+      return await _resolveSingleLinkedPatientId(session.caregiverId!);
+    }
+
+    return null;
+  }
+
+  Future<int?> _resolveSingleLinkedPatientId(int caregiverId) async {
+    try {
+      final response = await ApiService.getCaregiverPatients(caregiverId);
+      if (response.statusCode != 200) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        return null;
+      }
+
+      final linkedPatientIds = decoded
+          .map<int?>((item) {
+            if (item is! Map<String, dynamic>) return null;
+            final patient = item['patient'];
+            if (patient is! Map<String, dynamic>) return null;
+            final patientId = patient['id'];
+            if (patientId is int) return patientId;
+            if (patientId is String) return int.tryParse(patientId);
+            return null;
+          })
+          .whereType<int>()
+          .toSet()
+          .toList();
+
+      // Auto-select only when unambiguous.
+      if (linkedPatientIds.length == 1) {
+        final autoResolved = linkedPatientIds.first;
+        await UserRoleStorageService.instance.updatePatientId(autoResolved);
+        return autoResolved;
+      }
+    } catch (_) {
+      // Ignore and fall back to explicit patient selection guidance.
+    }
+    return null;
+  }
+
+  Future<void> _collectFitbitReadings(
+    List<_IngestReading> readings,
+    DateTime startTime,
+    DateTime endTime,
+  ) async {
+    bool hasFitbitDevice =
+        connectedDevices.any((device) => device.platform == 'fitbit');
+    if (!hasFitbitDevice) return;
+
+    if (fitbitClientId == null || fitbitClientSecret == null) {
+      setState(() {
+        hasSyncError = true;
+        syncStatusMessage =
+            'Fitbit sync skipped: FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET are not configured.';
+      });
+      return;
+    }
+
+    try {
+      String? accessToken =
+          await _secureStorage.read(key: 'fitbit_access_token');
+      String? userID = await _secureStorage.read(key: 'fitbit_user_id');
+
+      if (accessToken == null || accessToken.isEmpty) {
+        return;
+      }
+
+      userID ??= '-';
+
+      FitbitCredentials fitbitCredentials = FitbitCredentials(
+        userID: userID,
+        fitbitAccessToken: accessToken,
+        fitbitRefreshToken: '',
+      );
+
+      FitbitActivityTimeseriesDataManager stepsManager =
+          FitbitActivityTimeseriesDataManager(
+        clientID: fitbitClientId!,
+        clientSecret: fitbitClientSecret!,
+      );
+
+      final stepsData = await stepsManager
+          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
+        date: DateTime.now(),
+        resource: Resource.steps,
+        fitbitCredentials: fitbitCredentials,
+      ));
+
+      for (final dataPoint in stepsData) {
+        final value = _extractFitbitValue(dataPoint);
+        if (value <= 0) continue;
+        readings.add(
+          _IngestReading(
+            metric: 'STEPS',
+            metricValue: value,
+            recordedAt: _extractFitbitDate(dataPoint),
+            source: 'fitbit',
+          ),
+        );
+      }
+    } catch (e) {
+      print('⚠ Fitbit reading collection failed: $e');
+    }
+  }
+
+  Future<void> _collectGoogleAppleReadings(
+    List<_IngestReading> readings,
+    DateTime startTime,
+    DateTime endTime,
+  ) async {
+    bool hasHealthDevice = connectedDevices.any((device) =>
+        device.platform == 'google_fit' || device.platform == 'apple_health');
+
+    if (!hasHealthDevice) return;
+
+    try {
+      Health health = Health();
+      await health.configure();
+
+      final source = connectedDevices
+              .any((device) => device.platform == 'apple_health')
+          ? 'apple_health'
+          : 'google_fit';
+
+      List<HealthDataType> types = [
+        HealthDataType.STEPS,
+        HealthDataType.HEART_RATE,
+        HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+        HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+      ];
+
+      // Re-check authorization before reading; on iOS this can avoid silent empty reads.
+      final bool hasReadAccess = await health.requestAuthorization(
+        types,
+        permissions: types.map((type) => HealthDataAccess.READ).toList(),
+      );
+      if (!hasReadAccess) {
+        setState(() {
+          syncStatusMessage =
+              'Apple Health access was denied. Enable Steps/Heart Rate/Blood Pressure in Health app.';
+        });
+        return;
+      }
+
+      List<HealthDataPoint> allHealthData = await health.getHealthDataFromTypes(
+        startTime: startTime,
+        endTime: endTime,
+        types: types,
+      );
+
+      int collectedCount = 0;
+
+      for (final point in allHealthData) {
+        final mappedMetric = _mapHealthTypeToBackendMetric(point.type);
+        if (mappedMetric == null) continue;
+        final value = _safeHealthValue(point.value);
+        if (value == null || value <= 0) continue;
+        collectedCount++;
+        readings.add(
+          _IngestReading(
+            metric: mappedMetric,
+            metricValue: value,
+            recordedAt: point.dateFrom,
+            source: source,
+          ),
+        );
+      }
+
+      if (allHealthData.isEmpty) {
+        setState(() {
+          syncStatusMessage =
+              'Connected to Apple Health, but no matching data found in the last 7 days.';
+        });
+      } else if (collectedCount == 0) {
+        setState(() {
+          syncStatusMessage =
+              'Apple Health data was found but could not be mapped to sync metrics.';
+        });
+      }
+    } catch (e) {
+      print('⚠ Health data collection failed: $e');
+    }
+  }
+
+  String? _mapHealthTypeToBackendMetric(HealthDataType type) {
+    switch (type) {
+      case HealthDataType.STEPS:
+        return 'STEPS';
+      case HealthDataType.HEART_RATE:
+        return 'HEART_RATE';
+      case HealthDataType.BLOOD_PRESSURE_DIASTOLIC:
+        return 'BLOOD_PRESSURE_DIA';
+      case HealthDataType.BLOOD_PRESSURE_SYSTOLIC:
+        return 'BLOOD_PRESSURE_SYS';
+      default:
+        return null;
+    }
+  }
+
+  double? _safeHealthValue(HealthValue value) {
+    if (value is NumericHealthValue) {
+      return value.numericValue.toDouble();
+    }
+    final asString = value.toString();
+    final direct = double.tryParse(asString);
+    if (direct != null) return direct;
+    final numericMatch = RegExp(r'[-+]?\d*\.?\d+').firstMatch(asString);
+    if (numericMatch != null) {
+      return double.tryParse(numericMatch.group(0)!);
+    }
+    return null;
+  }
+
+  Future<List<_IngestReading>> _ingestReadings({
+    required int patientId,
+    required List<_IngestReading> readings,
+  }) async {
+    if (readings.isEmpty) {
+      setState(() {
+        _lastAcceptedCount = 0;
+        _lastRejectedCount = 0;
+      });
+      return const [];
+    }
+
+    final authHeaders = await ApiService.getAuthHeaders();
+    final response = await http.post(
+      Uri.parse('${ApiConstants.baseUrl}analytics/vitals/ingest'),
+      headers: {
+        ...authHeaders,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'patientId': patientId,
+        'source': 'wearables_screen',
+        'readings': readings.take(500).map((reading) => reading.toJson()).toList(),
+      }),
+    );
+
+    if (response.statusCode == 201 ||
+        response.statusCode == 200 ||
+        response.statusCode == 207) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>?;
+      int accepted = ((data?['acceptedCount'] ?? body['acceptedCount'] ?? 0) as num)
+          .toInt();
+      int rejected = ((data?['rejectedCount'] ?? body['rejectedCount'] ?? 0) as num)
+          .toInt();
+      final acceptedReadings = _parseAcceptedIngestionReadings(data);
+      if (accepted == 0 && acceptedReadings.isNotEmpty) {
+        accepted = acceptedReadings.length;
+      }
+      setState(() {
+        _lastAcceptedCount = accepted;
+        _lastRejectedCount = rejected;
+      });
+
+      if (rejected > 0) {
+        setState(() {
+          syncStatusMessage =
+              'Synced $accepted readings, but $rejected were rejected.';
+        });
+      }
+      return acceptedReadings;
+    }
+
+    final errorBody = response.body.length > 200
+        ? '${response.body.substring(0, 200)}...'
+        : response.body;
+    throw Exception(
+      'Wearable ingest failed (${response.statusCode}) body=$errorBody',
+    );
+  }
+
+  List<_IngestReading> _parseAcceptedIngestionReadings(
+    Map<String, dynamic>? data,
+  ) {
+    final acceptedRaw = data?['acceptedReadings'];
+    if (acceptedRaw is! List) return const [];
+
+    return acceptedRaw
+        .whereType<Map<String, dynamic>>()
+        .map((entry) {
+          final metric = entry['metric']?.toString();
+          final value = (entry['metricValue'] as num?)?.toDouble();
+          final recordedAt =
+              DateTime.tryParse(entry['recordedAt']?.toString() ?? '');
+          final source = entry['source']?.toString() ?? 'wearable';
+
+          if (metric == null || value == null || recordedAt == null) {
+            return null;
+          }
+          return _IngestReading(
+            metric: metric,
+            metricValue: value,
+            recordedAt: recordedAt,
+            source: source,
+          );
+        })
+        .whereType<_IngestReading>()
+        .toList();
+  }
+
+  Future<bool> _loadPersistedReadings({required int patientId}) async {
+    final authHeaders = await ApiService.getAuthHeaders();
+    final response = await http.get(
+      Uri.parse(
+        '${ApiConstants.baseUrl}analytics/vitals?patientId=$patientId&days=30',
+      ),
+      headers: authHeaders,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load persisted vitals (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final List<dynamic> data = (decoded['data'] as List<dynamic>? ?? []);
+
+    if (data.isEmpty) {
+      setState(() {
+        hasSyncError = false;
+        latestHealthData = {};
+        syncStatusMessage =
+            'No synced wearable data found yet. '
+            'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
+      });
+      return false;
+    }
+
+    final vitals = data
+        .whereType<Map<String, dynamic>>()
+        .toList()
+      ..sort((a, b) {
+        final aTs = DateTime.tryParse(a['timestamp']?.toString() ?? '');
+        final bTs = DateTime.tryParse(b['timestamp']?.toString() ?? '');
+        if (aTs == null && bTs == null) return 0;
+        if (aTs == null) return 1;
+        if (bTs == null) return -1;
+        return bTs.compareTo(aTs);
+      });
+
+    final persisted = <String, HealthData>{};
+
+    for (final vital in vitals) {
+      final timestamp = DateTime.tryParse(vital['timestamp']?.toString() ?? '');
+      if (timestamp == null) continue;
+
+      final heartRate = (vital['heartRate'] as num?)?.toDouble() ?? 0.0;
+      final spo2 = (vital['spo2'] as num?)?.toDouble() ?? 0.0;
+      final systolic = (vital['systolic'] as num?)?.toDouble() ?? 0.0;
+      final diastolic = (vital['diastolic'] as num?)?.toDouble() ?? 0.0;
+      final weight = (vital['weight'] as num?)?.toDouble() ?? 0.0;
+
+      if (heartRate > 0 && !persisted.containsKey('heart_rate')) {
+        persisted['heart_rate'] = _healthDataFromDefinition(
+          key: 'heart_rate',
+          source: 'CareConnect Backend',
+          value: heartRate,
+          date: timestamp,
+        );
+      }
+      if (spo2 > 0 && !persisted.containsKey('spo2')) {
+        persisted['spo2'] = _healthDataFromDefinition(
+          key: 'spo2',
+          source: 'CareConnect Backend',
+          value: spo2,
+          date: timestamp,
+        );
+      }
+      if (systolic > 0 && !persisted.containsKey('blood_pressure_systolic')) {
+        persisted['blood_pressure_systolic'] = _healthDataFromDefinition(
+          key: 'blood_pressure_systolic',
+          source: 'CareConnect Backend',
+          value: systolic,
+          date: timestamp,
+        );
+      }
+      if (diastolic > 0 && !persisted.containsKey('blood_pressure_diastolic')) {
+        persisted['blood_pressure_diastolic'] = _healthDataFromDefinition(
+          key: 'blood_pressure_diastolic',
+          source: 'CareConnect Backend',
+          value: diastolic,
+          date: timestamp,
+        );
+      }
+      if (weight > 0 && !persisted.containsKey('weight')) {
+        persisted['weight'] = _healthDataFromDefinition(
+          key: 'weight',
+          source: 'CareConnect Backend',
+          value: weight,
+          date: timestamp,
+        );
+      }
+    }
+
+    setState(() {
+      hasSyncError = false;
+      latestHealthData = persisted;
+      if (persisted.isEmpty) {
+        syncStatusMessage =
+            'No persisted wearable vitals available in this range. '
+            'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
+      } else if (syncStatusMessage == null) {
+        syncStatusMessage = null;
+      }
+    });
+    return persisted.isNotEmpty;
+  }
+
+  void _applyAcceptedIngestionSnapshot(List<_IngestReading> acceptedReadings) {
+    final snapshot = <String, HealthData>{};
+    for (final reading in acceptedReadings) {
+      final metricKey = _uiMetricKeyForBackendMetric(reading.metric);
+      if (metricKey == null) continue;
+      final existing = snapshot[metricKey];
+      if (existing != null && existing.date.isAfter(reading.recordedAt)) {
+        continue;
+      }
+      snapshot[metricKey] = _healthDataFromDefinition(
+        key: metricKey,
+        source: 'CareConnect Backend',
+        value: reading.metricValue,
+        date: reading.recordedAt,
+      );
+    }
+
+    if (snapshot.isNotEmpty) {
+      setState(() {
+        hasSyncError = false;
+        latestHealthData = snapshot;
+        syncStatusMessage = null;
+      });
+    }
+  }
+
+  String? _uiMetricKeyForBackendMetric(String backendMetric) {
+    switch (backendMetric.toUpperCase()) {
+      case 'STEPS':
+        return 'steps';
+      case 'HEART_RATE':
+        return 'heart_rate';
+      case 'SPO2':
+        return 'spo2';
+      case 'BLOOD_PRESSURE_SYS':
+        return 'blood_pressure_systolic';
+      case 'BLOOD_PRESSURE_DIA':
+        return 'blood_pressure_diastolic';
+      case 'WEIGHT':
+        return 'weight';
+      default:
+        return null;
     }
   }
 
@@ -370,8 +929,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
     try {
       FitbitActivityTimeseriesDataManager stepsManager =
           FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId,
-        clientSecret: fitbitClientSecret,
+        clientID: fitbitClientId!,
+        clientSecret: fitbitClientSecret!,
       );
 
       final stepsData = await stepsManager
@@ -407,8 +966,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
     try {
       FitbitActivityTimeseriesDataManager caloriesManager =
           FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId,
-        clientSecret: fitbitClientSecret,
+        clientID: fitbitClientId!,
+        clientSecret: fitbitClientSecret!,
       );
 
       final caloriesData = await caloriesManager
@@ -479,6 +1038,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
       case 'apple_health':
         return 'Apple Health';
       case 'google_fit':
+      case 'careconnect backend':
       default:
         return 'Health Connect';
     }
@@ -1044,45 +1604,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Connected Devices',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.indigo,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${connectedDevices.length} device${connectedDevices.length == 1 ? '' : 's'} connected',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: _navigateToAddDevice,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Device'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
+            _buildConnectedDevicesHeader(),
             const SizedBox(height: 20),
             _buildSemesterScopeCard(),
             const SizedBox(height: 20),
-            if (latestHealthData.isNotEmpty) ...[
+            if (isLoadingData ||
+                latestHealthData.isNotEmpty ||
+                syncStatusMessage != null) ...[
               const Text(
                 'Latest Health Data',
                 style: TextStyle(
@@ -1098,6 +1626,22 @@ class _WearablesScreenState extends State<WearablesScreen> {
                     padding: EdgeInsets.all(20.0),
                     child: CircularProgressIndicator(),
                   ),
+                )
+              else if (hasSyncError)
+                _buildSyncStateCard(
+                  icon: Icons.sync_problem,
+                  color: Colors.red,
+                  title: 'Synchronization failed',
+                  subtitle: syncStatusMessage ??
+                      'We could not synchronize wearable readings.',
+                )
+              else if (latestHealthData.isEmpty)
+                _buildSyncStateCard(
+                  icon: Icons.inbox_outlined,
+                  color: Colors.blueGrey,
+                  title: 'No synced data yet',
+                  subtitle: syncStatusMessage ??
+                      'Connect a wearable and run sync to view persisted vitals.',
                 )
               else
                 _buildHealthDataCards(),
@@ -1116,6 +1660,89 @@ class _WearablesScreenState extends State<WearablesScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildConnectedDevicesHeader() {
+    final subtitle =
+        '${connectedDevices.length} device${connectedDevices.length == 1 ? '' : 's'} connected';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 430;
+        if (isCompact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Connected Devices',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigo,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: _navigateToAddDevice,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Device'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Connected Devices',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+            ElevatedButton.icon(
+              onPressed: _navigateToAddDevice,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add Device'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1245,6 +1872,59 @@ class _WearablesScreenState extends State<WearablesScreen> {
     );
   }
 
+  Widget _buildSyncStateCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHealthDataItem(HealthData data) {
     IconData dataIcon = _getHealthDataIcon(data.type);
     Color dataColor = _getHealthDataColor(data.type);
@@ -1271,19 +1951,19 @@ class _WearablesScreenState extends State<WearablesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Text(
+                  data.type,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
                   children: [
-                    Flexible(
-                      child: Text(
-                        data.type,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 1),
@@ -1301,7 +1981,6 @@ class _WearablesScreenState extends State<WearablesScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 1),
@@ -1324,6 +2003,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 2),
                 Text(
                   'Updated: ${_formatDate(data.date)}',
                   style: const TextStyle(
