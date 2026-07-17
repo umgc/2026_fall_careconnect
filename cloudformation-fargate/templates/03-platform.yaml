@@ -35,14 +35,6 @@ Parameters:
       - 180
       - 365
 
-  # One-time Chime Media Insights configuration ARN (empty until ops creates the config).
-  MediaInsightsConfigArn:
-    Type: String
-    Default: ''
-    Description: >
-      ARN of the Chime Media Insights pipeline configuration for per-attendee speaker capture.
-      Create the configuration in AWS once, then pass the ARN on stack create/update.
-
 Resources:
   # Backend image repository.
   BackendRepository:
@@ -95,7 +87,7 @@ Resources:
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/careconnect/${Environment}/*
 
-  # Task role: runtime permissions for Chime, recording, KVS speaker capture,
+  # Task role: runtime permissions for Chime, recording, KVS stream-pool speaker capture,
   # Bedrock, S3, Transcribe, SSM (prod profile), and related AWS SDK clients.
   # See cloudformation-fargate/README.md — ECS task role permissions.
   EcsTaskRole:
@@ -140,12 +132,6 @@ Resources:
                   - chime:GetMediaCapturePipeline
                   - chime:GetMediaPipeline
                   - chime:CreateMediaStreamPipeline
-                  - chime:CreateMediaInsightsPipeline
-                  - chime:DeleteMediaInsightsPipeline
-                  - chime:GetMediaInsightsPipeline
-                  - chime:CreateMediaInsightsPipelineConfiguration
-                  - chime:GetMediaInsightsPipelineConfiguration
-                  - chime:ListMediaInsightsPipelineConfigurations
                 Resource: '*'
               - Sid: KinesisVideoStreams
                 Effect: Allow
@@ -202,7 +188,7 @@ Resources:
                   - ses:SendRawEmail
                   - sns:Publish
                 Resource: '*'
-              # Covers kvs-stream-pool-arn, chime-media-insights-config-arn, and other env SSM params.
+              # Covers kvs-stream-pool-arn and other env-scoped SSM params.
               - Sid: SsmParameters
                 Effect: Allow
                 Action:
@@ -245,14 +231,6 @@ Resources:
         Set manually after creating the pool (not provisioned by this stack).
       Value: REPLACE_WITH_CHIME_KVS_STREAM_POOL_ARN
 
-  ChimeMediaInsightsConfigArnParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub /careconnect/${Environment}/chime-media-insights-config-arn
-      Type: String
-      Description: Chime Media Insights pipeline configuration ARN for speaker-ID capture
-      Value: !Ref MediaInsightsConfigArn
-
 Outputs:
   # Exported outputs are consumed by the service stack.
   EcrRepositoryUri:
@@ -294,8 +272,3 @@ Outputs:
     Value: !Ref KvsStreamPoolArnParameter
     Export:
       Name: !Sub careconnect-${Environment}-KvsStreamPoolArnParameterName
-
-  ChimeMediaInsightsConfigArnParameterName:
-    Value: !Ref ChimeMediaInsightsConfigArnParameter
-    Export:
-      Name: !Sub careconnect-${Environment}-ChimeMediaInsightsConfigArnParameterName

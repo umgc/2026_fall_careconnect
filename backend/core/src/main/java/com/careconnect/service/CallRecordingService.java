@@ -1173,7 +1173,6 @@ public class CallRecordingService {
         "lifecycleStatus",
         rec.getLifecycleStatus() == null ? null : rec.getLifecycleStatus().name());
     m.put("pipelineId", rec.getPipelineId());
-    m.put("kvsPipelineId", rec.getKvsPipelineId());
     m.put("mediaStreamPipelineId", rec.getMediaStreamPipelineId());
     m.put("s3Bucket", rec.getS3Bucket());
     m.put("s3Prefix", rec.getS3Prefix());

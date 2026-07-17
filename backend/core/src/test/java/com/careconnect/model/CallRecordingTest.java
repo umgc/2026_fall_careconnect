@@ -9,11 +9,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CallRecordingTest {
 
     @Test
-    @DisplayName("SPEAKER-010: kvsPipelineId field maps on CallRecording entity")
-    void kvsPipelineId_roundTrips() {
+    @DisplayName("SPEAKER-010: mediaStreamPipelineId field maps on CallRecording entity")
+    void mediaStreamPipelineId_roundTrips() {
         final CallRecording recording = new CallRecording();
-        recording.setKvsPipelineId("kvs-pipeline-xyz");
+        recording.setMediaStreamPipelineId("media-stream-pipeline-xyz");
 
-        assertThat(recording.getKvsPipelineId()).isEqualTo("kvs-pipeline-xyz");
+        assertThat(recording.getMediaStreamPipelineId()).isEqualTo("media-stream-pipeline-xyz");
     }
 }
