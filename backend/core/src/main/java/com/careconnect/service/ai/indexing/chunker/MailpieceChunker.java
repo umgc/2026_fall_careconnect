@@ -44,8 +44,6 @@ public class MailpieceChunker {
         final List<IndexingChunkDraft> drafts = new ArrayList<>(1);
         final String chunkText = buildChunkText(
                 sender, summary, ocrText, importanceLevel, importanceCategory, importanceReasoning);
-        final List<IndexingChunkDraft> drafts = new ArrayList<>(1);
-        final String chunkText = buildChunkText(sender, summary, ocrText);
         if (chunkText.isBlank()) {
             return drafts;
         }
@@ -124,7 +122,6 @@ public class MailpieceChunker {
             final String importanceLevel,
             final String importanceCategory,
             final String importanceReasoning) {
-    String buildChunkText(final String sender, final String summary, final String ocrText) {
         final StringBuilder sb = new StringBuilder();
         if (sender != null && !sender.isBlank()) {
             sb.append("From: ").append(sender.trim());
@@ -161,7 +158,5 @@ public class MailpieceChunker {
 
     String buildChunkText(final String sender, final String summary, final String ocrText) {
         return buildChunkText(sender, summary, ocrText, null, null, null);
-    }
-        return sb.toString().trim();
     }
 }

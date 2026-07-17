@@ -67,7 +67,6 @@ public class RetrievalIndexService {
             final SummaryChunker summaryChunker,
             final TranscriptSegmentChunker transcriptSegmentChunker,
             final MailpieceChunker mailpieceChunker,
-            final ObjectMapper objectMapper) {
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
@@ -249,23 +248,12 @@ public class RetrievalIndexService {
                 && !contentHash.isBlank()
                 && shouldSkipUspsMailReindex(sourceRecordId, contentHash, mailpiece)) {
             log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash+importance unchanged",
-        if (payload.contentHash() != null
-                && !payload.contentHash().isBlank()
-                && hasMatchingUspsMailContentHash(sourceRecordId, payload.contentHash())) {
-            log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash unchanged",
                     payload.mailpieceId());
             return 0;
         }
 
         final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
         final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
-        final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
-
-        final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
-        final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
-        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
         final String sourceKey = firstNonBlank(payload.sourceKey(), mailpiece.getSourceKey());
         final String consentScope = firstNonBlank(
                 payload.consentScope(), mailpiece.getConsentScope());
@@ -282,7 +270,6 @@ public class RetrievalIndexService {
                 mailpiece.getImportanceCategory(),
                 mailpiece.getClassificationMethod(),
                 mailpiece.getImportanceReasoning());
-                consentScope);
 
         if (drafts.isEmpty()) {
             log.warn(
@@ -393,15 +380,6 @@ public class RetrievalIndexService {
                 return false;
             }
             return true;
-    private boolean hasMatchingUspsMailContentHash(
-            final String sourceRecordId, final String contentHash) {
-        final List<RetrievalIndexChunk> existing =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
-        for (final RetrievalIndexChunk chunk : existing) {
-            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
-                return true;
-            }
         }
         return false;
     }
