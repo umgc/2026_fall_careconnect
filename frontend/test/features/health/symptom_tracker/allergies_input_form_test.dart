@@ -6,7 +6,9 @@
 // No Provider needed.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/widgets/allergies_input_form.dart';
 
 Widget _wrap() => MaterialApp(
@@ -21,6 +23,30 @@ Widget _wrap() => MaterialApp(
     );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (call) async {
+        if (call.method != 'read') return null;
+        final key = (call.arguments as Map<Object?, Object?>)['key'];
+        if (key == 'jwt_token') return 'test-jwt';
+        if (key == 'token_expiry') return '4102444800';
+        return null;
+      },
+    );
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      null,
+    );
+  });
+
   group('AllergyInputForm – initial render', () {
     testWidgets('renders without crashing', (tester) async {
       await tester.pumpWidget(_wrap());
@@ -58,6 +84,30 @@ void main() {
       expect(find.text('Use AI Voice'), findsOneWidget);
     });
 
+    // TC-M3-ALG-VOICE-001
+    testWidgets('voice handoff consumes the returned transcript',
+        (tester) async {
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      await tester.tap(find.text('Use AI Voice'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final voicePage = tester.widget<VoiceCommandAI>(
+        find.byType(VoiceCommandAI),
+      );
+      expect(voicePage.singleShot, isTrue);
+
+      Navigator.of(tester.element(find.byType(VoiceCommandAI))).pop(
+        '  hives and facial swelling  ',
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('hives and facial swelling'), findsOneWidget);
+    });
+
     testWidgets('shows severity dropdown with default "Mild" value',
         (tester) async {
       await tester.pumpWidget(_wrap());
@@ -81,7 +131,10 @@ void main() {
     testWidgets('shows Add Drug Allergy submit button', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.pump();
-      expect(find.byType(ElevatedButton), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((widget) => widget is ElevatedButton),
+        findsOneWidget,
+      );
     });
   });
 
