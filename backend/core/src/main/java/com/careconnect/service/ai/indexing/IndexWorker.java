@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.IndexingEventType;
+import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.indexing.IndexingOutboxRow;
@@ -235,6 +236,11 @@ public class IndexWorker {
                 final TranscriptIndexedPayload payload =
                         objectMapper.treeToValue(payloadNode, TranscriptIndexedPayload.class);
                 return retrievalIndexService.ingestTranscriptIndexed(payload);
+            }
+            if (IndexingEventType.MAILPIECE_INDEXED.equals(eventType)) {
+                final MailpieceIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, MailpieceIndexedPayload.class);
+                return retrievalIndexService.ingestMailpieceIndexed(payload);
             }
         } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
             throw ex;

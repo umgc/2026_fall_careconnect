@@ -1,14 +1,18 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
@@ -47,25 +51,32 @@ public class RetrievalIndexService {
 
     private final CallSummaryRepository callSummaryRepository;
     private final CallTranscriptSegmentRepository transcriptSegmentRepository;
+    private final UspsMailpieceRepository uspsMailpieceRepository;
     private final RetrievalIndexChunkRepository chunkRepository;
     private final SummaryChunker summaryChunker;
     private final TranscriptSegmentChunker transcriptSegmentChunker;
+    private final MailpieceChunker mailpieceChunker;
     private final ObjectMapper objectMapper;
     private final ChunkEmbeddingService chunkEmbeddingService;
 
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
             final CallTranscriptSegmentRepository transcriptSegmentRepository,
+            final UspsMailpieceRepository uspsMailpieceRepository,
             final RetrievalIndexChunkRepository chunkRepository,
             final SummaryChunker summaryChunker,
             final TranscriptSegmentChunker transcriptSegmentChunker,
+            final MailpieceChunker mailpieceChunker,
+            final ObjectMapper objectMapper) {
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
         this.transcriptSegmentRepository = transcriptSegmentRepository;
+        this.uspsMailpieceRepository = uspsMailpieceRepository;
         this.chunkRepository = chunkRepository;
         this.summaryChunker = summaryChunker;
         this.transcriptSegmentChunker = transcriptSegmentChunker;
+        this.mailpieceChunker = mailpieceChunker;
         this.objectMapper = objectMapper;
         this.chunkEmbeddingService = chunkEmbeddingService;
     }
@@ -210,6 +221,65 @@ public class RetrievalIndexService {
         return persistDrafts(patientId, callId, drafts);
     }
 
+    /**
+     * Indexes a persisted USPS mailpiece into {@code retrieval_index_chunk}
+     * with {@link RetrievalRecordType#USPS_MAIL} (Task 3.14.5). Embedding
+     * remains null until Task 4.3; FTS is maintained by the DB trigger.
+     *
+     * @return number of chunks written (0 when skipped)
+     */
+    @Transactional
+    public int ingestMailpieceIndexed(final MailpieceIndexedPayload payload) {
+        if (payload == null || payload.mailpieceId() == null) {
+            throw new IllegalArgumentException("MAILPIECE_INDEXED payload requires mailpieceId");
+        }
+        if (payload.patientId() == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index mailpieceId=" + payload.mailpieceId()
+                            + " — patientId is required on retrieval_index_chunk");
+        }
+
+        final String sourceRecordId = String.valueOf(payload.mailpieceId());
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && hasMatchingUspsMailContentHash(sourceRecordId, payload.contentHash())) {
+            log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash unchanged",
+                    payload.mailpieceId());
+            return 0;
+        }
+
+        final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
+
+        final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
+        final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
+        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
+        final String sourceKey = firstNonBlank(payload.sourceKey(), mailpiece.getSourceKey());
+        final String consentScope = firstNonBlank(
+                payload.consentScope(), mailpiece.getConsentScope());
+
+        final List<IndexingChunkDraft> drafts = mailpieceChunker.chunk(
+                sender,
+                summary,
+                mailpiece.getOcrText(),
+                contentHash,
+                sourceKey,
+                payload.digestDate() != null ? payload.digestDate() : mailpiece.getDigestDate(),
+                consentScope);
+
+        if (drafts.isEmpty()) {
+            log.warn(
+                    "MAILPIECE_INDEXED produced no drafts for mailpieceId={}; leaving existing chunks unchanged",
+                    payload.mailpieceId());
+            return 0;
+        }
+
+        chunkRepository.deleteBySourceRecordIdAndRecordType(
+                sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        return persistDrafts(payload.patientId(), sourceRecordId, drafts);
+    }
+
     private int persistDrafts(
             final Long patientId,
             final String sourceRecordId,
@@ -272,6 +342,19 @@ public class RetrievalIndexService {
         final List<RetrievalIndexChunk> all = new ArrayList<>(existing);
         all.addAll(visitExisting);
         for (final RetrievalIndexChunk chunk : all) {
+            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasMatchingUspsMailContentHash(
+            final String sourceRecordId, final String contentHash) {
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findBySourceRecordIdAndRecordType(
+                        sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        for (final RetrievalIndexChunk chunk : existing) {
             if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
                 return true;
             }

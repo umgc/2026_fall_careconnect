@@ -6,6 +6,8 @@ import com.careconnect.repository.USPSDigestCacheRepo;
 import com.careconnect.security.TokenCryptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
@@ -22,6 +24,7 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class USPSDigestService {
+    private static final Logger log = LoggerFactory.getLogger(USPSDigestService.class);
     private static final int SEARCH_LOOKBACK_DAYS = 30;
     private static final int MAX_REMOTE_FETCHES = 8;
 
@@ -32,15 +35,23 @@ public class USPSDigestService {
     private final GmailParser gmailParser;
     private final OutlookParser outlookParser;
     private final TokenCryptor tokenCryptor;
+    private final UspsMailpiecePersistenceService mailpiecePersistenceService;
     private final ObjectMapper om = new ObjectMapper();
 
     public Optional<USPSDigest> latestForUser(String userId) {
-        // 1) cache
+        // 1) cache — still retry durable persist (idempotent) so a prior failure
+        //    during TTL cannot leave the Ask AI index permanently empty.
         var cached = cacheRepo.findFirstByUserIdAndExpiresAtAfterOrderByDigestDateDesc(userId, Instant.now());
         if (cached.isPresent()) {
             try {
-                return Optional.of(om.readValue(cached.get().getPayloadJson(), USPSDigest.class));
-            } catch (Exception ignored) {}
+                final USPSDigest digest =
+                        om.readValue(cached.get().getPayloadJson(), USPSDigest.class);
+                persistMailpieces(userId, digest);
+                return Optional.of(digest);
+            } catch (Exception ex) {
+                log.warn("Failed to deserialize cached USPS digest for userId={}: {}",
+                        userId, ex.getMessage());
+            }
         }
 
         // 2) Gmail
@@ -84,8 +95,14 @@ public class USPSDigestService {
                 userId, start, end, now);
         if (cached.isPresent()) {
             try {
-                return Optional.of(om.readValue(cached.get().getPayloadJson(), USPSDigest.class));
-            } catch (Exception ignored) { }
+                final USPSDigest digest =
+                        om.readValue(cached.get().getPayloadJson(), USPSDigest.class);
+                persistMailpieces(userId, digest);
+                return Optional.of(digest);
+            } catch (Exception ex) {
+                log.warn("Failed to deserialize cached USPS digest for userId={} date={}: {}",
+                        userId, date, ex.getMessage());
+            }
         }
 
         var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
@@ -202,7 +219,21 @@ public class USPSDigestService {
             c.setPayloadJson(om.writeValueAsString(d));
             c.setExpiresAt(Instant.now().plus(Duration.ofHours(24)));
             cacheRepo.save(c);
-        } catch (Exception ignored) {}
+            persistMailpieces(userId, d);
+        } catch (Exception ex) {
+            log.warn("Failed to cache USPS digest for userId={}: {}", userId, ex.getMessage());
+        }
+    }
+
+    private void persistMailpieces(String userId, USPSDigest digest) {
+        if (mailpiecePersistenceService == null || digest == null) {
+            return;
+        }
+        try {
+            mailpiecePersistenceService.persistAndIndex(userId, digest);
+        } catch (Exception ex) {
+            log.warn("Mailpiece persistence failed for userId={}: {}", userId, ex.getMessage(), ex);
+        }
     }
 
     public void clearCacheForUser(String userId) {

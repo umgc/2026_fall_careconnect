@@ -1,13 +1,17 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
@@ -43,6 +47,8 @@ class RetrievalIndexServiceTest {
     @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
+    private UspsMailpieceRepository uspsMailpieceRepository;
+    @Mock
     private RetrievalIndexChunkRepository chunkRepository;
     @Mock
     private ChunkEmbeddingService chunkEmbeddingService;
@@ -55,9 +61,12 @@ class RetrievalIndexServiceTest {
         service = new RetrievalIndexService(
                 callSummaryRepository,
                 transcriptSegmentRepository,
+                uspsMailpieceRepository,
                 chunkRepository,
                 new SummaryChunker(mapper),
                 new TranscriptSegmentChunker(),
+                new MailpieceChunker(),
+                mapper);
                 mapper,
                 chunkEmbeddingService);
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
@@ -391,5 +400,62 @@ class RetrievalIndexServiceTest {
                 .isInstanceOf(IndexingDeferredException.class)
                 .hasMessageContaining("patientId");
         verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+    }
+
+    @Test
+    @DisplayName("ingestMailpieceIndexed writes USPS_MAIL chunk and replaces prior source rows")
+    void ingestMailpieceIndexed_writesChunk() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setSender("Acme Bank");
+        mailpiece.setSummary("Monthly statement");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setConsentScope("on_consent");
+        when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
+        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("55"), any()))
+                .thenReturn(List.of());
+
+        final MailpieceIndexedPayload payload = new MailpieceIndexedPayload(
+                55L, 42L, "2025-03-03|m-1", "sha-abc",
+                "Acme Bank", "Monthly statement",
+                java.time.LocalDate.of(2025, 3, 3), "on_consent");
+
+        final int written = service.ingestMailpieceIndexed(payload);
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
+                "55", RetrievalRecordType.USPS_MAIL.name());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(1);
+        assertThat(captor.getValue().get(0).getRecordType())
+                .isEqualTo(RetrievalRecordType.USPS_MAIL.name());
+        assertThat(captor.getValue().get(0).getPatientId()).isEqualTo(42L);
+        assertThat(captor.getValue().get(0).getChunkText()).contains("Acme Bank");
+    }
+
+    @Test
+    @DisplayName("ingestMailpieceIndexed skips when contentHash matches existing USPS_MAIL chunk")
+    void ingestMailpieceIndexed_skipsUnchangedHash() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.USPS_MAIL.name())
+                .sourceRecordId("55")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
+                .build();
+        when(chunkRepository.findBySourceRecordIdAndRecordType(
+                "55", RetrievalRecordType.USPS_MAIL.name()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 42L, "2025-03-03|m-1", "sha-abc",
+                "Acme", "Statement", java.time.LocalDate.of(2025, 3, 3), "on_consent"));
+
+        assertThat(written).isZero();
+        verify(uspsMailpieceRepository, never()).findById(any());
+        verify(chunkRepository, never()).saveAll(anyList());
     }
 }
