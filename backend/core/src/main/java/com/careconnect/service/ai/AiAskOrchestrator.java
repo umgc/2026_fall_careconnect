@@ -7,6 +7,7 @@ import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.HybridRetrievalService;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
+import com.careconnect.security.UnauthorizedException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -58,7 +59,7 @@ public class AiAskOrchestrator {
     }
 
     public AiAskResult ask(User caller, Long patientId, String question)
-            throws ForbiddenScopeException {
+            throws ForbiddenScopeException, UnauthorizedException {
 
         log.info("Ask AI request — caller={} patientId={} questionLength={}",
                 caller.getId(), patientId, question.length());
