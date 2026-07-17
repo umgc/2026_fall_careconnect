@@ -45,9 +45,43 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   List<_CommandMatch> _ambiguousMatches = [];
 
   static const _commandTable = [
+    // Core navigation
     _CommandMatch(phrase: 'take me home', intent: 'navigate_home'),
     _CommandMatch(phrase: 'take me to calendar', intent: 'navigate_calendar'),
     _CommandMatch(phrase: 'take me to my tracker', intent: 'navigate_symptoms'),
+    _CommandMatch(phrase: 'open messages', intent: 'navigate_messages'),
+    _CommandMatch(phrase: 'take me to messages', intent: 'navigate_messages'),
+    _CommandMatch(phrase: 'open profile', intent: 'navigate_profile'),
+    _CommandMatch(phrase: 'open settings', intent: 'navigate_settings'),
+    _CommandMatch(phrase: 'open menu', intent: 'navigate_menu'),
+    // Health
+    _CommandMatch(phrase: 'open medication tracker', intent: 'navigate_medication'),
+    _CommandMatch(phrase: 'take me to medications', intent: 'navigate_medication'),
+    _CommandMatch(phrase: 'open virtual check in', intent: 'navigate_virtual_checkin'),
+    _CommandMatch(phrase: 'start check in', intent: 'navigate_virtual_checkin'),
+    // Integrations
+    _CommandMatch(phrase: 'open wearables', intent: 'navigate_wearables'),
+    _CommandMatch(phrase: 'open smart devices', intent: 'navigate_smart_devices'),
+    _CommandMatch(phrase: 'open home monitoring', intent: 'navigate_home_monitoring'),
+    // Social
+    _CommandMatch(phrase: 'open social feed', intent: 'navigate_social_feed'),
+    // Caregiver
+    _CommandMatch(phrase: 'open patient list', intent: 'navigate_patient_list'),
+    _CommandMatch(phrase: 'show my patients', intent: 'navigate_patient_list'),
+    _CommandMatch(phrase: 'open evv', intent: 'navigate_evv'),
+    _CommandMatch(phrase: 'open notetaker', intent: 'navigate_notetaker'),
+    _CommandMatch(phrase: 'open invoice assistant', intent: 'navigate_invoice'),
+    // Files & documents
+    _CommandMatch(phrase: 'open file management', intent: 'navigate_files'),
+    _CommandMatch(phrase: 'open my files', intent: 'navigate_files'),
+    _CommandMatch(phrase: 'open informed delivery', intent: 'navigate_informed_delivery'),
+    _CommandMatch(phrase: 'check my mail', intent: 'navigate_informed_delivery'),
+    // Other features
+    _CommandMatch(phrase: 'open gamification', intent: 'navigate_gamification'),
+    _CommandMatch(phrase: 'show achievements', intent: 'navigate_gamification'),
+    _CommandMatch(phrase: 'open search', intent: 'navigate_search'),
+    _CommandMatch(phrase: 'open subscription', intent: 'navigate_subscription'),
+    _CommandMatch(phrase: 'open ai configuration', intent: 'navigate_ai_config'),
   ];
 
   @override
