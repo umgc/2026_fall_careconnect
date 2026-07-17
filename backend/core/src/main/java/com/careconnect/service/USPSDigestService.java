@@ -232,7 +232,6 @@ public class USPSDigestService {
             c.setExpiresAt(Instant.now().plus(Duration.ofHours(24)));
             cacheRepo.save(c);
             persistMailpieces(userId, d);
-        } catch (Exception ignored) {}
         } catch (Exception ex) {
             log.warn("Failed to cache USPS digest for userId={}: {}", userId, ex.getMessage());
         }
@@ -246,17 +245,6 @@ public class USPSDigestService {
             mailpiecePersistenceService.persistAndIndex(userId, digest);
         } catch (Exception ex) {
             log.warn("Mailpiece persistence failed for userId={}: {}", userId, ex.getMessage(), ex);
-        }
-    }
-
-    private void persistMailpieces(String userId, USPSDigest digest) {
-        if (mailpiecePersistenceService == null || digest == null) {
-            return;
-        }
-        try {
-            mailpiecePersistenceService.persistAndIndex(userId, digest);
-        } catch (Exception ex) {
-            System.err.println("[USPSDigestService] Mailpiece persistence failed: " + ex.getMessage());
         }
     }
 

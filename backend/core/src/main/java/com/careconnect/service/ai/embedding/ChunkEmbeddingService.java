@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Task 4.3 — batch-embeds {@code retrieval_index_chunk.chunk_text} via Bedrock Titan
@@ -129,6 +130,32 @@ public class ChunkEmbeddingService {
             log.info("Embedded {}/{} retrieval chunk(s) via {}", written, pending.size(), modelId);
         }
         return written;
+    }
+
+    /**
+     * Embeds a sanitized user query for hybrid vector search (Task 5.1).
+     * Uses the same Titan model and dimension as index-time chunk embeddings.
+     *
+     * @return empty when embedding is disabled, Bedrock is unavailable, text is blank, or invoke fails
+     */
+    public Optional<float[]> embedQuery(final String text) {
+        if (!enabled) {
+            log.debug("Query embedding skipped — careconnect.embedding.enabled=false");
+            return Optional.empty();
+        }
+        if (bedrockRuntimeClient == null) {
+            log.warn("Query embedding skipped — BedrockRuntimeClient not configured");
+            return Optional.empty();
+        }
+        if (text == null || text.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(invokeTitanEmbed(text));
+        } catch (final Exception ex) {
+            log.warn("Failed to embed query text: {}", ex.getMessage());
+            return Optional.empty();
+        }
     }
 
     float[] invokeTitanEmbed(final String chunkText) throws Exception {

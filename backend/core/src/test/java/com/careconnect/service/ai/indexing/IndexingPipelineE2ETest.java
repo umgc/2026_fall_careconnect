@@ -85,7 +85,6 @@ class IndexingPipelineE2ETest {
                 new SummaryChunker(objectMapper),
                 new TranscriptSegmentChunker(),
                 new MailpieceChunker(),
-                objectMapper);
                 objectMapper,
                 chunkEmbeddingService);
         worker = new IndexWorker(
