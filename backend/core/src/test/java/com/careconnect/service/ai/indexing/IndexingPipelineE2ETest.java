@@ -9,8 +9,10 @@ import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
@@ -61,6 +63,8 @@ class IndexingPipelineE2ETest {
     @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
+    private UspsMailpieceRepository uspsMailpieceRepository;
+    @Mock
     private RetrievalIndexChunkRepository chunkRepository;
     @Mock
     private ChunkEmbeddingService chunkEmbeddingService;
@@ -76,9 +80,12 @@ class IndexingPipelineE2ETest {
         final RetrievalIndexService retrievalIndexService = new RetrievalIndexService(
                 callSummaryRepository,
                 transcriptSegmentRepository,
+                uspsMailpieceRepository,
                 chunkRepository,
                 new SummaryChunker(objectMapper),
                 new TranscriptSegmentChunker(),
+                new MailpieceChunker(),
+                objectMapper);
                 objectMapper,
                 chunkEmbeddingService);
         worker = new IndexWorker(

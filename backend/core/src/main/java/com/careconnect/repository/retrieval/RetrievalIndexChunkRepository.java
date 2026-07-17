@@ -111,18 +111,22 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     /**
      * Counts NULL embeddings for a single source record (Task 4.3 contentHash short-circuit).
+     * Only counts embeddable rows (non-blank {@code chunk_text}) — same filter as backfill/retry.
      */
     @Query(
             value = """
                     SELECT COUNT(*) FROM retrieval_index_chunk
                     WHERE source_record_id = :sourceRecordId
                       AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
                     """,
             nativeQuery = true)
     long countMissingEmbeddingForSource(@Param("sourceRecordId") String sourceRecordId);
 
     /**
      * Loads portable columns for chunks that still need Titan embeddings (retry path).
+     * Only embeddable rows (non-blank {@code chunk_text}) — aligned with backfill batch query.
      */
     @Query(
             value = """
@@ -131,6 +135,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     FROM retrieval_index_chunk
                     WHERE source_record_id = :sourceRecordId
                       AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
                     """,
             nativeQuery = true)
     List<RetrievalIndexChunk> findBySourceRecordIdAndEmbeddingIsNull(
