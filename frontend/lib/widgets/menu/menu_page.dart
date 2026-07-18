@@ -181,11 +181,6 @@ class _MenuPageState extends State<MenuPage> {
         route: '/voice',
       ),
       _MenuItem(
-        icon: Icons.chat_bubble_outline,
-        label: local.askAi,
-        route: '/ask-ai',
-      ),
-      _MenuItem(
         icon: Icons.wb_sunny_outlined,
         label: local.dailyBrief,
         route: '/stml/brief',

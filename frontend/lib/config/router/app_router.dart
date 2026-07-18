@@ -13,7 +13,6 @@ import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
 import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
-import 'package:care_connect_app/features/ai/presentation/pages/ask_ai_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_brief_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_recall_page.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
@@ -188,7 +187,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
-    GoRoute(path: '/ask-ai', builder: (_, __) => const AskAiPage()),
     GoRoute(path: '/stml/brief', builder: (_, __) => const StmlBriefPage()),
     GoRoute(path: '/stml/recall', builder: (_, __) => const StmlRecallPage()),
     GoRoute(path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
