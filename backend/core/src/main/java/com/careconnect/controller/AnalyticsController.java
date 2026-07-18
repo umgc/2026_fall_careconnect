@@ -3,10 +3,13 @@ package com.careconnect.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import jakarta.validation.Valid;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.Permission;
 import com.careconnect.security.Role;
+import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.util.SecurityUtil;
 
@@ -21,6 +24,8 @@ import java.util.Collections;
 import org.springframework.security.core.Authentication;
 import com.careconnect.dto.ExportLinkDTO;
 import com.careconnect.dto.VitalSampleDTO;
+import com.careconnect.dto.WearableReadingIngestionRequest;
+import com.careconnect.dto.WearableReadingIngestionResponse;
 import com.careconnect.service.AnalyticsService;
 import com.careconnect.service.VitalSampleService;
 import com.careconnect.exception.AppException;
@@ -162,6 +167,9 @@ private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
 @GetMapping("/vitals")
 public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int days) {
   try {
+        if (days < 1) {
+            days = 1;
+        }
         // Get user details from JWT token
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String userEmail = auth.getName();
@@ -213,9 +221,8 @@ public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int 
             "message", "Vitals data retrieved successfully"
         ));
     } catch (Exception e) {
-        return ResponseEntity.ok(Map.of(
-            "data", Collections.emptyList(),
-            "message", "No vitals data available"
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+            "error", "Failed to retrieve vitals data"
         ));
     }
     }
@@ -285,6 +292,37 @@ public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", "Failed to create vital sample"));
         }
+    }
+
+    @PostMapping("/vitals/ingest")
+    @RequirePermission(Permission.RECORD_HEALTH_DATA)
+    public ResponseEntity<?> ingestWearableReadings(@Valid @RequestBody WearableReadingIngestionRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String userEmail = auth.getName();
+
+        User currentUser = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not found"));
+
+        WearableReadingIngestionResponse response = vitalSampleService.ingestWearableReadings(currentUser, request);
+
+        if (response.acceptedCount() == 0) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "error", "No wearable readings were accepted",
+                    "data", response
+            ));
+        }
+
+        if (response.rejectedCount() > 0) {
+            return ResponseEntity.status(HttpStatus.MULTI_STATUS).body(Map.of(
+                    "data", response,
+                    "message", "Wearable readings partially ingested"
+            ));
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "data", response,
+                "message", "Wearable readings ingested successfully"
+        ));
     }
 
     /**

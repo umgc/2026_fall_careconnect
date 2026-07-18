@@ -221,22 +221,7 @@ void main() {
     });
   });
 
-  // ---------------------------------------------------------------
-  // getAgoraAppCertificate
-  // ---------------------------------------------------------------
-  group('getAgoraAppCertificate', () {
-    test('returns empty string when AGORA_APP_CERTIFICATE is not set', () {
-      expect(getAgoraAppCertificate(), isEmpty);
-    });
-
-    test('does not throw even when not configured', () {
-      expect(() => getAgoraAppCertificate(), returnsNormally);
-    });
-
-    test('returns a String type', () {
-      expect(getAgoraAppCertificate(), isA<String>());
-    });
-  });
+  // getAgoraAppCertificate — removed from API (no public getter exists).
 
   // ---------------------------------------------------------------
   // getEnableUSPSDigest
@@ -272,40 +257,7 @@ void main() {
     });
   });
 
-  // ---------------------------------------------------------------
-  // getAgoraAppId – throws when not set
-  // ---------------------------------------------------------------
-  group('getAgoraAppId', () {
-    test('throws Exception when AGORA_APP_ID is not defined', () {
-      expect(() => getAgoraAppId(), throwsException);
-    });
-
-    test('throws with descriptive message about AGORA_APP_ID', () {
-      expect(
-        () => getAgoraAppId(),
-        throwsA(
-          isA<Exception>().having(
-            (e) => e.toString(),
-            'message',
-            contains('AGORA_APP_ID'),
-          ),
-        ),
-      );
-    });
-
-    test('throws with message mentioning --dart-define', () {
-      expect(
-        () => getAgoraAppId(),
-        throwsA(
-          isA<Exception>().having(
-            (e) => e.toString(),
-            'message',
-            contains('--dart-define'),
-          ),
-        ),
-      );
-    });
-  });
+  // getAgoraAppId — removed from API (no public getter exists).
 
   // ---------------------------------------------------------------
   // getFitbitClientId – throws when not set
@@ -581,7 +533,6 @@ void main() {
       expect(getOAuthRedirectUri(), getOAuthRedirectUri());
       expect(getWebSocketNotificationUrl(), getWebSocketNotificationUrl());
       expect(getWebRTCSignalingServerUrl(), getWebRTCSignalingServerUrl());
-      expect(getAgoraAppCertificate(), getAgoraAppCertificate());
       expect(getEnableUSPSDigest(), getEnableUSPSDigest());
       expect(getEnableMockUSPSDigest(), getEnableMockUSPSDigest());
       expect(getBackendToken(), getBackendToken());

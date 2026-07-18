@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../config/env_constant.dart';
+import '../features/telemetry/telemetry_error_handler.dart';
 import 'auth_token_manager.dart';
 import 'auth_service.dart';
 
@@ -85,6 +86,8 @@ class ApiClient {
               // fall through to error
             }
           }
+
+          _recordDioErrorTelemetry(err);
 
           // Normalize to a DioException that wraps ApiException for consistency
           handler.reject(_normalizeDioError(err));
@@ -232,6 +235,55 @@ class ApiClient {
   }
 
   // --------------- Helpers ---------------
+
+  void _recordDioErrorTelemetry(DioException err) {
+    final endpoint = bucketEndpoint(err.requestOptions.path);
+    if (isTelemetryEndpoint(endpoint)) return;
+
+    final method = err.requestOptions.method.toUpperCase();
+
+    if (err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.receiveTimeout) {
+      recordHttpTimeout(
+        source: 'dio',
+        method: method,
+        endpoint: endpoint,
+        timeoutMs: _dioTimeoutMs(err),
+      );
+      return;
+    }
+
+    if (err.type == DioExceptionType.connectionError ||
+        err.error is SocketException) {
+      recordHttpNetworkError(
+        source: 'dio',
+        method: method,
+        endpoint: endpoint,
+        statusCode: err.response?.statusCode ?? 0,
+        errorType: err.error is SocketException ? 'socket' : 'connection',
+      );
+      return;
+    }
+
+    if (err.response == null &&
+        err.type == DioExceptionType.unknown &&
+        isNetworkError(err.error ?? err)) {
+      recordHttpNetworkError(
+        source: 'dio',
+        method: method,
+        endpoint: endpoint,
+        errorType: networkErrorType(err.error ?? err),
+      );
+    }
+  }
+
+  int? _dioTimeoutMs(DioException err) {
+    final timeout = err.requestOptions.connectTimeout ??
+        err.requestOptions.sendTimeout ??
+        err.requestOptions.receiveTimeout;
+    return timeout?.inMilliseconds;
+  }
 
   T _parse<T>(Response resp, T Function(dynamic json)? parser) {
     final code = resp.statusCode ?? 0;

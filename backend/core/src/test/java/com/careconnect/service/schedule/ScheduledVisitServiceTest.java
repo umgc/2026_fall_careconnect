@@ -294,6 +294,32 @@ class ScheduledVisitServiceTest {
 
             assertEquals("Unknown", response.getPatientName());
         }
+
+        @Test
+        @DisplayName("should create visit when conflict summary has null patient/caregiver conflict lists")
+        void shouldCreateVisitWhenConflictListsAreNull() throws Exception {
+            // Arrange: simulate a ConflictSummary whose conflict lists were never
+            // populated (null), exercising the null-check branches guarding both
+            // the patient-conflict block and the caregiver-conflict warning flag.
+            ScheduledVisitRequest request = createRequest();
+            ConflictSummary conflictSummary = new ConflictSummary();
+            conflictSummary.setPatientConflicts(null);
+            conflictSummary.setCaregiverConflicts(null);
+            ScheduledVisit savedVisit = createVisit();
+
+            when(conflictService.analyzeConflicts(
+                    CAREGIVER_ID, PATIENT_ID, TEST_DATE, TEST_TIME, 60))
+                    .thenReturn(conflictSummary);
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class))).thenReturn(savedVisit);
+            when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+            mockPatientLookup();
+
+            ScheduledVisitResponse response =
+                    visitService.createScheduledVisit(CAREGIVER_ID, request);
+
+            assertNotNull(response);
+            verify(scheduledVisitRepository).save(any(ScheduledVisit.class));
+        }
     }
 
     // ========================================================================
@@ -1343,6 +1369,391 @@ class ScheduledVisitServiceTest {
             ScheduledVisitResponse response = visitService.getScheduledVisit(VISIT_ID);
 
             assertEquals("", response.getPatientName());
+        }
+    }
+
+    // ========================================================================
+    // getScheduledVisitsBetweenDatesForPatient
+    // ========================================================================
+
+    @Nested
+    @DisplayName("getScheduledVisitsBetweenDatesForPatient")
+    class GetScheduledVisitsBetweenDatesForPatient {
+
+        @Test
+        @DisplayName("should return visits for patient between dates")
+        void shouldReturnVisitsForPatientBetweenDates() {
+            ScheduledVisit visit = createVisit();
+            LocalDate start = TEST_DATE.minusDays(1);
+            LocalDate end = TEST_DATE.plusDays(1);
+
+            when(scheduledVisitRepository
+                    .findByPatientIdAndScheduledDateBetween(PATIENT_ID, start, end))
+                    .thenReturn(List.of(visit));
+            mockPatientLookup();
+
+            List<ScheduledVisitResponse> results =
+                    visitService.getScheduledVisitsBetweenDatesForPatient(PATIENT_ID, start, end);
+
+            assertEquals(1, results.size());
+            assertEquals(VISIT_ID, results.get(0).getId());
+        }
+
+        @Test
+        @DisplayName("should return empty list when patient has no visits in range")
+        void shouldReturnEmptyListForPatientRange() {
+            LocalDate start = TEST_DATE.minusDays(1);
+            LocalDate end = TEST_DATE.plusDays(1);
+
+            when(scheduledVisitRepository
+                    .findByPatientIdAndScheduledDateBetween(PATIENT_ID, start, end))
+                    .thenReturn(Collections.emptyList());
+
+            List<ScheduledVisitResponse> results =
+                    visitService.getScheduledVisitsBetweenDatesForPatient(PATIENT_ID, start, end);
+
+            assertTrue(results.isEmpty());
+        }
+    }
+
+    // ========================================================================
+    // updateScheduledVisit — additional audit-field branches
+    // (patientId / scheduledDate / scheduledTime / durationMinutes changes)
+    // ========================================================================
+
+    @Nested
+    @DisplayName("updateScheduledVisit — remaining audit field branches")
+    class UpdateScheduledVisitRemainingAuditFields {
+
+        @Test
+        @DisplayName("should create audit entry when patientId changes")
+        void shouldCreateAuditEntryWhenPatientIdChanges() {
+            ScheduledVisit existing = createVisit();
+            ScheduledVisitRequest request = createRequest();
+            Long newPatientId = 99L;
+            request.setPatientId(newPatientId);
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(existing));
+            when(conflictService.analyzeConflicts(
+                    eq(CAREGIVER_ID), eq(newPatientId), eq(TEST_DATE), eq(TEST_TIME), eq(60)))
+                    .thenReturn(createEmptyConflictSummary());
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class)))
+                    .thenReturn(existing);
+            when(patientRepository.findById(any())).thenReturn(Optional.of(createPatient()));
+
+            visitService.updateScheduledVisit(VISIT_ID, request);
+
+            verify(scheduledVisitAuditRepository, times(1))
+                    .save(any(ScheduledVisitAudit.class));
+        }
+
+        @Test
+        @DisplayName("should create audit entry when scheduledDate changes")
+        void shouldCreateAuditEntryWhenScheduledDateChanges() {
+            ScheduledVisit existing = createVisit();
+            ScheduledVisitRequest request = createRequest();
+            LocalDate newDate = TEST_DATE.plusDays(1);
+            request.setScheduledDate(newDate);
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(existing));
+            when(conflictService.analyzeConflicts(
+                    eq(CAREGIVER_ID), eq(PATIENT_ID), eq(newDate), eq(TEST_TIME), eq(60)))
+                    .thenReturn(createEmptyConflictSummary());
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class)))
+                    .thenReturn(existing);
+            mockPatientLookup();
+
+            visitService.updateScheduledVisit(VISIT_ID, request);
+
+            verify(scheduledVisitAuditRepository, times(1))
+                    .save(any(ScheduledVisitAudit.class));
+        }
+
+        @Test
+        @DisplayName("should create audit entry when scheduledTime changes")
+        void shouldCreateAuditEntryWhenScheduledTimeChanges() {
+            ScheduledVisit existing = createVisit();
+            ScheduledVisitRequest request = createRequest();
+            LocalTime newTime = TEST_TIME.plusHours(2);
+            request.setScheduledTime(newTime);
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(existing));
+            when(conflictService.analyzeConflicts(
+                    eq(CAREGIVER_ID), eq(PATIENT_ID), eq(TEST_DATE), eq(newTime), eq(60)))
+                    .thenReturn(createEmptyConflictSummary());
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class)))
+                    .thenReturn(existing);
+            mockPatientLookup();
+
+            visitService.updateScheduledVisit(VISIT_ID, request);
+
+            verify(scheduledVisitAuditRepository, times(1))
+                    .save(any(ScheduledVisitAudit.class));
+        }
+
+        @Test
+        @DisplayName("should create audit entry when durationMinutes changes")
+        void shouldCreateAuditEntryWhenDurationMinutesChanges() {
+            ScheduledVisit existing = createVisit();
+            ScheduledVisitRequest request = createRequest();
+            request.setDurationMinutes(90);
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(existing));
+            when(conflictService.analyzeConflicts(
+                    eq(CAREGIVER_ID), eq(PATIENT_ID), eq(TEST_DATE), eq(TEST_TIME), eq(90)))
+                    .thenReturn(createEmptyConflictSummary());
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class)))
+                    .thenReturn(existing);
+            mockPatientLookup();
+
+            visitService.updateScheduledVisit(VISIT_ID, request);
+
+            verify(scheduledVisitAuditRepository, times(1))
+                    .save(any(ScheduledVisitAudit.class));
+        }
+
+        @Test
+        @DisplayName("should not create audit entry when both old and new notes are null")
+        void shouldNotCreateAuditEntryWhenNotesBothNull() {
+            // Arrange: oldNotes == null and request.getNotes() == null exercises the
+            // false branch of "request.getNotes() != null" (first clause) and the
+            // false branch of "oldNotes != null" (second clause) in the notes-changed
+            // condition — neither is hit by the other notes-change tests.
+            ScheduledVisit existing = createVisit();
+            existing.setNotes(null);
+            ScheduledVisitRequest request = createRequest();
+            request.setNotes(null);
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(existing));
+            when(conflictService.analyzeConflicts(
+                    eq(CAREGIVER_ID), eq(PATIENT_ID), eq(TEST_DATE), eq(TEST_TIME), eq(60)))
+                    .thenReturn(createEmptyConflictSummary());
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class)))
+                    .thenReturn(existing);
+            mockPatientLookup();
+
+            visitService.updateScheduledVisit(VISIT_ID, request);
+
+            verify(scheduledVisitAuditRepository, never())
+                    .save(any(ScheduledVisitAudit.class));
+        }
+
+        @Test
+        @DisplayName("should create audit entry with empty-string new value when notes cleared to null")
+        void shouldCreateAuditEntryWhenNotesClearedToNull() {
+            // Arrange: oldNotes is non-null and request.getNotes() is null — this
+            // hits the "request.getNotes() != null ? ... : \"\"" false branch at the
+            // createAuditEntry call site, which no other test exercises.
+            ScheduledVisit existing = createVisit();
+            existing.setNotes("Existing notes");
+            ScheduledVisitRequest request = createRequest();
+            request.setNotes(null);
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(existing));
+            when(conflictService.analyzeConflicts(
+                    eq(CAREGIVER_ID), eq(PATIENT_ID), eq(TEST_DATE), eq(TEST_TIME), eq(60)))
+                    .thenReturn(createEmptyConflictSummary());
+            when(scheduledVisitRepository.save(any(ScheduledVisit.class)))
+                    .thenReturn(existing);
+            mockPatientLookup();
+
+            visitService.updateScheduledVisit(VISIT_ID, request);
+
+            verify(scheduledVisitAuditRepository, times(1))
+                    .save(any(ScheduledVisitAudit.class));
+        }
+    }
+
+    // ========================================================================
+    // getVisitAuditDetails — applyAuditToVisit switch coverage
+    // Drives reconstructVisitFromAuditHistory through every changedField case
+    // (patientId / scheduledDate / scheduledTime / durationMinutes / priority / notes)
+    // ========================================================================
+
+    @Nested
+    @DisplayName("getVisitAuditDetails — applyAuditToVisit field coverage")
+    class ApplyAuditToVisitFieldCoverage {
+
+        private ScheduledVisitAudit priorAuditFor(Long visitId, String field, String oldValue,
+                String newValue, LocalDateTime changedAt) {
+            ScheduledVisitAudit audit = new ScheduledVisitAudit();
+            audit.setId((long) changedAt.getNano()); // unique-enough id per call within a test
+            audit.setVisitId(visitId);
+            audit.setAction("UPDATED");
+            audit.setChangedField(field);
+            audit.setOldValue(oldValue);
+            audit.setNewValue(newValue);
+            audit.setChangedBy(TEST_USER);
+            audit.setChangedAt(changedAt);
+            return audit;
+        }
+
+        @Test
+        @DisplayName("should reconstruct before-state across every changed field type")
+        void shouldReconstructBeforeStateAcrossEveryField() {
+            Long auditId = 50L;
+            ScheduledVisit visit = createVisit();
+            LocalDateTime currentTime = LocalDateTime.of(2026, 3, 17, 12, 0);
+
+            ScheduledVisitAudit currentAudit = new ScheduledVisitAudit();
+            currentAudit.setId(auditId);
+            currentAudit.setVisitId(VISIT_ID);
+            currentAudit.setAction("UPDATED");
+            currentAudit.setChangedField("notes");
+            currentAudit.setOldValue("old notes");
+            currentAudit.setNewValue("new notes");
+            currentAudit.setChangedBy(TEST_USER);
+            currentAudit.setChangedAt(currentTime);
+
+            // One prior audit per switch-case branch in applyAuditToVisit.
+            List<ScheduledVisitAudit> priorAudits = List.of(
+                    priorAuditFor(VISIT_ID, "patientId", "10", "20", currentTime.minusHours(6)),
+                    priorAuditFor(VISIT_ID, "scheduledDate", "2026-03-16", "2026-03-17", currentTime.minusHours(5)),
+                    priorAuditFor(VISIT_ID, "scheduledTime", "09:00", "10:00", currentTime.minusHours(4)),
+                    priorAuditFor(VISIT_ID, "durationMinutes", "30", "60", currentTime.minusHours(3)),
+                    priorAuditFor(VISIT_ID, "priority", "Low", "Normal", currentTime.minusHours(2)),
+                    priorAuditFor(VISIT_ID, "notes", "older notes", "old notes", currentTime.minusHours(1)));
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(visit));
+            when(scheduledVisitAuditRepository.findById(auditId))
+                    .thenReturn(Optional.of(currentAudit));
+            when(scheduledVisitAuditRepository
+                    .findByVisitIdAndChangedAtBeforeOrderByChangedAtDesc(VISIT_ID, currentTime))
+                    .thenReturn(priorAudits);
+            mockPatientLookup();
+
+            AuditDiffResponse response = visitService.getVisitAuditDetails(VISIT_ID, auditId);
+
+            assertNotNull(response);
+            assertNotNull(response.getBefore());
+            assertEquals(20L, response.getBefore().getPatientId());
+            assertEquals(LocalDate.parse("2026-03-17"), response.getBefore().getScheduledDate());
+            assertEquals(LocalTime.parse("10:00"), response.getBefore().getScheduledTime());
+            assertEquals(60, response.getBefore().getDurationMinutes());
+            assertEquals("Normal", response.getBefore().getPriority());
+            assertEquals("old notes", response.getBefore().getNotes());
+        }
+
+        @Test
+        @DisplayName("should throw when visit is removed between existence check and reconstruction")
+        void shouldThrowWhenVisitRemovedDuringReconstruction() {
+            Long auditId = 50L;
+            ScheduledVisit visit = createVisit();
+            LocalDateTime currentTime = LocalDateTime.of(2026, 3, 17, 12, 0);
+
+            ScheduledVisitAudit currentAudit = new ScheduledVisitAudit();
+            currentAudit.setId(auditId);
+            currentAudit.setVisitId(VISIT_ID);
+            currentAudit.setAction("UPDATED");
+            currentAudit.setChangedField("serviceType");
+            currentAudit.setOldValue("General Care");
+            currentAudit.setNewValue("Physical Therapy");
+            currentAudit.setChangedBy(TEST_USER);
+            currentAudit.setChangedAt(currentTime);
+
+            // First call (existence check) finds the visit; second call
+            // (reconstructVisitFromCurrentState) simulates a concurrent delete.
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(visit))
+                    .thenReturn(Optional.empty());
+            when(scheduledVisitAuditRepository.findById(auditId))
+                    .thenReturn(Optional.of(currentAudit));
+            when(scheduledVisitAuditRepository
+                    .findByVisitIdAndChangedAtBeforeOrderByChangedAtDesc(VISIT_ID, currentTime))
+                    .thenReturn(Collections.emptyList());
+
+            RuntimeException ex = assertThrows(RuntimeException.class,
+                    () -> visitService.getVisitAuditDetails(VISIT_ID, auditId));
+
+            assertTrue(ex.getMessage().contains("Visit not found"));
+        }
+
+        @Test
+        @DisplayName("should leave visit unchanged when prior audit has an unrecognized changed field")
+        void shouldLeaveVisitUnchangedForUnrecognizedChangedField() {
+            // Arrange: applyAuditToVisit's switch has no default case — a prior
+            // audit whose changedField matches none of the 7 known cases (e.g. a
+            // forward-compatible field added later) falls through and applies no
+            // mutation. Reachable via the public API whenever audit history
+            // contains an entry the current switch doesn't recognize.
+            Long auditId = 50L;
+            ScheduledVisit visit = createVisit();
+            LocalDateTime currentTime = LocalDateTime.of(2026, 3, 17, 12, 0);
+
+            ScheduledVisitAudit currentAudit = new ScheduledVisitAudit();
+            currentAudit.setId(auditId);
+            currentAudit.setVisitId(VISIT_ID);
+            currentAudit.setAction("UPDATED");
+            currentAudit.setChangedField("notes");
+            currentAudit.setOldValue("old notes");
+            currentAudit.setNewValue("new notes");
+            currentAudit.setChangedBy(TEST_USER);
+            currentAudit.setChangedAt(currentTime);
+
+            List<ScheduledVisitAudit> priorAudits = List.of(
+                    priorAuditFor(VISIT_ID, "unknownField", "before", "after", currentTime.minusHours(1)));
+
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(visit));
+            when(scheduledVisitAuditRepository.findById(auditId))
+                    .thenReturn(Optional.of(currentAudit));
+            when(scheduledVisitAuditRepository
+                    .findByVisitIdAndChangedAtBeforeOrderByChangedAtDesc(VISIT_ID, currentTime))
+                    .thenReturn(priorAudits);
+            mockPatientLookup();
+
+            AuditDiffResponse response = visitService.getVisitAuditDetails(VISIT_ID, auditId);
+
+            // Assert: reconstruction starts from a blank visit (only id set) and the
+            // unrecognized field never mutates it — patientId remains unset.
+            assertNotNull(response);
+            assertNotNull(response.getBefore());
+            assertEquals(VISIT_ID, response.getBefore().getId());
+            assertNull(response.getBefore().getPatientId());
+        }
+    }
+
+    // ========================================================================
+    // formatConflictingVisits — private helper, exercised via reflection.
+    // Unreachable through the public API: createScheduledVisit only invokes
+    // this helper after confirming the patient-conflict list is non-empty, so
+    // the empty/null branch is invoked directly here, matching the reflection
+    // pattern already used for ScheduledVisit-style private-method coverage.
+    // ========================================================================
+
+    @Nested
+    @DisplayName("formatConflictingVisits (private helper)")
+    class FormatConflictingVisits {
+
+        @Test
+        @DisplayName("should return 'none' for an empty conflict list")
+        void shouldReturnNoneForEmptyList() throws Exception {
+            var method = ScheduledVisitService.class
+                    .getDeclaredMethod("formatConflictingVisits", List.class);
+            method.setAccessible(true);
+
+            String result = (String) method.invoke(visitService, Collections.emptyList());
+
+            assertEquals("none", result);
+        }
+
+        @Test
+        @DisplayName("should return 'none' for a null conflict list")
+        void shouldReturnNoneForNullList() throws Exception {
+            var method = ScheduledVisitService.class
+                    .getDeclaredMethod("formatConflictingVisits", List.class);
+            method.setAccessible(true);
+
+            String result = (String) method.invoke(visitService, new Object[] { null });
+
+            assertEquals("none", result);
         }
     }
 }
