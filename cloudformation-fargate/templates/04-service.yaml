@@ -337,6 +337,8 @@ Resources:
               Value: 'false'
             - Name: SPRING_JPA_HIBERNATE_DDL_AUTO
               Value: update
+            - Name: CARECONNECT_RECORDING_ENABLED
+              Value: 'true'
             - Name: CARECONNECT_KVS_ENABLED
               Value: 'true'
             - Name: CARECONNECT_KVS_STREAM_POOL_ARN

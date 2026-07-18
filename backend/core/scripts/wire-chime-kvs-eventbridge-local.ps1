@@ -1,6 +1,7 @@
 # Wire EventBridge → ngrok → local backend for Chime KVS stream discovery.
-# Usage: .\scripts\wire-chime-kvs-eventbridge-local.ps1 -NgrokBaseUrl https://abc123.ngrok-free.app
-# Re-run when ngrok URL changes (updates API destination endpoint).
+# Usage: .\scripts\wire-chime-kvs-eventbridge-local.ps1 -NgrokBaseUrl https://YOUR-STABLE-SUBDOMAIN.ngrok-free.app
+# Prefer a reserved ngrok domain (logged-in account) so the URL stays stable across restarts.
+# Re-run only when the public base URL changes (updates the API destination endpoint).
 
 param(
     [Parameter(Mandatory = $true)]

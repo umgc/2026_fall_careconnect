@@ -321,6 +321,8 @@ The templates assume the backend uses these environment variables:
 - `EMAIL_PROVIDER` / `FROM_EMAIL` — SendGrid when `SpringProfile=prod` (API key from SSM)
 - `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_ENABLED` — optional; leave empty until a real WebSocket API endpoint is set (prod profile uses empty default like dev)
 - `AWS_DEFAULT_REGION` — required for Bedrock and SSM clients
+- `CARECONNECT_RECORDING_ENABLED` — `true` on ECS so system capture + post-call Transcribe (including speaker ID) run
+- `CARECONNECT_KVS_ENABLED` / `CARECONNECT_KVS_STREAM_POOL_ARN` / `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED` — speaker-ID ingest (see [KVS speaker stream pool](#kvs-speaker-stream-pool-speaker-identification))
 
 The backend health endpoint (smoke tests and welcome-page checks) is:
 
@@ -377,11 +379,23 @@ aws iam create-service-linked-role --aws-service-name mediapipelines.chime.amazo
 ```
 
 See also [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md)
-(sections 7–8) for local-dev IAM parity and troubleshooting.
+(sections 3 / **3a**, 7, **7b**, **7c**, and 8) for **local-dev IAM group + full policy**,
+`.env.example`, recording setup, speaker-ID (KVS), **ngrok**, and troubleshooting.
+
+**Local vs ECS credentials:** local `dev` uses an **IAM user** (or assumed role) from
+`.env` / the default credential chain — **not** `EcsTaskRole`. That user needs the same
+Chime / KVS / S3 / Transcribe / Bedrock capability set summarized above, or local video
+calls, recording, and speaker ID will fail with access errors even when feature flags are on.
 
 ### KVS speaker stream pool (speaker identification)
 
-**Ingest:** Chime `CreateMediaStreamPipeline` with `IndividualAudio` → **KVS Stream Pool**. Post-call: assemble archived fragments → WAV → Transcribe per attendee (no Media Insights S3 export).
+**Ingest:** Chime `CreateMediaStreamPipeline` with `IndividualAudio` → **KVS Stream Pool**.
+Post-call: assemble archived fragments → WAV (`ffmpeg` in the container image) → Transcribe
+per attendee (no Media Insights S3 export).
+
+**App defaults:** `careconnect.kvs.enabled` is **false** unless `CARECONNECT_KVS_ENABLED` is
+set (local opt-in). ECS turns it on via `04-service.yaml`. Recording must also be enabled —
+post-call speaker Transcribe runs after concatenation becomes ready.
 
 After deploying `03-platform.yaml`, the stack provides:
 
@@ -397,17 +411,26 @@ After deploying `03-platform.yaml`, the stack provides:
      --stream-configuration Region=${REGION},DataRetentionInHours=24 \
      --region ${REGION}
    ```
-2. Set SSM `/careconnect/{env}/kvs-stream-pool-arn` to the returned pool ARN
-3. Redeploy `04-service.yaml` after SSM updates — stack wires EventBridge `chime:MediaPipelineKinesisVideoStreamStart` → `/api/internal/chime/media-stream-events` and sets `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true`
-4. Smoke test: 2-party call; logs `Registered KVS stream from EventBridge`; DB `media_stream_pipeline_id` and `call_attendees.kvs_stream_arn` set; post-call KVS transcript segments with role labels
+2. Set SSM `/careconnect/{env}/kvs-stream-pool-arn` to the returned pool ARN (overwrite the placeholder).
+3. Redeploy `04-service.yaml` after SSM updates — stack wires EventBridge
+   `chime:MediaPipelineKinesisVideoStreamStart` → `/api/internal/chime/media-stream-events`
+   and sets `CARECONNECT_KVS_ENABLED=true`, `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true`,
+   and `CARECONNECT_RECORDING_ENABLED=true`.
+4. Smoke test: 2-party call; logs `Registered KVS stream from EventBridge`; DB
+   `media_stream_pipeline_id` and `call_attendees.kvs_stream_arn` set; post-call KVS
+   transcript segments with role labels.
 
-**ECS (`04-service.yaml`):** Sets `CARECONNECT_KVS_ENABLED=true` and loads `CARECONNECT_KVS_STREAM_POOL_ARN` from SSM.
+**ECS (`04-service.yaml`):** Sets `CARECONNECT_KVS_ENABLED=true`,
+`CARECONNECT_RECORDING_ENABLED=true`, and loads `CARECONNECT_KVS_STREAM_POOL_ARN` from SSM.
 
-**Local dev:** Use IAM user credentials from `.env` (not `EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED=true` and `CARECONNECT_KVS_STREAM_POOL_ARN`.
+**Local dev:** Use an **IAM user** with the permissions above (credentials in `.env` — not
+`EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED=true`, `CARECONNECT_KVS_STREAM_POOL_ARN`, and
+(for reliable discovery) `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` with EventBridge →
+ngrok. Details: [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md) §7b.
 
 **Prod Spring profile:** `SsmPropertySourceInitializer` maps `/careconnect/prod/kvs-stream-pool-arn` when that SSM parameter exists.
 
-**Legacy Media Insights cleanup (O4):** Old deployments may have left bucket-root UUID folders with `.ogg` / `_metadata.json` from the deprecated `S3RecordingSink` path. Safe to delete manually after confirming they are not under `recordings/…` call prefixes. SSM `/careconnect/{env}/chime-media-insights-config-arn` is no longer used by the app.
+**Legacy Media Insights cleanup:** Old deployments may have left bucket-root UUID folders with `.ogg` / `_metadata.json` from the deprecated `S3RecordingSink` path. Safe to delete manually after confirming they are not under `recordings/…` call prefixes. SSM `/careconnect/{env}/chime-media-insights-config-arn` is no longer used by the app.
 
 ### Parameter files
 
