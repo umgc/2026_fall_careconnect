@@ -176,6 +176,8 @@ dependencies:
   connectivity_plus: ^6.0.5 # For checking network connectivity status
   device_info_plus: ^12.1.0
   flutter_local_notifications: ^17.2.1
+  video_player: ^2.11.1
+  chewie: ^1.13.1
 
   # Team D - Dependencies End
 dependency_overrides:

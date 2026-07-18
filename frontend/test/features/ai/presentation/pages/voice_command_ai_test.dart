@@ -749,7 +749,8 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('final result pops navigator with recognized words',
+    // TC-M3-VOICE-001
+    testWidgets('singleShot returns simulated recognized text to its caller',
         (tester) async {
       String? poppedResult;
 

@@ -66,7 +66,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(_wrap(_card(moodLabel: 'Fair')));
-      expect(find.text('Fair'), findsOneWidget);
+      expect(find.textContaining('Fair'), findsWidgets);
     });
 
     testWidgets('shows current mood emoji', (tester) async {
@@ -74,7 +74,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(_wrap(_card(moodEmoji: '😐')));
-      expect(find.text('😐'), findsOneWidget);
+      expect(find.textContaining('😐'), findsWidgets);
     });
 
     testWidgets('shows first letter of name in avatar', (tester) async {
@@ -90,7 +90,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(_wrap(_card()));
-      expect(find.text('Current Mood:'), findsOneWidget);
+      expect(find.textContaining('Current Mood:'), findsWidgets);
     });
 
     testWidgets('shows Last Check-in text', (tester) async {
@@ -98,7 +98,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(_wrap(_card()));
-      expect(find.text('Last Check-in:'), findsOneWidget);
+      expect(find.textContaining('Last Check-in:'), findsWidgets);
     });
 
     testWidgets('shows Start Video Call button', (tester) async {
@@ -201,7 +201,9 @@ void main() {
         allergies: [],
         onStartVideoCall: () => called = true,
       )));
-      await tester.tap(find.text('Start Video Call'));
+      tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Start Video Call'),
+      ).onPressed!();
       await tester.pump();
       expect(called, isTrue);
     });

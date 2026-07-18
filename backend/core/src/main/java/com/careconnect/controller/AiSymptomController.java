@@ -28,7 +28,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "careconnect.deepseek.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "careconnect.ai.provider", havingValue = "bedrock")
 @RequestMapping({"/api/ai", "/v1/api/ai"})
 public class AiSymptomController {
 
@@ -38,7 +38,7 @@ public class AiSymptomController {
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
 
-    @RequirePermission(Permission.CREATE_TASKS)
+    @RequirePermission(Permission.USE_AI_FEATURES)
 
 
     @PostMapping(
