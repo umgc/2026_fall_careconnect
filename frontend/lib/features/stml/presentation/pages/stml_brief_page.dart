@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -6,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../../../config/router/app_router.dart';
 import '../../../../config/theme/app_theme.dart';
 import '../../../../providers/user_provider.dart';
-import '../../../../services/daily_brief_gate_service.dart';
 import '../../../../services/stml_service.dart';
 
 /// STML-2 / STML-5: the Daily Memory Brief — a self-contained, first-time-
@@ -49,25 +47,6 @@ class _StmlBriefPageState extends State<StmlBriefPage> {
         backgroundColor: AppTheme.primary,
         foregroundColor: AppTheme.textLight,
         actions: [
-          if (kDebugMode)
-            IconButton(
-              icon: const Icon(Icons.bug_report_outlined),
-              tooltip: 'Debug: reset "seen today" so the 7am gate '
-                  're-triggers on next login',
-              onPressed: () async {
-                await DailyBriefGateService.resetForTesting();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Reset — log out and back in to see the brief '
-                        'auto-open again.',
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline),
             tooltip: 'Ask what we discussed',
