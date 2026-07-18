@@ -5,12 +5,14 @@ import com.careconnect.dto.StmlCheckInDTO.StmlCheckInItemDTO;
 import com.careconnect.model.Allergy;
 import com.careconnect.model.ClinicalNote;
 import com.careconnect.model.Medication;
+import com.careconnect.model.Patient;
 import com.careconnect.model.Task;
 import com.careconnect.model.User;
 import com.careconnect.repository.AllergyRepository;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.ClinicalNotesRepository;
 import com.careconnect.repository.MedicationRepository;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.TaskRepository;
 import com.careconnect.repository.UserRepository;
 import java.time.LocalDateTime;
@@ -31,6 +33,7 @@ public class StmlCheckInService {
 
   private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
   private final UserRepository userRepository;
+  private final PatientRepository patientRepository;
   private final ClinicalNotesRepository clinicalNotesRepository;
   private final TaskRepository taskRepository;
   private final MedicationRepository medicationRepository;
@@ -46,7 +49,11 @@ public class StmlCheckInService {
    */
   public StmlCheckInDTO getCheckInView(final Long patientId, final Long caregiverId) {
     User caregiver = userRepository.findById(caregiverId).orElse(null);
-    User patient = userRepository.findById(patientId).orElse(null);
+    // patientId is the Patient entity id (matches every other STML endpoint's
+    // path variable), not a User id — the consent link is keyed by the
+    // patient's User account, so resolve it through Patient.getUser().
+    Patient patientEntity = patientRepository.findById(patientId).orElse(null);
+    User patient = patientEntity != null ? patientEntity.getUser() : null;
 
     boolean hasConsent = false;
     if (caregiver != null && patient != null) {

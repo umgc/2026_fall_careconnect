@@ -9,10 +9,12 @@ import com.careconnect.dto.StmlSearchResponse;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.StmlCheckInService;
 import com.careconnect.service.StmlRecallService;
 import com.careconnect.service.StmlSearchService;
 import com.careconnect.service.StmlService;
+import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -60,8 +62,10 @@ public class StmlController {
       @PathVariable final Long patientId) {
     try {
       retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (Exception e) {
+    } catch (ForbiddenScopeException e) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    } catch (UnauthorizedException e) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
     return ResponseEntity.ok(stmlService.getDailyBrief(patientId));
   }
@@ -78,8 +82,10 @@ public class StmlController {
       @RequestBody final StmlRecallRequest request) {
     try {
       retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (Exception e) {
+    } catch (ForbiddenScopeException e) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    } catch (UnauthorizedException e) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
     request.setPatientId(patientId);
     return ResponseEntity.ok(stmlRecallService.recall(request));
@@ -95,10 +101,19 @@ public class StmlController {
   public ResponseEntity<StmlCheckInDTO> getCheckInView(
       @PathVariable final Long patientId,
       @RequestParam final Long caregiverId) {
-    try {
-      retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (Exception e) {
+    User caller = getCurrentUser();
+    // caregiverId is client-supplied — without this check, any authenticated
+    // user could pass a different caregiver's id and read their consent-gated
+    // check-in view. Consent is only meaningful if caregiverId is the caller.
+    if (!caller.getId().equals(caregiverId)) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    }
+    try {
+      retrievalScopeService.resolveRetrievalScope(caller, patientId);
+    } catch (ForbiddenScopeException e) {
+      return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    } catch (UnauthorizedException e) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
     return ResponseEntity.ok(
         stmlCheckInService.getCheckInView(patientId, caregiverId));
@@ -116,8 +131,10 @@ public class StmlController {
       @RequestBody final StmlSearchRequest request) {
     try {
       retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (Exception e) {
+    } catch (ForbiddenScopeException e) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    } catch (UnauthorizedException e) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
     request.setPatientId(patientId);
     return ResponseEntity.ok(stmlSearchService.search(request));
