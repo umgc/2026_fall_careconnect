@@ -59,7 +59,7 @@ final class CitationMetadataMapper {
         switch (type) {
             case TRANSCRIPT_SEGMENT -> {
                 copyText(source, metadata, "callId", "callId");
-                copyText(source, metadata, "segmentId", "segmentId");
+                copyNumber(source, metadata, "segmentId", "segmentId");
                 copyText(source, metadata, "speakerLabel", "speaker");
                 copyNumber(source, metadata, "startMs", "startMs");
                 copyNumber(source, metadata, "endMs", "endMs");

@@ -28,7 +28,6 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -153,7 +152,7 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneId.systemDefault())
+                                .atZone(ZoneOffset.UTC)
                                 .toInstant()
                                 .toString());
 

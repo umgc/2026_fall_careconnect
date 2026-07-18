@@ -142,9 +142,7 @@ public class AiAskService {
         final long retrievalLatencyMs = (System.nanoTime() - retrievalStarted) / 1_000_000L;
 
         if (retrieval == null || retrieval.isEmpty()) {
-            log.info(
-                    "Ask AI NO_RECORDS requestId={} patientId={} caller={}",
-                    requestId, request.patientId(), caller.getId());
+            log.info("Ask AI NO_RECORDS requestId={}", requestId);
             return noRecordsResponse(
                     requestId, auditId, sessionId, locale, retrieval, retrievalLatencyMs);
         }
@@ -172,9 +170,8 @@ public class AiAskService {
                 citationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
         if (!citationResult.grounded()) {
             log.warn(
-                    "Ask AI WITHHELD ungrounded response requestId={} patientId={} invalidRefs={}",
+                    "Ask AI WITHHELD ungrounded response requestId={} invalidRefs={}",
                     requestId,
-                    request.patientId(),
                     citationResult.invalidRefs());
             // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
             // never deliver an answer whose model citations are missing or invalid.
@@ -186,9 +183,8 @@ public class AiAskService {
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
         log.info(
-                "Ask AI DELIVERED requestId={} patientId={} chunks={} citations={} modality={} degraded={}",
+                "Ask AI DELIVERED requestId={} chunks={} citations={} modality={} degraded={}",
                 requestId,
-                request.patientId(),
                 context.usedChunks().size(),
                 citations.size(),
                 modality,
