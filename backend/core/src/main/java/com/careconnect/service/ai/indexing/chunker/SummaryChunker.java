@@ -46,6 +46,30 @@ public class SummaryChunker {
             final String contentHash,
             final String caregiverVisibility,
             final String summarizationEngine) {
+        return chunk(
+                episodeType,
+                summaryJson,
+                contentHash,
+                caregiverVisibility,
+                summarizationEngine,
+                null,
+                null);
+    }
+
+    /**
+     * Builds summary chunks with citation-routing metadata.
+     *
+     * @param episodeId callId or visitId used to construct validated citation deep links
+     * @param occurredAt ISO-8601 summary timestamp used in citation display metadata
+     */
+    public List<IndexingChunkDraft> chunk(
+            final String episodeType,
+            final String summaryJson,
+            final String contentHash,
+            final String caregiverVisibility,
+            final String summarizationEngine,
+            final String episodeId,
+            final String occurredAt) {
         final List<IndexingChunkDraft> drafts = new ArrayList<>();
         if (summaryJson == null || summaryJson.isBlank()) {
             return drafts;
@@ -73,7 +97,7 @@ public class SummaryChunker {
                     contentHash,
                     caregiverVisibility,
                     summarizationEngine,
-                    Map.of("section", "overview")));
+                    overviewMetadata(root)));
         }
 
         chunkIndex = appendArrayItems(
@@ -138,7 +162,7 @@ public class SummaryChunker {
                     Map.of("section", "clinicalObservations")));
         }
 
-        return drafts;
+        return enrichCitationMetadata(drafts, episodeType, episodeId, occurredAt);
     }
 
     private int appendArrayItems(
@@ -170,6 +194,7 @@ public class SummaryChunker {
             putIfPresent(extra, "sourceTurnId", textOrNull(item, "sourceTurnId"));
             putIfPresent(extra, "type", textOrNull(item, "type"));
             putIfPresent(extra, "status", textOrNull(item, "status"));
+            putConfidenceIfValid(extra, item.path("confidence"));
             drafts.add(draft(
                     recordType,
                     text.trim(),
@@ -204,6 +229,7 @@ public class SummaryChunker {
             extra.put("section", "appointments");
             putIfPresent(extra, "itemId", textOrNull(item, "itemId"));
             putIfPresent(extra, "sourceTurnId", textOrNull(item, "sourceTurnId"));
+            putConfidenceIfValid(extra, item.path("confidence"));
             drafts.add(draft(
                     RetrievalRecordType.SUMMARY_APPOINTMENT,
                     text,
@@ -236,6 +262,53 @@ public class SummaryChunker {
             metadata.putAll(extra);
         }
         return new IndexingChunkDraft(recordType, chunkText, metadata, caregiverVisibility);
+    }
+
+    private static Map<String, Object> overviewMetadata(final JsonNode root) {
+        final Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("section", "overview");
+        putIfPresent(metadata, "title", textOrNull(root, "headline"));
+        putConfidenceIfValid(metadata, root.path("summaryConfidence"), "summaryConfidence");
+        return metadata;
+    }
+
+    private static List<IndexingChunkDraft> enrichCitationMetadata(
+            final List<IndexingChunkDraft> drafts,
+            final String episodeType,
+            final String episodeId,
+            final String occurredAt) {
+        if (drafts.isEmpty()) {
+            return drafts;
+        }
+        final boolean visit = isVisit(episodeType);
+        final List<IndexingChunkDraft> enriched = new ArrayList<>(drafts.size());
+        for (final IndexingChunkDraft draft : drafts) {
+            final Map<String, Object> metadata = new LinkedHashMap<>(draft.metadata());
+            metadata.put("episodeType", visit ? "visit" : "call");
+            putIfPresent(metadata, visit ? "visitId" : "callId", episodeId);
+            putIfPresent(metadata, "occurredAt", occurredAt);
+            enriched.add(new IndexingChunkDraft(
+                    draft.recordType(),
+                    draft.chunkText(),
+                    metadata,
+                    draft.consentScope()));
+        }
+        return enriched;
+    }
+
+    private static void putConfidenceIfValid(
+            final Map<String, Object> map, final JsonNode confidence) {
+        putConfidenceIfValid(map, confidence, "confidence");
+    }
+
+    private static void putConfidenceIfValid(
+            final Map<String, Object> map, final JsonNode confidence, final String key) {
+        if (confidence != null && confidence.isNumber()) {
+            final double value = confidence.asDouble();
+            if (Double.isFinite(value) && value >= 0.0d && value <= 1.0d) {
+                map.put(key, value);
+            }
+        }
     }
 
     private static String buildOverviewText(final JsonNode root) {

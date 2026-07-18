@@ -147,7 +147,11 @@ public class RetrievalIndexService {
                 summary.getSummaryJson(),
                 contentHash,
                 caregiverVisibility,
-                engine);
+                engine,
+                summary.getCallId(),
+                summary.getGeneratedAt() == null
+                        ? null
+                        : summary.getGeneratedAt().atOffset(ZoneOffset.UTC).toString());
 
         if (drafts.isEmpty()) {
             log.warn(

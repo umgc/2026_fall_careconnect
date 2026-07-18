@@ -15,6 +15,7 @@ import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
 import com.careconnect.service.security.InputSanitizationService;
 import com.careconnect.service.security.LangChainGovernanceService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,7 @@ class AiAskServiceTest {
                 retrievalScopeService,
                 hybridRetrievalService,
                 groundedAskLlmService,
+                new CitationAssembler(new ObjectMapper()),
                 inputSanitizationService,
                 governanceService);
     }
@@ -123,8 +125,8 @@ class AiAskServiceTest {
     }
 
     @Test
-    @DisplayName("ask delivers low-confidence when LLM omits citationRefs")
-    void ask_deliveredUncited_lowConfidence() throws Exception {
+    @DisplayName("ask fails closed when LLM omits citationRefs")
+    void ask_uncited_failsClosed() throws Exception {
         stubHappyPathPreRetrieval("metformin");
         final RankedChunk chunk = new RankedChunk(
                 UUID.randomUUID(),
@@ -146,12 +148,40 @@ class AiAskServiceTest {
                         List.of(),
                         "amazon.nova-lite-v1:0")));
 
-        final AiAskResponse response = service.ask(caller(), request("metformin"));
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiUnavailableException.class)
+                .extracting(ex -> ((AskAiUnavailableException) ex).getErrorCode())
+                .isEqualTo("UNGROUNDED_RESPONSE");
+    }
 
-        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
-        assertThat(response.citations()).isEmpty();
-        assertThat(response.escalation().reason()).isEqualTo("low_confidence_uncited");
-        assertThat(response.confirmation().message()).contains("could not be fully cited");
+    @Test
+    @DisplayName("ask fails closed when LLM mixes valid and unknown citationRefs")
+    void ask_unknownCitationRef_failsClosed() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                "Started metformin 500mg twice daily",
+                "{\"callId\":\"call-99\"}",
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Patient started metformin 500mg.",
+                        List.of("C1", "C99"),
+                        "amazon.nova-lite-v1:0")));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiUnavailableException.class)
+                .extracting(ex -> ((AskAiUnavailableException) ex).getErrorCode())
+                .isEqualTo("UNGROUNDED_RESPONSE");
     }
 
     @Test
