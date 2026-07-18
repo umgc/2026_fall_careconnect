@@ -6,6 +6,7 @@ import com.careconnect.repository.CallSummaryRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -156,7 +157,8 @@ public class CallSummaryService {
     summary.setTranscriptSegmentCount((int) segmentCount);
     summary.setGeneratedByUserId(generatedByUserId);
     summary.setErrorMessage("No transcript segments were available.");
-    summary.setGeneratedAt(LocalDateTime.now());
+    // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
+    summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
     summary.setSummaryJson(
         toJsonSafe(emptySummaryPayload(EMPTY_SUMMARY_HEADLINE, EMPTY_SUMMARY_ASSESSMENT)));
     return persistResponse(normalizedCallId, summary);
@@ -206,7 +208,8 @@ public class CallSummaryService {
     summary.setStatus(status);
     summary.setTranscriptSegmentCount((int) segmentCount);
     summary.setGeneratedByUserId(generatedByUserId);
-    summary.setGeneratedAt(LocalDateTime.now());
+    // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
+    summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
     summary.setErrorMessage(errorMessage);
     summary.setRiskLevel(extractStringField(summaryPayload, "riskLevel"));
     summary.setCaregiverVisibility(extractCaregiverVisibility(summaryPayload));

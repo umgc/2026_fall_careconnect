@@ -41,6 +41,7 @@ class AiAskCoverageTest {
         assertThat(source).contains("AskAiGroundingException");
         assertThat(source).contains("fail closed");
         assertThat(source).contains("TODO(Task 6.x)");
+        assertThat(source).doesNotContain("patientId={}", "caller={}");
         assertThat(source).doesNotContain("MedicalContextService");
     }
 }

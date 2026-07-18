@@ -26,7 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -201,7 +201,7 @@ class RetrievalIndexServiceTest {
                 .contains("\"citationMetadataVersion\":1")
                 .contains("\"callId\":\"call-9\"")
                 .contains("\"occurredAt\":\""
-                        + generatedAt.atZone(ZoneId.systemDefault()).toInstant() + "\"");
+                        + generatedAt.toInstant(ZoneOffset.UTC) + "\"");
     }
 
     @Test
