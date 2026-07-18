@@ -21,6 +21,7 @@ class SummaryChunkerTest {
                 {
                   "headline": "Medication change discussed",
                   "overallAssessment": "Patient started a new medication.",
+                  "summaryConfidence": 0.91,
                   "soap": {
                     "subjective": "Fatigue",
                     "objective": "Alert",
@@ -29,7 +30,7 @@ class SummaryChunkerTest {
                     "riskLevel": "LOW"
                   },
                   "actionItems": [
-                    { "text": "Call pharmacy", "sourceTurnId": "t1" }
+                    { "itemId": "action-1", "text": "Call pharmacy", "sourceTurnId": "t1", "confidence": 0.84 }
                   ],
                   "appointments": [
                     { "date": "2026-07-20", "time": "10:00", "with": "Dr. Lee", "purpose": "Follow-up" }
@@ -45,7 +46,9 @@ class SummaryChunkerTest {
                 json,
                 "sha256:abc",
                 "on_consent",
-                "aws_bedrock:test");
+                "aws_bedrock:test",
+                "call-42",
+                "2026-07-17T14:30:00Z");
 
         assertThat(drafts.stream().map(IndexingChunkDraft::recordType))
                 .contains(
@@ -62,7 +65,21 @@ class SummaryChunkerTest {
         assertThat(overview.chunkText()).contains("Medication change discussed");
         assertThat(overview.chunkText()).doesNotContain("Fatigue");
         assertThat(overview.consentScope()).isEqualTo("on_consent");
-        assertThat(overview.metadata()).containsEntry("contentHash", "sha256:abc");
+        assertThat(overview.metadata())
+                .containsEntry("contentHash", "sha256:abc")
+                .containsEntry("callId", "call-42")
+                .containsEntry("occurredAt", "2026-07-17T14:30:00Z")
+                .containsEntry("title", "Medication change discussed")
+                .containsEntry("summaryConfidence", 0.91d);
+
+        final IndexingChunkDraft actionItem = drafts.stream()
+                .filter(d -> d.recordType() == RetrievalRecordType.SUMMARY_ACTION_ITEM)
+                .findFirst()
+                .orElseThrow();
+        assertThat(actionItem.metadata())
+                .containsEntry("itemId", "action-1")
+                .containsEntry("confidence", 0.84d)
+                .containsEntry("callId", "call-42");
     }
 
     @Test

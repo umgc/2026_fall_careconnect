@@ -2,6 +2,7 @@ package com.careconnect.service.ai.ask;
 
 import com.careconnect.service.ai.retrieval.RankedChunk;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,11 @@ final class RetrievalContextAssembler {
                 %s
                 """.formatted(query == null ? "" : query.trim(), records).trim();
 
-        return new GroundedContext(systemPrompt, userPrompt, List.copyOf(refMap.values()), Map.copyOf(refMap));
+        return new GroundedContext(
+                systemPrompt,
+                userPrompt,
+                List.copyOf(refMap.values()),
+                Collections.unmodifiableMap(new LinkedHashMap<>(refMap)));
     }
 
     private static String formatBlock(final RankedChunk chunk, final String excerpt) {
