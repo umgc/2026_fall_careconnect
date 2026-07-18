@@ -38,9 +38,12 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
   bool _isSavingPersonalization = false;
   bool _isEditingPersonalization = false;
 
+  bool _initialized = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     fetchData();
   }
 

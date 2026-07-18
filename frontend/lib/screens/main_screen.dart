@@ -44,9 +44,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _unreadMessageCount = 0;
   Timer? _messageBadgeTimer;
 
+  bool _initialized = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     WidgetsBinding.instance.addObserver(this);
     _initializeConfig();
     _pageController = PageController(initialPage: widget.initialTabIndex ?? 0);

@@ -76,9 +76,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
   List<Map<String, dynamic>> _upcomingEvvAppointments = [];
   bool _loadingEvv = false;
 
+  bool _initialized = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     _loadDashboardData();
     _callNotificationInitialized = true;
     _checkConnectivity();

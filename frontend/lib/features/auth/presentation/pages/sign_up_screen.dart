@@ -665,7 +665,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             isRequired: true,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return t.signup_accountDOB;
+                return t.signup_accountDOBMissing;
               }
               return null;
             },

@@ -87,7 +87,7 @@ class AuthService {
               final error = uri.queryParameters['error'];
 
               if (error != null) {
-                completer.completeError(Exception('${t.authservice_oauthError}}: $error'));
+                completer.completeError(Exception('${t.authservice_oauthError}: $error'));
                 return;
               }
 
@@ -732,7 +732,7 @@ class AuthService {
         final body = jsonDecode(response.body);
         return {
           'isSuccess': false,
-          'message': body['error'] ?? t.authservice_alexaUnlinkedSuccess,
+          'message': body['error'] ?? t.authservice_alexaUnlinkedFailed,
         };
       }
     } catch (e) {
