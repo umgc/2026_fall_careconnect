@@ -26,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -123,7 +124,8 @@ class RetrievalIndexServiceTest {
                 .recordType(RetrievalRecordType.CALL_SUMMARY.name())
                 .sourceRecordId("99")
                 .chunkText("old")
-                .chunkMetadata("{\"contentHash\":\"sha256:same\"}")
+                .chunkMetadata(
+                        "{\"contentHash\":\"sha256:same\",\"citationMetadataVersion\":1}")
                 .build();
         when(chunkRepository.findBySourceRecordIdAndRecordType("99", "CALL_SUMMARY"))
                 .thenReturn(List.of(existing));
@@ -152,6 +154,57 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
+    @DisplayName("ingestSummaryCreated rebuilds unchanged content when citation metadata is stale")
+    void ingestSummaryCreated_sameHash_staleCitationMetadata_rebuilds() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("99")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha256:same\"}")
+                .build();
+        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "CALL_SUMMARY"))
+                .thenReturn(List.of(existing));
+        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "VISIT_SUMMARY"))
+                .thenReturn(List.of());
+
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        final LocalDateTime generatedAt = LocalDateTime.of(2026, 7, 17, 12, 0);
+        summary.setGeneratedAt(generatedAt);
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        when(callSummaryRepository.findById(99L)).thenReturn(Optional.of(summary));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                "sha256:same");
+
+        assertThat(service.ingestSummaryCreated(payload)).isEqualTo(1);
+        verify(chunkRepository).deleteBySourceRecordId("99");
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getChunkMetadata())
+                .contains("\"citationMetadataVersion\":1")
+                .contains("\"callId\":\"call-9\"")
+                .contains("\"occurredAt\":\""
+                        + generatedAt.atZone(ZoneId.systemDefault()).toInstant() + "\"");
+    }
+
+    @Test
     @DisplayName("ingestSummaryCreated retries embed when contentHash matches but embeddings missing")
     void ingestSummaryCreated_hashMatch_missingEmbeddings_retriesEmbed() {
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
@@ -160,7 +213,8 @@ class RetrievalIndexServiceTest {
                 .recordType(RetrievalRecordType.CALL_SUMMARY.name())
                 .sourceRecordId("99")
                 .chunkText("old")
-                .chunkMetadata("{\"contentHash\":\"sha256:same\"}")
+                .chunkMetadata(
+                        "{\"contentHash\":\"sha256:same\",\"citationMetadataVersion\":1}")
                 .build();
         when(chunkRepository.findBySourceRecordIdAndRecordType("99", "CALL_SUMMARY"))
                 .thenReturn(List.of(existing));
