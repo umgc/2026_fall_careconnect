@@ -87,7 +87,7 @@ void main() {
       final json = {
         'id': '42',
         'paymentSubscriptionId': 'sub_abc',
-        'customerId': 'cus_xyz',
+        'paymentCustomerId': 'cus_xyz',
         'status': 'active',
         'startedAt': '2024-01-01',
         'currentPeriodEnd': '2024-02-01',

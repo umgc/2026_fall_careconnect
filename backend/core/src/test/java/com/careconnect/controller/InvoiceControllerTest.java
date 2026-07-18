@@ -12,6 +12,7 @@ import com.careconnect.service.invoice.InvoiceService;
 import com.careconnect.service.invoice.LlmExtractionService;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.service.invoice.TextractService;
+import com.careconnect.util.JsonSanitizer;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -417,35 +418,35 @@ class InvoiceControllerTest {
 
     @Test
     void jsonSanitizer_nullInput_returnsNull() throws Exception {
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject(null)).isNull();
+        assertThat(JsonSanitizer.extractFirstJsonObject(null)).isNull();
     }
 
     @Test
     void jsonSanitizer_noOpenBrace_returnsNull() throws Exception {
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject("no json here")).isNull();
+        assertThat(JsonSanitizer.extractFirstJsonObject("no json here")).isNull();
     }
 
     @Test
     void jsonSanitizer_simpleObject_extractsCorrectly() throws Exception {
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject("{\"a\":1}")).isEqualTo("{\"a\":1}");
+        assertThat(JsonSanitizer.extractFirstJsonObject("{\"a\":1}")).isEqualTo("{\"a\":1}");
     }
 
     @Test
     void jsonSanitizer_nestedObject_extractsOutermost() throws Exception {
         final String input = "{\"outer\":{\"inner\":true}}";
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject(input)).isEqualTo(input);
+        assertThat(JsonSanitizer.extractFirstJsonObject(input)).isEqualTo(input);
     }
 
     @Test
     void jsonSanitizer_escapedBackslash_handledCorrectly() throws Exception {
         final String input = "{\"path\":\"C:\\\\Users\\\\test\"}";
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject(input)).isEqualTo(input);
+        assertThat(JsonSanitizer.extractFirstJsonObject(input)).isEqualTo(input);
     }
 
     @Test
     void jsonSanitizer_fencedJsonWithNewline_stripsAndExtracts() throws Exception {
         final String input = "```json\n{\"key\":\"value\"}\n```";
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject(input)).isEqualTo("{\"key\":\"value\"}");
+        assertThat(JsonSanitizer.extractFirstJsonObject(input)).isEqualTo("{\"key\":\"value\"}");
     }
 
     @Test
@@ -453,18 +454,18 @@ class InvoiceControllerTest {
         // ``` immediately followed by { (no newline after fence marker)
         final String input = "```{\"key\":\"value\"}```";
         // firstNewline < 0 branch: t stays as the remainder after "```" trim
-        final String result = InvoiceController.JsonSanitizer.extractFirstJsonObject(input);
+        final String result = JsonSanitizer.extractFirstJsonObject(input);
         assertThat(result).isEqualTo("{\"key\":\"value\"}");
     }
 
     @Test
     void jsonSanitizer_unclosedObject_returnsNull() throws Exception {
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject("{\"a\":1")).isNull();
+        assertThat(JsonSanitizer.extractFirstJsonObject("{\"a\":1")).isNull();
     }
 
     @Test
     void jsonSanitizer_escapedQuoteInsideString_handledCorrectly() throws Exception {
         final String input = "{\"msg\":\"say \\\"hello\\\"\"}";
-        assertThat(InvoiceController.JsonSanitizer.extractFirstJsonObject(input)).isEqualTo(input);
+        assertThat(JsonSanitizer.extractFirstJsonObject(input)).isEqualTo(input);
     }
 }

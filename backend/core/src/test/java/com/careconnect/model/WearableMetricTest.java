@@ -69,7 +69,8 @@ class WearableMetricTest {
     void metricType_allValues() throws Exception {
         assertThat(MetricType.values()).containsExactly(
                 MetricType.HEART_RATE, MetricType.SPO2, MetricType.TEMPERATURE,
-                MetricType.BLOOD_PRESSURE_SYS, MetricType.BLOOD_PRESSURE_DIA, MetricType.WEIGHT);
+                MetricType.BLOOD_PRESSURE_SYS, MetricType.BLOOD_PRESSURE_DIA, MetricType.WEIGHT,
+                MetricType.STEPS);
     }
 
     // ─── equals() and hashCode() ──────────────────────────────────────────────

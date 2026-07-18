@@ -2,22 +2,36 @@ package com.careconnect.service;
 
 import com.careconnect.dto.CheckInCreateRequestDTO;
 import com.careconnect.dto.CheckInCreateResponseDTO;
+import com.careconnect.dto.CheckInDetailDTO;
+import com.careconnect.dto.CheckInAnswerDetailDTO;
+import com.careconnect.dto.CheckInPageDTO;
 import com.careconnect.dto.CheckInSummaryDTO;
 import com.careconnect.dto.QuestionDTO;
 import com.careconnect.exception.AppException;
+import com.careconnect.model.Answer;
 import com.careconnect.model.CheckIn;
 import com.careconnect.model.CheckInQuestion;
 import com.careconnect.model.Patient;
 import com.careconnect.model.Question;
+import com.careconnect.model.User;
 import com.careconnect.repository.CheckInQuestionRepository;
 import com.careconnect.repository.CheckInRepository;
+import com.careconnect.repository.AnswerRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.QuestionRepository;
+import com.careconnect.security.Role;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -32,17 +46,20 @@ public class CheckInSnapshotService {
 
     private final CheckInRepository checkInRepository;
     private final CheckInQuestionRepository checkInQuestionRepository;
+    private final AnswerRepository answerRepository;
     private final PatientRepository patientRepository;
     private final QuestionRepository questionRepository;
 
     public CheckInSnapshotService(
             CheckInRepository checkInRepository,
             CheckInQuestionRepository checkInQuestionRepository,
+            AnswerRepository answerRepository,
             PatientRepository patientRepository,
             QuestionRepository questionRepository
     ) {
         this.checkInRepository = checkInRepository;
         this.checkInQuestionRepository = checkInQuestionRepository;
+        this.answerRepository = answerRepository;
         this.patientRepository = patientRepository;
         this.questionRepository = questionRepository;
     }
@@ -125,6 +142,56 @@ public class CheckInSnapshotService {
     }
 
     @Transactional(readOnly = true)
+    public CheckInPageDTO listCheckInsForPatientFiltered(
+            Long patientId,
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
+            Integer page,
+            Integer size
+    ) {
+        if (!patientRepository.existsById(patientId)) {
+            throw new AppException(HttpStatus.NOT_FOUND, "Patient not found: " + patientId);
+        }
+
+        final int safePage = page == null || page < 0 ? 0 : page;
+        final int safeSize = size == null || size <= 0 ? 20 : Math.min(size, 100);
+        final String normalizedStatus = normalizeStatus(status);
+
+        final OffsetDateTime rangeStart = startDate == null
+                ? null
+                : startDate.atStartOfDay().atOffset(ZoneOffset.UTC);
+        final OffsetDateTime rangeEnd = endDate == null
+                ? null
+                : endDate.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC).minusNanos(1);
+        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "startDate must be on or before endDate");
+        }
+
+        Page<CheckIn> filteredPage = checkInRepository.findByPatientIdWithFilters(
+                patientId,
+                normalizedStatus,
+                rangeStart,
+                rangeEnd,
+                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+        List<CheckIn> pageItems = filteredPage.getContent();
+
+        Map<Long, Integer> questionCounts = buildQuestionCountsMap(pageItems);
+        List<CheckInSummaryDTO> items = pageItems.stream()
+                .map(checkIn -> toSummary(checkIn, questionCounts))
+                .toList();
+
+        return new CheckInPageDTO(
+                items,
+                filteredPage.getNumber(),
+                filteredPage.getSize(),
+                filteredPage.getTotalElements(),
+                filteredPage.getTotalPages()
+        );
+    }
+
+    @Transactional(readOnly = true)
     public Optional<CheckInSummaryDTO> getLatestCheckInForPatient(Long patientId) {
         if (!patientRepository.existsById(patientId)) {
             throw new AppException(HttpStatus.NOT_FOUND, "Patient not found: " + patientId);
@@ -134,6 +201,70 @@ public class CheckInSnapshotService {
                     Map<Long, Integer> counts = buildQuestionCountsMap(List.of(checkIn));
                     return toSummary(checkIn, counts);
                 });
+    }
+
+    public CheckInDetailDTO getCheckInDetail(Long checkInId) {
+        CheckIn checkIn = checkInRepository.findById(checkInId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Check-in not found: " + checkInId));
+        return buildCheckInDetail(checkIn);
+    }
+
+    public CheckInDetailDTO markCheckInReviewed(Long checkInId, User currentUser) {
+        CheckIn checkIn = checkInRepository.findById(checkInId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Check-in not found: " + checkInId));
+
+        if (currentUser == null || currentUser.getRole() == null) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Only caregivers or admins can review check-ins");
+        }
+        Role role = currentUser.getRole();
+        if (role != Role.ADMIN && role != Role.CAREGIVER) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Only caregivers or admins can review check-ins");
+        }
+        if (checkIn.getSubmittedAt() == null) {
+            throw new AppException(HttpStatus.CONFLICT, "Cannot review a draft check-in");
+        }
+        if (checkIn.getReviewedAt() == null) {
+            checkIn.setReviewedAt(OffsetDateTime.now());
+            checkIn = checkInRepository.save(checkIn);
+        }
+
+        return buildCheckInDetail(checkIn);
+    }
+
+    private CheckInDetailDTO buildCheckInDetail(CheckIn checkIn) {
+        Long checkInId = checkIn.getId();
+        List<CheckInQuestion> snapshotQuestions = checkInQuestionRepository.findByCheckIn_IdOrderByOrdinalAsc(checkInId);
+        Map<Long, Answer> answersByQuestionId = new HashMap<>();
+        for (Answer answer : answerRepository.findByCheckIn_Id(checkInId)) {
+            answersByQuestionId.put(answer.getQuestion().getId(), answer);
+        }
+
+        List<CheckInAnswerDetailDTO> details = snapshotQuestions.stream()
+                .map(snapshot -> {
+                    Answer answer = answersByQuestionId.get(snapshot.getQuestion().getId());
+                    return new CheckInAnswerDetailDTO(
+                            snapshot.getQuestion().getId(),
+                            snapshot.getPromptSnapshot(),
+                            snapshot.getTypeSnapshot(),
+                            snapshot.isRequired(),
+                            snapshot.getOrdinal(),
+                            answer == null ? null : answer.getValueText(),
+                            answer == null ? null : answer.getValueBoolean(),
+                            answer == null ? null : answer.getValueNumber(),
+                            answer == null ? null : answer.getCreatedAt()
+                    );
+                })
+                .toList();
+
+        return new CheckInDetailDTO(
+                checkIn.getId(),
+                checkIn.getPatient().getId(),
+                checkIn.getCreatedAt(),
+                checkIn.getSubmittedAt(),
+                checkIn.getReviewedAt(),
+                computeStatus(checkIn),
+                details
+        );
     }
 
     private Map<Long, Integer> buildQuestionCountsMap(List<CheckIn> checkIns) {
@@ -154,7 +285,30 @@ public class CheckInSnapshotService {
                 checkIn.getPatient().getId(),
                 checkIn.getCreatedAt(),
                 checkIn.getSubmittedAt(),
+                checkIn.getReviewedAt(),
                 questionCounts.getOrDefault(checkIn.getId(), 0)
         );
     }
+
+    private String normalizeStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            return null;
+        }
+        String normalized = rawStatus.trim().toLowerCase();
+        if (!normalized.equals("draft") && !normalized.equals("submitted") && !normalized.equals("reviewed")) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "status must be one of: draft, submitted, reviewed");
+        }
+        return normalized;
+    }
+
+    private String computeStatus(CheckIn checkIn) {
+        if (checkIn.getReviewedAt() != null) {
+            return "reviewed";
+        }
+        if (checkIn.getSubmittedAt() != null) {
+            return "submitted";
+        }
+        return "draft";
+    }
+
 }

@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/enhanced_patient_notes_widget.dart';
+import 'package:care_connect_app/widgets/structured_entry_form.dart';
+import 'package:provider/provider.dart';
+import 'package:care_connect_app/features/compliance/presentation/pages/compliance_checklist_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
+import 'package:care_connect_app/services/structured_entry_service.dart';
 
 class PatientFilesPage extends StatefulWidget {
   final int patientId;
@@ -132,6 +137,30 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         context,
         title: '${widget.patientName} - ${t.shortcut_files}',
         additionalActions: [
+          IconButton(
+            icon: const Icon(Icons.fact_check),
+            tooltip: 'Required documents checklist',
+            onPressed: () {
+              // Only coordinators may transition statuses (mirrors the
+              // backend's requireAdminOrCaregiver); everyone else gets a
+              // read-only checklist.
+              final role = Provider.of<UserProvider>(context, listen: false)
+                  .user
+                  ?.role
+                  .toUpperCase();
+              final canEdit = role == 'CAREGIVER' || role == 'ADMIN';
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (routeContext) => ComplianceChecklistPage(
+                    subjectType: 'CARE_CIRCLE',
+                    subjectId: widget.patientId,
+                    subjectName: widget.patientName,
+                    canEdit: canEdit,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFiles),
         ],
       ),
@@ -324,6 +353,9 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
             switch (value) {
+              case 'structured':
+                _openStructuredEntry(file);
+                break;
               case 'preview':
                 _previewFile(file);
                 break;
@@ -336,7 +368,16 @@ class _PatientFilesPageState extends State<PatientFilesPage>
             }
           },
           itemBuilder: (context) => [
-            PopupMenuItem(
+            if (DocumentFieldTemplates.isSupported(file.fileCategory))
+              const PopupMenuItem(
+                value: 'structured',
+                child: ListTile(
+                  leading: Icon(Icons.edit_note),
+                  title: Text('Structured entry'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            const PopupMenuItem(
               value: 'preview',
               child: ListTile(
                 leading: Icon(Icons.visibility),
@@ -365,6 +406,37 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         onTap: () => _previewFile(file),
       ),
     );
+  }
+
+  /// Opens the structured form-entry dialog for [file] in this patient's
+  /// context — creating a new entry, or editing the one already captured
+  /// from this document.
+  Future<void> _openStructuredEntry(UserFileDTO file) async {
+    StructuredEntryDTO? existing;
+    try {
+      existing = await StructuredEntryService.getEntryForFile(file.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load structured entry: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final saved = await StructuredEntryFormDialog.show(
+      context,
+      fileId: file.id,
+      fileName: file.originalFilename.isNotEmpty
+          ? file.originalFilename
+          : file.fileName,
+      fileCategory: file.fileCategory,
+      patientId: file.patientId ?? widget.patientId,
+      existingEntry: existing,
+    );
+    if (saved == true) {
+      await _loadFiles();
+    }
   }
 
   void _previewFile(UserFileDTO file) {

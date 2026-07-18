@@ -77,13 +77,13 @@ void main() {
       await manager.addTaskType('monitoring', Colors.red);
       expect(manager.getIcon('monitoring'), Icons.task);
 
-      await manager.updateTaskIcon('monitoring', Icons.health_and_safety);
-      expect(manager.getIcon('monitoring'), Icons.health_and_safety);
+      await manager.updateTaskIcon('monitoring', Icons.science);
+      expect(manager.getIcon('monitoring'), Icons.science);
 
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = prefs.getString('task_type_settings');
       final decoded = json.decode(jsonStr!);
-      expect(decoded['monitoring']['icon'], Icons.health_and_safety.codePoint);
+      expect(decoded['monitoring']['icon'], 'science');
     });
 
     test('resetDefaults restores all predefined types', () async {
@@ -116,8 +116,8 @@ void main() {
         final prefs = await SharedPreferences.getInstance();
         final encoded = json.encode({
           'hydration': {
-            'color': Colors.blue.value,
-            'icon': Icons.water_drop.codePoint,
+            'color': Colors.blue.toARGB32(),
+            'icon': 'science',
           },
         });
         await prefs.setString('task_type_settings', encoded);
@@ -127,8 +127,8 @@ void main() {
         await Future.delayed(const Duration(milliseconds: 10));
 
         //  Compare by color value
-        expect(manager2.getColor('hydration').value, Colors.blue.value);
-        expect(manager2.getIcon('hydration'), Icons.water_drop);
+        expect(manager2.getColor('hydration').toARGB32(), Colors.blue.toARGB32());
+        expect(manager2.getIcon('hydration'), Icons.science);
       },
     );
 

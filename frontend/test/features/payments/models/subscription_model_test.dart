@@ -5,7 +5,7 @@
 //   Both classes are pure Dart data models with no platform channels or I/O.
 //
 //   Branches tested:
-//     Subscription.fromJson — new backend format (contains stripeSubscriptionId
+//     Subscription.fromJson — new backend format (contains paymentSubscriptionId
 //       key), including priceCents→planAmount conversion, customerId field
 //       resolution order, and missing-field defaults.
 //     Subscription.fromJson — Stripe direct format with plan object; items data
@@ -50,12 +50,12 @@ void main() {
   // ─── Subscription.fromJson — new backend format ──────────────────────────────
 
   group('Subscription.fromJson (new backend format)', () {
-    test('parses new format with stripeSubscriptionId key', () {
+    test('parses new format with paymentSubscriptionId key', () {
       // Verifies field mapping from the custom backend response shape.
       final json = {
         'id': 'db-123',
         'paymentSubscriptionId': 'sub_ABC',
-        'customerId': 'cus_XYZ',
+        'paymentCustomerId': 'cus_XYZ',
         'status': 'active',
         'startedAt': '2025-01-01',
         'currentPeriodEnd': '2025-02-01',
@@ -91,7 +91,7 @@ void main() {
       // Verifies primary customerId field resolution in new format.
       final json = {
         'paymentSubscriptionId': 's',
-        'customerId': 'cus_A',
+        'paymentCustomerId': 'cus_A',
         'status': '',
       };
       expect(Subscription.fromJson(json).customerId, 'cus_A');
@@ -99,7 +99,7 @@ void main() {
 
     test('customerId falls back to customer then customerId fields', () {
       // Verifies secondary and tertiary fallback for customerId.
-      final json1 = {'paymentSubscriptionId': 's', 'customerId': 'cus_A', 'status': ''};
+      final json1 = {'paymentSubscriptionId': 's', 'customer': 'cus_A', 'status': ''};
       expect(Subscription.fromJson(json1).customerId, 'cus_A');
 
       final json2 = {'paymentSubscriptionId': 's', 'customerId': 'cus_B', 'status': ''};
