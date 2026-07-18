@@ -7,8 +7,7 @@ import '../../../../services/ask_ai_service.dart';
 /// A single question/answer turn shown in the Ask AI transcript.
 class _AskAiTurn {
   final String question;
-  String? answer;
-  int? chunksUsed;
+  AskAiResult? result;
   String? error;
   bool isLoading = true;
 
@@ -19,10 +18,8 @@ class _AskAiTurn {
 ///
 /// Lets the user ask a natural-language question and see an answer grounded
 /// strictly in their own indexed records, with a persistent non-medical-
-/// advice disclaimer (REQ-SC-1, FR-AI-3). There is no citations array from
-/// the backend yet (see AiAskResponse) — this screen shows the number of
-/// record chunks the answer was grounded in instead, and is structured so
-/// per-item citations can be added later without a layout change.
+/// advice disclaimer (REQ-SC-1, FR-AI-3) and tappable source citations
+/// (FR-AI-2).
 class AskAiPage extends StatefulWidget {
   const AskAiPage({super.key});
 
@@ -73,8 +70,7 @@ class _AskAiPageState extends State<AskAiPage> {
         question: question,
       );
       setState(() {
-        turn.answer = result.answer;
-        turn.chunksUsed = result.chunksUsed;
+        turn.result = result;
         turn.isLoading = false;
       });
     } on AskAiException catch (e) {
@@ -263,27 +259,90 @@ class _AnswerBubble extends StatelessWidget {
                       ),
                     ],
                   )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        turn.answer ?? '',
-                        style: const TextStyle(fontSize: 18, height: 1.35),
-                      ),
-                      if ((turn.chunksUsed ?? 0) > 0) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Based on ${turn.chunksUsed} record'
-                          '${turn.chunksUsed == 1 ? '' : 's'} from your account.',
-                          style: AppTheme.bodySmall.copyWith(
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                : _buildResultContent(turn.result!),
       ),
+    );
+  }
+
+  Widget _buildResultContent(AskAiResult result) {
+    final hasAnswer = result.deliveryStatus == 'DELIVERED' &&
+        result.answerText != null &&
+        result.answerText!.isNotEmpty;
+
+    if (!hasAnswer) {
+      // HELD (Tier 2 review pending), WITHHELD, or NO_RECORDS all land here.
+      final message = result.message ??
+          (result.deliveryStatus == 'HELD'
+              ? 'This question needs a quick review before we can answer. '
+                  "We'll let you know when it's ready."
+              : 'I could not find relevant information in your records to '
+                  'answer that question.');
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            result.deliveryStatus == 'HELD'
+                ? Icons.hourglass_top
+                : Icons.search_off,
+            size: 18,
+            color: AppTheme.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(message, style: const TextStyle(fontSize: 16)),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          result.answerText!,
+          style: const TextStyle(fontSize: 18, height: 1.35),
+        ),
+        if (result.citations.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          for (final citation in result.citations)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.description_outlined,
+                      size: 16, color: AppTheme.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (citation.title != null) citation.title,
+                        if (citation.excerpt != null) citation.excerpt,
+                      ].whereType<String>().join(' — '),
+                      style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        if (result.disclaimerText != null &&
+            result.disclaimerText!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            result.disclaimerText!,
+            style: AppTheme.bodySmall.copyWith(
+              color: AppTheme.textSecondary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
