@@ -16,7 +16,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CitationAssemblerTest {
 
-    private final CitationAssembler assembler = new CitationAssembler(new ObjectMapper());
+    private final CitationAssembler assembler =
+            new CitationAssembler(
+                    new CitationDeepLinkBuilder(),
+                    new CitationMetadataMapper(new ObjectMapper()));
 
     @Test
     @DisplayName("assemble validates metadata and keeps retrieval relevance order")
@@ -54,7 +57,7 @@ class CitationAssemblerTest {
                 .extracting(AiCitation::citationId)
                 .containsExactly("C1", "C2");
         final AiCitation first = result.citations().get(0);
-        assertThat(first.deepLink()).isEqualTo("/calls/call%2F42/summary");
+        assertThat(first.deepLink()).isEqualTo("/chatandcalls");
         assertThat(first.title()).isEqualTo("Medication check");
         assertThat(first.occurredAt()).hasToString("2026-07-17T14:30:00Z");
         assertThat(first.confidence()).isEqualTo(0.82d);
@@ -96,7 +99,7 @@ class CitationAssemblerTest {
     void assemble_invalidConfidence_doesNotUseRrfScore() {
         final RankedChunk chunk = chunk(
                 "C1",
-                "doc 1",
+                "doc/1",
                 RetrievalRecordType.UPLOADED_DOCUMENT,
                 "  First line\nsecond\tline  ",
                 "{\"confidence\":1.2,\"private\":\"hidden\"}",
@@ -108,7 +111,7 @@ class CitationAssemblerTest {
         assertThat(result.grounded()).isTrue();
         assertThat(result.citations().get(0).confidence()).isNull();
         assertThat(result.citations().get(0).excerpt()).isEqualTo("First line second line");
-        assertThat(result.citations().get(0).deepLink()).isEqualTo("/files/doc%201");
+        assertThat(result.citations().get(0).deepLink()).isEqualTo("/file-management");
         assertThat(result.citations().get(0).metadata()).isEmpty();
     }
 
@@ -129,6 +132,24 @@ class CitationAssemblerTest {
         assertThat(result.grounded()).isFalse();
         assertThat(result.invalidRefs()).containsExactly("C1");
         assertThat(result.citations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("source identifiers are validated rather than normalized")
+    void assemble_sourceIdentifierWithWhitespace_invalidatesCitation() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                " doc-1 ",
+                RetrievalRecordType.UPLOADED_DOCUMENT,
+                "Document text",
+                null,
+                0.1d);
+
+        final CitationAssembler.CitationResult result =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk));
+
+        assertThat(result.grounded()).isFalse();
+        assertThat(result.invalidRefs()).containsExactly("C1");
     }
 
     @Test

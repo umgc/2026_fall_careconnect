@@ -60,7 +60,9 @@ class AiAskServiceTest {
                 retrievalScopeService,
                 hybridRetrievalService,
                 groundedAskLlmService,
-                new CitationAssembler(new ObjectMapper()),
+                new CitationAssembler(
+                        new CitationDeepLinkBuilder(),
+                        new CitationMetadataMapper(new ObjectMapper())),
                 inputSanitizationService,
                 governanceService);
     }
@@ -149,8 +151,8 @@ class AiAskServiceTest {
                         "amazon.nova-lite-v1:0")));
 
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
-                .isInstanceOf(AskAiUnavailableException.class)
-                .extracting(ex -> ((AskAiUnavailableException) ex).getErrorCode())
+                .isInstanceOf(AskAiGroundingException.class)
+                .extracting(ex -> ((AskAiGroundingException) ex).getErrorCode())
                 .isEqualTo("UNGROUNDED_RESPONSE");
     }
 
@@ -179,8 +181,8 @@ class AiAskServiceTest {
                         "amazon.nova-lite-v1:0")));
 
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
-                .isInstanceOf(AskAiUnavailableException.class)
-                .extracting(ex -> ((AskAiUnavailableException) ex).getErrorCode())
+                .isInstanceOf(AskAiGroundingException.class)
+                .extracting(ex -> ((AskAiGroundingException) ex).getErrorCode())
                 .isEqualTo("UNGROUNDED_RESPONSE");
     }
 

@@ -7,6 +7,7 @@ import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.ask.AiAskService;
+import com.careconnect.service.ai.ask.AskAiGroundingException;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
 import com.careconnect.service.ai.ask.AskAiUnavailableException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
@@ -67,6 +68,12 @@ public class AiAskController {
         } catch (final AskAiRejectedException ex) {
             log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());
             return ResponseEntity.status(ex.getHttpStatus())
+                    .body(AiAskService.withheld(
+                            null, null, sessionId,
+                            ex.getErrorCode(), ex.getMessage(), null));
+        } catch (final AskAiGroundingException ex) {
+            log.warn("Ask AI response failed grounding validation: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .body(AiAskService.withheld(
                             null, null, sessionId,
                             ex.getErrorCode(), ex.getMessage(), null));
