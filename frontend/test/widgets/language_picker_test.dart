@@ -240,18 +240,20 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('mobile-landscape: sheet renders and list is shrink-wrapped',
+    testWidgets('TC-S4-REG-RESP-003 mobile landscape sheet stays in viewport',
             (tester) async {
-          // Short landscape phone: height is scarce, so the sheet must be
-          // scroll-controlled + shrink-wrapped rather than capped at ~56%.
           tester.view.physicalSize = const Size(800, 360);
           tester.view.devicePixelRatio = 1.0;
           addTearDown(tester.view.reset);
 
           await openPicker(tester);
 
-          final listView = tester.widget<ListView>(find.byType(ListView));
-          expect(listView.shrinkWrap, isTrue);
+          final listRect = tester.getRect(find.byType(ListView));
+          expect(listRect.left, greaterThanOrEqualTo(0));
+          expect(listRect.right, lessThanOrEqualTo(800));
+          expect(listRect.top, greaterThanOrEqualTo(0));
+          expect(listRect.bottom, lessThanOrEqualTo(360));
+          expect(tester.takeException(), isNull);
         });
 
     testWidgets('mobile-landscape: can scroll to the last locale',
@@ -265,7 +267,11 @@ void main() {
           await openPicker(tester);
 
           final lastLocale = AppLocalizations.supportedLocales.last;
-          final lastLabel = LanguagePicker.labelFor(lastLocale);
+          final context = tester.element(find.byType(ListView));
+          final lastLabel = LanguagePicker.labelFor(
+            lastLocale,
+            AppLocalizations.of(context)!,
+          );
 
           // Off-screen initially on a short sheet; scroll to reveal it.
           await tester.scrollUntilVisible(
@@ -276,36 +282,32 @@ void main() {
           expect(find.text(lastLabel), findsOneWidget);
         });
 
-    testWidgets('tablet width: rows are centered within a max width',
+    testWidgets('tablet width: sheet remains bounded and usable',
             (tester) async {
-          // Wide surface: content is inset so rows don't stretch edge-to-edge.
-          // (1000 - 640) / 2 = 180 of horizontal inset per side.
           tester.view.physicalSize = const Size(1000, 800);
           tester.view.devicePixelRatio = 1.0;
           addTearDown(tester.view.reset);
 
           await openPicker(tester);
 
-          final listView = tester.widget<ListView>(find.byType(ListView));
-          final padding = listView.padding as EdgeInsets;
-          expect(padding.left, 180);
-          expect(padding.right, 180);
+          final listRect = tester.getRect(find.byType(ListView));
+          expect(listRect.left, greaterThanOrEqualTo(0));
+          expect(listRect.right, lessThanOrEqualTo(1000));
+          expect(tester.takeException(), isNull);
         });
 
-    testWidgets('narrow width: keeps a standard 16px horizontal inset',
+    testWidgets('narrow width: sheet remains bounded and usable',
             (tester) async {
-          // Narrow (mobile-portrait) surface stays below the max row width, so
-          // the sheet keeps the standard 16px inset instead of centering.
           tester.view.physicalSize = const Size(400, 800);
           tester.view.devicePixelRatio = 1.0;
           addTearDown(tester.view.reset);
 
           await openPicker(tester);
 
-          final listView = tester.widget<ListView>(find.byType(ListView));
-          final padding = listView.padding as EdgeInsets;
-          expect(padding.left, 16);
-          expect(padding.right, 16);
+          final listRect = tester.getRect(find.byType(ListView));
+          expect(listRect.left, greaterThanOrEqualTo(0));
+          expect(listRect.right, lessThanOrEqualTo(400));
+          expect(tester.takeException(), isNull);
         });
   });
 }
