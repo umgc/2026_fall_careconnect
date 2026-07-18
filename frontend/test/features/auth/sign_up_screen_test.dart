@@ -5,12 +5,17 @@
 // Tests cover all 5 steps, form validation, password visibility, and role selection.
 
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/sign_up_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../helpers/fake_http_overrides.dart';
 
 /// Wraps RegistrationPage in a GoRouter so that context.go('/login') works.
 Widget _wrap({String? initialRole, bool lockRole = false, double width = 800}) {
@@ -29,6 +34,11 @@ Widget _wrap({String? initialRole, bool lockRole = false, double width = 800}) {
         path: '/login',
         builder: (context, state) =>
             const Scaffold(body: Text('Login Page')),
+      ),
+      GoRoute(
+        path: '/select-subscription-tier',
+        builder: (context, state) =>
+            const Scaffold(body: Text('Subscription Tier')),
       ),
     ],
   );
@@ -185,7 +195,76 @@ Future<void> _goToStep4(WidgetTester tester) async {
   await _tapNextButton(tester);
 }
 
+/// Navigate a (non-professional) Caregiver all the way to the review step.
+Future<void> _goToCaregiverReview(WidgetTester tester) async {
+  await _goToStep1(tester, role: 'Caregiver'); // pumps widget; step 0 -> step 1
+  await _fillCaregiverPersonalInfo(tester, caregiverType: 'Family Member');
+  await _tapNextButton(tester); // step 1 -> step 2 (Contact)
+  await _fillContactInfo(tester);
+  await _tapNextButton(tester); // step 2 -> step 3 (Security)
+  final fields = find.byType(TextFormField);
+  await tester.enterText(fields.at(0), 'Password123');
+  await tester.enterText(fields.at(1), 'Password123');
+  await tester.pump();
+  await _tapNextButton(tester); // step 3 -> step 4 (Review)
+}
+
+/// Navigate a Professional caregiver (with license fields) to the review step.
+Future<void> _goToProfessionalCaregiverReview(WidgetTester tester) async {
+  await _goToStep1(tester, role: 'Caregiver');
+  await _fillCaregiverPersonalInfo(tester, caregiverType: 'Professional');
+  await _tapNextButton(tester); // step 1 -> step 2 (Contact + professional fields)
+
+  final contactFields = find.byType(TextFormField);
+  await tester.enterText(contactFields.at(0), 'pro@caregiver.com');
+  await tester.enterText(contactFields.at(1), '5559876543');
+  await tester.pump();
+  await tester.ensureVisible(contactFields.at(2));
+  await tester.pump();
+  await tester.enterText(contactFields.at(2), '789 Care Blvd');
+  await tester.pump();
+  await tester.ensureVisible(contactFields.at(4));
+  await tester.pump();
+  await tester.enterText(contactFields.at(4), 'Rockville');
+  await tester.enterText(contactFields.at(5), 'MD');
+  await tester.enterText(contactFields.at(6), '20850');
+  await tester.pump();
+
+  // Scroll to and fill the professional license fields (indices 7, 8, 9).
+  await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -500));
+  await tester.pump();
+  final allFields = find.byType(TextFormField);
+  await tester.ensureVisible(allFields.at(7));
+  await tester.pump();
+  await tester.enterText(allFields.at(7), 'LIC-12345');
+  await tester.pump();
+  await tester.ensureVisible(allFields.at(8));
+  await tester.pump();
+  await tester.enterText(allFields.at(8), 'Maryland');
+  await tester.pump();
+  await tester.ensureVisible(allFields.at(9));
+  await tester.pump();
+  await tester.enterText(allFields.at(9), '10');
+  await tester.pump();
+
+  await _tapNextButton(tester); // step 2 -> step 3 (Security)
+  final secFields = find.byType(TextFormField);
+  await tester.enterText(secFields.at(0), 'Password123');
+  await tester.enterText(secFields.at(1), 'Password123');
+  await tester.pump();
+  await _tapNextButton(tester); // step 3 -> step 4 (Review)
+}
+
 void main() {
+  // RegistrationPage builds AppConfig.getGooglePlacesApiKey(), which reads
+  // dotenv.env. Without this, every build throws NotInitializedError.
+  setUpAll(() {
+    dotenv.loadFromString(
+      mergeWith: {'GOOGLE_PLACES_API_KEY': 'test_key'},
+      isOptional: true,
+    );
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -301,10 +380,14 @@ void main() {
       expect(find.text('Account Role *'), findsOneWidget);
     });
 
-    testWidgets('shows role dropdown hint text', (tester) async {
+    testWidgets('shows both role option cards', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.pump();
-      expect(find.text('Select account role'), findsOneWidget);
+      // Role is chosen via two tappable cards, not a dropdown.
+      expect(find.text('Patient'), findsOneWidget);
+      expect(find.text('Caregiver'), findsOneWidget);
+      expect(find.text('Managing my own health'), findsOneWidget);
+      expect(find.text('Caring for someone else'), findsOneWidget);
     });
 
     testWidgets('shows role description text', (tester) async {
@@ -317,10 +400,12 @@ void main() {
       );
     });
 
-    testWidgets('shows DropdownButton for role selection', (tester) async {
+    testWidgets('shows role card icons', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.pump();
-      expect(find.byType(DropdownButton<String>), findsOneWidget);
+      // Each role card renders its icon (Patient = person, Caregiver = favorite).
+      expect(find.byIcon(Icons.person), findsWidgets);
+      expect(find.byIcon(Icons.favorite), findsWidgets);
     });
 
     testWidgets('shows SafeArea', (tester) async {
@@ -337,14 +422,15 @@ void main() {
       expect(find.byType(RegistrationPage), findsOneWidget);
     });
 
-    testWidgets('dropdown is disabled when lockRole=true', (tester) async {
+    testWidgets('role cards are disabled when lockRole=true', (tester) async {
       await tester.pumpWidget(_wrap(initialRole: 'Patient', lockRole: true));
       await tester.pump();
-      // The DropdownButton should have null onChanged when locked
-      final dropdown = tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
-      );
-      expect(dropdown.onChanged, isNull);
+      // Tapping a different role must not change the locked selection.
+      await tester.ensureVisible(find.text('Caregiver'));
+      await tester.tap(find.text('Caregiver'), warnIfMissed: false);
+      await tester.pump();
+      expect(find.textContaining('track your health'), findsOneWidget);
+      expect(find.textContaining('monitor and assist'), findsNothing);
     });
   });
 
@@ -355,10 +441,13 @@ void main() {
       expect(find.widgetWithText(ElevatedButton, 'Next'), findsOneWidget);
     });
 
-    testWidgets('shows keyboard_arrow_down icon for dropdown', (tester) async {
+    testWidgets('selecting a role shows its description', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.pump();
-      expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
+      await tester.ensureVisible(find.text('Patient'));
+      await tester.tap(find.text('Patient'));
+      await tester.pump();
+      expect(find.textContaining('track your health'), findsOneWidget);
     });
 
     testWidgets('Next button disabled when no role selected', (tester) async {
@@ -579,7 +668,7 @@ void main() {
       expect(find.text('Email Address *'), findsOneWidget);
       expect(find.text('Phone Number *'), findsOneWidget);
       expect(find.text('Address'), findsOneWidget);
-      expect(find.text('Address Line 1 *'), findsOneWidget);
+      expect(find.text('Address Line 1'), findsOneWidget);
     });
 
     testWidgets('shows Step 3 of 5', (tester) async {
@@ -1309,22 +1398,14 @@ void main() {
     });
   });
 
-  group('RegistrationPage - dropdown role selection', () {
-    testWidgets('can select Patient from dropdown', (tester) async {
+  group('RegistrationPage - role card selection', () {
+    testWidgets('can select Patient via role card', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.pump();
 
-      // Ensure the dropdown is visible first
-      final dropdown = find.byType(DropdownButton<String>);
-      await tester.ensureVisible(dropdown);
-      await tester.pump();
-
-      // Tap the dropdown
-      await tester.tap(dropdown);
-      await tester.pumpAndSettle();
-
-      // Select Patient
-      await tester.tap(find.text('Patient').last);
+      // Tap the Patient role card.
+      await tester.ensureVisible(find.text('Patient'));
+      await tester.tap(find.text('Patient'));
       await tester.pumpAndSettle();
 
       // Should show Patient role description
@@ -1337,21 +1418,13 @@ void main() {
       expect(button.onPressed, isNotNull);
     });
 
-    testWidgets('can select Caregiver from dropdown', (tester) async {
+    testWidgets('can select Caregiver via role card', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.pump();
 
-      // Ensure the dropdown is visible first
-      final dropdown = find.byType(DropdownButton<String>);
-      await tester.ensureVisible(dropdown);
-      await tester.pump();
-
-      // Tap the dropdown
-      await tester.tap(dropdown);
-      await tester.pumpAndSettle();
-
-      // Select Caregiver
-      await tester.tap(find.text('Caregiver').last);
+      // Tap the Caregiver role card.
+      await tester.ensureVisible(find.text('Caregiver'));
+      await tester.tap(find.text('Caregiver'));
       await tester.pumpAndSettle();
 
       // Should show Caregiver role description
@@ -1715,6 +1788,98 @@ void main() {
       await tester.pumpWidget(_wrap(initialRole: 'Patient'));
       await tester.pump();
       expect(find.byType(FractionallySizedBox), findsOneWidget);
+    });
+  });
+
+  group('RegistrationPage – submit (Patient)', () {
+    testWidgets('successful registration navigates to /login', (tester) async {
+      HttpOverrides.global =
+          FakeHttpOverrides((method, uri) => FakeResponse(200, '{}'));
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+      await _goToStep4(tester); // fill all steps, land on the review step
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump(); // start the async submit
+      await tester.pump(const Duration(seconds: 1)); // let http + navigation run
+
+      expect(find.text('Login Page'), findsOneWidget);
+    });
+
+    testWidgets('failed registration shows a SnackBar', (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(400, '{"error":"bad"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+      await _goToStep4(tester);
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.textContaining('Registration failed'), findsOneWidget);
+    });
+  });
+
+  group('RegistrationPage – submit (Caregiver)', () {
+    testWidgets('successful registration navigates to subscription tier',
+        (tester) async {
+      HttpOverrides.global =
+          FakeHttpOverrides((method, uri) => FakeResponse(201, '{}'));
+      addTearDown(() => HttpOverrides.global = null);
+
+      await _goToCaregiverReview(tester);
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump(); // start the async submit
+      await tester.pump(const Duration(seconds: 1)); // let http + navigation run
+
+      expect(find.text('Subscription Tier'), findsOneWidget);
+    });
+
+    testWidgets('professional caregiver submit navigates to subscription tier',
+        (tester) async {
+      HttpOverrides.global =
+          FakeHttpOverrides((method, uri) => FakeResponse(201, '{}'));
+      addTearDown(() => HttpOverrides.global = null);
+
+      await _goToProfessionalCaregiverReview(tester);
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Subscription Tier'), findsOneWidget);
+    });
+
+    testWidgets('caregiver submit failure shows a SnackBar', (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(400, '{"error":"bad"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await _goToCaregiverReview(tester);
+
+      final signUp = find.widgetWithText(ElevatedButton, 'Sign Up');
+      await tester.ensureVisible(signUp);
+      await tester.tap(signUp);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.textContaining('Registration failed'), findsOneWidget);
     });
   });
 }

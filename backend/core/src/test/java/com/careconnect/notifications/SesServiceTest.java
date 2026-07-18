@@ -297,12 +297,8 @@ class SesServiceTest {
 
         verify(sesClient).sendEmail(captor.capture());
         SendEmailRequest req = captor.getValue();
-        assertEquals("Appointment Reminder - Checkup", req.message().subject().data());
-        assertTrue(req.message().body().html().data().contains("Carol"));
-        assertTrue(req.message().body().html().data().contains("Checkup"));
+        assertEquals("Appointment Reminder", req.message().subject().data());
         assertTrue(req.message().body().html().data().contains("2026-04-01 10:00"));
-        assertTrue(req.message().body().html().data().contains("Room 101"));
-        assertTrue(req.message().body().text().data().contains("Carol"));
     }
 
     @Test

@@ -262,7 +262,7 @@ void main() {
           'id': 9001,
           'user': <String, dynamic>{
             'id': 42,
-            'stripeCustomerId': 'cus_123',
+            'paymentCustomerId': 'cus_123',
           },
         }));
       };
@@ -287,7 +287,7 @@ void main() {
       expect(result['message'], 'Caregiver registration successful!');
       expect(result['userId'], '42');
       expect(result['caregiverId'], '9001');
-      expect(result['stripeCustomerId'], 'cus_123');
+      expect(result['paymentCustomerId'], 'cus_123');
     });
 
     test('registers caregiver with default values when optional data is omitted',
@@ -313,7 +313,7 @@ void main() {
           'id': 100,
           'user': <String, dynamic>{
             'id': 5,
-            'stripeCustomerId': '',
+            'paymentCustomerId': '',
           },
         }));
       };
@@ -328,7 +328,7 @@ void main() {
 
       expect(result['userId'], '5');
       expect(result['caregiverId'], '100');
-      expect(result['stripeCustomerId'], '');
+      expect(result['paymentCustomerId'], '');
     });
 
     test('throws when caregiver registration fails', () async {

@@ -1412,13 +1412,19 @@ SELECT pg_reload_conf();
 
 ### Database Migration Strategy
 
-Database migrations allow you to evolve the database schema over time while preserving data. Flyway is a migration tool that tracks which schema changes have been applied, ensuring migrations run exactly once in the correct order.
+CareConnect **does not use Flyway in production or ECS deploys**. Schema evolves through:
 
-**Why Flyway Over Manual SQL**: Without a migration tool, you'd have to manually track which SQL scripts ran in each environment (dev, staging, prod). Missed scripts lead to schema drift—dev has columns prod doesn't, causing deployment failures. Flyway solves this by maintaining a `flyway_schema_history` table that records every migration.
+1. **`SchemaPatchRunner`** — idempotent JDBC patches run at every application startup (`backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java`). Add new production DDL here.
+2. **Hibernate `ddl-auto=update`** — ECS sets `SPRING_JPA_HIBERNATE_DDL_AUTO=update` via CloudFormation; JPA creates/alters tables from `@Entity` classes.
+3. **`db/migration/*.sql`** — canonical SQL reference for developers; optional local use via `psql` or `./mvnw flyway:migrate` only (not wired into GitHub Actions or ECS).
 
-#### Flyway Migration Setup
+**Why not Flyway in prod**: Flyway is disabled to avoid circular dependency with JPA startup. Deploy pipelines (`backend-app-deploy.yml`, `backend-full-deploy.yml`) do not run migration jobs.
 
-**How Flyway Works**:
+#### Optional local Flyway (development only)
+
+Flyway Maven plugin and SQL files remain available for local verification. This is **not** part of the production deploy path.
+
+**How Flyway Works** (local optional use only):
 1. **Version-Named Files**: Migrations are SQL files named `V001__description.sql`, `V002__another_change.sql`. The version number determines execution order.
 2. **Checksum Validation**: Flyway calculates a checksum of each migration file. If you modify a file after it's been applied, Flyway detects the change and fails—preventing accidental modifications to historical migrations.
 3. **Automatic Execution**: On application startup (or via Maven command), Flyway checks which migrations haven't run yet and executes them in order.
@@ -1912,40 +1918,11 @@ jobs:
         DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Aliases.Items, 'careconnect.example.com')].Id" --output text)
         aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
 
-  run-migrations:
-    needs: [build-and-deploy-backend]
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'adopt'
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v3
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Run database migrations
-      working-directory: backend/core
-      run: |
-        # Get database credentials from Secrets Manager
-        DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id careconnect/prod/db-password --query SecretString --output text)
-
-        ./mvnw flyway:migrate \
-          -Dflyway.url=jdbc:postgresql://prod-db.region.rds.amazonaws.com:5432/careconnect \
-          -Dflyway.user=careconnect_app \
-          -Dflyway.password=$DB_PASSWORD
+  # Schema is applied at ECS task startup (SchemaPatchRunner + Hibernate ddl-auto).
+  # Do not add a Flyway migrate step for production deploys.
 
   smoke-tests:
-    needs: [build-and-deploy-backend, build-and-deploy-frontend, run-migrations]
+    needs: [build-and-deploy-backend, build-and-deploy-frontend]
     runs-on: ubuntu-latest
 
     steps:
@@ -1967,7 +1944,7 @@ jobs:
           | grep -q "Invalid credentials"
 
   notify:
-    needs: [build-and-deploy-backend, build-and-deploy-frontend, run-migrations, smoke-tests]
+    needs: [build-and-deploy-backend, build-and-deploy-frontend, smoke-tests]
     runs-on: ubuntu-latest
     if: always()
 

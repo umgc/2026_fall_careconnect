@@ -6,10 +6,14 @@
 // GoRouter is required because _redirectToLogin() calls context.go('/login').
 
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/oauth_callback_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 
@@ -195,6 +199,95 @@ void main() {
       await tester.pump();
       expect(find.text('Back to Login'), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+    });
+  });
+
+  group('OAuthCallbackPage – token+user processing', () {
+    testWidgets('malformed user data shows processing failure', (tester) async {
+      // token + user present, but user is not valid JSON -> jsonDecode throws
+      // -> catch block sets the failure status and redirects.
+      await tester.pumpWidget(
+        _wrap(const OAuthCallbackPage(token: 'jwt-token', user: 'not-json')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600)); // past the 500ms delay
+      await tester.pump();
+
+      expect(
+        find.textContaining('Failed to process authentication'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 4)); // drain the 3s redirect timer
+      await tester.pump();
+    });
+
+    testWidgets('Back to Login button navigates away', (tester) async {
+      await tester.pumpWidget(
+        _wrap(const OAuthCallbackPage(error: 'oauth_failed')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+
+      await tester.tap(find.text('Back to Login')); // covers onPressed -> context.go
+      await tester.pumpAndSettle();
+      expect(find.byType(OAuthCallbackPage), findsNothing);
+
+      await tester.pump(const Duration(seconds: 4)); // drain the pending redirect timer
+      await tester.pump();
+    });
+  });
+
+  group('OAuthCallbackPage – success path', () {
+    setUp(() {
+      // navigateToDashboard reads stored user data; mock the storage channels.
+      SharedPreferences.setMockInitialValues({});
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async {
+          if (call.method == 'readAll') return <String, String>{};
+          if (call.method == 'containsKey') return false;
+          return null;
+        },
+      );
+    });
+
+    String encodedUser(String role) => Uri.encodeComponent(jsonEncode({
+          'id': 1,
+          'email': 'user@test.com',
+          'role': role,
+          'token': 'jwt-token',
+          'name': 'Test User',
+          'emailVerified': true,
+        }));
+
+    testWidgets('valid token + user parses, saves, and navigates away',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(OAuthCallbackPage(token: 'jwt-token', user: encodedUser('PATIENT'))),
+      );
+      await tester.pump();
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      // navigateToDashboard fires context.go, so the callback page is gone.
+      expect(find.byType(OAuthCallbackPage), findsNothing);
+      await tester.pump(const Duration(seconds: 4)); // drain any redirect timer
+    });
+
+    testWidgets('unknown user role shows the unknown-role error',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(OAuthCallbackPage(token: 'jwt-token', user: encodedUser('ADMIN'))),
+      );
+      await tester.pump();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(find.textContaining('Unknown user role'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4)); // drain the redirect timer
       await tester.pump();
     });
   });

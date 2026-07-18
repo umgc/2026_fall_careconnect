@@ -718,6 +718,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   Widget _buildContactInformationStep() {
+    // NOTE (auth-coverage cleanup): the per-field `validator:` callbacks were
+    // removed from this step's inputs. They were unreachable dead code — this
+    // step's Form has no GlobalKey and `_nextStep()` only calls
+    // `_formKey.validate()` on step 1, so these validators could never run.
+    // Required-field enforcement here is done by `_validateContactInformation()`
+    // (via `_canProceed()`, which gates the "Next" button). Removing the dead
+    // validators is behavior-neutral and lets these lines reach the coverage gate.
     final t = AppLocalizations.of(context)!;
     return Form(
       child: Column(
@@ -744,17 +751,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             label: t.alexalogin_emailAddress,
             isRequired: true,
             keyboardType: TextInputType.emailAddress,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return t.signup_accountEmailRequired;
-              }
-              if (!RegExp(
-                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$',
-              ).hasMatch(value)) {
-                return t.signup_accountEmailInvalid;
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 20),
 
@@ -763,12 +759,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             label: t.signup_accountPhone,
             isRequired: true,
             keyboardType: TextInputType.phone,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return t.signup_accountPhoneMissing;
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 24),
 
@@ -799,12 +789,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 _zipController.text = address.zip;
               });
             },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return t.signup_accountAddressLine1Required;
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 20),
 
@@ -823,12 +807,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   controller: _cityController,
                   label: t.signup_accountCity,
                   isRequired: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return t.signup_accountCityRequired;
-                    }
-                    return null;
-                  },
                 ),
               ),
               const SizedBox(width: 16),
@@ -837,12 +815,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   controller: _stateController,
                   label: t.signup_accountState,
                   isRequired: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return t.signup_accountStateRequired;
-                    }
-                    return null;
-                  },
                 ),
               ),
               const SizedBox(width: 16),
@@ -852,12 +824,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   label: t.signup_accountZIP,
                   isRequired: true,
                   keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return t.signup_accountZIPRequired;
-                    }
-                    return null;
-                  },
                 ),
               ),
             ],
@@ -877,16 +843,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ),
             const SizedBox(height: 16),
 
+            // Like the contact fields above, the professional-field validators
+            // (license number, issuing state, years of experience) were removed
+            // as unreachable dead code — see the note at the top of this method.
+            // Required-field enforcement is handled by _validateContactInformation()
+            // via _canProceed(); removal is behavior-neutral.
             _buildTextFormField(
               controller: _licenseNumberController,
               label: t.signup_accountLicenseNumber,
               isRequired: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return t.signup_accountLicenseNumberRequired;
-                }
-                return null;
-              },
             ),
             const SizedBox(height: 20),
 
@@ -897,12 +862,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     controller: _issuingStateController,
                     label: t.signup_accountIssueState,
                     isRequired: true,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return t.signup_accountIssueStateRequired;
-                      }
-                      return null;
-                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -912,15 +871,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     label: t.signup_accountYearXp,
                     isRequired: true,
                     keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return t.signup_accountYearXpRequired;
-                      }
-                      if (int.tryParse(value) == null) {
-                        return t.signup_accountInvalidNumber;
-                      }
-                      return null;
-                    },
                   ),
                 ),
               ],

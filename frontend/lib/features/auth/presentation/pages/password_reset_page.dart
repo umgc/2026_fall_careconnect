@@ -36,25 +36,12 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
     final t = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
 
-    if (_emailController.text.trim().isEmpty) {
-      setState(() {
-        _error = t.signup_accountEmailRequired;
-        _message = null;
-      });
-      return;
-    }
-
+    // Note: email-empty and password-length are already enforced by the form
+    // field validators above (validate() returns false first), so only the
+    // cross-field password match needs an explicit check here.
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
         _error = t.signup_accountConfirmPasswordMismatch;
-        _message = null;
-      });
-      return;
-    }
-
-    if (_passwordController.text.length < 6) {
-      setState(() {
-        _error = t.passwordresetconfirm_pswLengthShort;
         _message = null;
       });
       return;

@@ -5,7 +5,9 @@ import com.careconnect.repository.CallRecordingRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +66,9 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
+import software.amazon.awssdk.services.s3.model.CORSConfiguration;
+import software.amazon.awssdk.services.s3.model.CORSRule;
+import software.amazon.awssdk.services.s3.model.PutBucketCorsRequest;
 import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -137,6 +142,12 @@ public class CallRecordingService {
 
   @Value("${careconnect.recording.raw-cleanup.enabled:true}")
   private boolean rawCleanupEnabled;
+
+  @Value("${careconnect.cors_allowed:http://localhost:*}")
+  private String corsAllowedOrigins;
+
+  @Value("${careconnect.recording.cors-allow-wildcard:true}")
+  private boolean recordingCorsAllowWildcard;
 
   // Cached AWS account ID (looked up once via STS on first use)
   private String cachedAccountId;
@@ -554,8 +565,14 @@ public class CallRecordingService {
       playbackResult.put("recordingStatus", rec.getStatus());
       playbackResult.put("concatenationStatus", rec.getConcatenationStatus());
       playbackResult.put("transcriptionStatus", rec.getTranscriptionStatus());
-      // System recordings (initiatedByUserId == null) are transcription-only; never allow playback
+      // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
+      // User-initiated recordings with a resolved video key are ready to play.
       playbackResult.put("playbackReady", rec.getInitiatedByUserId() != null);
+      playbackResult.put(
+          "recordingStartedAt",
+          rec.getStartedAt() != null
+              ? rec.getStartedAt().atZone(ZoneOffset.UTC).toInstant().toString()
+              : null);
       return playbackResult;
 
     } catch (Exception e) {
@@ -1365,6 +1382,7 @@ public class CallRecordingService {
       // chime.amazonaws.com s3:PutObject + s3:GetBucketAcl before they will
       // accept the bucket as a sink. Apply it unconditionally — it is idempotent.
       applyChimeBucketPolicy(bucketName);
+      applyRecordingBucketCors(bucketName);
 
       // AWS also requires a service-linked role for the Chime Media Pipelines
       // service to access Chime meetings. Create it if it does not yet exist.
@@ -1450,6 +1468,93 @@ public class CallRecordingService {
         log.error("Failed to apply Chime bucket policy to {}: {}", bucketName, e.getMessage());
       }
     }
+  }
+
+  /**
+   * Applies S3 CORS rules required for browser inline MP4 seek (HTTP Range on presigned URLs).
+   *
+   * <p>Without {@code ExposeHeaders} for {@code Accept-Ranges} / {@code Content-Range}, Flutter web
+   * {@code video_player} cannot seek on composited recordings (WBS §3.3.2 / M7).
+   */
+  private void applyRecordingBucketCors(final String bucketName) {
+    if (s3Client == null || bucketName == null || bucketName.isBlank()) {
+      return;
+    }
+
+    final List<String> origins = resolveS3CorsOrigins();
+    try {
+      s3Client.putBucketCors(
+          PutBucketCorsRequest.builder()
+              .bucket(bucketName)
+              .corsConfiguration(
+                  CORSConfiguration.builder()
+                      .corsRules(
+                          CORSRule.builder()
+                              .allowedOrigins(origins)
+                              .allowedMethods("GET", "HEAD")
+                              .allowedHeaders(List.of("*"))
+                              .exposeHeaders(
+                                  "Accept-Ranges", "Content-Range", "Content-Length", "ETag")
+                              .maxAgeSeconds(3600)
+                              .build())
+                      .build())
+              .build());
+      if (log.isInfoEnabled()) {
+        log.info(
+            "Applied recording bucket CORS for inline playback on {} (origins={})",
+            bucketName,
+            origins);
+      }
+    } catch (Exception e) {
+      if (log.isWarnEnabled()) {
+        log.warn(
+            "Failed to apply recording bucket CORS to {}: {} — add s3:PutBucketCors to IAM or run"
+                + " scripts/recording-bucket-cors.json once via aws s3api put-bucket-cors",
+            bucketName,
+            e.getMessage());
+      }
+    }
+  }
+
+  /**
+   * Maps Spring CORS origin patterns to S3 CORS allowed origins.
+   *
+   * <p>S3 does not support port wildcards ({@code http://localhost:*}); when patterns are present,
+   * use {@code *} so dev Flutter web ports can load presigned MP4s. Presigned URLs remain
+   * time-limited and unguessable.
+   */
+  private List<String> resolveS3CorsOrigins() {
+    final List<String> explicit = new ArrayList<>();
+    if (corsAllowedOrigins == null || corsAllowedOrigins.isBlank()) {
+      explicit.add("*");
+      return explicit;
+    }
+
+    boolean needsWildcard = false;
+    for (final String raw : corsAllowedOrigins.split(",")) {
+      final String origin = raw.trim();
+      if (origin.isEmpty()) {
+        continue;
+      }
+      if ("*".equals(origin) || origin.contains("*")) {
+        needsWildcard = true;
+      } else {
+        explicit.add(origin);
+      }
+    }
+
+    if (needsWildcard || explicit.isEmpty()) {
+      if (recordingCorsAllowWildcard) {
+        explicit.clear();
+        explicit.add("*");
+      } else if (explicit.isEmpty() && log.isWarnEnabled()) {
+        log.warn(
+            "Recording bucket CORS requires wildcard origins for localhost dev ports but"
+                + " careconnect.recording.cors-allow-wildcard=false — configure explicit"
+                + " origins in careconnect.cors_allowed");
+      }
+    }
+    return explicit;
   }
 
   /**
