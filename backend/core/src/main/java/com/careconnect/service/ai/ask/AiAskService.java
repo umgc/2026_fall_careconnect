@@ -53,9 +53,6 @@ public class AiAskService {
             "This answer is based on your stored health records and is not medical advice.";
     private static final String CONFIRM_EN =
             "Please confirm important details with your care provider before acting on this information.";
-    private static final String CONFIRM_LOW_CONFIDENCE_EN =
-            "This answer could not be fully cited to your records. "
-                    + "Please confirm important details with your care provider before acting on this information.";
     private static final String NO_RECORDS_EN =
             "No matching records were found for this question. "
                     + "CareConnect Ask AI only answers from your stored health records "
@@ -64,6 +61,7 @@ public class AiAskService {
     private final RetrievalScopeService retrievalScopeService;
     private final HybridRetrievalService hybridRetrievalService;
     private final GroundedAskLlmService groundedAskLlmService;
+    private final CitationAssembler citationAssembler;
     private final InputSanitizationService inputSanitizationService;
     private final LangChainGovernanceService governanceService;
 
@@ -71,15 +69,24 @@ public class AiAskService {
             final RetrievalScopeService retrievalScopeService,
             final HybridRetrievalService hybridRetrievalService,
             final GroundedAskLlmService groundedAskLlmService,
+            final CitationAssembler citationAssembler,
             final InputSanitizationService inputSanitizationService,
             final LangChainGovernanceService governanceService) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
         this.groundedAskLlmService = groundedAskLlmService;
+        this.citationAssembler = citationAssembler;
         this.inputSanitizationService = inputSanitizationService;
         this.governanceService = governanceService;
     }
 
+    /**
+     * Produces a records-grounded answer or fails closed before delivery.
+     *
+     * @throws ForbiddenScopeException when the caller cannot retrieve the requested patient's records
+     * @throws UnauthorizedException when no authenticated caller is available
+     * @throws AskAiUnavailableException when inference or citation validation cannot produce a grounded answer
+     */
     public AiAskResponse ask(final User caller, final AiAskRequest request)
             throws ForbiddenScopeException, UnauthorizedException {
         if (caller == null || caller.getId() == null) {
@@ -161,28 +168,31 @@ public class AiAskService {
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
         final CitationAssembler.CitationResult citationResult =
-                CitationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
+                citationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
+        if (!citationResult.grounded()) {
+            log.warn(
+                    "Ask AI WITHHELD ungrounded response requestId={} patientId={} invalidRefs={}",
+                    requestId,
+                    request.patientId(),
+                    citationResult.invalidRefs());
+            // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
+            // never deliver an answer whose model citations are missing or invalid.
+            throw new AskAiUnavailableException(
+                    "UNGROUNDED_RESPONSE",
+                    "Generated answer could not be verified against retrieved records");
+        }
         final List<AiCitation> citations = citationResult.citations();
-        final boolean modelCited = citationResult.modelCited();
 
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
         log.info(
-                "Ask AI DELIVERED requestId={} patientId={} chunks={} citations={} modelCited={} modality={} degraded={}",
+                "Ask AI DELIVERED requestId={} patientId={} chunks={} citations={} modality={} degraded={}",
                 requestId,
                 request.patientId(),
                 context.usedChunks().size(),
                 citations.size(),
-                modelCited,
                 modality,
                 retrieval.vectorDegraded());
-
-        final AiEscalation escalation = modelCited
-                ? new AiEscalation(1, "Tier1_auto_deliver", false)
-                : new AiEscalation(1, "low_confidence_uncited", false);
-        final AiConfirmationHint confirmation = modelCited
-                ? new AiConfirmationHint(true, CONFIRM_EN)
-                : new AiConfirmationHint(true, CONFIRM_LOW_CONFIDENCE_EN);
 
         return new AiAskResponse(
                 true,
@@ -197,8 +207,8 @@ public class AiAskService {
                 new AiAnswerBlock(llm.answerText(), locale),
                 citations,
                 disclaimer(locale),
-                escalation,
-                confirmation,
+                new AiEscalation(1, "Tier1_auto_deliver", false),
+                new AiConfirmationHint(true, CONFIRM_EN),
                 new AiRetrievalMeta(
                         retrieval.chunks().size(),
                         context.usedChunks().size(),
