@@ -541,6 +541,8 @@ void main() {
       loc.filemanage_cannotBeUndone,
       loc.filemanage_deleted,
       loc.filemanage_failedToDelete,
+      loc.ptfiles_structEntry,
+      loc.filemanage_docComplianceDash,
     ];
   }
 

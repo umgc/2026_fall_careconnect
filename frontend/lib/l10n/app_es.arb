@@ -251,6 +251,7 @@
   "ptfiles_today": "Hoy",
   "ptfiles_yesterday": "Ayer",
   "ptfiles_daysAgo": "hace días",
+  "ptfiles_structEntry": "Entrada estructurada",
 
   "subscriptionplans_basicDescription": "Plan de suscripción a los servicios de CareConnect.",
   "subscriptionplans_standardDescription": "Funcionalidades básicas para pacientes y cuidadores.",
@@ -451,6 +452,7 @@
   "filemanage_cannotBeUndone": "Esta acción no se puede deshacer.",
   "filemanage_deleted": "Eliminado",
   "filemanage_failedToDelete": "Error al eliminar",
+  "filemanage_docComplianceDash": "Cuadro de mando de cumplimiento normativo de documentos",
 
   "manualentrywidget_manualTextEntry": "Introducción Manual de Texto",
   "manualentrywidget_noCateAvail": "No hay categorías disponibles.",

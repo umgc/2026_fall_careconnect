@@ -253,6 +253,7 @@
   "ptfiles_today": "Today",
   "ptfiles_yesterday": "Yesterday",
   "ptfiles_daysAgo": "days ago",
+  "ptfiles_structEntry": "Structured entry",
 
   "subscriptionplans_basicDescription": "Subscription plan for CareConnect services.",
   "subscriptionplans_standardDescription": "Basic features for patients and caregivers.",
@@ -452,6 +453,7 @@
   "filemanage_cannotBeUndone": "This action cannot be undone.",
   "filemanage_deleted": "Deleted",
   "filemanage_failedToDelete": "Failed to delete",
+  "filemanage_docComplianceDash": "Document compliance dashboard",
 
   "manualentrywidget_manualTextEntry": "Manual Text Entry",
   "manualentrywidget_noCateAvail": "No categories available.",

@@ -369,15 +369,15 @@ class _PatientFilesPageState extends State<PatientFilesPage>
           },
           itemBuilder: (context) => [
             if (DocumentFieldTemplates.isSupported(file.fileCategory))
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'structured',
                 child: ListTile(
                   leading: Icon(Icons.edit_note),
-                  title: Text('Structured entry'),
+                  title: Text(t.ptfiles_structEntry),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'preview',
               child: ListTile(
                 leading: Icon(Icons.visibility),

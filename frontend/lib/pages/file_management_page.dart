@@ -133,7 +133,7 @@ class _FileManagementPageState extends State<FileManagementPage>
           if (_isCaregiver || isAdmin)
             IconButton(
               icon: const Icon(Icons.fact_check),
-              tooltip: 'Document compliance dashboard',
+              tooltip: t.filemanage_docComplianceDash,
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
