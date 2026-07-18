@@ -219,7 +219,7 @@ class _FileManagementPageState extends State<FileManagementPage>
         return t.filemanage_onboardForm;
       case('Background Check'):
         return t.filemanage_backgroundCheck;
-      case('Certification/License'):
+      case('Certification / License'):
         return t.filemanage_cert;
       case('Reference'):
         return t.filemanage_ref;

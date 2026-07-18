@@ -1,5 +1,6 @@
 import 'package:care_connect_app/features/homecare_documents/models/home_care_document_models.dart';
 import 'package:care_connect_app/features/homecare_documents/pages/home_care_document_review_page.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,6 +37,9 @@ void main() {
 
   Widget wrap(HomeCareExtractionResult result) {
     return MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: HomeCareDocumentReviewPage(result: result, patientId: 1),
     );
   }
@@ -116,6 +120,9 @@ void main() {
     testWidgets('save without a user ID shows an error instead of uploading',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: HomeCareDocumentReviewPage(
           result: prefilledResult(),
           patientId: null,
