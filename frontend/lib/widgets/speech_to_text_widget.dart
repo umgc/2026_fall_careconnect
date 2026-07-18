@@ -128,6 +128,21 @@ String _translateCategory(String name){
         return t.filemanage_hlthDataImport;
       case('Backup File'):
         return t.filemanage_backupFile;
+      case('Employment Application'):
+        return t.filemanage_empApplication;
+      case('Onboarding Form'):
+        return t.filemanage_onboardForm;
+      case('Background Check'):
+        return t.filemanage_backgroundCheck;
+      case('Certification/License'):
+        return t.filemanage_cert;
+      case('Reference'):
+        return t.filemanage_ref;
+      case('Employment Contract'):
+        return t.filemanage_empContract;
+      case('Tax Form (W-4)'):
+        return t.filemanage_taxForm;
+      case('Work Authorization (I-9)'):
       default:
         return name;
     }

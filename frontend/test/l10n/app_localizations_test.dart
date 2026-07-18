@@ -543,6 +543,14 @@ void main() {
       loc.filemanage_failedToDelete,
       loc.ptfiles_structEntry,
       loc.filemanage_docComplianceDash,
+      loc.filemanage_empApplication,
+      loc.filemanage_onboardForm,
+      loc.filemanage_backgroundCheck,
+      loc.filemanage_cert,
+      loc.filemanage_ref,
+      loc.filemanage_empContract,
+      loc.filemanage_taxForm,
+      loc.filemanage_workAuth,
     ];
   }
 
