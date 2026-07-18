@@ -33,10 +33,13 @@ class CitationDeepLinkBuilderTest {
     }
 
     @Test
-    @DisplayName("clinical-note identifiers are encoded and unsupported visit links stay null")
+    @DisplayName("clinical-note links accept safe identifiers and omit unsafe path values")
     void build_sourceSpecificRoutes_areSafeOrOmitted() {
-        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "note/1"))
-                .isEqualTo("/notetaker/detail/note%2F1");
+        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "note-1_2.3"))
+                .isEqualTo("/notetaker/detail/note-1_2.3");
+        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "note/1")).isNull();
+        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "#fragment")).isNull();
+        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "..")).isNull();
         assertThat(build(RetrievalRecordType.VISIT_SUMMARY, "visit-1")).isNull();
     }
 

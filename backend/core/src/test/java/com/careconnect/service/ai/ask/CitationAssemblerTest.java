@@ -116,6 +116,25 @@ class CitationAssemblerTest {
     }
 
     @Test
+    @DisplayName("numeric transcript segment ID survives citation metadata mapping")
+    void assemble_numericTranscriptSegmentId_preserved() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "transcript-1",
+                RetrievalRecordType.TRANSCRIPT_SEGMENT,
+                "Patient reported feeling better.",
+                "{\"callId\":\"call-1\",\"segmentId\":11,\"startMs\":1000}",
+                0.1d);
+
+        final AiCitation citation =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk)).citations().get(0);
+
+        assertThat(citation.metadata())
+                .containsEntry("segmentId", 11L)
+                .containsEntry("startMs", 1000L);
+    }
+
+    @Test
     @DisplayName("blank source text cannot become a grounded citation")
     void assemble_blankExcerpt_invalidatesCitation() {
         final RankedChunk chunk = chunk(
