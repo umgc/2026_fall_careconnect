@@ -1,62 +1,81 @@
 package com.careconnect.controller;
 
-import com.careconnect.ai.ask.dto.AiAskRequest;
-import com.careconnect.ai.ask.dto.AiAskResponse;
-import com.careconnect.exception.AppException;
+import com.careconnect.dto.ai.AiAskRequest;
+import com.careconnect.dto.ai.AiAskResponse;
 import com.careconnect.model.User;
-import com.careconnect.repository.UserRepository;
+import com.careconnect.security.Permission;
+import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
-import com.careconnect.service.ai.AiAskOrchestrator;
-import com.careconnect.service.ai.AiAskOrchestrator.AiAskResult;
+import com.careconnect.service.ai.ask.AiAskService;
+import com.careconnect.service.ai.ask.AskAiRejectedException;
+import com.careconnect.service.ai.ask.AskAiUnavailableException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
+import com.careconnect.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Task 5.3 — records-grounded Ask AI gateway ({@code POST /api/ai/ask}).
+ *
+ * <p>Caller is resolved from JWT. Patient access and source-type RBAC are enforced by
+ * {@link com.careconnect.service.ai.retrieval.RetrievalScopeService}.
+ *
+ * <p>All failure modes return {@link AiAskResponse} with {@code deliveryStatus=WITHHELD}
+ * (including {@link ForbiddenScopeException}) so clients share one error contract.
+ */
 @Slf4j
 @RestController
-@RequestMapping("/v1/api/ai/ask")
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "careconnect.ai.ask.enabled", havingValue = "true", matchIfMissing = true)
+@RequestMapping({"/api/ai", "/v1/api/ai"})
 public class AiAskController {
 
-    private final AiAskOrchestrator aiAskOrchestrator;
-    private final UserRepository userRepository;
+    private final AiAskService aiAskService;
+    private final SecurityUtil securityUtil;
 
-    private User getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
-    }
-
-    @PostMapping("/{patientId}")
-    public ResponseEntity<AiAskResponse> ask(
-            @PathVariable Long patientId,
-            @Valid @RequestBody AiAskRequest request) {
-
-        User caller = getCurrentUser();
-        log.info("POST /v1/api/ai/ask/{} — caller={}", patientId, caller.getId());
-
+    @RequirePermission(Permission.USE_AI_FEATURES)
+    @PostMapping(
+            value = "/ask",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<AiAskResponse> ask(@Valid @RequestBody final AiAskRequest request)
+            throws UnauthorizedException {
+        final User caller = securityUtil.resolveCurrentUser();
+        final java.util.UUID sessionId = request == null ? null : request.sessionId();
         try {
-            AiAskResult result = aiAskOrchestrator.ask(caller, patientId, request.getQuestion());
-            return ResponseEntity.ok(new AiAskResponse(result.answer(), result.chunksUsed()));
-        } catch (ForbiddenScopeException e) {
-            log.warn("Scope denied — caller={} patientId={}", caller.getId(), patientId);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (UnauthorizedException e) {
-            log.warn("Unauthorized — caller={} patientId={}", caller.getId(), patientId);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        } catch (RuntimeException e) {
-            log.error("Ask AI failed for patientId={}", patientId, e);
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+            final AiAskResponse response = aiAskService.ask(caller, request);
+            return ResponseEntity.ok(response);
+        } catch (final ForbiddenScopeException ex) {
+            log.warn("Ask AI forbidden scope code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(AiAskService.withheld(
+                            null,
+                            ex.getAuditId(),
+                            sessionId,
+                            ForbiddenScopeException.ERROR_CODE,
+                            ex.getMessage(),
+                            null));
+        } catch (final AskAiRejectedException ex) {
+            log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            return ResponseEntity.status(ex.getHttpStatus())
+                    .body(AiAskService.withheld(
+                            null, null, sessionId,
+                            ex.getErrorCode(), ex.getMessage(), null));
+        } catch (final AskAiUnavailableException ex) {
+            log.warn("Ask AI unavailable: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(AiAskService.withheld(
+                            null, null, sessionId,
+                            ex.getErrorCode(), ex.getMessage(), null));
         }
     }
-}   
+}

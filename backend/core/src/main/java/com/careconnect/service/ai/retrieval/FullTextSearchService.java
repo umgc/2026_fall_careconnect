@@ -20,8 +20,8 @@ import java.util.stream.Collectors;
  *
  * <p>{@code search_vector} is maintained by the DB trigger on {@code chunk_text}
  * writes from {@link com.careconnect.service.ai.indexing.RetrievalIndexService}.
- * This service is the keyword leg that {@code HybridRetrievalService} (Task 5.1)
- * will compose with vector similarity (Task 4.3).
+ * This service is the keyword leg that {@link HybridRetrievalService} (Task 5.1)
+ * composes with vector similarity via Reciprocal Rank Fusion.
  */
 @Service
 public class FullTextSearchService {
