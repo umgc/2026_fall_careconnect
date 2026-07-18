@@ -443,9 +443,9 @@ segments). Mixed MP4 Transcribe remains the fallback / supplemental path.
 `call_recordings.media_stream_pipeline_id` and `call_attendees.kvs_stream_arn` set →
 post-call transcript segments with Caregiver/Patient (or role) labels.
 
-**Short / partial calls:** If only one attendee stream yields Transcribe text (common when
-one mic is muted or the call is very short), the app keeps those KVS segments and may run a
-**supplemental** full-call MP4 job. That is expected, not a full primary success.
+**Short / partial calls:** If only some attendee streams yield Transcribe text (for example
+a very short call), the app keeps those KVS segments and may run a **supplemental** full-call
+MP4 job. That is expected, not a full primary success.
 
 **Deploy:** see [cloudformation-fargate/README.md](../../cloudformation-fargate/README.md)
 § KVS speaker stream pool. ECS turns KVS + EventBridge webhook on; you still must put a
