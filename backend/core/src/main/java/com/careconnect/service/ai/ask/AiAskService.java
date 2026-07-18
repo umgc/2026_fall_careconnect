@@ -85,7 +85,8 @@ public class AiAskService {
      *
      * @throws ForbiddenScopeException when the caller cannot retrieve the requested patient's records
      * @throws UnauthorizedException when no authenticated caller is available
-     * @throws AskAiUnavailableException when inference or citation validation cannot produce a grounded answer
+     * @throws AskAiUnavailableException when grounded inference is unavailable
+     * @throws AskAiGroundingException when model citations do not validate against retrieved records
      */
     public AiAskResponse ask(final User caller, final AiAskRequest request)
             throws ForbiddenScopeException, UnauthorizedException {
@@ -177,8 +178,7 @@ public class AiAskService {
                     citationResult.invalidRefs());
             // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
             // never deliver an answer whose model citations are missing or invalid.
-            throw new AskAiUnavailableException(
-                    "UNGROUNDED_RESPONSE",
+            throw new AskAiGroundingException(
                     "Generated answer could not be verified against retrieved records");
         }
         final List<AiCitation> citations = citationResult.citations();

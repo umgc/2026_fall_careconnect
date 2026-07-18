@@ -25,6 +25,8 @@ import java.util.Map;
 public class SummaryChunker {
 
     private static final Logger log = LoggerFactory.getLogger(SummaryChunker.class);
+    /** Increment when citation-routing metadata requires existing summary chunks to be rebuilt. */
+    public static final int CITATION_METADATA_VERSION = 1;
 
     private final ObjectMapper objectMapper;
 
@@ -284,6 +286,7 @@ public class SummaryChunker {
         final List<IndexingChunkDraft> enriched = new ArrayList<>(drafts.size());
         for (final IndexingChunkDraft draft : drafts) {
             final Map<String, Object> metadata = new LinkedHashMap<>(draft.metadata());
+            metadata.put("citationMetadataVersion", CITATION_METADATA_VERSION);
             metadata.put("episodeType", visit ? "visit" : "call");
             putIfPresent(metadata, visit ? "visitId" : "callId", episodeId);
             putIfPresent(metadata, "occurredAt", occurredAt);

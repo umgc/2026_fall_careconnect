@@ -70,7 +70,8 @@ class SummaryChunkerTest {
                 .containsEntry("callId", "call-42")
                 .containsEntry("occurredAt", "2026-07-17T14:30:00Z")
                 .containsEntry("title", "Medication change discussed")
-                .containsEntry("summaryConfidence", 0.91d);
+                .containsEntry("summaryConfidence", 0.91d)
+                .containsEntry("citationMetadataVersion", 1);
 
         final IndexingChunkDraft actionItem = drafts.stream()
                 .filter(d -> d.recordType() == RetrievalRecordType.SUMMARY_ACTION_ITEM)

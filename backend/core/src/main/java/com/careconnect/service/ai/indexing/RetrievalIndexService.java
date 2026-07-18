@@ -28,6 +28,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -151,7 +152,10 @@ public class RetrievalIndexService {
                 summary.getCallId(),
                 summary.getGeneratedAt() == null
                         ? null
-                        : summary.getGeneratedAt().atOffset(ZoneOffset.UTC).toString());
+                        : summary.getGeneratedAt()
+                                .atZone(ZoneId.systemDefault())
+                                .toInstant()
+                                .toString());
 
         if (drafts.isEmpty()) {
             log.warn(
@@ -349,11 +353,26 @@ public class RetrievalIndexService {
         final List<RetrievalIndexChunk> all = new ArrayList<>(existing);
         all.addAll(visitExisting);
         for (final RetrievalIndexChunk chunk : all) {
-            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
+            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)
+                    && hasCurrentCitationMetadata(chunk.getChunkMetadata())) {
                 return true;
             }
         }
         return false;
+    }
+
+    private boolean hasCurrentCitationMetadata(final String chunkMetadataJson) {
+        if (chunkMetadataJson == null || chunkMetadataJson.isBlank()) {
+            return false;
+        }
+        try {
+            final JsonNode metadata = objectMapper.readTree(chunkMetadataJson);
+            return metadata.path("citationMetadataVersion").asInt(-1)
+                    >= SummaryChunker.CITATION_METADATA_VERSION;
+        } catch (final Exception ex) {
+            log.debug("Unable to parse citation metadata version: {}", ex.getMessage());
+            return false;
+        }
     }
 
     /**
