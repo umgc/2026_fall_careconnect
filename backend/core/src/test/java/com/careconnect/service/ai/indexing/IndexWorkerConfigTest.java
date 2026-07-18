@@ -4,6 +4,7 @@ import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +32,7 @@ class IndexWorkerConfigTest {
                     () -> mock(CallTranscriptSegmentRepository.class))
             .withBean(RetrievalIndexChunkRepository.class,
                     () -> mock(RetrievalIndexChunkRepository.class))
+            .withBean(ChunkEmbeddingService.class, () -> mock(ChunkEmbeddingService.class))
             .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(SummaryChunker.class, () -> new SummaryChunker(new ObjectMapper()))
             .withBean(TranscriptSegmentChunker.class, TranscriptSegmentChunker::new)

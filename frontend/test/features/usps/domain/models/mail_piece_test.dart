@@ -14,6 +14,8 @@ void main() {
       expect(piece.imageDataUrl, isNull);
       expect(piece.dateIso, isNull);
       expect(piece.actions.track, isNull);
+      expect(piece.hasDisplayableImage, isFalse);
+      expect(piece.isMissingImageNormalState, isTrue);
     });
 
     test('constructor with all fields populated', () {
