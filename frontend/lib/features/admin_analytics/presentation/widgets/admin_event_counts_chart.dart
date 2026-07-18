@@ -1,3 +1,5 @@
+import 'dart:math' show log, pow;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -58,7 +60,7 @@ class AdminEventCountsChart extends StatelessWidget {
   BarChartData _buildChartData(BuildContext context, List<EventNameCount> top) {
     final primary = Theme.of(context).colorScheme.primary;
     final maxCount = top.map((e) => e.count).reduce((a, b) => a > b ? a : b);
-    final yMax = (maxCount <= 5) ? 6.0 : maxCount.toDouble() + 2.0;
+    final axis = _computeNiceYAxis(maxCount.toDouble());
 
     final bars = top
         .asMap()
@@ -79,10 +81,12 @@ class AdminEventCountsChart extends StatelessWidget {
         .toList();
 
     return BarChartData(
+      minY: 0,
+      maxY: axis.maxY,
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        horizontalInterval: yMax > 10 ? (yMax / 5).ceilToDouble() : 2,
+        horizontalInterval: axis.interval,
       ),
       borderData: FlBorderData(show: false),
       barGroups: bars,
@@ -90,8 +94,17 @@ class AdminEventCountsChart extends StatelessWidget {
         leftTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            reservedSize: 32,
-            interval: yMax > 10 ? (yMax / 5).ceilToDouble() : 2,
+            reservedSize: 36,
+            interval: axis.interval,
+            getTitlesWidget: (value, meta) {
+              if ((value % axis.interval).abs() > 0.001 && value != 0) {
+                return const SizedBox.shrink();
+              }
+              return Text(
+                value.toInt().toString(),
+                style: const TextStyle(fontSize: 10),
+              );
+            },
           ),
         ),
         bottomTitles: AxisTitles(
@@ -127,7 +140,37 @@ class AdminEventCountsChart extends StatelessWidget {
           },
         ),
       ),
-      maxY: yMax,
     );
   }
+}
+
+/// Rounds the Y-axis to evenly spaced ticks (e.g. 0, 50, 100, 150, 200).
+({double maxY, double interval}) _computeNiceYAxis(
+  double maxValue, {
+  int divisions = 4,
+}) {
+  if (maxValue <= 0) {
+    return (maxY: divisions.toDouble(), interval: 1);
+  }
+
+  final rawStep = maxValue / divisions;
+  final magnitude = pow(10, (log(rawStep) / log(10)).floor()).toDouble();
+  final normalized = rawStep / magnitude;
+
+  final niceNormalized = normalized <= 1
+      ? 1.0
+      : normalized <= 2
+          ? 2.0
+          : normalized <= 5
+              ? 5.0
+              : 10.0;
+
+  final interval = niceNormalized * magnitude;
+  var maxY = interval * divisions;
+
+  while (maxY < maxValue) {
+    maxY += interval;
+  }
+
+  return (maxY: maxY, interval: interval);
 }
