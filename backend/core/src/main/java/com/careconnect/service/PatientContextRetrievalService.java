@@ -7,6 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Legacy in-memory substring stub. Prefer
+ * {@link com.careconnect.service.ai.retrieval.HybridRetrievalService} (Task 5.1)
+ * for patient-scoped FTS + vector retrieval. Full removal is Task 5.8.
+ */
 @Service
 public class PatientContextRetrievalService {
     private final List<String> contextSegments = new ArrayList<>();

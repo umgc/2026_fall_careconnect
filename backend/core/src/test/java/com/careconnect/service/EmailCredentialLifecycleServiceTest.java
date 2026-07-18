@@ -119,7 +119,8 @@ class EmailCredentialLifecycleServiceTest {
                 outlookParser,
                 cryptor,
                 googleOAuthService,
-                lifecycle);
+                lifecycle,
+                org.mockito.Mockito.mock(UspsMailpiecePersistenceService.class));
 
         assertThatThrownBy(() -> digestService.latestForUser("42"))
                 .isInstanceOf(EmailCredentialNeedsReauthException.class);

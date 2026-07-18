@@ -149,6 +149,28 @@ class ChunkEmbeddingServiceTest {
         verify(bedrockRuntimeClient, times(2)).invokeModel(any(InvokeModelRequest.class));
     }
 
+    @Test
+    @DisplayName("embedQuery returns empty when embedding disabled")
+    void embedQuery_disabled_returnsEmpty() {
+        final ChunkEmbeddingService service = newService(false, bedrockRuntimeClient);
+        assertThat(service.embedQuery("metformin")).isEmpty();
+        verify(bedrockRuntimeClient, never()).invokeModel(any(InvokeModelRequest.class));
+    }
+
+    @Test
+    @DisplayName("embedQuery returns Titan vector for query text")
+    void embedQuery_returnsVector() throws Exception {
+        final float[] values = sampleVector(0.5f);
+        when(bedrockRuntimeClient.invokeModel(any(InvokeModelRequest.class)))
+                .thenReturn(InvokeModelResponse.builder()
+                        .body(SdkBytes.fromUtf8String(embeddingJson(values)))
+                        .build());
+        final ChunkEmbeddingService service = newService(true, bedrockRuntimeClient);
+
+        assertThat(service.embedQuery("blood pressure")).hasValueSatisfying(v ->
+                assertThat(v).hasSize(RetrievalIndexSchema.EMBEDDING_DIMENSION));
+    }
+
     private ChunkEmbeddingService newService(
             final boolean enabled, final BedrockRuntimeClient client) {
         return new ChunkEmbeddingService(
