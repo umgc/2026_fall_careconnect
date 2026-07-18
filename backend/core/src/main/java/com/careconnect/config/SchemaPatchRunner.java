@@ -116,6 +116,16 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
             "))"
         );
+        applyPatch(
+            "V75a – add session_id column to telemetry_events",
+            "ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS session_id VARCHAR(64)"
+        );
+        applyPatch(
+            "V75b – index session_id on telemetry_events",
+            "CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id_time " +
+            "ON telemetry_events (session_id, event_time DESC) " +
+            "WHERE session_id IS NOT NULL"
+        );
         applyRetrievalIndexChunkPatches();
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
