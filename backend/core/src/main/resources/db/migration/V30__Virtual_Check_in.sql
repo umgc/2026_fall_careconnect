@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_active_ordinal
 /* ---------- CHECK-INS ---------- */
 CREATE TABLE IF NOT EXISTS check_ins (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  patient_id  BIGINT      NOT NULL REFERENCES patients(id) ON UPDATE CASCADE,
+  patient_id  BIGINT      NOT NULL REFERENCES patient(id) ON UPDATE CASCADE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   submitted_at TIMESTAMPTZ
 );

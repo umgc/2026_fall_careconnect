@@ -112,13 +112,13 @@ class SsmPropertySourceInitializerTest {
 
         // Access private method using reflection
         final Method method = SsmPropertySourceInitializer.class
-                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class);
+                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class, String.class);
 
         method.setAccessible(true);
 
         @SuppressWarnings("unchecked")
         final Map<String, Object> result =
-                (Map<String, Object>) method.invoke(initializer, ssmClient);
+                (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
         assertFalse(result.isEmpty());
         assertTrue(result.containsKey("stripe.secret-key"));
@@ -141,13 +141,13 @@ class SsmPropertySourceInitializerTest {
                 .thenThrow(new RuntimeException("Parameter not found"));
 
         final Method method = SsmPropertySourceInitializer.class
-                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class);
+                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class, String.class);
 
         method.setAccessible(true);
 
         @SuppressWarnings("unchecked")
         final Map<String, Object> result =
-                (Map<String, Object>) method.invoke(initializer, ssmClient);
+                (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
         assertTrue(result.isEmpty());
     }
@@ -220,8 +220,9 @@ class SsmPropertySourceInitializerTest {
     void shouldLoadAllParametersWhenAllSsmCallsSucceed() throws Exception {
         // Verifies that loadParametersFromSsm() iterates every entry in SSM_PARAMETERS
         // and populates the map with the matching Spring property key from
-        // PARAMETER_MAPPING. With 15 parameters defined and all calls succeeding, the
-        // result must contain exactly 15 entries.
+        // PARAMETER_MAPPING. JWT and DB credentials are excluded (ECS Secrets Manager).
+        // With 12 parameters defined and all calls succeeding, the result must contain
+        // exactly 12 entries.
 
         final SsmClient ssmClient = Mockito.mock(SsmClient.class);
 
@@ -236,25 +237,52 @@ class SsmPropertySourceInitializerTest {
                 .thenReturn(response);
 
         final Method method = SsmPropertySourceInitializer.class
-                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class);
+                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class, String.class);
         method.setAccessible(true);
 
         @SuppressWarnings("unchecked")
         final Map<String, Object> result =
-                (Map<String, Object>) method.invoke(initializer, ssmClient);
+                (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
-        // All 15 SSM_PARAMETERS entries are in PARAMETER_MAPPING, so all should load.
-        assertEquals(15, result.size());
+        // All 12 SSM_PARAMETERS entries are in PARAMETER_MAPPING, so all should load.
+        assertEquals(12, result.size());
 
         // Spot-check a representative sample of the PARAMETER_MAPPING entries.
         assertEquals("mock-value", result.get("stripe.secret-key"));
         assertEquals("mock-value", result.get("stripe.webhook-secret"));
-        assertEquals("mock-value", result.get("security.jwt.secret"));
-        assertEquals("mock-value", result.get("careconnect.db.password"));
-        assertEquals("mock-value", result.get("careconnect.db.username"));
+        assertEquals("mock-value", result.get("careconnect.email.sendgrid.api-key"));
+        assertFalse(result.containsKey("security.jwt.secret"));
+        assertFalse(result.containsKey("careconnect.db.password"));
         assertEquals("mock-value", result.get("aws.s3.access-key"));
         assertEquals("mock-value", result.get("aws.s3.secret-key"));
         assertEquals("mock-value", result.get("firebase.service-account-key"));
+    }
+
+    // ==========================================
+    // resolveSsmPrefix
+    // ==========================================
+
+    @Test
+    void resolveSsmPrefix_usesEnvironmentWhenSet() {
+        environment.setProperty("ENVIRONMENT", "cfdemo");
+        assertEquals("/careconnect/cfdemo/", SsmPropertySourceInitializer.resolveSsmPrefix(environment));
+    }
+
+    @Test
+    void resolveSsmPrefix_defaultsToProdWhenEnvironmentUnset() {
+        assertEquals("/careconnect/prod/", SsmPropertySourceInitializer.resolveSsmPrefix(environment));
+    }
+
+    @Test
+    void resolveSsmPrefix_explicitOverrideAddsTrailingSlash() {
+        environment.setProperty("CARECONNECT_SSM_PREFIX", "/custom/path");
+        assertEquals("/custom/path/", SsmPropertySourceInitializer.resolveSsmPrefix(environment));
+    }
+
+    @Test
+    void resolveSsmPrefix_explicitOverridePreservesTrailingSlash() {
+        environment.setProperty("CARECONNECT_SSM_PREFIX", "/custom/path/");
+        assertEquals("/custom/path/", SsmPropertySourceInitializer.resolveSsmPrefix(environment));
     }
 
     // ==========================================
@@ -281,12 +309,12 @@ class SsmPropertySourceInitializerTest {
                 .thenThrow(new RuntimeException("Access denied"));
 
         final Method method = SsmPropertySourceInitializer.class
-                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class);
+                .getDeclaredMethod("loadParametersFromSsm", SsmClient.class, String.class);
         method.setAccessible(true);
 
         @SuppressWarnings("unchecked")
         final Map<String, Object> result =
-                (Map<String, Object>) method.invoke(initializer, ssmClient);
+                (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
         assertEquals(1, result.size());
         assertTrue(result.containsKey("stripe.secret-key"));

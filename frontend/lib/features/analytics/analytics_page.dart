@@ -15,8 +15,6 @@ import 'models/dashboard_analytics_model.dart';
 import 'web_utils.dart'
     if (dart.library.html) 'web_utils_web.dart'
     as web_utils;
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../../../widgets/ai_chat_improved.dart';
 
 class AnalyticsPage extends StatefulWidget {
@@ -235,240 +233,47 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   Future<void> _exportToCsv() async {
-    // Create CSV content
-    StringBuffer csvContent = StringBuffer();
-    csvContent.writeln(
-      'Date,Heart Rate (bpm),SpO2 (%),Systolic (mmHg),Diastolic (mmHg),Weight (lbs)',
-    );
-
-    for (var vital in vitals) {
-      csvContent.writeln(
-        '${vital.timestamp.toIso8601String()},${vital.heartRate},${vital.spo2},${vital.systolic},${vital.diastolic},${vital.weight}',
-      );
-    }
-
-    // Add summary data
-    csvContent.writeln('');
-    csvContent.writeln('Summary Data');
-    if (dashboard != null) {
-      csvContent.writeln(
-        'Adherence Rate,%,${dashboard!.adherenceRate?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Heart Rate,bpm,${dashboard!.avgHeartRate?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg SpO2,%,${dashboard!.avgSpo2?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Systolic,mmHg,${dashboard!.avgSystolic?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Diastolic,mmHg,${dashboard!.avgDiastolic?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Weight,lbs,${dashboard!.avgWeight?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Mood,/10,${dashboard!.avgMoodValue?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Pain Level,/10,${dashboard!.avgPainValue?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-    }
-
-    final fileName =
-        'patient_${widget.patientId}_analytics_${selectedDays}days_${DateTime.now().millisecondsSinceEpoch}.csv';
-
-    if (kIsWeb) {
-      final bytes = utf8.encode(csvContent.toString());
-      web_utils.downloadFile(fileName, bytes);
-    }
+    await _downloadExportFromApi('csv');
   }
 
   Future<void> _exportToPdf() async {
-    // Create a PDF document
-    final pdf = pw.Document();
+    await _downloadExportFromApi('pdf');
+  }
 
-    // Add page to PDF
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Header(
-                level: 0,
-                child: pw.Text(
-                  'PATIENT ANALYTICS REPORT',
-                  style: pw.TextStyle(
-                    fontSize: 24,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 20),
-              pw.Text('Patient ID: ${widget.patientId}'),
-              pw.Text('Period: Last $selectedDays days'),
-              pw.Text(
-                'Generated: ${DateTime.now().toString().substring(0, 19)}',
-              ),
-              pw.SizedBox(height: 20),
-
-              if (dashboard != null) ...[
-                pw.Header(level: 1, child: pw.Text('HEALTH SUMMARY')),
-                pw.SizedBox(height: 10),
-                pw.Text(
-                  'Period: ${dashboard!.periodStart?.month ?? '?'}/${dashboard!.periodStart?.day ?? '?'} - ${dashboard!.periodEnd?.month ?? '?'}/${dashboard!.periodEnd?.day ?? '?'}',
-                ),
-                pw.Text(
-                  'Adherence Rate: ${dashboard!.adherenceRate?.toStringAsFixed(1) ?? 'N/A'}%',
-                ),
-                pw.Text(
-                  'Avg Heart Rate: ${dashboard!.avgHeartRate?.toStringAsFixed(1) ?? 'N/A'} bpm',
-                ),
-                pw.Text(
-                  'Avg SpO₂: ${dashboard!.avgSpo2?.toStringAsFixed(1) ?? 'N/A'}%',
-                ),
-                pw.Text(
-                  'Avg Systolic: ${dashboard!.avgSystolic?.toStringAsFixed(1) ?? 'N/A'} mmHg',
-                ),
-                pw.Text(
-                  'Avg Diastolic: ${dashboard!.avgDiastolic?.toStringAsFixed(1) ?? 'N/A'} mmHg',
-                ),
-                pw.Text(
-                  'Avg Weight: ${dashboard!.avgWeight?.toStringAsFixed(1) ?? 'N/A'} lbs',
-                ),
-                pw.SizedBox(height: 20),
-              ],
-
-              pw.Header(level: 1, child: pw.Text('DETAILED VITALS DATA')),
-              pw.SizedBox(height: 10),
-
-              // Create table for vitals data
-              pw.Table(
-                border: pw.TableBorder.all(),
-                children: [
-                  // Header row
-                  pw.TableRow(
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.grey300,
-                    ),
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Date',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Heart Rate',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'SpO₂',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Blood Pressure',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Weight',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Mood',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Pain',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Data rows
-                  ...vitals.map(
-                    (vital) => pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            vital.timestamp.toString().substring(0, 10),
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${vital.heartRate} bpm'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${vital.spo2}%'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            '${vital.systolic}/${vital.diastolic}',
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${vital.weight} lbs'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            vital.moodValue != null
-                                ? '${vital.moodValue}/10'
-                                : 'N/A',
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            vital.painValue != null
-                                ? '${vital.painValue}/10'
-                                : 'N/A',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
+  Future<void> _downloadExportFromApi(String type) async {
+    final authHeaders = await ApiService.getAuthHeaders();
+    final response = await http.get(
+      Uri.parse(
+        '${ApiConstants.baseUrl}analytics/export/vitals/$type?patientId=${widget.patientId}&days=$selectedDays',
       ),
+      headers: authHeaders,
     );
 
-    final fileName =
-        'patient_${widget.patientId}_analytics_${selectedDays}days_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-    if (kIsWeb) {
-      final bytes = await pdf.save();
-      web_utils.downloadFile(fileName, bytes);
+    if (response.statusCode != 200) {
+      throw Exception('Export failed with status ${response.statusCode}');
     }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fallbackFileName =
+        'patient_${widget.patientId}_analytics_${selectedDays}days_$timestamp.$type';
+    final contentDisposition = response.headers['content-disposition'];
+    final fileName =
+        _extractFileName(contentDisposition) ?? fallbackFileName;
+
+    if (!kIsWeb) {
+      throw Exception('Export download is currently supported on web builds.');
+    }
+
+    web_utils.downloadFile(fileName, response.bodyBytes);
+  }
+
+  String? _extractFileName(String? contentDisposition) {
+    if (contentDisposition == null || contentDisposition.isEmpty) {
+      return null;
+    }
+    final fileNameRegex = RegExp(r'filename="?([^";]+)"?');
+    final match = fileNameRegex.firstMatch(contentDisposition);
+    return match?.group(1);
   }
 
   /*

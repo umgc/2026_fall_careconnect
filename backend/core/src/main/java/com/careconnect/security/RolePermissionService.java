@@ -271,18 +271,20 @@ public class RolePermissionService {
      * Defines all permissions for the PATIENT role.
      * Patients can view and interact with their OWN data only.
      *
-     * Total: 6 permissions
+     * Total: 7 permissions
      *
      * Can do:
      * - View and complete own tasks
      * - View and record own health data
      * - Communicate with caregivers
+     * - Use Ask AI features on own records (USE_AI_FEATURES; scope enforced elsewhere)
      *
      * Cannot do:
      * - Create or delete tasks
      * - View other patients
      * - Access billing
      * - View analytics
+     * - Manage devices (caregiver/admin only)
      *
      * @return Set of patient permissions
      */
@@ -298,7 +300,10 @@ public class RolePermissionService {
 
             // Communication
             Permission.SEND_MESSAGES,
-            Permission.VIEW_MESSAGES
+            Permission.VIEW_MESSAGES,
+
+            // Ask AI (own patient scope enforced by RetrievalScopeService / gateway)
+            Permission.USE_AI_FEATURES
         ));
     }
 

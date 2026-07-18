@@ -141,6 +141,37 @@ class EvvOfflineSyncServiceTest {
     }
 
     @Test
+    void syncQueueItem_withLocationFields_includesLocationDetailsInAuditLog() throws Exception {
+        // Arrange: record carries legacy, check-in, and check-out location data —
+        // existing tests above only ever sync records with every location field
+        // null, leaving the "non-null" branch of each OR-condition unexercised.
+        final EvvOfflineQueue item = buildQueueItem("UPDATE", 1L, 10L, 0);
+        final EvvRecord record = buildRecord(1L);
+        record.setLocationLat(38.9);
+        record.setLocationLng(-77.0);
+        record.setLocationSource("GPS");
+        record.setCheckinLocationLat(38.91);
+        record.setCheckinLocationLng(-77.01);
+        record.setCheckoutLocationLat(38.92);
+        record.setCheckoutLocationLng(-77.02);
+
+        when(offlineQueueRepository.save(any(EvvOfflineQueue.class))).thenReturn(item);
+        when(recordRepository.findById(1L)).thenReturn(Optional.of(record));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(record);
+        doNothing().when(audit).log(any(), any(), any(), any());
+
+        evvOfflineSyncService.syncQueueItem(item);
+
+        final org.mockito.ArgumentCaptor<java.util.Map> captor =
+                org.mockito.ArgumentCaptor.forClass(java.util.Map.class);
+        verify(audit).log(eq(record), any(), eq("OFFLINE_SYNCED"), captor.capture());
+        assertThat(captor.getValue())
+                .containsEntry("locationLat", 38.9)
+                .containsEntry("checkinLocationLat", 38.91)
+                .containsEntry("checkoutLocationLat", 38.92);
+    }
+
+    @Test
     void syncQueueItem_createOperation_confirmedStatus_queuesForSubmission() throws Exception {
         final EvvOfflineQueue item = buildQueueItem("CREATE", 1L, 10L, 0);
 
