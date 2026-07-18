@@ -73,6 +73,7 @@ import '../../features/evv/presentation/pages/checkout_location_page.dart';
 import '../../features/evv/presentation/pages/visit_complete_page.dart';
 import '../../features/evv/presentation/pages/visit_completed_success_page.dart';
 import '../../providers/user_provider.dart';
+import '../../services/daily_brief_gate_service.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.dart';
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
@@ -140,7 +141,11 @@ class TelemetryGoRouterObserver extends NavigatorObserver {
 final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
-Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+Future<void> navigateToDashboard(
+  BuildContext context, {
+  int? tabIndex,
+  bool routePatientToDailyBrief = false,
+}) async {
   // Issue #75: if the user authenticated in the middle of accepting an invite,
   // route them back to the invite landing screen to complete the join instead
   // of going straight to the dashboard. The landing screen accepts the invite
@@ -152,6 +157,24 @@ Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
       return;
     }
   }
+
+  // STML-2 / WBS 3.13.2: care recipients see the Daily Memory Brief on their
+  // first login of the day, no earlier than 7am (SRS §6, "surfaces ... when
+  // the app is opened"). Caregivers, other roles, and logins after the brief
+  // has already been shown today go straight to the dashboard.
+  if (routePatientToDailyBrief) {
+    final role = Provider.of<UserProvider>(context, listen: false).user?.role;
+    if (role?.toUpperCase() == 'PATIENT') {
+      final shouldShowBrief = await DailyBriefGateService.shouldShowAndMarkSeen();
+      if (shouldShowBrief) {
+        if (context.mounted) {
+          context.go('/stml/brief');
+        }
+        return;
+      }
+    }
+  }
+
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,

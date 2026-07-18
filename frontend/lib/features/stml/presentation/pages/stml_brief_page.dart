@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../../../config/router/app_router.dart';
 import '../../../../config/theme/app_theme.dart';
 import '../../../../providers/user_provider.dart';
 import '../../../../services/stml_service.dart';
@@ -101,6 +102,21 @@ class _StmlBriefPageState extends State<StmlBriefPage> {
                 },
               ),
             ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ElevatedButton(
+            onPressed: () => navigateToDashboard(context),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 52),
+              backgroundColor: AppTheme.primary,
+              foregroundColor: AppTheme.textLight,
+              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Continue to Dashboard'),
+          ),
+        ),
+      ),
     );
   }
 }
