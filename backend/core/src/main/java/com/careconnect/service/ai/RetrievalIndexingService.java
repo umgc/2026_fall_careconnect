@@ -16,8 +16,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Indexes patient records into retrieval_index_chunk for Ask AI (Task 4.2).
- * Covers MEDICATION, TASK, and VITAL_SIGN record types.
+ * Synchronous, on-demand indexer for {@code retrieval_index_chunk} (Task 4.2),
+ * triggered directly via {@code POST /v1/api/ai/index/{patientId}}
+ * ({@link com.careconnect.controller.RetrievalIndexingController}).
+ * Covers MEDICATION, TASK, and VITAL_SIGN record types only.
+ *
+ * <p><b>Not the same pipeline as
+ * {@link com.careconnect.service.ai.indexing.IndexWorker} /
+ * {@link com.careconnect.service.ai.indexing.RetrievalIndexService}</b>, which
+ * asynchronously drains {@code indexing_outbox} and covers CALL_SUMMARY /
+ * VISIT_SUMMARY, TRANSCRIPT_SEGMENT, and USPS_MAIL — a disjoint set of record
+ * types. The two do not currently overlap, but both write into the same
+ * {@code retrieval_index_chunk} table, so any new record type must be added to
+ * exactly one of the two paths, not both, or {@code sourceRecordId} values
+ * and chunk shapes can diverge for the same logical record.
+ *
+ * <p>Canonical usage: this service is for manual/admin re-index and
+ * local dev/test seeding (it has no event trigger of its own — callers decide
+ * when to run it). The outbox-driven pipeline is what production relies on to
+ * index new content as it's created; this service does not replace it.
  */
 @Slf4j
 @Service
