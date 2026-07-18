@@ -228,7 +228,7 @@ void main() {
       );
       return ChangeNotifierProvider<UserProvider>(
         create: (_) => UserProvider(),
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, routerConfig: router),
       );
     }
 

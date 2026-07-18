@@ -957,7 +957,7 @@ void main() {
 
     testWidgets('shows Phone and Date of Birth labels', (tester) async {
       await _goToStep4(tester);
-      expect(find.text('Phone'), findsOneWidget);
+      expect(find.text('Phone Number'), findsOneWidget);
       expect(find.text('Date of Birth'), findsOneWidget);
     });
 

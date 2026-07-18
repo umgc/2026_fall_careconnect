@@ -44,7 +44,7 @@ Widget _wrapRouter() {
       GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
 }
 
 // Helpers to find the two password fields by index.
