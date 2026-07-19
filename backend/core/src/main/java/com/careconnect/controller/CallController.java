@@ -12,6 +12,7 @@ import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
+import com.careconnect.service.CallTerminationExecutor;
 import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChimeService;
@@ -30,7 +31,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,6 +108,8 @@ public class CallController {
   private Environment environment;
   @Autowired
   private CallSessionService callSessionService;
+  @Autowired
+  private CallTerminationExecutor callTerminationExecutor;
 
   private User getCurrentUser() {
     final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -444,7 +446,7 @@ public class CallController {
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
 
       if (shouldEndMeeting) {
-        final boolean completed = finalizeTermination(
+        final boolean completed = callTerminationExecutor.execute(
             callId, currentUser.getId(), leave.terminationClaimId());
         if (!completed) {
           return ResponseEntity.status(HttpStatus.ACCEPTED).body(
@@ -551,7 +553,8 @@ public class CallController {
       return ResponseEntity.status(HttpStatus.ACCEPTED)
           .body(Map.of("status", "processing", "callId", callId));
     }
-    if (!finalizeTermination(callId, currentUser.getId(), claim.terminationClaimId())) {
+    if (!callTerminationExecutor.execute(
+        callId, currentUser.getId(), claim.terminationClaimId())) {
       return ResponseEntity.status(HttpStatus.ACCEPTED)
           .body(Map.of("status", "processing", "callId", callId));
     }
@@ -564,20 +567,6 @@ public class CallController {
                 "callId", callId,
                 "endedBy", currentUser.getId().toString())));
     return ResponseEntity.ok(Map.of("status", "ended", "callId", callId));
-  }
-
-  private boolean finalizeTermination(
-      final String callId, final Long actorUserId, final UUID claimId) {
-    try {
-      maybeRecordFinalOverallSentiment(callId, actorUserId, null);
-      maybeGenerateAndStoreCallSummary(callId, actorUserId);
-      callRecordingService.stopRecording(callId);
-      chimeService.endMeeting(callId);
-      return callSessionService.completeTermination(callId, claimId);
-    } catch (RuntimeException failure) {
-      callSessionService.recordTerminationFailure(callId, claimId, failure);
-      throw failure;
-    }
   }
 
   @PostMapping("/{callId}/sentiment/text")
@@ -1284,62 +1273,6 @@ public class CallController {
     return safe;
   }
 
-  private void maybeRecordFinalOverallSentiment(
-      final String callId, final Long actorUserId, final Long targetUserId) {
-    try {
-      final Map<String, CallTelemetryEvent> latestByChannel = callTelemetryService.getLatestSentimentByChannel(callId);
-      if (latestByChannel.isEmpty()) {
-        return;
-      }
-
-      final Map<String, SentimentResult> channelResults = new LinkedHashMap<>();
-      for (final Map.Entry<String, CallTelemetryEvent> entry : latestByChannel.entrySet()) {
-        final CallTelemetryEvent event = entry.getValue();
-        if (event == null || event.getSentimentScore() == null) {
-          continue;
-        }
-        final String channel = entry.getKey().trim().toUpperCase(Locale.ROOT);
-        channelResults.put(
-            channel,
-            new SentimentResult(
-                event.getSentimentScore(),
-                event.getSentimentLabel() == null ? "ANXIOUS" : event.getSentimentLabel(),
-                event.getSentimentNotes() == null ? "" : event.getSentimentNotes(),
-                channel,
-                callId,
-                event.getAnalysisTimestamp() == null
-                    ? System.currentTimeMillis()
-                    : event.getAnalysisTimestamp(),
-                false));
-      }
-
-      if (channelResults.isEmpty()) {
-        return;
-      }
-
-      SentimentResult finalResult = sentimentService.analyzeFinalOverallSentiment(callId, channelResults);
-      callTelemetryService.recordSentimentEvent(
-          callId,
-          "SENTIMENT_FINAL",
-          "COMBINED",
-          actorUserId,
-          targetUserId,
-          "END_CALL",
-          finalResult,
-          Map.of(
-              "overallScore", finalResult.score(),
-              "overallLabel", finalResult.label(),
-              "status", "FINAL_END_CALL"),
-          "SUCCESS",
-          null);
-    } catch (Exception ex) {
-      if (log.isWarnEnabled()) {
-        log.warn(
-            "Final end-call sentiment analysis skipped for callId {}: {}", callId, ex.getMessage());
-      }
-    }
-  }
-
   private Map<String, Object> extractCallContextMetadata(Map<String, Object> body) {
     if (body == null || body.isEmpty()) {
       return Map.of();
@@ -1391,17 +1324,6 @@ public class CallController {
     }
     merged.putAll(extras);
     return merged;
-  }
-
-  private void maybeGenerateAndStoreCallSummary(String callId, Long actorUserId) {
-    try {
-      Map<String, CallTelemetryEvent> latestByChannel = callTelemetryService.getLatestSentimentByChannel(callId);
-      callSummaryService.generateAndStoreSummary(callId, actorUserId, latestByChannel);
-    } catch (Exception ex) {
-      if (log.isWarnEnabled()) {
-        log.warn("Call summary generation skipped for callId {}: {}", callId, ex.getMessage());
-      }
-    }
   }
 
   private List<CallTranscriptService.TranscriptSegmentInput> extractTranscriptSegments(
@@ -1552,7 +1474,7 @@ public class CallController {
   }
 
   @GetMapping("/recordings")
-  @Operation(summary = "List all call recordings (admin and caregiver only)")
+  @Operation(summary = "List recordings visible to the current admin or caregiver")
   public ResponseEntity<List<Map<String, Object>>> listRecordings(
       @RequestParam(required = false) Long userId) {
     User currentUser = getCurrentUser();
@@ -1563,6 +1485,10 @@ public class CallController {
           HttpStatus.FORBIDDEN, "Only admins and caregivers can list recordings");
     }
     List<Map<String, Object>> recordings;
+    if (isCaregiver && userId != null && !currentUser.getId().equals(userId)) {
+      throw new AppException(
+          HttpStatus.FORBIDDEN, "Caregivers may only list recordings they initiated");
+    }
     if (userId != null) {
       recordings = callRecordingService.getRecordingsByUser(userId);
     } else if (isAdmin) {
@@ -1589,7 +1515,7 @@ public class CallController {
     notification.put("callId", callId);
     notification.put("status", state.getOrDefault("status", "UNKNOWN"));
     notification.put("playbackReady", state.getOrDefault("playbackReady", false));
-    callSessionService.getParticipants(callId).stream()
+    callSessionService.getJoinedParticipants(callId).stream()
         .map(com.careconnect.model.CallParticipant::getUserId)
         .distinct()
         .forEach(id -> callNotificationHandler.sendNotificationToUser(
@@ -1597,14 +1523,40 @@ public class CallController {
   }
 
   @DeleteMapping("/recordings")
-  @Operation(summary = "Purge ALL recordings from S3 and DB (dev/local only - for test cleanup)")
+  @Operation(summary = "Purge ALL recordings from S3 and DB (explicitly enabled dev/local/test only)")
   public ResponseEntity<Map<String, Object>> purgeAllRecordings() {
-    ensureDevOrLocalMode();
+    ensureGlobalRecordingPurgeEnabled();
     User currentUser = getCurrentUser();
+    if (currentUser.getRole() != Role.ADMIN) {
+      throw new AppException(HttpStatus.FORBIDDEN, "Only administrators can purge recordings");
+    }
     if (log.isWarnEnabled()) {
       log.warn("Recording purge requested by user {} (dev/local mode)", currentUser.getId());
     }
     Map<String, Object> result = callRecordingService.purgeAllRecordings();
     return ResponseEntity.ok(result);
+  }
+
+  private void ensureGlobalRecordingPurgeEnabled() {
+    final String[] activeProfiles = environment.getActiveProfiles();
+    boolean restrictedProfile = false;
+    if (activeProfiles != null) {
+      for (final String profile : activeProfiles) {
+        final String normalized = profile == null ? "" : profile.trim().toLowerCase(Locale.ROOT);
+        if ("dev".equals(normalized)
+            || "local".equals(normalized)
+            || "test".equals(normalized)) {
+          restrictedProfile = true;
+          break;
+        }
+      }
+    }
+    final boolean explicitlyEnabled = environment.getProperty(
+        "careconnect.recording.global-purge-enabled", Boolean.class, false);
+    if (!restrictedProfile || !explicitlyEnabled) {
+      throw new AppException(
+          HttpStatus.FORBIDDEN,
+          "Global recording purge requires explicit enablement in dev/local/test");
+    }
   }
 }

@@ -236,6 +236,7 @@ void main() {
       bool isModal = false,
       int? patientId,
       String? healthDataContext,
+      AiChatMode mode = AiChatMode.legacyGeneral,
     }) {
       final provider = MockUserProvider(mockUser: MockUser(id: 1, role: role));
       return ChangeNotifierProvider<UserProvider>.value(
@@ -248,6 +249,7 @@ void main() {
               isModal: isModal,
               patientId: patientId,
               healthDataContext: healthDataContext,
+              mode: mode,
             ),
           ),
         ),
@@ -878,12 +880,14 @@ void main() {
         isModal: true,
         patientId: 42,
         userId: 7,
+        mode: AiChatMode.groundedRecords,
       );
       expect(chat.role, 'PATIENT');
       expect(chat.healthDataContext, 'test context');
       expect(chat.isModal, true);
       expect(chat.patientId, 42);
       expect(chat.userId, 7);
+      expect(chat.mode, AiChatMode.groundedRecords);
     });
 
     testWidgets('AIChat defaults isModal to false', (tester) async {
@@ -892,6 +896,7 @@ void main() {
       expect(chat.healthDataContext, isNull);
       expect(chat.patientId, isNull);
       expect(chat.userId, isNull);
+      expect(chat.mode, AiChatMode.legacyGeneral);
     });
 
     // === MESSAGE COUNT DISPLAY ===
@@ -1031,7 +1036,11 @@ void main() {
       });
 
       await http.runWithClient(() async {
-        await tester.pumpWidget(buildWidget(userId: 1, patientId: 42));
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
         await tester.pump(const Duration(seconds: 1));
         await tester.enterText(find.byType(TextField), 'What changed?');
         await tester.tap(find.byIcon(Icons.send));
@@ -1043,6 +1052,34 @@ void main() {
         expect(find.byKey(const Key('ask-ai-disclaimer')), findsOneWidget);
         expect(find.byKey(const Key('ask-ai-escalation')), findsOneWidget);
         expect(find.byKey(const Key('ask-ai-confirmation')), findsOneWidget);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded mode fails closed without patientId', (tester) async {
+      suppressOverflow();
+      var askRequests = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          askRequests++;
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'What changed?');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+
+        expect(
+          find.textContaining('without a selected patient'),
+          findsOneWidget,
+        );
+        expect(askRequests, 0);
       }, () => mockClient);
     });
 

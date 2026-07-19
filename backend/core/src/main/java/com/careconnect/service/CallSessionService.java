@@ -94,33 +94,42 @@ public class CallSessionService {
         validateScheduledVisit(scheduledVisitId, patient.getId(), creator);
 
         final String normalizedCallId = callId.trim();
-        callSessionRepository.insertIfAbsent(
+        final int inserted = callSessionRepository.insertIfAbsent(
                 normalizedCallId,
                 patient.getId(),
                 creator.getId(),
                 scheduledVisitId,
                 SESSION_CREATED);
-        final CallSession session = callSessionRepository.findByCallId(normalizedCallId)
-                .map(existing -> requireSameOwnership(
-                        existing, patient.getId(), creator.getId(), scheduledVisitId))
-                // Keeps isolated unit tests and non-PostgreSQL developer stores usable.
-                // Production PostgreSQL takes the atomic INSERT ... ON CONFLICT path above.
-                .orElseGet(() -> {
-                    final CallSession created = new CallSession();
-                    created.setCallId(normalizedCallId);
-                    created.setPatientId(patient.getId());
-                    created.setCreatedByUserId(creator.getId());
-                    created.setScheduledVisitId(scheduledVisitId);
-                    created.setStatus(SESSION_CREATED);
-                    return callSessionRepository.save(created);
-                });
+        final var stored = callSessionRepository.findByCallId(normalizedCallId);
+        final CallSession session;
+        final boolean newlyCreated;
+        if (stored.isPresent()) {
+            session = requireSameOwnership(
+                    stored.get(), patient.getId(), creator.getId(), scheduledVisitId);
+            newlyCreated = inserted == 1;
+        } else {
+            // Keeps isolated unit tests and non-PostgreSQL developer stores usable.
+            // Production PostgreSQL takes the atomic INSERT ... ON CONFLICT path above.
+            final CallSession created = new CallSession();
+            created.setCallId(normalizedCallId);
+            created.setPatientId(patient.getId());
+            created.setCreatedByUserId(creator.getId());
+            created.setScheduledVisitId(scheduledVisitId);
+            created.setStatus(SESSION_CREATED);
+            session = callSessionRepository.save(created);
+            newlyCreated = true;
+        }
 
-        upsertParticipant(session, creator.getId(), creator.getId(), PARTICIPANT_INVITED);
-        if (inviteeUserId != null) {
-            final User invitee = userRepository.findById(inviteeUserId)
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Invitee not found"));
-            authorizeForPatient(invitee, patientUserId);
-            upsertParticipant(session, invitee.getId(), creator.getId(), PARTICIPANT_INVITED);
+        if (newlyCreated) {
+            upsertParticipant(session, creator.getId(), creator.getId(), PARTICIPANT_INVITED);
+            if (inviteeUserId != null) {
+                final User invitee = userRepository.findById(inviteeUserId)
+                        .orElseThrow(() -> new AppException(
+                                HttpStatus.NOT_FOUND, "Invitee not found"));
+                authorizeForPatient(invitee, patientUserId);
+                upsertParticipant(
+                        session, invitee.getId(), creator.getId(), PARTICIPANT_INVITED);
+            }
         }
         return session;
     }
@@ -342,8 +351,18 @@ public class CallSessionService {
                 .toList();
         final long joined = callParticipantRepository.countByCallSessionIdAndStatus(
                 session.getId(), PARTICIPANT_JOINED);
+        final long invited = callParticipantRepository.countByCallSessionIdAndStatus(
+                session.getId(), PARTICIPANT_INVITED);
+        if (joined > 0 || invited > 0) {
+            return new DeclineResult(notify, false, null);
+        }
+        if (SESSION_CREATED.equals(session.getStatus())) {
+            callSessionRepository.cancelIfNotActive(
+                    session.getId(), SESSION_CREATED, SESSION_CANCELLED);
+            return new DeclineResult(notify, false, null);
+        }
         final UUID claimId = UUID.randomUUID();
-        final boolean terminationOwner = joined <= 1 && callSessionRepository.beginTermination(
+        final boolean terminationOwner = callSessionRepository.beginTermination(
                 session.getId(),
                 SESSION_CREATED,
                 SESSION_ACTIVE,

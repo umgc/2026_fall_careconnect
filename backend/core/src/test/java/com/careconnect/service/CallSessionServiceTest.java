@@ -185,28 +185,37 @@ class CallSessionServiceTest {
         patient.setUser(patientUser);
         final CallSession existing = session(10L, 42L);
         existing.setCreatedByUserId(2L);
-        final CallParticipant creatorParticipant = new CallParticipant();
-        creatorParticipant.setCallSessionId(10L);
-        creatorParticipant.setUserId(2L);
-        creatorParticipant.setStatus(CallSessionService.PARTICIPANT_INVITED);
-        final CallParticipant patientParticipant = new CallParticipant();
-        patientParticipant.setCallSessionId(10L);
-        patientParticipant.setUserId(7L);
-        patientParticipant.setStatus(CallSessionService.PARTICIPANT_INVITED);
-
         when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient));
         when(caregiverLinkService.hasAccessToPatient(2L, 7L)).thenReturn(true);
-        when(userRepository.findById(7L)).thenReturn(Optional.of(patientUser));
         when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(existing));
-        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
-                .thenReturn(Optional.of(creatorParticipant));
-        when(participantRepository.findByCallSessionIdAndUserId(10L, 7L))
-                .thenReturn(Optional.of(patientParticipant));
 
         assertThat(service.createSession("call-1", 7L, 7L, null, creator))
                 .isSameAs(existing);
         verify(sessionRepository, never()).save(any(CallSession.class));
         verify(participantRepository, never()).save(any(CallParticipant.class));
+    }
+
+    @Test
+    void createSession_activeReplayDoesNotReinviteOrAddParticipants() {
+        final User creator = user(2L, Role.CAREGIVER);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(user(7L, Role.PATIENT));
+        final CallSession existing = session(10L, 42L);
+        existing.setCreatedByUserId(2L);
+        existing.setStatus(CallSessionService.SESSION_ACTIVE);
+        when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(2L, 7L)).thenReturn(true);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(existing));
+
+        assertThat(service.createSession("call-1", 7L, 99L, null, creator))
+                .isSameAs(existing);
+
+        verify(userRepository, never()).findById(99L);
+        verify(participantRepository, never()).insertIfAbsent(
+                any(), any(), any(), any());
+        verify(participantRepository, never()).reinviteIfInactive(
+                any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -268,28 +277,52 @@ class CallSessionServiceTest {
     }
 
     @Test
-    void declineInvitation_givesUnansweredSessionDurableCleanupOwnership() {
+    void declineInvitation_cancelsUnansweredSessionWhenNoValidParticipantsRemain() {
         final CallSession session = session(10L, 42L);
-        final CallParticipant creator = new CallParticipant();
-        creator.setUserId(2L);
-        creator.setStatus(CallSessionService.PARTICIPANT_INVITED);
         when(sessionRepository.findByCallIdForLifecycle("call-1"))
                 .thenReturn(Optional.of(session));
         when(participantRepository.declineIfInvited(
                 10L, 7L, CallSessionService.PARTICIPANT_INVITED,
                 CallSessionService.PARTICIPANT_DECLINED)).thenReturn(1);
-        when(participantRepository.findByCallSessionId(10L)).thenReturn(java.util.List.of(creator));
-        when(sessionRepository.beginTermination(
-                eq(10L), eq(CallSessionService.SESSION_CREATED),
-                eq(CallSessionService.SESSION_ACTIVE),
-                eq(CallSessionService.SESSION_TERMINATING),
-                any(), eq(7L), anyLong(), eq("2"))).thenReturn(1);
 
         final CallSessionService.DeclineResult result =
                 service.declineInvitation("call-1", 7L);
-        assertThat(result.notifyUserIds()).containsExactly(2L);
-        assertThat(result.terminationOwner()).isTrue();
-        assertThat(result.terminationClaimId()).isNotNull();
+        assertThat(result.notifyUserIds()).isEmpty();
+        assertThat(result.terminationOwner()).isFalse();
+        verify(sessionRepository).cancelIfNotActive(
+                10L, CallSessionService.SESSION_CREATED,
+                CallSessionService.SESSION_CANCELLED);
+        verify(sessionRepository, never()).beginTermination(
+                any(), any(), any(), any(), any(), any(), anyLong(), any());
+    }
+
+    @Test
+    void declineInvitation_keepsSessionOpenForOtherInvitedAndJoinedParticipants() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_ACTIVE);
+        final CallParticipant invited =
+                participant(3L, CallSessionService.PARTICIPANT_INVITED);
+        final CallParticipant joined =
+                participant(4L, CallSessionService.PARTICIPANT_JOINED);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(participantRepository.declineIfInvited(
+                10L, 7L, CallSessionService.PARTICIPANT_INVITED,
+                CallSessionService.PARTICIPANT_DECLINED)).thenReturn(1);
+        when(participantRepository.findByCallSessionId(10L))
+                .thenReturn(java.util.List.of(invited, joined));
+        when(participantRepository.countByCallSessionIdAndStatus(
+                10L, CallSessionService.PARTICIPANT_JOINED)).thenReturn(1L);
+        when(participantRepository.countByCallSessionIdAndStatus(
+                10L, CallSessionService.PARTICIPANT_INVITED)).thenReturn(1L);
+
+        final CallSessionService.DeclineResult result =
+                service.declineInvitation("call-1", 7L);
+
+        assertThat(result.notifyUserIds()).containsExactly(3L, 4L);
+        assertThat(result.terminationOwner()).isFalse();
+        verify(sessionRepository, never()).beginTermination(
+                any(), any(), any(), any(), any(), any(), anyLong(), any());
         verify(sessionRepository, never()).cancelIfNotActive(any(), any(), any());
     }
 

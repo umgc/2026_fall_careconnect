@@ -1215,6 +1215,72 @@ void main() {
       });
     }
 
+    for (final invalidCitations in <Object?>[
+      null,
+      {'citationId': 'C1'},
+      [
+        {
+          'citationId': 'C1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+        'not-a-citation',
+      ],
+      [
+        {
+          'citationId': 'C1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+        {
+          'citationId': 'C1',
+          'recordType': 'MEDICATION',
+          'excerpt': 'Metformin 500 mg.',
+        },
+      ],
+      [
+        {
+          'citationId': 'C0',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+      ],
+      [
+        {
+          'citationId': 'C01',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+      ],
+      [
+        {
+          'citationId': 'c1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+      ],
+    ]) {
+      test('rejects malformed delivered citations payload $invalidCitations',
+          () async {
+        final body = _validDeliveredAskResponse();
+        if (invalidCitations == null) {
+          body.remove('citations');
+        } else {
+          body['citations'] = invalidCitations;
+        }
+
+        final result = await http.runWithClient(
+          () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+          () => _mockJson(200, body),
+        );
+
+        expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+        expect(result.answer, isNull);
+        expect(result.citations, isEmpty);
+        expect(result.error?.code, 'INVALID_RESPONSE');
+      });
+    }
+
     for (final status in const ['WITHHELD', 'NO_RECORDS']) {
       test('discards injected answer and citations for $status', () async {
         final result = await http.runWithClient(

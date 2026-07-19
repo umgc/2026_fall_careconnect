@@ -13,6 +13,7 @@ import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
+import com.careconnect.service.CallTerminationExecutor;
 import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChimeService;
@@ -34,6 +35,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Collections;
@@ -64,6 +66,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @Import(CareconnectTestConfig.class)
 @org.springframework.test.context.ActiveProfiles("test")
+@TestPropertySource(properties = "careconnect.recording.global-purge-enabled=true")
 @DisplayName("CallController Extended Tests")
 class CallControllerExtendedTest {
 
@@ -82,6 +85,7 @@ class CallControllerExtendedTest {
     @MockitoBean private CallNotificationHandler callNotificationHandler;
     @MockitoBean private SnsService snsService;
     @MockitoBean private CallSessionService callSessionService;
+    @MockitoBean private CallTerminationExecutor callTerminationExecutor;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -620,6 +624,15 @@ class CallControllerExtendedTest {
         }
 
         @Test
+        @WithMockUser(username = "caregiver@test.com")
+        void listRecordings_caregiverCannotFilterAnotherUser() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/recordings")
+                            .param("userId", "999")
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
         @DisplayName("GET /recordings as PATIENT returns 403")
         @WithMockUser(username = "patient@test.com")
         void listRecordings_patient_returns403() throws Exception {
@@ -652,6 +665,15 @@ class CallControllerExtendedTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk());
+        }
+
+        @Test
+        @WithMockUser(username = "caregiver@test.com")
+        void purgeAllRecordings_caregiverReturns403EvenInTestProfile() throws Exception {
+            mockMvc.perform(delete(BASE_URL + "/recordings")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isForbidden());
         }
     }
 

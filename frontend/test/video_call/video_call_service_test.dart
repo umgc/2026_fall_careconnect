@@ -205,6 +205,183 @@ void main() {
 
       service.dispose();
     });
+
+    test('joining a failed in-flight flush retries remaining segment',
+        () async {
+      final service = VideoCallService();
+      final firstRequestStarted = Completer<void>();
+      final firstResponse = Completer<http.Response>();
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'remote-end-inflight-retry',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Do not lose these words');
+        await firstRequestStarted.future;
+
+        final remoteEnd = service.handleRemoteCallEndForTest();
+        firstResponse.complete(http.Response('{}', 500));
+        await remoteEnd;
+
+        expect(transcriptRequests, 2);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            if (transcriptRequests == 1) {
+              firstRequestStarted.complete();
+              return firstResponse.future;
+            }
+            return http.Response('{}', 201);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('transient 500 retries without clearing the segment', () async {
+      final service = VideoCallService();
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'transient-500-retry',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Retry this segment');
+        await service.handleRemoteCallEndForTest();
+
+        expect(transcriptRequests, 2);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            return http.Response('{}', transcriptRequests == 1 ? 500 : 201);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('transient timeout retries without clearing the segment', () async {
+      final service = VideoCallService();
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'transient-timeout-retry',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Retry after timeout');
+        await service.handleRemoteCallEndForTest();
+
+        expect(transcriptRequests, 2);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            if (transcriptRequests == 1) {
+              throw TimeoutException('transient timeout');
+            }
+            return http.Response('{}', 201);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('hang-up reset retains final segment after retry exhaustion',
+        () async {
+      final service = VideoCallService();
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'hangup-retains-unsent',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Unsent final segment');
+        await service.handleRemoteCallEndForTest();
+
+        expect(transcriptRequests, greaterThanOrEqualTo(3));
+        expect(service.pendingTranscriptSegmentCountForTest, 1);
+        expect(service.currentCallId, isNull);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            return http.Response('{}', 500);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+      expect(service.pendingTranscriptSegmentCountForTest, 1);
+    });
   });
 
   // =========================================================================

@@ -55,12 +55,15 @@ class UploadedFile {
 // (AIModel selection removed as requested)
 
 // ...existing widget classes below...
+enum AiChatMode { groundedRecords, legacyGeneral }
+
 class AIChat extends StatefulWidget {
   final String role;
   final String? healthDataContext;
   final bool isModal;
   final int? patientId;
   final int? userId;
+  final AiChatMode mode;
 
   const AIChat({
     super.key,
@@ -69,6 +72,7 @@ class AIChat extends StatefulWidget {
     this.isModal = false,
     this.patientId,
     this.userId,
+    this.mode = AiChatMode.legacyGeneral,
   });
 
   @override
@@ -697,6 +701,34 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
       // Only use patientId if explicitly provided, never default to user ID
       final currentPatientId = widget.patientId;
+      if (widget.mode == AiChatMode.groundedRecords &&
+          (currentPatientId == null || currentPatientId <= 0)) {
+        setState(() {
+          _isLoading = false;
+          _messages.add(ChatMessage(
+            text:
+                'Ask AI cannot access grounded records without a selected patient.',
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'Missing patient ID for grounded records mode',
+          ));
+        });
+        return;
+      }
+      if (widget.mode == AiChatMode.groundedRecords &&
+          _uploadedFiles.isNotEmpty) {
+        setState(() {
+          _isLoading = false;
+          _messages.add(ChatMessage(
+            text:
+                'File uploads are not available in grounded records mode. Start a general file-upload chat instead.',
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'File upload requires legacy general mode',
+          ));
+        });
+        return;
+      }
 
       // Prepare uploadedFiles for API if any
       List<Map<String, dynamic>>? uploadedFilesJson;
@@ -720,14 +752,14 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       }
 
       // Only these fields are dynamic for the request
-      final useGroundedAsk = currentPatientId != null && _uploadedFiles.isEmpty;
+      final useGroundedAsk = widget.mode == AiChatMode.groundedRecords;
       if (useGroundedAsk && _conversationId.isEmpty) {
         _conversationId = const Uuid().v4();
       }
       final AiAskResult? askResult = useGroundedAsk
           ? await AIChatService.askRecords(
               query: userMessage,
-              patientId: currentPatientId,
+              patientId: currentPatientId!,
               sessionId: _askSessionId,
               conversationId: _conversationId,
             )

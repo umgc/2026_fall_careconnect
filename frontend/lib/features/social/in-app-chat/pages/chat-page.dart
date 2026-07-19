@@ -59,7 +59,8 @@ class _ChatPageState extends State<ChatPage> {
       authorId: _currentUser.id,
       createdAt: DateTime.now(),
       id: const Uuid().v4(),
-      text: 'I\'m feeling much better, thank you! The medication is working well.',
+      text:
+          'I\'m feeling much better, thank you! The medication is working well.',
     );
 
     _chatController.insertMessage(textMessage);
@@ -118,7 +119,8 @@ class _ChatPageState extends State<ChatPage> {
                 Text(
                   widget.contactRole,
                   style: TextStyle(
-                    color: Theme.of(context).primaryColor.withValues(alpha: 0.6),
+                    color:
+                        Theme.of(context).primaryColor.withValues(alpha: 0.6),
                     fontSize: 12,
                     fontWeight: FontWeight.normal,
                   ),
@@ -220,7 +222,8 @@ class _ChatPageState extends State<ChatPage> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Chat'),
-          content: const Text('Are you sure you want to delete this chat? This action cannot be undone.'),
+          content: const Text(
+              'Are you sure you want to delete this chat? This action cannot be undone.'),
           actions: [
             TextButton(
               child: const Text('Cancel'),
@@ -266,7 +269,9 @@ class _ChatPageState extends State<ChatPage> {
               onPressed: () {
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Search functionality not implemented yet')),
+                  const SnackBar(
+                      content:
+                          Text('Search functionality not implemented yet')),
                 );
               },
             ),
@@ -298,13 +303,15 @@ class _ChatPageState extends State<ChatPage> {
                   context: context,
                   backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                   shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
                   ),
                   builder: (context) => SizedBox(
                     height: MediaQuery.of(context).size.height * 0.75,
                     child: AIChat(
                       role: 'patient',
                       isModal: true,
+                      mode: AiChatMode.legacyGeneral,
                     ),
                   ),
                 );

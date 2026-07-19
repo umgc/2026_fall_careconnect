@@ -2,6 +2,7 @@ package com.careconnect.controller;
 
 import com.careconnect.config.CareconnectTestConfig;
 import com.careconnect.exception.AppException;
+import com.careconnect.model.CallParticipant;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
@@ -13,6 +14,7 @@ import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
+import com.careconnect.service.CallTerminationExecutor;
 import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChimeService;
@@ -34,6 +36,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -75,6 +78,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @Import(CareconnectTestConfig.class)
 @org.springframework.test.context.ActiveProfiles("test")
+@TestPropertySource(properties = "careconnect.recording.global-purge-enabled=true")
 @DisplayName("CallController Tests")
 class CallControllerTest {
 
@@ -93,6 +97,7 @@ class CallControllerTest {
     @MockitoBean private CallNotificationHandler callNotificationHandler;
     @MockitoBean private SnsService snsService;
     @MockitoBean private CallSessionService callSessionService;
+    @MockitoBean private CallTerminationExecutor callTerminationExecutor;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -140,8 +145,8 @@ class CallControllerTest {
         when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
                 .thenReturn(new CallSessionService.LeaveResult(
                         true, false, 0L, TERMINATION_CLAIM, List.of()));
-        when(callSessionService.completeTermination(anyString(), any(UUID.class)))
-                .thenReturn(true);
+        when(callTerminationExecutor.execute(
+                anyString(), anyLong(), any(UUID.class))).thenReturn(true);
         when(callSessionService.getOtherParticipantUserIds(anyString(), anyLong()))
                 .thenReturn(List.of());
 
@@ -370,12 +375,13 @@ class CallControllerTest {
         }
 
         @Test
-        @DisplayName("CHIME-008: chimeService.endMeeting throws AppException  re-throws 4xx")
+        @DisplayName("CHIME-008: termination executor AppException re-throws 4xx")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void chime008_endMeetingAppExceptionRethrown() throws Exception {
             mockCurrentCaregiver();
-            doThrow(new AppException(HttpStatus.NOT_FOUND, "Meeting not found"))
-                    .when(chimeService).endMeeting(anyString());
+            when(callTerminationExecutor.execute(
+                    CALL_ID, caregiverUser.getId(), TERMINATION_CLAIM))
+                    .thenThrow(new AppException(HttpStatus.NOT_FOUND, "Meeting not found"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
                             .with(csrf())
@@ -659,8 +665,8 @@ class CallControllerTest {
             verify(callNotificationHandler).sendNotificationToUser(
                     eq("4"), argThat(m -> "call-ended".equals(m.get("type"))));
             verify(callNotificationHandler, never()).sendNotificationToUser(eq("2"), any());
-            verify(callRecordingService).stopRecording(CALL_ID);
-            verify(chimeService).endMeeting(CALL_ID);
+            verify(callTerminationExecutor).execute(
+                    CALL_ID, caregiverUser.getId(), TERMINATION_CLAIM);
         }
 
         @Test
@@ -735,8 +741,8 @@ class CallControllerTest {
                     eq("4"), argThat(m -> "call-ended".equals(m.get("type"))));
             verify(callNotificationHandler, never()).sendNotificationToUser(eq("1"), any());
             verify(callNotificationHandler, never()).sendNotificationToUser(eq("2"), any());
-            verify(callRecordingService).stopRecording(CALL_ID);
-            verify(chimeService).endMeeting(CALL_ID);
+            verify(callTerminationExecutor).execute(
+                    CALL_ID, patientUser.getId(), TERMINATION_CLAIM);
         }
 
         @Test
@@ -778,7 +784,8 @@ class CallControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("ended"));
 
-            verify(callSessionService).completeTermination(CALL_ID, TERMINATION_CLAIM);
+            verify(callTerminationExecutor).execute(
+                    CALL_ID, caregiverUser.getId(), TERMINATION_CLAIM);
             verify(callNotificationHandler).sendNotificationToUser(
                     eq("1"), argThat(message -> "call-ended".equals(message.get("type"))));
         }
@@ -882,9 +889,8 @@ class CallControllerTest {
                             .content("{}"))
                     .andExpect(status().isOk());
 
-            // Verify that a sentiment event was recorded as part of end-call processing
-            verify(callTelemetryService, times(1)).recordSentimentEvent(
-                    anyString(), anyString(), anyString(), any(), any(), any(), any(), any(), anyString(), any());
+            verify(callTerminationExecutor).execute(
+                    CALL_ID, caregiverUser.getId(), TERMINATION_CLAIM);
         }
 
         @Test
@@ -1064,12 +1070,18 @@ class CallControllerTest {
             mockCurrentCaregiver();
             when(callRecordingService.startRecording(CALL_ID, 2L))
                     .thenReturn(Map.of("status", "STARTED", "callId", CALL_ID));
+            CallParticipant joined = new CallParticipant();
+            joined.setUserId(2L);
+            joined.setStatus(CallSessionService.PARTICIPANT_JOINED);
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(joined));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/recording/start")
                             .with(csrf()))
                     .andExpect(status().isOk());
 
             verify(callRecordingService).startRecording(CALL_ID, 2L);
+            verify(callNotificationHandler).sendNotificationToUser(eq("2"), any());
+            verify(callSessionService, never()).getParticipants(CALL_ID);
         }
 
         @Test
@@ -1812,8 +1824,9 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCallRuntimeExceptionReturns500() throws Exception {
             mockCurrentCaregiver();
-            doThrow(new RuntimeException("Chime unavailable"))
-                    .when(chimeService).endMeeting(anyString());
+            when(callTerminationExecutor.execute(
+                    CALL_ID, caregiverUser.getId(), TERMINATION_CLAIM))
+                    .thenThrow(new RuntimeException("Chime unavailable"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
                             .with(csrf())
