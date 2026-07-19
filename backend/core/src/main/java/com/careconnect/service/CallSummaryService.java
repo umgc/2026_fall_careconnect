@@ -3,6 +3,7 @@ package com.careconnect.service;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.repository.CallSummaryRepository;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -16,9 +17,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.indexing.SummaryCreatedPayload;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -325,30 +323,8 @@ public class CallSummaryService {
         summary.getTranscriptSegmentCount(),
         summary.getCaregiverVisibility(),
         summary.getSummarizationEngine(),
-        sha256(summary.getSummaryJson()));
+        ContentHashUtil.sha256(summary.getSummaryJson()));
     indexingEventEmitter.emitSummaryCreated(payload);
-  }
-
-  /**
-   * Computes {@code sha256:<hex>} of the given input for the
-   * SUMMARY_CREATED payload's contentHash field. Consumers use this
-   * to skip re-embedding an unchanged summary.
-   */
-  private String sha256(final String input) {
-    if (input == null) {
-      return null;
-    }
-    try {
-      final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      final byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-      final StringBuilder hex = new StringBuilder(hash.length * 2);
-      for (final byte b : hash) {
-        hex.append(String.format("%02x", b));
-      }
-      return "sha256:" + hex;
-    } catch (final NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 not available", e);
-    }
   }
 
   private Map<String, Object> toResponse(final CallSummary summary) {

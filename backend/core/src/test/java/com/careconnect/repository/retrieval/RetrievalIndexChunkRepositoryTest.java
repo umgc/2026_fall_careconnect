@@ -1,6 +1,7 @@
 package com.careconnect.repository.retrieval;
 
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
+import com.careconnect.service.ai.indexing.SummarySourceKey;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -127,5 +128,32 @@ class RetrievalIndexChunkRepositoryTest {
         assertThat(repository.findByPatientId(6L))
                 .extracting(RetrievalIndexChunk::getChunkText)
                 .containsExactly("other patient's summary");
+    }
+
+    @Test
+    @DisplayName("namespaced call replacement preserves same-id visit summary")
+    void deletesNamespacedCallSummaryWithoutTouchingVisitCollision() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId(SummarySourceKey.call(77L))
+                .chunkText("call summary")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.VISIT_SUMMARY.name())
+                .sourceRecordId(SummarySourceKey.visit(77L))
+                .chunkText("visit summary")
+                .build());
+
+        repository.deleteByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+                5L,
+                java.util.List.of(SummarySourceKey.call(77L), SummarySourceKey.legacy(77L)),
+                RetrievalRecordType.summaryTypeNames());
+        repository.flush();
+
+        assertThat(repository.findByPatientId(5L))
+                .extracting(RetrievalIndexChunk::getSourceRecordId)
+                .containsExactly(SummarySourceKey.visit(77L));
     }
 }
