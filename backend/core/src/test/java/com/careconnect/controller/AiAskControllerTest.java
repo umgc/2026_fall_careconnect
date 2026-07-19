@@ -1,9 +1,5 @@
 package com.careconnect.controller;
 
-import com.careconnect.dto.ai.AiAskRequest;
-import com.careconnect.dto.ai.AiAskResponse;
-import com.careconnect.dto.ai.DeliveryStatus;
-import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
 import com.careconnect.security.Role;
 import com.careconnect.service.ai.ask.AiAskService;
@@ -16,11 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.UUID;
+
+import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class AiAskControllerTest {
@@ -30,12 +32,14 @@ class AiAskControllerTest {
     @Mock
     private SecurityUtil securityUtil;
 
-    private AiAskController controller;
+    private MockMvc mockMvc;
     private User caller;
 
     @BeforeEach
     void setUp() {
-        controller = new AiAskController(aiAskService, securityUtil);
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new AiAskController(aiAskService, securityUtil))
+                .build();
         caller = new User();
         caller.setId(7L);
         caller.setRole(Role.PATIENT);
@@ -43,46 +47,67 @@ class AiAskControllerTest {
     }
 
     @Test
-    @DisplayName("ungrounded model response returns 502 WITHHELD without answer or citations")
-    void ask_ungroundedResponse_returnsBadGatewayWithheld() throws Exception {
-        final AiAskRequest request = request();
-        when(aiAskService.ask(caller, request))
-                .thenThrow(new AskAiGroundingException("Citation validation failed"));
+    @DisplayName("primary Ask AI URL returns correlated 502 WITHHELD contract")
+    void ask_primaryUrl_groundingFailurePreservesCorrelation() throws Exception {
+        final UUID requestId = UUID.randomUUID();
+        final UUID auditId = UUID.randomUUID();
+        final UUID sessionId = UUID.randomUUID();
+        when(aiAskService.ask(any(), any())).thenThrow(new AskAiGroundingException(
+                requestId, auditId, sessionId, "Citation validation failed"));
 
-        final ResponseEntity<AiAskResponse> response = controller.ask(request);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().success()).isFalse();
-        assertThat(response.getBody().deliveryStatus()).isEqualTo(DeliveryStatus.WITHHELD);
-        assertThat(response.getBody().answer()).isNull();
-        assertThat(response.getBody().citations()).isEmpty();
-        assertThat(response.getBody().error().code()).isEqualTo("UNGROUNDED_RESPONSE");
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.auditId").value(auditId.toString()))
+                .andExpect(jsonPath("$.sessionId").value(sessionId.toString()))
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.answer").doesNotExist())
+                .andExpect(jsonPath("$.citations", hasSize(0)))
+                .andExpect(jsonPath("$.error.code").value("UNGROUNDED_RESPONSE"));
     }
 
     @Test
-    @DisplayName("inference outage remains a 503 WITHHELD response")
-    void ask_inferenceUnavailable_returnsServiceUnavailable() throws Exception {
-        final AiAskRequest request = request();
-        when(aiAskService.ask(caller, request))
-                .thenThrow(new AskAiUnavailableException("Bedrock unavailable"));
+    @DisplayName("versioned Ask AI URL returns correlated 503 and preserves request session")
+    void ask_versionedUrl_unavailablePreservesCorrelation() throws Exception {
+        final UUID requestId = UUID.randomUUID();
+        final UUID auditId = UUID.randomUUID();
+        final UUID sessionId = UUID.randomUUID();
+        when(aiAskService.ask(any(), any())).thenThrow(new AskAiUnavailableException(
+                requestId,
+                auditId,
+                sessionId,
+                "RETRIEVAL_UNAVAILABLE",
+                "Bedrock unavailable",
+                null));
 
-        final ResponseEntity<AiAskResponse> response = controller.ask(request);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().deliveryStatus()).isEqualTo(DeliveryStatus.WITHHELD);
-        assertThat(response.getBody().error().code()).isEqualTo("RETRIEVAL_UNAVAILABLE");
+        mockMvc.perform(post("/v1/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(sessionId)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.auditId").value(auditId.toString()))
+                .andExpect(jsonPath("$.sessionId").value(sessionId.toString()))
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.answer").doesNotExist())
+                .andExpect(jsonPath("$.citations", hasSize(0)))
+                .andExpect(jsonPath("$.error.code").value("RETRIEVAL_UNAVAILABLE"));
     }
 
-    private static AiAskRequest request() {
-        return new AiAskRequest(
-                "What medication changed?",
-                42L,
-                null,
-                null,
-                InputModality.TEXT,
-                "en-US",
-                null);
+    private static String requestJson(final UUID sessionId) {
+        final String session = sessionId == null
+                ? "null"
+                : "\"" + sessionId + "\"";
+        return """
+                {
+                  "query": "What medication changed?",
+                  "patientId": 42,
+                  "modality": "TEXT",
+                  "locale": "en-US",
+                  "sessionId": %s
+                }
+                """.formatted(session);
     }
 }
