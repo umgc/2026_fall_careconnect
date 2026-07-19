@@ -58,9 +58,9 @@ public class AiAskController {
             log.warn("Ask AI forbidden scope code={} msg={}", ex.getErrorCode(), ex.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(AiAskService.withheld(
-                            null,
+                            ex.getRequestId(),
                             ex.getAuditId(),
-                            sessionId,
+                            ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ForbiddenScopeException.ERROR_CODE,
                             ex.getMessage(),
                             null));
@@ -68,7 +68,9 @@ public class AiAskController {
             log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());
             return ResponseEntity.status(ex.getHttpStatus())
                     .body(AiAskService.withheld(
-                            null, null, sessionId,
+                            ex.getRequestId(),
+                            ex.getAuditId(),
+                            ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ex.getErrorCode(), ex.getMessage(), null));
         } catch (final AskAiException ex) {
             log.warn("Ask AI failed code={} requestId={}", ex.getErrorCode(), ex.getRequestId());

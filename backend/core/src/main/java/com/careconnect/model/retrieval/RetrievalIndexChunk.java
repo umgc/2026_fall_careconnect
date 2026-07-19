@@ -65,6 +65,10 @@ public class RetrievalIndexChunk {
     @Column(name = "source_record_id", nullable = false, length = RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH)
     private String sourceRecordId;
 
+    /** First-class ownership discriminator for sources whose table-local IDs can collide. */
+    @Column(name = "source_kind", length = RetrievalIndexSchema.RECORD_TYPE_MAX_LENGTH)
+    private String sourceKind;
+
     @Column(name = "chunk_text", nullable = false, columnDefinition = "TEXT")
     private String chunkText;
 

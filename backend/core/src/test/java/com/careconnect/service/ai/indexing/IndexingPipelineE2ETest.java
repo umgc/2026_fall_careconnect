@@ -124,8 +124,13 @@ class IndexingPipelineE2ETest {
                   "careInstructions": [{ "type": "medication", "text": "Take with food" }]
                 }
                 """);
-        when(callSummaryRepository.findById(99L)).thenReturn(Optional.of(summary));
-        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("99"), anyString()))
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L),
+                eq("call-summary:99"),
+                eq("99"),
+                eq(SummarySourceKey.CALL_KIND),
+                any()))
                 .thenReturn(List.of());
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
@@ -155,7 +160,8 @@ class IndexingPipelineE2ETest {
         assertThat(indexedChunks.get())
                 .allMatch(c -> Long.valueOf(42L).equals(c.getPatientId()));
         assertThat(indexedChunks.get())
-                .allMatch(c -> "99".equals(c.getSourceRecordId()));
+                .allMatch(c -> "call-summary:99".equals(c.getSourceRecordId()))
+                .allMatch(c -> SummarySourceKey.CALL_KIND.equals(c.getSourceKind()));
 
         final ArgumentCaptor<IndexingOutboxRow> outboxCaptor =
                 ArgumentCaptor.forClass(IndexingOutboxRow.class);
@@ -163,7 +169,12 @@ class IndexingPipelineE2ETest {
         assertThat(outboxCaptor.getValue().getProcessedAt()).isNotNull();
         assertThat(outboxCaptor.getValue().getLastError()).isNull();
         assertThat(outboxCaptor.getValue().getAttemptCount()).isEqualTo(1);
-        verify(chunkRepository).deleteBySourceRecordId("99");
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L),
+                eq("call-summary:99"),
+                eq("99"),
+                eq(SummarySourceKey.CALL_KIND),
+                any());
     }
 
     @Test
@@ -202,17 +213,37 @@ class IndexingPipelineE2ETest {
     @Test
     @DisplayName("E2E: re-processing same summary contentHash skips rewrite")
     void summaryCreated_sameContentHash_skipsDeleteAndRewrite() throws Exception {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-e2e");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        summary.setSummarizationEngine("engine");
+        summary.setSummaryJson("{\"headline\":\"already indexed\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
                 .patientId(42L)
                 .recordType(RetrievalRecordType.CALL_SUMMARY.name())
-                .sourceRecordId("99")
+                .sourceRecordId("call-summary:99")
+                .sourceKind(SummarySourceKey.CALL_KIND)
                 .chunkText("already indexed")
-                .chunkMetadata("{\"contentHash\":\"sha256:same-hash\",\"chunkIndex\":0}")
+                .consentScope("on_consent")
+                .chunkMetadata(
+                        "{\"contentHash\":\"sha256:same-hash\",\"chunkIndex\":0,"
+                                + "\"summarizationEngine\":\"engine\","
+                                + "\"section\":\"overview\",\"title\":\"already indexed\","
+                                + "\"citationMetadataVersion\":1,\"episodeType\":\"call\","
+                                + "\"callId\":\"call-e2e\"}")
                 .build();
-        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "CALL_SUMMARY"))
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L),
+                eq("call-summary:99"),
+                eq("99"),
+                eq(SummarySourceKey.CALL_KIND),
+                any()))
                 .thenReturn(List.of(existing));
-        when(chunkRepository.findBySourceRecordIdAndRecordType("99", "VISIT_SUMMARY"))
-                .thenReturn(List.of());
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call",
@@ -232,8 +263,9 @@ class IndexingPipelineE2ETest {
 
         worker.pollAndProcess();
 
-        verify(callSummaryRepository, never()).findById(any());
-        verify(chunkRepository, never()).deleteBySourceRecordId(anyString());
+        verify(callSummaryRepository).findByIdForUpdate(99L);
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), anyString(), anyString(), anyString(), any());
         verify(chunkRepository, never()).saveAll(anyList());
         assertThat(indexedChunks.get()).isEmpty();
 
@@ -274,8 +306,13 @@ class IndexingPipelineE2ETest {
         summary.setPatientId(42L);
         summary.setSummaryJson("   ");
         summary.setCaregiverVisibility("on_consent");
-        when(callSummaryRepository.findById(88L)).thenReturn(Optional.of(summary));
-        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("88"), anyString()))
+        when(callSummaryRepository.findByIdForUpdate(88L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L),
+                eq("call-summary:88"),
+                eq("88"),
+                eq(SummarySourceKey.CALL_KIND),
+                any()))
                 .thenReturn(List.of());
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
@@ -296,7 +333,8 @@ class IndexingPipelineE2ETest {
 
         worker.pollAndProcess();
 
-        verify(chunkRepository, never()).deleteBySourceRecordId(anyString());
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), anyString(), anyString(), anyString(), any());
         verify(chunkRepository, never()).saveAll(anyList());
         verify(outboxRepository, atLeastOnce()).save(any(IndexingOutboxRow.class));
     }

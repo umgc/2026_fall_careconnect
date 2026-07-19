@@ -137,23 +137,57 @@ class RetrievalIndexChunkRepositoryTest {
                 .patientId(5L)
                 .recordType(RetrievalRecordType.CALL_SUMMARY.name())
                 .sourceRecordId(SummarySourceKey.call(77L))
+                .sourceKind(SummarySourceKey.CALL_KIND)
                 .chunkText("call summary")
                 .build());
         repository.save(RetrievalIndexChunk.builder()
                 .patientId(5L)
                 .recordType(RetrievalRecordType.VISIT_SUMMARY.name())
                 .sourceRecordId(SummarySourceKey.visit(77L))
+                .sourceKind(SummarySourceKey.VISIT_KIND)
                 .chunkText("visit summary")
                 .build());
 
-        repository.deleteByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+        repository.deleteCallSummaryChunksForReplacement(
                 5L,
-                java.util.List.of(SummarySourceKey.call(77L), SummarySourceKey.legacy(77L)),
+                SummarySourceKey.call(77L),
+                SummarySourceKey.legacy(77L),
+                SummarySourceKey.CALL_KIND,
                 RetrievalRecordType.summaryTypeNames());
         repository.flush();
 
         assertThat(repository.findByPatientId(5L))
                 .extracting(RetrievalIndexChunk::getSourceRecordId)
                 .containsExactly(SummarySourceKey.visit(77L));
+    }
+
+    @Test
+    @DisplayName("ambiguous legacy call/visit collision is not destructively migrated")
+    void legacyCallVisitCollision_isPreserved() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("legacy call")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.VISIT_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("legacy visit")
+                .build());
+
+        final int deleted = repository.deleteCallSummaryChunksForReplacement(
+                5L,
+                SummarySourceKey.call(77L),
+                SummarySourceKey.legacy(77L),
+                SummarySourceKey.CALL_KIND,
+                RetrievalRecordType.summaryTypeNames());
+        repository.flush();
+
+        assertThat(deleted).isZero();
+        assertThat(repository.findByPatientId(5L))
+                .extracting(RetrievalIndexChunk::getChunkText)
+                .containsExactlyInAnyOrder("legacy call", "legacy visit");
     }
 }

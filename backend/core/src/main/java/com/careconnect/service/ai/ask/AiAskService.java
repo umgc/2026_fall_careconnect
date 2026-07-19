@@ -114,6 +114,9 @@ public class AiAskService {
         if (!governance.isAllowed()) {
             final boolean rateLimited = "RATE_LIMIT".equals(governance.getAction());
             throw new AskAiRejectedException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     rateLimited ? "RATE_LIMITED" : "INVALID_REQUEST",
                     governance.getReason(),
                     rateLimited ? 429 : 400);
@@ -124,6 +127,9 @@ public class AiAskService {
                         request.query(), caller.getId(), conversationKey);
         if (sanitization.isBlocked()) {
             throw new AskAiRejectedException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     "SAFETY_VALIDATION_FAILED",
                     "Query blocked by input safety checks",
                     422);
@@ -131,12 +137,23 @@ public class AiAskService {
         final String sanitizedQuery = sanitization.getSanitizedContent();
         if (sanitizedQuery == null || sanitizedQuery.isBlank()) {
             throw new AskAiRejectedException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     "INVALID_REQUEST", "query must not be blank", 400);
         }
 
         final Set<RetrievalRecordType> requestedTypes = toTypeSet(request.sourceTypes());
-        final RetrievalScope scope = retrievalScopeService.resolveRetrievalScope(
-                caller, request.patientId(), requestedTypes);
+        final RetrievalScope scope;
+        try {
+            scope = retrievalScopeService.resolveRetrievalScope(
+                    caller, request.patientId(), requestedTypes);
+        } catch (final ForbiddenScopeException ex) {
+            throw ex.withCorrelation(
+                    requestId,
+                    ex.getAuditId() == null ? auditId : ex.getAuditId(),
+                    sessionId);
+        }
 
         final long retrievalStarted = System.nanoTime();
         final HybridRetrievalResult retrieval;
