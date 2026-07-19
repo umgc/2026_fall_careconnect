@@ -64,6 +64,19 @@ class SchemaPatchRunnerTest {
     }
 
     @Test
+    void run_waitsTenMinutesForProductionSchemaMigrationLock() throws Exception {
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        assertThat(source).contains("TimeUnit.MINUTES.toNanos(10)");
+        assertThat(source).doesNotContain("TimeUnit.SECONDS.toNanos(30)");
+    }
+
+    @Test
     void run_abortsWhenRequiredProductionPatchFails() throws Exception {
         final DataSource dataSource = mock(DataSource.class);
         final Connection connection = mock(Connection.class);
