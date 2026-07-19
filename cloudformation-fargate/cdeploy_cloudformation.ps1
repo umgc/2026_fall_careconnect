@@ -57,6 +57,10 @@ $ServiceParameters = Join-Path $ParameterDir "$Environment-service.json"
 $script:DataEffectiveParameters = $DataParameters
 $script:TemporaryFiles = New-Object System.Collections.Generic.List[string]
 
+# Remove parameter override temp files left by interrupted previous runs.
+Get-ChildItem -Path ([System.IO.Path]::GetTempPath()) -Filter "careconnect-*-data-*.json" -File -ErrorAction SilentlyContinue |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+
 function Write-Step {
     param([string]$Message)
     Write-Host ""
@@ -612,7 +616,7 @@ Write-Step "Checking prerequisites"
 
         Write-Step "Building Docker image"
         $script:CurrentOperation = "Building Docker image"
-        & docker build -t $LocalImageName .
+        & docker build --platform linux/amd64 -t $LocalImageName .
         Assert-LastExitCode "Docker build"
 
         Write-Step "Tagging and pushing Docker image to ECR"

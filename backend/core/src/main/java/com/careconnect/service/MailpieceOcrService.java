@@ -35,6 +35,14 @@ public class MailpieceOcrService {
      * @return optional sender name candidate
      */
     public Optional<String> extractTopLeftLabel(byte[] imageBytes, String metadata) {
+        return extractMailpieceMetadata(imageBytes, metadata).map(MailpieceOcrResult::sender);
+    }
+
+    /**
+     * Runs AWS Textract and returns sender plus an optional second top-region line for summary
+     * enrichment when HTML metadata is insufficient.
+     */
+    public Optional<MailpieceOcrResult> extractMailpieceMetadata(byte[] imageBytes, String metadata) {
         if (imageBytes == null || imageBytes.length == 0) {
             return Optional.empty();
         }
@@ -47,47 +55,68 @@ public class MailpieceOcrService {
                             .build()
             );
 
-            List<Block> lines = response.blocks().stream()
-                    .filter(b -> b.blockType() == BlockType.LINE)
-                    .filter(b -> b.geometry() != null && b.geometry().boundingBox() != null)
-                    .collect(Collectors.toList());
-
-            if (lines.isEmpty()) {
+            List<String> topRegionLines = collectTopRegionLines(response);
+            if (topRegionLines.isEmpty()) {
                 return Optional.empty();
             }
 
-            lines.sort(Comparator
-                    .comparingDouble((Block b) -> b.geometry().boundingBox().top())
-                    .thenComparingDouble(b -> b.geometry().boundingBox().left()));
-
-            double minTop = lines.get(0).geometry().boundingBox().top();
-            double threshold = minTop + 0.15; // roughly top 15% of the image
-
-            return lines.stream()
-                    .filter(b -> b.geometry().boundingBox().top() <= threshold)
-                    .sorted(Comparator
-                            .comparingDouble((Block b) -> b.geometry().boundingBox().top())
-                            .thenComparingDouble(b -> b.geometry().boundingBox().left()))
-                    .map(block -> {
-                        String text = block.text();
-                        log.debug("Mailpiece OCR candidate: '{}' (top={}, left={})",
-                                text,
-                                block.geometry().boundingBox().top(),
-                                block.geometry().boundingBox().left());
-                        return text;
-                    })
-                    .map(String::trim)
+            String sender = topRegionLines.stream()
                     .filter(this::looksLikeSender)
                     .findFirst()
-                    .map(candidate -> {
-                        log.info("Mailpiece OCR detected sender '{}'", candidate);
-                        return candidate;
-                    });
+                    .orElse(null);
+            if (sender == null) {
+                return Optional.empty();
+            }
+
+            String summaryLine = topRegionLines.stream()
+                    .filter(this::looksLikeSummary)
+                    .filter(line -> !line.equalsIgnoreCase(sender))
+                    .findFirst()
+                    .orElse(null);
+
+            log.info("Mailpiece OCR detected sender '{}'{}", sender,
+                    summaryLine != null ? " with summary hint '" + summaryLine + "'" : "");
+            return Optional.of(new MailpieceOcrResult(sender, summaryLine));
 
         } catch (Exception ex) {
             log.warn("Textract mailpiece OCR failed ({}): {}", metadata, ex.getMessage());
             return Optional.empty();
         }
+    }
+
+    private List<String> collectTopRegionLines(DetectDocumentTextResponse response) {
+        List<Block> lines = response.blocks().stream()
+                .filter(b -> b.blockType() == BlockType.LINE)
+                .filter(b -> b.geometry() != null && b.geometry().boundingBox() != null)
+                .collect(Collectors.toList());
+
+        if (lines.isEmpty()) {
+            return List.of();
+        }
+
+        lines.sort(Comparator
+                .comparingDouble((Block b) -> b.geometry().boundingBox().top())
+                .thenComparingDouble(b -> b.geometry().boundingBox().left()));
+
+        double minTop = lines.get(0).geometry().boundingBox().top();
+        double threshold = minTop + 0.15;
+
+        return lines.stream()
+                .filter(b -> b.geometry().boundingBox().top() <= threshold)
+                .sorted(Comparator
+                        .comparingDouble((Block b) -> b.geometry().boundingBox().top())
+                        .thenComparingDouble(b -> b.geometry().boundingBox().left()))
+                .map(block -> {
+                    String text = block.text();
+                    log.debug("Mailpiece OCR candidate: '{}' (top={}, left={})",
+                            text,
+                            block.geometry().boundingBox().top(),
+                            block.geometry().boundingBox().left());
+                    return text;
+                })
+                .map(String::trim)
+                .filter(text -> !text.isBlank())
+                .collect(Collectors.toList());
     }
 
     private boolean looksLikeSender(String text) {
@@ -113,5 +142,19 @@ public class MailpieceOcrService {
         }
         // Require at least one letter to avoid purely numeric tracking numbers.
         return cleaned.matches(".*[A-Za-z].*");
+    }
+
+    private boolean looksLikeSummary(String text) {
+        if (text == null || text.isBlank() || text.length() < 3) {
+            return false;
+        }
+        String lower = text.strip().toLowerCase(Locale.ROOT);
+        if (lower.startsWith("learn more") || lower.contains("click") || lower.contains("visit")) {
+            return false;
+        }
+        if (lower.contains("ridealong") || lower.contains("ride along")) {
+            return false;
+        }
+        return lower.matches(".*[a-z].*");
     }
 }

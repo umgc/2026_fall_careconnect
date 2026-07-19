@@ -80,6 +80,40 @@ public class CallSummaryService {
   }
 
   /**
+   * Returns the stored summary entity by its database identifier when present.
+   *
+   * <p>Used by the read-side endpoint {@code GET /api/v3/summaries/{id}}
+   * (WBS 3.11.6). Unlike {@link #getLatestSummaryEntity(String)} this
+   * method does not resolve "latest per call" — it fetches exactly the row
+   * with the given primary key, so callers reach the specific summary
+   * emitted in a {@code SUMMARY_CREATED} event.
+   *
+   * @param id database identifier of the summary row
+   * @return matching summary when found, empty otherwise
+   */
+  public Optional<CallSummary> getSummaryEntityById(final Long id) {
+    final Optional<CallSummary> result;
+    if (id == null) {
+      result = Optional.empty();
+    } else {
+      result = summaryRepository.findById(id);
+    }
+    return result;
+  }
+
+  /**
+   * Returns the stored summary payload by its database identifier when
+   * present. Response shape matches {@link #getLatestSummary(String)} so
+   * consumers can treat the two endpoints as interchangeable read paths.
+   *
+   * @param id database identifier of the summary row
+   * @return summary response payload when found
+   */
+  public Optional<Map<String, Object>> getSummaryById(final Long id) {
+    return getSummaryEntityById(id).map(this::toResponse);
+  }
+
+  /**
    * Generates, stores, and returns a summary for the supplied call.
    *
    * @param callId call identifier

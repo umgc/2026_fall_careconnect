@@ -18,13 +18,24 @@
 
 name: Team B CI
 
+# Push runs are scoped to develop and Team B branches — running the
+# full ~2h pipeline on every push to every team's feature branches
+# burns Actions minutes and spams their authors with failure emails.
+# PRs still run the full pipeline whenever they target develop or
+# team-b-develop, regardless of source branch, so the coverage gate
+# continues to protect every merge into those branches.
 on:
   push:
     branches:
-      - '**'
+      - develop
+      - team-b-develop
+      - 'feature/b-*'
+      - 'fix/b-*'
+      - 'sync/team-b-*'
   pull_request:
     branches:
-      - '**'
+      - develop
+      - team-b-develop
 
 env:
   FLUTTER_VERSION: '3.x'
@@ -87,6 +98,13 @@ jobs:
       - name: Maven compile (skip tests)
         working-directory: backend/core
         run: mvn -B clean compile -DskipTests
+
+      # Web uses different conditional imports (dart.library.js_interop)
+      # than the native path, so web-only breakage is invisible to the
+      # other build/test steps. Compile check only — no artifacts kept.
+      - name: Flutter build web (compile check)
+        working-directory: frontend
+        run: flutter build web --release
 
       # ----------------------------------------------------------------
       # Stage 3: Unit tests

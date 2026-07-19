@@ -12,7 +12,7 @@ import java.sql.Statement;
 /**
  * Applies one-time schema patches via plain JDBC at startup.
  * Runs before JPA initialisation (@Order(1)) and has no JPA dependency,
- * so it avoids the Flyway ↔ entityManagerFactory circular-dependency issue.
+ * so it avoids coupling schema changes to Flyway/JPA startup order.
  *
  * Each patch is idempotent: safe to execute on every restart.
  */
@@ -116,7 +116,83 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
             "))"
         );
+        applyRetrievalIndexChunkPatches();
         seedDemoScheduledVisits();
+    }
+
+    /**
+     * Tasks 1.5 / 1.6 — pgvector extension and shared Ask AI retrieval index table.
+     * Mirrors db/migration V2607071920 and V2607071921 (applied via SchemaPatchRunner in all envs).
+     */
+    private void applyRetrievalIndexChunkPatches() {
+        applyPatch(
+            "V2607071920 – enable pgvector extension",
+            "CREATE EXTENSION IF NOT EXISTS vector"
+        );
+        applyPatch(
+            "V2607071921a – create retrieval_index_chunk table",
+            "CREATE TABLE IF NOT EXISTS retrieval_index_chunk (" +
+            "  id                UUID          PRIMARY KEY DEFAULT gen_random_uuid()," +
+            "  patient_id        BIGINT        NOT NULL," +
+            "  record_type       VARCHAR(40)   NOT NULL," +
+            "  source_record_id  VARCHAR(120)  NOT NULL," +
+            "  chunk_text        TEXT          NOT NULL," +
+            "  chunk_metadata    JSONB         NULL," +
+            "  search_vector     TSVECTOR      NULL," +
+            "  embedding         vector(1536)  NULL," +
+            "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
+            "  consent_scope     VARCHAR(40)   NULL" +
+            ")"
+        );
+        applyPatch(
+            "V2607071921b – retrieval_index_chunk patient FK",
+            "DO $$ BEGIN " +
+            "  ALTER TABLE retrieval_index_chunk " +
+            "    ADD CONSTRAINT fk_retrieval_chunk_patient " +
+            "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
+            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+        );
+        applyPatch(
+            "V2607071921c – retrieval_index_chunk indexes",
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id " +
+            "  ON retrieval_index_chunk (patient_id);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_record_type " +
+            "  ON retrieval_index_chunk (patient_id, record_type);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source " +
+            "  ON retrieval_index_chunk (source_record_id, record_type);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_fts " +
+            "  ON retrieval_index_chunk USING GIN (search_vector);" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding " +
+            "  ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) " +
+            "  WITH (lists = 100)"
+        );
+        applyPatch(
+            "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
+            "CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger() " +
+            "RETURNS TRIGGER AS $$ " +
+            "BEGIN " +
+            "  NEW.search_vector := to_tsvector('english', COALESCE(NEW.chunk_text, '')); " +
+            "  RETURN NEW; " +
+            "END; " +
+            "$$ LANGUAGE plpgsql;" +
+            "DROP TRIGGER IF EXISTS trg_retrieval_index_chunk_search_vector ON retrieval_index_chunk;" +
+            "CREATE TRIGGER trg_retrieval_index_chunk_search_vector " +
+            "  BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk " +
+            "  FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger()"
+        );
+        applyPatch(
+            "V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)",
+            "UPDATE retrieval_index_chunk " +
+            "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
+            "WHERE search_vector IS NULL"
+        );
+        applyPatch(
+            "V2607122000 – indexing_outbox claimed_at lease column",
+            "ALTER TABLE indexing_outbox " +
+            "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
+            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
+            "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
+        );
     }
 
     /**
