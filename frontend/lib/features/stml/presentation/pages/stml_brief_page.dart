@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../config/router/app_router.dart';
 import '../../../../config/theme/app_theme.dart';
 import '../../../../providers/user_provider.dart';
+import '../../../../services/daily_brief_gate_service.dart';
 import '../../../../services/stml_service.dart';
 
 /// STML-2 / STML-5: the Daily Memory Brief — a self-contained, first-time-
@@ -34,8 +35,16 @@ class _StmlBriefPageState extends State<StmlBriefPage> {
       return;
     }
     setState(() {
-      _briefFuture = StmlService.getDailyBrief(patientId);
+      _briefFuture = _loadAndMarkSeen(patientId);
     });
+  }
+
+  /// Only marks today's brief as seen once it has actually loaded, so a
+  /// failed navigation/load doesn't consume the day's auto-trigger.
+  Future<StmlBrief> _loadAndMarkSeen(int patientId) async {
+    final brief = await StmlService.getDailyBrief(patientId);
+    await DailyBriefGateService.markSeen(patientId);
+    return brief;
   }
 
   @override

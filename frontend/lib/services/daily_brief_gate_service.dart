@@ -2,14 +2,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// STML-2: gates the Daily Memory Brief auto-open to once per day, no
 /// earlier than 7am local time, per "first-open-after-7am" (WBS 3.13.2).
+///
+/// The last-shown marker is scoped per [patientId] so a shared device that
+/// switches between patient accounts doesn't skip one patient's brief
+/// because another patient's brief was already marked seen today.
 class DailyBriefGateService {
-  static const _lastShownKey = 'stml_daily_brief_last_shown_date';
+  static const _lastShownKeyPrefix = 'stml_daily_brief_last_shown_date_';
   static const _briefEarliestHour = 7;
 
-  /// Returns true exactly once per calendar day, only from 7am onward.
-  /// A true result marks today as shown, so calling this again today
-  /// (even after another login) returns false until the date rolls over.
-  static Future<bool> shouldShowAndMarkSeen({DateTime? now}) async {
+  /// Returns true if the brief should be shown for [patientId]: it's 7am or
+  /// later local time and today's brief hasn't been marked seen yet.
+  /// Read-only — call [markSeen] only after the brief actually loads, so a
+  /// failed navigation/load doesn't consume the day's trigger.
+  static Future<bool> shouldShow(int patientId, {DateTime? now}) async {
     final current = now ?? DateTime.now();
     if (current.hour < _briefEarliestHour) {
       return false;
@@ -17,19 +22,24 @@ class DailyBriefGateService {
 
     final prefs = await SharedPreferences.getInstance();
     final todayKey = _dateKey(current);
-    if (prefs.getString(_lastShownKey) == todayKey) {
-      return false;
-    }
-
-    await prefs.setString(_lastShownKey, todayKey);
-    return true;
+    return prefs.getString(_keyFor(patientId)) != todayKey;
   }
 
-  /// Clears the last-shown marker — for tests/manual QA of the gate.
-  static Future<void> resetForTesting() async {
+  /// Marks today's brief as shown for [patientId]. Call this only after the
+  /// brief has successfully loaded.
+  static Future<void> markSeen(int patientId, {DateTime? now}) async {
+    final current = now ?? DateTime.now();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_lastShownKey);
+    await prefs.setString(_keyFor(patientId), _dateKey(current));
   }
+
+  /// Clears the last-shown marker for [patientId] — for tests/manual QA.
+  static Future<void> resetForTesting(int patientId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyFor(patientId));
+  }
+
+  static String _keyFor(int patientId) => '$_lastShownKeyPrefix$patientId';
 
   static String _dateKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'

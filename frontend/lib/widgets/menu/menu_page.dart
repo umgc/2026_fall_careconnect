@@ -184,6 +184,7 @@ class _MenuPageState extends State<MenuPage> {
         icon: Icons.wb_sunny_outlined,
         label: local.dailyBrief,
         route: '/stml/brief',
+        visibleFor: const {'PATIENT'},
       ),
       _MenuItem(
         icon: Icons.sensors,

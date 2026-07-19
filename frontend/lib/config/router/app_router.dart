@@ -162,9 +162,10 @@ Future<void> navigateToDashboard(
   // the app is opened"). Caregivers, other roles, and logins after the brief
   // has already been shown today go straight to the dashboard.
   if (routePatientToDailyBrief) {
-    final role = Provider.of<UserProvider>(context, listen: false).user?.role;
-    if (role?.toUpperCase() == 'PATIENT') {
-      final shouldShowBrief = await DailyBriefGateService.shouldShowAndMarkSeen();
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    final patientId = user?.patientId;
+    if (user?.role.toUpperCase() == 'PATIENT' && patientId != null) {
+      final shouldShowBrief = await DailyBriefGateService.shouldShow(patientId);
       if (shouldShowBrief) {
         if (context.mounted) {
           context.go('/stml/brief');
