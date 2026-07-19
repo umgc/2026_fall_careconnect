@@ -341,6 +341,23 @@ public class CallSessionService {
         authorizeForPatient(user, requirePatientUserIdFromEntityId(patientEntityId));
     }
 
+    /**
+     * Authorizes access using a patient user id resolved from legacy telemetry or summaries.
+     */
+    @Transactional(readOnly = true)
+    public void requirePatientUserAccess(final User user, final Long patientUserId) {
+        if (user == null || user.getId() == null) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        }
+        if (user.getRole() == com.careconnect.security.Role.ADMIN) {
+            return;
+        }
+        if (patientUserId == null) {
+            throw new AppException(HttpStatus.NOT_FOUND, "Call not found");
+        }
+        authorizeForPatient(user, patientUserId);
+    }
+
     private Long requirePatientUserIdFromEntityId(final Long patientEntityId) {
         final Patient patient = patientRepository.findById(patientEntityId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient not found"));

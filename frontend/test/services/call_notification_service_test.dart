@@ -122,6 +122,24 @@ void main() {
       expect(CallNotificationService.isIncomingDialogVisibleForTest, isFalse);
     });
 
+    testWidgets('callEnding_dismissesIncomingPopup_byCallId', (tester) async {
+      await _pumpHost(tester);
+      await _showIncomingPopup(tester);
+
+      expect(find.byType(IncomingCallPopup), findsOneWidget);
+
+      CallNotificationService.processNotificationMessageForTest({
+        'type': 'call-ending',
+        'callId': 'call-dismiss-test',
+        'endedBy': '2',
+        'status': 'processing',
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.byType(IncomingCallPopup), findsNothing);
+      expect(CallNotificationService.isIncomingDialogVisibleForTest, isFalse);
+    });
+
     testWidgets('callEnded_dismissesWhenIncomingCallIdClearedButDialogVisible',
         (tester) async {
       await _pumpHost(tester);
