@@ -1,18 +1,17 @@
 package com.careconnect.controller;
 
 import com.careconnect.config.CareconnectTestConfig;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.CallSummary;
-import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
+import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
-import com.careconnect.service.CallTelemetryService;
-import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.CaregiverService;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,6 +23,7 @@ import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAu
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -31,6 +31,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -38,10 +41,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Slice tests for {@link CallSummaryController} (WBS 3.11.6).
- *
- * <p>Covers the {@code GET /api/v3/summaries/{id}} contract:
- * 200 with body on found + authorized (via each of the four access paths),
- * 404 on not-found, 403 on unauthorized, 400 on a non-numeric id.
  */
 @WebMvcTest(
         controllers = CallSummaryController.class,
@@ -62,10 +61,10 @@ class CallSummaryControllerTest {
     private CallSummaryService callSummaryService;
 
     @MockitoBean
-    private CallTelemetryService callTelemetryService;
+    private CallSessionService callSessionService;
 
     @MockitoBean
-    private CallTranscriptService callTranscriptService;
+    private CaregiverService caregiverService;
 
     @MockitoBean
     private UserRepository userRepository;
@@ -73,6 +72,7 @@ class CallSummaryControllerTest {
     private static final long SUMMARY_ID = 101L;
     private static final long CURRENT_USER_ID = 500L;
     private static final long OWNER_USER_ID = 999L;
+    private static final long PATIENT_ID = 77L;
     private static final String CALL_ID = "call-1";
     private static final String CURRENT_USER_EMAIL = "user";
 
@@ -80,21 +80,16 @@ class CallSummaryControllerTest {
 
     @BeforeEach
     void setUp() {
-        // @WithMockUser defaults username to "user"; findByEmail is called
-        // with authentication.getName().
         caregiverUser = new User();
         caregiverUser.setId(CURRENT_USER_ID);
         caregiverUser.setRole(Role.CAREGIVER);
         caregiverUser.setEmail(CURRENT_USER_EMAIL);
         when(userRepository.findByEmail(CURRENT_USER_EMAIL))
                 .thenReturn(Optional.of(caregiverUser));
-
-        // Default: no access via any path unless the individual test
-        // wires the specific path it's exercising.
-        when(callTelemetryService.getTelemetryForCall(anyString()))
-                .thenReturn(List.of());
-        when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong()))
-                .thenReturn(false);
+        doThrow(new AppException(HttpStatus.FORBIDDEN, "User has no historical call access"))
+                .when(callSessionService)
+                .requireHistoricalParticipant(anyString(), anyLong());
+        when(caregiverService.hasAccessToPatient(anyLong(), anyLong())).thenReturn(false);
     }
 
     private Map<String, Object> exampleResponse() {
@@ -116,20 +111,13 @@ class CallSummaryControllerTest {
         entity.setId(SUMMARY_ID);
         entity.setCallId(CALL_ID);
         entity.setGeneratedByUserId(ownerUserId);
+        entity.setPatientId(PATIENT_ID);
         return entity;
     }
 
-    private CallTelemetryEvent telemetryEventFor(final Long actorUserId) {
-        CallTelemetryEvent event = new CallTelemetryEvent();
-        event.setActorUserId(actorUserId);
-        return event;
-    }
-
-    // ---- 200 paths: each of the four authorization routes ----
-
     @Test
     @WithMockUser
-    @DisplayName("returns 200 when caller is admin (regardless of ownership/participation)")
+    @DisplayName("returns 200 when caller is admin")
     void getSummaryById_admin_returns200() throws Exception {
         caregiverUser.setRole(Role.ADMIN);
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
@@ -144,12 +132,13 @@ class CallSummaryControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("returns 200 when caller is a telemetry participant on the call")
-    void getSummaryById_telemetryParticipant_returns200() throws Exception {
+    @DisplayName("returns 200 when caller is a durable historical participant")
+    void getSummaryById_historicalParticipant_returns200() throws Exception {
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOwnedBy(OWNER_USER_ID)));
-        when(callTelemetryService.getTelemetryForCall(CALL_ID))
-                .thenReturn(List.of(telemetryEventFor(CURRENT_USER_ID)));
+        org.mockito.Mockito.doReturn(new com.careconnect.model.CallSession())
+                .when(callSessionService)
+                .requireHistoricalParticipant(CALL_ID, CURRENT_USER_ID);
         when(callSummaryService.getSummaryById(SUMMARY_ID))
                 .thenReturn(Optional.of(exampleResponse()));
 
@@ -159,12 +148,11 @@ class CallSummaryControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("returns 200 when caller has transcript access to the call")
-    void getSummaryById_transcriptAccess_returns200() throws Exception {
+    @DisplayName("returns 200 when caller has current patient relationship")
+    void getSummaryById_patientRelationship_returns200() throws Exception {
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOwnedBy(OWNER_USER_ID)));
-        when(callTranscriptService.hasTranscriptAccess(CALL_ID, CURRENT_USER_ID))
-                .thenReturn(true);
+        when(caregiverService.hasAccessToPatient(CURRENT_USER_ID, PATIENT_ID)).thenReturn(true);
         when(callSummaryService.getSummaryById(SUMMARY_ID))
                 .thenReturn(Optional.of(exampleResponse()));
 
@@ -174,26 +162,37 @@ class CallSummaryControllerTest {
 
     @Test
     @WithMockUser
-    @DisplayName("returns 200 when caller is the summary owner (generatedByUserId matches)")
-    void getSummaryById_summaryOwner_returns200() throws Exception {
+    @DisplayName("denies summary when only a forged telemetry target would have granted access")
+    void getSummaryById_forgedTelemetryTarget_returns403() throws Exception {
+        final CallSummary summary = entityOwnedBy(OWNER_USER_ID);
+        when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
+                .thenReturn(Optional.of(summary));
+
+        mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
+                .andExpect(status().isForbidden());
+
+        verify(callSessionService).requireHistoricalParticipant(CALL_ID, CURRENT_USER_ID);
+        verify(caregiverService).hasAccessToPatient(CURRENT_USER_ID, PATIENT_ID);
+        verify(callSummaryService, never()).getSummaryById(SUMMARY_ID);
+    }
+
+    @Test
+    @WithMockUser
+    @DisplayName("returns 403 when caller is only the summary generator without durable access")
+    void getSummaryById_summaryOwnerAlone_returns403() throws Exception {
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOwnedBy(CURRENT_USER_ID)));
-        when(callSummaryService.getSummaryById(SUMMARY_ID))
-                .thenReturn(Optional.of(exampleResponse()));
 
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
     }
-
-    // ---- Failure paths ----
 
     @Test
     @WithMockUser
-    @DisplayName("returns 403 when caller has none of the four access paths")
+    @DisplayName("returns 403 when caller has none of the allowed access paths")
     void getSummaryById_noAccess_returns403() throws Exception {
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOwnedBy(OWNER_USER_ID)));
-        // Role is CAREGIVER (not ADMIN), no telemetry, no transcript, not owner.
 
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
                 .andExpect(status().isForbidden());

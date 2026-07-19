@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -45,4 +46,20 @@ public class CallParticipant extends Auditable {
 
     @Column(name = "left_at")
     private LocalDateTime leftAt;
+
+    /** Opaque Chime externalUserId (no names, roles, or raw user IDs). */
+    @Column(name = "chime_external_user_id", length = 64)
+    private String chimeExternalUserId;
+
+    @Column(name = "chime_attendee_id", length = 255)
+    private String chimeAttendeeId;
+
+    @Column(name = "chime_join_token", columnDefinition = "TEXT")
+    private String chimeJoinToken;
+
+    @Column(name = "attendee_claim_token")
+    private UUID attendeeClaimToken;
+
+    @Column(name = "attendee_claimed_until")
+    private LocalDateTime attendeeClaimedUntil;
 }

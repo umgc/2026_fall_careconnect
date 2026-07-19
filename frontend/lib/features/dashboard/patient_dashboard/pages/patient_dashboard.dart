@@ -1083,6 +1083,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
             builder: (context) => SizedBox(
               height: sheetHeight,
               child: AIChat(
+                key: ValueKey(
+                  'ai-chat-${AiChatMode.groundedRecords.name}-${user?.patientId ?? 'none'}',
+                ),
                 role: 'patient',
                 isModal: true,
                 patientId: user?.patientId, // Pass the actual patient ID

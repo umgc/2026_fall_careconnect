@@ -136,6 +136,8 @@ class CallControllerTest {
                 .thenReturn(durableSession);
         when(callSessionService.requireActiveParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
+        when(callSessionService.requireTranscriptUploadParticipant(anyString(), anyLong()))
+                .thenReturn(durableSession);
         when(callSessionService.requireHistoricalParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
         when(callSessionService.requireRecordingAccess(anyString(), any()))
@@ -1516,6 +1518,7 @@ class CallControllerTest {
             Map<String, Object> body = new HashMap<>();
             List<Map<String, Object>> segments = new ArrayList<>();
             Map<String, Object> seg1 = new HashMap<>();
+            seg1.put("clientSegmentId", "b6814f33-12e0-4f6e-80b7-ec71197da642");
             seg1.put("speakerLabel", "Speaker 1");
             seg1.put("text", "Hello");
             seg1.put("startMs", 0);
@@ -1534,14 +1537,30 @@ class CallControllerTest {
         }
 
         @Test
+        @DisplayName("POST transcript segment requires a canonical stable UUID")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void saveTranscriptSegmentsRejectsMissingStableId() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/transcript/segments")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"text\":\"retryable segment\"}"))
+                    .andExpect(status().isBadRequest());
+
+            verify(callTranscriptService, never()).recordSegments(anyString(), anyLong(), any());
+        }
+
+        @Test
         @DisplayName("POST /{callId}/transcript/segments as ADMIN non-participant returns 403")
         @WithMockUser(username = "admin@test.com", roles = {"ADMIN"})
         void saveTranscriptSegmentsAsAdminReturns200() throws Exception {
             mockCurrentAdmin();
-            when(callSessionService.requireActiveParticipant(CALL_ID, 3L))
+            when(callSessionService.requireTranscriptUploadParticipant(CALL_ID, 3L))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
 
             Map<String, Object> body = new HashMap<>();
+            body.put("clientSegmentId", "efee89b3-8700-4677-b8a8-d2666cb58de5");
             body.put("speakerLabel", "Speaker 1");
             body.put("text", "Single segment");
             body.put("startMs", 0);
@@ -1561,7 +1580,7 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void saveTranscriptSegmentsAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
-            when(callSessionService.requireActiveParticipant(CALL_ID, 1L))
+            when(callSessionService.requireTranscriptUploadParticipant(CALL_ID, 1L))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
             Map<String, Object> body = Map.of("text", "test");
 

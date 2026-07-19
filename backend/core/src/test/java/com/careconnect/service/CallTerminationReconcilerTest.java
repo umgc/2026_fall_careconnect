@@ -76,4 +76,20 @@ class CallTerminationReconcilerTest {
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any());
     }
+
+    @Test
+    void reconcile_skipsNotificationWhenExecutorDoesNotFenceEnded() {
+        final UUID claimId = UUID.randomUUID();
+        when(callSessionService.claimDueTermination(10L))
+                .thenReturn(new CallSessionService.TerminationClaim(
+                        "call-1", claimId, List.of(7L)));
+        when(callTerminationExecutor.execute("call-1", null, claimId)).thenReturn(false);
+
+        reconciler.reconcile(10L);
+
+        verify(callTerminationExecutor).execute("call-1", null, claimId);
+        verify(notificationHandler, never()).sendNotificationToUser(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
 }

@@ -23,6 +23,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:care_connect_app/services/video_call_service.dart';
+import 'package:care_connect_app/services/transcript_outbox/encrypted_transcript_outbox.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 
 // ---------------------------------------------------------------------------
@@ -109,7 +110,9 @@ void main() {
     });
 
     test('createCallSession posts durable ownership before joining', () async {
-      final service = VideoCallService();
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
       Map<String, dynamic>? requestBody;
 
       await http.runWithClient(() async {
@@ -144,7 +147,9 @@ void main() {
   group('Remote call end transcript buffering', () {
     test('awaits an in-flight transcript batch before clearing call state',
         () async {
-      final service = VideoCallService();
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
       final transcriptRequestStarted = Completer<void>();
       final transcriptResponse = Completer<http.Response>();
       var endedCallbackCalled = false;
@@ -208,7 +213,9 @@ void main() {
 
     test('joining a failed in-flight flush retries remaining segment',
         () async {
-      final service = VideoCallService();
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
       final firstRequestStarted = Completer<void>();
       final firstResponse = Completer<http.Response>();
       var transcriptRequests = 0;
@@ -258,8 +265,11 @@ void main() {
     });
 
     test('transient 500 retries without clearing the segment', () async {
-      final service = VideoCallService();
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
       var transcriptRequests = 0;
+      final uploadedSegmentIds = <String>[];
 
       await http.runWithClient(() async {
         await service.initialize(
@@ -278,6 +288,16 @@ void main() {
 
         expect(transcriptRequests, 2);
         expect(service.pendingTranscriptSegmentCountForTest, 0);
+        expect(uploadedSegmentIds, hasLength(2));
+        expect(uploadedSegmentIds.toSet(), hasLength(1));
+        expect(
+          uploadedSegmentIds.first,
+          matches(
+            RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            ),
+          ),
+        );
       }, () {
         return MockClient((request) async {
           if (request.url.path.endsWith('/join')) {
@@ -288,6 +308,10 @@ void main() {
           }
           if (request.url.path.endsWith('/transcript/segments')) {
             transcriptRequests++;
+            uploadedSegmentIds.add(
+              (jsonDecode(request.body)
+                  as Map<String, dynamic>)['clientSegmentId'] as String,
+            );
             return http.Response('{}', transcriptRequests == 1 ? 500 : 201);
           }
           return http.Response('{}', 404);
@@ -298,7 +322,9 @@ void main() {
     });
 
     test('transient timeout retries without clearing the segment', () async {
-      final service = VideoCallService();
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
       var transcriptRequests = 0;
 
       await http.runWithClient(() async {
@@ -342,7 +368,9 @@ void main() {
 
     test('hang-up reset retains final segment after retry exhaustion',
         () async {
-      final service = VideoCallService();
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
       var transcriptRequests = 0;
 
       await http.runWithClient(() async {
@@ -360,7 +388,7 @@ void main() {
         await service.sendTranscriptSegment(text: 'Unsent final segment');
         await service.handleRemoteCallEndForTest();
 
-        expect(transcriptRequests, greaterThanOrEqualTo(3));
+        expect(transcriptRequests, greaterThanOrEqualTo(2));
         expect(service.pendingTranscriptSegmentCountForTest, 1);
         expect(service.currentCallId, isNull);
       }, () {

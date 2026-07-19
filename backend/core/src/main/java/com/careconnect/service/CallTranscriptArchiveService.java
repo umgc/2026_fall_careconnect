@@ -2,7 +2,6 @@ package com.careconnect.service;
 
 import com.careconnect.model.CallTranscriptArchive;
 import com.careconnect.model.CallTranscriptSegment;
-import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.CallTranscriptArchiveRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.TranscriptArchiveLifecycleRepository;
@@ -39,14 +38,14 @@ public class CallTranscriptArchiveService {
   /** Repository used to access live transcript segments. */
   private final CallTranscriptSegmentRepository segmentRepository;
 
-  /** Repository used to align transcript archive keys with recordings. */
-  private final CallRecordingRepository recordingRepository;
-
   /** JSON mapper used for archived transcript payloads. */
   private final ObjectMapper objectMapper;
 
   /** Durable per-call purge fence and object-deletion outbox. */
   private final TranscriptArchiveLifecycleRepository lifecycleRepository;
+
+  /** PostgreSQL advisory lock helper used to serialize archive capture/purge. */
+  private final DatabaseLockService databaseLockService;
 
   /** Runs the capture and finalize phases in separate, short transactions. */
   private final TransactionTemplate transactionTemplate;
@@ -54,15 +53,15 @@ public class CallTranscriptArchiveService {
   public CallTranscriptArchiveService(
       final CallTranscriptArchiveRepository archiveRepository,
       final CallTranscriptSegmentRepository segmentRepository,
-      final CallRecordingRepository recordingRepository,
       final ObjectMapper objectMapper,
       final TranscriptArchiveLifecycleRepository lifecycleRepository,
+      final DatabaseLockService databaseLockService,
       final PlatformTransactionManager transactionManager) {
     this.archiveRepository = archiveRepository;
     this.segmentRepository = segmentRepository;
-    this.recordingRepository = recordingRepository;
     this.objectMapper = objectMapper;
     this.lifecycleRepository = lifecycleRepository;
+    this.databaseLockService = databaseLockService;
     this.transactionTemplate = new TransactionTemplate(transactionManager);
   }
 
@@ -207,7 +206,7 @@ public class CallTranscriptArchiveService {
   }
 
   private ArchiveCapture captureForArchive(final String normalizedCallId) {
-    segmentRepository.acquireArchiveLock(normalizedCallId);
+    databaseLockService.acquireCallArchiveLock(normalizedCallId);
     lifecycleRepository.ensureActive(normalizedCallId);
     final ArchiveLifecycle lifecycle = lifecycleRepository.find(normalizedCallId);
     if (lifecycle.purged()) {
@@ -285,7 +284,7 @@ public class CallTranscriptArchiveService {
     try {
       final List<ArchivedTranscriptSegment> payload = buildPayload(capture.segments());
       final byte[] bytes = objectMapper.writeValueAsBytes(payload);
-      storageKey = buildStorageKey(capture.callId());
+      storageKey = buildStorageKey(capture.callId(), capture.generation());
       s3StorageService.upload(storageKey, bytes, "application/json");
       uploaded = true;
       final byte[] persistedBytes = s3StorageService.download(storageKey);
@@ -313,7 +312,7 @@ public class CallTranscriptArchiveService {
 
   private boolean finalizeArchive(
       final ArchiveCapture capture, final String storageKey, final byte[] bytes) {
-    segmentRepository.acquireArchiveLock(capture.callId());
+    databaseLockService.acquireCallArchiveLock(capture.callId());
     lifecycleRepository.ensureActive(capture.callId());
     final ArchiveLifecycle lifecycle = lifecycleRepository.find(capture.callId());
     if (lifecycle.purged() || lifecycle.generation() != capture.generation()) {
@@ -406,29 +405,15 @@ public class CallTranscriptArchiveService {
     }
   }
 
-  private String buildStorageKey(final String callId) {
-    final LocalDateTime now = LocalDateTime.now();
+  private String buildStorageKey(final String callId, final long generation) {
     final String safeCallId = callId.replaceAll("[^A-Za-z0-9_\\-]", "_");
     final String fileName =
         "transcript_"
-            + KEY_TS.format(now)
+            + KEY_TS.format(LocalDateTime.now())
             + "_"
             + UUID.randomUUID().toString().substring(0, 8)
             + ".json";
-
-    return recordingRepository
-        .findTopByCallIdOrderByStartedAtDesc(callId)
-        .map(recording -> recording.getS3Prefix())
-        .filter(prefix -> prefix != null && !prefix.isBlank())
-        .map(prefix -> prefix + "transcripts/" + fileName)
-        .orElseGet(
-            () ->
-                "recordings/"
-                    + safeCallId
-                    + "/"
-                    + KEY_TS.format(now)
-                    + "/transcripts/"
-                    + fileName);
+    return "transcript-archives/" + safeCallId + "/" + generation + "/" + fileName;
   }
 
   private String buildParticipantUserIds(final List<CallTranscriptSegment> segments) {
@@ -514,11 +499,40 @@ public class CallTranscriptArchiveService {
     return deletedCount;
   }
 
-  private long purgeArchiveInTransaction(final String callId) {
-    segmentRepository.acquireArchiveLock(callId);
+  /**
+   * Commits the terminal purge fence and removes live and archive metadata under one call lock.
+   */
+  public TranscriptPurgeResult purgeTranscriptForCall(final String callId) {
+    final String normalizedCallId = normalize(callId);
+    if (normalizedCallId == null) {
+      return new TranscriptPurgeResult(0L, 0L);
+    }
+    final TranscriptPurgeResult result =
+        transactionTemplate.execute(status -> purgeTranscriptInTransaction(normalizedCallId));
+    return result == null ? new TranscriptPurgeResult(0L, 0L) : result;
+  }
+
+  private TranscriptPurgeResult purgeTranscriptInTransaction(final String callId) {
+    databaseLockService.acquireCallArchiveLock(callId);
     lifecycleRepository.markPurged(callId);
     final List<CallTranscriptArchive> archives =
         archiveRepository.findByCallIdOrderByArchivedAtDesc(callId);
+    enqueueArchiveDeletions(archives);
+    final long deletedSegments = segmentRepository.deleteByCallId(callId);
+    final long deletedArchives = archiveRepository.deleteByCallId(callId);
+    return new TranscriptPurgeResult(deletedSegments, deletedArchives);
+  }
+
+  private long purgeArchiveInTransaction(final String callId) {
+    databaseLockService.acquireCallArchiveLock(callId);
+    lifecycleRepository.markPurged(callId);
+    final List<CallTranscriptArchive> archives =
+        archiveRepository.findByCallIdOrderByArchivedAtDesc(callId);
+    enqueueArchiveDeletions(archives);
+    return archiveRepository.deleteByCallId(callId);
+  }
+
+  private void enqueueArchiveDeletions(final List<CallTranscriptArchive> archives) {
     for (final CallTranscriptArchive archive : archives) {
       if (archive != null
           && archive.getStorageKey() != null
@@ -526,7 +540,6 @@ public class CallTranscriptArchiveService {
         lifecycleRepository.enqueueDeletion(archive.getStorageKey());
       }
     }
-    return archiveRepository.deleteByCallId(callId);
   }
 
   private void enqueueUploadedObjectCleanup(final String storageKey) {
@@ -560,4 +573,7 @@ public class CallTranscriptArchiveService {
       List<CallTranscriptSegment> segments,
       int transcriptChars,
       long generation) {}
+
+  /** Counts deleted by an atomic transcript purge. */
+  public record TranscriptPurgeResult(long deletedSegments, long deletedArchives) {}
 }

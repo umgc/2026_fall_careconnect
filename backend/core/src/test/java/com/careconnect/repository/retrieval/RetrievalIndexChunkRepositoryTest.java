@@ -269,7 +269,8 @@ class RetrievalIndexChunkRepositoryTest {
                 .build());
         repository.flush();
 
-        assertThat(repository.quarantineAmbiguousLegacySummarySources()).isEqualTo(2);
+        assertThat(repository.quarantineLegacySummarySourceAcrossPatients(
+                "77", RetrievalRecordType.summaryTypeNames())).isEqualTo(2);
         repository.flush();
 
         assertThat(repository.findByPatientId(5L))

@@ -46,6 +46,10 @@ public class CallSession extends Auditable {
     @Column(name = "status", nullable = false, length = 24)
     private String status;
 
+    /** One-way durable election for threshold-triggered system capture. */
+    @Column(name = "recording_start_elected", nullable = false)
+    private boolean recordingStartElected;
+
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
 
@@ -70,4 +74,16 @@ public class CallSession extends Auditable {
     /** Comma-delimited immutable user-id snapshot captured when termination starts. */
     @Column(name = "termination_notify_user_ids", columnDefinition = "TEXT")
     private String terminationNotifyUserIds;
+
+    @Column(name = "termination_sentiment_at")
+    private LocalDateTime terminationSentimentAt;
+
+    @Column(name = "termination_summary_at")
+    private LocalDateTime terminationSummaryAt;
+
+    @Column(name = "termination_recording_at")
+    private LocalDateTime terminationRecordingAt;
+
+    @Column(name = "termination_meeting_at")
+    private LocalDateTime terminationMeetingAt;
 }

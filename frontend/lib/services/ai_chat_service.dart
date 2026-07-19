@@ -26,6 +26,63 @@ const Set<String> _aiAskRecordTypes = {
   'VITAL_SIGN',
 };
 final RegExp _aiAskCitationIdPattern = RegExp(r'^C[1-9][0-9]*$');
+final RegExp _aiAskUuidPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+const Set<String> _aiAskRetryableErrorCodes = {
+  'TIMEOUT',
+  'NETWORK_ERROR',
+  'RATE_LIMITED',
+  'SERVICE_UNAVAILABLE',
+};
+
+bool _isAiAskUuid(Object? value) {
+  if (value is! String) return false;
+  return _aiAskUuidPattern.hasMatch(value);
+}
+
+String? _optionalUuid(Map<String, dynamic> json, String key) {
+  if (!json.containsKey(key) || json[key] == null) return null;
+  final value = json[key];
+  if (!_isAiAskUuid(value)) {
+    throw FormatException('Ask AI $key must be a UUID');
+  }
+  return value as String;
+}
+
+String _requiredUuid(Map<String, dynamic> json, String key) {
+  final value = _optionalUuid(json, key);
+  if (value == null) {
+    throw FormatException('Ask AI $key is required');
+  }
+  return value;
+}
+
+bool _requiredBool(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! bool) {
+    throw FormatException('Ask AI $key must be a boolean');
+  }
+  return value;
+}
+
+String _requiredNonEmptyString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Ask AI $key must be a non-empty string');
+  }
+  return value;
+}
+
+int _requiredInt(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is int) return value;
+  if (value is num && value == value.roundToDouble()) {
+    return value.toInt();
+  }
+  throw FormatException('Ask AI $key must be an integer');
+}
 
 class AiAskDisclaimer {
   final String text;
@@ -42,10 +99,10 @@ class AiAskDisclaimer {
 
   factory AiAskDisclaimer.fromJson(Map<String, dynamic> json) =>
       AiAskDisclaimer(
-        text: json['text']?.toString() ?? '',
-        aiNoticeRequired: json['aiNoticeRequired'] == true,
-        recordsBasedFraming: json['recordsBasedFraming'] == true,
-        locale: json['locale']?.toString() ?? 'en-US',
+        text: _requiredNonEmptyString(json, 'text'),
+        aiNoticeRequired: _requiredBool(json, 'aiNoticeRequired'),
+        recordsBasedFraming: _requiredBool(json, 'recordsBasedFraming'),
+        locale: _requiredNonEmptyString(json, 'locale'),
       );
 }
 
@@ -58,9 +115,9 @@ class AiAskEscalation {
 
   factory AiAskEscalation.fromJson(Map<String, dynamic> json) =>
       AiAskEscalation(
-        (json['tier'] as num?)?.toInt() ?? 0,
-        json['reason']?.toString() ?? '',
-        json['requiresClinicianReview'] == true,
+        _requiredInt(json, 'tier'),
+        _requiredNonEmptyString(json, 'reason'),
+        _requiredBool(json, 'requiresClinicianReview'),
       );
 }
 
@@ -72,8 +129,17 @@ class AiAskConfirmation {
 
   factory AiAskConfirmation.fromJson(Map<String, dynamic> json) =>
       AiAskConfirmation(
-        json['promptConfirmWithProvider'] == true,
-        json['message']?.toString(),
+        _requiredBool(json, 'promptConfirmWithProvider'),
+        () {
+          final message = json['message'];
+          if (message == null) return null;
+          if (message is! String) {
+            throw const FormatException(
+              'Ask AI confirmation.message must be a string',
+            );
+          }
+          return message;
+        }(),
       );
 }
 
@@ -92,13 +158,27 @@ class AiAskCitation {
     this.deepLink,
   });
 
-  factory AiAskCitation.fromJson(Map<String, dynamic> json) => AiAskCitation(
-        citationId: json['citationId']?.toString() ?? '',
-        recordType: json['recordType']?.toString() ?? 'UNKNOWN',
-        title: json['title']?.toString(),
-        excerpt: json['excerpt']?.toString() ?? '',
-        deepLink: json['deepLink']?.toString(),
-      );
+  factory AiAskCitation.fromJson(Map<String, dynamic> json) {
+    final citationId = json['citationId'];
+    final recordType = json['recordType'];
+    final excerpt = json['excerpt'];
+    final title = json['title'];
+    final deepLink = json['deepLink'];
+    if (citationId is! String ||
+        recordType is! String ||
+        excerpt is! String ||
+        (title != null && title is! String) ||
+        (deepLink != null && deepLink is! String)) {
+      throw const FormatException('Ask AI citation has invalid field types');
+    }
+    return AiAskCitation(
+      citationId: citationId,
+      recordType: recordType,
+      title: title as String?,
+      excerpt: excerpt,
+      deepLink: deepLink as String?,
+    );
+  }
 }
 
 class AiAskError {
@@ -108,13 +188,23 @@ class AiAskError {
 
   const AiAskError(this.code, this.message, [this.details = const []]);
 
-  factory AiAskError.fromJson(Map<String, dynamic> json) => AiAskError(
-        json['code']?.toString() ?? 'UNKNOWN_ERROR',
-        json['message']?.toString() ?? 'Ask AI could not complete the request.',
-        (json['details'] as List<dynamic>? ?? const [])
-            .map((item) => item.toString())
-            .toList(growable: false),
-      );
+  factory AiAskError.fromJson(Map<String, dynamic> json) {
+    final code = json['code'];
+    final message = json['message'];
+    final details = json['details'];
+    if (code is! String ||
+        message is! String ||
+        (details != null && details is! List)) {
+      throw const FormatException('Ask AI error has invalid field types');
+    }
+    return AiAskError(
+      code,
+      message,
+      (details as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(growable: false),
+    );
+  }
 }
 
 class AiAskResult {
@@ -131,6 +221,8 @@ class AiAskResult {
   final AiAskEscalation? escalation;
   final AiAskConfirmation? confirmation;
   final String? retryInput;
+  final bool retryable;
+  final bool cancelled;
 
   const AiAskResult({
     required this.success,
@@ -146,28 +238,79 @@ class AiAskResult {
     this.escalation,
     this.confirmation,
     this.retryInput,
+    this.retryable = false,
+    this.cancelled = false,
   });
 
   factory AiAskResult.fromJson(
     Map<String, dynamic> json, {
     bool allowDelivered = true,
   }) {
-    final status = switch (json['deliveryStatus']?.toString()) {
+    final statusRaw = json['deliveryStatus'];
+    if (statusRaw is! String) {
+      throw const FormatException('Ask AI deliveryStatus must be a string');
+    }
+    final status = switch (statusRaw) {
       'DELIVERED' => AiAskDeliveryStatus.delivered,
       'NO_RECORDS' => AiAskDeliveryStatus.noRecords,
-      _ => AiAskDeliveryStatus.withheld,
+      'WITHHELD' => AiAskDeliveryStatus.withheld,
+      _ => throw FormatException(
+          'Ask AI deliveryStatus is unknown: $statusRaw',
+        ),
     };
+
+    final held = json.containsKey('held') ? _requiredBool(json, 'held') : false;
+    final requestId = status == AiAskDeliveryStatus.delivered
+        ? _requiredUuid(json, 'requestId')
+        : _optionalUuid(json, 'requestId');
+    final sessionId = status == AiAskDeliveryStatus.delivered
+        ? _requiredUuid(json, 'sessionId')
+        : _optionalUuid(json, 'sessionId');
+    final conversationId = _optionalUuid(json, 'conversationId');
+    _optionalUuid(json, 'auditId');
+    _optionalUuid(json, 'heldItemId');
+
     final answerJson = json['answer'];
+    if (answerJson != null && answerJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI answer must be an object');
+    }
     final errorJson = json['error'];
+    if (errorJson != null && errorJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI error must be an object');
+    }
     final disclaimerJson = json['disclaimer'];
+    if (disclaimerJson != null && disclaimerJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI disclaimer must be an object');
+    }
     final escalationJson = json['escalation'];
+    if (escalationJson != null && escalationJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI escalation must be an object');
+    }
     final confirmationJson = json['confirmation'];
+    if (confirmationJson != null && confirmationJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI confirmation must be an object');
+    }
+
     final answer = answerJson is Map<String, dynamic>
-        ? answerJson['text']?.toString().trim()
+        ? () {
+            final text = answerJson['text'];
+            if (text != null && text is! String) {
+              throw const FormatException(
+                  'Ask AI answer.text must be a string');
+            }
+            return (text as String?)?.trim();
+          }()
         : null;
+
     final citationsJson = json['citations'];
+    if (citationsJson != null && citationsJson is! List) {
+      throw const FormatException('Ask AI citations must be a list');
+    }
     final citationListIsValid = citationsJson is List<dynamic> &&
         citationsJson.every((item) => item is Map<String, dynamic>);
+    if (citationsJson is List && !citationListIsValid) {
+      throw const FormatException('Ask AI citations contain invalid entries');
+    }
     final citations = citationListIsValid
         ? citationsJson
             .cast<Map<String, dynamic>>()
@@ -193,42 +336,54 @@ class AiAskResult {
               _aiAskRecordTypes.contains(citation.recordType) &&
               citation.excerpt.trim().isNotEmpty,
         );
-    if (status == AiAskDeliveryStatus.delivered &&
-        (!allowDelivered ||
-            json['success'] != true ||
-            answer == null ||
-            answer.isEmpty ||
-            citations.isEmpty ||
-            !deliveredCitationsValid ||
-            disclaimer == null ||
-            !disclaimer.aiNoticeRequired ||
-            !disclaimer.recordsBasedFraming ||
-            disclaimer.text.trim().isEmpty ||
-            escalation == null ||
-            escalation.tier < 1 ||
-            confirmation == null ||
-            !confirmation.required ||
-            confirmation.text?.trim().isNotEmpty != true)) {
+
+    final deliveredContractValid = allowDelivered &&
+        json['success'] == true &&
+        !held &&
+        answer != null &&
+        answer.isNotEmpty &&
+        citations.isNotEmpty &&
+        deliveredCitationsValid &&
+        disclaimer != null &&
+        disclaimer.aiNoticeRequired &&
+        disclaimer.recordsBasedFraming &&
+        disclaimer.text.trim().isNotEmpty &&
+        escalation != null &&
+        escalation.tier == 1 &&
+        escalation.reviewRequired == false &&
+        confirmation != null &&
+        confirmation.required &&
+        confirmation.text?.trim().isNotEmpty == true;
+
+    if (status == AiAskDeliveryStatus.delivered && !deliveredContractValid) {
       throw const FormatException(
         'DELIVERED response violates the Ask AI safety contract',
       );
     }
-    final exposeDeliveredContent = status == AiAskDeliveryStatus.delivered;
+
+    // Never expose held or non-delivered answer content.
+    final exposeDeliveredContent =
+        status == AiAskDeliveryStatus.delivered && !held;
+    final message = json['message'];
+    if (message != null && message is! String) {
+      throw const FormatException('Ask AI message must be a string');
+    }
+
     return AiAskResult(
       success: json['success'] == true,
       deliveryStatus: status,
-      requestId: json['requestId']?.toString(),
-      sessionId: json['sessionId']?.toString(),
-      conversationId: json['conversationId']?.toString(),
+      requestId: requestId,
+      sessionId: sessionId,
+      conversationId: conversationId,
       answer: exposeDeliveredContent ? answer : null,
-      message: json['message']?.toString(),
+      message: message as String?,
       citations: exposeDeliveredContent ? citations : const [],
       error: errorJson is Map<String, dynamic>
           ? AiAskError.fromJson(errorJson)
           : null,
-      disclaimer: disclaimer,
-      escalation: escalation,
-      confirmation: confirmation,
+      disclaimer: exposeDeliveredContent ? disclaimer : null,
+      escalation: exposeDeliveredContent ? escalation : null,
+      confirmation: exposeDeliveredContent ? confirmation : null,
     );
   }
 }
@@ -238,6 +393,9 @@ class AIChatService {
   static String get _baseUrl => '${getBackendBaseUrl()}/v1/api/ai-chat';
 
   /// Records-grounded Ask AI client. Identity is supplied only by the JWT.
+  ///
+  /// Pass [abortTrigger] to cancel an in-flight request (see package:http
+  /// [AbortableRequest]). Completion of the future aborts the HTTP call.
   static Future<AiAskResult> askRecords({
     required String query,
     required int patientId,
@@ -246,8 +404,10 @@ class AIChatService {
     String locale = 'en-US',
     List<String>? sourceTypes,
     Duration timeout = const Duration(seconds: 20),
+    Future<void>? abortTrigger,
   }) async {
     final retryInput = query;
+    http.Client? client;
     try {
       if (sourceTypes != null &&
           (sourceTypes.length > 16 ||
@@ -257,30 +417,109 @@ class AIChatService {
       final headers = await ApiService.getAuthHeaders();
       headers['Content-Type'] = 'application/json';
       headers['Accept'] = 'application/json';
-      final response = await http
-          .post(
-            Uri.parse('${getBackendBaseUrl()}/api/ai/ask'),
-            headers: headers,
-            body: jsonEncode({
-              'query': query,
-              'patientId': patientId,
-              'inputModality': 'TEXT',
-              'locale': locale,
-              if (sessionId != null && sessionId.isNotEmpty)
-                'sessionId': sessionId,
-              if (conversationId != null && conversationId.isNotEmpty)
-                'conversationId': conversationId,
-              if (sourceTypes != null) 'sourceTypes': sourceTypes,
-            }),
-          )
-          .timeout(timeout);
+
+      final request = http.AbortableRequest(
+        'POST',
+        Uri.parse('${getBackendBaseUrl()}/api/ai/ask'),
+        abortTrigger: abortTrigger,
+      );
+      request.headers.addAll(headers);
+      request.body = jsonEncode({
+        'query': query,
+        'patientId': patientId,
+        'inputModality': 'TEXT',
+        'locale': locale,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+        if (conversationId != null && conversationId.isNotEmpty)
+          'conversationId': conversationId,
+        if (sourceTypes != null) 'sourceTypes': sourceTypes,
+      });
+
+      client = http.Client();
+      final sendFuture = client.send(request).timeout(timeout);
+      // Keep abort races from surfacing as unhandled late errors.
+      if (abortTrigger != null) {
+        unawaited(sendFuture.then<void>((_) {}, onError: (_) {}));
+      }
+      final streamed = abortTrigger == null
+          ? await sendFuture
+          : await Future.any<http.StreamedResponse>([
+              sendFuture,
+              abortTrigger.then((_) {
+                throw http.RequestAbortedException(request.url);
+              }),
+            ]);
+      final response =
+          await http.Response.fromStream(streamed).timeout(timeout);
+
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Ask AI response is not an object');
       }
-      return AiAskResult.fromJson(
-        decoded,
-        allowDelivered: response.statusCode >= 200 && response.statusCode < 300,
+
+      final statusCode = response.statusCode;
+      final retryableByStatus = statusCode == 429 || statusCode >= 500;
+      final payload = Map<String, dynamic>.from(decoded);
+      if (retryableByStatus) {
+        // Never accept DELIVERED content from retryable transport failures.
+        payload['success'] = false;
+        payload['deliveryStatus'] = 'WITHHELD';
+        payload.remove('answer');
+        payload.remove('citations');
+        payload.remove('disclaimer');
+        payload.remove('escalation');
+        payload.remove('confirmation');
+      }
+
+      final parsed = AiAskResult.fromJson(
+        payload,
+        allowDelivered:
+            !retryableByStatus && statusCode >= 200 && statusCode < 300,
+      );
+
+      final retryableByCode = parsed.error != null &&
+          _aiAskRetryableErrorCodes.contains(parsed.error!.code);
+      if (retryableByStatus || retryableByCode) {
+        return AiAskResult(
+          success: false,
+          deliveryStatus: AiAskDeliveryStatus.withheld,
+          requestId: parsed.requestId,
+          sessionId: parsed.sessionId,
+          conversationId: parsed.conversationId,
+          error: parsed.error ??
+              AiAskError(
+                statusCode == 429 ? 'RATE_LIMITED' : 'SERVICE_UNAVAILABLE',
+                statusCode == 429
+                    ? 'Ask AI is rate limited. Please try again shortly.'
+                    : 'Ask AI is temporarily unavailable. Please try again.',
+              ),
+          retryInput: retryInput,
+          retryable: true,
+        );
+      }
+
+      return AiAskResult(
+        success: parsed.success,
+        deliveryStatus: parsed.deliveryStatus,
+        requestId: parsed.requestId,
+        sessionId: parsed.sessionId,
+        conversationId: parsed.conversationId,
+        answer: parsed.answer,
+        message: parsed.message,
+        citations: parsed.citations,
+        error: parsed.error,
+        disclaimer: parsed.disclaimer,
+        escalation: parsed.escalation,
+        confirmation: parsed.confirmation,
+        retryInput: parsed.error != null ? retryInput : null,
+        retryable: false,
+      );
+    } on http.RequestAbortedException {
+      return const AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: AiAskError('CANCELLED', 'Ask AI request was cancelled.'),
+        cancelled: true,
       );
     } on FormatException {
       return AiAskResult(
@@ -301,8 +540,17 @@ class AIChatService {
           'Ask AI took too long to respond. Please try again.',
         ),
         retryInput: retryInput,
+        retryable: true,
       );
-    } on http.ClientException {
+    } on http.ClientException catch (error) {
+      if (error is http.RequestAbortedException) {
+        return const AiAskResult(
+          success: false,
+          deliveryStatus: AiAskDeliveryStatus.withheld,
+          error: AiAskError('CANCELLED', 'Ask AI request was cancelled.'),
+          cancelled: true,
+        );
+      }
       return AiAskResult(
         success: false,
         deliveryStatus: AiAskDeliveryStatus.withheld,
@@ -311,6 +559,7 @@ class AIChatService {
           'Unable to connect to Ask AI. Please check your connection.',
         ),
         retryInput: retryInput,
+        retryable: true,
       );
     } catch (_) {
       return AiAskResult(
@@ -322,6 +571,8 @@ class AIChatService {
         ),
         retryInput: retryInput,
       );
+    } finally {
+      client?.close();
     }
   }
 

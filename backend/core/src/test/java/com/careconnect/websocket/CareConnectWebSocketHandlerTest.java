@@ -127,6 +127,19 @@ class CareConnectWebSocketHandlerTest {
         verify(session, times(2)).sendMessage(any(TextMessage.class));
     }
 
+    @Test
+    void afterConnectionClosed_oldSessionDoesNotRemoveReplacement() throws Exception {
+        authenticate(session, "s1", user, 1L, "u@u.com", "tok1");
+        authenticate(targetSession, "s2", user, 1L, "u@u.com", "tok2");
+        when(targetSession.isOpen()).thenReturn(true);
+
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        assertThat(handler.isUserOnline("1")).isTrue();
+        handler.sendRealTimeUpdate("1", Map.of("type", "still-online"));
+        verify(targetSession, atLeastOnce()).sendMessage(any(TextMessage.class));
+    }
+
     // ─── subscribe-to-updates ────────────────────────────────────────────────
 
     @Test

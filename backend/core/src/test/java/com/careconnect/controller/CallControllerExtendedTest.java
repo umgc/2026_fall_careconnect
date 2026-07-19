@@ -141,7 +141,7 @@ class CallControllerExtendedTest {
         when(callRecordingService.stopRecording(anyString()))
                 .thenReturn(Map.of("status", "STOPPED"));
         when(callRecordingService.getRecordingStatus(anyString()))
-                .thenReturn(Map.of("status", "RECORDING"));
+                .thenReturn(Map.of("status", "RECORDING", "ownerUserId", "2"));
         when(callRecordingService.generatePlaybackUrl(anyString()))
                 .thenReturn(Map.of("url", "https://s3.example.com/recording.mp4"));
         when(callRecordingService.getAllRecordings())
@@ -358,6 +358,7 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "admin@test.com")
         void saveTranscriptSegments_admin_returns200() throws Exception {
             Map<String, Object> body = Map.of(
+                    "clientSegmentId", "b6814f33-12e0-4f6e-80b7-ec71197da642",
                     "speakerLabel", "patient",
                     "text", "I have been feeling better",
                     "startMs", 1000,
@@ -379,9 +380,10 @@ class CallControllerExtendedTest {
         void saveTranscriptSegments_nonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
             doThrow(new AppException(HttpStatus.FORBIDDEN, "User must join the call"))
-                    .when(callSessionService).requireActiveParticipant(CALL_ID, patientUser.getId());
+                    .when(callSessionService).requireTranscriptUploadParticipant(CALL_ID, patientUser.getId());
 
             Map<String, Object> body = Map.of(
+                    "clientSegmentId", "efee89b3-8700-4677-b8a8-d2666cb58de5",
                     "speakerLabel", "patient",
                     "text", "Hello",
                     "startMs", 0,
@@ -524,6 +526,8 @@ class CallControllerExtendedTest {
         @DisplayName("POST /{callId}/recording/stop returns 200")
         @WithMockUser(username = "caregiver@test.com")
         void stopRecording_returns200() throws Exception {
+            when(callRecordingService.getRecordingStatus(anyString()))
+                    .thenReturn(Map.of("status", "RECORDING", "ownerUserId", "2"));
             when(callRecordingService.stopRecording(anyString()))
                     .thenReturn(Map.of("status", "STOPPED"));
 

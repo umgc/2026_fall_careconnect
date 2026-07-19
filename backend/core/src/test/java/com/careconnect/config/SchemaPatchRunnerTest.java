@@ -67,7 +67,9 @@ class SchemaPatchRunnerTest {
             return false;
         }).when(statement).execute(anyString());
 
-        assertThatThrownBy(() -> new SchemaPatchRunner(dataSource).run())
+        final SchemaPatchLedger patchLedger = mock(SchemaPatchLedger.class);
+
+        assertThatThrownBy(() -> new SchemaPatchRunner(dataSource, patchLedger).run())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Required schema patch")
                 .hasRootCauseMessage("required production DDL unavailable");

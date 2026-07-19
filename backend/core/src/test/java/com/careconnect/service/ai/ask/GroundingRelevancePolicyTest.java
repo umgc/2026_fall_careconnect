@@ -96,6 +96,47 @@ class GroundingRelevancePolicyTest {
     }
 
     @Test
+    void shortClinicalEntityIsRequiredInEvidence() {
+        final String evidence = "Blood pressure was measured in clinic today.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What is my BP?", evidence, evidence, strongChunk(evidence)))
+                .isFalse();
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What is my BP?", "BP was 128/82 mmHg.", "BP was 128/82 mmHg.",
+                strongChunk("BP was 128/82 mmHg.")))
+                .isTrue();
+    }
+
+    @Test
+    void negationIsPreservedAsRequiredEntity() {
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "Is the patient not allergic to penicillin?",
+                "The patient is allergic to penicillin.",
+                "The patient is allergic to penicillin.",
+                strongChunk("The patient is allergic to penicillin.")))
+                .isFalse();
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "Is the patient not allergic to penicillin?",
+                "The patient is not allergic to penicillin.",
+                "The patient is not allergic to penicillin.",
+                strongChunk("The patient is not allergic to penicillin.")))
+                .isTrue();
+    }
+
+    @Test
+    void grammaticalBeenIsNotRequiredEvidence() {
+        final String evidence = "The patient reported ongoing knee pain this week.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "How has my pain been recently?",
+                evidence,
+                evidence,
+                strongChunk(evidence)))
+                .isTrue();
+    }
+
+    @Test
     void nonGenericEntityCannotUseRankOnlyFallback() {
         final String evidence = "The patient attended a routine follow-up visit.";
 

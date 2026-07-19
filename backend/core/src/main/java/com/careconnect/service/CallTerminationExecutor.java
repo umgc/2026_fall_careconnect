@@ -1,7 +1,10 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.TerminationStep;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
+import com.careconnect.service.CallSessionService.TerminationProgress;
+import com.careconnect.service.RecordingStopResult.Status;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -27,6 +30,9 @@ public class CallTerminationExecutor {
   /**
    * Completes all post-call artifacts and external cleanup before fencing the session as ended.
    *
+   * <p>Ownership is renewed before and verified after every external/slow operation. Retries
+   * resume at the first incomplete step. Stale owners abort with no further side effects.
+   *
    * @param callId durable call identifier
    * @param actorUserId user that initiated termination, or {@code null} for recovery
    * @param claimId current termination ownership fence
@@ -35,17 +41,150 @@ public class CallTerminationExecutor {
   public boolean execute(
       final String callId, final Long actorUserId, final UUID claimId) {
     try {
-      ensureFinalSentiment(callId, actorUserId);
-      final Map<String, CallTelemetryEvent> latestByChannel =
-          callTelemetryService.getLatestSentimentByChannel(callId);
-      callSummaryService.generateAndStoreSummary(callId, actorUserId, latestByChannel);
-      callRecordingService.stopRecording(callId);
-      chimeService.endMeeting(callId);
+      TerminationProgress progress =
+          callSessionService.renewTerminationOwnership(callId, claimId);
+      if (progress == null) {
+        return false;
+      }
+
+      if (!progress.isDone(TerminationStep.SENTIMENT)
+          && !runSentimentStep(callId, actorUserId, claimId)) {
+        return false;
+      }
+
+      progress = callSessionService.renewTerminationOwnership(callId, claimId);
+      if (progress == null) {
+        return false;
+      }
+      if (!progress.isDone(TerminationStep.SUMMARY)
+          && !runSummaryStep(callId, actorUserId, claimId)) {
+        return false;
+      }
+
+      progress = callSessionService.renewTerminationOwnership(callId, claimId);
+      if (progress == null) {
+        return false;
+      }
+      boolean recordingDone = progress.isDone(TerminationStep.RECORDING);
+      if (!recordingDone) {
+        final RecordingOutcome recording = runRecordingStep(callId, claimId);
+        if (recording == RecordingOutcome.STALE) {
+          return false;
+        }
+        recordingDone = recording == RecordingOutcome.DONE;
+      }
+
+      progress = callSessionService.renewTerminationOwnership(callId, claimId);
+      if (progress == null) {
+        return false;
+      }
+      if (!progress.isDone(TerminationStep.MEETING)
+          && !runMeetingStep(callId, claimId)) {
+        return false;
+      }
+
+      if (!recordingDone) {
+        if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
+          return false;
+        }
+        callSessionService.recordTerminationRetry(
+            callId, claimId, "Recording stop remains retryable");
+        return false;
+      }
+
+      progress = callSessionService.renewTerminationOwnership(callId, claimId);
+      if (progress == null) {
+        return false;
+      }
       return callSessionService.completeTermination(callId, claimId);
     } catch (RuntimeException failure) {
-      callSessionService.recordTerminationFailure(callId, claimId, failure);
+      if (callSessionService.verifyTerminationOwnership(callId, claimId) != null) {
+        callSessionService.recordTerminationFailure(callId, claimId, failure);
+      }
       throw failure;
     }
+  }
+
+  private boolean runSentimentStep(
+      final String callId, final Long actorUserId, final UUID claimId) {
+    if (callSessionService.renewTerminationOwnership(callId, claimId) == null) {
+      return false;
+    }
+    ensureFinalSentiment(callId, actorUserId);
+    if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
+      return false;
+    }
+    return callSessionService.advanceTerminationStep(
+        callId, claimId, TerminationStep.SENTIMENT)
+        || alreadyDone(callId, claimId, TerminationStep.SENTIMENT);
+  }
+
+  private boolean runSummaryStep(
+      final String callId, final Long actorUserId, final UUID claimId) {
+    if (callSessionService.renewTerminationOwnership(callId, claimId) == null) {
+      return false;
+    }
+    final Map<String, CallTelemetryEvent> latestByChannel =
+        callTelemetryService.getLatestSentimentByChannel(callId);
+    callSummaryService.generateAndStoreSummary(callId, actorUserId, latestByChannel);
+    if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
+      return false;
+    }
+    return callSessionService.advanceTerminationStep(
+        callId, claimId, TerminationStep.SUMMARY)
+        || alreadyDone(callId, claimId, TerminationStep.SUMMARY);
+  }
+
+  private RecordingOutcome runRecordingStep(final String callId, final UUID claimId) {
+    if (callSessionService.renewTerminationOwnership(callId, claimId) == null) {
+      return RecordingOutcome.STALE;
+    }
+    final RecordingStopResult result = callRecordingService.stopRecordingTyped(callId);
+    if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
+      return RecordingOutcome.STALE;
+    }
+    if (isRecordingAdvanced(result.status())) {
+      if (callSessionService.advanceTerminationStep(
+              callId, claimId, TerminationStep.RECORDING)
+          || alreadyDone(callId, claimId, TerminationStep.RECORDING)) {
+        return RecordingOutcome.DONE;
+      }
+      return RecordingOutcome.STALE;
+    }
+    // Keep ownership through meeting shutdown; park for retry only after MEETING.
+    return RecordingOutcome.DEFERRED;
+  }
+
+  private boolean runMeetingStep(final String callId, final UUID claimId) {
+    if (callSessionService.renewTerminationOwnership(callId, claimId) == null) {
+      return false;
+    }
+    chimeService.endMeeting(callId);
+    if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
+      return false;
+    }
+    return callSessionService.advanceTerminationStep(
+        callId, claimId, TerminationStep.MEETING)
+        || alreadyDone(callId, claimId, TerminationStep.MEETING);
+  }
+
+  private boolean alreadyDone(
+      final String callId, final UUID claimId, final TerminationStep step) {
+    final TerminationProgress progress =
+        callSessionService.verifyTerminationOwnership(callId, claimId);
+    return progress != null && progress.isDone(step);
+  }
+
+  private static boolean isRecordingAdvanced(final Status status) {
+    return status == Status.STOPPED
+        || status == Status.ALREADY_STOPPED
+        || status == Status.NOT_RECORDING;
+  }
+
+  private enum RecordingOutcome {
+    DONE,
+    DEFERRED,
+    STALE
   }
 
   private void ensureFinalSentiment(final String callId, final Long actorUserId) {

@@ -14,7 +14,6 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.UUID;
 
 /** Bounded, idempotent replay worker for summary chunks with stale citation metadata. */
 @Service
@@ -24,11 +23,14 @@ import java.util.UUID;
 @Slf4j
 public class SummaryCitationMetadataBackfillWorker {
 
+    static final int DEFAULT_MAX_ATTEMPTS = 8;
+
     private final RetrievalIndexChunkRepository chunkRepository;
     private final RetrievalIndexService retrievalIndexService;
     private final int batchSize;
     private final long failureBackoffMs;
     private final long claimLeaseMs;
+    private final int maxAttempts;
 
     public SummaryCitationMetadataBackfillWorker(
             final RetrievalIndexChunkRepository chunkRepository,
@@ -37,7 +39,9 @@ public class SummaryCitationMetadataBackfillWorker {
             @Value("${careconnect.ai.citation.backfill.failure-backoff-ms:300000}")
                     final long failureBackoffMs,
             @Value("${careconnect.ai.citation.backfill.claim-lease-ms:300000}")
-                    final long claimLeaseMs) {
+                    final long claimLeaseMs,
+            @Value("${careconnect.ai.citation.backfill.max-attempts:8}")
+                    final int maxAttempts) {
         this.chunkRepository = chunkRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.batchSize = Math.max(1, batchSize);
@@ -47,13 +51,13 @@ public class SummaryCitationMetadataBackfillWorker {
         this.claimLeaseMs = Math.min(
                 Duration.ofHours(1).toMillis(),
                 Math.max(10_000L, claimLeaseMs));
+        this.maxAttempts = Math.max(1, maxAttempts);
     }
 
     @Scheduled(
             fixedDelayString =
                     "${careconnect.ai.citation.backfill.poll-interval-ms:60000}")
     public void pollAndBackfill() {
-        final UUID claimToken = UUID.randomUUID();
         final List<SummaryReplayCandidate> candidates =
                 chunkRepository.claimStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
@@ -61,7 +65,7 @@ public class SummaryCitationMetadataBackfillWorker {
                         batchSize,
                         OffsetDateTime.now(ZoneOffset.UTC)
                                 .plus(Duration.ofMillis(claimLeaseMs)),
-                        claimToken);
+                        maxAttempts);
         if (candidates.isEmpty()) {
             return;
         }
@@ -74,37 +78,41 @@ public class SummaryCitationMetadataBackfillWorker {
             try {
                 if (!SummarySourceKey.CALL_KIND.equals(candidate.getSourceKind())
                         || SummarySourceKey.isLegacyNumeric(sourceId)) {
-                    quarantined += chunkRepository.quarantineSummarySource(
-                            candidate.getPatientId(),
-                            sourceId,
-                            RetrievalRecordType.summaryTypeNames(),
-                            candidate.getClaimToken());
+                    quarantined += quarantine(
+                            candidate, "malformed_or_legacy_source_key");
                     continue;
                 }
                 final Long summaryId = SummarySourceKey.parseCallSummaryId(sourceId)
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Invalid call summary source key"));
+                        .orElse(null);
+                if (summaryId == null) {
+                    quarantined += quarantine(
+                            candidate, "malformed_call_summary_source_key");
+                    continue;
+                }
                 final SummaryCitationReplayOutcome outcome =
                         retrievalIndexService.replaySummaryCitationMetadata(
-                                summaryId, candidate.getPatientId());
+                                summaryId,
+                                candidate.getPatientId(),
+                                candidate.getClaimToken(),
+                                claimLeaseMs);
                 if (outcome == SummaryCitationReplayOutcome.UPDATED) {
                     updated++;
                     releaseClaim(candidate);
-                } else if (outcome == SummaryCitationReplayOutcome.NO_DRAFTS) {
+                } else if (outcome == SummaryCitationReplayOutcome.RETRYABLE) {
+                    failed++;
+                    markFailureOrQuarantine(candidate, "retryable_replay_failure");
+                } else if (outcome == SummaryCitationReplayOutcome.TERMINAL_QUARANTINED) {
+                    quarantined += quarantine(
+                            candidate, "terminal_replay_failure");
+                } else if (outcome == SummaryCitationReplayOutcome.BUSY) {
                     failed++;
                     markFailureBackoff(candidate);
-                } else if (outcome == SummaryCitationReplayOutcome.QUARANTINED) {
-                    quarantined += chunkRepository.quarantineSummarySource(
-                            candidate.getPatientId(),
-                            sourceId,
-                            RetrievalRecordType.summaryTypeNames(),
-                            candidate.getClaimToken());
                 } else {
                     releaseClaim(candidate);
                 }
             } catch (final RuntimeException ex) {
                 failed++;
-                markFailureBackoff(candidate);
+                markFailureOrQuarantine(candidate, "unexpected_replay_exception");
                 log.warn(
                         "Summary citation metadata replay failed type={}",
                         ex.getClass().getSimpleName());
@@ -118,9 +126,19 @@ public class SummaryCitationMetadataBackfillWorker {
                 failed);
     }
 
-    private void markFailureBackoff(final SummaryReplayCandidate candidate) {
+    private void markFailureOrQuarantine(
+            final SummaryReplayCandidate candidate, final String reason) {
+        final int priorAttempts = candidate.getAttempts() == null ? 0 : candidate.getAttempts();
+        if (priorAttempts + 1 >= maxAttempts) {
+            quarantine(candidate, reason + "_max_attempts");
+            return;
+        }
+        markFailureBackoff(candidate);
+    }
+
+    private int markFailureBackoff(final SummaryReplayCandidate candidate) {
         try {
-            chunkRepository.markSummaryCitationReplayFailure(
+            return chunkRepository.markSummaryCitationReplayFailure(
                     candidate.getPatientId(),
                     candidate.getSourceRecordId(),
                     OffsetDateTime.now(ZoneOffset.UTC)
@@ -130,7 +148,17 @@ public class SummaryCitationMetadataBackfillWorker {
             log.warn(
                     "Unable to persist summary citation replay backoff type={}",
                     markFailure.getClass().getSimpleName());
+            return 0;
         }
+    }
+
+    private int quarantine(final SummaryReplayCandidate candidate, final String reason) {
+        return chunkRepository.quarantineSummarySource(
+                candidate.getPatientId(),
+                candidate.getSourceRecordId(),
+                RetrievalRecordType.summaryTypeNames(),
+                candidate.getClaimToken(),
+                reason);
     }
 
     private void releaseClaim(final SummaryReplayCandidate candidate) {
@@ -139,5 +167,4 @@ public class SummaryCitationMetadataBackfillWorker {
                 candidate.getSourceRecordId(),
                 candidate.getClaimToken());
     }
-
 }
