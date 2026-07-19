@@ -17,7 +17,6 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.HybridRetrievalResult;
 import com.careconnect.service.ai.retrieval.HybridRetrievalService;
-import com.careconnect.service.ai.retrieval.RankedChunk;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
@@ -35,6 +34,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Task 5.3 — Ask AI gateway orchestrator.
@@ -64,6 +64,12 @@ public class AiAskService {
             "No matching records were found for this question. "
                     + "CareConnect Ask AI only answers from your stored health records "
                     + "and cannot provide general medical advice.";
+    private static final int CITATION_CONTEXT_CODE_POINTS = 80;
+    private static final Pattern WORD_BOUNDARY = Pattern.compile("[^\\p{L}\\p{N}]+");
+    private static final Set<String> QUERY_STOP_WORDS = Set.of(
+            "about", "could", "does", "from", "have", "please", "record",
+            "records", "show", "tell", "that", "these", "this", "what",
+            "when", "where", "which", "with", "would");
 
     private final RetrievalScopeService retrievalScopeService;
     private final HybridRetrievalService hybridRetrievalService;
@@ -177,7 +183,7 @@ public class AiAskService {
         final long retrievalLatencyMs = (System.nanoTime() - retrievalStarted) / 1_000_000L;
 
         if (retrieval == null || retrieval.isEmpty()) {
-            log.info("Ask AI NO_RECORDS requestId={}", requestId);
+            log.debug("Ask AI NO_RECORDS requestId={}", requestId);
             return noRecordsResponse(
                     requestId, auditId, sessionId, locale, retrieval, retrievalLatencyMs);
         }
@@ -221,13 +227,19 @@ public class AiAskService {
                             claim.citationRefs(), context.citationRefMap());
             if (claim.text() == null
                     || claim.text().isBlank()
-                    || !hasExtractiveEvidence(claim, context.promptExcerptMap())
+                    || !hasExtractiveEvidence(
+                            claim, sanitizedQuery, context.promptExcerptMap())
                     || !claimCitations.grounded()) {
                 throw groundingFailure(
                         requestId, auditId, sessionId,
                         "Generated answer contains an unsupported factual claim");
             }
-            verifiedEvidenceByRef.putAll(claim.evidenceByRef());
+            final String ref = claim.citationRefs().get(0);
+            verifiedEvidenceByRef.put(
+                    ref,
+                    surroundingCitationContext(
+                            context.promptExcerptMap().get(ref),
+                            claim.evidenceByRef().get(ref)));
         }
         final CitationAssembler.CitationResult citationResult =
                 citationAssembler.assemble(
@@ -257,7 +269,7 @@ public class AiAskService {
 
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
-        log.info(
+        log.debug(
                 "Ask AI DELIVERED requestId={} chunks={} citations={} modality={} degraded={}",
                 requestId,
                 context.usedChunks().size(),
@@ -294,6 +306,7 @@ public class AiAskService {
 
     private static boolean hasExtractiveEvidence(
             final GroundedAskLlmService.GroundedClaim claim,
+            final String query,
             final Map<String, String> promptExcerptMap) {
         if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
             return false;
@@ -305,7 +318,99 @@ public class AiAskService {
                 && evidence != null
                 && evidence.codePointCount(0, evidence.length()) >= 20
                 && claim.text().equals(evidence)
-                && excerpt.contains(evidence);
+                && isCompleteSpan(excerpt, evidence)
+                && isRelevantExtract(query, evidence, excerpt);
+    }
+
+    private static boolean isCompleteSpan(final String excerpt, final String evidence) {
+        final int start = excerpt.indexOf(evidence);
+        if (start < 0 || excerpt.indexOf(evidence, start + 1) >= 0) {
+            return false;
+        }
+        final int end = start + evidence.length();
+        return isSentenceStart(excerpt, start) && isSentenceEnd(excerpt, end);
+    }
+
+    private static boolean isSentenceStart(final String text, final int start) {
+        if (start == 0) {
+            return true;
+        }
+        int offset = start;
+        while (offset > 0) {
+            final int codePoint = text.codePointBefore(offset);
+            offset -= Character.charCount(codePoint);
+            if (!Character.isWhitespace(codePoint)) {
+                return codePoint == '.' || codePoint == '!' || codePoint == '?'
+                        || codePoint == '\n' || codePoint == '\r';
+            }
+        }
+        return true;
+    }
+
+    private static boolean isSentenceEnd(final String text, final int end) {
+        if (end == text.length()) {
+            return true;
+        }
+        final int lastEvidenceCodePoint = text.codePointBefore(end);
+        final int nextCodePoint = text.codePointAt(end);
+        return (lastEvidenceCodePoint == '.'
+                || lastEvidenceCodePoint == '!'
+                || lastEvidenceCodePoint == '?')
+                && Character.isWhitespace(nextCodePoint);
+    }
+
+    /**
+     * Deterministic fail-closed relevance safeguard. If query terms occur in the
+     * prompted excerpt, the chosen complete span must retain at least one of them.
+     * Generic questions such as "What meds?" continue to rely on ranked retrieval.
+     */
+    private static boolean isRelevantExtract(
+            final String query, final String evidence, final String excerpt) {
+        final Set<String> queryTerms = normalizedTerms(query);
+        if (queryTerms.isEmpty()) {
+            return true;
+        }
+        final Set<String> excerptTerms = normalizedTerms(excerpt);
+        excerptTerms.retainAll(queryTerms);
+        if (excerptTerms.isEmpty()) {
+            return true;
+        }
+        final Set<String> evidenceTerms = normalizedTerms(evidence);
+        evidenceTerms.retainAll(queryTerms);
+        return !evidenceTerms.isEmpty();
+    }
+
+    private static Set<String> normalizedTerms(final String value) {
+        final Set<String> terms = new java.util.HashSet<>();
+        if (value == null) {
+            return terms;
+        }
+        for (final String token : WORD_BOUNDARY.split(value.toLowerCase(java.util.Locale.ROOT))) {
+            if (token.codePointCount(0, token.length()) >= 4
+                    && !QUERY_STOP_WORDS.contains(token)) {
+                terms.add(token);
+            }
+        }
+        return terms;
+    }
+
+    private static String surroundingCitationContext(
+            final String excerpt, final String evidence) {
+        if (excerpt == null || evidence == null) {
+            return evidence;
+        }
+        final int evidenceStart = excerpt.indexOf(evidence);
+        if (evidenceStart < 0) {
+            return evidence;
+        }
+        final int evidenceEnd = evidenceStart + evidence.length();
+        final int before = excerpt.codePointCount(0, evidenceStart);
+        final int after = excerpt.codePointCount(evidenceEnd, excerpt.length());
+        final int contextStart = excerpt.offsetByCodePoints(
+                evidenceStart, -Math.min(before, CITATION_CONTEXT_CODE_POINTS));
+        final int contextEnd = excerpt.offsetByCodePoints(
+                evidenceEnd, Math.min(after, CITATION_CONTEXT_CODE_POINTS));
+        return excerpt.substring(contextStart, contextEnd).trim();
     }
 
     private static AskAiGroundingException groundingFailure(

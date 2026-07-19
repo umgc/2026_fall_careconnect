@@ -103,6 +103,8 @@ class UspsMailpiecePersistenceServiceTest {
         final int upserted = service.persistAndIndex("7", digestWithOnePiece());
 
         assertThat(upserted).isEqualTo(1);
+        verify(mailpieceRepository).acquirePersistenceLock(
+                "usps-mailpiece:42:2025-03-03|m-1");
         final ArgumentCaptor<MailpieceIndexedPayload> payloadCaptor =
                 ArgumentCaptor.forClass(MailpieceIndexedPayload.class);
         verify(indexingEventEmitter).emitMailpieceIndexed(payloadCaptor.capture());
@@ -141,6 +143,8 @@ class UspsMailpiecePersistenceServiceTest {
         when(mailpieceRepository.save(any(UspsMailpiece.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(service.persistAndIndex("7", digest)).isEqualTo(1);
+        verify(mailpieceRepository).acquirePersistenceLock(
+                "usps-mailpiece:42:" + normalized.sourceKey());
         verify(indexingEventEmitter, never()).emitMailpieceIndexed(any());
         verify(mailpieceRepository, times(1)).save(any());
     }

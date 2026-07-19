@@ -48,8 +48,7 @@ MockClient _mockRaw(int statusCode, String rawBody) =>
 
 /// Returns a [MockClient] that throws [error] on every request.
 /// Use for simulating network and other transport-layer exceptions.
-MockClient _mockThrows(Object error) =>
-    MockClient((_) async => throw error);
+MockClient _mockThrows(Object error) => MockClient((_) async => throw error);
 
 /// Returns a ([MockClient], capturedRequests) pair.
 /// Every outgoing request is captured in the returned list so that individual
@@ -165,7 +164,7 @@ void main() {
       expect(result['success'], isFalse);
     });
 
-    test('returns errorMessage when success:false has errorMessage', () async {
+    test('maps logical backend failure to a stable safe message', () async {
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
         () => _mockJson(200, {
@@ -173,11 +172,13 @@ void main() {
           'errorMessage': 'AI unavailable',
         }),
       );
-      expect(result['errorMessage'], 'AI unavailable');
+      expect(
+        result['errorMessage'],
+        'The AI service could not complete your request. Please try again.',
+      );
     });
 
-    test('falls back to error field when errorMessage is absent', () async {
-      // Some backend versions use "error" instead of "errorMessage".
+    test('does not surface a raw backend error field', () async {
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
         () => _mockJson(200, {
@@ -185,17 +186,19 @@ void main() {
           'error': 'Backend error',
         }),
       );
-      expect(result['errorMessage'], 'Backend error');
+      expect(result['errorMessage'], isNot(contains('Backend error')));
     });
 
-    test(
-        'falls back to "Unknown error" when both errorMessage and error are absent',
+    test('uses the same stable message when backend error fields are absent',
         () async {
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
         () => _mockJson(200, {'success': false}),
       );
-      expect(result['errorMessage'], 'Unknown error');
+      expect(
+        result['errorMessage'],
+        'The AI service could not complete your request. Please try again.',
+      );
     });
   });
 
@@ -282,7 +285,20 @@ void main() {
       expect(result['success'], isFalse);
     });
 
-    test('returns success:false on an unexpected 4xx code (e.g. 422)', () async {
+    test('never exposes a raw backend failure body', () async {
+      const sensitiveBody =
+          '{"message":"SQL failed for patient@example.com","stack":"secret"}';
+      final result = await http.runWithClient(
+        () => AIChatService.sendMessage(message: 'Hi', userId: 1),
+        () => _mockRaw(500, sensitiveBody),
+      );
+
+      expect(result.values.join(' '), isNot(contains('patient@example.com')));
+      expect(result.values.join(' '), isNot(contains('secret')));
+    });
+
+    test('returns success:false on an unexpected 4xx code (e.g. 422)',
+        () async {
       // Non-enumerated status codes fall through to the generic error branch.
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
@@ -656,9 +672,11 @@ void main() {
     test('returns the parsed response map on HTTP 200', () async {
       final result = await http.runWithClient(
         () => AIChatService.getConversationHistory(userId: '1'),
-        () => _mockJson(200, {'messages': [
-          {'id': 1, 'text': 'Hello'}
-        ]}),
+        () => _mockJson(200, {
+          'messages': [
+            {'id': 1, 'text': 'Hello'}
+          ]
+        }),
       );
       expect(result['messages'], hasLength(1));
     });
@@ -734,7 +752,8 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   group('startNewConversation()', () {
     test('uses POST method', () async {
-      final (client, requests) = _capturingClient(200, {'conversationId': 'id'});
+      final (client, requests) =
+          _capturingClient(200, {'conversationId': 'id'});
       await http.runWithClient(
         () => AIChatService.startNewConversation(userId: '1'),
         () => client,
@@ -743,7 +762,8 @@ void main() {
     });
 
     test('hits the /v1/api/ai-chat/conversation/new endpoint', () async {
-      final (client, requests) = _capturingClient(200, {'conversationId': 'id'});
+      final (client, requests) =
+          _capturingClient(200, {'conversationId': 'id'});
       await http.runWithClient(
         () => AIChatService.startNewConversation(userId: '1'),
         () => client,
@@ -798,7 +818,8 @@ void main() {
     test('request body includes title when provided', () async {
       final (client, requests) = _capturingClient(200, {'conversationId': 'x'});
       await http.runWithClient(
-        () => AIChatService.startNewConversation(userId: '1', title: 'My Session'),
+        () => AIChatService.startNewConversation(
+            userId: '1', title: 'My Session'),
         () => client,
       );
       final body = jsonDecode(requests.single.body) as Map;

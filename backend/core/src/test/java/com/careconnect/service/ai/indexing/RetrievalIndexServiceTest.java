@@ -4,10 +4,12 @@ import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
+import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
@@ -51,6 +53,8 @@ class RetrievalIndexServiceTest {
     @Mock
     private CallSummaryRepository callSummaryRepository;
     @Mock
+    private CallSessionRepository callSessionRepository;
+    @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
     private UspsMailpieceRepository uspsMailpieceRepository;
@@ -66,6 +70,7 @@ class RetrievalIndexServiceTest {
         final ObjectMapper mapper = new ObjectMapper();
         service = new RetrievalIndexService(
                 callSummaryRepository,
+                callSessionRepository,
                 transcriptSegmentRepository,
                 uspsMailpieceRepository,
                 chunkRepository,
@@ -752,6 +757,8 @@ class RetrievalIndexServiceTest {
     @Test
     @DisplayName("ingestTranscriptIndexed writes one chunk per segment")
     void ingestTranscriptIndexed_writesSegments() {
+        when(callSessionRepository.findByCallIdForIndexing("call-1"))
+                .thenReturn(Optional.of(callSession("call-1", 42L)));
         final CallTranscriptSegment segment = new CallTranscriptSegment();
         segment.setId(5L);
         segment.setText("Feeling better today");
@@ -771,10 +778,8 @@ class RetrievalIndexServiceTest {
     @Test
     @DisplayName("ingestTranscriptIndexed does not delete when no segment drafts")
     void ingestTranscriptIndexed_emptyDrafts_doesNotDelete() {
-        final CallSummary summary = new CallSummary();
-        summary.setPatientId(77L);
-        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc("call-2"))
-                .thenReturn(Optional.of(summary));
+        when(callSessionRepository.findByCallIdForIndexing("call-2"))
+                .thenReturn(Optional.of(callSession("call-2", 77L)));
         when(transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc("call-2"))
                 .thenReturn(List.of());
 
@@ -788,13 +793,45 @@ class RetrievalIndexServiceTest {
     @Test
     @DisplayName("ingestTranscriptIndexed defers when patientId cannot be resolved")
     void ingestTranscriptIndexed_defersWithoutPatientId() {
-        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc("call-3"))
+        when(callSessionRepository.findByCallIdForIndexing("call-3"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.ingestTranscriptIndexed(
                 new TranscriptIndexedPayload("call-3", null, 1, "CLIENT_TRANSCRIPT")))
                 .isInstanceOf(IndexingDeferredException.class)
-                .hasMessageContaining("patientId");
+                .hasMessageContaining("CallSession")
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isFalse());
+        verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+    }
+
+    @Test
+    void ingestTranscriptIndexed_rejectsCrossPatientStalePayload() {
+        when(callSessionRepository.findByCallIdForIndexing("call-4"))
+                .thenReturn(Optional.of(callSession("call-4", 77L)));
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-4", 42L, 1, "CLIENT_TRANSCRIPT")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("CallSession");
+
+        verify(chunkRepository, never()).acquireSourceReplacementLock(any(), any(), any());
+    }
+
+    @Test
+    void ingestTranscriptIndexed_defersIncompleteLongCallSnapshotWithoutBurning() {
+        when(callSessionRepository.findByCallIdForIndexing("call-long"))
+                .thenReturn(Optional.of(callSession("call-long", 42L)));
+        when(transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc("call-long"))
+                .thenReturn(List.of(new CallTranscriptSegment()));
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-long", 42L, 200, "CLIENT_TRANSCRIPT")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("incomplete")
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isFalse());
+
         verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
     }
 
@@ -808,8 +845,9 @@ class RetrievalIndexServiceTest {
         mailpiece.setSender("Acme Bank");
         mailpiece.setSummary("Monthly statement");
         mailpiece.setContentHash("sha-abc");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
         mailpiece.setConsentScope("on_consent");
-        when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
         when(chunkRepository.findBySourceRecordIdAndRecordType(eq("55"), any()))
                 .thenReturn(List.of());
 
@@ -839,8 +877,13 @@ class RetrievalIndexServiceTest {
         final UspsMailpiece mailpiece = new UspsMailpiece();
         mailpiece.setId(55L);
         mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setSender("Acme");
+        mailpiece.setSummary("Statement");
         mailpiece.setContentHash("sha-abc");
-        when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
 
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
                 .recordType(RetrievalRecordType.USPS_MAIL.name())
@@ -871,12 +914,13 @@ class RetrievalIndexServiceTest {
         mailpiece.setSender("Acme Bank");
         mailpiece.setSummary("Monthly statement");
         mailpiece.setContentHash("sha-abc");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
         mailpiece.setConsentScope("on_consent");
         mailpiece.setImportanceLevel("HIGH");
         mailpiece.setImportanceCategory("FINANCIAL");
         mailpiece.setClassificationMethod("RULES");
         mailpiece.setImportanceReasoning("Matched bank keyword.");
-        when(uspsMailpieceRepository.findById(55L)).thenReturn(Optional.of(mailpiece));
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
 
         final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
                 .recordType(RetrievalRecordType.USPS_MAIL.name())
@@ -901,6 +945,80 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getChunkText()).contains("Importance: HIGH");
         assertThat(captor.getValue().get(0).getChunkMetadata()).contains("importanceFingerprint");
+    }
+
+    @Test
+    void ingestMailpieceIndexed_rejectsCrossPatientStalePayloadBeforeChunkAccess() {
+        final UspsMailpiece mailpiece = authoritativeMailpiece();
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+
+        assertThatThrownBy(() -> service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 99L, mailpiece.getSourceKey(), mailpiece.getContentHash(),
+                mailpiece.getSender(), mailpiece.getSummary(),
+                mailpiece.getDigestDate(), mailpiece.getConsentScope())))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("authoritative");
+
+        verify(chunkRepository, never()).acquireSourceReplacementLock(any(), any(), any());
+    }
+
+    @Test
+    void ingestMailpieceIndexed_rejectsStaleContentAssertion() {
+        final UspsMailpiece mailpiece = authoritativeMailpiece();
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+
+        assertThatThrownBy(() -> service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 42L, mailpiece.getSourceKey(), "sha-stale",
+                mailpiece.getSender(), "stale summary",
+                mailpiece.getDigestDate(), mailpiece.getConsentScope())))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("authoritative");
+
+        verify(chunkRepository, never()).findBySourceRecordIdAndRecordType(any(), any());
+    }
+
+    @Test
+    void ingestMailpieceIndexed_duplicateDeliveryLocksAndSkipsExistingChunk() {
+        final UspsMailpiece mailpiece = authoritativeMailpiece();
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+        when(chunkRepository.findBySourceRecordIdAndRecordType(
+                "55", RetrievalRecordType.USPS_MAIL.name()))
+                .thenReturn(List.of(RetrievalIndexChunk.builder()
+                        .sourceRecordId("55")
+                        .recordType(RetrievalRecordType.USPS_MAIL.name())
+                        .chunkText("existing")
+                        .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
+                        .build()));
+
+        final MailpieceIndexedPayload payload = new MailpieceIndexedPayload(
+                55L, 42L, mailpiece.getSourceKey(), mailpiece.getContentHash(),
+                mailpiece.getSender(), mailpiece.getSummary(),
+                mailpiece.getDigestDate(), mailpiece.getConsentScope());
+
+        assertThat(service.ingestMailpieceIndexed(payload)).isZero();
+        verify(chunkRepository).acquireSourceReplacementLock(
+                42L, RetrievalRecordType.USPS_MAIL.name(), "55");
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    private static CallSession callSession(final String callId, final Long patientId) {
+        final CallSession session = new CallSession();
+        session.setCallId(callId);
+        session.setPatientId(patientId);
+        return session;
+    }
+
+    private static UspsMailpiece authoritativeMailpiece() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setSender("Acme");
+        mailpiece.setSummary("Statement");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        return mailpiece;
     }
 
     private static Collection<String> anyCollection() {

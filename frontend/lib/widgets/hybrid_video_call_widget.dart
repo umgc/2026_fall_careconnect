@@ -336,6 +336,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
           callId: widget.callId,
           isVideoCall: widget.isVideoEnabled,
           callType: _isCareTeamCall ? 'care-team' : 'general',
+          callKind: _isCareTeamCall ? 'CARE_TEAM' : 'GENERAL',
+          contextPatientUserIds: widget.contextPatientUserIds,
         );
 
         if (!invitationSent) {
@@ -1278,6 +1280,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       final userName = Uri.encodeComponent(widget.userName ?? '');
       final recipientName = Uri.encodeComponent(widget.recipientName ?? '');
       final recipientIdValue = Uri.encodeComponent(widget.recipientId ?? '');
+      final callKind = Uri.encodeComponent(
+        (widget.callKind ?? 'GENERAL').trim().toUpperCase(),
+      );
+      final contextIds = widget.contextPatientUserIds ?? const <int>[];
 
       context.pushReplacement(
         '/video-call-chime'
@@ -1289,7 +1295,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         '&recipientName=$recipientName'
         '&initiator=true'
         '&video=${widget.isVideoEnabled ? 'true' : 'false'}'
-        '&audio=${widget.isAudioEnabled ? 'true' : 'false'}',
+        '&audio=${widget.isAudioEnabled ? 'true' : 'false'}'
+        '&callKind=$callKind'
+        '${contextIds.isEmpty ? '' : '&contextPatientUserIds=${Uri.encodeComponent(contextIds.join(','))}'}',
       );
     } catch (_) {
       if (!mounted) return;
@@ -1313,7 +1321,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
 
     // Keep transcript capture always enabled once meeting is active so it does
     // not depend on async role-resolution timing during screen init.
-    final shouldEnableSentimentCapture = true;
+    final shouldEnableSentimentCapture = !_isCareTeamCall;
 
     final mediaPlacement = _callSession!.mediaPlacement;
     final hasMediaEndpoints = mediaPlacement.values.whereType<String>().any(

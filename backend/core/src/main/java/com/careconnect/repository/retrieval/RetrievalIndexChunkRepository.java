@@ -28,6 +28,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
         String getSourceRecordId();
 
         String getSourceKind();
+
+        UUID getClaimToken();
     }
 
     List<RetrievalIndexChunk> findByPatientId(Long patientId);
@@ -66,7 +68,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                            ric.chunk_text, ric.chunk_metadata, ric.indexed_at,
                            ric.consent_scope, ric.source_kind,
                            ric.citation_replay_after, ric.citation_replay_attempts,
-                           ric.citation_replay_claimed_until,
+                           ric.citation_replay_claimed_until, ric.citation_replay_claim_token,
                            ric.migration_status
                     FROM retrieval_index_chunk ric
                     WHERE ric.patient_id = :patientId
@@ -125,7 +127,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
@@ -153,7 +155,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
@@ -212,7 +214,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE source_record_id = :sourceRecordId
@@ -261,7 +263,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
@@ -282,7 +284,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
@@ -329,7 +331,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                           CASE
                             WHEN COALESCE(
                                     ric.chunk_metadata->>'citationMetadataVersion', '')
-                                   ~ '^[0-9]+$'
+                                   ~ '^[0-9]{1,9}$'
                             THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
                             ELSE -1
                           END
@@ -346,14 +348,10 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     @Query(
             value = """
-                    WITH candidate_sources AS (
-                      SELECT ric.patient_id,
-                             ric.source_record_id,
-                             CASE
-                               WHEN COUNT(*) FILTER (WHERE ric.source_kind IS NULL) > 0
-                               THEN NULL
-                               ELSE MAX(ric.source_kind)
-                             END AS source_kind
+                    WITH source_representatives AS (
+                      SELECT DISTINCT ON (ric.patient_id, ric.source_record_id)
+                             ric.id, ric.patient_id, ric.source_record_id,
+                             ric.source_kind, ric.citation_replay_after
                       FROM retrieval_index_chunk ric
                       WHERE ric.record_type IN (:recordTypes)
                         AND ric.migration_status = 'ACTIVE'
@@ -381,22 +379,34 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                           ric.source_record_id ~ '^[0-9]+$'
                           OR (
                             CASE
-                              WHEN COALESCE(
+                            WHEN COALESCE(
                                       ric.chunk_metadata->>'citationMetadataVersion', '')
-                                     ~ '^[0-9]+$'
+                                     ~ '^[0-9]{1,9}$'
                               THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
                               ELSE -1
                             END
                           ) < :version
                         )
-                      GROUP BY ric.patient_id, ric.source_record_id
-                      ORDER BY ric.patient_id, ric.source_record_id
+                      ORDER BY ric.patient_id, ric.source_record_id, ric.id
+                    ),
+                    locked_sources AS (
+                      SELECT ric.id, representative.patient_id,
+                             representative.source_record_id,
+                             representative.source_kind
+                      FROM retrieval_index_chunk ric
+                      JOIN source_representatives representative
+                        ON representative.id = ric.id
+                      ORDER BY representative.citation_replay_after NULLS FIRST,
+                               representative.patient_id,
+                               representative.source_record_id
+                      FOR UPDATE OF ric SKIP LOCKED
                       LIMIT :limit
                     ),
                     claimed_rows AS (
                       UPDATE retrieval_index_chunk ric
-                      SET citation_replay_claimed_until = :claimedUntil
-                      FROM candidate_sources candidate
+                      SET citation_replay_claimed_until = :claimedUntil,
+                          citation_replay_claim_token = :claimToken
+                      FROM locked_sources candidate
                       WHERE ric.patient_id = candidate.patient_id
                         AND ric.source_record_id = candidate.source_record_id
                         AND ric.record_type IN (:recordTypes)
@@ -405,17 +415,20 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                           ric.citation_replay_claimed_until IS NULL
                           OR ric.citation_replay_claimed_until <= NOW()
                         )
-                      RETURNING ric.patient_id, ric.source_record_id
+                      RETURNING ric.patient_id, ric.source_record_id,
+                                ric.citation_replay_claim_token
                     )
                     SELECT candidate.patient_id AS "patientId",
                            candidate.source_record_id AS "sourceRecordId",
-                           candidate.source_kind AS "sourceKind"
-                    FROM candidate_sources candidate
+                           candidate.source_kind AS "sourceKind",
+                           :claimToken AS "claimToken"
+                    FROM locked_sources candidate
                     WHERE EXISTS (
                       SELECT 1
                       FROM claimed_rows claimed
                       WHERE claimed.patient_id = candidate.patient_id
                         AND claimed.source_record_id = candidate.source_record_id
+                        AND claimed.citation_replay_claim_token = :claimToken
                     )
                     ORDER BY candidate.patient_id, candidate.source_record_id
                     """,
@@ -424,20 +437,26 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("recordTypes") Collection<String> recordTypes,
             @Param("version") int version,
             @Param("limit") int limit,
-            @Param("claimedUntil") java.time.OffsetDateTime claimedUntil);
+            @Param("claimedUntil") java.time.OffsetDateTime claimedUntil,
+            @Param("claimToken") UUID claimToken);
 
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
             value = """
                     UPDATE retrieval_index_chunk
-                    SET citation_replay_attempts = citation_replay_attempts + 1,
+                    SET citation_replay_attempts =
+                          CASE WHEN citation_replay_attempts < 2147483647
+                               THEN citation_replay_attempts + 1
+                               ELSE 2147483647 END,
                         citation_replay_after = :retryAfter,
-                        citation_replay_claimed_until = NULL
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
                       AND migration_status = 'ACTIVE'
+                      AND citation_replay_claim_token = :claimToken
                       AND (
                         source_kind = 'CALL_SUMMARY'
                         OR (
@@ -455,39 +474,71 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("patientId") Long patientId,
             @Param("sourceRecordId") String sourceRecordId,
             @Param("recordTypes") Collection<String> recordTypes,
-            @Param("retryAfter") java.time.OffsetDateTime retryAfter);
+            @Param("retryAfter") java.time.OffsetDateTime retryAfter,
+            @Param("claimToken") UUID claimToken);
 
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
             value = """
                     UPDATE retrieval_index_chunk
-                    SET citation_replay_claimed_until = NULL
+                    SET citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
                       AND migration_status = 'ACTIVE'
+                      AND citation_replay_claim_token = :claimToken
                     """,
             nativeQuery = true)
     int releaseSummaryCitationReplayClaim(
             @Param("patientId") Long patientId,
             @Param("sourceRecordId") String sourceRecordId,
-            @Param("recordTypes") Collection<String> recordTypes);
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("claimToken") UUID claimToken);
 
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
             value = """
                     UPDATE retrieval_index_chunk
-                    SET migration_status = 'QUARANTINED'
+                    SET migration_status = 'QUARANTINED',
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
                       AND migration_status = 'ACTIVE'
+                      AND citation_replay_claim_token = :claimToken
                       AND (source_kind = 'CALL_SUMMARY' OR source_kind IS NULL)
                     """,
             nativeQuery = true)
     int quarantineSummarySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("claimToken") UUID claimToken);
+
+    /**
+     * Explicit reconciliation gate for legacy rows. Call only after the upstream
+     * summary owner and patient scope have both been verified.
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET source_kind = 'CALL_SUMMARY',
+                        migration_status = 'ACTIVE',
+                        citation_replay_after = NULL
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND source_kind IS NULL
+                      AND migration_status = 'QUARANTINED'
+                    """,
+            nativeQuery = true)
+    int promoteReconciledLegacySummarySource(
             @Param("patientId") Long patientId,
             @Param("sourceRecordId") String sourceRecordId,
             @Param("recordTypes") Collection<String> recordTypes);
@@ -562,6 +613,18 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             nativeQuery = true)
     boolean tryAcquireSummaryReplayLock(@Param("lockKey") String lockKey);
 
+    /** Serializes delete-and-replace for one patient/source identity. */
+    @Query(
+            value = """
+                    SELECT pg_advisory_xact_lock(hashtextextended(
+                        CONCAT(:patientId, ':', :sourceKind, ':', :sourceRecordId), 0))
+                    """,
+            nativeQuery = true)
+    void acquireSourceReplacementLock(
+            @Param("patientId") Long patientId,
+            @Param("sourceKind") String sourceKind,
+            @Param("sourceRecordId") String sourceRecordId);
+
     /**
      * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).
      */
@@ -570,7 +633,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE embedding IS NULL
@@ -612,7 +675,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
@@ -636,7 +699,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope, source_kind,
                            citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until,
+                           citation_replay_claimed_until, citation_replay_claim_token,
                            migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId

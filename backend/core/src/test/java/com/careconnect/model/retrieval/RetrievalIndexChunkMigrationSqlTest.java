@@ -77,6 +77,20 @@ class RetrievalIndexChunkMigrationSqlTest {
         assertThat(sql).contains("idx_indexing_outbox_claimable");
     }
 
+    @Test
+    @DisplayName("replay fencing migration repairs partial schemas and quarantines untyped rows")
+    void replayFencingMigrationIsAdditiveAndFailClosed() throws Exception {
+        String sql = readMigration("V2607182330__fence_retrieval_replay_claims.sql");
+
+        assertThat(sql).contains("ADD COLUMN IF NOT EXISTS search_vector TSVECTOR");
+        assertThat(sql).contains("ADD COLUMN IF NOT EXISTS embedding vector(1536)");
+        assertThat(sql).contains("ADD COLUMN IF NOT EXISTS citation_replay_claim_token UUID");
+        assertThat(sql).contains("pg_constraint");
+        assertThat(sql).contains("fk_call_participants_session");
+        assertThat(sql).contains("migration_status = 'QUARANTINED'");
+        assertThat(sql).contains("WHERE source_kind IS NULL");
+    }
+
     private static String readMigration(String filename) throws Exception {
         try (var stream = RetrievalIndexChunkMigrationSqlTest.class.getClassLoader()
                 .getResourceAsStream("db/migration/" + filename)) {

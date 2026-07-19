@@ -25,7 +25,9 @@ class SchemaPatchRunnerTest {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.createStatement()).thenReturn(statement);
         when(connection.getMetaData()).thenReturn(metadata);
-        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        // Call-session catalog verification is PostgreSQL-only; this test targets
+        // the independently required retrieval bootstrap failure path.
+        when(metadata.getDatabaseProductName()).thenReturn("H2", "PostgreSQL");
         doAnswer(invocation -> {
             final String sql = invocation.getArgument(0);
             if (sql.contains("CREATE EXTENSION IF NOT EXISTS vector")) {

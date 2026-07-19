@@ -166,6 +166,25 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "CREATE INDEX IF NOT EXISTS idx_call_participants_session " +
             "  ON call_participants(call_session_id, status)"
         );
+        if (isPostgreSql()) {
+            applyRequiredPatch(
+                "V2607182230d – repair call session foreign keys",
+                foreignKeyIfMissing("fk_call_sessions_patient", "call_sessions",
+                        "patient_id", "patient", "id", "") +
+                foreignKeyIfMissing("fk_call_sessions_created_by", "call_sessions",
+                        "created_by_user_id", "users", "id", "") +
+                foreignKeyIfMissing("fk_call_participants_session", "call_participants",
+                        "call_session_id", "call_sessions", "id", " ON DELETE CASCADE") +
+                foreignKeyIfMissing("fk_call_participants_user", "call_participants",
+                        "user_id", "users", "id", "") +
+                foreignKeyIfMissing("fk_call_participants_invited_by", "call_participants",
+                        "invited_by_user_id", "users", "id", "")
+            );
+            verifyConstraints("call session", 5,
+                    "fk_call_sessions_patient", "fk_call_sessions_created_by",
+                    "fk_call_participants_session", "fk_call_participants_user",
+                    "fk_call_participants_invited_by");
+        }
     }
 
     /**
@@ -205,6 +224,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyRequiredPatch(
             "V2607182130 – typed retrieval replay and migration state",
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS patient_id BIGINT;" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS record_type VARCHAR(40);" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS source_record_id VARCHAR(120);" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL;" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS chunk_text TEXT;" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS chunk_metadata JSONB NULL;" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL;" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL;" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ DEFAULT now();" +
+            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS consent_scope VARCHAR(40) NULL;" +
             "ALTER TABLE retrieval_index_chunk " +
             "  ADD COLUMN IF NOT EXISTS citation_replay_after TIMESTAMPTZ NULL;" +
             "ALTER TABLE retrieval_index_chunk " +
@@ -212,17 +242,27 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "ALTER TABLE retrieval_index_chunk " +
             "  ADD COLUMN IF NOT EXISTS citation_replay_claimed_until TIMESTAMPTZ NULL;" +
             "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'"
+            "  ADD COLUMN IF NOT EXISTS citation_replay_claim_token UUID NULL;" +
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE';" +
+            "UPDATE retrieval_index_chunk SET migration_status = 'QUARANTINED', " +
+            "citation_replay_claimed_until = NULL, citation_replay_claim_token = NULL " +
+            "WHERE source_kind IS NULL " +
+            "AND record_type IN ('CALL_SUMMARY','VISIT_SUMMARY','SUMMARY_ACTION_ITEM'," +
+            "'SUMMARY_APPOINTMENT','SUMMARY_CARE_INSTRUCTION','SUMMARY_CONDITION'," +
+            "'SUMMARY_SOAP','SUMMARY_CLINICAL_OBSERVATION') AND migration_status = 'ACTIVE'"
         );
-        applyRequiredPatch(
+        ensureConcurrentIndex(
             "V2607182130b – concurrent retrieval replay index",
+            "idx_retrieval_summary_replay",
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
             "  ON retrieval_index_chunk " +
             "    (citation_replay_after, patient_id, source_record_id) " +
             "  WHERE migration_status = 'ACTIVE'"
         );
-        applyRequiredPatch(
+        ensureConcurrentIndex(
             "V2607182130c – concurrent retrieval replay claim index",
+            "idx_retrieval_summary_replay_claim",
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay_claim " +
             "  ON retrieval_index_chunk " +
             "    (citation_replay_claimed_until, citation_replay_after, " +
@@ -234,8 +274,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "ALTER TABLE retrieval_index_chunk " +
             "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL"
         );
-        applyRequiredPatch(
+        ensureConcurrentIndex(
             "V2607182105b – concurrent retrieval source identity index",
+            "idx_retrieval_chunk_source_identity",
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
             "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
         );
@@ -254,12 +295,19 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_record_type " +
             "  ON retrieval_index_chunk (patient_id, record_type);" +
             "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source " +
-            "  ON retrieval_index_chunk (source_record_id, record_type);" +
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_fts " +
-            "  ON retrieval_index_chunk USING GIN (search_vector);" +
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding " +
-            "  ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) " +
-            "  WITH (lists = 100)"
+            "  ON retrieval_index_chunk (source_record_id, record_type)"
+        );
+        ensureConcurrentIndex(
+            "V2607071921c – concurrent retrieval FTS index",
+            "idx_retrieval_chunk_fts",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_fts " +
+            "ON retrieval_index_chunk USING GIN (search_vector)"
+        );
+        ensureConcurrentIndex(
+            "V2607071921c – concurrent retrieval embedding index",
+            "idx_retrieval_chunk_embedding",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_embedding " +
+            "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
         );
         applyRequiredPatch(
             "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
@@ -444,6 +492,83 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
+    private void ensureConcurrentIndex(
+            final String name,
+            final String indexName,
+            final String createSql) {
+        final String statusSql = """
+                SELECT i.indisvalid AND i.indisready
+                FROM pg_index i
+                JOIN pg_class c ON c.oid = i.indexrelid
+                WHERE c.relname = '%s'
+                """.formatted(indexName.replace("'", "''"));
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            conn.setAutoCommit(true);
+            boolean exists = false;
+            boolean healthy = false;
+            try (var result = stmt.executeQuery(statusSql)) {
+                if (result.next()) {
+                    exists = true;
+                    healthy = result.getBoolean(1);
+                }
+            }
+            if (exists && !healthy) {
+                log.warn("Rebuilding invalid retrieval index: {}", indexName);
+                stmt.execute("DROP INDEX CONCURRENTLY IF EXISTS " + indexName);
+            }
+            if (!healthy) {
+                stmt.execute(createSql);
+            }
+            try (var result = stmt.executeQuery(statusSql)) {
+                if (!result.next() || !result.getBoolean(1)) {
+                    throw new IllegalStateException(
+                            "Index is not ready and valid: " + indexName);
+                }
+            }
+            log.info("Required concurrent index ready: {}", name);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required concurrent index could not be prepared: " + name, e);
+        }
+    }
+
+    private static String foreignKeyIfMissing(
+            final String constraint,
+            final String table,
+            final String column,
+            final String referencedTable,
+            final String referencedColumn,
+            final String suffix) {
+        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint " +
+                "WHERE conname = '" + constraint + "' AND contype = 'f') THEN " +
+                "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint +
+                " FOREIGN KEY (" + column + ") REFERENCES " + referencedTable +
+                " (" + referencedColumn + ")" + suffix + "; END IF; END $$;";
+    }
+
+    private void verifyConstraints(
+            final String group,
+            final int expected,
+            final String... constraints) {
+        final String names = java.util.Arrays.stream(constraints)
+                .map(name -> "'" + name.replace("'", "''") + "'")
+                .collect(java.util.stream.Collectors.joining(","));
+        final String sql = "SELECT COUNT(*) FROM pg_constraint " +
+                "WHERE contype = 'f' AND convalidated AND conname IN (" + names + ")";
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             var result = stmt.executeQuery(sql)) {
+            if (!result.next() || result.getInt(1) != expected) {
+                throw new IllegalStateException(
+                        "Required " + group + " constraints verification failed");
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required " + group + " constraints verification failed", e);
+        }
+    }
+
     private void verifyRequiredRetrievalSchema() {
         final String sql = """
                 SELECT
@@ -451,15 +576,31 @@ public class SchemaPatchRunner implements CommandLineRunner {
                    FROM information_schema.columns
                    WHERE table_name = 'retrieval_index_chunk'
                      AND column_name IN (
+                       'id',
+                       'patient_id',
+                       'record_type',
+                       'source_record_id',
                        'source_kind',
+                       'chunk_text',
+                       'chunk_metadata',
+                       'search_vector',
+                       'embedding',
+                       'indexed_at',
+                       'consent_scope',
                        'citation_replay_after',
                        'citation_replay_attempts',
                        'citation_replay_claimed_until',
+                       'citation_replay_claim_token',
                        'migration_status')) AS column_count,
                   (SELECT COUNT(*)
-                   FROM pg_indexes
-                   WHERE tablename = 'retrieval_index_chunk'
-                     AND indexname IN (
+                   FROM pg_index i
+                   JOIN pg_class idx ON idx.oid = i.indexrelid
+                   JOIN pg_class tbl ON tbl.oid = i.indrelid
+                   WHERE tbl.relname = 'retrieval_index_chunk'
+                     AND i.indisvalid AND i.indisready
+                     AND idx.relname IN (
+                       'idx_retrieval_chunk_fts',
+                       'idx_retrieval_chunk_embedding',
                        'idx_retrieval_chunk_source_identity',
                        'idx_retrieval_summary_replay',
                        'idx_retrieval_summary_replay_claim')) AS index_count
@@ -468,8 +609,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
              Statement stmt = conn.createStatement();
              var result = stmt.executeQuery(sql)) {
             if (!result.next()
-                    || result.getInt("column_count") != 5
-                    || result.getInt("index_count") != 3) {
+                    || result.getInt("column_count") != 16
+                    || result.getInt("index_count") != 5) {
                 throw new IllegalStateException(
                         "Required retrieval schema verification failed");
             }
@@ -478,6 +619,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     "Required retrieval schema verification failed",
                     e);
         }
+        verifyConstraints(
+                "retrieval",
+                1,
+                "fk_retrieval_chunk_patient");
     }
 
     private boolean isPostgreSql() {

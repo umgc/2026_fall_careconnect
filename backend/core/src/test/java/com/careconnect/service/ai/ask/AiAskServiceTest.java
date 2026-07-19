@@ -186,6 +186,45 @@ class AiAskServiceTest {
     }
 
     @Test
+    void ask_negationOmissionFragment_failsClosed() throws Exception {
+        stubExtractiveResult(
+                "The patient did not report chest pain today.",
+                "report chest pain today.",
+                "report chest pain today.");
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_irrelevantCompleteSentence_failsClosedWhenQueryTermExistsElsewhere()
+            throws Exception {
+        stubExtractiveResult(
+                "Metformin was discussed. The weather was pleasant outside.",
+                "The weather was pleasant outside.",
+                "The weather was pleasant outside.");
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_citationDisplaysSurroundingPromptContext() throws Exception {
+        final String evidence = "The patient started metformin 500 mg.";
+        stubExtractiveResult(
+                "Medication review occurred. " + evidence + " Follow-up is next week.",
+                evidence,
+                evidence);
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.citations().get(0).excerpt())
+                .contains("Medication review occurred.")
+                .contains(evidence)
+                .contains("Follow-up is next week.");
+    }
+
+    @Test
     void ask_evidenceOutsidePromptExcerpt_failsClosed() throws Exception {
         final String hiddenEvidence = "The hidden tail contains a medication change.";
         stubExtractiveResult("x".repeat(650) + hiddenEvidence, hiddenEvidence, hiddenEvidence);
