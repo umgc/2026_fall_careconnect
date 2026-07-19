@@ -181,12 +181,18 @@ public class CallController {
     final CallSession callSession = callSessionService.requireJoinAuthorized(
         callId, currentUser.getId());
     try {
-      final Map<String, Object> response = chimeService.joinMeeting(callId, currentUser.getId().toString(),
-          currentUser.getRole().name(), getCallUserDisplayName(currentUser));
+      // Durable join first so a failed Chime call cannot leave orphan credentials.
       final boolean recordingStartOwner = callSessionService.recordJoin(
-          callSession,
-          currentUser.getId(),
-          response.get("meetingId") == null ? null : response.get("meetingId").toString());
+          callSession, currentUser.getId(), null);
+      final Map<String, Object> response = chimeService.joinMeeting(
+          callId,
+          currentUser.getId().toString(),
+          currentUser.getRole().name(),
+          getCallUserDisplayName(currentUser));
+      final Object meetingIdValue = response.get("meetingId");
+      if (meetingIdValue != null) {
+        callSessionService.attachChimeMeetingId(callId, meetingIdValue.toString());
+      }
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
       callTelemetryService.recordCallEvent(
           callId,
@@ -448,16 +454,7 @@ public class CallController {
       if (shouldEndMeeting) {
         final boolean completed = callTerminationExecutor.execute(
             callId, currentUser.getId(), leave.terminationClaimId());
-        if (!completed) {
-          return ResponseEntity.status(HttpStatus.ACCEPTED).body(
-              Map.of(
-                  "status", "processing",
-                  "callId", callId,
-                  "remainingParticipantCount", "0"));
-        }
-      }
-
-      if (shouldEndMeeting) {
+        // Notify peers immediately even when termination parks as 202 processing.
         leave.notifyUserIds().stream()
             .map(String::valueOf)
             .forEach(
@@ -469,7 +466,16 @@ public class CallController {
                         "callId",
                         callId,
                         "endedBy",
-                        currentUser.getId().toString())));
+                        currentUser.getId().toString(),
+                        "status",
+                        completed ? "ended" : "processing")));
+        if (!completed) {
+          return ResponseEntity.status(HttpStatus.ACCEPTED).body(
+              Map.of(
+                  "status", "processing",
+                  "callId", callId,
+                  "remainingParticipantCount", "0"));
+        }
       } else {
         resolveActiveParticipantIds(callId).stream()
             .map(String::valueOf)

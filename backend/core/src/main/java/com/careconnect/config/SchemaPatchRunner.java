@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -147,6 +148,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 applyCallSummaryIdempotencyPatch();
                 applyTranscriptArchiveStoragePatch();
                 applyRetrievalIndexChunkPatches();
+                // Fail-closed coverage: every catalog entry is applied exactly once via the ledger.
+                applyOutstandingCatalogPatches();
             });
         } else {
             applyCallSessionPatches();
@@ -1143,6 +1146,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
 
     private void applyCatalogPatch(final String patchId) {
         patchLedger.apply(SchemaPatchCatalog.patch(patchId));
+    }
+
+    /**
+     * Applies every catalog patch in declaration order. Already-ledgered entries are no-ops, so
+     * this closes the gap when new catalog IDs are registered but not yet called earlier in
+     * {@link #run()}.
+     */
+    void applyOutstandingCatalogPatches() {
+        for (final SchemaPatchLedger.Patch patch : SchemaPatchCatalog.PATCHES) {
+            applyCatalogPatch(patch.id());
+        }
+    }
+
+    /** Catalog IDs the runner guarantees to apply under the production migration lock. */
+    static List<String> catalogPatchIdsAppliedByRunner() {
+        return SchemaPatchCatalog.PATCHES.stream().map(SchemaPatchLedger.Patch::id).toList();
     }
 
     private static String applicationVersion() {

@@ -108,4 +108,13 @@ class SchemaPatchCatalogTest {
                 .contains("quarantine_reason VARCHAR(255)")
                 .contains("summary_citation_replay_source");
     }
+
+    @Test
+    void runnerGuaranteesEveryCatalogPatchId() {
+        assertThat(SchemaPatchRunner.catalogPatchIdsAppliedByRunner())
+                .containsExactlyElementsOf(
+                        SchemaPatchCatalog.PATCHES.stream()
+                                .map(SchemaPatchLedger.Patch::id)
+                                .toList());
+    }
 }

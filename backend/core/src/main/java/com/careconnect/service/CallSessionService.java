@@ -232,6 +232,9 @@ public class CallSessionService {
     /**
      * Allows a joined historical participant to finish durable transcript retries briefly after
      * call termination. The transcript purge fence is checked independently by the writer.
+     *
+     * <p>{@code TERMINATING} sessions are within grace even when {@code ended_at} is still null
+     * (that timestamp is written only on {@code completeTermination}).
      */
     @Transactional(readOnly = true)
     public CallSession requireTranscriptUploadParticipant(
@@ -242,6 +245,9 @@ public class CallSessionService {
             return requireActiveParticipant(callId, userId);
         }
         requireHistoricalParticipant(callId, userId);
+        if (SESSION_TERMINATING.equals(session.getStatus())) {
+            return session;
+        }
         final LocalDateTime endedAt = session.getEndedAt();
         final LocalDateTime deadline = endedAt == null
                 ? null
@@ -253,7 +259,7 @@ public class CallSessionService {
     }
 
     /**
-     * Recording metadata/playback requires active participation or a durable
+     * Recording metadata/playback requires historical participation or a durable
      * patient relationship. Administrator access is an explicit policy branch.
      */
     @Transactional(readOnly = true)
@@ -274,7 +280,24 @@ public class CallSessionService {
         if (durableParticipant) {
             return session;
         }
-        throw new AppException(HttpStatus.FORBIDDEN, "User has no durable recording access");
+        authorizeForPatient(user, requirePatientUserId(session));
+        return session;
+    }
+
+    /**
+     * Persists the Chime meeting id after a durable join has already succeeded.
+     *
+     * @param callId durable call identifier
+     * @param meetingId Chime meeting id, ignored when blank
+     */
+    public void attachChimeMeetingId(final String callId, final String meetingId) {
+        if (meetingId == null || meetingId.isBlank()) {
+            return;
+        }
+        final CallSession session = callSessionRepository.findByCallId(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        callSessionRepository.activateIfJoinable(
+                session.getId(), meetingId, SESSION_CREATED, SESSION_ACTIVE);
     }
 
     public boolean recordJoin(

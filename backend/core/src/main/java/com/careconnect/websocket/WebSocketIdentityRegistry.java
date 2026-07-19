@@ -27,11 +27,23 @@ public final class WebSocketIdentityRegistry {
    */
   public void bind(final WebSocketSession session, final User user) {
     synchronized (authenticationLock) {
-      final User prior = sessionUsers.remove(session.getId());
-      if (prior != null) {
-        userSessions.remove(prior.getId().toString(), session);
+      final User priorOnSocket = sessionUsers.remove(session.getId());
+      if (priorOnSocket != null) {
+        userSessions.remove(priorOnSocket.getId().toString(), session);
       }
-      userSessions.put(user.getId().toString(), session);
+      final WebSocketSession previous = userSessions.put(user.getId().toString(), session);
+      if (previous != null && !previous.getId().equals(session.getId())) {
+        sessionUsers.remove(previous.getId());
+        if (previous.isOpen()) {
+          try {
+            previous.close(
+                org.springframework.web.socket.CloseStatus.NORMAL.withReason(
+                    "Replaced by newer authenticated session"));
+          } catch (Exception ignored) {
+            // Best-effort close; identity maps are already detached.
+          }
+        }
+      }
       sessionUsers.put(session.getId(), user);
     }
   }
@@ -81,10 +93,15 @@ public final class WebSocketIdentityRegistry {
   /**
    * Registers a user identity without a live WebSocket (legacy HTTP undying-session hook).
    *
+   * <p>Uses the user→session map only as an online marker with a null session so
+   * {@link #getUser(String)} is never polluted with userIds as session keys.
+   *
    * @param userId user identifier
    * @param user user metadata
    */
   public void registerUserWithoutSession(final String userId, final User user) {
-    sessionUsers.put(userId, user);
+    synchronized (authenticationLock) {
+      sessionUsers.put("user:" + userId, user);
+    }
   }
 }
