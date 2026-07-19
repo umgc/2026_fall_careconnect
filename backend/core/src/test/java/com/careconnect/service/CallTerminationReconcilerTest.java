@@ -17,8 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CallTerminationReconcilerTest {
 
     @Mock private CallSessionService callSessionService;
-    @Mock private CallRecordingService callRecordingService;
-    @Mock private ChimeService chimeService;
+    @Mock private CallTerminationExecutor callTerminationExecutor;
     @Mock private CallNotificationHandler notificationHandler;
 
     private CallTerminationReconciler reconciler;
@@ -27,8 +26,7 @@ class CallTerminationReconcilerTest {
     void setUp() {
         reconciler = new CallTerminationReconciler(
                 callSessionService,
-                callRecordingService,
-                chimeService,
+                callTerminationExecutor,
                 notificationHandler);
     }
 
@@ -39,13 +37,11 @@ class CallTerminationReconcilerTest {
         when(callSessionService.claimDueTermination(10L))
                 .thenReturn(new CallSessionService.TerminationClaim(
                         "call-1", claimId, List.of(7L)));
-        when(callSessionService.completeTermination("call-1", claimId)).thenReturn(true);
+        when(callTerminationExecutor.execute("call-1", null, claimId)).thenReturn(true);
 
         reconciler.reconcileDueTerminations();
 
-        verify(callRecordingService).stopRecording("call-1");
-        verify(chimeService).endMeeting("call-1");
-        verify(callSessionService).completeTermination("call-1", claimId);
+        verify(callTerminationExecutor).execute("call-1", null, claimId);
         verify(notificationHandler).sendNotificationToUser(
                 "7",
                 java.util.Map.of(
@@ -55,25 +51,29 @@ class CallTerminationReconcilerTest {
     }
 
     @Test
-    void reconcile_recordsFailureForClaimOwner() {
+    void reconcileDueTerminations_claimFailureDoesNotAbortBatch() {
         final UUID claimId = UUID.randomUUID();
-        final RuntimeException failure = new RuntimeException("delete failed");
+        when(callSessionService.findDueTerminationIds(25)).thenReturn(List.of(10L, 11L));
         when(callSessionService.claimDueTermination(10L))
+                .thenThrow(new IllegalStateException("claim failed"));
+        when(callSessionService.claimDueTermination(11L))
                 .thenReturn(new CallSessionService.TerminationClaim(
-                        "call-1", claimId, List.of()));
-        when(callRecordingService.stopRecording("call-1")).thenThrow(failure);
+                        "call-2", claimId, List.of()));
+        when(callTerminationExecutor.execute("call-2", null, claimId)).thenReturn(true);
 
-        reconciler.reconcile(10L);
+        reconciler.reconcileDueTerminations();
 
-        verify(callSessionService).recordTerminationFailure("call-1", claimId, failure);
-        verify(chimeService, never()).endMeeting("call-1");
+        verify(callSessionService).claimDueTermination(11L);
+        verify(callTerminationExecutor).execute("call-2", null, claimId);
     }
 
     @Test
     void reconcile_skipsCandidateLostToAnotherNode() {
         reconciler.reconcile(10L);
 
-        verify(callRecordingService, never()).stopRecording("call-1");
-        verify(chimeService, never()).endMeeting("call-1");
+        verify(callTerminationExecutor, never()).execute(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 }

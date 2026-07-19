@@ -2,7 +2,6 @@ package com.careconnect.service;
 
 import com.careconnect.model.CallRecording;
 import com.careconnect.repository.CallRecordingRepository;
-import com.careconnect.service.PostCallTranscriptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,6 +20,7 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaC
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipelineResponse;
@@ -323,6 +323,7 @@ class CallRecordingServiceTest {
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
             assertThat(result).containsEntry("status", "STOPPED");
+            assertThat(rec.getStatus()).isEqualTo("STOPPED");
             verify(pipelinesClient).deleteMediaCapturePipeline(
                     any(DeleteMediaCapturePipelineRequest.class));
         }
@@ -821,8 +822,8 @@ class CallRecordingServiceTest {
     class AdditionalEdgePathTests {
 
         @Test
-        @DisplayName("stopRecording returns STOPPED without AWS delete when clients are unavailable after DB recovery")
-        void stopRecording_awsUnavailableAfterDbRecovery_returnsStopped() {
+        @DisplayName("stopRecording remains retryable when AWS is unavailable after DB recovery")
+        void stopRecording_awsUnavailableAfterDbRecovery_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
 
@@ -833,13 +834,15 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "STOP_RETRYABLE");
             assertThat(result).containsEntry("pipelineId", PIPELINE_ID);
+            assertThat(rec.getStatus()).isEqualTo("STOP_RETRYABLE");
         }
 
         @Test
-        @DisplayName("stopRecording reports warning and failed concatenation when delete and ARN lookup fail")
-        void stopRecording_deleteAndArnLookupFail_reportsWarning() {
+        @DisplayName("stopRecording keeps deletion failures retryable")
+        void stopRecording_deleteFailure_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
             rec.setS3Bucket(BUCKET);
@@ -855,9 +858,10 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
-            assertThat(result).containsEntry("concatenationStatus", "FAILED");
-            assertThat(result.get("warning").toString()).contains("delete failed");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "STOP_RETRYABLE");
+            assertThat(result.get("message").toString()).contains("delete failed");
+            assertThat(rec.getStatus()).isEqualTo("STOP_RETRYABLE");
         }
 
         @Test
@@ -1252,7 +1256,9 @@ class CallRecordingServiceTest {
 
             service.reconcileCompletedRecordingCleanup();
 
-            verifyNoInteractions(recordingRepository);
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("STOP_RETRYABLE");
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("FINALIZE_RETRYABLE");
+            verify(recordingRepository, never()).findTop100ByStatusOrderByStartedAtDesc("STOPPED");
         }
 
         @Test
@@ -1262,7 +1268,9 @@ class CallRecordingServiceTest {
 
             service.reconcileCompletedRecordingCleanup();
 
-            verifyNoInteractions(recordingRepository);
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("STOP_RETRYABLE");
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("FINALIZE_RETRYABLE");
+            verify(recordingRepository, never()).findTop100ByStatusOrderByStartedAtDesc("STOPPED");
         }
 
         @Test
@@ -1358,8 +1366,8 @@ class CallRecordingServiceTest {
         }
 
         @Test
-        @DisplayName("concatenation failure sets FAILED status when concatenation pipeline throws")
-        void stopRecording_concatenationPipelineThrows_setsFailed() {
+        @DisplayName("concatenation failure remains retryable when concatenation pipeline throws")
+        void stopRecording_concatenationPipelineThrows_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
             rec.setS3Bucket(BUCKET);
@@ -1384,8 +1392,49 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
-            assertThat(result).containsEntry("concatenationStatus", "FAILED");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "FINALIZE_RETRYABLE");
+            assertThat(rec.getStatus()).isEqualTo("FINALIZE_RETRYABLE");
+        }
+
+        @Test
+        @DisplayName("retry after deletion failure can complete stop and finalization")
+        void stopRecording_retryAfterDeleteFailure_completes() {
+            CallRecording rec = buildRecording("STARTED");
+            rec.setPipelineId(PIPELINE_ID);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+            when(pipelinesClient.getMediaCapturePipeline(
+                    any(GetMediaCapturePipelineRequest.class)))
+                    .thenReturn(GetMediaCapturePipelineResponse.builder()
+                            .mediaCapturePipeline(MediaCapturePipeline.builder()
+                                    .mediaPipelineId(PIPELINE_ID)
+                                    .mediaPipelineArn("arn:aws:chime:us-east-1:"
+                                            + ACCOUNT_ID + ":media-pipeline/" + PIPELINE_ID)
+                                    .build())
+                            .build());
+            when(pipelinesClient.deleteMediaCapturePipeline(
+                            any(DeleteMediaCapturePipelineRequest.class)))
+                    .thenThrow(new RuntimeException("temporary delete failure"))
+                    .thenReturn(DeleteMediaCapturePipelineResponse.builder().build());
+            when(pipelinesClient.createMediaConcatenationPipeline(
+                    any(CreateMediaConcatenationPipelineRequest.class)))
+                    .thenReturn(CreateMediaConcatenationPipelineResponse.builder()
+                            .mediaConcatenationPipeline(MediaConcatenationPipeline.builder()
+                                    .mediaPipelineId("concat-retry")
+                                    .build())
+                            .build());
+
+            assertThat(service.stopRecording(CALL_ID))
+                    .containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(service.stopRecording(CALL_ID))
+                    .containsEntry("status", "STOPPED");
+
+            assertThat(rec.getStatus()).isEqualTo("STOPPED");
+            verify(pipelinesClient, times(2)).deleteMediaCapturePipeline(
+                    any(DeleteMediaCapturePipelineRequest.class));
         }
     }
 

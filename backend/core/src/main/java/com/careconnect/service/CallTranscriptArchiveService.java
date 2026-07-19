@@ -5,6 +5,8 @@ import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.CallTranscriptArchiveRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.TranscriptArchiveLifecycleRepository;
+import com.careconnect.repository.TranscriptArchiveLifecycleRepository.ArchiveLifecycle;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.security.MessageDigest;
@@ -21,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Service that archives transcript payloads and serves archived transcript data. */
@@ -44,6 +45,9 @@ public class CallTranscriptArchiveService {
   /** JSON mapper used for archived transcript payloads. */
   private final ObjectMapper objectMapper;
 
+  /** Durable per-call purge fence and object-deletion outbox. */
+  private final TranscriptArchiveLifecycleRepository lifecycleRepository;
+
   /** Runs the capture and finalize phases in separate, short transactions. */
   private final TransactionTemplate transactionTemplate;
 
@@ -52,11 +56,13 @@ public class CallTranscriptArchiveService {
       final CallTranscriptSegmentRepository segmentRepository,
       final CallRecordingRepository recordingRepository,
       final ObjectMapper objectMapper,
+      final TranscriptArchiveLifecycleRepository lifecycleRepository,
       final PlatformTransactionManager transactionManager) {
     this.archiveRepository = archiveRepository;
     this.segmentRepository = segmentRepository;
     this.recordingRepository = recordingRepository;
     this.objectMapper = objectMapper;
+    this.lifecycleRepository = lifecycleRepository;
     this.transactionTemplate = new TransactionTemplate(transactionManager);
   }
 
@@ -202,6 +208,11 @@ public class CallTranscriptArchiveService {
 
   private ArchiveCapture captureForArchive(final String normalizedCallId) {
     segmentRepository.acquireArchiveLock(normalizedCallId);
+    lifecycleRepository.ensureActive(normalizedCallId);
+    final ArchiveLifecycle lifecycle = lifecycleRepository.find(normalizedCallId);
+    if (lifecycle.purged()) {
+      return null;
+    }
     if (archiveRepository.existsByCallId(normalizedCallId)) {
       return null;
     }
@@ -212,7 +223,8 @@ public class CallTranscriptArchiveService {
         || (segments.size() < minArchiveSegments && transcriptChars < minArchiveChars)) {
       return null;
     }
-    return new ArchiveCapture(normalizedCallId, segments, transcriptChars);
+    return new ArchiveCapture(
+        normalizedCallId, segments, transcriptChars, lifecycle.generation());
   }
 
   private List<CallTranscriptSegment> loadArchivedSegments(
@@ -285,15 +297,12 @@ public class CallTranscriptArchiveService {
           transactionTemplate.execute(
               status -> finalizeArchive(capture, finalizedStorageKey, bytes));
       archived = Boolean.TRUE.equals(finalized);
-      if (!archived) {
-        deleteStorageObjectQuietly(storageKey);
-        uploaded = false;
-      } else {
+      if (archived) {
         logArchiveSuccess(capture.callId(), capture.segments().size(), capture.transcriptChars());
       }
     } catch (Exception ex) {
       if (uploaded) {
-        deleteStorageObjectQuietly(storageKey);
+        enqueueUploadedObjectCleanup(storageKey);
       }
       if (log.isWarnEnabled()) {
         log.warn("Transcript archival failed for callId {}: {}", capture.callId(), ex.getMessage());
@@ -305,7 +314,14 @@ public class CallTranscriptArchiveService {
   private boolean finalizeArchive(
       final ArchiveCapture capture, final String storageKey, final byte[] bytes) {
     segmentRepository.acquireArchiveLock(capture.callId());
+    lifecycleRepository.ensureActive(capture.callId());
+    final ArchiveLifecycle lifecycle = lifecycleRepository.find(capture.callId());
+    if (lifecycle.purged() || lifecycle.generation() != capture.generation()) {
+      lifecycleRepository.enqueueDeletion(storageKey);
+      return false;
+    }
     if (archiveRepository.existsByCallId(capture.callId())) {
+      lifecycleRepository.enqueueDeletion(storageKey);
       return false;
     }
     archiveRepository.save(
@@ -485,40 +501,46 @@ public class CallTranscriptArchiveService {
    * @param callId call identifier
    * @return number of deleted archive rows
    */
-  @Transactional
   public long purgeArchiveForCall(final String callId) {
     final String normalizedCallId = normalize(callId);
     final long deletedCount;
     if (normalizedCallId == null) {
       deletedCount = 0;
     } else {
-      if (s3StorageService != null) {
-        archiveRepository
-            .findByCallIdOrderByArchivedAtDesc(normalizedCallId)
-            .forEach(this::deleteArchiveObjectQuietly);
-      }
-      deletedCount = archiveRepository.deleteByCallId(normalizedCallId);
+      final Long purged =
+          transactionTemplate.execute(status -> purgeArchiveInTransaction(normalizedCallId));
+      deletedCount = purged == null ? 0 : purged;
     }
     return deletedCount;
   }
 
-  private void deleteArchiveObjectQuietly(final CallTranscriptArchive archive) {
-    if (archive != null && archive.getStorageKey() != null && !archive.getStorageKey().isBlank()) {
-      deleteStorageObjectQuietly(archive.getStorageKey());
+  private long purgeArchiveInTransaction(final String callId) {
+    segmentRepository.acquireArchiveLock(callId);
+    lifecycleRepository.markPurged(callId);
+    final List<CallTranscriptArchive> archives =
+        archiveRepository.findByCallIdOrderByArchivedAtDesc(callId);
+    for (final CallTranscriptArchive archive : archives) {
+      if (archive != null
+          && archive.getStorageKey() != null
+          && !archive.getStorageKey().isBlank()) {
+        lifecycleRepository.enqueueDeletion(archive.getStorageKey());
+      }
     }
+    return archiveRepository.deleteByCallId(callId);
   }
 
-  private void deleteStorageObjectQuietly(final String storageKey) {
+  private void enqueueUploadedObjectCleanup(final String storageKey) {
     if (storageKey != null && !storageKey.isBlank()) {
       try {
-        s3StorageService.deleteFile(storageKey);
+        transactionTemplate.executeWithoutResult(
+            status -> lifecycleRepository.enqueueDeletion(storageKey));
       } catch (Exception ex) {
-        if (log.isWarnEnabled()) {
-          log.warn(
-              "Failed to delete transcript archive object {}: {}",
-              storageKey,
-              ex.getMessage());
-        }
+        log.error(
+            "Failed to durably enqueue transcript archive cleanup key={}",
+            storageKey,
+            ex);
+        throw new IllegalStateException(
+            "Uploaded transcript archive cleanup could not be persisted", ex);
       }
     }
   }
@@ -534,5 +556,8 @@ public class CallTranscriptArchiveService {
       String occurredAt) {}
 
   private record ArchiveCapture(
-      String callId, List<CallTranscriptSegment> segments, int transcriptChars) {}
+      String callId,
+      List<CallTranscriptSegment> segments,
+      int transcriptChars,
+      long generation) {}
 }

@@ -113,6 +113,27 @@ class SummaryCitationMetadataBackfillWorkerTest {
     }
 
     @Test
+    void pollAndBackfill_currentCanonicalSourceOnlyReleasesClaim() {
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                eq(RetrievalRecordType.summaryTypeNames()),
+                eq(SummaryChunker.CITATION_METADATA_VERSION),
+                eq(2),
+                any(),
+                any())).thenReturn(List.of(candidate(42L, "call-summary:42")));
+        when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
+                .thenReturn(SummaryCitationReplayOutcome.CURRENT);
+
+        worker.pollAndBackfill();
+
+        verify(chunkRepository).releaseSummaryCitationReplayClaim(
+                42L, "call-summary:42", CLAIM_TOKEN);
+        verify(chunkRepository, never()).markSummaryCitationReplayFailure(
+                eq(42L), eq("call-summary:42"), any(), eq(CLAIM_TOKEN));
+        verify(chunkRepository, never()).quarantineSummarySource(
+                eq(42L), eq("call-summary:42"), any(), eq(CLAIM_TOKEN));
+    }
+
+    @Test
     void pollAndBackfill_noDraftOutcomeIsBackedOff() {
         when(chunkRepository.claimStaleSummaryCitationSources(
                 eq(RetrievalRecordType.summaryTypeNames()),

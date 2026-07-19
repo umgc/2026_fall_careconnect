@@ -6,6 +6,8 @@ import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.CallTranscriptArchiveRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.TranscriptArchiveLifecycleRepository;
+import com.careconnect.repository.TranscriptArchiveLifecycleRepository.ArchiveLifecycle;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -59,6 +60,9 @@ class CallTranscriptArchiveServiceTest {
     @Mock
     private S3StorageService s3StorageService;
 
+    @Mock
+    private TranscriptArchiveLifecycleRepository lifecycleRepository;
+
     private CallTranscriptArchiveService service;
 
     private TrackingTransactionManager transactionManager;
@@ -73,7 +77,11 @@ class CallTranscriptArchiveServiceTest {
                 segmentRepository,
                 callRecordingRepository,
                 objectMapper,
+                lifecycleRepository,
                 transactionManager);
+        org.mockito.Mockito.lenient()
+                .when(lifecycleRepository.find(anyString()))
+                .thenReturn(new ArchiveLifecycle(0L, false));
         ReflectionTestUtils.setField(service, "s3StorageService", s3StorageService);
         ReflectionTestUtils.setField(service, "archiveEnabled", true);
         ReflectionTestUtils.setField(service, "minArchiveSegments", 600);
@@ -464,6 +472,19 @@ class CallTranscriptArchiveServiceTest {
         }
 
         @Test
+        @DisplayName("Returns false after a durable purge marker")
+        void returnsFalseWhenCallWasPurged() {
+            when(lifecycleRepository.find(CALL_ID))
+                    .thenReturn(new ArchiveLifecycle(1L, true));
+
+            assertThat(service.archiveIfEligible(CALL_ID)).isFalse();
+
+            verify(archiveRepository, never()).existsByCallId(anyString());
+            verify(s3StorageService, never())
+                    .upload(anyString(), any(byte[].class), anyString());
+        }
+
+        @Test
         @DisplayName("Returns false for null segments list")
         void returnsFalseForNullSegments() {
             when(archiveRepository.existsByCallId(CALL_ID)).thenReturn(false);
@@ -552,6 +573,7 @@ class CallTranscriptArchiveServiceTest {
 
             verify(archiveRepository, never()).save(any());
             verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
+            verify(lifecycleRepository).enqueueDeletion(anyString());
         }
 
         @Test
@@ -577,7 +599,8 @@ class CallTranscriptArchiveServiceTest {
 
             verify(archiveRepository, never()).save(any());
             verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
-            verify(s3StorageService).deleteFile(anyString());
+            verify(lifecycleRepository).enqueueDeletion(anyString());
+            verify(s3StorageService, never()).deleteFile(anyString());
         }
 
         @Test
@@ -744,8 +767,8 @@ class CallTranscriptArchiveServiceTest {
         }
 
         @Test
-        @DisplayName("Deletes S3 objects and DB records")
-        void deletesS3ObjectsAndDbRecords() {
+        @DisplayName("Commits a purge fence and durable deletion requests with DB records")
+        void recordsDurableDeletionRequestsAndDeletesDbRecords() {
             CallTranscriptArchive archive1 = buildArchive(CALL_ID, "key1.json", "1");
             CallTranscriptArchive archive2 = buildArchive(CALL_ID, "key2.json", "1,2");
             when(archiveRepository.findByCallIdOrderByArchivedAtDesc(CALL_ID))
@@ -755,8 +778,10 @@ class CallTranscriptArchiveServiceTest {
             long result = service.purgeArchiveForCall(CALL_ID);
 
             assertThat(result).isEqualTo(2L);
-            verify(s3StorageService).deleteFile("key1.json");
-            verify(s3StorageService).deleteFile("key2.json");
+            verify(lifecycleRepository).markPurged(CALL_ID);
+            verify(lifecycleRepository).enqueueDeletion("key1.json");
+            verify(lifecycleRepository).enqueueDeletion("key2.json");
+            verifyNoInteractions(s3StorageService);
             verify(archiveRepository).deleteByCallId(CALL_ID);
         }
 
@@ -772,33 +797,29 @@ class CallTranscriptArchiveServiceTest {
 
             service.purgeArchiveForCall(CALL_ID);
 
-            verify(s3StorageService).deleteFile("valid-key.json");
-            // Should only call deleteFile once (for the valid key)
+            verify(lifecycleRepository).enqueueDeletion("valid-key.json");
         }
 
         @Test
-        @DisplayName("Continues purge even if S3 delete fails")
-        void continuesPurgeOnS3DeleteFailure() {
+        @DisplayName("Does not perform object deletion inside the purge transaction")
+        void doesNotDeleteObjectsInsideTransaction() {
             CallTranscriptArchive archive1 = buildArchive(CALL_ID, "key1.json", "1");
             CallTranscriptArchive archive2 = buildArchive(CALL_ID, "key2.json", "1");
             when(archiveRepository.findByCallIdOrderByArchivedAtDesc(CALL_ID))
                     .thenReturn(List.of(archive1, archive2));
             when(archiveRepository.deleteByCallId(CALL_ID)).thenReturn(2L);
 
-            // First S3 delete fails
-            doThrow(new RuntimeException("S3 error"))
-                    .when(s3StorageService).deleteFile("key1.json");
-
             long result = service.purgeArchiveForCall(CALL_ID);
 
             assertThat(result).isEqualTo(2L);
-            // Both delete attempts made, DB purge still happens
-            verify(s3StorageService).deleteFile("key2.json");
+            verify(lifecycleRepository).enqueueDeletion("key1.json");
+            verify(lifecycleRepository).enqueueDeletion("key2.json");
+            verifyNoInteractions(s3StorageService);
             verify(archiveRepository).deleteByCallId(CALL_ID);
         }
 
         @Test
-        @DisplayName("Handles purge when s3StorageService is null")
+        @DisplayName("Persists purge work when s3StorageService is null")
         void handlesPurgeWhenS3Null() {
             ReflectionTestUtils.setField(service, "s3StorageService", null);
             when(archiveRepository.deleteByCallId(CALL_ID)).thenReturn(1L);
@@ -806,7 +827,7 @@ class CallTranscriptArchiveServiceTest {
             long result = service.purgeArchiveForCall(CALL_ID);
 
             assertThat(result).isEqualTo(1L);
-            // S3 delete should not be called
+            verify(lifecycleRepository).markPurged(CALL_ID);
         }
 
         @Test
@@ -818,6 +839,29 @@ class CallTranscriptArchiveServiceTest {
             service.purgeArchiveForCall("  " + CALL_ID + "  ");
 
             verify(archiveRepository).findByCallIdOrderByArchivedAtDesc(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("Purge between capture and finalize fences resurrection")
+        void concurrentPurgePreventsFinalizationAndEnqueuesUploadedObject() throws Exception {
+            List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
+            when(segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(segments);
+            when(archiveRepository.existsByCallId(CALL_ID)).thenReturn(false);
+            when(callRecordingRepository.findTopByCallIdOrderByStartedAtDesc(anyString()))
+                    .thenReturn(Optional.empty());
+            when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[]{1, 2, 3});
+            when(lifecycleRepository.find(CALL_ID))
+                    .thenReturn(new ArchiveLifecycle(7L, false))
+                    .thenReturn(new ArchiveLifecycle(8L, true));
+            when(s3StorageService.download(anyString())).thenReturn(new byte[]{1, 2, 3});
+
+            assertThat(service.archiveIfEligible(CALL_ID)).isFalse();
+
+            verify(archiveRepository, never()).save(any());
+            verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
+            verify(lifecycleRepository).enqueueDeletion(anyString());
+            verify(s3StorageService, never()).deleteFile(anyString());
         }
     }
 

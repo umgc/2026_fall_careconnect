@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.chimesdkmeetings.ChimeSdkMeetingsClient;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Attendee;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateAttendeeRequest;
@@ -16,6 +17,8 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingRespo
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.EngineTranscribeSettings;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
+import software.amazon.awssdk.services.chimesdkmeetings.model.ListAttendeesRequest;
+import software.amazon.awssdk.services.chimesdkmeetings.model.ListAttendeesResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Meeting;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionResponse;
@@ -66,6 +69,9 @@ public class ChimeService {
     /** Cached join credentials per callId and userId (L5a idempotent re-join). */
     private final Map<String, Map<String, Map<String, Object>>> attendeeCredentials =
             new ConcurrentHashMap<>();
+
+    /** Per attendee locks prevent duplicate local requests while the durable lock coordinates nodes. */
+    private final Map<String, Object> attendeeCreationLocks = new ConcurrentHashMap<>();
 
     /** Tracks whether transcription has been started for each callId. */
     private final Map<String, Boolean> transcriptionStarted = new ConcurrentHashMap<>();
@@ -230,8 +236,39 @@ public class ChimeService {
      * @param userId the user to add as an attendee
      * @return attendee credentials map
      */
-    public final Map<String, Object> createAttendee(final String callId, final String userId, final String role, final String displayName) {
+    @Transactional
+    public Map<String, Object> createAttendee(
+            final String callId,
+            final String userId,
+            final String role,
+            final String displayName) {
         log.info("Creating Chime attendee for userId: {} in callId: {}", userId, callId);
+        final String attendeeKey = callId + "\u0000" + userId;
+        final Object localLock = attendeeCreationLocks.computeIfAbsent(
+                attendeeKey, ignored -> new Object());
+        synchronized (localLock) {
+            try {
+                return createAttendeeCoordinated(callId, userId, role, displayName);
+            } finally {
+                attendeeCreationLocks.remove(attendeeKey, localLock);
+            }
+        }
+    }
+
+    private Map<String, Object> createAttendeeCoordinated(
+            final String callId,
+            final String userId,
+            final String role,
+            final String displayName) {
+        // A row lock spans the AWS lookup/create operation. Other application nodes then
+        // observe the attendee in Chime before deciding whether another create is needed.
+        if (callSessionRepository != null) {
+            final CallSession locked = callSessionRepository.findByCallIdForLifecycle(callId)
+                    .orElseThrow(() -> new IllegalStateException("Call session does not exist"));
+            if (!isJoinableStatus(locked.getStatus())) {
+                throw new IllegalStateException("Call is no longer joinable");
+            }
+        }
 
         final Meeting meeting = activeMeetings.get(callId);
         if (meeting == null) {
@@ -276,6 +313,12 @@ public class ChimeService {
 
         try {
             final String externalUserId = toChimeExternalUserId(userId, role, displayName);
+            final Attendee existing = findAttendee(meeting.meetingId(), externalUserId);
+            if (existing != null) {
+                final Map<String, Object> credentials = buildAttendeeCredentials(meeting, existing);
+                cacheAttendeeCredentials(callId, userId, credentials);
+                return credentials;
+            }
             final CreateAttendeeRequest request = CreateAttendeeRequest.builder()
                     .meetingId(meeting.meetingId())
                     .externalUserId(externalUserId)
@@ -292,28 +335,7 @@ public class ChimeService {
             // happened before media signaling was fully ready.
             ensureMeetingTranscriptionStarted(callId, meeting, "createAttendee");
 
-            final String eventIngestionUrl = meeting.mediaPlacement().eventIngestionUrl() != null
-                    ? meeting.mediaPlacement().eventIngestionUrl() : "";
-
-            // Return everything Flutter needs to join the meeting
-            final Map<String, Object> credentials = Map.of(
-                "meetingId",         meeting.meetingId(),
-                "externalMeetingId", meeting.externalMeetingId(),
-                "mediaRegion",       meeting.mediaRegion(),
-                "mediaPlacement",    Map.of(
-                    "audioHostUrl",      meeting.mediaPlacement().audioHostUrl(),
-                    "audioFallbackUrl",  meeting.mediaPlacement().audioFallbackUrl(),
-                    "screenDataUrl",     meeting.mediaPlacement().screenDataUrl(),
-                    "screenSharingUrl",  meeting.mediaPlacement().screenSharingUrl(),
-                    "screenViewingUrl",  meeting.mediaPlacement().screenViewingUrl(),
-                    "signalingUrl",      meeting.mediaPlacement().signalingUrl(),
-                    "turnControlUrl",    meeting.mediaPlacement().turnControlUrl(),
-                    "eventIngestionUrl", eventIngestionUrl
-                ),
-                "attendeeId",     attendee.attendeeId(),
-                "externalUserId", attendee.externalUserId(),
-                "joinToken",      attendee.joinToken()
-            );
+            final Map<String, Object> credentials = buildAttendeeCredentials(meeting, attendee);
             cacheAttendeeCredentials(callId, userId, credentials);
             return credentials;
 
@@ -321,6 +343,55 @@ public class ChimeService {
             log.error("Failed to create attendee for userId: {} in callId: {}", userId, callId, e);
             throw new RuntimeException("Failed to join video call: " + e.getMessage(), e);
         }
+    }
+
+    private Attendee findAttendee(final String meetingId, final String externalUserId) {
+        String nextToken = null;
+        do {
+            final ListAttendeesRequest.Builder request =
+                    ListAttendeesRequest.builder().meetingId(meetingId);
+            if (nextToken != null) {
+                request.nextToken(nextToken);
+            }
+            final ListAttendeesResponse response =
+                    chimeSdkMeetingsClient.listAttendees(request.build());
+            if (response == null) {
+                return null;
+            }
+            final Attendee existing = response.attendees().stream()
+                    .filter(attendee -> externalUserId.equals(attendee.externalUserId()))
+                    .findFirst()
+                    .orElse(null);
+            if (existing != null) {
+                return existing;
+            }
+            nextToken = response.nextToken();
+        } while (nextToken != null && !nextToken.isBlank());
+        return null;
+    }
+
+    private Map<String, Object> buildAttendeeCredentials(
+            final Meeting meeting, final Attendee attendee) {
+        final String eventIngestionUrl = meeting.mediaPlacement().eventIngestionUrl() != null
+                ? meeting.mediaPlacement().eventIngestionUrl() : "";
+        return Map.of(
+            "meetingId",         meeting.meetingId(),
+            "externalMeetingId", meeting.externalMeetingId(),
+            "mediaRegion",       meeting.mediaRegion(),
+            "mediaPlacement",    Map.of(
+                "audioHostUrl",      meeting.mediaPlacement().audioHostUrl(),
+                "audioFallbackUrl",  meeting.mediaPlacement().audioFallbackUrl(),
+                "screenDataUrl",     meeting.mediaPlacement().screenDataUrl(),
+                "screenSharingUrl",  meeting.mediaPlacement().screenSharingUrl(),
+                "screenViewingUrl",  meeting.mediaPlacement().screenViewingUrl(),
+                "signalingUrl",      meeting.mediaPlacement().signalingUrl(),
+                "turnControlUrl",    meeting.mediaPlacement().turnControlUrl(),
+                "eventIngestionUrl", eventIngestionUrl
+            ),
+            "attendeeId",     attendee.attendeeId(),
+            "externalUserId", attendee.externalUserId(),
+            "joinToken",      attendee.joinToken()
+        );
     }
 
     // ================================================================
@@ -338,7 +409,12 @@ public class ChimeService {
      * @param userId the user joining the meeting
      * @return attendee credentials map
      */
-    public final Map<String, Object> joinMeeting(final String callId, final String userId, final String role, final String displayName) {
+    @Transactional
+    public Map<String, Object> joinMeeting(
+            final String callId,
+            final String userId,
+            final String role,
+            final String displayName) {
         // Always resolve via createMeeting. AWS returns the same meeting for the
         // deterministic token, which hydrates a node that has no local cache.
         createMeeting(callId);

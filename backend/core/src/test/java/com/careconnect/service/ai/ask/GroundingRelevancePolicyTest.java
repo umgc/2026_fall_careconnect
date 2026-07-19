@@ -30,6 +30,54 @@ class GroundingRelevancePolicyTest {
     }
 
     @Test
+    void genericDoseModifierCannotSubstituteForSpecificMedicationEntity() {
+        final String evidence = "The insulin dose was increased to ten units nightly.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What is the metformin dose?", evidence, evidence, strongChunk(evidence)))
+                .isFalse();
+    }
+
+    @Test
+    void allSpecificEntitiesMustAppearInEvidence() {
+        final String evidence = "Metformin was continued without changes.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "Compare metformin and lisinopril doses", evidence, evidence, strongChunk(evidence)))
+                .isFalse();
+    }
+
+    @Test
+    void specificEntityWithGenericModifierIsAcceptedWhenEntityAppears() {
+        final String evidence = "The metformin dosage is 500 mg twice daily.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What is the metformin dose?", evidence, evidence, strongChunk(evidence)))
+                .isTrue();
+    }
+
+    @Test
+    void genericDoseQuestionStillUsesMedicationConceptEvidence() {
+        final String evidence = "Insulin was increased to ten units nightly.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What dose changed?", evidence, evidence, strongChunk(evidence)))
+                .isTrue();
+    }
+
+    @Test
+    void genericMedicationStatusQuestionRemainsGeneric() {
+        final String evidence = "Insulin was increased to ten units nightly.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What is the patient's current medication status?",
+                evidence,
+                evidence,
+                strongChunk(evidence)))
+                .isTrue();
+    }
+
+    @Test
     void genericMedicationQuestionAcceptsMedicationConceptEvidence() {
         final String evidence = "Insulin was increased to ten units nightly.";
 

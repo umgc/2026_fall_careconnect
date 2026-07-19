@@ -49,6 +49,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   // Store user info for sessions: sessionId -> User
   private final Map<String, User> sessionUsers = new ConcurrentHashMap<>();
 
+  // Serializes identity changes so a socket cannot remain bound to two accounts.
+  private final Object authenticationLock = new Object();
+
   // Store email verification sessions: email -> WebSocketSession
   private final Map<String, WebSocketSession> emailVerificationSessions = new ConcurrentHashMap<>();
 
@@ -137,9 +140,15 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
       return;
     }
     
-    // Store user session
-    userSessions.put(user.getId().toString(), session);
-    sessionUsers.put(session.getId(), user);
+    // Atomically detach any prior identity for this socket before binding the new account.
+    synchronized (authenticationLock) {
+      final User priorUser = sessionUsers.remove(session.getId());
+      if (priorUser != null) {
+        userSessions.remove(priorUser.getId().toString(), session);
+      }
+      userSessions.put(user.getId().toString(), session);
+      sessionUsers.put(session.getId(), user);
+    }
     
     Map<String, Object> response = Map.of(
       "type", "authentication-success",
@@ -335,9 +344,14 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
 
   @Override
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-    User user = sessionUsers.remove(session.getId());
+    final User user;
+    synchronized (authenticationLock) {
+      user = sessionUsers.remove(session.getId());
+      if (user != null) {
+        userSessions.remove(user.getId().toString(), session);
+      }
+    }
     if (user != null) {
-      userSessions.remove(user.getId().toString());
       log.info("CareConnect WebSocket connection closed for user: {} - Status: {}", user.getEmail(), status);
     } else {
       log.info("CareConnect WebSocket connection closed: {} - Status: {}", session.getId(), status);

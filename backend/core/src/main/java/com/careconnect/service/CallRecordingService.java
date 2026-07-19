@@ -100,6 +100,8 @@ public class CallRecordingService {
   private static final String CONCATENATION_STATUS_READY = "READY";
   private static final String CONCATENATION_STATUS_FAILED = "FAILED";
   private static final String STATUS_STARTED = "STARTED";
+  private static final String STATUS_STOP_RETRYABLE = "STOP_RETRYABLE";
+  private static final String STATUS_FINALIZATION_RETRYABLE = "FINALIZE_RETRYABLE";
   private static final String STATUS_STOPPED = "STOPPED";
   private static final int MAX_KEYS_SMALL = 20;
   private static final int MAX_KEYS_MEDIUM = 50;
@@ -338,13 +340,13 @@ public class CallRecordingService {
    * (no-op).
    */
   public Map<String, Object> stopRecording(final String callId) {
-    String pipelineId = activePipelineIds.remove(callId);
+    String pipelineId = activePipelineIds.get(callId);
     CallRecording recording = null;
     if (pipelineId == null) {
-      // Check DB for a STARTED entry (e.g. after restart)
+      // Check DB for an active/retryable entry (e.g. after restart).
       final Optional<CallRecording> dbRec =
           recordingRepository.findTopByCallIdOrderByStartedAtDesc(callId);
-      if (dbRec.isPresent() && STATUS_STARTED.equals(dbRec.get().getStatus())) {
+      if (dbRec.isPresent() && isStopPending(dbRec.get().getStatus())) {
         recording = dbRec.get();
         pipelineId = dbRec.get().getPipelineId();
       }
@@ -364,36 +366,49 @@ public class CallRecordingService {
       return Map.of("status", "NOT_RECORDING", "callId", callId);
     }
 
-    finalizeRecordingInDb(recording);
-
     if (!isAwsAvailable()) {
-      return Map.of("status", "STOPPED", "callId", callId, "pipelineId", pipelineId);
+      return markStopRetryable(
+          recording, STATUS_STOP_RETRYABLE, "AWS media pipeline client is unavailable");
     }
 
-    final String capturePipelineArn = resolveCapturePipelineArn(pipelineId);
-    String warning = null;
-    try {
-      pipelinesClient.deleteMediaCapturePipeline(
-          DeleteMediaCapturePipelineRequest.builder().mediaPipelineId(pipelineId).build());
+    final String capturePipelineArn = resolveOrBuildCapturePipelineArn(pipelineId);
+    if (capturePipelineArn == null) {
+      return markStopRetryable(
+          recording,
+          STATUS_STOP_RETRYABLE,
+          "Could not resolve capture pipeline ARN for finalization");
+    }
 
-    } catch (Exception e) {
-      // Pipeline may have been auto-terminated by Chime when the meeting ended
-      if (log.isWarnEnabled()) {
-        log.warn(
-            "Could not delete pipeline {} for callId={} (may already be gone): {}",
-            pipelineId,
-            callId,
-            e.getMessage());
+    if (!STATUS_FINALIZATION_RETRYABLE.equals(recording.getStatus())) {
+      try {
+        pipelinesClient.deleteMediaCapturePipeline(
+            DeleteMediaCapturePipelineRequest.builder().mediaPipelineId(pipelineId).build());
+        activePipelineIds.remove(callId, pipelineId);
+      } catch (Exception e) {
+        if (e instanceof
+                software.amazon.awssdk.services.chimesdkmediapipelines.model
+                    .ChimeSdkMediaPipelinesException serviceException
+            && serviceException.statusCode() == 404) {
+          activePipelineIds.remove(callId, pipelineId);
+        } else {
+          if (log.isWarnEnabled()) {
+            log.warn(
+                "Could not delete pipeline {} for callId={}; stop remains retryable: {}",
+                pipelineId,
+                callId,
+                e.getMessage());
+          }
+          return markStopRetryable(recording, STATUS_STOP_RETRYABLE, e.getMessage());
+        }
       }
-      warning = e.getMessage();
     }
 
     final Map<String, Object> result = new HashMap<>();
-    result.put("status", "STOPPED");
     result.put("callId", callId);
     result.put("pipelineId", pipelineId);
 
-    if (capturePipelineArn != null) {
+    if (recording.getConcatenationPipelineId() == null
+        || recording.getConcatenationPipelineId().isBlank()) {
       try {
         final CreateMediaConcatenationPipelineResponse response =
             createConcatenationPipeline(recording, capturePipelineArn);
@@ -401,7 +416,6 @@ public class CallRecordingService {
             response.mediaConcatenationPipeline().mediaPipelineId();
         recording.setConcatenationPipelineId(concatenationPipelineId);
         recording.setConcatenationStatus(CONCATENATION_STATUS_PROCESSING);
-        recording.setErrorMessage(null);
         recordingRepository.save(recording);
         result.put("concatenationPipelineId", concatenationPipelineId);
         result.put("concatenationStatus", CONCATENATION_STATUS_PROCESSING);
@@ -413,25 +427,23 @@ public class CallRecordingService {
         }
       } catch (Exception e) {
         recording.setConcatenationStatus(CONCATENATION_STATUS_FAILED);
-        recording.setErrorMessage(e.getMessage());
-        recordingRepository.save(recording);
-        result.put("concatenationStatus", CONCATENATION_STATUS_FAILED);
-        result.put("concatenationWarning", e.getMessage());
         if (log.isWarnEnabled()) {
           log.warn(
-              "Failed to start recording concatenation for callId={}: {}", callId, e.getMessage());
+              "Failed to start recording concatenation for callId={}; finalization remains"
+                  + " retryable: {}",
+              callId,
+              e.getMessage());
         }
+        return markStopRetryable(recording, STATUS_FINALIZATION_RETRYABLE, e.getMessage());
       }
     } else {
-      recording.setConcatenationStatus(CONCATENATION_STATUS_FAILED);
-      recording.setErrorMessage("Could not resolve capture pipeline ARN for concatenation");
-      recordingRepository.save(recording);
-      result.put("concatenationStatus", CONCATENATION_STATUS_FAILED);
+      result.put("concatenationPipelineId", recording.getConcatenationPipelineId());
+      result.put("concatenationStatus", recording.getConcatenationStatus());
     }
 
-    if (warning != null && !warning.isBlank()) {
-      result.put("warning", warning);
-    }
+    recording.setErrorMessage(null);
+    finalizeRecordingInDb(recording);
+    result.put("status", STATUS_STOPPED);
     return result;
   }
 
@@ -584,7 +596,7 @@ public class CallRecordingService {
     if (rec == null) {
       return;
     }
-    if (!STATUS_STARTED.equals(rec.getStatus())) {
+    if (!isStopPending(rec.getStatus())) {
       return;
     }
 
@@ -597,6 +609,26 @@ public class CallRecordingService {
       rec.setDurationSeconds(secs);
     }
     recordingRepository.save(rec);
+  }
+
+  private boolean isStopPending(final String status) {
+    return STATUS_STARTED.equals(status)
+        || STATUS_STOP_RETRYABLE.equals(status)
+        || STATUS_FINALIZATION_RETRYABLE.equals(status);
+  }
+
+  private Map<String, Object> markStopRetryable(
+      final CallRecording recording, final String status, final String errorMessage) {
+    recording.setStatus(status);
+    recording.setErrorMessage(errorMessage);
+    recordingRepository.save(recording);
+    final Map<String, Object> result = new HashMap<>();
+    result.put("status", "RETRYABLE_FAILURE");
+    result.put("recordingStatus", status);
+    result.put("callId", recording.getCallId());
+    result.put("pipelineId", recording.getPipelineId());
+    result.put("message", errorMessage == null ? "Recording stop must be retried" : errorMessage);
+    return result;
   }
 
   private Map<String, Object> buildRecordingMap(final CallRecording rec) {
@@ -701,6 +733,19 @@ public class CallRecordingService {
     }
   }
 
+  private String resolveOrBuildCapturePipelineArn(final String pipelineId) {
+    final String resolved = resolveCapturePipelineArn(pipelineId);
+    if (resolved != null) {
+      return resolved;
+    }
+    final String accountId = getAwsAccountId();
+    if (accountId == null || pipelineId == null || pipelineId.isBlank()) {
+      return null;
+    }
+    final String regionId = defaultAwsRegion == null ? "us-east-1" : defaultAwsRegion.id();
+    return "arn:aws:chime:" + regionId + ":" + accountId + ":media-pipeline/" + pipelineId;
+  }
+
   private void refreshConcatenationStatus(final CallRecording rec) {
     if (rec == null || rec.getS3Bucket() == null || rec.getS3Prefix() == null) {
       return;
@@ -782,7 +827,12 @@ public class CallRecordingService {
   /** Periodically reconciles stopped recordings and attempts raw artifact cleanup. */
   @Scheduled(fixedDelayString = "${careconnect.recording.raw-cleanup.interval-ms:60000}")
   public void reconcileCompletedRecordingCleanup() {
-    if (!recordingEnabled || !rawCleanupEnabled || s3Client == null) {
+    if (!recordingEnabled) {
+      return;
+    }
+    retryPendingStops(STATUS_STOP_RETRYABLE);
+    retryPendingStops(STATUS_FINALIZATION_RETRYABLE);
+    if (!rawCleanupEnabled || s3Client == null) {
       return;
     }
 
@@ -798,6 +848,25 @@ public class CallRecordingService {
         if (log.isDebugEnabled()) {
           log.debug(
               "Raw cleanup reconciliation skipped for callId {}: {}",
+              recording.getCallId(),
+              e.getMessage());
+        }
+      }
+    }
+  }
+
+  private void retryPendingStops(final String status) {
+    for (final CallRecording recording :
+        recordingRepository.findTop100ByStatusOrderByStartedAtDesc(status)) {
+      if (recording == null || recording.getCallId() == null) {
+        continue;
+      }
+      try {
+        stopRecording(recording.getCallId());
+      } catch (RuntimeException e) {
+        if (log.isDebugEnabled()) {
+          log.debug(
+              "Recording stop reconciliation remains pending for callId {}: {}",
               recording.getCallId(),
               e.getMessage());
         }

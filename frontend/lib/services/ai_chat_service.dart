@@ -25,6 +25,7 @@ const Set<String> _aiAskRecordTypes = {
   'EVV_RECORD',
   'VITAL_SIGN',
 };
+final RegExp _aiAskCitationIdPattern = RegExp(r'^C[1-9][0-9]*$');
 
 class AiAskDisclaimer {
   final String text;
@@ -164,10 +165,15 @@ class AiAskResult {
     final answer = answerJson is Map<String, dynamic>
         ? answerJson['text']?.toString().trim()
         : null;
-    final citations = (json['citations'] as List<dynamic>? ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(AiAskCitation.fromJson)
-        .toList(growable: false);
+    final citationsJson = json['citations'];
+    final citationListIsValid = citationsJson is List<dynamic> &&
+        citationsJson.every((item) => item is Map<String, dynamic>);
+    final citations = citationListIsValid
+        ? citationsJson
+            .cast<Map<String, dynamic>>()
+            .map(AiAskCitation.fromJson)
+            .toList(growable: false)
+        : const <AiAskCitation>[];
     final disclaimer = disclaimerJson is Map<String, dynamic>
         ? AiAskDisclaimer.fromJson(disclaimerJson)
         : null;
@@ -177,12 +183,16 @@ class AiAskResult {
     final confirmation = confirmationJson is Map<String, dynamic>
         ? AiAskConfirmation.fromJson(confirmationJson)
         : null;
-    final deliveredCitationsValid = citations.every(
-      (citation) =>
-          citation.citationId.trim().isNotEmpty &&
-          _aiAskRecordTypes.contains(citation.recordType) &&
-          citation.excerpt.trim().isNotEmpty,
-    );
+    final citationIds =
+        citations.map((citation) => citation.citationId).toSet();
+    final deliveredCitationsValid = citationListIsValid &&
+        citationIds.length == citations.length &&
+        citations.every(
+          (citation) =>
+              _aiAskCitationIdPattern.hasMatch(citation.citationId) &&
+              _aiAskRecordTypes.contains(citation.recordType) &&
+              citation.excerpt.trim().isNotEmpty,
+        );
     if (status == AiAskDeliveryStatus.delivered &&
         (!allowDelivered ||
             json['success'] != true ||

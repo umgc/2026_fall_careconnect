@@ -13,7 +13,7 @@ class AIChatModal extends StatelessWidget {
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
-    
+
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -33,10 +33,11 @@ class AIChatModal extends StatelessWidget {
           ],
         ),
         child: AIChat(
-          role: role, 
+          role: role,
           isModal: true,
           patientId: user?.patientId,
           userId: user?.id,
+          mode: AiChatMode.groundedRecords,
         ),
       ),
     );
