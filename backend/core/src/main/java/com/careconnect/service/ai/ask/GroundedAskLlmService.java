@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Grounded Ask AI Bedrock completion — structured {@code {answerText, citationRefs[]}} only.
+ * Grounded Ask AI Bedrock completion — structured claim-level citations only.
  *
  * <p>Does not reuse {@code BedrockAIChatService} (raw chat). Failures surface as empty
  * {@link Optional} so the gateway can return HTTP 503 instead of an ungrounded answer.
@@ -117,20 +117,35 @@ public class GroundedAskLlmService {
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
-            final String answerText = textOrEmpty(root, "answerText");
-            if (answerText.isBlank()) {
+            final JsonNode claimsNode = root.get("claims");
+            if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
                 return Optional.empty();
             }
+            final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
-            final JsonNode refsNode = root.get("citationRefs");
-            if (refsNode != null && refsNode.isArray()) {
-                for (final JsonNode n : refsNode) {
-                    if (n != null && n.isTextual() && !n.asText().isBlank()) {
-                        refs.add(n.asText().trim());
+            for (final JsonNode claimNode : claimsNode) {
+                final String claimText = textOrEmpty(claimNode, "text").trim();
+                final JsonNode refsNode = claimNode.get("citationRefs");
+                final List<String> claimRefs = new ArrayList<>();
+                if (refsNode != null && refsNode.isArray()) {
+                    for (final JsonNode n : refsNode) {
+                        if (n != null && n.isTextual() && !n.asText().isBlank()) {
+                            claimRefs.add(n.asText().trim());
+                        }
                     }
                 }
+                if (claimText.isBlank() || claimRefs.isEmpty()) {
+                    return Optional.empty();
+                }
+                claims.add(new GroundedClaim(claimText, List.copyOf(claimRefs)));
+                refs.addAll(claimRefs);
             }
-            return Optional.of(new GroundedLlmResult(answerText.trim(), List.copyOf(refs), modelId));
+            final String answerText = claims.stream()
+                    .map(GroundedClaim::text)
+                    .reduce((left, right) -> left + " " + right)
+                    .orElse("");
+            return Optional.of(new GroundedLlmResult(
+                    answerText, List.copyOf(refs), List.copyOf(claims), modelId));
         } catch (final Exception ex) {
             log.warn("Unable to parse grounded Ask AI JSON: {}", ex.getMessage());
             return Optional.empty();
@@ -162,6 +177,32 @@ public class GroundedAskLlmService {
         return node.asText("");
     }
 
-    public record GroundedLlmResult(String answerText, List<String> citationRefs, String modelId) {
+    public record GroundedClaim(String text, List<String> citationRefs) {
+        public GroundedClaim {
+            citationRefs = citationRefs == null ? List.of() : List.copyOf(citationRefs);
+        }
+    }
+
+    public record GroundedLlmResult(
+            String answerText,
+            List<String> citationRefs,
+            List<GroundedClaim> claims,
+            String modelId) {
+
+        public GroundedLlmResult(
+                final String answerText,
+                final List<String> citationRefs,
+                final String modelId) {
+            this(
+                    answerText,
+                    citationRefs,
+                    List.of(new GroundedClaim(answerText, citationRefs)),
+                    modelId);
+        }
+
+        public GroundedLlmResult {
+            citationRefs = citationRefs == null ? List.of() : List.copyOf(citationRefs);
+            claims = claims == null ? List.of() : List.copyOf(claims);
+        }
     }
 }

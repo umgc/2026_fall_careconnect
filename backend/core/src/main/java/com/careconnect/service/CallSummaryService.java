@@ -51,6 +51,9 @@ public class CallSummaryService {
   /** Emits SUMMARY_CREATED events to the indexing outbox after successful persistence. */
   private final IndexingEventEmitter indexingEventEmitter;
 
+  /** Resolves the authoritative patient entity associated with a call. */
+  private final CallPatientResolver callPatientResolver;
+
   /**
    * Returns the latest stored summary entity for a call when available.
    *
@@ -126,17 +129,20 @@ public class CallSummaryService {
       final Long generatedByUserId,
       final Map<String, CallTelemetryEvent> latestByChannel) {
     final String normalizedCallId = requireCallId(callId);
+    final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
     final String transcript = transcriptService.buildTranscriptTextForSummary(normalizedCallId);
     final long segmentCount = transcriptService.countSegments(normalizedCallId);
     Map<String, Object> response = Map.of();
 
     if (transcript.isBlank()) {
-      response = buildNoTranscriptResponse(normalizedCallId, generatedByUserId, segmentCount);
+      response = buildNoTranscriptResponse(
+          normalizedCallId, patientId, generatedByUserId, segmentCount);
     } else {
       final Map<String, BedrockSentimentService.SentimentResult> channelScores =
           toChannelScores(normalizedCallId, latestByChannel);
       response = generateSummaryResponse(
           normalizedCallId,
+          patientId,
           transcript,
           generatedByUserId,
           segmentCount,
@@ -147,10 +153,12 @@ public class CallSummaryService {
 
   private Map<String, Object> buildNoTranscriptResponse(
       final String normalizedCallId,
+      final Long patientId,
       final Long generatedByUserId,
       final long segmentCount) {
     final CallSummary summary = new CallSummary();
     summary.setCallId(normalizedCallId);
+    summary.setPatientId(patientId);
     summary.setStatus("NO_TRANSCRIPT");
     summary.setTranscriptSegmentCount((int) segmentCount);
     summary.setGeneratedByUserId(generatedByUserId);
@@ -164,6 +172,7 @@ public class CallSummaryService {
 
   private Map<String, Object> generateSummaryResponse(
       final String normalizedCallId,
+      final Long patientId,
       final String transcript,
       final Long generatedByUserId,
       final long segmentCount,
@@ -174,6 +183,7 @@ public class CallSummaryService {
           sentimentService.summarizeTranscript(normalizedCallId, transcript, channelScores);
       final CallSummary stored = buildStoredSummary(
           normalizedCallId,
+          patientId,
           generatedByUserId,
           segmentCount,
           "SUCCESS",
@@ -184,6 +194,7 @@ public class CallSummaryService {
       logSummaryFailure(normalizedCallId, ex);
       final CallSummary failed = buildStoredSummary(
           normalizedCallId,
+          patientId,
           generatedByUserId,
           segmentCount,
           "ERROR",
@@ -196,6 +207,7 @@ public class CallSummaryService {
 
   private CallSummary buildStoredSummary(
       final String normalizedCallId,
+      final Long patientId,
       final Long generatedByUserId,
       final long segmentCount,
       final String status,
@@ -203,6 +215,7 @@ public class CallSummaryService {
       final Map<String, Object> summaryPayload) {
     final CallSummary summary = new CallSummary();
     summary.setCallId(normalizedCallId);
+    summary.setPatientId(patientId);
     summary.setStatus(status);
     summary.setTranscriptSegmentCount((int) segmentCount);
     summary.setGeneratedByUserId(generatedByUserId);
@@ -302,15 +315,18 @@ public class CallSummaryService {
 
   /**
    * Emits SUMMARY_CREATED for a persisted summary when its status is
-   * SUCCESS. Per Ravichandra Vasireddy's 2026-07-03 indexing contract,
-   * NO_TRANSCRIPT and ERROR summaries are not indexed. patientId is
-   * read from the entity, nullable until callers populate it.
+   * SUCCESS. Per the indexing contract, NO_TRANSCRIPT and ERROR summaries are not indexed.
+   * Patient ownership is resolved before persistence and is mandatory for successful emission.
    *
    * @param summary persisted call summary
    */
   private void emitIfSuccess(final CallSummary summary) {
     if (summary == null || !"SUCCESS".equals(summary.getStatus())) {
       return;
+    }
+    if (summary.getPatientId() == null) {
+      throw new IllegalStateException(
+          "Successful call summary requires authoritative patient ownership");
     }
     final SummaryCreatedPayload payload = new SummaryCreatedPayload(
         "call",

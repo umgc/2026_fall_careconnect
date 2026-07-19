@@ -145,8 +145,24 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  search_vector     TSVECTOR      NULL," +
             "  embedding         vector(1536)  NULL," +
             "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
-            "  consent_scope     VARCHAR(40)   NULL" +
+            "  consent_scope     VARCHAR(40)   NULL," +
+            "  citation_replay_after TIMESTAMPTZ NULL," +
+            "  citation_replay_attempts INTEGER NOT NULL DEFAULT 0," +
+            "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
             ")"
+        );
+        applyPatch(
+            "V2607182130 – typed retrieval replay and migration state",
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS citation_replay_after TIMESTAMPTZ NULL;" +
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS citation_replay_attempts INTEGER NOT NULL DEFAULT 0;" +
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE';" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_summary_replay " +
+            "  ON retrieval_index_chunk " +
+            "    (citation_replay_after, patient_id, source_record_id) " +
+            "  WHERE migration_status = 'ACTIVE'"
         );
         applyPatch(
             "V2607182105 – add retrieval source ownership discriminator",

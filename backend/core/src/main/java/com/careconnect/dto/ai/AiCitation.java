@@ -17,6 +17,7 @@ import java.util.UUID;
 public record AiCitation(
         String citationId,
         RetrievalRecordType recordType,
+        String sourceKind,
         String sourceRecordId,
         UUID chunkId,
         String title,

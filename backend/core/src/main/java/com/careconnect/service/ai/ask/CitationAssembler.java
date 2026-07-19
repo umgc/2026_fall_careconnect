@@ -1,7 +1,9 @@
 package com.careconnect.service.ai.ask;
 
 import com.careconnect.dto.ai.AiCitation;
+import com.careconnect.service.ai.indexing.SummarySourceKey;
 import com.careconnect.service.ai.retrieval.RankedChunk;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -95,7 +97,9 @@ final class CitationAssembler {
                 || !ref.equals(chunk.citationRef())) {
             return Optional.empty();
         }
-        final String sourceId = validateIdentifier(chunk.sourceRecordId());
+        final String sourceKey = validateIdentifier(chunk.sourceRecordId());
+        final String sourceKind = citationSourceKind(chunk, sourceKey);
+        final String sourceId = publicSourceId(chunk, sourceKey);
         final String excerpt = normalizeAndTruncate(chunk.chunkText(), EXCERPT_CHARS);
         if (sourceId == null || excerpt.isBlank()) {
             return Optional.empty();
@@ -108,6 +112,7 @@ final class CitationAssembler {
         return Optional.of(new AiCitation(
                 ref,
                 chunk.recordType(),
+                sourceKind,
                 sourceId,
                 chunk.chunkId(),
                 metadata.title(),
@@ -116,6 +121,38 @@ final class CitationAssembler {
                 deepLink,
                 metadata.confidence(),
                 metadata.metadata()));
+    }
+
+    private static String publicSourceId(
+            final RankedChunk chunk,
+            final String sourceKey) {
+        if (sourceKey == null || chunk == null || chunk.recordType() == null) {
+            return null;
+        }
+        if (RetrievalRecordType.summaryTypeNames().contains(chunk.recordType().name())
+                && SummarySourceKey.sourceKind(sourceKey) != null) {
+            return SummarySourceKey.parsePublicSummaryId(sourceKey)
+                    .map(String::valueOf)
+                    .orElse(null);
+        }
+        return sourceKey;
+    }
+
+    private static String citationSourceKind(
+            final RankedChunk chunk,
+            final String sourceKey) {
+        final String namespacedKind = SummarySourceKey.sourceKind(sourceKey);
+        if (namespacedKind != null) {
+            return namespacedKind;
+        }
+        if (chunk == null || chunk.recordType() == null) {
+            return null;
+        }
+        return switch (chunk.recordType()) {
+            case CALL_SUMMARY -> SummarySourceKey.CALL_KIND;
+            case VISIT_SUMMARY -> SummarySourceKey.VISIT_KIND;
+            default -> null;
+        };
     }
 
     private static String validateIdentifier(final String value) {
