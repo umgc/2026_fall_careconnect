@@ -4,6 +4,7 @@ import com.careconnect.model.User;
 import com.careconnect.security.Role;
 import com.careconnect.service.ai.ask.AiAskService;
 import com.careconnect.service.ai.ask.AskAiGroundingException;
+import com.careconnect.service.ai.ask.AskAiRejectedException;
 import com.careconnect.service.ai.ask.AskAiUnavailableException;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,6 +95,31 @@ class AiAskControllerTest {
                 .andExpect(jsonPath("$.answer").doesNotExist())
                 .andExpect(jsonPath("$.citations", hasSize(0)))
                 .andExpect(jsonPath("$.error.code").value("RETRIEVAL_UNAVAILABLE"));
+    }
+
+    @Test
+    @DisplayName("post-allocation safety rejection preserves correlation")
+    void ask_safetyRejectionPreservesCorrelation() throws Exception {
+        final UUID requestId = UUID.randomUUID();
+        final UUID auditId = UUID.randomUUID();
+        final UUID sessionId = UUID.randomUUID();
+        when(aiAskService.ask(any(), any())).thenThrow(new AskAiRejectedException(
+                requestId,
+                auditId,
+                sessionId,
+                "SAFETY_VALIDATION_FAILED",
+                "Query blocked by input safety checks",
+                422));
+
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(sessionId)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.auditId").value(auditId.toString()))
+                .andExpect(jsonPath("$.sessionId").value(sessionId.toString()))
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.error.code").value("SAFETY_VALIDATION_FAILED"));
     }
 
     private static String requestJson(final UUID sessionId) {

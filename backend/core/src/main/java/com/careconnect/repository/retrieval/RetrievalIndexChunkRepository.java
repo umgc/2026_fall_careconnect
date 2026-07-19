@@ -52,6 +52,82 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             Collection<String> sourceRecordIds,
             Collection<String> recordTypes);
 
+    @Query(
+            value = """
+                    SELECT ric.id, ric.patient_id, ric.record_type, ric.source_record_id,
+                           ric.chunk_text, ric.chunk_metadata, ric.indexed_at,
+                           ric.consent_scope, ric.source_kind
+                    FROM retrieval_index_chunk ric
+                    WHERE ric.patient_id = :patientId
+                      AND ric.record_type IN (:recordTypes)
+                      AND (
+                        (
+                          ric.source_record_id = :currentSourceRecordId
+                          AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
+                        )
+                        OR (
+                          ric.source_record_id = :legacySourceRecordId
+                          AND ric.source_kind IS NULL
+                          AND EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk call_overview
+                            WHERE call_overview.patient_id = ric.patient_id
+                              AND call_overview.source_record_id = ric.source_record_id
+                              AND call_overview.record_type = 'CALL_SUMMARY'
+                          )
+                          AND NOT EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk visit_overview
+                            WHERE visit_overview.patient_id = ric.patient_id
+                              AND visit_overview.source_record_id = ric.source_record_id
+                              AND visit_overview.record_type = 'VISIT_SUMMARY'
+                          )
+                        )
+                      )
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findCallSummaryChunksForReplacement(
+            @Param("patientId") Long patientId,
+            @Param("currentSourceRecordId") String currentSourceRecordId,
+            @Param("legacySourceRecordId") String legacySourceRecordId,
+            @Param("sourceKind") String sourceKind,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Modifying
+    @Query(
+            value = """
+                    DELETE FROM retrieval_index_chunk ric
+                    WHERE ric.patient_id = :patientId
+                      AND ric.record_type IN (:recordTypes)
+                      AND (
+                        (
+                          ric.source_record_id = :currentSourceRecordId
+                          AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
+                        )
+                        OR (
+                          ric.source_record_id = :legacySourceRecordId
+                          AND ric.source_kind IS NULL
+                          AND EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk call_overview
+                            WHERE call_overview.patient_id = ric.patient_id
+                              AND call_overview.source_record_id = ric.source_record_id
+                              AND call_overview.record_type = 'CALL_SUMMARY'
+                          )
+                          AND NOT EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk visit_overview
+                            WHERE visit_overview.patient_id = ric.patient_id
+                              AND visit_overview.source_record_id = ric.source_record_id
+                              AND visit_overview.record_type = 'VISIT_SUMMARY'
+                          )
+                        )
+                      )
+                    """,
+            nativeQuery = true)
+    int deleteCallSummaryChunksForReplacement(
+            @Param("patientId") Long patientId,
+            @Param("currentSourceRecordId") String currentSourceRecordId,
+            @Param("legacySourceRecordId") String legacySourceRecordId,
+            @Param("sourceKind") String sourceKind,
+            @Param("recordTypes") Collection<String> recordTypes);
+
     /**
      * Broad cleanup helper retained for tests and administrative maintenance.
      * Production indexing must prefer patient/type-scoped deletion.
@@ -74,7 +150,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND search_vector @@ plainto_tsquery('english', :query)
@@ -98,7 +174,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND search_vector @@ plainto_tsquery('english', :query)
@@ -153,7 +229,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE source_record_id = :sourceRecordId
                       AND embedding IS NULL
@@ -199,7 +275,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
@@ -217,7 +293,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND source_record_id IN (:sourceRecordIds)
@@ -234,28 +310,50 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     @Query(
             value = """
-                    SELECT DISTINCT source_record_id
-                    FROM retrieval_index_chunk
-                    WHERE record_type IN (:recordTypes)
-                      AND source_record_id ~ '^(call-summary:)?[0-9]+$'
+                    SELECT DISTINCT ric.source_record_id
+                    FROM retrieval_index_chunk ric
+                    WHERE ric.record_type IN (:recordTypes)
+                      AND ric.source_record_id ~ '^(call-summary:)?[0-9]+$'
                       AND (
-                        source_record_id LIKE 'call-summary:%'
-                        OR record_type = 'CALL_SUMMARY'
-                        OR chunk_metadata->>'episodeType' = 'call'
+                        ric.source_kind = 'CALL_SUMMARY'
+                        OR (
+                          ric.source_record_id LIKE 'call-summary:%'
+                          AND ric.source_kind IS NULL
+                        )
+                        OR (
+                          ric.source_record_id ~ '^[0-9]+$'
+                          AND ric.source_kind IS NULL
+                          AND EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk call_overview
+                            WHERE call_overview.patient_id = ric.patient_id
+                              AND call_overview.source_record_id = ric.source_record_id
+                              AND call_overview.record_type = 'CALL_SUMMARY'
+                          )
+                          AND NOT EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk visit_overview
+                            WHERE visit_overview.patient_id = ric.patient_id
+                              AND visit_overview.source_record_id = ric.source_record_id
+                              AND visit_overview.record_type = 'VISIT_SUMMARY'
+                          )
+                        )
                       )
                       AND (
-                        chunk_metadata->>'citationReplayAfter' IS NULL
-                        OR (chunk_metadata->>'citationReplayAfter')::timestamptz <= NOW()
+                        ric.chunk_metadata->>'citationReplayAfter' IS NULL
+                        OR (ric.chunk_metadata->>'citationReplayAfter')::timestamptz <= NOW()
                       )
                       AND (
-                        CASE
-                          WHEN COALESCE(chunk_metadata->>'citationMetadataVersion', '')
-                                 ~ '^[0-9]+$'
-                          THEN (chunk_metadata->>'citationMetadataVersion')::integer
-                          ELSE -1
-                        END
-                      ) < :version
-                    ORDER BY source_record_id
+                        ric.source_record_id ~ '^[0-9]+$'
+                        OR (
+                          CASE
+                            WHEN COALESCE(
+                                    ric.chunk_metadata->>'citationMetadataVersion', '')
+                                   ~ '^[0-9]+$'
+                            THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
+                            ELSE -1
+                          END
+                        ) < :version
+                      )
+                    ORDER BY ric.source_record_id
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -288,6 +386,33 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                             to_jsonb(CAST(:retryAfter AS text)))
                     WHERE source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
+                      AND (
+                        source_kind = 'CALL_SUMMARY'
+                        OR (
+                          source_record_id LIKE 'call-summary:%'
+                          AND source_kind IS NULL
+                        )
+                        OR (
+                          source_record_id ~ '^[0-9]+$'
+                          AND source_kind IS NULL
+                          AND EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk call_overview
+                            WHERE call_overview.patient_id =
+                                    retrieval_index_chunk.patient_id
+                              AND call_overview.source_record_id =
+                                    retrieval_index_chunk.source_record_id
+                              AND call_overview.record_type = 'CALL_SUMMARY'
+                          )
+                          AND NOT EXISTS (
+                            SELECT 1 FROM retrieval_index_chunk visit_overview
+                            WHERE visit_overview.patient_id =
+                                    retrieval_index_chunk.patient_id
+                              AND visit_overview.source_record_id =
+                                    retrieval_index_chunk.source_record_id
+                              AND visit_overview.record_type = 'VISIT_SUMMARY'
+                          )
+                        )
+                      )
                     """,
             nativeQuery = true)
     int markSummaryCitationReplayFailure(
@@ -301,7 +426,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE embedding IS NULL
                       AND chunk_text IS NOT NULL
@@ -338,7 +463,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND embedding IS NOT NULL
@@ -358,7 +483,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND embedding IS NOT NULL

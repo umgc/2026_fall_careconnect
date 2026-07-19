@@ -54,36 +54,47 @@ public class SummaryCitationMetadataBackfillWorker {
             return;
         }
 
-        int rebuilt = 0;
+        int updated = 0;
         int failed = 0;
         for (final String sourceId : sourceIds) {
             try {
                 final Long summaryId = SummarySourceKey.parseCallSummaryId(sourceId)
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Invalid call summary source key"));
-                rebuilt += retrievalIndexService.replaySummaryCitationMetadata(summaryId);
+                final SummaryCitationReplayOutcome outcome =
+                        retrievalIndexService.replaySummaryCitationMetadata(summaryId);
+                if (outcome == SummaryCitationReplayOutcome.UPDATED) {
+                    updated++;
+                } else if (outcome == SummaryCitationReplayOutcome.NO_DRAFTS) {
+                    failed++;
+                    markFailureBackoff(sourceId);
+                }
             } catch (final RuntimeException ex) {
                 failed++;
-                try {
-                    chunkRepository.markSummaryCitationReplayFailure(
-                            sourceId,
-                            RetrievalRecordType.summaryTypeNames(),
-                            OffsetDateTime.now(ZoneOffset.UTC)
-                                    .plus(Duration.ofMillis(failureBackoffMs)));
-                } catch (final RuntimeException markFailure) {
-                    log.warn(
-                            "Unable to persist summary citation replay backoff type={}",
-                            markFailure.getClass().getSimpleName());
-                }
+                markFailureBackoff(sourceId);
                 log.warn(
                         "Summary citation metadata replay failed type={}",
                         ex.getClass().getSimpleName());
             }
         }
         log.info(
-                "Summary citation metadata replay processed {} source(s), wrote {} chunk(s), failed {}",
+                "Summary citation metadata replay processed {} source(s), updated {} source(s), failed {}",
                 sourceIds.size(),
-                rebuilt,
+                updated,
                 failed);
+    }
+
+    private void markFailureBackoff(final String sourceId) {
+        try {
+            chunkRepository.markSummaryCitationReplayFailure(
+                    sourceId,
+                    RetrievalRecordType.summaryTypeNames(),
+                    OffsetDateTime.now(ZoneOffset.UTC)
+                            .plus(Duration.ofMillis(failureBackoffMs)));
+        } catch (final RuntimeException markFailure) {
+            log.warn(
+                    "Unable to persist summary citation replay backoff type={}",
+                    markFailure.getClass().getSimpleName());
+        }
     }
 }
