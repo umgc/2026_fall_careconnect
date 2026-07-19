@@ -343,6 +343,43 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
     }
 
     @Test
+    void currentCanonicalChunksMakeQuarantinedLegacyReplayTerminal() {
+        insertChunk(
+                "00000000-0000-0000-0000-000000000077",
+                "call-summary:77",
+                "CALL_SUMMARY");
+        jdbcTemplate.update("""
+                UPDATE retrieval_index_chunk
+                SET chunk_metadata = jsonb_build_object(
+                      'citationMetadataVersion', ?)
+                WHERE source_record_id = 'call-summary:77'
+                """, SummaryChunker.CITATION_METADATA_VERSION);
+        jdbcTemplate.update("""
+                INSERT INTO retrieval_index_chunk (
+                  id, patient_id, record_type, source_record_id, source_kind,
+                  chunk_text, chunk_metadata, indexed_at, consent_scope,
+                  migration_status)
+                VALUES (
+                  '00000000-0000-0000-0000-000000000078', 42,
+                  'CALL_SUMMARY', '77', NULL, 'legacy',
+                  '{"citationMetadataVersion":1}', NOW(), 'auto', 'QUARANTINED')
+                """);
+
+        assertThat(staleSources()).isEmpty();
+        assertThat(repository.claimStaleSummaryCitationSources(
+                RetrievalRecordType.summaryTypeNames(),
+                SummaryChunker.CITATION_METADATA_VERSION,
+                1,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5),
+                UUID.randomUUID())).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT migration_status
+                FROM retrieval_index_chunk
+                WHERE source_record_id = '77'
+                """, String.class)).isEqualTo("QUARANTINED");
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void productionBootstrap_repairsHibernateFirstSchemaAndForeignKeys() {
         jdbcTemplate.execute("DROP TABLE summary_citation_replay_source");

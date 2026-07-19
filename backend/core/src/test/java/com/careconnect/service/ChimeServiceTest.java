@@ -22,13 +22,21 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingReque
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingResponse;
+import software.amazon.awssdk.services.chimesdkmeetings.model.ListAttendeesRequest;
+import software.amazon.awssdk.services.chimesdkmeetings.model.ListAttendeesResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.MediaPlacement;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Meeting;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionResponse;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -322,6 +330,81 @@ class ChimeServiceTest {
 
             assertThat(result.get("attendeeId")).isEqualTo("attendee-xyz");
             assertThat(result.get("joinToken")).isEqualTo("join-token-abc");
+        }
+
+        @Test
+        @DisplayName("concurrent same-user joins create one Chime attendee")
+        void createAttendee_concurrentSameUser_createsOnce() throws Exception {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
+                    .thenReturn(ListAttendeesResponse.builder().attendees(List.of()).build());
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenReturn(CreateAttendeeResponse.builder().attendee(buildAttendee()).build());
+            service.createMeeting(CALL_ID);
+
+            int callers = 8;
+            ExecutorService executor = Executors.newFixedThreadPool(callers);
+            CountDownLatch ready = new CountDownLatch(callers);
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<Map<String, Object>>> futures = new ArrayList<>();
+            try {
+                for (int i = 0; i < callers; i++) {
+                    futures.add(executor.submit(() -> {
+                        ready.countDown();
+                        start.await();
+                        return service.createAttendee(
+                                CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+                    }));
+                }
+                ready.await();
+                start.countDown();
+                for (Future<Map<String, Object>> future : futures) {
+                    assertThat(future.get().get("attendeeId")).isEqualTo("attendee-xyz");
+                }
+            } finally {
+                executor.shutdownNow();
+            }
+
+            verify(chimeSdkMeetingsClient, times(1))
+                    .createAttendee(any(CreateAttendeeRequest.class));
+        }
+
+        @Test
+        @DisplayName("a second node reuses attendee discovered in Chime under durable lock")
+        void createAttendee_secondNode_reusesExistingAttendee() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            CallSession session = new CallSession();
+            session.setCallId(CALL_ID);
+            session.setChimeMeetingId(MEETING_ID);
+            session.setStatus(CallSessionService.SESSION_ACTIVE);
+            when(callSessionRepository.findByCallId(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(callSessionRepository.findByCallIdForLifecycle(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(chimeSdkMeetingsClient.getMeeting(any(GetMeetingRequest.class)))
+                    .thenReturn(GetMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
+                    .thenReturn(ListAttendeesResponse.builder()
+                            .attendees(Attendee.builder()
+                                    .attendeeId("attendee-xyz")
+                                    .externalUserId("CAREGIVER_John-DOE_42")
+                                    .joinToken("join-token-abc")
+                                    .build())
+                            .build());
+            ChimeService secondNode = new ChimeService(
+                    chimeSdkMeetingsClient, callSessionRepository,
+                    true, false, "en-US", "us-east-1");
+            secondNode.createMeeting(CALL_ID);
+
+            Map<String, Object> result = secondNode.createAttendee(
+                    CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(result.get("attendeeId")).isEqualTo("attendee-xyz");
+            verify(callSessionRepository).findByCallIdForLifecycle(CALL_ID);
+            verify(chimeSdkMeetingsClient, never())
+                    .createAttendee(any(CreateAttendeeRequest.class));
         }
 
         @Test

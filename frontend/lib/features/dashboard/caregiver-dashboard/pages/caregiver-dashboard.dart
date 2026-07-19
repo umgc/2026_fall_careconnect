@@ -69,7 +69,8 @@ class CaregiverDashboard extends StatelessWidget {
               color: Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () {
-              final double sheetHeight = MediaQuery.of(context).size.height * 0.75;
+              final double sheetHeight =
+                  MediaQuery.of(context).size.height * 0.75;
               showModalBottomSheet(
                 isScrollControlled: true,
                 context: context,
@@ -78,7 +79,9 @@ class CaregiverDashboard extends StatelessWidget {
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width > 768 ? 600 : double.infinity,
+                  maxWidth: MediaQuery.of(context).size.width > 768
+                      ? 600
+                      : double.infinity,
                 ),
                 builder: (context) => SizedBox(
                   height: sheetHeight,
@@ -87,6 +90,7 @@ class CaregiverDashboard extends StatelessWidget {
                     isModal: true,
                     patientId: user?.patientId,
                     userId: user?.id,
+                    mode: AiChatMode.groundedRecords,
                   ),
                 ),
               );

@@ -338,6 +338,24 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                           AND replay.source_record_id ~ '^call-summary:[0-9]+$'
                           AND legacy.source_record_id =
                               SUBSTRING(replay.source_record_id FROM 14)
+                          AND NOT EXISTS (
+                            SELECT 1
+                            FROM retrieval_index_chunk canonical
+                            WHERE canonical.patient_id = replay.patient_id
+                              AND canonical.record_type IN (:recordTypes)
+                              AND canonical.migration_status = 'ACTIVE'
+                              AND canonical.source_kind = replay.source_kind
+                              AND canonical.source_record_id = replay.source_record_id
+                              AND CASE
+                                    WHEN COALESCE(
+                                      canonical.chunk_metadata
+                                        ->>'citationMetadataVersion', '')
+                                      ~ '^[0-9]{1,9}$'
+                                    THEN (canonical.chunk_metadata
+                                      ->>'citationMetadataVersion')::integer
+                                    ELSE -1
+                                  END >= :version
+                          )
                       )
                     ORDER BY replay.replay_after ASC NULLS FIRST,
                              replay.attempts,
@@ -387,6 +405,24 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                             AND replay.source_record_id ~ '^call-summary:[0-9]+$'
                             AND legacy.source_record_id =
                                 SUBSTRING(replay.source_record_id FROM 14)
+                            AND NOT EXISTS (
+                              SELECT 1
+                              FROM retrieval_index_chunk canonical
+                              WHERE canonical.patient_id = replay.patient_id
+                                AND canonical.record_type IN (:recordTypes)
+                                AND canonical.migration_status = 'ACTIVE'
+                                AND canonical.source_kind = replay.source_kind
+                                AND canonical.source_record_id = replay.source_record_id
+                                AND CASE
+                                      WHEN COALESCE(
+                                        canonical.chunk_metadata
+                                          ->>'citationMetadataVersion', '')
+                                        ~ '^[0-9]{1,9}$'
+                                      THEN (canonical.chunk_metadata
+                                        ->>'citationMetadataVersion')::integer
+                                      ELSE -1
+                                    END >= :version
+                            )
                         )
                       ORDER BY replay.replay_after ASC NULLS FIRST,
                                replay.attempts ASC,

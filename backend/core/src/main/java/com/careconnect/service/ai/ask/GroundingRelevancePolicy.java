@@ -18,14 +18,17 @@ final class GroundingRelevancePolicy {
 
     private static final Pattern WORD_BOUNDARY = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final Set<String> QUERY_STOP_WORDS = Set.of(
-            "about", "could", "does", "from", "have", "please", "record",
+            "about", "compare", "could", "does", "from", "have", "please", "record",
             "records", "show", "tell", "that", "these", "this", "what",
             "when", "where", "which", "with", "would");
     private static final Set<String> GENERIC_QUERY_TERMS = Set.of(
             "allergy", "allergies", "appointment", "appointments", "care",
-            "change", "changed", "changes", "drug", "drugs", "happened",
-            "latest", "medication", "medications", "medicine", "medicines",
-            "meds", "pain", "recent", "recently", "update", "updates");
+            "change", "changed", "changes", "current", "details", "dose",
+            "dosage", "drug", "drugs", "happened", "history", "information",
+            "latest", "level", "levels", "list", "medication", "medications",
+            "medicine", "medicines", "meds", "patient", "pain", "recent",
+            "recently", "status", "tablet", "tablets", "taking", "update",
+            "updates");
     private static final Map<String, Set<String>> CONCEPTS = Map.of(
             "medication", Set.of("medication", "medications", "medicine", "medicines",
                     "drug", "drugs", "dose", "dosage", "mg", "tablet", "metformin", "insulin"),
@@ -43,13 +46,13 @@ final class GroundingRelevancePolicy {
             final RankedChunk chunk) {
         final Set<String> queryTerms = normalizedTerms(query);
         final Set<String> evidenceTerms = normalizedTerms(evidence);
+        final Set<String> specificEntityTerms = new HashSet<>(queryTerms);
+        specificEntityTerms.removeAll(GENERIC_QUERY_TERMS);
 
-        if (!queryTerms.isEmpty()) {
-            if (queryTerms.stream().anyMatch(queryTerm ->
+        if (!specificEntityTerms.isEmpty()) {
+            return specificEntityTerms.stream().allMatch(queryTerm ->
                     evidenceTerms.stream().anyMatch(evidenceTerm ->
-                            sameEntityToken(queryTerm, evidenceTerm)))) {
-                return true;
-            }
+                            sameEntityToken(queryTerm, evidenceTerm)));
         }
 
         if (!isGenuinelyGeneric(queryTerms)) {

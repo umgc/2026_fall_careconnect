@@ -113,6 +113,20 @@ class CareConnectWebSocketHandlerTest {
         verify(session, atLeastOnce()).sendMessage(any(TextMessage.class));
     }
 
+    @Test
+    void authenticate_sameSocketSwitchesAccount_removesPriorUserMapping() throws Exception {
+        authenticate(session, "s1", user, 1L, "first@test.com", "first-token");
+        when(session.isOpen()).thenReturn(true);
+        assertThat(handler.isUserOnline("1")).isTrue();
+
+        authenticate(session, "s1", targetUser, 2L, "second@test.com", "second-token");
+
+        assertThat(handler.isUserOnline("1")).isFalse();
+        assertThat(handler.isUserOnline("2")).isTrue();
+        handler.sendRealTimeUpdate("1", Map.of("type", "must-not-deliver"));
+        verify(session, times(2)).sendMessage(any(TextMessage.class));
+    }
+
     // ─── subscribe-to-updates ────────────────────────────────────────────────
 
     @Test

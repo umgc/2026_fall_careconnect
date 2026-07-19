@@ -224,7 +224,6 @@ class VideoCallService {
     _callStartedAt = DateTime.now();
     _lastTranscriptEndMs = 0;
     _aggregatedSentiment.clear();
-    _pendingTranscriptSegments.clear();
     _seedAwaitingSentimentState();
     _startTranscriptFlushTimer();
 
@@ -586,7 +585,6 @@ class VideoCallService {
     _lastTranscriptEndMs = 0;
     _meetingCredentials = null;
     _aggregatedSentiment.clear();
-    _pendingTranscriptSegments.clear();
     final normalizedCallId = callId?.trim();
     if (markCompleted &&
         normalizedCallId != null &&
@@ -608,46 +606,54 @@ class VideoCallService {
     int maxAttempts = 1,
     bool respectInCallState = true,
   }) async {
-    final inFlight = _transcriptFlushFuture;
-    if (inFlight != null) {
-      await inFlight;
-      return;
-    }
-    if (_pendingTranscriptSegments.isEmpty) {
-      return;
-    }
-    if (_jwtToken == null || _jwtToken!.isEmpty) {
-      return;
-    }
-    if (respectInCallState && !_isInCall) {
-      return;
-    }
-
-    final activeCallId = callIdOverride ?? _currentCallId;
-    if (activeCallId == null || activeCallId.trim().isEmpty) {
-      return;
-    }
-
-    final flush = _runTranscriptFlush(activeCallId, maxAttempts);
-    _transcriptFlushFuture = flush;
-    try {
-      await flush;
-    } finally {
-      if (identical(_transcriptFlushFuture, flush)) {
-        _transcriptFlushFuture = null;
+    while (true) {
+      final inFlight = _transcriptFlushFuture;
+      if (inFlight != null) {
+        await inFlight;
+        if (identical(_transcriptFlushFuture, inFlight)) {
+          _transcriptFlushFuture = null;
+        }
+        continue;
       }
+      if (_pendingTranscriptSegments.isEmpty) {
+        return;
+      }
+      if (_jwtToken == null || _jwtToken!.isEmpty) {
+        return;
+      }
+      if (respectInCallState && !_isInCall) {
+        return;
+      }
+
+      final activeCallId = callIdOverride ?? _currentCallId;
+      if (activeCallId == null || activeCallId.trim().isEmpty) {
+        return;
+      }
+
+      final flush = _runTranscriptFlush(activeCallId, maxAttempts);
+      _transcriptFlushFuture = flush;
+      try {
+        await flush;
+      } finally {
+        if (identical(_transcriptFlushFuture, flush)) {
+          _transcriptFlushFuture = null;
+        }
+      }
+      return;
     }
   }
 
   Future<void> _runTranscriptFlush(String activeCallId, int maxAttempts) async {
     var attempts = 0;
-    while (_pendingTranscriptSegments.isNotEmpty && attempts < maxAttempts) {
-      attempts += 1;
-      final segment = _pendingTranscriptSegments.first;
-      if (segment.callId != activeCallId) {
-        _pendingTranscriptSegments.removeAt(0);
-        continue;
+    while (attempts < maxAttempts) {
+      final segmentIndex = _pendingTranscriptSegments.indexWhere(
+        (segment) => segment.callId == activeCallId,
+      );
+      if (segmentIndex < 0) {
+        return;
       }
+      attempts += 1;
+      final segment = _pendingTranscriptSegments[segmentIndex];
 
       try {
         final response = await http
@@ -670,7 +676,7 @@ class VideoCallService {
             .timeout(const Duration(seconds: 8));
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          _pendingTranscriptSegments.removeAt(0);
+          _pendingTranscriptSegments.remove(segment);
           attempts = 0;
           continue;
         }
@@ -680,12 +686,20 @@ class VideoCallService {
         );
 
         if (response.statusCode == 400) {
-          _pendingTranscriptSegments.removeAt(0);
+          _pendingTranscriptSegments.remove(segment);
+          attempts = 0;
           continue;
         }
-        break;
+        if (response.statusCode >= 500 && response.statusCode < 600) {
+          continue;
+        }
+        return;
+      } on TimeoutException {
+        continue;
+      } on http.ClientException {
+        continue;
       } catch (_) {
-        break;
+        return;
       }
     }
   }
@@ -1074,7 +1088,6 @@ class VideoCallService {
     _stopTranscriptFlushTimer();
     _wsSubscription?.cancel();
     _aggregatedSentiment.clear();
-    _pendingTranscriptSegments.clear();
     _onCallDeclined = null;
     _onRecordingState = null;
     _isPatientSentimentSource = false;

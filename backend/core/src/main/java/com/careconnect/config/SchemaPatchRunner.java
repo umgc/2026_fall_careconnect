@@ -131,6 +131,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             withProductionSchemaMigrationLock(() -> {
                 applyCallSessionPatches();
                 applyCallSummaryIdempotencyPatch();
+                applyTranscriptArchiveStoragePatch();
                 applyRetrievalIndexChunkPatches();
             });
         } else {
@@ -139,6 +140,13 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
+    }
+
+    /** Durable purge fencing and post-commit object deletion for transcript archives. */
+    private void applyTranscriptArchiveStoragePatch() {
+        applyRequiredSqlResource(
+                "V2607191300 – harden transcript archive purge",
+                "db/migration/V2607191300__harden_transcript_archive_purge.sql");
     }
 
     /** Production parity for Flyway migration V2607190010. */

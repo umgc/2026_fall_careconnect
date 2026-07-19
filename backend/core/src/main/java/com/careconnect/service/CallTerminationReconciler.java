@@ -18,8 +18,7 @@ public class CallTerminationReconciler {
     private static final int BATCH_SIZE = 25;
 
     private final CallSessionService callSessionService;
-    private final CallRecordingService callRecordingService;
-    private final ChimeService chimeService;
+    private final CallTerminationExecutor callTerminationExecutor;
     private final CallNotificationHandler callNotificationHandler;
 
     @Scheduled(
@@ -27,7 +26,14 @@ public class CallTerminationReconciler {
                     "${careconnect.call.termination-reconcile-interval-ms:30000}")
     public void reconcileDueTerminations() {
         for (final Long sessionId : callSessionService.findDueTerminationIds(BATCH_SIZE)) {
-            reconcile(sessionId);
+            try {
+                reconcile(sessionId);
+            } catch (RuntimeException failure) {
+                log.error(
+                        "Scheduled call termination item failed for sessionId={}",
+                        sessionId,
+                        failure);
+            }
         }
     }
 
@@ -37,27 +43,16 @@ public class CallTerminationReconciler {
         if (claim == null) {
             return;
         }
-        try {
-            callRecordingService.stopRecording(claim.callId());
-            chimeService.endMeeting(claim.callId());
-            if (!callSessionService.completeTermination(claim.callId(), claim.claimId())) {
-                return;
-            }
-            claim.notifyUserIds().stream()
-                    .map(String::valueOf)
-                    .forEach(userId -> callNotificationHandler.sendNotificationToUser(
-                            userId,
-                            Map.of(
-                                    "type", "call-ended",
-                                    "callId", claim.callId(),
-                                    "endedBy", "SYSTEM")));
-        } catch (RuntimeException failure) {
-            callSessionService.recordTerminationFailure(
-                    claim.callId(), claim.claimId(), failure);
-            log.error(
-                    "Scheduled call termination failed for callId={}",
-                    claim.callId(),
-                    failure);
+        if (!callTerminationExecutor.execute(claim.callId(), null, claim.claimId())) {
+            return;
         }
+        claim.notifyUserIds().stream()
+                .map(String::valueOf)
+                .forEach(userId -> callNotificationHandler.sendNotificationToUser(
+                        userId,
+                        Map.of(
+                                "type", "call-ended",
+                                "callId", claim.callId(),
+                                "endedBy", "SYSTEM")));
     }
 }

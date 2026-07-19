@@ -4,9 +4,8 @@ import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.service.CallSessionService;
-import com.careconnect.service.CallRecordingService;
-import com.careconnect.service.ChimeService;
 import com.careconnect.service.CallTelemetryService;
+import com.careconnect.service.CallTerminationExecutor;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,8 +39,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
   /** Service used to verify caregiver-patient link permissions. */
   private final CaregiverPatientLinkService caregiverPatientLinkService;
   private final CallSessionService callSessionService;
-  private final CallRecordingService callRecordingService;
-  private final ChimeService chimeService;
+  private final CallTerminationExecutor callTerminationExecutor;
 
   /** JSON mapper used to serialize websocket payloads. */
   private final ObjectMapper objectMapper;
@@ -67,15 +65,13 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       final CallTelemetryService callTelemetryService,
       final CaregiverPatientLinkService caregiverPatientLinkService,
       final CallSessionService callSessionService,
-      final CallRecordingService callRecordingService,
-      final ChimeService chimeService) {
+      final CallTerminationExecutor callTerminationExecutor) {
     this.userRepository = userRepository;
     this.jwtTokenProvider = jwtTokenProvider;
     this.callTelemetryService = callTelemetryService;
     this.caregiverPatientLinkService = caregiverPatientLinkService;
     this.callSessionService = callSessionService;
-    this.callRecordingService = callRecordingService;
-    this.chimeService = chimeService;
+    this.callTerminationExecutor = callTerminationExecutor;
     this.objectMapper = new ObjectMapper();
   }
 
@@ -90,7 +86,6 @@ public class CallNotificationHandler extends TextWebSocketHandler {
         jwtTokenProvider,
         callTelemetryService,
         caregiverPatientLinkService,
-        null,
         null,
         null);
   }
@@ -558,18 +553,11 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       final CallSessionService.DeclineResult decline =
           callSessionService.declineInvitation(callId, user.getId());
       recipients = decline.notifyUserIds();
-      if (decline.terminationOwner()) {
+      if (decline.terminationOwner() && callTerminationExecutor != null) {
         try {
-          if (callRecordingService != null) {
-            callRecordingService.stopRecording(callId);
-          }
-          if (chimeService != null) {
-            chimeService.endMeeting(callId);
-          }
-          callSessionService.completeTermination(callId, decline.terminationClaimId());
+          callTerminationExecutor.execute(
+              callId, user.getId(), decline.terminationClaimId());
         } catch (RuntimeException cleanupFailure) {
-          callSessionService.recordTerminationFailure(
-              callId, decline.terminationClaimId(), cleanupFailure);
           log.error("Declined call cleanup failed for callId={}", callId, cleanupFailure);
         }
       }
