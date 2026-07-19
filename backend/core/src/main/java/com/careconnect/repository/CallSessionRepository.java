@@ -95,6 +95,14 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             @Param("threshold") int threshold);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE CallSession s
+               SET s.recordingStartElected = FALSE, s.updatedAt = CURRENT_TIMESTAMP
+             WHERE s.id = :sessionId AND s.recordingStartElected = TRUE
+            """)
+    int clearRecordingStartElected(@Param("sessionId") Long sessionId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             UPDATE call_sessions
                SET status = :terminating,

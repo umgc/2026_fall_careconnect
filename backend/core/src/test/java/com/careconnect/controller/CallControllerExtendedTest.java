@@ -114,6 +114,7 @@ class CallControllerExtendedTest {
         when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
         when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(false);
         doNothing().when(callSessionService).attachChimeMeetingId(anyString(), anyString());
+        doNothing().when(callSessionService).revertJoinAfterChimeFailure(anyString(), anyLong());
 
         // User repository stubs
         when(userRepository.findByEmail("patient@test.com")).thenReturn(Optional.of(patientUser));

@@ -146,6 +146,7 @@ class CallControllerTest {
         when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
         when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(false);
         doNothing().when(callSessionService).attachChimeMeetingId(anyString(), anyString());
+        doNothing().when(callSessionService).revertJoinAfterChimeFailure(anyString(), anyLong());
         when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
                 .thenReturn(new CallSessionService.LeaveResult(
                         true, false, 0L, TERMINATION_CLAIM, List.of()));
@@ -327,7 +328,7 @@ class CallControllerTest {
         }
 
         @Test
-        @DisplayName("endCall returns 202 processing but still fans out call-ended")
+        @DisplayName("endCall returns 202 processing but still fans out call-ending")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCallProcessingStillNotifiesPeers() throws Exception {
             mockCurrentCaregiver();
@@ -346,11 +347,11 @@ class CallControllerTest {
 
             verify(callNotificationHandler).sendNotificationToUser(
                     eq("1"),
-                    argThat(m -> "call-ended".equals(m.get("type"))
+                    argThat(m -> "call-ending".equals(m.get("type"))
                             && "processing".equals(m.get("status"))));
             verify(callNotificationHandler).sendNotificationToUser(
                     eq("4"),
-                    argThat(m -> "call-ended".equals(m.get("type"))
+                    argThat(m -> "call-ending".equals(m.get("type"))
                             && "processing".equals(m.get("status"))));
         }
 
@@ -408,6 +409,8 @@ class CallControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isInternalServerError());
+
+            verify(callSessionService).revertJoinAfterChimeFailure(CALL_ID, 2L);
         }
 
         @Test

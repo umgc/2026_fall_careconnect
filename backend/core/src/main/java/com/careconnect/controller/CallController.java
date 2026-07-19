@@ -182,45 +182,55 @@ public class CallController {
         callId, currentUser.getId());
     try {
       // Durable join first so a failed Chime call cannot leave orphan credentials.
-      final boolean recordingStartOwner = callSessionService.recordJoin(
-          callSession, currentUser.getId(), null);
-      final Map<String, Object> response = chimeService.joinMeeting(
-          callId,
-          currentUser.getId().toString(),
-          currentUser.getRole().name(),
-          getCallUserDisplayName(currentUser));
-      final Object meetingIdValue = response.get("meetingId");
-      if (meetingIdValue != null) {
-        callSessionService.attachChimeMeetingId(callId, meetingIdValue.toString());
-      }
-      final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
-      callTelemetryService.recordCallEvent(
-          callId,
-          EVT_CALL_JOIN,
-          currentUser.getId(),
-          null,
-          STATUS_SUCCESS,
-          mergeMetadata(
-              Map.of("meetingActive", chimeService.isMeetingActive(callId)), contextMetadata),
-          null);
-      if (log.isInfoEnabled()) {
-        log.info("User {} joined call {}", currentUser.getId(), callId);
-      }
-      // Exactly one join transaction wins this durable threshold election across all nodes.
-      if (recordingStartOwner
-          && environment.getProperty(
-              "careconnect.recording.system-transcription-enabled", Boolean.class, false)) {
-        try {
-          final Map<String, Object> recording =
-              callRecordingService.startRecordingTyped(callId, null, true).toMap();
-          notifyRecordingState(callId, recording);
-        } catch (Exception e) {
-          if (log.isWarnEnabled()) {
-            log.warn("Auto-recording start failed for call {}: {}", callId, e.getMessage());
+      boolean joinedDurably = false;
+      boolean recordingStartOwner = false;
+      try {
+        recordingStartOwner = callSessionService.recordJoin(
+            callSession, currentUser.getId(), null);
+        joinedDurably = true;
+        final Map<String, Object> response = chimeService.joinMeeting(
+            callId,
+            currentUser.getId().toString(),
+            currentUser.getRole().name(),
+            getCallUserDisplayName(currentUser));
+        final Object meetingIdValue = response.get("meetingId");
+        if (meetingIdValue != null) {
+          callSessionService.attachChimeMeetingId(callId, meetingIdValue.toString());
+        }
+        final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
+        callTelemetryService.recordCallEvent(
+            callId,
+            EVT_CALL_JOIN,
+            currentUser.getId(),
+            null,
+            STATUS_SUCCESS,
+            mergeMetadata(
+                Map.of("meetingActive", chimeService.isMeetingActive(callId)), contextMetadata),
+            null);
+        if (log.isInfoEnabled()) {
+          log.info("User {} joined call {}", currentUser.getId(), callId);
+        }
+        // Exactly one join transaction wins this durable threshold election across all nodes.
+        if (recordingStartOwner
+            && environment.getProperty(
+                "careconnect.recording.system-transcription-enabled", Boolean.class, false)) {
+          try {
+            final Map<String, Object> recording =
+                callRecordingService.startRecordingTyped(callId, null, true).toMap();
+            notifyRecordingState(callId, recording);
+          } catch (Exception e) {
+            if (log.isWarnEnabled()) {
+              log.warn("Auto-recording start failed for call {}: {}", callId, e.getMessage());
+            }
           }
         }
+        return ResponseEntity.ok(response);
+      } catch (Exception joinFailure) {
+        if (joinedDurably) {
+          callSessionService.revertJoinAfterChimeFailure(callId, currentUser.getId());
+        }
+        throw joinFailure;
       }
-      return ResponseEntity.ok(response);
     } catch (AppException e) {
       throw e;
     } catch (Exception e) {
@@ -454,7 +464,7 @@ public class CallController {
       if (shouldEndMeeting) {
         final boolean completed = callTerminationExecutor.execute(
             callId, currentUser.getId(), leave.terminationClaimId());
-        // Notify peers immediately even when termination parks as 202 processing.
+        // Notify peers immediately; use call-ending while termination is still processing.
         leave.notifyUserIds().stream()
             .map(String::valueOf)
             .forEach(
@@ -462,7 +472,7 @@ public class CallController {
                     participantId,
                     Map.of(
                         "type",
-                        "call-ended",
+                        completed ? "call-ended" : "call-ending",
                         "callId",
                         callId,
                         "endedBy",
@@ -571,7 +581,8 @@ public class CallController {
             Map.of(
                 "type", "call-ended",
                 "callId", callId,
-                "endedBy", currentUser.getId().toString())));
+                "endedBy", currentUser.getId().toString(),
+                "status", "ended")));
     return ResponseEntity.ok(Map.of("status", "ended", "callId", callId));
   }
 
@@ -1411,10 +1422,27 @@ public class CallController {
   }
 
   private void requireDurableCallAccess(final String callId, final User user) {
-    if (user.getRole() != Role.ADMIN) {
+    if (user.getRole() == Role.ADMIN) {
+      try {
+        callSessionService.requireSession(callId);
+      } catch (AppException missingSession) {
+        if (missingSession.getStatus() != HttpStatus.NOT_FOUND) {
+          throw missingSession;
+        }
+        // Admins may inspect legacy call-scoped resources without a session row.
+      }
+      return;
+    }
+    try {
       callSessionService.requireHistoricalParticipant(callId, user.getId());
-    } else {
-      callSessionService.requireSession(callId);
+    } catch (AppException accessFailure) {
+      if (accessFailure.getStatus() != HttpStatus.NOT_FOUND) {
+        throw accessFailure;
+      }
+      final Long patientEntityId = callSummaryService.getLatestSummaryEntity(callId)
+          .map(summary -> summary.getPatientId())
+          .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call not found"));
+      callSessionService.requirePatientEntityAccess(user, patientEntityId);
     }
   }
 

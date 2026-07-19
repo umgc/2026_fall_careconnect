@@ -77,6 +77,25 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
             @Param("joined") String joined,
             @Param("left") String left);
 
+    /**
+     * Reverts a ghost JOINED row back to INVITED when Chime attendee creation never persisted.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("""
+            UPDATE CallParticipant p
+               SET p.status = :invited, p.joinedAt = NULL, p.leftAt = NULL,
+                   p.updatedAt = CURRENT_TIMESTAMP
+             WHERE p.callSessionId = :sessionId AND p.userId = :userId
+               AND p.status = :joined
+               AND p.chimeAttendeeId IS NULL
+            """)
+    int revertJoinedToInvitedWithoutAttendee(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("joined") String joined,
+            @Param("invited") String invited);
+
     @Modifying
     @Transactional
     @Query("""
