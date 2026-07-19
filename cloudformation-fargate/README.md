@@ -322,7 +322,7 @@ The templates assume the backend uses these environment variables:
 - `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_ENABLED` — optional; leave empty until a real WebSocket API endpoint is set (prod profile uses empty default like dev)
 - `AWS_DEFAULT_REGION` — required for Bedrock and SSM clients
 - `CARECONNECT_RECORDING_ENABLED` — `true` on ECS so system capture + post-call Transcribe (including speaker ID) run
-- `CARECONNECT_KVS_ENABLED` / `CARECONNECT_KVS_STREAM_POOL_ARN` / `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED` — speaker-ID ingest (see [KVS speaker stream pool](#kvs-speaker-stream-pool-speaker-identification))
+- `CARECONNECT_KVS_ENABLED` / `CARECONNECT_KVS_STREAM_POOL_ARN` / `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED` / `CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET` — speaker-ID ingest (see [KVS speaker stream pool](#kvs-speaker-stream-pool-speaker-identification))
 
 The backend health endpoint (smoke tests and welcome-page checks) is:
 
@@ -415,18 +415,22 @@ After deploying `03-platform.yaml`, the stack provides:
 3. Redeploy `04-service.yaml` after SSM updates — stack wires EventBridge
    `chime:MediaPipelineKinesisVideoStreamStart` → `/api/internal/chime/media-stream-events`
    and sets `CARECONNECT_KVS_ENABLED=true`, `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true`,
-   and `CARECONNECT_RECORDING_ENABLED=true`.
+   `CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET` (matches EventBridge connection
+   `X-EventBridge-Connection` API key), and `CARECONNECT_RECORDING_ENABLED=true`.
 4. Smoke test: 2-party call; logs `Registered KVS stream from EventBridge`; DB
    `media_stream_pipeline_id` and `call_attendees.kvs_stream_arn` set; post-call KVS
    transcript segments with role labels.
 
 **ECS (`04-service.yaml`):** Sets `CARECONNECT_KVS_ENABLED=true`,
 `CARECONNECT_RECORDING_ENABLED=true`, and loads `CARECONNECT_KVS_STREAM_POOL_ARN` from SSM.
+Webhook auth uses `CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET` =
+`careconnect-${Environment}-kvs-discovery` (same value as the EventBridge connection API key).
 
 **Local dev:** Use an **IAM user** with the permissions above (credentials in `.env` — not
-`EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED=true`, `CARECONNECT_KVS_STREAM_POOL_ARN`, and
-(for reliable discovery) `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` with EventBridge →
-ngrok. Details: [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md) §7b.
+`EcsTaskRole`). Set `CARECONNECT_KVS_ENABLED=true`, `CARECONNECT_KVS_STREAM_POOL_ARN`,
+`CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true`, and
+`CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET=local-dev` with EventBridge → ngrok.
+Details: [TEAM_A_VIDEO_CALL_QUICKSTART.md](../docs/guides/TEAM_A_VIDEO_CALL_QUICKSTART.md) §7b.
 
 **Prod Spring profile:** `SsmPropertySourceInitializer` maps `/careconnect/prod/kvs-stream-pool-arn` when that SSM parameter exists.
 

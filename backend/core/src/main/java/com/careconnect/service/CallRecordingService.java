@@ -10,6 +10,7 @@ import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import jakarta.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -120,6 +121,12 @@ public class CallRecordingService {
    * leaving the patient with no real KVS stream.
    */
   private static final int MEDIA_PIPELINE_INTERNAL_STREAM_SLACK = 2;
+
+  /**
+   * In-flight claim marker for {@link #activeMediaStreamPipelineIds} so concurrent
+   * {@code startMediaStreamPipeline} calls do not create duplicate Chime pipelines.
+   */
+  private static final String MEDIA_STREAM_PIPELINE_PENDING = "__pending__";
 
   /** Retry post-call transcription shortly after a ready recording if the original trigger was missed. */
   private static final Duration POST_CALL_TRANSCRIPTION_LATE_TRIGGER_WINDOW = Duration.ofMinutes(30);
@@ -634,12 +641,14 @@ public class CallRecordingService {
           callId);
     }
 
-    if (activeMediaStreamPipelineIds.containsKey(callId)) {
+    final String alreadyStartedId = resolveExistingMediaStreamPipelineId(callId);
+    if (alreadyStartedId != null) {
+      activeMediaStreamPipelineIds.put(callId, alreadyStartedId);
       return Map.of(
           "status",
           "ALREADY_STARTED",
           "mediaStreamPipelineId",
-          activeMediaStreamPipelineIds.get(callId),
+          alreadyStartedId,
           "callId",
           callId);
     }
@@ -681,6 +690,26 @@ public class CallRecordingService {
           callId);
     }
 
+    final String priorClaim = activeMediaStreamPipelineIds.putIfAbsent(callId, MEDIA_STREAM_PIPELINE_PENDING);
+    if (priorClaim != null) {
+      if (MEDIA_STREAM_PIPELINE_PENDING.equals(priorClaim)) {
+        return Map.of(
+            "status",
+            "IN_PROGRESS",
+            "message",
+            "Media stream pipeline start already in progress",
+            "callId",
+            callId);
+      }
+      return Map.of(
+          "status",
+          "ALREADY_STARTED",
+          "mediaStreamPipelineId",
+          priorClaim,
+          "callId",
+          callId);
+    }
+
     final int reservedCapacity =
         Math.min(
             Math.max(attendees.size() + MEDIA_PIPELINE_INTERNAL_STREAM_SLACK, 1),
@@ -703,7 +732,7 @@ public class CallRecordingService {
                       .mediaStreamType(MediaStreamType.INDIVIDUAL_AUDIO)
                       .reservedStreamCapacity(reservedCapacity)
                       .build())
-              .clientRequestToken(UUID.randomUUID().toString())
+              .clientRequestToken(mediaStreamPipelineClientRequestToken(callId))
               .build();
 
       final CreateMediaStreamPipelineResponse response =
@@ -744,6 +773,7 @@ public class CallRecordingService {
           reservedCapacity);
 
     } catch (Exception e) {
+      activeMediaStreamPipelineIds.remove(callId, MEDIA_STREAM_PIPELINE_PENDING);
       if (log.isErrorEnabled()) {
         log.error(
             "Failed to start media stream pipeline for callId={}: {}", callId, e.getMessage(), e);
@@ -756,6 +786,34 @@ public class CallRecordingService {
           "callId",
           callId);
     }
+  }
+
+  /**
+   * Deterministic idempotency token so concurrent/retried CreateMediaStreamPipeline calls for the
+   * same call share one AWS request identity.
+   */
+  static String mediaStreamPipelineClientRequestToken(final String callId) {
+    return UUID.nameUUIDFromBytes(("kvs-msp:" + callId).getBytes(StandardCharsets.UTF_8)).toString();
+  }
+
+  /**
+   * Returns a real media stream pipeline id from memory or the system recording row, ignoring the
+   * in-flight claim marker.
+   */
+  private String resolveExistingMediaStreamPipelineId(final String callId) {
+    final String inMemory = activeMediaStreamPipelineIds.get(callId);
+    if (inMemory != null && !MEDIA_STREAM_PIPELINE_PENDING.equals(inMemory)) {
+      return inMemory;
+    }
+    final Optional<CallRecording> recording =
+        Optional.ofNullable(
+                recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(
+                    callId))
+            .orElse(Optional.empty());
+    return recording
+        .map(CallRecording::getMediaStreamPipelineId)
+        .filter(id -> id != null && !id.isBlank())
+        .orElse(null);
   }
 
   /** Stops the active media stream pipeline for a call and clears attendee stream mappings. */
@@ -859,12 +917,23 @@ public class CallRecordingService {
           "message", "KVS stream pool is not enabled in this environment");
     }
 
-    if (activeMediaStreamPipelineIds.containsKey(callId)) {
+    final String existingMediaStreamId = resolveExistingMediaStreamPipelineId(callId);
+    if (existingMediaStreamId != null) {
+      activeMediaStreamPipelineIds.put(callId, existingMediaStreamId);
       return Map.of(
           "status",
           "ALREADY_STARTED",
           "mediaStreamPipelineId",
-          activeMediaStreamPipelineIds.get(callId),
+          existingMediaStreamId,
+          "callId",
+          callId);
+    }
+    if (MEDIA_STREAM_PIPELINE_PENDING.equals(activeMediaStreamPipelineIds.get(callId))) {
+      return Map.of(
+          "status",
+          "IN_PROGRESS",
+          "message",
+          "Media stream pipeline start already in progress",
           "callId",
           callId);
     }
@@ -888,6 +957,9 @@ public class CallRecordingService {
 
     final Map<String, Object> ingestResult = startMediaStreamPipeline(callId);
     final String ingestStatus = ingestResult.get("status").toString();
+    if ("IN_PROGRESS".equals(ingestStatus)) {
+      return ingestResult;
+    }
     if (!"STARTED".equals(ingestStatus) && !"ALREADY_STARTED".equals(ingestStatus)) {
       return ingestResult;
     }

@@ -345,6 +345,9 @@ Resources:
               Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/kvs-stream-pool-arn}}'
             - Name: CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED
               Value: 'true'
+            # Must match ChimeKvsStreamDiscoveryConnection ApiKeyValue (X-EventBridge-Connection).
+            - Name: CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET
+              Value: !Sub 'careconnect-${Environment}-kvs-discovery'
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
