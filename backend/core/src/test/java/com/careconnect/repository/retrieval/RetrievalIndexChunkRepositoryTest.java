@@ -1,6 +1,7 @@
 package com.careconnect.repository.retrieval;
 
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
+import com.careconnect.service.ai.indexing.RetrievalMigrationStatus;
 import com.careconnect.service.ai.indexing.SummarySourceKey;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import org.junit.jupiter.api.DisplayName;
@@ -189,5 +190,30 @@ class RetrievalIndexChunkRepositoryTest {
         assertThat(repository.findByPatientId(5L))
                 .extracting(RetrievalIndexChunk::getChunkText)
                 .containsExactlyInAnyOrder("legacy call", "legacy visit");
+    }
+
+    @Test
+    @DisplayName("ambiguous legacy call/visit collision is quarantined from retrieval")
+    void ambiguousLegacyCollision_isQuarantined() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("legacy call")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.VISIT_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("legacy visit")
+                .build());
+        repository.flush();
+
+        assertThat(repository.quarantineAmbiguousLegacySummarySources()).isEqualTo(2);
+        repository.flush();
+
+        assertThat(repository.findByPatientId(5L))
+                .extracting(RetrievalIndexChunk::getMigrationStatus)
+                .containsOnly(RetrievalMigrationStatus.QUARANTINED.name());
     }
 }

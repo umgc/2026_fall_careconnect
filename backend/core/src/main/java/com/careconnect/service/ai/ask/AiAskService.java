@@ -200,6 +200,18 @@ public class AiAskService {
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
+        for (final GroundedAskLlmService.GroundedClaim claim : llm.claims()) {
+            final CitationAssembler.CitationResult claimCitations =
+                    citationAssembler.assemble(
+                            claim.citationRefs(), context.citationRefMap());
+            if (claim.text() == null
+                    || claim.text().isBlank()
+                    || !claimCitations.grounded()) {
+                throw groundingFailure(
+                        requestId, auditId, sessionId,
+                        "Generated answer contains an unsupported factual claim");
+            }
+        }
         final CitationAssembler.CitationResult citationResult =
                 citationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
         if (!citationResult.grounded()) {
@@ -209,10 +221,8 @@ public class AiAskService {
                     citationResult.invalidRefs().size());
             // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
             // never deliver an answer whose model citations are missing or invalid.
-            throw new AskAiGroundingException(
-                    requestId,
-                    auditId,
-                    sessionId,
+            throw groundingFailure(
+                    requestId, auditId, sessionId,
                     "Generated answer could not be verified against retrieved records");
         }
         final List<AiCitation> citations = citationResult.citations();
@@ -252,6 +262,14 @@ public class AiAskService {
                 null,
                 null,
                 null);
+    }
+
+    private static AskAiGroundingException groundingFailure(
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String message) {
+        return new AskAiGroundingException(requestId, auditId, sessionId, message);
     }
 
     private AiAskResponse noRecordsResponse(

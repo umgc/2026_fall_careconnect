@@ -206,13 +206,20 @@ public class RetrievalIndexService {
      * The row lock serializes this operation with normal outbox ingestion.
      */
     @Transactional
-    public SummaryCitationReplayOutcome replaySummaryCitationMetadata(final Long summaryId) {
+    public SummaryCitationReplayOutcome replaySummaryCitationMetadata(
+            final Long summaryId,
+            final Long candidatePatientId) {
         if (summaryId == null) {
             throw new IllegalArgumentException("summaryId is required");
         }
         final CallSummary summary = callSummaryRepository.findByIdForUpdate(summaryId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + summaryId));
+        if (candidatePatientId == null
+                || summary.getPatientId() == null
+                || !candidatePatientId.equals(summary.getPatientId())) {
+            return SummaryCitationReplayOutcome.QUARANTINED;
+        }
         final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
         final List<IndexingChunkDraft> expectedDrafts = summaryChunker.chunk(
                 "call",
@@ -399,6 +406,8 @@ public class RetrievalIndexService {
                     .recordType(draft.recordType().name())
                     .sourceRecordId(truncateSourceId(sourceRecordId))
                     .sourceKind(sourceKind)
+                    .citationReplayAttempts(0)
+                    .migrationStatus(RetrievalMigrationStatus.ACTIVE.name())
                     .chunkText(draft.chunkText())
                     .chunkMetadata(toJson(draft.metadata()))
                     .consentScope(truncateConsent(draft.consentScope()))

@@ -62,7 +62,10 @@ class RetrievalIndexChunkRepositoryPostgresTest {
                     chunk_text TEXT NOT NULL,
                     chunk_metadata JSONB,
                     indexed_at TIMESTAMPTZ NOT NULL,
-                    consent_scope VARCHAR(40)
+                    consent_scope VARCHAR(40),
+                    citation_replay_after TIMESTAMPTZ,
+                    citation_replay_attempts INTEGER NOT NULL DEFAULT 0,
+                    migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'
                 )
                 """);
     }
@@ -76,7 +79,7 @@ class RetrievalIndexChunkRepositoryPostgresTest {
         final OffsetDateTime retryAfter =
                 OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
         assertThat(repository.markSummaryCitationReplayFailure(
-                "42", RetrievalRecordType.summaryTypeNames(), retryAfter))
+                42L, "42", RetrievalRecordType.summaryTypeNames(), retryAfter))
                 .isEqualTo(1);
 
         assertThat(staleSources()).isEmpty();
@@ -95,13 +98,24 @@ class RetrievalIndexChunkRepositoryPostgresTest {
         insertChunk("00000000-0000-0000-0000-000000000002", "77", "VISIT_SUMMARY");
 
         assertThat(staleSources()).isEmpty();
+        assertThat(repository.quarantineAmbiguousLegacySummarySources()).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM retrieval_index_chunk
+                WHERE source_record_id = '77'
+                  AND migration_status = 'QUARANTINED'
+                """,
+                Integer.class)).isEqualTo(2);
     }
 
     private List<String> staleSources() {
-        return repository.findStaleSummaryCitationSourceIds(
-                RetrievalRecordType.summaryTypeNames(),
-                SummaryChunker.CITATION_METADATA_VERSION,
-                25);
+        return repository.findStaleSummaryCitationSources(
+                        RetrievalRecordType.summaryTypeNames(),
+                        SummaryChunker.CITATION_METADATA_VERSION,
+                        25)
+                .stream()
+                .map(RetrievalIndexChunkRepository.SummaryReplayCandidate::getSourceRecordId)
+                .toList();
     }
 
     private void insertChunk(

@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +45,9 @@ class CallSummaryServiceTest {
     @Mock
     private IndexingEventEmitter indexingEventEmitter;
 
+    @Mock
+    private CallPatientResolver callPatientResolver;
+
     private CallSummaryService service;
 
     private static final String CALL_ID = "call-1";
@@ -55,8 +59,10 @@ class CallSummaryServiceTest {
                 callTranscriptService,
                 bedrockSentimentService,
                 new ObjectMapper(),
-                indexingEventEmitter
+                indexingEventEmitter,
+                callPatientResolver
         );
+        lenient().when(callPatientResolver.requirePatientId(CALL_ID)).thenReturn(42L);
     }
 
     @Nested
@@ -286,6 +292,7 @@ class CallSummaryServiceTest {
             ArgumentCaptor<CallSummary> captor = ArgumentCaptor.forClass(CallSummary.class);
             verify(callSummaryRepository).save(captor.capture());
             CallSummary saved = captor.getValue();
+            assertThat(saved.getPatientId()).isEqualTo(42L);
             assertThat(saved.getRiskLevel()).isEqualTo("HIGH");
             assertThat(saved.getCaregiverVisibility()).isEqualTo("auto");
             assertThat(saved.getSummarizationEngine()).isEqualTo("aws_bedrock:amazon.nova-pro-v1:0");
@@ -339,6 +346,7 @@ class CallSummaryServiceTest {
                     ArgumentCaptor.forClass(SummaryCreatedPayload.class);
             verify(indexingEventEmitter).emitSummaryCreated(payloadCaptor.capture());
             SummaryCreatedPayload payload = payloadCaptor.getValue();
+            assertThat(payload.patientId()).isEqualTo(42L);
             assertThat(payload.status()).isEqualTo("SUCCESS");
             assertThat(payload.callId()).isEqualTo(CALL_ID);
             assertThat(payload.episodeType()).isEqualTo("call");

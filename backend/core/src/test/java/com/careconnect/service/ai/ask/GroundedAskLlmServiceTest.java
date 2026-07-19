@@ -27,7 +27,7 @@ class GroundedAskLlmServiceTest {
                 client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
 
         final String body = """
-                {"output":{"message":{"content":[{"text":"{\\"answerText\\":\\"Started metformin.\\",\\"citationRefs\\":[\\"C1\\"]}"}]}}}
+                {"output":{"message":{"content":[{"text":"{\\"claims\\":[{\\"text\\":\\"Started metformin.\\",\\"citationRefs\\":[\\"C1\\"]}]}"}]}}}
                 """;
         when(client.invokeModel(any(InvokeModelRequest.class)))
                 .thenReturn(InvokeModelResponse.builder()

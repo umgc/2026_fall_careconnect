@@ -85,7 +85,7 @@ public class CallSummary extends Auditable {
 
     /**
      * Patient this summary is about. Nullable so historic rows survive;
-     * populated for new summaries via the call context at persistence time.
+     * required for new summaries and resolved from the call participants before persistence.
      * Carried on SUMMARY_CREATED events (WBS 3.11.5) as the RBAC scope key.
      * Column added by Flyway migration V2607032251 (PR #244).
      */
