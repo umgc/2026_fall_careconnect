@@ -518,7 +518,7 @@ public class ChimeService {
             cacheAttendeeCredentials(callId, userId, credentials);
             return credentials;
         }
-        // Lost ownership after AWS create — compensate then return durable winner credentials.
+        // Lost ownership after AWS create — compensate, then only return durable winner credentials.
         if (createdHere) {
             compensateCreatedAttendee(meetingId, String.valueOf(credentials.get("attendeeId")));
         }
@@ -534,8 +534,7 @@ public class ChimeService {
             cacheAttendeeCredentials(callId, userId, existing);
             return existing;
         }
-        cacheAttendeeCredentials(callId, userId, credentials);
-        return credentials;
+        throw new IllegalStateException("Attendee creation is already in progress");
     }
 
     private void releaseAttendeeClaim(

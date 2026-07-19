@@ -47,7 +47,8 @@ class CallTerminationReconcilerTest {
                 java.util.Map.of(
                         "type", "call-ended",
                         "callId", "call-1",
-                        "endedBy", "SYSTEM"));
+                        "endedBy", "SYSTEM",
+                        "status", "ended"));
     }
 
     @Test

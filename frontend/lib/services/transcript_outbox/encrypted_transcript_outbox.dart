@@ -72,6 +72,12 @@ class EncryptedTranscriptOutbox implements TranscriptOutbox {
     int maxEntries = 500,
     int maxEncryptedBytes = 4 * 1024 * 1024,
   }) async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'Encrypted transcript outbox persistence is not supported on web; '
+        'PHI segments require a native secure keystore.',
+      );
+    }
     final owner = ownerUserId.trim();
     if (owner.isEmpty) {
       throw ArgumentError.value(ownerUserId, 'ownerUserId');

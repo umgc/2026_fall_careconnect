@@ -4,6 +4,7 @@ import com.careconnect.model.User;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 
 /**
@@ -21,30 +22,31 @@ public final class WebSocketIdentityRegistry {
 
   /**
    * Atomically detaches any prior identity for {@code session}, then binds {@code user}.
+   * Prior sockets for the same user are closed outside the lock to avoid deadlock with
+   * {@code afterConnectionClosed}.
    *
    * @param session socket being authenticated
    * @param user authenticated user
    */
   public void bind(final WebSocketSession session, final User user) {
+    final WebSocketSession previous;
     synchronized (authenticationLock) {
       final User priorOnSocket = sessionUsers.remove(session.getId());
       if (priorOnSocket != null) {
         userSessions.remove(priorOnSocket.getId().toString(), session);
       }
-      final WebSocketSession previous = userSessions.put(user.getId().toString(), session);
+      previous = userSessions.put(user.getId().toString(), session);
       if (previous != null && !previous.getId().equals(session.getId())) {
         sessionUsers.remove(previous.getId());
-        if (previous.isOpen()) {
-          try {
-            previous.close(
-                org.springframework.web.socket.CloseStatus.NORMAL.withReason(
-                    "Replaced by newer authenticated session"));
-          } catch (Exception ignored) {
-            // Best-effort close; identity maps are already detached.
-          }
-        }
       }
       sessionUsers.put(session.getId(), user);
+    }
+    if (previous != null && previous.isOpen() && !previous.getId().equals(session.getId())) {
+      try {
+        previous.close(CloseStatus.NORMAL.withReason("Replaced by newer authenticated session"));
+      } catch (Exception ignored) {
+        // Best-effort close; identity maps are already detached.
+      }
     }
   }
 
@@ -93,8 +95,7 @@ public final class WebSocketIdentityRegistry {
   /**
    * Registers a user identity without a live WebSocket (legacy HTTP undying-session hook).
    *
-   * <p>Uses the user→session map only as an online marker with a null session so
-   * {@link #getUser(String)} is never polluted with userIds as session keys.
+   * <p>Uses a namespaced key so {@link #getUser(String)} is never polluted with raw userIds.
    *
    * @param userId user identifier
    * @param user user metadata
