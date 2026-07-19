@@ -147,7 +147,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id_time " +
             "ON telemetry_events (session_id, event_time DESC) " +
             "WHERE session_id IS NOT NULL"
-        );        if (isPostgreSql()) {
+        );
+        if (isPostgreSql()) {
             withProductionSchemaMigrationLock(() -> {
                 patchLedger.initialize();
                 applyCatalogPatch("2607190000-call-transcript-summary-base");
