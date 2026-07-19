@@ -148,15 +148,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
             ")"
         );
         applyPatch(
-            // Hibernate's ddl-auto=update creates retrieval_index_chunk from the JPA entity
-            // (which deliberately omits search_vector/embedding) before this CommandLineRunner
-            // executes, so the CREATE TABLE IF NOT EXISTS above is a no-op whenever that happens.
-            // This ALTER guarantees the columns exist regardless of which path created the table.
-            "V2607071922 – ensure search_vector/embedding columns exist on retrieval_index_chunk",
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
-        );
-        applyPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
             "DO $$ BEGIN " +
             "  ALTER TABLE retrieval_index_chunk " +
