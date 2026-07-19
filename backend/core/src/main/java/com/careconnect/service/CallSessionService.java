@@ -7,15 +7,14 @@ import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.repository.CaregiverRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +26,14 @@ public class CallSessionService {
 
     public static final String SESSION_CREATED = "CREATED";
     public static final String SESSION_ACTIVE = "ACTIVE";
+    public static final String SESSION_TERMINATING = "TERMINATING";
     public static final String SESSION_ENDED = "ENDED";
+    public static final String SESSION_CANCELLED = "CANCELLED";
     public static final String PARTICIPANT_INVITED = "INVITED";
     public static final String PARTICIPANT_JOINED = "JOINED";
     public static final String PARTICIPANT_LEFT = "LEFT";
+    public static final String PARTICIPANT_DECLINED = "DECLINED";
+    public static final String PARTICIPANT_EXPIRED = "EXPIRED";
 
     private final CallSessionRepository callSessionRepository;
     private final CallParticipantRepository callParticipantRepository;
@@ -38,8 +41,11 @@ public class CallSessionService {
     private final UserRepository userRepository;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final FamilyMemberService familyMemberService;
-    @Autowired(required = false)
-    private ScheduledVisitRepository scheduledVisitRepository;
+    private final ScheduledVisitRepository scheduledVisitRepository;
+    private final CaregiverRepository caregiverRepository;
+
+    public record LeaveResult(boolean terminationOwner, boolean ended, long remainingParticipants) {}
+    public record DeclineResult(List<Long> notifyUserIds, boolean terminationOwner) {}
 
     public CallSession createSession(
             final String callId,
@@ -58,7 +64,7 @@ public class CallSessionService {
         final Patient patient = patientRepository.findByUserId(patientUserId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient not found"));
         authorizeForPatient(creator, patientUserId);
-        validateScheduledVisit(scheduledVisitId, patient.getId());
+        validateScheduledVisit(scheduledVisitId, patient.getId(), creator);
 
         final String normalizedCallId = callId.trim();
         callSessionRepository.insertIfAbsent(
@@ -101,7 +107,8 @@ public class CallSessionService {
     @Transactional(readOnly = true)
     public CallSession requireJoinAuthorized(final String callId, final Long userId) {
         final CallSession session = requireSession(callId);
-        if (SESSION_ENDED.equals(session.getStatus())) {
+        if (!SESSION_CREATED.equals(session.getStatus())
+                && !SESSION_ACTIVE.equals(session.getStatus())) {
             throw new AppException(HttpStatus.GONE, "Call is no longer active");
         }
         if (userId == null || callParticipantRepository
@@ -152,33 +159,28 @@ public class CallSessionService {
         if (user.getRole() == com.careconnect.security.Role.ADMIN) {
             return session;
         }
-        final boolean activeParticipant = callParticipantRepository
+        final boolean durableParticipant = callParticipantRepository
                 .findByCallSessionIdAndUserId(session.getId(), user.getId())
-                .filter(p -> PARTICIPANT_JOINED.equals(p.getStatus()))
+                .filter(p -> PARTICIPANT_JOINED.equals(p.getStatus())
+                        || PARTICIPANT_LEFT.equals(p.getStatus())
+                        || PARTICIPANT_EXPIRED.equals(p.getStatus()))
                 .isPresent();
-        if (activeParticipant) {
+        if (durableParticipant) {
             return session;
         }
-        authorizeForPatient(user, requirePatientUserId(session));
-        return session;
+        throw new AppException(HttpStatus.FORBIDDEN, "User has no durable recording access");
     }
 
     public void recordJoin(
             final CallSession session, final Long userId, final String chimeMeetingId) {
-        final CallParticipant participant = callParticipantRepository
-                .findByCallSessionIdAndUserId(session.getId(), userId)
-                .orElseThrow(() -> new AppException(
-                        HttpStatus.FORBIDDEN, "User is not authorized for this call"));
-        participant.setStatus(PARTICIPANT_JOINED);
-        participant.setJoinedAt(LocalDateTime.now());
-        participant.setLeftAt(null);
-        callParticipantRepository.save(participant);
-
-        if (chimeMeetingId != null && !chimeMeetingId.isBlank()) {
-            session.setChimeMeetingId(chimeMeetingId);
+        final CallSession locked = callSessionRepository.findByCallIdForLifecycle(session.getCallId())
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (callSessionRepository.activateIfJoinable(
+                locked.getId(), chimeMeetingId, SESSION_CREATED, SESSION_ACTIVE) != 1
+                || callParticipantRepository.markJoinedIfInvited(
+                        locked.getId(), userId, PARTICIPANT_INVITED, PARTICIPANT_JOINED) != 1) {
+            throw new AppException(HttpStatus.GONE, "Call is no longer joinable");
         }
-        session.setStatus(SESSION_ACTIVE);
-        callSessionRepository.save(session);
     }
 
     public CallParticipant addAuthorizedParticipant(
@@ -190,19 +192,66 @@ public class CallSessionService {
                 session, invitee.getId(), inviter.getId(), PARTICIPANT_INVITED);
     }
 
-    public void recordLeave(final String callId, final Long userId, final boolean ended) {
-        final CallSession session = requireJoinAuthorized(callId, userId);
-        callParticipantRepository.findByCallSessionIdAndUserId(session.getId(), userId)
-                .ifPresent(participant -> {
-                    participant.setStatus(PARTICIPANT_LEFT);
-                    participant.setLeftAt(LocalDateTime.now());
-                    callParticipantRepository.save(participant);
-                });
-        if (ended) {
-            session.setStatus(SESSION_ENDED);
-            session.setEndedAt(LocalDateTime.now());
-            callSessionRepository.save(session);
+    public LeaveResult leaveOrBeginTermination(final String callId, final Long userId) {
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        final CallParticipant participant = callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), userId)
+                .orElseThrow(() -> new AppException(
+                        HttpStatus.FORBIDDEN, "User is not authorized for this call"));
+        if (SESSION_ENDED.equals(session.getStatus()) || SESSION_CANCELLED.equals(session.getStatus())) {
+            return new LeaveResult(false, true, 0);
         }
+        if (SESSION_TERMINATING.equals(session.getStatus())) {
+            return new LeaveResult(false, false, 0);
+        }
+        if (!PARTICIPANT_JOINED.equals(participant.getStatus())) {
+            throw new AppException(HttpStatus.FORBIDDEN, "User must join the call before this operation");
+        }
+        callParticipantRepository.markLeftIfJoined(
+                session.getId(), userId, PARTICIPANT_JOINED, PARTICIPANT_LEFT);
+        final long remaining = callParticipantRepository.countByCallSessionIdAndStatus(
+                session.getId(), PARTICIPANT_JOINED);
+        if (remaining > 1) {
+            return new LeaveResult(false, false, remaining);
+        }
+        final boolean owner = callSessionRepository.beginTermination(
+                session.getId(), SESSION_CREATED, SESSION_ACTIVE, SESSION_TERMINATING) == 1;
+        return new LeaveResult(owner, false, remaining);
+    }
+
+    public void completeTermination(final String callId) {
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        callParticipantRepository.expireJoinedParticipants(
+                session.getId(), PARTICIPANT_JOINED, PARTICIPANT_EXPIRED);
+        callSessionRepository.completeTermination(
+                session.getId(), SESSION_TERMINATING, SESSION_ENDED);
+    }
+
+    public DeclineResult declineInvitation(final String callId, final Long userId) {
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (callParticipantRepository.declineIfInvited(
+                session.getId(), userId, PARTICIPANT_INVITED, PARTICIPANT_DECLINED) != 1) {
+            throw new AppException(HttpStatus.CONFLICT, "Invitation is no longer pending");
+        }
+        final List<Long> notify = callParticipantRepository.findByCallSessionId(session.getId()).stream()
+                .filter(p -> !Objects.equals(p.getUserId(), userId))
+                .filter(p -> PARTICIPANT_INVITED.equals(p.getStatus())
+                        || PARTICIPANT_JOINED.equals(p.getStatus()))
+                .map(CallParticipant::getUserId)
+                .toList();
+        if (SESSION_CREATED.equals(session.getStatus())) {
+            callSessionRepository.cancelIfNotActive(
+                    session.getId(), SESSION_CREATED, SESSION_CANCELLED);
+            return new DeclineResult(notify, false);
+        }
+        final long joined = callParticipantRepository.countByCallSessionIdAndStatus(
+                session.getId(), PARTICIPANT_JOINED);
+        final boolean terminationOwner = joined <= 1 && callSessionRepository.beginTermination(
+                session.getId(), SESSION_CREATED, SESSION_ACTIVE, SESSION_TERMINATING) == 1;
+        return new DeclineResult(notify, terminationOwner);
     }
 
     @Transactional(readOnly = true)
@@ -228,6 +277,33 @@ public class CallSessionService {
                 session.getId(), PARTICIPANT_JOINED);
     }
 
+    @Transactional(readOnly = true)
+    public Long requirePendingInvitationRecipient(
+            final String callId, final Long senderUserId, final Long requestedRecipientId) {
+        final CallSession session = requireJoinAuthorized(callId, senderUserId);
+        final List<Long> pending = callParticipantRepository.findByCallSessionId(session.getId()).stream()
+                .filter(p -> PARTICIPANT_INVITED.equals(p.getStatus()))
+                .map(CallParticipant::getUserId)
+                .filter(id -> !Objects.equals(id, senderUserId))
+                .toList();
+        if (pending.size() != 1 || !Objects.equals(pending.get(0), requestedRecipientId)) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Recipient is not a pending call invitee");
+        }
+        return pending.get(0);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> getOtherParticipantUserIds(final String callId, final Long actorUserId) {
+        final CallSession session = requireParticipant(callId, actorUserId);
+        return callParticipantRepository.findByCallSessionId(session.getId()).stream()
+                .filter(p -> !Objects.equals(p.getUserId(), actorUserId))
+                .filter(p -> PARTICIPANT_INVITED.equals(p.getStatus())
+                        || PARTICIPANT_JOINED.equals(p.getStatus())
+                        || PARTICIPANT_LEFT.equals(p.getStatus()))
+                .map(CallParticipant::getUserId)
+                .toList();
+    }
+
     private CallSession requireSameOwnership(
             final CallSession existing,
             final Long patientId,
@@ -236,7 +312,9 @@ public class CallSessionService {
         if (!Objects.equals(existing.getPatientId(), patientId)
                 || !Objects.equals(existing.getCreatedByUserId(), creatorUserId)
                 || !Objects.equals(existing.getScheduledVisitId(), scheduledVisitId)
-                || SESSION_ENDED.equals(existing.getStatus())) {
+                || SESSION_TERMINATING.equals(existing.getStatus())
+                || SESSION_ENDED.equals(existing.getStatus())
+                || SESSION_CANCELLED.equals(existing.getStatus())) {
             throw new AppException(HttpStatus.CONFLICT, "callId is already in use");
         }
         return existing;
@@ -247,6 +325,11 @@ public class CallSessionService {
             final Long userId,
             final Long invitedByUserId,
             final String initialStatus) {
+        final var existing = callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), userId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
         callParticipantRepository.insertIfAbsent(
                 session.getId(), userId, invitedByUserId, initialStatus);
         return callParticipantRepository
@@ -276,8 +359,9 @@ public class CallSessionService {
         }
     }
 
-    private void validateScheduledVisit(final Long scheduledVisitId, final Long patientId) {
-        if (scheduledVisitId == null || scheduledVisitRepository == null) {
+    private void validateScheduledVisit(
+            final Long scheduledVisitId, final Long patientId, final User creator) {
+        if (scheduledVisitId == null) {
             return;
         }
         final com.careconnect.model.schedule.ScheduledVisit visit =
@@ -287,6 +371,15 @@ public class CallSessionService {
         if (!Objects.equals(visit.getPatientId(), patientId)) {
             throw new AppException(
                     HttpStatus.FORBIDDEN, "Scheduled visit does not belong to this patient");
+        }
+        if (creator.getRole() != com.careconnect.security.Role.CAREGIVER) {
+            return;
+        }
+        final Long caregiverId = caregiverRepository.findByUserId(creator.getId())
+                .map(com.careconnect.model.Caregiver::getId)
+                .orElseThrow(() -> new AppException(HttpStatus.FORBIDDEN, "Caregiver profile not found"));
+        if (!Objects.equals(caregiverId, visit.getCaregiverId())) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Scheduled visit is assigned to another caregiver");
         }
     }
 

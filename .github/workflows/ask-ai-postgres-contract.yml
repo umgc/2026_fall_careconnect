@@ -29,5 +29,5 @@ jobs:
           ./mvnw -B
           -DskipTests=false
           -Dsurefire.failIfNoSpecifiedTests=true
-          -Dtest=RetrievalIndexChunkRepositoryPostgresCiTest
+          -Dtest=RetrievalIndexChunkRepositoryPostgresCiTest,RetrievalIndexChunkMigrationSqlTest,SummaryCitationMetadataBackfillWorkerTest,SchemaPatchRunnerTest
           test

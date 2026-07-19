@@ -22,7 +22,7 @@ class GroundedAskLlmServiceTest {
 
     @Test
     @DisplayName("generate parses structured JSON answer and citationRefs")
-    void generate_parsesStructuredJson() {
+    void generate_parsesStructuredJson() throws Exception {
         final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
         final GroundedAskLlmService service = new GroundedAskLlmService(
                 client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
@@ -45,7 +45,11 @@ class GroundedAskLlmServiceTest {
         final ArgumentCaptor<InvokeModelRequest> captor =
                 ArgumentCaptor.forClass(InvokeModelRequest.class);
         verify(client).invokeModel(captor.capture());
-        assertThat(captor.getValue().body().asUtf8String()).contains("system");
+        final com.fasterxml.jackson.databind.JsonNode payload =
+                new ObjectMapper().readTree(captor.getValue().body().asUtf8String());
+        assertThat(payload.path("system").get(0).path("text").asText()).isEqualTo("system");
+        assertThat(payload.path("messages").get(0).path("content").get(0)
+                .path("text").asText()).isEqualTo("user");
     }
 
     @Test

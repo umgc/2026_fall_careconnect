@@ -11,9 +11,9 @@ import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallSessionRepository;
-import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
@@ -57,7 +57,7 @@ public class RetrievalIndexService {
 
     private final CallSummaryRepository callSummaryRepository;
     private final CallSessionRepository callSessionRepository;
-    private final CallTranscriptSegmentRepository transcriptSegmentRepository;
+    private final CallTranscriptService callTranscriptService;
     private final UspsMailpieceRepository uspsMailpieceRepository;
     private final RetrievalIndexChunkRepository chunkRepository;
     private final SummaryChunker summaryChunker;
@@ -69,7 +69,7 @@ public class RetrievalIndexService {
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
             final CallSessionRepository callSessionRepository,
-            final CallTranscriptSegmentRepository transcriptSegmentRepository,
+            final CallTranscriptService callTranscriptService,
             final UspsMailpieceRepository uspsMailpieceRepository,
             final RetrievalIndexChunkRepository chunkRepository,
             final SummaryChunker summaryChunker,
@@ -79,7 +79,7 @@ public class RetrievalIndexService {
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
         this.callSessionRepository = callSessionRepository;
-        this.transcriptSegmentRepository = transcriptSegmentRepository;
+        this.callTranscriptService = callTranscriptService;
         this.uspsMailpieceRepository = uspsMailpieceRepository;
         this.chunkRepository = chunkRepository;
         this.summaryChunker = summaryChunker;
@@ -156,10 +156,16 @@ public class RetrievalIndexService {
         }
 
         final String episodeType = "call";
-        final String caregiverVisibility = firstNonBlank(
-                summary.getCaregiverVisibility(), payload.caregiverVisibility());
-        final String engine = firstNonBlank(
-                payload.summarizationEngine(), summary.getSummarizationEngine());
+        if (summary.getSummarizationEngine() != null
+                && !summary.getSummarizationEngine().isBlank()
+                && payload.summarizationEngine() != null
+                && !payload.summarizationEngine().isBlank()
+                && !Objects.equals(payload.summarizationEngine(), summary.getSummarizationEngine())) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED engine does not match authoritative summary");
+        }
+        final String caregiverVisibility = summary.getCaregiverVisibility();
+        final String engine = summary.getSummarizationEngine();
 
         final List<IndexingChunkDraft> drafts = summaryChunker.chunk(
                 episodeType,
@@ -336,18 +342,21 @@ public class RetrievalIndexService {
 
         chunkRepository.acquireSourceReplacementLock(
                 patientId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name(), callId);
-        final List<CallTranscriptSegment> segments =
-                transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(callId);
-        if (payload.segmentCount() > 0
-                && segments.size() < payload.segmentCount()) {
+        final CallTranscriptService.IndexingSnapshot snapshot =
+                callTranscriptService.captureIndexingSnapshot(callId);
+        final List<CallTranscriptSegment> segments = snapshot.segments();
+        if (segments.size() != payload.totalSegmentCount()
+                || payload.snapshotVersion() == null
+                || !payload.snapshotVersion().equals(snapshot.version())) {
             throw new IndexingDeferredException(
-                    "Transcript snapshot is incomplete for callId=" + callId
-                            + " (expected at least " + payload.segmentCount()
-                            + " segments, found " + segments.size() + ")",
+                    "Transcript snapshot is incomplete or stale for callId="
+                            + callId + " (expected count/version "
+                            + payload.totalSegmentCount() + "/" + payload.snapshotVersion()
+                            + ", found " + segments.size() + "/" + snapshot.version() + ")",
                     false);
         }
         final List<IndexingChunkDraft> drafts =
-                transcriptSegmentChunker.chunk(callId, payload.source(), segments);
+                transcriptSegmentChunker.chunk(callId, null, segments);
 
         if (drafts.isEmpty()) {
             log.warn(
@@ -471,6 +480,10 @@ public class RetrievalIndexService {
             return 0;
         }
         final List<RetrievalIndexChunk> saved = chunkRepository.saveAll(entities);
+        if (SummarySourceKey.CALL_KIND.equals(sourceKind)) {
+            chunkRepository.registerSummaryCitationReplaySource(
+                    patientId, sourceKind, truncateSourceId(sourceRecordId));
+        }
         log.info("Indexed {} chunk(s) for sourceRecordId={} patientId={}",
                 saved.size(), sourceRecordId, patientId);
         scheduleEmbeddingAfterCommit(saved);
@@ -683,13 +696,4 @@ public class RetrievalIndexService {
         return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
     }
 
-    private static String firstNonBlank(final String a, final String b) {
-        if (a != null && !a.isBlank()) {
-            return a;
-        }
-        if (b != null && !b.isBlank()) {
-            return b;
-        }
-        return a;
-    }
 }

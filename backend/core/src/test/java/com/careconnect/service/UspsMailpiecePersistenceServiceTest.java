@@ -29,6 +29,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +61,8 @@ class UspsMailpiecePersistenceServiceTest {
                 mailpieceRepository,
                 new MailpieceNormalizer(),
                 classifier,
-                indexingEventEmitter);
+                new UspsMailpieceAtomicPersistenceService(
+                        mailpieceRepository, indexingEventEmitter));
     }
 
     @Test
@@ -147,6 +149,22 @@ class UspsMailpiecePersistenceServiceTest {
                 "usps-mailpiece:42:" + normalized.sourceKey());
         verify(indexingEventEmitter, never()).emitMailpieceIndexed(any());
         verify(mailpieceRepository, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("remote classification orchestration is outside the atomic DB transaction")
+    void transactionBoundary_classificationOutsideAtomicPersistence() throws Exception {
+        assertThat(UspsMailpiecePersistenceService.class
+                .getMethod("persistAndIndex", String.class, USPSDigest.class)
+                .getAnnotation(Transactional.class)).isNull();
+        assertThat(UspsMailpieceAtomicPersistenceService.class
+                .getMethod(
+                        "persist",
+                        Long.class,
+                        String.class,
+                        MailpieceNormalizer.NormalizedMailpiece.class,
+                        com.careconnect.service.mail.MailpieceImportanceResult.class)
+                .getAnnotation(Transactional.class)).isNotNull();
     }
 
     private static USPSDigest digestWithOnePiece() {

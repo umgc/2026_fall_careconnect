@@ -493,7 +493,7 @@ class CallFlowIntegrationTest {
                 link.setPatientId(patientUser.getId());
                 familyMemberLinkRepository.save(link);
             }
-            authorizeCall(conferenceCallId, patientUser, caregiverUser);
+            authorizeCall(conferenceCallId, patientUser, caregiverUser, familyUser);
 
             mockMvc.perform(post("/api/v3/calls/{callId}/join", conferenceCallId)
                             .with(user(patientUser.getEmail()).roles("PATIENT"))
@@ -565,7 +565,7 @@ class CallFlowIntegrationTest {
                 link.setPatientId(patientUser.getId());
                 familyMemberLinkRepository.save(link);
             }
-            authorizeCall(callId, patientUser, caregiverUser);
+            authorizeCall(callId, patientUser, caregiverUser, familyUser);
 
             mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
                             .with(user(patientUser.getEmail()).roles("PATIENT"))
@@ -701,6 +701,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001: Patient submits text sentiment — 200 with SentimentResult (heuristic fallback, SENT-007)")
         void patient_submitTextSentiment_returns200WithResult() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "text", "I feel a lot better today, thank you for checking in",
                     "captureMode", "balanced",
@@ -760,6 +761,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001b: Patient voice sentiment — 200 OK (SENT-007: heuristic when Bedrock down)")
         void patient_submitVoiceSentiment_returns200() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "averageLevel", "0.7",
                     "speechRatio", "0.8",
@@ -781,6 +783,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001: Text sentiment missing 'text' field → 400 Bad Request")
         void textSentiment_missingTextField_returns400() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "captureMode", "balanced"
             ));
@@ -796,6 +799,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001: Text sentiment recorded in telemetry database")
         void textSentiment_isRecordedInTelemetryDatabase() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "text", "I am feeling much better today",
                     "captureMode", "balanced",
@@ -860,6 +864,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-004: POST /end records CALL_END telemetry in database")
         void endCall_recordsCallEndTelemetry() throws Exception {
+            joinCall(CALL_ID, caregiverUser);
             String endBody = objectMapper.writeValueAsString(Map.of(
                     "otherPartyId", patientUser.getId().toString()
             ));
@@ -898,6 +903,7 @@ class CallFlowIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isOk());
+            joinCall(flowCallId, caregiverUser);
 
             // 2. Patient submits text sentiment
             String textBody = objectMapper.writeValueAsString(Map.of(
@@ -954,6 +960,8 @@ class CallFlowIntegrationTest {
         @DisplayName("SENT-005 / GET /{callId}/sentiment: patient participant can read sentiment after submitting")
         void getSentiment_participantCanRead_returnsSentimentByChannel() throws Exception {
             String flowCallId = "sentiment-read-call-" + System.currentTimeMillis();
+            authorizeCall(flowCallId, patientUser, caregiverUser);
+            joinCall(flowCallId, patientUser);
 
             // Submit sentiment first
             String textBody = objectMapper.writeValueAsString(Map.of(
@@ -973,6 +981,15 @@ class CallFlowIntegrationTest {
                             .with(user(patientUser.getEmail()).roles("PATIENT")))
                     .andExpect(status().isOk());
         }
+    }
+
+    private void joinCall(final String callId, final User joiningUser) throws Exception {
+        mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                        .with(user(joiningUser.getEmail()).roles(joiningUser.getRole().name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

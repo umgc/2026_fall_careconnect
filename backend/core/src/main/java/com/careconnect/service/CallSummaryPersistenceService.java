@@ -20,10 +20,25 @@ public class CallSummaryPersistenceService {
     private final IndexingEventEmitter indexingEventEmitter;
 
     /**
-     * Persists the summary and its SUCCESS outbox event in the same transaction.
+     * Persists one summary per call/snapshot/model key and its SUCCESS outbox event
+     * in the same transaction.
      */
     @Transactional
     public CallSummary persist(final CallSummary summary) {
+        final String lockKey = "call-summary:"
+                + summary.getCallId() + ":"
+                + summary.getTranscriptSnapshotVersion() + ":"
+                + summary.getModelConfigVersion();
+        summaryRepository.acquireGenerationLock(lockKey);
+        final CallSummary existing = summaryRepository
+                .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+                        summary.getCallId(),
+                        summary.getTranscriptSnapshotVersion(),
+                        summary.getModelConfigVersion())
+                .orElse(null);
+        if (existing != null) {
+            return existing;
+        }
         final CallSummary saved = summaryRepository.save(summary);
         if ("SUCCESS".equals(saved.getStatus())) {
             if (saved.getPatientId() == null) {

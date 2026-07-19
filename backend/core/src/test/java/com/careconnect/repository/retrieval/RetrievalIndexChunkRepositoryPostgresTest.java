@@ -61,6 +61,7 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
 
     @BeforeEach
     void createContractTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS summary_citation_replay_source");
         jdbcTemplate.execute("DROP TABLE IF EXISTS retrieval_index_chunk");
         jdbcTemplate.execute("""
                 CREATE TABLE retrieval_index_chunk (
@@ -78,6 +79,21 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                     citation_replay_claimed_until TIMESTAMPTZ,
                     citation_replay_claim_token UUID,
                     migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE summary_citation_replay_source (
+                    patient_id BIGINT NOT NULL,
+                    source_kind VARCHAR(40) NOT NULL,
+                    source_record_id VARCHAR(120) NOT NULL,
+                    replay_after TIMESTAMPTZ,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    claimed_until TIMESTAMPTZ,
+                    claim_token UUID,
+                    migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    PRIMARY KEY (patient_id, source_kind, source_record_id)
                 )
                 """);
     }
@@ -107,40 +123,40 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         final OffsetDateTime retryAfter =
                 OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
         assertThat(repository.markSummaryCitationReplayFailure(
-                42L, "42", RetrievalRecordType.summaryTypeNames(), retryAfter, claimToken))
+                42L, "42", retryAfter, claimToken))
                 .isEqualTo(1);
 
         assertThat(staleSources()).isEmpty();
         assertThat(jdbcTemplate.queryForObject(
                 """
-                SELECT citation_replay_attempts
-                FROM retrieval_index_chunk
+                SELECT attempts
+                FROM summary_citation_replay_source
                 WHERE source_record_id = '42'
                 """,
                 Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
-                SELECT citation_replay_after IS NOT NULL
-                FROM retrieval_index_chunk
+                SELECT replay_after IS NOT NULL
+                FROM summary_citation_replay_source
                 WHERE source_record_id = '42'
                 """,
                 Boolean.class)).isTrue();
         assertThat(jdbcTemplate.queryForObject(
                 """
-                SELECT citation_replay_claimed_until IS NULL
-                FROM retrieval_index_chunk
+                SELECT claimed_until IS NULL AND claim_token IS NULL
+                FROM summary_citation_replay_source
                 WHERE source_record_id = '42'
                 """,
                 Boolean.class)).isTrue();
     }
 
     @Test
-    void replayQuery_returnsLegacySourceForAuthoritativeResolution() {
+    void replayQuery_doesNotClaimUntypedAmbiguousChunks() {
         insertChunk("00000000-0000-0000-0000-000000000001", "77", "CALL_SUMMARY");
         insertChunk("00000000-0000-0000-0000-000000000002", "77", "VISIT_SUMMARY");
         jdbcTemplate.update("UPDATE retrieval_index_chunk SET source_kind = NULL");
 
-        assertThat(staleSources()).containsExactly("77");
+        assertThat(staleSources()).isEmpty();
         assertThat(repository.quarantineAmbiguousLegacySummarySources()).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
                 """
@@ -153,10 +169,16 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
 
     @Test
     void retrievalMigrations_executeAgainstPgvectorAndMatchRequiredSchema() throws Exception {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS summary_citation_replay_source");
         jdbcTemplate.execute("DROP TABLE IF EXISTS retrieval_index_chunk");
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
         jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS patient (id BIGINT PRIMARY KEY)");
         jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY)");
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS call_summaries (
+                  id BIGINT PRIMARY KEY, patient_id BIGINT, summary_json TEXT,
+                  status VARCHAR(24), generated_at TIMESTAMP)
+                """);
 
         try (var connection = dataSource.getConnection()) {
             for (final String migration : List.of(
@@ -165,7 +187,8 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                     "db/migration/V2607161317__add_retrieval_chunk_embedding_backfill_index.sql",
                     "db/migration/V2607182130__add_retrieval_source_ownership_and_replay_state.sql",
                     "db/migration/V2607182230__create_call_sessions_and_participants.sql",
-                    "db/migration/V2607182330__fence_retrieval_replay_claims.sql")) {
+                    "db/migration/V2607182330__fence_retrieval_replay_claims.sql",
+                    "db/migration/V2607190100__create_summary_citation_replay_source.sql")) {
                 ScriptUtils.executeSqlScript(connection, new ClassPathResource(migration));
             }
         }
@@ -194,6 +217,7 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void concurrentWorkers_claimDifferentRepresentativeSources() throws Exception {
         insertChunk("00000000-0000-0000-0000-000000000001", "call-summary:41", "CALL_SUMMARY");
         insertChunk("00000000-0000-0000-0000-000000000002", "call-summary:42", "CALL_SUMMARY");
@@ -229,8 +253,8 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                 OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), expiredToken);
         assertThat(first).hasSize(1);
         jdbcTemplate.update("""
-                UPDATE retrieval_index_chunk
-                SET citation_replay_claimed_until = NOW() - INTERVAL '1 second'
+                UPDATE summary_citation_replay_source
+                SET claimed_until = NOW() - INTERVAL '1 second'
                 """);
 
         final UUID currentToken = UUID.randomUUID();
@@ -240,13 +264,13 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                 OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), currentToken)).hasSize(1);
 
         assertThat(repository.releaseSummaryCitationReplayClaim(
-                42L, "call-summary:42", RetrievalRecordType.summaryTypeNames(), expiredToken))
+                42L, "call-summary:42", expiredToken))
                 .isZero();
         assertThat(repository.markSummaryCitationReplayFailure(
-                42L, "call-summary:42", RetrievalRecordType.summaryTypeNames(),
+                42L, "call-summary:42",
                 OffsetDateTime.now(ZoneOffset.UTC).plusHours(1), expiredToken)).isZero();
         assertThat(repository.releaseSummaryCitationReplayClaim(
-                42L, "call-summary:42", RetrievalRecordType.summaryTypeNames(), currentToken))
+                42L, "call-summary:42", currentToken))
                 .isEqualTo(1);
     }
 
@@ -272,7 +296,59 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void authoritativeRecoveryCreatesCanonicalReplayAndPreservesLegacyRows() throws Exception {
+        prepareBootstrapDependencies();
+        jdbcTemplate.update("INSERT INTO patient (id) VALUES (42) ON CONFLICT DO NOTHING");
+        jdbcTemplate.update("""
+                INSERT INTO call_summaries (
+                  id, patient_id, summary_json, status, generated_at)
+                VALUES (77, 42, '{}', 'SUCCESS', NOW())
+                ON CONFLICT DO NOTHING
+                """);
+        insertChunk("00000000-0000-0000-0000-000000000077", "77", "CALL_SUMMARY");
+        jdbcTemplate.update("""
+                UPDATE retrieval_index_chunk
+                SET source_kind = NULL, migration_status = 'QUARANTINED'
+                WHERE source_record_id = '77'
+                """);
+
+        try (var connection = dataSource.getConnection()) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource(
+                    "db/migration/V2607190100__create_summary_citation_replay_source.sql"));
+        }
+
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM summary_citation_replay_source
+                WHERE patient_id = 42
+                  AND source_kind = 'CALL_SUMMARY'
+                  AND source_record_id = 'call-summary:77'
+                  AND migration_status = 'ACTIVE'
+                """, Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM retrieval_index_chunk
+                WHERE source_record_id = '77'
+                  AND source_kind IS NULL
+                  AND migration_status = 'QUARANTINED'
+                """, Integer.class)).isEqualTo(1);
+        assertThat(repository.claimStaleSummaryCitationSources(
+                RetrievalRecordType.summaryTypeNames(),
+                SummaryChunker.CITATION_METADATA_VERSION,
+                1,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5),
+                UUID.randomUUID()))
+                .extracting(RetrievalIndexChunkRepository.SummaryReplayCandidate::getSourceRecordId)
+                .containsExactly("call-summary:77");
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void productionBootstrap_repairsHibernateFirstSchemaAndForeignKeys() {
+        jdbcTemplate.execute("DROP TABLE summary_citation_replay_source");
+        jdbcTemplate.execute("""
+                CREATE TABLE summary_citation_replay_source (
+                  patient_id BIGINT, source_kind VARCHAR(40),
+                  source_record_id VARCHAR(120))
+                """);
         prepareBootstrapDependencies();
         new SchemaPatchRunner(dataSource).run();
         new SchemaPatchRunner(dataSource).run(); // upgrade/bootstrap is idempotent
@@ -311,6 +387,17 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
             // PostgreSQL intentionally leaves the failed concurrent index invalid.
         }
         assertThat(indexReadyAndValid("idx_retrieval_summary_replay")).isFalse();
+        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS catalog_decoy");
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS catalog_decoy.retrieval_index_chunk (
+                  citation_replay_after TIMESTAMPTZ, patient_id BIGINT,
+                  source_record_id VARCHAR(120))
+                """);
+        jdbcTemplate.execute("""
+                CREATE INDEX IF NOT EXISTS idx_retrieval_summary_replay
+                ON catalog_decoy.retrieval_index_chunk (
+                  citation_replay_after, patient_id, source_record_id)
+                """);
 
         new SchemaPatchRunner(dataSource).run();
 
@@ -344,12 +431,23 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                 id,
                 recordType,
                 sourceRecordId);
+        jdbcTemplate.update("""
+                INSERT INTO summary_citation_replay_source (
+                  patient_id, source_kind, source_record_id)
+                VALUES (42, 'CALL_SUMMARY', ?)
+                ON CONFLICT DO NOTHING
+                """, sourceRecordId);
     }
 
     private void prepareBootstrapDependencies() {
         jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
         jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY, email VARCHAR(255))");
         jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS patient (id BIGINT PRIMARY KEY, user_id BIGINT)");
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS call_summaries (
+                  id BIGINT PRIMARY KEY, patient_id BIGINT, summary_json TEXT,
+                  status VARCHAR(24), generated_at TIMESTAMP)
+                """);
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS indexing_outbox (
                   id BIGSERIAL PRIMARY KEY, processed_at TIMESTAMPTZ)

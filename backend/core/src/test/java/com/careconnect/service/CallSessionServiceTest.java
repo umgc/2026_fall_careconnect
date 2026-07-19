@@ -16,6 +16,7 @@ import com.careconnect.model.User;
 import com.careconnect.model.schedule.ScheduledVisit;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.repository.CaregiverRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
@@ -26,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class CallSessionServiceTest {
@@ -38,6 +38,7 @@ class CallSessionServiceTest {
     @Mock private CaregiverPatientLinkService caregiverLinkService;
     @Mock private FamilyMemberService familyMemberService;
     @Mock private ScheduledVisitRepository scheduledVisitRepository;
+    @Mock private CaregiverRepository caregiverRepository;
 
     private CallSessionService service;
 
@@ -49,8 +50,9 @@ class CallSessionServiceTest {
                 patientRepository,
                 userRepository,
                 caregiverLinkService,
-                familyMemberService);
-        ReflectionTestUtils.setField(service, "scheduledVisitRepository", scheduledVisitRepository);
+                familyMemberService,
+                scheduledVisitRepository,
+                caregiverRepository);
         lenient().when(sessionRepository.save(any(CallSession.class))).thenAnswer(invocation -> {
             CallSession session = invocation.getArgument(0);
             if (session.getId() == null) {
@@ -83,8 +85,8 @@ class CallSessionServiceTest {
 
         assertThat(session.getPatientId()).isEqualTo(42L);
         assertThat(session.getCreatedByUserId()).isEqualTo(2L);
-        verify(participantRepository).findByCallSessionIdAndUserId(10L, 2L);
-        verify(participantRepository).findByCallSessionIdAndUserId(10L, 7L);
+        verify(participantRepository).insertIfAbsent(10L, 2L, 2L, "INVITED");
+        verify(participantRepository).insertIfAbsent(10L, 7L, 2L, "INVITED");
     }
 
     @Test
@@ -120,15 +122,23 @@ class CallSessionServiceTest {
         participant.setCallSessionId(10L);
         participant.setUserId(2L);
         participant.setStatus(CallSessionService.PARTICIPANT_INVITED);
-        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
-                .thenReturn(Optional.of(participant));
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(sessionRepository.activateIfJoinable(
+                10L, "meeting-123", CallSessionService.SESSION_CREATED,
+                CallSessionService.SESSION_ACTIVE)).thenReturn(1);
+        when(participantRepository.markJoinedIfInvited(
+                10L, 2L, CallSessionService.PARTICIPANT_INVITED,
+                CallSessionService.PARTICIPANT_JOINED)).thenReturn(1);
 
         service.recordJoin(session, 2L, "meeting-123");
 
-        assertThat(session.getChimeMeetingId()).isEqualTo("meeting-123");
-        assertThat(session.getStatus()).isEqualTo(CallSessionService.SESSION_ACTIVE);
-        assertThat(participant.getStatus()).isEqualTo(CallSessionService.PARTICIPANT_JOINED);
-        assertThat(participant.getJoinedAt()).isNotNull();
+        verify(sessionRepository).activateIfJoinable(
+                10L, "meeting-123", CallSessionService.SESSION_CREATED,
+                CallSessionService.SESSION_ACTIVE);
+        verify(participantRepository).markJoinedIfInvited(
+                10L, 2L, CallSessionService.PARTICIPANT_INVITED,
+                CallSessionService.PARTICIPANT_JOINED);
     }
 
     @Test
@@ -199,6 +209,63 @@ class CallSessionServiceTest {
                 .hasMessageContaining("does not belong");
         verify(sessionRepository, never()).insertIfAbsent(
                 any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void recordJoin_doesNotResurrectTerminatingSession() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(sessionRepository.activateIfJoinable(
+                10L, "meeting-123", CallSessionService.SESSION_CREATED,
+                CallSessionService.SESSION_ACTIVE)).thenReturn(0);
+
+        assertThatThrownBy(() -> service.recordJoin(session, 2L, "meeting-123"))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("no longer joinable");
+        verify(participantRepository, never()).markJoinedIfInvited(
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void leaveOrBeginTermination_isIdempotentAfterEnded() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_ENDED);
+        final CallParticipant participant = new CallParticipant();
+        participant.setStatus(CallSessionService.PARTICIPANT_LEFT);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant));
+
+        final CallSessionService.LeaveResult result =
+                service.leaveOrBeginTermination("call-1", 2L);
+
+        assertThat(result.ended()).isTrue();
+        assertThat(result.terminationOwner()).isFalse();
+        verify(sessionRepository, never()).beginTermination(any(), any(), any(), any());
+    }
+
+    @Test
+    void declineInvitation_cancelsUnansweredSessionAndNotifiesCreator() {
+        final CallSession session = session(10L, 42L);
+        final CallParticipant creator = new CallParticipant();
+        creator.setUserId(2L);
+        creator.setStatus(CallSessionService.PARTICIPANT_INVITED);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(participantRepository.declineIfInvited(
+                10L, 7L, CallSessionService.PARTICIPANT_INVITED,
+                CallSessionService.PARTICIPANT_DECLINED)).thenReturn(1);
+        when(participantRepository.findByCallSessionId(10L)).thenReturn(java.util.List.of(creator));
+
+        final CallSessionService.DeclineResult result =
+                service.declineInvitation("call-1", 7L);
+        assertThat(result.notifyUserIds()).containsExactly(2L);
+        assertThat(result.terminationOwner()).isFalse();
+        verify(sessionRepository).cancelIfNotActive(
+                10L, CallSessionService.SESSION_CREATED, CallSessionService.SESSION_CANCELLED);
     }
 
     private static User user(Long id, Role role) {

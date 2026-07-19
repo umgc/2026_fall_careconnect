@@ -4,6 +4,8 @@ import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.service.CallSessionService;
+import com.careconnect.service.CallRecordingService;
+import com.careconnect.service.ChimeService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,6 +40,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
   /** Service used to verify caregiver-patient link permissions. */
   private final CaregiverPatientLinkService caregiverPatientLinkService;
   private final CallSessionService callSessionService;
+  private final CallRecordingService callRecordingService;
+  private final ChimeService chimeService;
 
   /** JSON mapper used to serialize websocket payloads. */
   private final ObjectMapper objectMapper;
@@ -62,12 +66,16 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       final JwtTokenProvider jwtTokenProvider,
       final CallTelemetryService callTelemetryService,
       final CaregiverPatientLinkService caregiverPatientLinkService,
-      final CallSessionService callSessionService) {
+      final CallSessionService callSessionService,
+      final CallRecordingService callRecordingService,
+      final ChimeService chimeService) {
     this.userRepository = userRepository;
     this.jwtTokenProvider = jwtTokenProvider;
     this.callTelemetryService = callTelemetryService;
     this.caregiverPatientLinkService = caregiverPatientLinkService;
     this.callSessionService = callSessionService;
+    this.callRecordingService = callRecordingService;
+    this.chimeService = chimeService;
     this.objectMapper = new ObjectMapper();
   }
 
@@ -82,6 +90,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
         jwtTokenProvider,
         callTelemetryService,
         caregiverPatientLinkService,
+        null,
+        null,
         null);
   }
 
@@ -319,7 +329,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       return;
     }
 
-    final String recipientId = (String) payload.get("recipientId");
+    String recipientId = String.valueOf(payload.get("recipientId"));
     final String callId = (String) payload.get("callId");
     final Boolean isVideoCall = (Boolean) payload.getOrDefault("isVideoCall", true);
     final String callType = (String) payload.getOrDefault("callType", "general");
@@ -327,6 +337,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
         payload.get("callerName") == null ? null : String.valueOf(payload.get("callerName"));
     if (callSessionService != null) {
       callSessionService.requireActiveParticipant(callId, sender.getId());
+      recipientId = callSessionService.requirePendingInvitationRecipient(
+          callId, sender.getId(), parseLong(recipientId)).toString();
     }
 
     final User recipient = userRepository.findById(Long.parseLong(recipientId)).orElse(null);
@@ -399,9 +411,14 @@ public class CallNotificationHandler extends TextWebSocketHandler {
           payload.getOrDefault(
               "callKind",
               "care-team".equalsIgnoreCase(callType) ? "CARE_TEAM" : "GENERAL"));
-      if (payload.get("contextPatientUserIds") != null) {
+      if (callSessionService != null) {
+        final com.careconnect.model.CallSession durable = callSessionService.requireSession(callId);
         callNotification.put(
-            "contextPatientUserIds", payload.get("contextPatientUserIds"));
+            "contextPatientUserIds",
+            java.util.List.of(callSessionService.requirePatientUserId(durable)));
+        if (durable.getScheduledVisitId() != null) {
+          callNotification.put("scheduledVisitId", durable.getScheduledVisitId());
+        }
       }
       callNotification.put("timestamp", System.currentTimeMillis());
 
@@ -498,13 +515,17 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     }
 
     final String callId = (String) payload.get("callId");
-    final String senderId = (String) payload.get("senderId");
     if (callSessionService != null) {
       callSessionService.requireJoinAuthorized(callId, user.getId());
     }
 
-    final WebSocketSession senderSession = userSessions.get(senderId);
-    if (senderSession != null && senderSession.isOpen()) {
+    final java.util.List<Long> recipients = callSessionService == null
+        ? java.util.List.of(parseLong(payload.get("senderId")))
+        : callSessionService.getOtherParticipantUserIds(callId, user.getId());
+    for (final Long recipientId : recipients) {
+      if (recipientId == null) continue;
+      final WebSocketSession senderSession = userSessions.get(recipientId.toString());
+      if (senderSession == null || !senderSession.isOpen()) continue;
       final Map<String, Object> response =
           Map.of(
               "type", "call-answered",
@@ -527,14 +548,33 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     }
 
     final String callId = (String) payload.get("callId");
-    final String senderId = (String) payload.get("senderId");
     final String reason = (String) payload.getOrDefault("reason", "declined");
+    final java.util.List<Long> recipients;
     if (callSessionService != null) {
-      callSessionService.requireJoinAuthorized(callId, user.getId());
+      final CallSessionService.DeclineResult decline =
+          callSessionService.declineInvitation(callId, user.getId());
+      recipients = decline.notifyUserIds();
+      if (decline.terminationOwner()) {
+        try {
+          if (callRecordingService != null) {
+            callRecordingService.stopRecording(callId);
+          }
+          if (chimeService != null) {
+            chimeService.endMeeting(callId);
+          }
+          callSessionService.completeTermination(callId);
+        } catch (RuntimeException cleanupFailure) {
+          log.error("Declined call cleanup failed for callId={}", callId, cleanupFailure);
+        }
+      }
+    } else {
+      recipients = java.util.List.of(parseLong(payload.get("senderId")));
     }
 
-    final WebSocketSession senderSession = userSessions.get(senderId);
-    if (senderSession != null && senderSession.isOpen()) {
+    for (final Long recipientId : recipients) {
+      if (recipientId == null) continue;
+      final WebSocketSession senderSession = userSessions.get(recipientId.toString());
+      if (senderSession == null || !senderSession.isOpen()) continue;
       final Map<String, Object> response =
           Map.of(
               "type", "call-declined",

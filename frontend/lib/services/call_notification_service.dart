@@ -172,6 +172,8 @@ class CallNotificationService {
       _incomingCallController.add(data);
     } else if (type == 'sentiment-channel-state') {
       _incomingCallController.add(data);
+    } else if (type == 'recording-state') {
+      _incomingCallController.add(data);
     }
   }
 
@@ -221,6 +223,7 @@ class CallNotificationService {
     final contextPatientUserIds = _normalizePatientContextIds(
       callData['contextPatientUserIds'] ?? callData['contextPatientUserId'],
     );
+    final scheduledVisitId = (callData['scheduledVisitId'] ?? '').toString();
 
     if (callId.isEmpty) return;
     _pruneSuppressedIncomingCallIds();
@@ -256,6 +259,7 @@ class CallNotificationService {
       isConferenceInvite: isConferenceInvite,
       callKind: callKind,
       contextPatientUserIds: contextPatientUserIds,
+      scheduledVisitId: scheduledVisitId,
     );
   }
 
@@ -269,6 +273,7 @@ class CallNotificationService {
     bool isConferenceInvite = false,
     String callKind = 'GENERAL',
     List<int> contextPatientUserIds = const [],
+    String scheduledVisitId = '',
   }) {
     if (_context == null) return;
 
@@ -290,9 +295,11 @@ class CallNotificationService {
           callId: callId,
           callerId: callerId,
           callerName: callerName,
+          callerRole: callerRole,
           isVideoCall: isVideoCall,
           callKind: callKind,
           contextPatientUserIds: contextPatientUserIds,
+          scheduledVisitId: scheduledVisitId,
           dialogContext: context,
         ),
         onDecline: () => _declineCall(
@@ -314,9 +321,11 @@ class CallNotificationService {
     required String callId,
     required String callerId,
     required String callerName,
+    required String callerRole,
     required bool isVideoCall,
     required String callKind,
     required List<int> contextPatientUserIds,
+    required String scheduledVisitId,
     BuildContext? dialogContext,
   }) {
     if (_context == null || _currentUserId == null) return;
@@ -343,9 +352,11 @@ class CallNotificationService {
         callId: callId,
         callerId: callerId,
         callerName: callerName,
+        callerRole: callerRole,
         isVideoCall: isVideoCall,
         callKind: callKind,
         contextPatientUserIds: contextPatientUserIds,
+        scheduledVisitId: scheduledVisitId,
       ),
     );
   }
@@ -707,9 +718,11 @@ class CallNotificationService {
     required String callId,
     required String callerId,
     required String callerName,
+    required String callerRole,
     required bool isVideoCall,
     required String callKind,
     required List<int> contextPatientUserIds,
+    String scheduledVisitId = '',
   }) {
     final params = <String, String>{
       'userId': _currentUserId ?? '',
@@ -718,12 +731,14 @@ class CallNotificationService {
       'userRole': (_currentUserRole ?? '').toUpperCase(),
       'userName': _getCurrentUserName(),
       'recipientName': callerName,
+      'recipientRole': callerRole,
       'initiator': 'false',
       'video': isVideoCall ? 'true' : 'false',
       'audio': 'true',
       'callKind': _normalizeCallKind(callKind),
       if (contextPatientUserIds.isNotEmpty)
         'contextPatientUserIds': contextPatientUserIds.join(','),
+      if (scheduledVisitId.isNotEmpty) 'scheduledVisitId': scheduledVisitId,
     };
     return Uri(path: '/video-call-chime', queryParameters: params).toString();
   }
@@ -802,14 +817,18 @@ class CallNotificationService {
   static String acceptedCallLocationForTest({
     required String callKind,
     required List<int> contextPatientUserIds,
+    String callerRole = 'CAREGIVER',
+    String scheduledVisitId = '',
   }) {
     return _acceptedCallLocation(
       callId: 'call-test',
       callerId: '2',
       callerName: 'Caller',
+      callerRole: callerRole,
       isVideoCall: true,
       callKind: callKind,
       contextPatientUserIds: contextPatientUserIds,
+      scheduledVisitId: scheduledVisitId,
     );
   }
 }

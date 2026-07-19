@@ -3,6 +3,8 @@ package com.careconnect.config;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -10,9 +12,9 @@ import java.sql.Connection;
 import java.sql.Statement;
 
 /**
- * Applies one-time schema patches via plain JDBC at startup.
- * Runs before JPA initialisation (@Order(1)) and has no JPA dependency,
- * so it avoids coupling schema changes to Flyway/JPA startup order.
+ * Applies one-time schema patches via plain JDBC after the application context starts.
+ * Production keeps Hibernate DDL and Flyway disabled, so this runner is the sole DDL
+ * owner; retrieval changes additionally use a bounded PostgreSQL advisory lock.
  *
  * Each patch is idempotent: safe to execute on every restart.
  */
@@ -117,7 +119,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "))"
         );
         applyCallSessionPatches();
-        applyRetrievalIndexChunkPatches();
+        if (isPostgreSql()) {
+            withRetrievalMigrationLock(this::applyRetrievalIndexChunkPatches);
+        } else {
+            applyRetrievalIndexChunkPatches();
+        }
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
     }
@@ -173,6 +179,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         "patient_id", "patient", "id", "") +
                 foreignKeyIfMissing("fk_call_sessions_created_by", "call_sessions",
                         "created_by_user_id", "users", "id", "") +
+                foreignKeyIfMissing("fk_call_sessions_scheduled_visit", "call_sessions",
+                        "scheduled_visit_id", "scheduled_visits", "id", "") +
                 foreignKeyIfMissing("fk_call_participants_session", "call_participants",
                         "call_session_id", "call_sessions", "id", " ON DELETE CASCADE") +
                 foreignKeyIfMissing("fk_call_participants_user", "call_participants",
@@ -180,10 +188,20 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 foreignKeyIfMissing("fk_call_participants_invited_by", "call_participants",
                         "invited_by_user_id", "users", "id", "")
             );
-            verifyConstraints("call session", 5,
+            verifyConstraints("call session", 6,
                     "fk_call_sessions_patient", "fk_call_sessions_created_by",
+                    "fk_call_sessions_scheduled_visit",
                     "fk_call_participants_session", "fk_call_participants_user",
                     "fk_call_participants_invited_by");
+            applyRequiredPatch(
+                "V2607190015 – harden call lifecycle statuses",
+                "ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS ck_call_sessions_status;" +
+                "ALTER TABLE call_sessions ADD CONSTRAINT ck_call_sessions_status CHECK " +
+                "(status IN ('CREATED','ACTIVE','TERMINATING','ENDED','CANCELLED'));" +
+                "ALTER TABLE call_participants DROP CONSTRAINT IF EXISTS ck_call_participants_status;" +
+                "ALTER TABLE call_participants ADD CONSTRAINT ck_call_participants_status CHECK " +
+                "(status IN ('INVITED','JOINED','LEFT','DECLINED','EXPIRED'))"
+            );
         }
     }
 
@@ -282,11 +300,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyRequiredPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
-            "DO $$ BEGIN " +
-            "  ALTER TABLE retrieval_index_chunk " +
-            "    ADD CONSTRAINT fk_retrieval_chunk_patient " +
-            "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
-            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            foreignKeyIfMissing(
+                    "fk_retrieval_chunk_patient", "retrieval_index_chunk",
+                    "patient_id", "patient", "id", "")
         );
         applyRequiredPatch(
             "V2607071921c – retrieval_index_chunk indexes",
@@ -344,6 +360,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "    AND chunk_text IS NOT NULL " +
             "    AND TRIM(BOTH FROM chunk_text) <> ''"
         );
+        applyRequiredSqlResource(
+                "V2607190100 – source-level citation replay ownership",
+                "db/migration/V2607190100__create_summary_citation_replay_source.sql");
         verifyRequiredRetrievalSchema();
     }
 
@@ -483,6 +502,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);
+            configureDdlTimeouts(stmt);
             stmt.execute(sql);
             log.info("Required schema patch applied: {}", name);
         } catch (Exception e) {
@@ -500,11 +520,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 SELECT i.indisvalid AND i.indisready
                 FROM pg_index i
                 JOIN pg_class c ON c.oid = i.indexrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE c.relname = '%s'
+                  AND n.nspname = current_schema()
                 """.formatted(indexName.replace("'", "''"));
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);
+            configureDdlTimeouts(stmt);
             boolean exists = false;
             boolean healthy = false;
             try (var result = stmt.executeQuery(statusSql)) {
@@ -533,6 +556,73 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
+    private void applyRequiredSqlResource(final String name, final String path) {
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(true);
+            try (Statement stmt = conn.createStatement()) {
+                configureDdlTimeouts(stmt);
+            }
+            ScriptUtils.executeSqlScript(conn, new ClassPathResource(path));
+            log.info("Required schema patch applied: {}", name);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required schema patch could not be applied: " + name, e);
+        }
+    }
+
+    private static void configureDdlTimeouts(final Statement stmt) throws Exception {
+        final String database = stmt.getConnection().getMetaData().getDatabaseProductName();
+        if (database != null
+                && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")) {
+            stmt.execute("SET lock_timeout = '5s'");
+            stmt.execute("SET statement_timeout = '5min'");
+        }
+    }
+
+    private void withRetrievalMigrationLock(final Runnable work) {
+        final long deadline = System.nanoTime()
+                + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            conn.setAutoCommit(true);
+            configureDdlTimeouts(stmt);
+            boolean acquired = false;
+            while (System.nanoTime() < deadline) {
+                try (var result = stmt.executeQuery(
+                        "SELECT pg_try_advisory_lock("
+                                + "hashtextextended('careconnect:retrieval-schema', 0))")) {
+                    acquired = result.next() && result.getBoolean(1);
+                }
+                if (acquired) {
+                    break;
+                }
+                Thread.sleep(200L);
+            }
+            if (!acquired) {
+                throw new IllegalStateException(
+                        "Timed out waiting for retrieval schema migration lock");
+            }
+            try {
+                work.run();
+            } finally {
+                stmt.executeQuery(
+                        "SELECT pg_advisory_unlock("
+                                + "hashtextextended('careconnect:retrieval-schema', 0))")
+                        .close();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                    "Interrupted waiting for retrieval schema migration lock", e);
+        } catch (Exception e) {
+            if (e instanceof IllegalStateException illegalState) {
+                throw illegalState;
+            }
+            throw new IllegalStateException(
+                    "Unable to coordinate retrieval schema migration", e);
+        }
+    }
+
     private static String foreignKeyIfMissing(
             final String constraint,
             final String table,
@@ -540,8 +630,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String referencedTable,
             final String referencedColumn,
             final String suffix) {
-        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint " +
-                "WHERE conname = '" + constraint + "' AND contype = 'f') THEN " +
+        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c " +
+                "JOIN pg_class t ON t.oid = c.conrelid " +
+                "JOIN pg_namespace n ON n.oid = t.relnamespace " +
+                "WHERE n.nspname = current_schema() AND c.conname = '" +
+                constraint + "' AND c.contype = 'f') THEN " +
                 "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint +
                 " FOREIGN KEY (" + column + ") REFERENCES " + referencedTable +
                 " (" + referencedColumn + ")" + suffix + "; END IF; END $$;";
@@ -554,8 +647,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
         final String names = java.util.Arrays.stream(constraints)
                 .map(name -> "'" + name.replace("'", "''") + "'")
                 .collect(java.util.stream.Collectors.joining(","));
-        final String sql = "SELECT COUNT(*) FROM pg_constraint " +
-                "WHERE contype = 'f' AND convalidated AND conname IN (" + names + ")";
+        final String sql = "SELECT COUNT(*) FROM pg_constraint c " +
+                "JOIN pg_class t ON t.oid = c.conrelid " +
+                "JOIN pg_namespace n ON n.oid = t.relnamespace " +
+                "WHERE n.nspname = current_schema() AND c.contype = 'f' " +
+                "AND c.convalidated AND c.conname IN (" + names + ")";
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement();
              var result = stmt.executeQuery(sql)) {
@@ -571,46 +667,129 @@ public class SchemaPatchRunner implements CommandLineRunner {
 
     private void verifyRequiredRetrievalSchema() {
         final String sql = """
+                WITH expected_columns(table_name, column_name, data_type, not_null, default_part) AS (
+                  VALUES
+                    ('retrieval_index_chunk','id','uuid',true,'gen_random_uuid()'),
+                    ('retrieval_index_chunk','patient_id','bigint',true,NULL),
+                    ('retrieval_index_chunk','record_type','character varying(40)',true,NULL),
+                    ('retrieval_index_chunk','source_record_id','character varying(120)',true,NULL),
+                    ('retrieval_index_chunk','source_kind','character varying(40)',false,NULL),
+                    ('retrieval_index_chunk','chunk_text','text',true,NULL),
+                    ('retrieval_index_chunk','chunk_metadata','jsonb',false,NULL),
+                    ('retrieval_index_chunk','search_vector','tsvector',false,NULL),
+                    ('retrieval_index_chunk','embedding','vector(1536)',false,NULL),
+                    ('retrieval_index_chunk','indexed_at','timestamp with time zone',true,'now()'),
+                    ('retrieval_index_chunk','consent_scope','character varying(40)',false,NULL),
+                    ('retrieval_index_chunk','citation_replay_after','timestamp with time zone',false,NULL),
+                    ('retrieval_index_chunk','citation_replay_attempts','integer',true,'0'),
+                    ('retrieval_index_chunk','citation_replay_claimed_until','timestamp with time zone',false,NULL),
+                    ('retrieval_index_chunk','citation_replay_claim_token','uuid',false,NULL),
+                    ('retrieval_index_chunk','migration_status','character varying(24)',true,'''ACTIVE'''),
+                    ('summary_citation_replay_source','patient_id','bigint',true,NULL),
+                    ('summary_citation_replay_source','source_kind','character varying(40)',true,NULL),
+                    ('summary_citation_replay_source','source_record_id','character varying(120)',true,NULL),
+                    ('summary_citation_replay_source','replay_after','timestamp with time zone',false,NULL),
+                    ('summary_citation_replay_source','attempts','integer',true,'0'),
+                    ('summary_citation_replay_source','claimed_until','timestamp with time zone',false,NULL),
+                    ('summary_citation_replay_source','claim_token','uuid',false,NULL),
+                    ('summary_citation_replay_source','migration_status','character varying(24)',true,'''ACTIVE'''),
+                    ('summary_citation_replay_source','created_at','timestamp with time zone',true,'now()'),
+                    ('summary_citation_replay_source','updated_at','timestamp with time zone',true,'now()')
+                ),
+                actual_columns AS (
+                  SELECT t.relname AS table_name, a.attname AS column_name,
+                         format_type(a.atttypid, a.atttypmod) AS data_type,
+                         a.attnotnull AS not_null,
+                         pg_get_expr(d.adbin, d.adrelid) AS default_expression
+                  FROM pg_attribute a
+                  JOIN pg_class t ON t.oid = a.attrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  LEFT JOIN pg_attrdef d
+                    ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+                  WHERE n.nspname = current_schema()
+                    AND t.relname IN (
+                      'retrieval_index_chunk','summary_citation_replay_source')
+                    AND a.attnum > 0 AND NOT a.attisdropped
+                ),
+                expected_constraints(table_name, constraint_name, constraint_type, definition_part) AS (
+                  VALUES
+                    ('retrieval_index_chunk','retrieval_index_chunk_pkey','p','PRIMARY KEY (id)'),
+                    ('retrieval_index_chunk','fk_retrieval_chunk_patient','f','FOREIGN KEY (patient_id) REFERENCES patient(id)'),
+                    ('retrieval_index_chunk','ck_retrieval_migration_status','c','migration_status'),
+                    ('retrieval_index_chunk','ck_retrieval_replay_attempts','c','citation_replay_attempts >= 0'),
+                    ('retrieval_index_chunk','ck_retrieval_source_kind','c','source_kind'),
+                    ('retrieval_index_chunk','ck_retrieval_replay_lease_token','c','citation_replay_claimed_until'),
+                    ('summary_citation_replay_source','pk_summary_citation_replay_source','p','PRIMARY KEY (patient_id, source_kind, source_record_id)'),
+                    ('summary_citation_replay_source','fk_summary_replay_patient','f','FOREIGN KEY (patient_id) REFERENCES patient(id)'),
+                    ('summary_citation_replay_source','ck_summary_replay_status','c','migration_status'),
+                    ('summary_citation_replay_source','ck_summary_replay_attempts','c','attempts >= 0'),
+                    ('summary_citation_replay_source','ck_summary_replay_source_kind','c','source_kind'),
+                    ('summary_citation_replay_source','ck_summary_replay_lease_token','c','claimed_until')
+                ),
+                expected_indexes(index_name, table_name, definition_part) AS (
+                  VALUES
+                    ('idx_retrieval_chunk_fts','retrieval_index_chunk','USING gin (search_vector)'),
+                    ('idx_retrieval_chunk_embedding','retrieval_index_chunk','vector_cosine_ops'),
+                    ('idx_retrieval_chunk_source_identity','retrieval_index_chunk','patient_id, source_kind, source_record_id'),
+                    ('idx_summary_replay_claim_fair','summary_citation_replay_source','replay_after'),
+                    ('idx_summary_replay_expired_claim','summary_citation_replay_source','claimed_until')
+                )
                 SELECT
                   (SELECT COUNT(*)
-                   FROM information_schema.columns
-                   WHERE table_name = 'retrieval_index_chunk'
-                     AND column_name IN (
-                       'id',
-                       'patient_id',
-                       'record_type',
-                       'source_record_id',
-                       'source_kind',
-                       'chunk_text',
-                       'chunk_metadata',
-                       'search_vector',
-                       'embedding',
-                       'indexed_at',
-                       'consent_scope',
-                       'citation_replay_after',
-                       'citation_replay_attempts',
-                       'citation_replay_claimed_until',
-                       'citation_replay_claim_token',
-                       'migration_status')) AS column_count,
+                   FROM expected_columns e
+                   LEFT JOIN actual_columns a USING (table_name, column_name)
+                   WHERE a.column_name IS NULL
+                      OR a.data_type <> e.data_type
+                      OR a.not_null <> e.not_null
+                      OR (e.default_part IS NOT NULL AND
+                          POSITION(e.default_part IN COALESCE(a.default_expression,'')) = 0)
+                  ) AS column_issues,
                   (SELECT COUNT(*)
-                   FROM pg_index i
-                   JOIN pg_class idx ON idx.oid = i.indexrelid
-                   JOIN pg_class tbl ON tbl.oid = i.indrelid
-                   WHERE tbl.relname = 'retrieval_index_chunk'
-                     AND i.indisvalid AND i.indisready
-                     AND idx.relname IN (
-                       'idx_retrieval_chunk_fts',
-                       'idx_retrieval_chunk_embedding',
-                       'idx_retrieval_chunk_source_identity',
-                       'idx_retrieval_summary_replay',
-                       'idx_retrieval_summary_replay_claim')) AS index_count
+                   FROM expected_constraints e
+                   WHERE NOT EXISTS (
+                     SELECT 1
+                     FROM pg_constraint c
+                     JOIN pg_class t ON t.oid = c.conrelid
+                     JOIN pg_namespace n ON n.oid = t.relnamespace
+                     WHERE n.nspname = current_schema()
+                       AND t.relname = e.table_name
+                       AND c.conname = e.constraint_name
+                       AND c.contype::text = e.constraint_type
+                       AND c.convalidated
+                       AND POSITION(e.definition_part IN pg_get_constraintdef(c.oid)) > 0
+                   )) AS constraint_issues,
+                  (SELECT COUNT(*)
+                   FROM expected_indexes e
+                   WHERE NOT EXISTS (
+                     SELECT 1
+                     FROM pg_index i
+                     JOIN pg_class idx ON idx.oid = i.indexrelid
+                     JOIN pg_class tbl ON tbl.oid = i.indrelid
+                     JOIN pg_namespace n ON n.oid = tbl.relnamespace
+                     WHERE n.nspname = current_schema()
+                       AND tbl.relname = e.table_name
+                       AND idx.relname = e.index_name
+                       AND i.indisvalid AND i.indisready
+                       AND POSITION(e.definition_part IN pg_get_indexdef(i.indexrelid)) > 0
+                   )) AS index_issues,
+                  (SELECT COUNT(*)
+                   FROM pg_trigger tr
+                   JOIN pg_class t ON t.oid = tr.tgrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND t.relname = 'retrieval_index_chunk'
+                     AND tr.tgname = 'trg_retrieval_index_chunk_search_vector'
+                     AND tr.tgenabled <> 'D'
+                     AND NOT tr.tgisinternal) AS trigger_count
                 """;
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement();
              var result = stmt.executeQuery(sql)) {
             if (!result.next()
-                    || result.getInt("column_count") != 16
-                    || result.getInt("index_count") != 5) {
+                    || result.getInt("column_issues") != 0
+                    || result.getInt("constraint_issues") != 0
+                    || result.getInt("index_issues") != 0
+                    || result.getInt("trigger_count") != 1) {
                 throw new IllegalStateException(
                         "Required retrieval schema verification failed");
             }
@@ -619,10 +798,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     "Required retrieval schema verification failed",
                     e);
         }
-        verifyConstraints(
-                "retrieval",
-                1,
-                "fk_retrieval_chunk_patient");
     }
 
     private boolean isPostgreSql() {

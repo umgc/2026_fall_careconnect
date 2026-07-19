@@ -64,6 +64,10 @@ class CallSummaryServiceTest {
                         callSummaryRepository, indexingEventEmitter)
         );
         lenient().when(callPatientResolver.requirePatientId(CALL_ID)).thenReturn(42L);
+        lenient().when(bedrockSentimentService.summaryModelConfigVersion())
+                .thenReturn("amazon.nova-pro-v1:0:call-summary-v2");
+        lenient().when(bedrockSentimentService.summaryEngine())
+                .thenReturn("aws_bedrock:amazon.nova-pro-v1:0");
     }
 
     @Nested
@@ -324,7 +328,8 @@ class CallSummaryServiceTest {
             CallSummary saved = captor.getValue();
             assertThat(saved.getRiskLevel()).isNull();
             assertThat(saved.getCaregiverVisibility()).isEqualTo("on_consent");
-            assertThat(saved.getSummarizationEngine()).isNull();
+            assertThat(saved.getSummarizationEngine())
+                    .isEqualTo("aws_bedrock:amazon.nova-pro-v1:0");
         }
 
         @Test
@@ -378,7 +383,8 @@ class CallSummaryServiceTest {
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
-                    .thenThrow(new RuntimeException("bedrock timeout"));
+                    .thenThrow(new ModelInferenceException(
+                            "bedrock timeout", new RuntimeException("timeout")));
             when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
 
             service.generateAndStoreSummary(CALL_ID, 3L, Map.of());
@@ -394,7 +400,8 @@ class CallSummaryServiceTest {
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
-                    .thenThrow(new RuntimeException("bedrock timeout"));
+                    .thenThrow(new ModelInferenceException(
+                            "bedrock timeout", new RuntimeException("timeout")));
             when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Map<String, Object> result = service.generateAndStoreSummary(CALL_ID, 3L, Map.of());
@@ -403,6 +410,23 @@ class CallSummaryServiceTest {
             assertThat(result).containsEntry("errorMessage", "bedrock timeout");
             assertThat(asObjectMap(result.get("summary")))
                     .containsEntry("headline", "Summary unavailable");
+        }
+
+        @Test
+        @DisplayName("persistence failures propagate and are not converted to ERROR summaries")
+        void generateAndStoreSummary_persistenceFailure_propagates() {
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Needs review", 1L));
+            when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
+                    .thenReturn(Map.of("headline", "Review"));
+            when(callSummaryRepository.save(any(CallSummary.class)))
+                    .thenThrow(new IllegalStateException("database unavailable"));
+
+            assertThatThrownBy(() -> service.generateAndStoreSummary(CALL_ID, 3L, Map.of()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("database unavailable");
+
+            verify(callSummaryRepository, org.mockito.Mockito.times(1)).save(any(CallSummary.class));
         }
     }
 

@@ -234,6 +234,66 @@ class AiAskServiceTest {
     }
 
     @Test
+    void ask_evidenceTouchingSyntheticExcerptBoundary_failsClosed() throws Exception {
+        final String clippedEvidence = "A".repeat(600);
+        stubExtractiveResult(clippedEvidence + " hidden tail", clippedEvidence, clippedEvidence);
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_zeroOverlapWeakRetrieval_failsClosed() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final String evidence = "The patient attended a routine follow-up appointment.";
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
+                evidence, null, "auto", 0.001d, null, 9, "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(
+                        List.of(chunk), "metformin", false, 0, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        evidence,
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                evidence, List.of("C1"), java.util.Map.of("C1", evidence))),
+                        "amazon.nova-lite-v1:0")));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_preservesMultipleEvidenceWindowsForSharedCitation() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final String first = "Metformin was started at 500 mg once daily.";
+        final String second = "Metformin was later increased to 500 mg twice daily.";
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
+                first + " A follow-up occurred between changes. " + second,
+                null, "auto", 0.03d, 1, 1, "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(
+                        List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        first + " " + second,
+                        List.of("C1", "C1"),
+                        List.of(
+                                new GroundedAskLlmService.GroundedClaim(
+                                        first, List.of("C1"), java.util.Map.of("C1", first)),
+                                new GroundedAskLlmService.GroundedClaim(
+                                        second, List.of("C1"), java.util.Map.of("C1", second))),
+                        "amazon.nova-lite-v1:0")));
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.citations()).hasSize(1);
+        assertThat(response.citations().get(0).excerpt()).contains(first).contains(second);
+    }
+
+    @Test
     void ask_unicodeExtractiveEvidence_isDeliveredWithoutBoundaryDamage() throws Exception {
         final String evidence = "El paciente tomó café ☕ y comenzó metformina 500 mg.";
         stubExtractiveResult(evidence, evidence, evidence);
@@ -415,6 +475,33 @@ class AiAskServiceTest {
                     assertThat(rejected.getSessionId()).isNotNull();
                 });
         verify(hybridRetrievalService, never()).search(any(), anyLong(), anyString());
+    }
+
+    @Test
+    void ask_removesBidiControlsBeforeSafetyAndRetrieval() throws Exception {
+        when(governanceService.validateRequest(anyLong(), anyString(), eq("metformin")))
+                .thenReturn(new LangChainGovernanceService.GovernanceResult(
+                        true, "ok", "ALLOW"));
+        when(inputSanitizationService.sanitizeUserInput(
+                eq("metformin"), anyLong(), anyString()))
+                .thenReturn(new InputSanitizationService.SanitizationResult(
+                        "metformin", false, List.of()));
+        when(retrievalScopeService.resolveRetrievalScope(any(), eq(42L), any()))
+                .thenReturn(new RetrievalScope(
+                        7L,
+                        Role.PATIENT,
+                        Set.of(42L),
+                        Set.of(RetrievalRecordType.CALL_SUMMARY),
+                        Set.of(),
+                        new CaregiverVisibilityFilter(Role.PATIENT, true),
+                        true));
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(HybridRetrievalResult.empty("metformin"));
+
+        final AiAskResponse response = service.ask(caller(), request("met\u202Eformin"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.NO_RECORDS);
+        verify(governanceService).validateRequest(anyLong(), anyString(), eq("metformin"));
     }
 
     @Test

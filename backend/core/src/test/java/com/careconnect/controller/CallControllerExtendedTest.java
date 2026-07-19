@@ -1,6 +1,7 @@
 package com.careconnect.controller;
 
 import com.careconnect.config.CareconnectTestConfig;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
@@ -29,6 +30,7 @@ import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAu
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -44,6 +46,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -291,6 +294,8 @@ class CallControllerExtendedTest {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
             when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
             when(callSummaryService.getLatestSummaryEntity(anyString())).thenReturn(Optional.empty());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call"))
+                    .when(callSessionService).requireParticipant(CALL_ID, patientUser.getId());
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
                             .with(csrf()))
@@ -334,6 +339,8 @@ class CallControllerExtendedTest {
         void getTranscriptSegments_nonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
             when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call"))
+                    .when(callSessionService).requireParticipant(CALL_ID, patientUser.getId());
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/transcript/segments")
                             .with(csrf()))
@@ -365,6 +372,8 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "patient@test.com")
         void saveTranscriptSegments_nonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "User must join the call"))
+                    .when(callSessionService).requireActiveParticipant(CALL_ID, patientUser.getId());
 
             Map<String, Object> body = Map.of(
                     "speakerLabel", "patient",
@@ -536,6 +545,8 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "patient@test.com")
         void getRecordingStatus_patientNonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "Recording access denied"))
+                    .when(callSessionService).requireRecordingAccess(CALL_ID, patientUser);
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording")
                             .with(csrf()))
@@ -575,6 +586,8 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "patient@test.com")
         void getRecordingPlaybackUrl_patientNonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "Recording access denied"))
+                    .when(callSessionService).requireRecordingAccess(CALL_ID, patientUser);
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording/playback-url")
                             .with(csrf()))

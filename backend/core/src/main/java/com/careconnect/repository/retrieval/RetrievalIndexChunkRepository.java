@@ -303,41 +303,44 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT DISTINCT
-                           ric.patient_id AS "patientId",
-                           ric.source_record_id AS "sourceRecordId",
-                           ric.source_kind AS "sourceKind"
-                    FROM retrieval_index_chunk ric
-                    WHERE ric.record_type IN (:recordTypes)
-                      AND ric.migration_status = 'ACTIVE'
-                      AND ric.source_record_id ~ '^(call-summary:)?[0-9]+$'
-                      AND (
-                        ric.source_kind = 'CALL_SUMMARY'
-                        OR (
-                          ric.source_record_id LIKE 'call-summary:%'
-                          AND ric.source_kind IS NULL
-                        )
-                        OR (
-                          ric.source_record_id ~ '^[0-9]+$'
-                          AND ric.source_kind IS NULL
-                        )
+                           replay.patient_id AS "patientId",
+                           replay.source_record_id AS "sourceRecordId",
+                           replay.source_kind AS "sourceKind"
+                    FROM summary_citation_replay_source replay
+                    WHERE replay.source_kind = 'CALL_SUMMARY'
+                      AND replay.migration_status = 'ACTIVE'
+                      AND (replay.replay_after IS NULL OR replay.replay_after <= NOW())
+                      AND (replay.claimed_until IS NULL OR replay.claimed_until <= NOW())
+                      AND EXISTS (
+                        SELECT 1
+                        FROM retrieval_index_chunk ric
+                        WHERE ric.patient_id = replay.patient_id
+                          AND ric.record_type IN (:recordTypes)
+                          AND ric.migration_status = 'ACTIVE'
+                          AND ric.source_kind = replay.source_kind
+                          AND ric.source_record_id = replay.source_record_id
+                          AND CASE
+                                WHEN COALESCE(
+                                  ric.chunk_metadata->>'citationMetadataVersion', '')
+                                  ~ '^[0-9]{1,9}$'
+                                THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
+                                ELSE -1
+                              END < :version
+                        UNION ALL
+                        SELECT 1
+                        FROM retrieval_index_chunk legacy
+                        WHERE legacy.patient_id = replay.patient_id
+                          AND legacy.record_type IN (:recordTypes)
+                          AND legacy.migration_status = 'QUARANTINED'
+                          AND legacy.source_kind IS NULL
+                          AND replay.source_record_id ~ '^call-summary:[0-9]+$'
+                          AND legacy.source_record_id =
+                              SUBSTRING(replay.source_record_id FROM 14)
                       )
-                      AND (
-                        ric.citation_replay_after IS NULL
-                        OR ric.citation_replay_after <= NOW()
-                      )
-                      AND (
-                        ric.source_record_id ~ '^[0-9]+$'
-                        OR (
-                          CASE
-                            WHEN COALESCE(
-                                    ric.chunk_metadata->>'citationMetadataVersion', '')
-                                   ~ '^[0-9]{1,9}$'
-                            THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
-                            ELSE -1
-                          END
-                        ) < :version
-                      )
-                    ORDER BY ric.patient_id, ric.source_record_id
+                    ORDER BY replay.replay_after ASC NULLS FIRST,
+                             replay.attempts,
+                             replay.patient_id,
+                             replay.source_record_id
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -346,91 +349,69 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("version") int version,
             @Param("limit") int limit);
 
+    @Transactional
     @Query(
             value = """
-                    WITH source_representatives AS (
-                      SELECT DISTINCT ON (ric.patient_id, ric.source_record_id)
-                             ric.id, ric.patient_id, ric.source_record_id,
-                             ric.source_kind, ric.citation_replay_after
-                      FROM retrieval_index_chunk ric
-                      WHERE ric.record_type IN (:recordTypes)
-                        AND ric.migration_status = 'ACTIVE'
-                        AND ric.source_record_id ~ '^(call-summary:)?[0-9]+$'
-                        AND (
-                          ric.source_kind = 'CALL_SUMMARY'
-                          OR (
-                            ric.source_record_id LIKE 'call-summary:%'
-                            AND ric.source_kind IS NULL
-                          )
-                          OR (
-                            ric.source_record_id ~ '^[0-9]+$'
-                            AND ric.source_kind IS NULL
-                          )
+                    WITH locked_sources AS (
+                      SELECT replay.patient_id, replay.source_kind,
+                             replay.source_record_id
+                      FROM summary_citation_replay_source replay
+                      WHERE replay.source_kind = 'CALL_SUMMARY'
+                        AND replay.migration_status = 'ACTIVE'
+                        AND (replay.replay_after IS NULL OR replay.replay_after <= NOW())
+                        AND (replay.claimed_until IS NULL OR replay.claimed_until <= NOW())
+                        AND EXISTS (
+                          SELECT 1
+                          FROM retrieval_index_chunk ric
+                          WHERE ric.patient_id = replay.patient_id
+                            AND ric.record_type IN (:recordTypes)
+                            AND ric.migration_status = 'ACTIVE'
+                            AND ric.source_kind = replay.source_kind
+                            AND ric.source_record_id = replay.source_record_id
+                            AND CASE
+                                  WHEN COALESCE(
+                                    ric.chunk_metadata->>'citationMetadataVersion', '')
+                                    ~ '^[0-9]{1,9}$'
+                                  THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
+                                  ELSE -1
+                                END < :version
+                          UNION ALL
+                          SELECT 1
+                          FROM retrieval_index_chunk legacy
+                          WHERE legacy.patient_id = replay.patient_id
+                            AND legacy.record_type IN (:recordTypes)
+                            AND legacy.migration_status = 'QUARANTINED'
+                            AND legacy.source_kind IS NULL
+                            AND replay.source_record_id ~ '^call-summary:[0-9]+$'
+                            AND legacy.source_record_id =
+                                SUBSTRING(replay.source_record_id FROM 14)
                         )
-                        AND (
-                          ric.citation_replay_after IS NULL
-                          OR ric.citation_replay_after <= NOW()
-                        )
-                        AND (
-                          ric.citation_replay_claimed_until IS NULL
-                          OR ric.citation_replay_claimed_until <= NOW()
-                        )
-                        AND (
-                          ric.source_record_id ~ '^[0-9]+$'
-                          OR (
-                            CASE
-                            WHEN COALESCE(
-                                      ric.chunk_metadata->>'citationMetadataVersion', '')
-                                     ~ '^[0-9]{1,9}$'
-                              THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
-                              ELSE -1
-                            END
-                          ) < :version
-                        )
-                      ORDER BY ric.patient_id, ric.source_record_id, ric.id
-                    ),
-                    locked_sources AS (
-                      SELECT ric.id, representative.patient_id,
-                             representative.source_record_id,
-                             representative.source_kind
-                      FROM retrieval_index_chunk ric
-                      JOIN source_representatives representative
-                        ON representative.id = ric.id
-                      ORDER BY representative.citation_replay_after NULLS FIRST,
-                               representative.patient_id,
-                               representative.source_record_id
-                      FOR UPDATE OF ric SKIP LOCKED
+                      ORDER BY replay.replay_after ASC NULLS FIRST,
+                               replay.attempts ASC,
+                               replay.patient_id,
+                               replay.source_kind,
+                               replay.source_record_id
+                      FOR UPDATE OF replay SKIP LOCKED
                       LIMIT :limit
                     ),
-                    claimed_rows AS (
-                      UPDATE retrieval_index_chunk ric
-                      SET citation_replay_claimed_until = :claimedUntil,
-                          citation_replay_claim_token = :claimToken
+                    claimed_sources AS (
+                      UPDATE summary_citation_replay_source replay
+                      SET claimed_until = :claimedUntil,
+                          claim_token = :claimToken,
+                          updated_at = NOW()
                       FROM locked_sources candidate
-                      WHERE ric.patient_id = candidate.patient_id
-                        AND ric.source_record_id = candidate.source_record_id
-                        AND ric.record_type IN (:recordTypes)
-                        AND ric.migration_status = 'ACTIVE'
-                        AND (
-                          ric.citation_replay_claimed_until IS NULL
-                          OR ric.citation_replay_claimed_until <= NOW()
-                        )
-                      RETURNING ric.patient_id, ric.source_record_id,
-                                ric.citation_replay_claim_token
+                      WHERE replay.patient_id = candidate.patient_id
+                        AND replay.source_kind = candidate.source_kind
+                        AND replay.source_record_id = candidate.source_record_id
+                      RETURNING replay.patient_id, replay.source_kind,
+                                replay.source_record_id, replay.claim_token
                     )
-                    SELECT candidate.patient_id AS "patientId",
-                           candidate.source_record_id AS "sourceRecordId",
-                           candidate.source_kind AS "sourceKind",
-                           :claimToken AS "claimToken"
-                    FROM locked_sources candidate
-                    WHERE EXISTS (
-                      SELECT 1
-                      FROM claimed_rows claimed
-                      WHERE claimed.patient_id = candidate.patient_id
-                        AND claimed.source_record_id = candidate.source_record_id
-                        AND claimed.citation_replay_claim_token = :claimToken
-                    )
-                    ORDER BY candidate.patient_id, candidate.source_record_id
+                    SELECT claimed.patient_id AS "patientId",
+                           claimed.source_record_id AS "sourceRecordId",
+                           claimed.source_kind AS "sourceKind",
+                           claimed.claim_token AS "claimToken"
+                    FROM claimed_sources claimed
+                    ORDER BY claimed.patient_id, claimed.source_record_id
                     """,
             nativeQuery = true)
     List<SummaryReplayCandidate> claimStaleSummaryCitationSources(
@@ -444,36 +425,25 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Transactional
     @Query(
             value = """
-                    UPDATE retrieval_index_chunk
-                    SET citation_replay_attempts =
-                          CASE WHEN citation_replay_attempts < 2147483647
-                               THEN citation_replay_attempts + 1
+                    UPDATE summary_citation_replay_source
+                    SET attempts =
+                          CASE WHEN attempts < 2147483647
+                               THEN attempts + 1
                                ELSE 2147483647 END,
-                        citation_replay_after = :retryAfter,
-                        citation_replay_claimed_until = NULL,
-                        citation_replay_claim_token = NULL
+                        replay_after = :retryAfter,
+                        claimed_until = NULL,
+                        claim_token = NULL,
+                        updated_at = NOW()
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
-                      AND record_type IN (:recordTypes)
+                      AND source_kind = 'CALL_SUMMARY'
                       AND migration_status = 'ACTIVE'
-                      AND citation_replay_claim_token = :claimToken
-                      AND (
-                        source_kind = 'CALL_SUMMARY'
-                        OR (
-                          source_record_id LIKE 'call-summary:%'
-                          AND source_kind IS NULL
-                        )
-                        OR (
-                          source_record_id ~ '^[0-9]+$'
-                          AND source_kind IS NULL
-                        )
-                      )
+                      AND claim_token = :claimToken
                     """,
             nativeQuery = true)
     int markSummaryCitationReplayFailure(
             @Param("patientId") Long patientId,
             @Param("sourceRecordId") String sourceRecordId,
-            @Param("recordTypes") Collection<String> recordTypes,
             @Param("retryAfter") java.time.OffsetDateTime retryAfter,
             @Param("claimToken") UUID claimToken);
 
@@ -481,36 +451,48 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Transactional
     @Query(
             value = """
-                    UPDATE retrieval_index_chunk
-                    SET citation_replay_claimed_until = NULL,
-                        citation_replay_claim_token = NULL
+                    UPDATE summary_citation_replay_source
+                    SET claimed_until = NULL,
+                        claim_token = NULL,
+                        updated_at = NOW()
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
-                      AND record_type IN (:recordTypes)
+                      AND source_kind = 'CALL_SUMMARY'
                       AND migration_status = 'ACTIVE'
-                      AND citation_replay_claim_token = :claimToken
+                      AND claim_token = :claimToken
                     """,
             nativeQuery = true)
     int releaseSummaryCitationReplayClaim(
             @Param("patientId") Long patientId,
             @Param("sourceRecordId") String sourceRecordId,
-            @Param("recordTypes") Collection<String> recordTypes,
             @Param("claimToken") UUID claimToken);
 
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
             value = """
-                    UPDATE retrieval_index_chunk
+                    WITH fenced AS (
+                      UPDATE summary_citation_replay_source
+                      SET migration_status = 'QUARANTINED',
+                          claimed_until = NULL,
+                          claim_token = NULL,
+                          updated_at = NOW()
+                      WHERE patient_id = :patientId
+                        AND source_record_id = :sourceRecordId
+                        AND source_kind = 'CALL_SUMMARY'
+                        AND migration_status = 'ACTIVE'
+                        AND claim_token = :claimToken
+                      RETURNING patient_id, source_kind, source_record_id
+                    )
+                    UPDATE retrieval_index_chunk ric
                     SET migration_status = 'QUARANTINED',
                         citation_replay_claimed_until = NULL,
                         citation_replay_claim_token = NULL
-                    WHERE patient_id = :patientId
-                      AND source_record_id = :sourceRecordId
-                      AND record_type IN (:recordTypes)
-                      AND migration_status = 'ACTIVE'
-                      AND citation_replay_claim_token = :claimToken
-                      AND (source_kind = 'CALL_SUMMARY' OR source_kind IS NULL)
+                    FROM fenced
+                    WHERE ric.patient_id = fenced.patient_id
+                      AND ric.source_kind = fenced.source_kind
+                      AND ric.source_record_id = fenced.source_record_id
+                      AND ric.record_type IN (:recordTypes)
                     """,
             nativeQuery = true)
     int quarantineSummarySource(
@@ -519,23 +501,49 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("recordTypes") Collection<String> recordTypes,
             @Param("claimToken") UUID claimToken);
 
+    @Modifying
+    @Transactional
+    @Query(
+            value = """
+                    INSERT INTO summary_citation_replay_source (
+                      patient_id, source_kind, source_record_id)
+                    VALUES (:patientId, :sourceKind, :sourceRecordId)
+                    ON CONFLICT (patient_id, source_kind, source_record_id)
+                    DO UPDATE SET migration_status = 'ACTIVE', updated_at = NOW()
+                    """,
+            nativeQuery = true)
+    void registerSummaryCitationReplaySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceKind") String sourceKind,
+            @Param("sourceRecordId") String sourceRecordId);
+
     /**
-     * Explicit reconciliation gate for legacy rows. Call only after the upstream
-     * summary owner and patient scope have both been verified.
+     * Registers authoritative recovery without mutating ambiguous numeric chunks.
+     * Replaying writes a canonical namespaced source; legacy rows remain quarantined.
      */
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
             value = """
-                    UPDATE retrieval_index_chunk
-                    SET source_kind = 'CALL_SUMMARY',
-                        migration_status = 'ACTIVE',
-                        citation_replay_after = NULL
-                    WHERE patient_id = :patientId
-                      AND source_record_id = :sourceRecordId
-                      AND record_type IN (:recordTypes)
-                      AND source_kind IS NULL
-                      AND migration_status = 'QUARANTINED'
+                    INSERT INTO summary_citation_replay_source (
+                      patient_id, source_kind, source_record_id)
+                    SELECT :patientId, 'CALL_SUMMARY', 'call-summary:' || cs.id
+                    FROM call_summaries cs
+                    WHERE cs.id::text = :sourceRecordId
+                      AND cs.patient_id = :patientId
+                      AND EXISTS (
+                        SELECT 1 FROM retrieval_index_chunk ric
+                        WHERE ric.patient_id = :patientId
+                          AND ric.source_record_id = :sourceRecordId
+                          AND ric.record_type IN (:recordTypes)
+                          AND ric.source_kind IS NULL
+                          AND ric.migration_status = 'QUARANTINED')
+                    ON CONFLICT (patient_id, source_kind, source_record_id)
+                    DO UPDATE SET migration_status = 'ACTIVE',
+                                  replay_after = NULL,
+                                  claimed_until = NULL,
+                                  claim_token = NULL,
+                                  updated_at = NOW()
                     """,
             nativeQuery = true)
     int promoteReconciledLegacySummarySource(
@@ -548,7 +556,9 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     UPDATE retrieval_index_chunk
-                    SET migration_status = 'QUARANTINED'
+                    SET migration_status = 'QUARANTINED',
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
@@ -571,7 +581,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             value = """
                     UPDATE retrieval_index_chunk
                     SET migration_status = 'QUARANTINED',
-                        citation_replay_claimed_until = NULL
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
                     WHERE source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
                       AND (source_kind IS NULL OR source_kind = 'CALL_SUMMARY')

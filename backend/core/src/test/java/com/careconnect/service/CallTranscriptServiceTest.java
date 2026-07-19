@@ -111,6 +111,15 @@ class CallTranscriptServiceTest {
                     new CallTranscriptService.TranscriptSegmentInput(" patient ", longText, 50L, 60L, null)
             ));
             inputs.add(1, null);
+            when(callTranscriptSegmentRepository
+                    .findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(List.of(
+                            segment("NURSE1", "hello there", 10L, 20L,
+                                    "localsource", 7L, LocalDateTime.now()),
+                            segment("PATIENT", "x".repeat(1200), 50L, 60L,
+                                    "CLIENT_TRANSCRIPT", 7L, LocalDateTime.now())));
+            when(callTranscriptArchiveService.getArchivedSegments(CALL_ID))
+                    .thenReturn(List.of());
 
             int saved = service.recordSegments("  " + CALL_ID + "  ", 7L, inputs);
 
@@ -134,6 +143,8 @@ class CallTranscriptServiceTest {
                     ArgumentCaptor.forClass(TranscriptIndexedPayload.class);
             verify(indexingEventEmitter).emitTranscriptIndexed(eventCaptor.capture());
             assertThat(eventCaptor.getValue().patientId()).isEqualTo(42L);
+            assertThat(eventCaptor.getValue().totalSegmentCount()).isEqualTo(2);
+            assertThat(eventCaptor.getValue().snapshotVersion()).startsWith("sha256:");
         }
     }
 
@@ -223,6 +234,23 @@ class CallTranscriptServiceTest {
             assertThat(snapshot.transcriptText()).contains("[PATIENT] first", "[NURSE] second");
             assertThat(snapshot.version()).startsWith("sha256:");
             verify(callTranscriptSegmentRepository).findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("authoritative snapshots fail closed when archive content is incomplete")
+        void captureIndexingSnapshot_incompleteArchive_failsClosed() {
+            when(callTranscriptSegmentRepository
+                    .findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(List.of());
+            when(callTranscriptArchiveService.getArchivedSegments(CALL_ID))
+                    .thenReturn(List.of());
+            when(callTranscriptArchiveService.isArchived(CALL_ID)).thenReturn(true);
+            when(callTranscriptArchiveService.getArchivedSegmentCount(CALL_ID))
+                    .thenReturn(3L);
+
+            assertThatThrownBy(() -> service.captureIndexingSnapshot(CALL_ID))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("archive");
         }
     }
 

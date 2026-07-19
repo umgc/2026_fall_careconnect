@@ -117,7 +117,8 @@ public final class BedrockModelSupport {
 
     /**
      * Builds a Bedrock invoke payload with optional system instructions and a user message.
-     * Claude models use the native {@code system} field; Nova models prepend system text to the user message.
+     * Claude and Nova models use native system fields so policy remains separate
+     * from untrusted user/retrieval data in the final provider payload.
      */
     public static String buildChatPayload(
             String modelId,
@@ -133,24 +134,18 @@ public final class BedrockModelSupport {
             String safeSystem = systemPrompt == null ? "" : systemPrompt.trim();
 
             if (isNovaModel(modelId)) {
-                String combinedPrompt = safeSystem.isBlank()
-                        ? safeUser
-                        : safeSystem + "\n\n" + safeUser;
-                Map<String, Object> payload = Map.of(
-                        "messages", List.of(
-                                Map.of(
-                                        "role", "user",
-                                        "content", List.of(
-                                                Map.of("text", combinedPrompt)
-                                        )
-                                )
-                        ),
-                        "inferenceConfig", Map.of(
-                                "maxTokens", maxTokens,
-                                "temperature", temperature,
-                                "topP", topP
-                        )
-                );
+                Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                if (!safeSystem.isBlank()) {
+                    payload.put("system", List.of(Map.of("text", safeSystem)));
+                }
+                payload.put("messages", List.of(
+                        Map.of(
+                                "role", "user",
+                                "content", List.of(Map.of("text", safeUser)))));
+                payload.put("inferenceConfig", Map.of(
+                        "maxTokens", maxTokens,
+                        "temperature", temperature,
+                        "topP", topP));
                 return objectMapper.writeValueAsString(payload);
             }
 

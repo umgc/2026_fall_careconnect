@@ -1,6 +1,7 @@
 package com.careconnect.service;
 
 import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.model.CallSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -19,12 +20,15 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingReque
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingResponse;
+import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
+import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.MediaPlacement;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Meeting;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionResponse;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -391,8 +395,8 @@ class ChimeServiceTest {
         }
 
         @Test
-        @DisplayName("endMeeting swallows AWS exception gracefully")
-        void endMeeting_awsError_swallowsException() {
+        @DisplayName("endMeeting surfaces retryable AWS deletion failures")
+        void endMeeting_awsError_isRetryable() {
             Meeting meeting = buildMeeting(MEETING_ID);
             when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
                     .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
@@ -400,9 +404,30 @@ class ChimeServiceTest {
                     .thenThrow(new RuntimeException("Network error"));
 
             service.createMeeting(CALL_ID);
-            service.endMeeting(CALL_ID); // should not throw
+            assertThatThrownBy(() -> service.endMeeting(CALL_ID))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("Retryable failure");
+        }
 
-            assertThat(service.isMeetingActive(CALL_ID)).isFalse();
+        @Test
+        @DisplayName("new node hydrates a durable meeting before creating another")
+        void createMeeting_afterRestart_hydratesDurableMeeting() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            CallSession session = new CallSession();
+            session.setCallId(CALL_ID);
+            session.setChimeMeetingId(MEETING_ID);
+            when(callSessionRepository.findByCallId(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(chimeSdkMeetingsClient.getMeeting(any(GetMeetingRequest.class)))
+                    .thenReturn(GetMeetingResponse.builder().meeting(meeting).build());
+            ChimeService restarted = new ChimeService(
+                    chimeSdkMeetingsClient, callSessionRepository,
+                    true, false, "en-US", "us-east-1");
+
+            Map<String, Object> result = restarted.createMeeting(CALL_ID);
+
+            assertThat(result.get("meetingId")).isEqualTo(MEETING_ID);
+            verify(chimeSdkMeetingsClient, never()).createMeeting(any(CreateMeetingRequest.class));
         }
     }
 

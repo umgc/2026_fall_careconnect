@@ -143,15 +143,18 @@ public class GroundedAskLlmService {
             final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
             for (final JsonNode claimNode : claimsNode) {
-                final String claimText = textOrEmpty(claimNode, "text").trim();
+                final String claimText =
+                        AskAiTextPolicy.normalize(textOrEmpty(claimNode, "text")).trim();
                 final JsonNode citationsNode = claimNode.get("citations");
                 final List<String> claimRefs = new ArrayList<>();
                 final Map<String, String> evidenceByRef = new LinkedHashMap<>();
                 if (citationsNode != null && citationsNode.isArray()) {
                     for (final JsonNode citationNode : citationsNode) {
-                        final String ref = textOrEmpty(citationNode, "ref").trim();
+                        final String ref =
+                                AskAiTextPolicy.normalize(textOrEmpty(citationNode, "ref")).trim();
                         final String evidence =
-                                textOrEmpty(citationNode, "evidence").trim();
+                                AskAiTextPolicy.normalize(
+                                        textOrEmpty(citationNode, "evidence")).trim();
                         if (!ref.isBlank() && !evidence.isBlank()) {
                             claimRefs.add(ref);
                             evidenceByRef.put(ref, evidence);
