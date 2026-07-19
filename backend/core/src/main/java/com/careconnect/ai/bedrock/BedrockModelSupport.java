@@ -27,6 +27,10 @@ public final class BedrockModelSupport {
             "anthropic.claude-sonnet-4-5-20250929-v1:0",
             "anthropic.claude-sonnet-4-6"
     );
+    public static final Set<String> APPROVED_INFERENCE_PROFILE_IDS = Set.of(
+            "us.anthropic.claude-sonnet-4-20250514-v1:0",
+            "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    );
 
     private static final String NOVA_PREFIX = "amazon.nova";
     private static final String CLAUDE_PREFIX = "anthropic.claude";
@@ -67,10 +71,9 @@ public final class BedrockModelSupport {
         return modelId;
     }
 
-    private static boolean isApprovedModelId(String modelId) {
+    public static boolean isApprovedModelId(String modelId) {
         return APPROVED_MODEL_IDS.contains(modelId)
-                || isApprovedClaudeInferenceProfileId(modelId)
-                || isApprovedClaudeInferenceProfileArn(modelId);
+                || APPROVED_INFERENCE_PROFILE_IDS.contains(modelId);
     }
 
     private static String normalizeKnownClaudeModelToProfile(String modelId) {
@@ -89,19 +92,6 @@ public final class BedrockModelSupport {
                 && (modelId.startsWith(CLAUDE_PREFIX)
                 || modelId.contains(CLAUDE_PROFILE_SEGMENT)
                 || modelId.contains("anthropic.claude"));
-    }
-
-    private static boolean isApprovedClaudeInferenceProfileId(String modelId) {
-        return modelId != null
-                && modelId.contains(CLAUDE_PROFILE_SEGMENT)
-                && !modelId.startsWith("arn:");
-    }
-
-    private static boolean isApprovedClaudeInferenceProfileArn(String modelId) {
-        return modelId != null
-                && modelId.startsWith("arn:aws:bedrock:")
-                && modelId.contains(":inference-profile/")
-                && modelId.contains("anthropic.claude");
     }
 
     public static String buildInvokePayload(

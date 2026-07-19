@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 // Message model for chat
 class ChatMessage {
@@ -16,6 +17,9 @@ class ChatMessage {
   final DateTime timestamp;
   final String? errorMessage;
   final List<AiAskCitation> citations;
+  final AiAskDisclaimer? disclaimer;
+  final AiAskEscalation? escalation;
+  final AiAskConfirmation? confirmation;
 
   ChatMessage({
     required this.text,
@@ -23,6 +27,9 @@ class ChatMessage {
     required this.timestamp,
     this.errorMessage,
     this.citations = const [],
+    this.disclaimer,
+    this.escalation,
+    this.confirmation,
   });
 }
 
@@ -70,6 +77,7 @@ class AIChat extends StatefulWidget {
 
 class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   String _conversationId = "";
+  String? _askSessionId;
   final TextEditingController _controller = TextEditingController();
   final List<ChatMessage> _messages = [];
   final List<UploadedFile> _uploadedFiles = [];
@@ -156,6 +164,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       setState(() {
         _messages.clear();
         _conversationId = "";
+        _askSessionId = null;
         _messages.add(ChatMessage(
           text: '⏰ Chat cleared due to 15 minutes of inactivity',
           isUser: false,
@@ -209,6 +218,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       setState(() {
         _messages.clear();
         _conversationId = "";
+        _askSessionId = null;
         _isLoadingHistory = false;
         _manuallyCleared = true;
       });
@@ -711,10 +721,15 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
       // Only these fields are dynamic for the request
       final useGroundedAsk = currentPatientId != null && _uploadedFiles.isEmpty;
+      if (useGroundedAsk && _conversationId.isEmpty) {
+        _conversationId = const Uuid().v4();
+      }
       final AiAskResult? askResult = useGroundedAsk
           ? await AIChatService.askRecords(
               query: userMessage,
               patientId: currentPatientId,
+              sessionId: _askSessionId,
+              conversationId: _conversationId,
             )
           : null;
       final Map<String, dynamic>? response = useGroundedAsk
@@ -740,6 +755,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       List<AiAskCitation> citations = const [];
 
       if (askResult != null) {
+        _askSessionId = askResult.sessionId ?? _askSessionId;
         citations = askResult.citations;
         switch (askResult.deliveryStatus) {
           case AiAskDeliveryStatus.delivered:
@@ -790,6 +806,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             timestamp: DateTime.now(),
             errorMessage: errorMsg,
             citations: citations,
+            disclaimer: askResult?.disclaimer,
+            escalation: askResult?.escalation,
+            confirmation: askResult?.confirmation,
           ),
         );
         _isLoading = false;
@@ -1053,6 +1072,34 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                     style: theme.textTheme.bodySmall,
                                   ),
                                 ),
+                              ),
+                            ),
+                          ],
+                          if (msg.disclaimer?.aiNoticeRequired == true) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              msg.disclaimer!.text,
+                              key: const Key('ask-ai-disclaimer'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                          if (msg.escalation != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Safety tier ${msg.escalation!.tier}: '
+                              '${msg.escalation!.reason}',
+                              key: const Key('ask-ai-escalation'),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                          if (msg.confirmation?.required == true &&
+                              msg.confirmation?.text?.isNotEmpty == true) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              msg.confirmation!.text!,
+                              key: const Key('ask-ai-confirmation'),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],

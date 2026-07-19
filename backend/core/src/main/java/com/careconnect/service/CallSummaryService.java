@@ -32,6 +32,8 @@ public class CallSummaryService {
   private static final String FAILED_SUMMARY_HEADLINE = "Summary unavailable";
   private static final String FAILED_SUMMARY_ASSESSMENT =
       "Automated summary could not be generated.";
+  private static final List<String> TERMINAL_SUCCESS_STATUSES =
+      List.of("SUCCESS", "NO_TRANSCRIPT");
 
   /** Repository used to persist generated call summaries. */
   private final CallSummaryRepository summaryRepository;
@@ -130,8 +132,12 @@ public class CallSummaryService {
         transcriptService.captureSummarySnapshot(normalizedCallId);
     final String modelConfigVersion = sentimentService.summaryModelConfigVersion();
     final Optional<CallSummary> existing =
-        summaryRepository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
-            normalizedCallId, snapshot.version(), modelConfigVersion);
+        summaryRepository
+            .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+                normalizedCallId,
+                snapshot.version(),
+                modelConfigVersion,
+                TERMINAL_SUCCESS_STATUSES);
     if (existing.isPresent()) {
       return toResponse(existing.get());
     }

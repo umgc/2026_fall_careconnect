@@ -42,7 +42,18 @@ String resolveCallSessionPatientUserId({
   final contextIds =
       (contextPatientUserIds ?? const <int>[]).where((id) => id > 0).toSet();
   if (contextIds.length == 1) return contextIds.single.toString();
-  throw StateError('Outgoing calls require exactly one authoritative patient.');
+  throw StateError(
+    'Select one patient before starting this care-team call.',
+  );
+}
+
+@visibleForTesting
+bool isEventForActiveCall(String? activeCallId, Map<String, dynamic> event) {
+  final eventCallId = (event['callId'] ?? '').toString().trim();
+  return activeCallId != null &&
+      activeCallId.isNotEmpty &&
+      eventCallId.isNotEmpty &&
+      eventCallId == activeCallId;
 }
 
 /// VideoCallService — AWS Chime SDK video call implementation.
@@ -123,11 +134,14 @@ class VideoCallService {
     // Listen for sentiment updates pushed via WebSocket
     _wsSubscription = CallNotificationService.incomingCallStream.listen((data) {
       final type = data['type'] as String?;
+      final belongsToActiveCall = isEventForActiveCall(_currentCallId, data);
       if (type == 'sentiment-update' && _onSentimentUpdate != null) {
+        if (!belongsToActiveCall) return;
         final merged = _mergeSentimentUpdate(data);
         _onSentimentUpdate!(merged);
       }
       if (type == 'sentiment-channel-state' && _onSentimentUpdate != null) {
+        if (!belongsToActiveCall) return;
         final merged = _mergeChannelStateEvent(data);
         _onSentimentUpdate!(merged);
       }
@@ -139,9 +153,11 @@ class VideoCallService {
         }
       }
       if (type == 'call-ended') {
+        if (!belongsToActiveCall) return;
         _handleRemoteCallEnd();
       }
       if (type == 'recording-state') {
+        if (!belongsToActiveCall) return;
         _onRecordingState?.call(data);
       }
     });
@@ -177,9 +193,10 @@ class VideoCallService {
       }),
     );
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception(
-        'Failed to create call session: ${response.statusCode} ${response.body}',
-      );
+      throw Exception(_safeCallFailure(
+        operation: 'create the call session',
+        statusCode: response.statusCode,
+      ));
     }
   }
 
@@ -229,9 +246,10 @@ class VideoCallService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to join call: ${response.statusCode} ${response.body}',
-        );
+        throw Exception(_safeCallFailure(
+          operation: 'join the call',
+          statusCode: response.statusCode,
+        ));
       }
 
       _meetingCredentials = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1052,6 +1070,7 @@ class VideoCallService {
   /// Starts server-side recording of [callId] via AWS Chime Media Capture
   /// Pipeline. Returns the full response body or throws on error.
   Future<Map<String, dynamic>> startRecording(String callId) async {
+    _requireActiveCall(callId);
     final response = await http.post(
       Uri.parse(
         '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/recording/start',
@@ -1064,14 +1083,16 @@ class VideoCallService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
-      'startRecording failed (${response.statusCode}): ${response.body}',
-    );
+    throw Exception(_safeCallFailure(
+      operation: 'start recording',
+      statusCode: response.statusCode,
+    ));
   }
 
   /// Stops an active recording for [callId]. Returns the final recording info
   /// or throws on error.
   Future<Map<String, dynamic>> stopRecording(String callId) async {
+    _requireActiveCall(callId);
     final response = await http.post(
       Uri.parse(
         '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/recording/stop',
@@ -1084,13 +1105,15 @@ class VideoCallService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
-      'stopRecording failed (${response.statusCode}): ${response.body}',
-    );
+    throw Exception(_safeCallFailure(
+      operation: 'stop recording',
+      statusCode: response.statusCode,
+    ));
   }
 
   /// Returns the current recording status for [callId], or null if none.
   Future<Map<String, dynamic>?> getRecordingStatus(String callId) async {
+    if (!_isInCall || _currentCallId != callId.trim()) return null;
     try {
       final response = await http.get(
         Uri.parse(
@@ -1106,6 +1129,28 @@ class VideoCallService {
       debugPrint('⚠️ getRecordingStatus error: $e');
     }
     return null;
+  }
+
+  void _requireActiveCall(String callId) {
+    if (!_isInCall || _currentCallId != callId.trim()) {
+      throw StateError('Recording controls require the active call.');
+    }
+  }
+
+  String _safeCallFailure({
+    required String operation,
+    required int statusCode,
+  }) {
+    if (statusCode == 401) {
+      return 'Your session expired. Please sign in again.';
+    }
+    if (statusCode == 403) {
+      return 'You do not have permission to $operation.';
+    }
+    if (statusCode >= 500) {
+      return 'The call service is temporarily unavailable. Please try again.';
+    }
+    return 'Unable to $operation. Please check the call details and try again.';
   }
 
   // ================================================================

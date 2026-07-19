@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -5,6 +6,56 @@ import 'api_service.dart';
 import '../config/env_constant.dart';
 
 enum AiAskDeliveryStatus { delivered, noRecords, withheld }
+
+class AiAskDisclaimer {
+  final String text;
+  final bool aiNoticeRequired;
+  final bool recordsBasedFraming;
+  final String locale;
+
+  const AiAskDisclaimer({
+    required this.text,
+    required this.aiNoticeRequired,
+    required this.recordsBasedFraming,
+    required this.locale,
+  });
+
+  factory AiAskDisclaimer.fromJson(Map<String, dynamic> json) =>
+      AiAskDisclaimer(
+        text: json['text']?.toString() ?? '',
+        aiNoticeRequired: json['aiNoticeRequired'] == true,
+        recordsBasedFraming: json['recordsBasedFraming'] == true,
+        locale: json['locale']?.toString() ?? 'en-US',
+      );
+}
+
+class AiAskEscalation {
+  final int tier;
+  final String reason;
+  final bool reviewRequired;
+
+  const AiAskEscalation(this.tier, this.reason, this.reviewRequired);
+
+  factory AiAskEscalation.fromJson(Map<String, dynamic> json) =>
+      AiAskEscalation(
+        (json['tier'] as num?)?.toInt() ?? 0,
+        json['reason']?.toString() ?? '',
+        json['requiresClinicianReview'] == true,
+      );
+}
+
+class AiAskConfirmation {
+  final bool required;
+  final String? text;
+
+  const AiAskConfirmation(this.required, this.text);
+
+  factory AiAskConfirmation.fromJson(Map<String, dynamic> json) =>
+      AiAskConfirmation(
+        json['promptConfirmWithProvider'] == true,
+        json['message']?.toString(),
+      );
+}
 
 class AiAskCitation {
   final String citationId;
@@ -51,20 +102,30 @@ class AiAskResult {
   final AiAskDeliveryStatus deliveryStatus;
   final String? requestId;
   final String? sessionId;
+  final String? conversationId;
   final String? answer;
   final String? message;
   final List<AiAskCitation> citations;
   final AiAskError? error;
+  final AiAskDisclaimer? disclaimer;
+  final AiAskEscalation? escalation;
+  final AiAskConfirmation? confirmation;
+  final String? retryInput;
 
   const AiAskResult({
     required this.success,
     required this.deliveryStatus,
     this.requestId,
     this.sessionId,
+    this.conversationId,
     this.answer,
     this.message,
     this.citations = const [],
     this.error,
+    this.disclaimer,
+    this.escalation,
+    this.confirmation,
+    this.retryInput,
   });
 
   factory AiAskResult.fromJson(Map<String, dynamic> json) {
@@ -75,22 +136,58 @@ class AiAskResult {
     };
     final answerJson = json['answer'];
     final errorJson = json['error'];
+    final disclaimerJson = json['disclaimer'];
+    final escalationJson = json['escalation'];
+    final confirmationJson = json['confirmation'];
+    final answer = answerJson is Map<String, dynamic>
+        ? answerJson['text']?.toString().trim()
+        : null;
+    final citations = (json['citations'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(AiAskCitation.fromJson)
+        .toList(growable: false);
+    final disclaimer = disclaimerJson is Map<String, dynamic>
+        ? AiAskDisclaimer.fromJson(disclaimerJson)
+        : null;
+    final escalation = escalationJson is Map<String, dynamic>
+        ? AiAskEscalation.fromJson(escalationJson)
+        : null;
+    final confirmation = confirmationJson is Map<String, dynamic>
+        ? AiAskConfirmation.fromJson(confirmationJson)
+        : null;
+    if (status == AiAskDeliveryStatus.delivered &&
+        (json['success'] != true ||
+            answer == null ||
+            answer.isEmpty ||
+            citations.isEmpty ||
+            disclaimer == null ||
+            !disclaimer.aiNoticeRequired ||
+            !disclaimer.recordsBasedFraming ||
+            disclaimer.text.trim().isEmpty ||
+            escalation == null ||
+            escalation.tier < 1 ||
+            confirmation == null ||
+            !confirmation.required ||
+            confirmation.text?.trim().isNotEmpty != true)) {
+      throw const FormatException(
+        'DELIVERED response violates the Ask AI safety contract',
+      );
+    }
     return AiAskResult(
       success: json['success'] == true,
       deliveryStatus: status,
       requestId: json['requestId']?.toString(),
       sessionId: json['sessionId']?.toString(),
-      answer: answerJson is Map<String, dynamic>
-          ? answerJson['text']?.toString()
-          : null,
+      conversationId: json['conversationId']?.toString(),
+      answer: answer,
       message: json['message']?.toString(),
-      citations: (json['citations'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(AiAskCitation.fromJson)
-          .toList(growable: false),
+      citations: citations,
       error: errorJson is Map<String, dynamic>
           ? AiAskError.fromJson(errorJson)
           : null,
+      disclaimer: disclaimer,
+      escalation: escalation,
+      confirmation: confirmation,
     );
   }
 }
@@ -106,55 +203,80 @@ class AIChatService {
     String? sessionId,
     String? conversationId,
     String locale = 'en-US',
+    List<String>? sourceTypes,
+    Duration timeout = const Duration(seconds: 20),
   }) async {
+    final retryInput = query;
     try {
+      if (sourceTypes != null &&
+          (sourceTypes.length > 16 ||
+              sourceTypes.any((type) => type.trim().isEmpty))) {
+        throw const FormatException('Invalid sourceTypes');
+      }
       final headers = await ApiService.getAuthHeaders();
       headers['Content-Type'] = 'application/json';
       headers['Accept'] = 'application/json';
-      final response = await http.post(
-        Uri.parse('${getBackendBaseUrl()}/api/ai/ask'),
-        headers: headers,
-        body: jsonEncode({
-          'query': query,
-          'patientId': patientId,
-          'inputModality': 'TEXT',
-          'locale': locale,
-          if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
-          if (conversationId != null && conversationId.isNotEmpty)
-            'conversationId': conversationId,
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('${getBackendBaseUrl()}/api/ai/ask'),
+            headers: headers,
+            body: jsonEncode({
+              'query': query,
+              'patientId': patientId,
+              'inputModality': 'TEXT',
+              'locale': locale,
+              if (sessionId != null && sessionId.isNotEmpty)
+                'sessionId': sessionId,
+              if (conversationId != null && conversationId.isNotEmpty)
+                'conversationId': conversationId,
+              if (sourceTypes != null) 'sourceTypes': sourceTypes,
+            }),
+          )
+          .timeout(timeout);
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Ask AI response is not an object');
       }
       return AiAskResult.fromJson(decoded);
     } on FormatException {
-      return const AiAskResult(
+      return AiAskResult(
         success: false,
         deliveryStatus: AiAskDeliveryStatus.withheld,
-        error: AiAskError(
+        error: const AiAskError(
           'INVALID_RESPONSE',
           'Ask AI returned an unexpected response. Please try again.',
         ),
+        retryInput: retryInput,
       );
-    } on http.ClientException {
-      return const AiAskResult(
+    } on TimeoutException {
+      return AiAskResult(
         success: false,
         deliveryStatus: AiAskDeliveryStatus.withheld,
-        error: AiAskError(
+        error: const AiAskError(
+          'TIMEOUT',
+          'Ask AI took too long to respond. Please try again.',
+        ),
+        retryInput: retryInput,
+      );
+    } on http.ClientException {
+      return AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: const AiAskError(
           'NETWORK_ERROR',
           'Unable to connect to Ask AI. Please check your connection.',
         ),
+        retryInput: retryInput,
       );
     } catch (_) {
-      return const AiAskResult(
+      return AiAskResult(
         success: false,
         deliveryStatus: AiAskDeliveryStatus.withheld,
-        error: AiAskError(
+        error: const AiAskError(
           'REQUEST_FAILED',
           'Ask AI could not complete the request. Please try again.',
         ),
+        retryInput: retryInput,
       );
     }
   }

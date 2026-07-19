@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -47,4 +48,26 @@ public class CallSession extends Auditable {
 
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
+
+    @Column(name = "termination_claim_id")
+    private UUID terminationClaimId;
+
+    @Column(name = "termination_claimed_by_user_id")
+    private Long terminationClaimedByUserId;
+
+    @Column(name = "termination_lease_until")
+    private LocalDateTime terminationLeaseUntil;
+
+    @Column(name = "termination_attempt_count", nullable = false)
+    private int terminationAttemptCount;
+
+    @Column(name = "termination_next_retry_at")
+    private LocalDateTime terminationNextRetryAt;
+
+    @Column(name = "termination_last_error", columnDefinition = "TEXT")
+    private String terminationLastError;
+
+    /** Comma-delimited immutable user-id snapshot captured when termination starts. */
+    @Column(name = "termination_notify_user_ids", columnDefinition = "TEXT")
+    private String terminationNotifyUserIds;
 }

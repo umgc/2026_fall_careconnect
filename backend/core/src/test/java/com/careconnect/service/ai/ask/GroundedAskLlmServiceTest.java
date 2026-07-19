@@ -53,7 +53,7 @@ class GroundedAskLlmServiceTest {
     }
 
     @Test
-    @DisplayName("generate returns empty when AWS disabled")
+    @DisplayName("generate classifies disabled AWS as configuration failure")
     void generate_awsDisabled() {
         final GroundedAskLlmService service = new GroundedAskLlmService(
                 mock(BedrockRuntimeClient.class),
@@ -61,7 +61,11 @@ class GroundedAskLlmServiceTest {
                 "amazon.nova-lite-v1:0",
                 false);
 
-        assertThat(service.generate("system", "user")).isEmpty();
+        assertThatThrownBy(() -> service.generate("system", "user"))
+                .isInstanceOfSatisfying(
+                        GroundedProviderException.class,
+                        exception -> assertThat(exception.getKind())
+                                .isEqualTo(GroundedProviderException.Kind.CONFIGURATION));
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.careconnect.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -244,7 +245,8 @@ class CallSessionServiceTest {
 
         assertThat(result.ended()).isTrue();
         assertThat(result.terminationOwner()).isFalse();
-        verify(sessionRepository, never()).beginTermination(any(), any(), any(), any());
+        verify(sessionRepository, never()).beginTermination(
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -268,6 +270,73 @@ class CallSessionServiceTest {
                 10L, CallSessionService.SESSION_CREATED, CallSessionService.SESSION_CANCELLED);
     }
 
+    @Test
+    void leaveOrBeginTermination_capturesRecipientsAndReturnsFencedClaim() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_ACTIVE);
+        final CallParticipant actor = participant(2L, CallSessionService.PARTICIPANT_JOINED);
+        final CallParticipant joined = participant(7L, CallSessionService.PARTICIPANT_JOINED);
+        final CallParticipant invited = participant(9L, CallSessionService.PARTICIPANT_INVITED);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(actor));
+        when(participantRepository.countByCallSessionIdAndStatus(
+                10L, CallSessionService.PARTICIPANT_JOINED)).thenReturn(1L);
+        when(participantRepository.findByCallSessionId(10L))
+                .thenReturn(java.util.List.of(actor, joined, invited));
+        when(sessionRepository.beginTermination(
+                eq(10L), eq(CallSessionService.SESSION_CREATED),
+                eq(CallSessionService.SESSION_ACTIVE),
+                eq(CallSessionService.SESSION_TERMINATING),
+                any(), eq(2L), any(), eq("7,9"))).thenReturn(1);
+
+        final CallSessionService.LeaveResult result =
+                service.leaveOrBeginTermination("call-1", 2L);
+
+        assertThat(result.terminationOwner()).isTrue();
+        assertThat(result.terminationClaimId()).isNotNull();
+        assertThat(result.notifyUserIds()).containsExactly(7L, 9L);
+    }
+
+    @Test
+    void claimTerminationRetry_reusesImmutableRecipientsWithNewFence() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationNotifyUserIds("7,9");
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(2L, CallSessionService.PARTICIPANT_LEFT)));
+        when(sessionRepository.reclaimTermination(
+                eq(10L), eq(CallSessionService.SESSION_TERMINATING),
+                any(), eq(2L), any(), any())).thenReturn(1);
+
+        final CallSessionService.LeaveResult result =
+                service.claimTerminationRetry("call-1", 2L);
+
+        assertThat(result.terminationOwner()).isTrue();
+        assertThat(result.terminationClaimId()).isNotNull();
+        assertThat(result.notifyUserIds()).containsExactly(7L, 9L);
+    }
+
+    @Test
+    void completeTermination_rejectsStaleClaimWithoutExpiringParticipants() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        final java.util.UUID staleClaim = java.util.UUID.randomUUID();
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(sessionRepository.completeTermination(
+                10L,
+                CallSessionService.SESSION_TERMINATING,
+                CallSessionService.SESSION_ENDED,
+                staleClaim)).thenReturn(0);
+
+        assertThat(service.completeTermination("call-1", staleClaim)).isFalse();
+        verify(participantRepository, never()).expireJoinedParticipants(any(), any(), any());
+    }
+
     private static User user(Long id, Role role) {
         User user = new User();
         user.setId(id);
@@ -282,5 +351,13 @@ class CallSessionServiceTest {
         session.setPatientId(patientId);
         session.setStatus(CallSessionService.SESSION_CREATED);
         return session;
+    }
+
+    private static CallParticipant participant(Long userId, String status) {
+        CallParticipant participant = new CallParticipant();
+        participant.setCallSessionId(10L);
+        participant.setUserId(userId);
+        participant.setStatus(status);
+        return participant;
     }
 }

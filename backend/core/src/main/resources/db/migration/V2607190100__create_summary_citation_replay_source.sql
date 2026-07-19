@@ -189,20 +189,68 @@ DO $$ BEGIN
         SELECT 1
         FROM pg_constraint c
         JOIN pg_class t ON t.oid = c.conrelid
-        JOIN pg_namespace n ON n.oid = t.relnamespace
-        WHERE n.nspname = current_schema()
+        JOIN pg_namespace tn ON tn.oid = t.relnamespace
+        JOIN pg_class rt ON rt.oid = c.confrelid
+        JOIN pg_namespace rn ON rn.oid = rt.relnamespace
+        WHERE tn.nspname = current_schema()
           AND t.relname = 'summary_citation_replay_source'
-          AND c.conname = 'fk_summary_replay_patient'
+          AND rn.nspname = current_schema()
+          AND rt.relname = 'patient'
           AND c.contype = 'f'
+          AND c.conkey = ARRAY[(
+              SELECT attnum FROM pg_attribute
+              WHERE attrelid = t.oid
+                AND attname = 'patient_id'
+          )]::smallint[]
+          AND c.confkey = ARRAY[(
+              SELECT attnum FROM pg_attribute
+              WHERE attrelid = rt.oid
+                AND attname = 'id'
+          )]::smallint[]
+          AND c.confdeltype = 'a'
     ) THEN
-        ALTER TABLE summary_citation_replay_source
-            ADD CONSTRAINT fk_summary_replay_patient
-            FOREIGN KEY (patient_id) REFERENCES patient(id) NOT VALID;
+        EXECUTE format(
+            'ALTER TABLE %I.summary_citation_replay_source '
+            'ADD CONSTRAINT fk_summary_replay_patient '
+            'FOREIGN KEY (patient_id) REFERENCES %I.patient(id) NOT VALID',
+            current_schema(), current_schema());
     END IF;
 END $$;
 
-ALTER TABLE summary_citation_replay_source
-    VALIDATE CONSTRAINT fk_summary_replay_patient;
+DO $$
+DECLARE
+    relationship RECORD;
+BEGIN
+    FOR relationship IN
+        SELECT c.conname
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace tn ON tn.oid = t.relnamespace
+        JOIN pg_class rt ON rt.oid = c.confrelid
+        JOIN pg_namespace rn ON rn.oid = rt.relnamespace
+        WHERE tn.nspname = current_schema()
+          AND t.relname = 'summary_citation_replay_source'
+          AND rn.nspname = current_schema()
+          AND rt.relname = 'patient'
+          AND c.contype = 'f'
+          AND c.conkey = ARRAY[(
+              SELECT attnum FROM pg_attribute
+              WHERE attrelid = t.oid
+                AND attname = 'patient_id'
+          )]::smallint[]
+          AND c.confkey = ARRAY[(
+              SELECT attnum FROM pg_attribute
+              WHERE attrelid = rt.oid
+                AND attname = 'id'
+          )]::smallint[]
+          AND c.confdeltype = 'a'
+          AND NOT c.convalidated
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE %I.summary_citation_replay_source VALIDATE CONSTRAINT %I',
+            current_schema(), relationship.conname);
+    END LOOP;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_summary_replay_claim_fair
     ON summary_citation_replay_source

@@ -130,12 +130,34 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyCallSessionPatches();
         if (isPostgreSql()) {
+            applyCallSummaryIdempotencyPatch();
             withRetrievalMigrationLock(this::applyRetrievalIndexChunkPatches);
         } else {
             applyRetrievalIndexChunkPatches();
         }
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
+    }
+
+    /** Production parity for Flyway migration V2607190010. */
+    private void applyCallSummaryIdempotencyPatch() {
+        applyRequiredSqlResource(
+                "V2607190010 – call summary generation idempotency",
+                "db/migration/V2607190010__add_call_summary_generation_idempotency.sql");
+        ensureIndex(
+                "V2607190010 – call summary generation idempotency index",
+                "uq_call_summary_generation_snapshot",
+                false,
+                "CREATE UNIQUE INDEX uq_call_summary_generation_snapshot "
+                        + "ON call_summaries "
+                        + "(call_id, transcript_snapshot_version, model_config_version) "
+                        + "WHERE transcript_snapshot_version IS NOT NULL "
+                        + "AND model_config_version IS NOT NULL",
+                "UNIQUE INDEX",
+                "(call_id, transcript_snapshot_version, model_config_version)",
+                "transcript_snapshot_version IS NOT NULL",
+                "model_config_version IS NOT NULL");
+        verifyCallSummaryIdempotencySchema();
     }
 
     /** Durable call authorization and patient ownership (reference migration V2607182230). */
@@ -198,11 +220,24 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 foreignKeyIfMissing("fk_call_participants_invited_by", "call_participants",
                         "invited_by_user_id", "users", "id", "")
             );
-            verifyConstraints("call session", 6,
-                    "fk_call_sessions_patient", "fk_call_sessions_created_by",
-                    "fk_call_sessions_scheduled_visit",
-                    "fk_call_participants_session", "fk_call_participants_user",
-                    "fk_call_participants_invited_by");
+            verifyForeignKeyCount(
+                    "call session patient", "call_sessions", "patient_id",
+                    "patient", "id", 'a', 1);
+            verifyForeignKeyCount(
+                    "call session creator", "call_sessions", "created_by_user_id",
+                    "users", "id", 'a', 1);
+            verifyForeignKeyCount(
+                    "call session visit", "call_sessions", "scheduled_visit_id",
+                    "scheduled_visits", "id", 'a', 1);
+            verifyForeignKeyCount(
+                    "call participant session", "call_participants", "call_session_id",
+                    "call_sessions", "id", 'c', 1);
+            verifyForeignKeyCount(
+                    "call participant user", "call_participants", "user_id",
+                    "users", "id", 'a', 1);
+            verifyForeignKeyCount(
+                    "call participant inviter", "call_participants", "invited_by_user_id",
+                    "users", "id", 'a', 1);
             applyRequiredPatch(
                 "V2607190015 – harden call lifecycle statuses",
                 "ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS ck_call_sessions_status;" +
@@ -212,6 +247,25 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "ALTER TABLE call_participants ADD CONSTRAINT ck_call_participants_status CHECK " +
                 "(status IN ('INVITED','JOINED','LEFT','DECLINED','EXPIRED'))"
             );
+            applyRequiredSqlResource(
+                    "V2607190200 – recoverable call termination",
+                    "db/migration/V2607190200__add_recoverable_call_termination.sql");
+            ensureIndex(
+                    "V2607190200 – call termination retry index",
+                    "idx_call_sessions_termination_retry",
+                    false,
+                    "CREATE INDEX idx_call_sessions_termination_retry "
+                            + "ON call_sessions "
+                            + "(termination_next_retry_at, termination_lease_until) "
+                            + "WHERE status = 'TERMINATING'",
+                    "INDEX",
+                    "(termination_next_retry_at, termination_lease_until)",
+                    "status",
+                    "TERMINATING");
+            verifyForeignKeyCount(
+                    "call termination claimant", "call_sessions",
+                    "termination_claimed_by_user_id", "users", "id", 'a', 1);
+            verifyCallTerminationSchema();
         }
     }
 
@@ -286,7 +340,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
             "  ON retrieval_index_chunk " +
             "    (citation_replay_after, patient_id, source_record_id) " +
-            "  WHERE migration_status = 'ACTIVE'"
+            "  WHERE migration_status = 'ACTIVE'",
+            "(citation_replay_after, patient_id, source_record_id)",
+            "migration_status = 'ACTIVE'"
         );
         ensureConcurrentIndex(
             "V2607182130c – concurrent retrieval replay claim index",
@@ -295,7 +351,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  ON retrieval_index_chunk " +
             "    (citation_replay_claimed_until, citation_replay_after, " +
             "     patient_id, source_record_id) " +
-            "  WHERE migration_status = 'ACTIVE'"
+            "  WHERE migration_status = 'ACTIVE'",
+            "(citation_replay_claimed_until, citation_replay_after, patient_id, source_record_id)",
+            "migration_status = 'ACTIVE'"
         );
         applyRequiredPatch(
             "V2607182105 – add retrieval source ownership discriminator",
@@ -373,6 +431,36 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyRequiredSqlResource(
                 "V2607190100 – source-level citation replay ownership",
                 "db/migration/V2607190100__create_summary_citation_replay_source.sql");
+        ensureIndex(
+                "V2607190100 – fair source replay claim index",
+                "idx_summary_replay_claim_fair",
+                false,
+                "CREATE INDEX idx_summary_replay_claim_fair "
+                        + "ON summary_citation_replay_source "
+                        + "(replay_after ASC NULLS FIRST, attempts ASC, patient_id, "
+                        + "source_kind, source_record_id) "
+                        + "WHERE migration_status = 'ACTIVE' AND claim_token IS NULL",
+                "(replay_after, attempts, patient_id, source_kind, source_record_id)",
+                "migration_status = 'ACTIVE'",
+                "claim_token IS NULL");
+        ensureIndex(
+                "V2607190100 – expired source replay claim index",
+                "idx_summary_replay_expired_claim",
+                false,
+                "CREATE INDEX idx_summary_replay_expired_claim "
+                        + "ON summary_citation_replay_source "
+                        + "(claimed_until, replay_after ASC NULLS FIRST, patient_id, "
+                        + "source_kind, source_record_id) "
+                        + "WHERE migration_status = 'ACTIVE' AND claim_token IS NOT NULL",
+                "(claimed_until, replay_after, patient_id, source_kind, source_record_id)",
+                "migration_status = 'ACTIVE'",
+                "claim_token IS NOT NULL");
+        verifyForeignKeyCount(
+                "retrieval chunk patient", "retrieval_index_chunk", "patient_id",
+                "patient", "id", 'a', 1);
+        verifyForeignKeyCount(
+                "summary replay patient", "summary_citation_replay_source", "patient_id",
+                "patient", "id", 'a', 1);
         verifyRequiredRetrievalSchema();
     }
 
@@ -525,15 +613,29 @@ public class SchemaPatchRunner implements CommandLineRunner {
     private void ensureConcurrentIndex(
             final String name,
             final String indexName,
-            final String createSql) {
+            final String createSql,
+            final String... expectedDefinitionParts) {
+        ensureIndex(name, indexName, true, createSql, expectedDefinitionParts);
+    }
+
+    private void ensureIndex(
+            final String name,
+            final String indexName,
+            final boolean concurrent,
+            final String createSql,
+            final String... expectedDefinitionParts) {
+        final String definitionChecks = java.util.Arrays.stream(expectedDefinitionParts)
+                .map(part -> " AND POSITION('" + part.replace("'", "''")
+                        + "' IN pg_get_indexdef(i.indexrelid)) > 0")
+                .collect(java.util.stream.Collectors.joining());
         final String statusSql = """
-                SELECT i.indisvalid AND i.indisready
+                SELECT i.indisvalid AND i.indisready%s
                 FROM pg_index i
                 JOIN pg_class c ON c.oid = i.indexrelid
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE c.relname = '%s'
                   AND n.nspname = current_schema()
-                """.formatted(indexName.replace("'", "''"));
+                """.formatted(definitionChecks, indexName.replace("'", "''"));
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);
@@ -547,8 +649,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 }
             }
             if (exists && !healthy) {
-                log.warn("Rebuilding invalid retrieval index: {}", indexName);
-                stmt.execute("DROP INDEX CONCURRENTLY IF EXISTS " + indexName);
+                log.warn("Rebuilding invalid or drifted schema index: {}", indexName);
+                stmt.execute("DROP INDEX " + (concurrent ? "CONCURRENTLY " : "")
+                        + "IF EXISTS " + indexName);
             }
             if (!healthy) {
                 stmt.execute(createSql);
@@ -568,12 +671,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
 
     private void applyRequiredSqlResource(final String name, final String path) {
         try (Connection conn = dataSource.getConnection()) {
-            conn.setAutoCommit(true);
+            conn.setAutoCommit(false);
             try (Statement stmt = conn.createStatement()) {
                 configureDdlTimeouts(stmt);
             }
-            ScriptUtils.executeSqlScript(conn, new ClassPathResource(path));
-            log.info("Required schema patch applied: {}", name);
+            try {
+                ScriptUtils.executeSqlScript(conn, new ClassPathResource(path));
+                conn.commit();
+                log.info("Required schema patch applied: {}", name);
+            } catch (Exception e) {
+                try {
+                    conn.rollback();
+                } catch (Exception rollbackFailure) {
+                    e.addSuppressed(rollbackFailure);
+                }
+                throw e;
+            }
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Required schema patch could not be applied: " + name, e);
@@ -641,37 +754,157 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String referencedColumn,
             final String suffix) {
         return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c " +
-                "JOIN pg_class t ON t.oid = c.conrelid " +
-                "JOIN pg_namespace n ON n.oid = t.relnamespace " +
-                "WHERE n.nspname = current_schema() AND c.conname = '" +
-                constraint + "' AND c.contype = 'f') THEN " +
+                "WHERE c.conrelid = '" + table + "'::regclass " +
+                "AND c.confrelid = '" + referencedTable + "'::regclass " +
+                "AND c.contype = 'f' " +
+                "AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute " +
+                "WHERE attrelid = '" + table + "'::regclass AND attname = '" +
+                column + "')]::smallint[] " +
+                "AND c.confkey = ARRAY[(SELECT attnum FROM pg_attribute " +
+                "WHERE attrelid = '" + referencedTable + "'::regclass AND attname = '" +
+                referencedColumn + "')]::smallint[] " +
+                "AND c.confdeltype = '" + (suffix.contains("CASCADE") ? "c" : "a") +
+                "') THEN " +
                 "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint +
                 " FOREIGN KEY (" + column + ") REFERENCES " + referencedTable +
                 " (" + referencedColumn + ")" + suffix + "; END IF; END $$;";
     }
 
-    private void verifyConstraints(
+    private void verifyForeignKeyCount(
             final String group,
-            final int expected,
-            final String... constraints) {
-        final String names = java.util.Arrays.stream(constraints)
-                .map(name -> "'" + name.replace("'", "''") + "'")
-                .collect(java.util.stream.Collectors.joining(","));
-        final String sql = "SELECT COUNT(*) FROM pg_constraint c " +
-                "JOIN pg_class t ON t.oid = c.conrelid " +
-                "JOIN pg_namespace n ON n.oid = t.relnamespace " +
-                "WHERE n.nspname = current_schema() AND c.contype = 'f' " +
-                "AND c.convalidated AND c.conname IN (" + names + ")";
+            final String table,
+            final String column,
+            final String referencedTable,
+            final String referencedColumn,
+            final char deleteAction,
+            final int expected) {
+        final String sql = "SELECT COUNT(*) FROM pg_constraint c "
+                + "WHERE c.conrelid = '" + table + "'::regclass "
+                + "AND c.confrelid = '" + referencedTable + "'::regclass "
+                + "AND c.contype = 'f' AND c.convalidated "
+                + "AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute "
+                + "WHERE attrelid = '" + table + "'::regclass AND attname = '"
+                + column + "')]::smallint[] "
+                + "AND c.confkey = ARRAY[(SELECT attnum FROM pg_attribute "
+                + "WHERE attrelid = '" + referencedTable + "'::regclass AND attname = '"
+                + referencedColumn + "')]::smallint[] "
+                + "AND c.confdeltype = '" + deleteAction + "'";
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement();
              var result = stmt.executeQuery(sql)) {
             if (!result.next() || result.getInt(1) != expected) {
                 throw new IllegalStateException(
-                        "Required " + group + " constraints verification failed");
+                        "Required " + group + " foreign key count verification failed");
             }
         } catch (Exception e) {
             throw new IllegalStateException(
-                    "Required " + group + " constraints verification failed", e);
+                    "Required " + group + " foreign key count verification failed", e);
+        }
+    }
+
+    private void verifyCallTerminationSchema() {
+        final String sql = """
+                SELECT
+                  (SELECT COUNT(*) FROM information_schema.columns
+                   WHERE table_schema = current_schema()
+                     AND table_name = 'call_sessions'
+                     AND column_name IN (
+                       'termination_claim_id',
+                       'termination_claimed_by_user_id',
+                       'termination_lease_until',
+                       'termination_attempt_count',
+                       'termination_next_retry_at',
+                       'termination_last_error',
+                       'termination_notify_user_ids')) AS column_count,
+                  (SELECT COUNT(*) FROM information_schema.columns
+                   WHERE table_schema = current_schema()
+                     AND table_name = 'call_sessions'
+                     AND column_name = 'termination_attempt_count'
+                     AND is_nullable = 'NO'
+                     AND column_default LIKE '%0%') AS attempt_default_count,
+                  (SELECT COUNT(*) FROM pg_constraint c
+                   WHERE c.conrelid = 'call_sessions'::regclass
+                     AND c.contype = 'c'
+                     AND c.convalidated
+                     AND pg_get_constraintdef(c.oid)
+                       LIKE '%termination_attempt_count >= 0%') AS check_count,
+                  (SELECT COUNT(*) FROM pg_index i
+                   JOIN pg_class idx ON idx.oid = i.indexrelid
+                   JOIN pg_class tbl ON tbl.oid = i.indrelid
+                   JOIN pg_namespace n ON n.oid = tbl.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND tbl.relname = 'call_sessions'
+                     AND idx.relname = 'idx_call_sessions_termination_retry'
+                     AND i.indisvalid AND i.indisready
+                     AND POSITION(
+                       '(termination_next_retry_at, termination_lease_until)'
+                       IN pg_get_indexdef(i.indexrelid)) > 0
+                     AND POSITION(
+                       'status = ''TERMINATING'''
+                       IN pg_get_indexdef(i.indexrelid)) > 0) AS index_count
+                """;
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             var result = stmt.executeQuery(sql)) {
+            if (!result.next()
+                    || result.getInt("column_count") != 7
+                    || result.getInt("attempt_default_count") != 1
+                    || result.getInt("check_count") != 1
+                    || result.getInt("index_count") != 1) {
+                throw new IllegalStateException(
+                        "Required recoverable call termination schema verification failed");
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required recoverable call termination schema verification failed", e);
+        }
+    }
+
+    private void verifyCallSummaryIdempotencySchema() {
+        final String sql = """
+                SELECT
+                  (SELECT COUNT(*) FROM information_schema.columns
+                   WHERE table_schema = current_schema()
+                     AND table_name = 'call_summaries'
+                     AND data_type = 'character varying'
+                     AND is_nullable = 'YES'
+                     AND (
+                       (column_name = 'transcript_snapshot_version'
+                         AND character_maximum_length = 80)
+                       OR
+                       (column_name = 'model_config_version'
+                         AND character_maximum_length = 160)
+                     )) AS column_count,
+                  (SELECT COUNT(*) FROM pg_index i
+                   JOIN pg_class idx ON idx.oid = i.indexrelid
+                   JOIN pg_class tbl ON tbl.oid = i.indrelid
+                   JOIN pg_namespace n ON n.oid = tbl.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND tbl.relname = 'call_summaries'
+                     AND idx.relname = 'uq_call_summary_generation_snapshot'
+                     AND i.indisunique AND i.indisvalid AND i.indisready
+                     AND POSITION(
+                       '(call_id, transcript_snapshot_version, model_config_version)'
+                       IN pg_get_indexdef(i.indexrelid)) > 0
+                     AND POSITION(
+                       'transcript_snapshot_version IS NOT NULL'
+                       IN pg_get_indexdef(i.indexrelid)) > 0
+                     AND POSITION(
+                       'model_config_version IS NOT NULL'
+                       IN pg_get_indexdef(i.indexrelid)) > 0) AS index_count
+                """;
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             var result = stmt.executeQuery(sql)) {
+            if (!result.next()
+                    || result.getInt("column_count") != 2
+                    || result.getInt("index_count") != 1) {
+                throw new IllegalStateException(
+                        "Required call summary idempotency schema verification failed");
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required call summary idempotency schema verification failed", e);
         }
     }
 
@@ -724,13 +957,13 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 expected_constraints(table_name, constraint_name, constraint_type, definition_part) AS (
                   VALUES
                     ('retrieval_index_chunk','retrieval_index_chunk_pkey','p','PRIMARY KEY (id)'),
-                    ('retrieval_index_chunk','fk_retrieval_chunk_patient','f','FOREIGN KEY (patient_id) REFERENCES patient(id)'),
+                    ('retrieval_index_chunk',NULL,'f','FOREIGN KEY (patient_id) REFERENCES patient(id)'),
                     ('retrieval_index_chunk','ck_retrieval_migration_status','c','migration_status'),
                     ('retrieval_index_chunk','ck_retrieval_replay_attempts','c','citation_replay_attempts >= 0'),
                     ('retrieval_index_chunk','ck_retrieval_source_kind','c','source_kind'),
                     ('retrieval_index_chunk','ck_retrieval_replay_lease_token','c','citation_replay_claimed_until'),
                     ('summary_citation_replay_source','pk_summary_citation_replay_source','p','PRIMARY KEY (patient_id, source_kind, source_record_id)'),
-                    ('summary_citation_replay_source','fk_summary_replay_patient','f','FOREIGN KEY (patient_id) REFERENCES patient(id)'),
+                    ('summary_citation_replay_source',NULL,'f','FOREIGN KEY (patient_id) REFERENCES patient(id)'),
                     ('summary_citation_replay_source','ck_summary_replay_status','c','migration_status'),
                     ('summary_citation_replay_source','ck_summary_replay_attempts','c','attempts >= 0'),
                     ('summary_citation_replay_source','ck_summary_replay_source_kind','c','source_kind'),
@@ -763,7 +996,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
                      JOIN pg_namespace n ON n.oid = t.relnamespace
                      WHERE n.nspname = current_schema()
                        AND t.relname = e.table_name
-                       AND c.conname = e.constraint_name
+                       AND (e.constraint_name IS NULL OR c.conname = e.constraint_name)
                        AND c.contype::text = e.constraint_type
                        AND c.convalidated
                        AND POSITION(e.definition_part IN pg_get_constraintdef(c.oid)) > 0

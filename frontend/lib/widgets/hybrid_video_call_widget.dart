@@ -14,6 +14,22 @@ import '../widgets/sentiment_dashboard_widget.dart';
 import '../widgets/chime_meeting_embed.dart';
 import '../features/health/caregiver-patient-list/page/patient_details_page.dart';
 
+@visibleForTesting
+String safeCallSessionError(Object error) {
+  final message = error.toString();
+  if (message.contains('Select one patient')) {
+    return 'Select one patient before starting this care-team call.';
+  }
+  if (message.contains('authentication token') ||
+      message.contains('session expired')) {
+    return 'Your session expired. Please sign in again.';
+  }
+  if (message.contains('permission')) {
+    return 'You do not have permission to start or join this call.';
+  }
+  return 'Unable to start the call. Please check the call details and try again.';
+}
+
 /// HybridVideoCallWidget — video call screen with live sentiment monitoring.
 ///
 /// Layout:
@@ -375,7 +391,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       );
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = safeCallSessionError(e);
         _isLoading = false;
       });
     }

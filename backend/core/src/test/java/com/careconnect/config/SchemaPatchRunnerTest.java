@@ -35,6 +35,8 @@ class SchemaPatchRunnerTest {
         when(statement.executeQuery(anyString())).thenReturn(resultSet);
         when(resultSet.next()).thenReturn(true);
         when(resultSet.getBoolean(1)).thenReturn(true);
+        when(resultSet.getInt("column_count")).thenReturn(2);
+        when(resultSet.getInt("index_count")).thenReturn(1);
         // Call-session catalog verification is PostgreSQL-only; this test targets
         // the independently required retrieval bootstrap failure path.
         when(metadata.getDatabaseProductName()).thenReturn("H2", "PostgreSQL");

@@ -246,9 +246,7 @@ public class CallTranscriptService {
     if (normalizedCallId == null) {
       archived = false;
     } else {
-      final List<CallTranscriptSegment> dbSegments =
-          segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(normalizedCallId);
-      archived = archiveService.archiveIfEligible(normalizedCallId, dbSegments);
+      archived = archiveService.archiveIfEligible(normalizedCallId);
     }
     return archived;
   }

@@ -154,6 +154,7 @@ public class ChimeService {
      */
     public final Map<String, Object> createMeeting(final String callId) {
         log.info("Creating Chime meeting for callId: {}", callId);
+        requireJoinableSession(callId);
 
         // This cache is an optimization only. The durable session and AWS's
         // deterministic idempotency token coordinate concurrent callers/nodes.
@@ -174,8 +175,11 @@ public class ChimeService {
                     .externalMeetingId(callId)
                     .mediaRegion(DEFAULT_MEDIA_REGION)
                     .build();
+            if (!persistMeetingId(callId, localMeeting.meetingId())) {
+                compensateCreatedMeeting(callId, localMeeting.meetingId());
+                throw new IllegalStateException("Call became non-joinable while creating meeting");
+            }
             activeMeetings.put(callId, localMeeting);
-            persistMeetingId(callId, localMeeting.meetingId());
             log.warn("AWS Chime unavailable/disabled; created local mock meeting for callId: {}",
                     callId);
             return buildMeetingResponse(localMeeting);
@@ -191,7 +195,10 @@ public class ChimeService {
             final CreateMeetingResponse response = chimeSdkMeetingsClient.createMeeting(request);
             final Meeting meeting = response.meeting();
 
-            persistMeetingId(callId, meeting.meetingId());
+            if (!persistMeetingId(callId, meeting.meetingId())) {
+                compensateCreatedMeeting(callId, meeting.meetingId());
+                throw new IllegalStateException("Call became non-joinable while creating meeting");
+            }
             // Store only as a local response/credential optimization.
             activeMeetings.put(callId, meeting);
             transcriptionLastMeetingId.put(callId, meeting.meetingId());
@@ -493,15 +500,27 @@ public class ChimeService {
                 ("careconnect-chime:" + callId).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    private void persistMeetingId(final String callId, final String meetingId) {
+    private boolean persistMeetingId(final String callId, final String meetingId) {
         if (callSessionRepository == null) {
-            return;
+            return true;
         }
-        final int updated = callSessionRepository.persistMeetingIdIfAbsent(callId, meetingId);
-        final String persisted = getDurableMeetingId(callId);
-        if (updated == 0 && persisted != null && !persisted.equals(meetingId)) {
+        final int updated = callSessionRepository.persistMeetingIdIfAbsent(
+                callId,
+                meetingId,
+                CallSessionService.SESSION_CREATED,
+                CallSessionService.SESSION_ACTIVE);
+        if (updated == 1) {
+            return true;
+        }
+        final CallSession session = callSessionRepository.findByCallId(callId).orElse(null);
+        if (session == null || !isJoinableStatus(session.getStatus())) {
+            return false;
+        }
+        final String persisted = session.getChimeMeetingId();
+        if (persisted != null && !persisted.equals(meetingId)) {
             throw new IllegalStateException("Call session is already bound to another Chime meeting");
         }
+        return meetingId.equals(persisted);
     }
 
     private String getDurableMeetingId(final String callId) {
@@ -528,6 +547,48 @@ public class ChimeService {
                 return null;
             }
             throw new RuntimeException("Failed to probe durable Chime meeting", e);
+        }
+    }
+
+    private void requireJoinableSession(final String callId) {
+        if (callSessionRepository == null) {
+            return;
+        }
+        final CallSession session = callSessionRepository.findByCallId(callId)
+                .orElseThrow(() -> new IllegalStateException("Call session does not exist"));
+        if (!isJoinableStatus(session.getStatus())) {
+            throw new IllegalStateException("Call is no longer joinable");
+        }
+    }
+
+    private boolean isJoinableStatus(final String status) {
+        return CallSessionService.SESSION_CREATED.equals(status)
+                || CallSessionService.SESSION_ACTIVE.equals(status);
+    }
+
+    private void compensateCreatedMeeting(final String callId, final String meetingId) {
+        activeMeetings.remove(callId);
+        attendeeCredentials.remove(callId);
+        if (!isAwsChimeAvailable()) {
+            return;
+        }
+        try {
+            chimeSdkMeetingsClient.deleteMeeting(
+                    DeleteMeetingRequest.builder().meetingId(meetingId).build());
+        } catch (software.amazon.awssdk.services.chimesdkmeetings.model.ChimeSdkMeetingsException e) {
+            if (e.statusCode() != 404) {
+                log.error(
+                        "Failed to compensate Chime meeting {} after call {} lost join race",
+                        meetingId,
+                        callId,
+                        e);
+            }
+        } catch (RuntimeException e) {
+            log.error(
+                    "Failed to compensate Chime meeting {} after call {} lost join race",
+                    meetingId,
+                    callId,
+                    e);
         }
     }
 

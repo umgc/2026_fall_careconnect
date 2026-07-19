@@ -35,7 +35,7 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     @Query("""
             UPDATE CallParticipant p
                SET p.status = :joined, p.joinedAt = COALESCE(p.joinedAt, CURRENT_TIMESTAMP),
-                   p.leftAt = NULL
+                   p.leftAt = NULL, p.updatedAt = CURRENT_TIMESTAMP
              WHERE p.callSessionId = :sessionId AND p.userId = :userId
                AND p.status IN (:invited, :joined)
             """)
@@ -48,7 +48,8 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     @Modifying
     @Transactional
     @Query("""
-            UPDATE CallParticipant p SET p.status = :left, p.leftAt = CURRENT_TIMESTAMP
+            UPDATE CallParticipant p SET p.status = :left, p.leftAt = CURRENT_TIMESTAMP,
+                   p.updatedAt = CURRENT_TIMESTAMP
              WHERE p.callSessionId = :sessionId AND p.userId = :userId
                AND p.status = :joined
             """)
@@ -61,7 +62,8 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     @Modifying
     @Transactional
     @Query("""
-            UPDATE CallParticipant p SET p.status = :expired, p.leftAt = CURRENT_TIMESTAMP
+            UPDATE CallParticipant p SET p.status = :expired, p.leftAt = CURRENT_TIMESTAMP,
+                   p.updatedAt = CURRENT_TIMESTAMP
              WHERE p.callSessionId = :sessionId AND p.status = :joined
             """)
     int expireJoinedParticipants(
@@ -72,7 +74,8 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     @Modifying
     @Transactional
     @Query("""
-            UPDATE CallParticipant p SET p.status = :declined, p.leftAt = CURRENT_TIMESTAMP
+            UPDATE CallParticipant p SET p.status = :declined, p.leftAt = CURRENT_TIMESTAMP,
+                   p.updatedAt = CURRENT_TIMESTAMP
              WHERE p.callSessionId = :sessionId AND p.userId = :userId
                AND p.status = :invited
             """)

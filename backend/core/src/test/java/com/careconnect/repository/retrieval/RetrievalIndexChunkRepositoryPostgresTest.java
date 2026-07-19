@@ -27,6 +27,7 @@ import java.util.concurrent.Executors;
 import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=none",
@@ -404,6 +405,131 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         assertThat(indexReadyAndValid("idx_retrieval_summary_replay")).isTrue();
     }
 
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void productionBootstrap_upgradesOldCallSummarySchemaAndRepairsReplayIndexes() {
+        prepareBootstrapDependencies();
+        jdbcTemplate.execute("DROP TABLE IF EXISTS call_summaries CASCADE");
+        jdbcTemplate.execute("""
+                CREATE TABLE call_summaries (
+                  id BIGSERIAL PRIMARY KEY,
+                  call_id VARCHAR(120) NOT NULL,
+                  patient_id BIGINT,
+                  summary_json TEXT NOT NULL,
+                  status VARCHAR(24) NOT NULL,
+                  generated_at TIMESTAMP NOT NULL)
+                """);
+        jdbcTemplate.execute("""
+                CREATE INDEX uq_call_summary_generation_snapshot
+                ON call_summaries (call_id)
+                """);
+        jdbcTemplate.execute("DROP INDEX IF EXISTS idx_summary_replay_claim_fair");
+        jdbcTemplate.execute("""
+                CREATE INDEX idx_summary_replay_claim_fair
+                ON summary_citation_replay_source (patient_id)
+                """);
+        jdbcTemplate.execute("DROP INDEX IF EXISTS idx_summary_replay_expired_claim");
+        jdbcTemplate.execute("""
+                CREATE INDEX idx_summary_replay_expired_claim
+                ON summary_citation_replay_source (source_record_id)
+                """);
+        jdbcTemplate.execute("""
+                ALTER TABLE summary_citation_replay_source
+                ADD CONSTRAINT legacy_summary_replay_patient_fk
+                FOREIGN KEY (patient_id) REFERENCES patient(id) NOT VALID
+                """);
+
+        new SchemaPatchRunner(dataSource).run();
+        new SchemaPatchRunner(dataSource).run();
+
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'call_summaries'
+                  AND column_name IN (
+                    'transcript_snapshot_version', 'model_config_version')
+                """, Integer.class)).isEqualTo(2);
+        assertThat(indexDefinition("uq_call_summary_generation_snapshot"))
+                .contains("UNIQUE INDEX")
+                .contains("(call_id, transcript_snapshot_version, model_config_version)")
+                .contains("transcript_snapshot_version IS NOT NULL")
+                .contains("model_config_version IS NOT NULL");
+        assertThat(indexDefinition("idx_summary_replay_claim_fair"))
+                .contains("(replay_after, attempts, patient_id, source_kind, source_record_id)")
+                .contains("migration_status")
+                .contains("claim_token IS NULL");
+        assertThat(indexDefinition("idx_summary_replay_expired_claim"))
+                .contains("(claimed_until, replay_after, patient_id, source_kind, source_record_id)")
+                .contains("migration_status")
+                .contains("claim_token IS NOT NULL");
+        assertThat(indexReadyAndValid("uq_call_summary_generation_snapshot")).isTrue();
+        assertThat(indexReadyAndValid("idx_summary_replay_claim_fair")).isTrue();
+        assertThat(indexReadyAndValid("idx_summary_replay_expired_claim")).isTrue();
+        assertThat(equivalentForeignKeyCount(
+                "summary_citation_replay_source", "patient_id", "patient", "id", "a"))
+                .isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT convalidated FROM pg_constraint
+                WHERE conname = 'legacy_summary_replay_patient_fk'
+                  AND connamespace = (
+                    SELECT oid FROM pg_namespace WHERE nspname = current_schema())
+                """, Boolean.class)).isTrue();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void productionBootstrap_rollsBackCallSummaryResourceOnFailure() {
+        prepareBootstrapDependencies();
+        jdbcTemplate.execute("DROP TABLE IF EXISTS call_summaries CASCADE");
+        jdbcTemplate.execute("""
+                CREATE TABLE call_summaries (
+                  id BIGSERIAL PRIMARY KEY,
+                  patient_id BIGINT,
+                  summary_json TEXT NOT NULL,
+                  status VARCHAR(24) NOT NULL,
+                  generated_at TIMESTAMP NOT NULL)
+                """);
+        try {
+            assertThatThrownBy(() -> new SchemaPatchRunner(dataSource).run())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("V2607190010");
+            assertThat(jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'call_summaries'
+                      AND column_name IN (
+                        'transcript_snapshot_version', 'model_config_version')
+                    """, Integer.class)).isZero();
+        } finally {
+            jdbcTemplate.execute("DROP TABLE call_summaries CASCADE");
+            prepareBootstrapDependencies();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void productionBootstrap_rollsBackReplayResourceOnFailure() {
+        prepareBootstrapDependencies();
+        jdbcTemplate.execute("DROP TABLE summary_citation_replay_source");
+        jdbcTemplate.execute("DROP TABLE call_summaries CASCADE");
+        jdbcTemplate.execute("""
+                CREATE TABLE call_summaries (
+                  call_id VARCHAR(120) NOT NULL)
+                """);
+        try {
+            assertThatThrownBy(() -> new SchemaPatchRunner(dataSource).run())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("V2607190100");
+            assertThat(jdbcTemplate.queryForObject("""
+                    SELECT to_regclass(
+                      current_schema() || '.summary_citation_replay_source') IS NULL
+                    """, Boolean.class)).isTrue();
+        } finally {
+            jdbcTemplate.execute("DROP TABLE call_summaries CASCADE");
+            prepareBootstrapDependencies();
+        }
+    }
+
     private List<String> staleSources() {
         return repository.findStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
@@ -444,6 +570,10 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY, email VARCHAR(255))");
         jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS patient (id BIGINT PRIMARY KEY, user_id BIGINT)");
         jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS scheduled_visits (
+                  id BIGINT PRIMARY KEY)
+                """);
+        jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS call_summaries (
                   id BIGINT PRIMARY KEY, patient_id BIGINT, summary_json TEXT,
                   status VARCHAR(24), generated_at TIMESTAMP)
@@ -452,6 +582,41 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                 CREATE TABLE IF NOT EXISTS indexing_outbox (
                   id BIGSERIAL PRIMARY KEY, processed_at TIMESTAMPTZ)
                 """);
+    }
+
+    private String indexDefinition(final String indexName) {
+        return jdbcTemplate.queryForObject("""
+                SELECT pg_get_indexdef(i.indexrelid)
+                FROM pg_index i
+                JOIN pg_class c ON c.oid = i.indexrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = current_schema() AND c.relname = ?
+                """, String.class, indexName);
+    }
+
+    private int equivalentForeignKeyCount(
+            final String table,
+            final String column,
+            final String referencedTable,
+            final String referencedColumn,
+            final String deleteAction) {
+        return jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM pg_constraint c
+                WHERE c.conrelid = CAST(? AS regclass)
+                  AND c.confrelid = CAST(? AS regclass)
+                  AND c.contype = 'f'
+                  AND c.conkey = ARRAY[(
+                    SELECT attnum FROM pg_attribute
+                    WHERE attrelid = CAST(? AS regclass) AND attname = ?
+                  )]::smallint[]
+                  AND c.confkey = ARRAY[(
+                    SELECT attnum FROM pg_attribute
+                    WHERE attrelid = CAST(? AS regclass) AND attname = ?
+                  )]::smallint[]
+                  AND c.confdeltype = CAST(? AS "char")
+                """, Integer.class,
+                table, referencedTable, table, column,
+                referencedTable, referencedColumn, deleteAction);
     }
 
     private boolean indexReadyAndValid(final String indexName) {
