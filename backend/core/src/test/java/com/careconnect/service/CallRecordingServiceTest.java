@@ -1712,6 +1712,8 @@ class CallRecordingServiceTest {
                     .isEqualTo(MediaStreamType.INDIVIDUAL_AUDIO);
             assertThat(requestCaptor.getValue().sinks().get(0).sinkArn()).isEqualTo(STREAM_POOL_ARN);
             assertThat(requestCaptor.getValue().sinks().get(0).reservedStreamCapacity()).isEqualTo(4);
+            assertThat(requestCaptor.getValue().clientRequestToken())
+                    .isEqualTo(CallRecordingService.mediaStreamPipelineClientRequestToken(CALL_ID));
         }
 
         @Test
@@ -1889,6 +1891,28 @@ class CallRecordingServiceTest {
             assertThat(result).containsEntry("status", "STARTED");
             assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
             assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+
+            final ArgumentCaptor<CreateMediaStreamPipelineRequest> tokenCaptor =
+                    ArgumentCaptor.forClass(CreateMediaStreamPipelineRequest.class);
+            verify(pipelinesClient).createMediaStreamPipeline(tokenCaptor.capture());
+            assertThat(tokenCaptor.getValue().clientRequestToken())
+                    .isEqualTo(CallRecordingService.mediaStreamPipelineClientRequestToken(CALL_ID));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-044: returns ALREADY_STARTED when DB already has media_stream_pipeline_id")
+        void startMediaStreamPipeline_dbAlreadyHasId_skipsCreate() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            final CallRecording systemRecording = buildRecording("STARTED");
+            systemRecording.setMediaStreamPipelineId(MEDIA_STREAM_PIPELINE_ID);
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            final Map<String, Object> result = service.startMediaStreamPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "ALREADY_STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            verify(pipelinesClient, never()).createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class));
         }
     }
 

@@ -313,6 +313,8 @@ For local speaker-ID testing, set in `.env` (see `.env.example`):
 - `CARECONNECT_KVS_STREAM_POOL_ARN=<Chime KVS stream pool ARN>`
 - `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` — **required for reliable local discovery**
   (EventBridge → ngrok → laptop; see **§7b** / **§7c**)
+- `CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET` — must match EventBridge connection
+  `ApiKeyValue` (local wire script uses `local-dev`; ECS uses `careconnect-${Environment}-kvs-discovery`)
 
 Optional: `CARECONNECT_KVS_STREAM_DISCOVERY_TIMEOUT_MS` (default 60000).
 
@@ -500,12 +502,23 @@ Backend must be listening on port **8080** (or change both ngrok and the script)
 .\scripts\wire-chime-kvs-eventbridge-local.ps1 -NgrokBaseUrl https://YOUR-STABLE-SUBDOMAIN.ngrok-free.app
 ```
 
-Ensure `.env` has `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` and restart the backend.
+Ensure `.env` has `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED=true` and
+`CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET=local-dev` (must match the wire script
+`ApiKeyValue`), then restart the backend.
 
-Quick probe (should return HTTP 200 from your machine through the tunnel):
+**Security:** ngrok exposes this webhook on the public internet. The shared secret in
+`X-EventBridge-Connection` is required — do not leave it blank, and do not commit
+production secrets.
 
-```text
-curl -X POST https://YOUR-STABLE-SUBDOMAIN.ngrok-free.app/api/internal/chime/media-stream-events -H "Content-Type: application/json" -d "{\"detail\":{}}"
+Quick probe (should return empty/200; must include the auth header). In PowerShell use
+`Invoke-RestMethod` (plain `curl` is aliased to `Invoke-WebRequest`):
+
+```powershell
+Invoke-RestMethod -Method POST `
+  -Uri "https://YOUR-STABLE-SUBDOMAIN.ngrok-free.app/api/internal/chime/media-stream-events" `
+  -Headers @{ "X-EventBridge-Connection" = "local-dev" } `
+  -ContentType "application/json" `
+  -Body '{"detail":{}}'
 ```
 
 ## 8) Fast troubleshooting
