@@ -24,8 +24,9 @@ class AiAskCoverageTest {
         assertThat(source).contains("careconnect.ai.ask.enabled");
         assertThat(source).contains("resolveCurrentUser");
         assertThat(source).contains("ForbiddenScopeException");
-        assertThat(source).contains("AskAiGroundingException");
-        assertThat(source).contains("HttpStatus.BAD_GATEWAY");
+        assertThat(source).contains("AskAiException");
+        assertThat(source).contains("ex.getStatus()");
+        assertThat(source).contains("ex.getRequestId()");
         assertThat(source).contains("deliveryStatus=WITHHELD");
     }
 

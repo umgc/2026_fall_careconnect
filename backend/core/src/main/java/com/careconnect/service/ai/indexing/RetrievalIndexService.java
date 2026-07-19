@@ -163,9 +163,11 @@ public class RetrievalIndexService {
                                 .toInstant()
                                 .toString());
         final List<RetrievalIndexChunk> existing =
-                chunkRepository.findByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+                chunkRepository.findCallSummaryChunksForReplacement(
                         patientId,
-                        sourceRecordIds,
+                        sourceRecordId,
+                        legacySourceRecordId,
+                        SummarySourceKey.CALL_KIND,
                         RetrievalRecordType.summaryTypeNames());
 
         if (drafts.isEmpty()) {
@@ -189,11 +191,14 @@ public class RetrievalIndexService {
                     "contentHash and citation metadata unchanged");
         }
 
-        chunkRepository.deleteByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+        chunkRepository.deleteCallSummaryChunksForReplacement(
                 patientId,
-                sourceRecordIds,
+                sourceRecordId,
+                legacySourceRecordId,
+                SummarySourceKey.CALL_KIND,
                 RetrievalRecordType.summaryTypeNames());
-        return persistDrafts(patientId, sourceRecordId, drafts);
+        return persistDrafts(
+                patientId, sourceRecordId, drafts, SummarySourceKey.CALL_KIND);
     }
 
     /**
@@ -201,13 +206,32 @@ public class RetrievalIndexService {
      * The row lock serializes this operation with normal outbox ingestion.
      */
     @Transactional
-    public int replaySummaryCitationMetadata(final Long summaryId) {
+    public SummaryCitationReplayOutcome replaySummaryCitationMetadata(final Long summaryId) {
         if (summaryId == null) {
             throw new IllegalArgumentException("summaryId is required");
         }
         final CallSummary summary = callSummaryRepository.findByIdForUpdate(summaryId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + summaryId));
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        final List<IndexingChunkDraft> expectedDrafts = summaryChunker.chunk(
+                "call",
+                summary.getSummaryJson(),
+                contentHash,
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                summary.getCallId(),
+                summary.getGeneratedAt() == null
+                        ? null
+                        : summary.getGeneratedAt()
+                                .atZone(ZoneOffset.UTC)
+                                .toInstant()
+                                .toString());
+        if (expectedDrafts.isEmpty()
+                || (summary.getStatus() != null
+                    && !"SUCCESS".equalsIgnoreCase(summary.getStatus().trim()))) {
+            return SummaryCitationReplayOutcome.NO_DRAFTS;
+        }
         final SummaryCreatedPayload replay = new SummaryCreatedPayload(
                 "call",
                 "call_summaries",
@@ -219,8 +243,11 @@ public class RetrievalIndexService {
                 summary.getTranscriptSegmentCount(),
                 summary.getCaregiverVisibility(),
                 summary.getSummarizationEngine(),
-                ContentHashUtil.sha256(summary.getSummaryJson()));
-        return ingestSummaryCreated(replay);
+                contentHash);
+        final int written = ingestSummaryCreated(replay);
+        return written > 0
+                ? SummaryCitationReplayOutcome.UPDATED
+                : SummaryCitationReplayOutcome.CURRENT;
     }
 
     /**
@@ -353,6 +380,14 @@ public class RetrievalIndexService {
             final Long patientId,
             final String sourceRecordId,
             final List<IndexingChunkDraft> drafts) {
+        return persistDrafts(patientId, sourceRecordId, drafts, null);
+    }
+
+    private int persistDrafts(
+            final Long patientId,
+            final String sourceRecordId,
+            final List<IndexingChunkDraft> drafts,
+            final String sourceKind) {
         final OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         final List<RetrievalIndexChunk> entities = new ArrayList<>(drafts.size());
         for (final IndexingChunkDraft draft : drafts) {
@@ -363,6 +398,7 @@ public class RetrievalIndexService {
                     .patientId(patientId)
                     .recordType(draft.recordType().name())
                     .sourceRecordId(truncateSourceId(sourceRecordId))
+                    .sourceKind(sourceKind)
                     .chunkText(draft.chunkText())
                     .chunkMetadata(toJson(draft.metadata()))
                     .consentScope(truncateConsent(draft.consentScope()))
@@ -426,6 +462,7 @@ public class RetrievalIndexService {
             final JsonNode metadata = parseChunkMetadata(chunk.getChunkMetadata());
             if (metadata == null
                     || !expectedSourceRecordId.equals(chunk.getSourceRecordId())
+                    || !SummarySourceKey.CALL_KIND.equals(chunk.getSourceKind())
                     || !contentHash.equals(metadata.path("contentHash").asText(null))
                     || metadata.path("citationMetadataVersion").asInt(-1)
                             < SummaryChunker.CITATION_METADATA_VERSION

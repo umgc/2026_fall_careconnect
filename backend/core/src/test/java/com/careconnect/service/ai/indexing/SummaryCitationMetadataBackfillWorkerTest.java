@@ -40,6 +40,8 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION,
                 2)).thenReturn(List.of("not-a-number", "42"));
+        when(retrievalIndexService.replaySummaryCitationMetadata(42L))
+                .thenReturn(SummaryCitationReplayOutcome.CURRENT);
 
         worker.pollAndBackfill();
 
@@ -58,6 +60,8 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 2)).thenReturn(List.of("41", "call-summary:42"));
         when(retrievalIndexService.replaySummaryCitationMetadata(41L))
                 .thenThrow(new IllegalStateException("failed"));
+        when(retrievalIndexService.replaySummaryCitationMetadata(42L))
+                .thenReturn(SummaryCitationReplayOutcome.CURRENT);
 
         worker.pollAndBackfill();
 
@@ -76,11 +80,30 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION,
                 2)).thenReturn(List.of("42"), List.of());
+        when(retrievalIndexService.replaySummaryCitationMetadata(42L))
+                .thenReturn(SummaryCitationReplayOutcome.UPDATED);
 
         worker.pollAndBackfill();
         worker.pollAndBackfill();
 
         verify(retrievalIndexService).replaySummaryCitationMetadata(42L);
         verify(retrievalIndexService, never()).replaySummaryCitationMetadata(43L);
+    }
+
+    @Test
+    void pollAndBackfill_noDraftOutcomeIsBackedOff() {
+        when(chunkRepository.findStaleSummaryCitationSourceIds(
+                RetrievalRecordType.summaryTypeNames(),
+                SummaryChunker.CITATION_METADATA_VERSION,
+                2)).thenReturn(List.of("call-summary:42"));
+        when(retrievalIndexService.replaySummaryCitationMetadata(42L))
+                .thenReturn(SummaryCitationReplayOutcome.NO_DRAFTS);
+
+        worker.pollAndBackfill();
+
+        verify(chunkRepository).markSummaryCitationReplayFailure(
+                org.mockito.ArgumentMatchers.eq("call-summary:42"),
+                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                any());
     }
 }

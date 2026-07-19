@@ -5,6 +5,9 @@ import java.util.Optional;
 /** Namespaced retrieval source keys for summary tables with independent numeric IDs. */
 public final class SummarySourceKey {
 
+    public static final String CALL_KIND = "CALL_SUMMARY";
+    public static final String VISIT_KIND = "VISIT_SUMMARY";
+
     private static final String CALL_PREFIX = "call-summary:";
     private static final String VISIT_PREFIX = "visit-summary:";
 

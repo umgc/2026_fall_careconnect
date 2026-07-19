@@ -139,6 +139,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  patient_id        BIGINT        NOT NULL," +
             "  record_type       VARCHAR(40)   NOT NULL," +
             "  source_record_id  VARCHAR(120)  NOT NULL," +
+            "  source_kind       VARCHAR(40)   NULL," +
             "  chunk_text        TEXT          NOT NULL," +
             "  chunk_metadata    JSONB         NULL," +
             "  search_vector     TSVECTOR      NULL," +
@@ -146,6 +147,13 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
             "  consent_scope     VARCHAR(40)   NULL" +
             ")"
+        );
+        applyPatch(
+            "V2607182105 – add retrieval source ownership discriminator",
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL;" +
+            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source_identity " +
+            "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
         );
         applyPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
