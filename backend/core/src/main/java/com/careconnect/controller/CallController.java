@@ -1496,9 +1496,10 @@ public class CallController {
         return target;
       }
     }
+    // Prefer server PATIENT actors; context ids are already PATIENT-validated in extract.
     for (final CallTelemetryEvent event : events) {
       final Long fromContext = extractContextPatientUserId(event);
-      if (fromContext != null && isPatientUser(fromContext)) {
+      if (fromContext != null) {
         return fromContext;
       }
     }
@@ -1527,12 +1528,16 @@ public class CallController {
       if (multi instanceof List<?> values) {
         for (final Object value : values) {
           final Long parsed = asLong(value);
-          if (parsed != null) {
+          if (parsed != null && isPatientUser(parsed)) {
             return parsed;
           }
         }
       }
-      return asLong(metadata.get("contextPatientUserId"));
+      final Long single = asLong(metadata.get("contextPatientUserId"));
+      if (single != null && isPatientUser(single)) {
+        return single;
+      }
+      return null;
     } catch (Exception ignored) {
       return null;
     }

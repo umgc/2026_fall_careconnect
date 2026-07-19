@@ -1896,6 +1896,39 @@ class CallControllerTest {
 
             verify(callSessionService).requirePatientEntityAccess(caregiverUser, 77L);
         }
+
+        @Test
+        @DisplayName("GET /{callId}/summary scans contextPatientUserIds for first PATIENT role")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void getSummaryScansContextPatientUserIdsForPatient() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.NOT_FOUND, "Call not found"));
+            when(callSummaryService.getLatestSummaryEntity(CALL_ID)).thenReturn(Optional.empty());
+
+            final CallTelemetryEvent contextList = new CallTelemetryEvent();
+            contextList.setActorUserId(2L);
+            contextList.setMetadataJson(
+                    "{\"contextPatientUserIds\":[98,1]}");
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID))
+                    .thenReturn(List.of(contextList));
+            when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
+            when(userRepository.findById(98L)).thenReturn(Optional.of(
+                    buildUser(98L, "family@test.com", Role.FAMILY_MEMBER)));
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            doNothing().when(callSessionService)
+                    .requirePatientUserAccess(caregiverUser, 1L);
+            when(callSummaryService.getLatestSummary(CALL_ID))
+                    .thenReturn(Optional.of(Map.of("status", "GENERATED")));
+
+            mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+
+            verify(callSessionService).requirePatientUserAccess(caregiverUser, 1L);
+            verify(callSessionService, never()).requirePatientUserAccess(caregiverUser, 98L);
+        }
     }
 
     // 

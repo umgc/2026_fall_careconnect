@@ -339,6 +339,32 @@ class ChimeServiceTest {
         }
 
         @Test
+        @DisplayName("createAttendee tolerates null mediaPlacement without NPE")
+        void createAttendee_nullMediaPlacement_returnsEmptyPlacementUrls() {
+            Meeting meeting = Meeting.builder()
+                    .meetingId(MEETING_ID)
+                    .externalMeetingId(CALL_ID)
+                    .mediaRegion("us-east-1")
+                    .build();
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
+                    .thenReturn(ListAttendeesResponse.builder().attendees(List.of()).build());
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenReturn(CreateAttendeeResponse.builder().attendee(buildAttendee()).build());
+
+            service.createMeeting(CALL_ID);
+            Map<String, Object> result = service.createAttendee(
+                    CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(result.get("attendeeId")).isEqualTo("attendee-xyz");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> placement = (Map<String, Object>) result.get("mediaPlacement");
+            assertThat(placement.get("audioHostUrl")).isEqualTo("");
+            assertThat(placement.get("signalingUrl")).isEqualTo("");
+        }
+
+        @Test
         @DisplayName("concurrent same-user joins create one Chime attendee")
         void createAttendee_concurrentSameUser_createsOnce() throws Exception {
             Meeting meeting = buildMeeting(MEETING_ID);
