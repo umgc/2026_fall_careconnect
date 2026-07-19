@@ -52,6 +52,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -189,6 +191,28 @@ class CallRecordingServiceTest {
 
             assertThat(result).containsEntry("status", "ALREADY_RECORDING");
             assertThat(result).containsKey("pipelineId");
+        }
+
+        @Test
+        @DisplayName("returns ALREADY_RECORDING when peer owns RESERVED generation")
+        void startRecording_peerReserved_doesNotDriveAws() {
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(recordingRepository.reserveActiveGeneration(anyString(), anyString(), any(), anyBoolean()))
+                    .thenReturn(0);
+            CallRecording peerReserved = buildRecording("STARTED");
+            peerReserved.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.RESERVED);
+            peerReserved.setInitiatedByUserId(null);
+            when(recordingRepository.findActiveByCallId(CALL_ID))
+                    .thenReturn(Optional.of(peerReserved));
+
+            Map<String, Object> result = service.startRecording(CALL_ID, null);
+
+            assertThat(result).containsEntry("status", "ALREADY_RECORDING");
+            assertThat(result.get("message").toString()).contains("Another node");
+            verify(pipelinesClient, never()).createMediaCapturePipeline(
+                    any(CreateMediaCapturePipelineRequest.class));
+            verify(recordingRepository, never()).saveAndFlush(any(CallRecording.class));
         }
 
         @Test

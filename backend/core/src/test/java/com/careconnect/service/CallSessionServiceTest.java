@@ -207,6 +207,54 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void transcriptUpload_allowsHistoricalParticipantWhileTerminating() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setEndedAt(null);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_LEFT)));
+
+        assertThat(service.requireTranscriptUploadParticipant("call-1", 2L))
+                .isSameAs(session);
+    }
+
+    @Test
+    void requireRecordingAccess_allowsLinkedCaregiverWithoutJoinHistory() {
+        final CallSession session = session(10L, 42L);
+        final User caregiver = user(9L, Role.CAREGIVER);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(user(7L, Role.PATIENT));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 9L))
+                .thenReturn(Optional.empty());
+        when(patientRepository.findById(42L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(9L, 7L)).thenReturn(true);
+
+        assertThat(service.requireRecordingAccess("call-1", caregiver)).isSameAs(session);
+    }
+
+    @Test
+    void requireRecordingAccess_rejectsUnrelatedUser() {
+        final CallSession session = session(10L, 42L);
+        final User stranger = user(9L, Role.CAREGIVER);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(user(7L, Role.PATIENT));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 9L))
+                .thenReturn(Optional.empty());
+        when(patientRepository.findById(42L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(9L, 7L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.requireRecordingAccess("call-1", stranger))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("not authorized");
+    }
+
+    @Test
     void createSession_existingRowsAreIdempotent() {
         final User creator = user(2L, Role.CAREGIVER);
         final User patientUser = user(7L, Role.PATIENT);

@@ -203,7 +203,7 @@ class CallTerminationExecutorTest {
   }
 
   @Test
-  void execute_retryableRecordingLeavesTerminatingAfterMeetingShutdown() {
+  void execute_retryableRecordingParksBeforeMeetingShutdown() {
     final UUID claimId = UUID.randomUUID();
     when(sessionService.renewTerminationOwnership("call-1", claimId))
         .thenReturn(noneDone());
@@ -222,8 +222,8 @@ class CallTerminationExecutorTest {
 
     assertThat(executor.execute("call-1", 2L, claimId)).isFalse();
 
-    verify(chimeService).endMeeting("call-1");
-    verify(sessionService).advanceTerminationStep(
+    verify(chimeService, never()).endMeeting(any());
+    verify(sessionService, never()).advanceTerminationStep(
         "call-1", claimId, TerminationStep.MEETING);
     verify(sessionService, never()).advanceTerminationStep(
         "call-1", claimId, TerminationStep.RECORDING);
