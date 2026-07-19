@@ -5,5 +5,6 @@ public enum SummaryCitationReplayOutcome {
     UPDATED,
     CURRENT,
     NO_DRAFTS,
-    QUARANTINED
+    QUARANTINED,
+    BUSY
 }

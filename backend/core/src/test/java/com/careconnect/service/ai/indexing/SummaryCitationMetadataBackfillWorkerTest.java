@@ -119,11 +119,13 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 2)).thenReturn(List.of(candidate(99L, "42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 99L))
                 .thenReturn(SummaryCitationReplayOutcome.QUARANTINED);
-        when(chunkRepository.quarantineSummarySource(99L, "42")).thenReturn(2);
+        when(chunkRepository.quarantineSummarySource(
+                99L, "42", RetrievalRecordType.summaryTypeNames())).thenReturn(2);
 
         worker.pollAndBackfill();
 
-        verify(chunkRepository).quarantineSummarySource(99L, "42");
+        verify(chunkRepository).quarantineSummarySource(
+                99L, "42", RetrievalRecordType.summaryTypeNames());
     }
 
     private static SummaryReplayCandidate candidate(

@@ -46,24 +46,18 @@ public class SummaryCitationMetadataBackfillWorker {
             fixedDelayString =
                     "${careconnect.ai.citation.backfill.poll-interval-ms:60000}")
     public void pollAndBackfill() {
-        final int quarantinedAmbiguous = quarantineAmbiguousSources();
         final List<SummaryReplayCandidate> candidates =
                 chunkRepository.findStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
                         SummaryChunker.CITATION_METADATA_VERSION,
                         batchSize);
         if (candidates.isEmpty()) {
-            if (quarantinedAmbiguous > 0) {
-                log.warn(
-                        "Quarantined {} ambiguous legacy summary chunk(s)",
-                        quarantinedAmbiguous);
-            }
             return;
         }
 
         int updated = 0;
         int failed = 0;
-        int quarantined = quarantinedAmbiguous;
+        int quarantined = 0;
         for (final SummaryReplayCandidate candidate : candidates) {
             final String sourceId = candidate.getSourceRecordId();
             try {
@@ -80,7 +74,9 @@ public class SummaryCitationMetadataBackfillWorker {
                     markFailureBackoff(candidate);
                 } else if (outcome == SummaryCitationReplayOutcome.QUARANTINED) {
                     quarantined += chunkRepository.quarantineSummarySource(
-                            candidate.getPatientId(), sourceId);
+                            candidate.getPatientId(),
+                            sourceId,
+                            RetrievalRecordType.summaryTypeNames());
                 }
             } catch (final RuntimeException ex) {
                 failed++;
@@ -113,14 +109,4 @@ public class SummaryCitationMetadataBackfillWorker {
         }
     }
 
-    private int quarantineAmbiguousSources() {
-        try {
-            return chunkRepository.quarantineAmbiguousLegacySummarySources();
-        } catch (final RuntimeException ex) {
-            log.warn(
-                    "Unable to quarantine ambiguous legacy summary sources type={}",
-                    ex.getClass().getSimpleName());
-            return 0;
-        }
-    }
 }

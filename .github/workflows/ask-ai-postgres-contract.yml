@@ -1,0 +1,28 @@
+name: Ask AI PostgreSQL Contract
+
+on:
+  pull_request:
+    paths:
+      - "backend/core/**"
+      - ".github/workflows/ask-ai-postgres-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  repository-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: backend/core/pom.xml
+
+      - name: Run PostgreSQL repository contract
+        working-directory: backend/core
+        run: ./mvnw -B -Dtest=RetrievalIndexChunkRepositoryPostgresCiTest test

@@ -216,4 +216,40 @@ class RetrievalIndexChunkRepositoryTest {
                 .extracting(RetrievalIndexChunk::getMigrationStatus)
                 .containsOnly(RetrievalMigrationStatus.QUARANTINED.name());
     }
+
+    @Test
+    @DisplayName("legacy quarantine is patient and summary-type scoped")
+    void quarantineLegacySummarySource_preservesUnrelatedRows() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("legacy summary")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.TRANSCRIPT_SEGMENT.name())
+                .sourceRecordId("77")
+                .chunkText("unrelated transcript")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(6L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("other patient")
+                .build());
+        repository.flush();
+
+        assertThat(repository.quarantineLegacySummarySource(
+                5L, "77", RetrievalRecordType.summaryTypeNames())).isEqualTo(1);
+        repository.flush();
+
+        assertThat(repository.findByPatientId(5L))
+                .filteredOn(chunk -> "unrelated transcript".equals(chunk.getChunkText()))
+                .extracting(RetrievalIndexChunk::getMigrationStatus)
+                .containsExactly(RetrievalMigrationStatus.ACTIVE.name());
+        assertThat(repository.findByPatientId(6L))
+                .extracting(RetrievalIndexChunk::getMigrationStatus)
+                .containsOnly(RetrievalMigrationStatus.ACTIVE.name());
+    }
 }

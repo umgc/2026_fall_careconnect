@@ -145,6 +145,7 @@ public class HybridRetrievalService {
                     chunk.getId(),
                     chunk.getPatientId(),
                     chunk.resolveRecordTypeEnum().orElse(null),
+                    chunk.getSourceKind(),
                     chunk.getSourceRecordId(),
                     chunk.getChunkText(),
                     chunk.getChunkMetadata(),

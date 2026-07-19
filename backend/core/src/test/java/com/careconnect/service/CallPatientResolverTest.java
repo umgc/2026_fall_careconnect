@@ -68,10 +68,23 @@ class CallPatientResolverTest {
                 .hasMessageContaining("exactly one patient");
     }
 
+    @Test
+    void requirePatientId_ignoresFailedJoinAttempts() {
+        final CallTelemetryEvent failed = join(8L);
+        failed.setStatus("ERROR");
+        when(callTelemetryService.getTelemetryForCall("call-1"))
+                .thenReturn(List.of(failed, join(7L)));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(patientUser(7L)));
+        when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient(42L)));
+
+        assertThat(resolver.requirePatientId("call-1")).isEqualTo(42L);
+    }
+
     private static CallTelemetryEvent join(final Long actorUserId) {
         final CallTelemetryEvent event = new CallTelemetryEvent();
         event.setEventType("CALL_JOIN");
         event.setActorUserId(actorUserId);
+        event.setStatus("SUCCESS");
         return event;
     }
 

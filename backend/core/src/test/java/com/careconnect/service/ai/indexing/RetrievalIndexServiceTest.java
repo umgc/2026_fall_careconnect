@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -73,6 +74,8 @@ class RetrievalIndexServiceTest {
                 mapper,
                 chunkEmbeddingService);
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(chunkRepository.tryAcquireSummaryReplayLock(anyString()))
+                .thenReturn(true);
     }
 
     @Test
@@ -153,7 +156,8 @@ class RetrievalIndexServiceTest {
                 eq(SummarySourceKey.CALL_KIND), anyCollection()))
                 .thenReturn(List.of(existing));
         when(chunkRepository.countMissingEmbeddingForSummarySources(
-                eq(42L), eq(summarySources(99L)), anyCollection())).thenReturn(0L);
+                eq(42L), eq(List.of(SummarySourceKey.call(99L))), anyCollection()))
+                .thenReturn(0L);
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call",
@@ -385,9 +389,10 @@ class RetrievalIndexServiceTest {
                 eq(SummarySourceKey.CALL_KIND), anyCollection()))
                 .thenReturn(List.of(existing));
         when(chunkRepository.countMissingEmbeddingForSummarySources(
-                eq(42L), eq(summarySources(99L)), anyCollection())).thenReturn(1L);
+                eq(42L), eq(List.of(SummarySourceKey.call(99L))), anyCollection()))
+                .thenReturn(1L);
         when(chunkRepository.findMissingEmbeddingsForSummarySources(
-                eq(42L), eq(summarySources(99L)), anyCollection()))
+                eq(42L), eq(List.of(SummarySourceKey.call(99L))), anyCollection()))
                 .thenReturn(List.of(existing));
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
@@ -507,9 +512,10 @@ class RetrievalIndexServiceTest {
                 eq(SummarySourceKey.CALL_KIND), anyCollection()))
                 .thenReturn(List.of(orphan));
         when(chunkRepository.countMissingEmbeddingForSummarySources(
-                eq(42L), eq(summarySources(8L)), anyCollection())).thenReturn(1L);
+                eq(42L), eq(List.of(SummarySourceKey.call(8L))), anyCollection()))
+                .thenReturn(1L);
         when(chunkRepository.findMissingEmbeddingsForSummarySources(
-                eq(42L), eq(summarySources(8L)), anyCollection()))
+                eq(42L), eq(List.of(SummarySourceKey.call(8L))), anyCollection()))
                 .thenReturn(List.of(orphan));
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
@@ -624,7 +630,19 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
-    @DisplayName("metadata replay migrates a current-version legacy numeric source")
+    @DisplayName("metadata replay does not race another application instance")
+    void replaySummaryCitationMetadata_lockBusy_returnsBusy() {
+        when(chunkRepository.tryAcquireSummaryReplayLock("summary-citation:42:99"))
+                .thenReturn(false);
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L))
+                .isEqualTo(SummaryCitationReplayOutcome.BUSY);
+
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    @DisplayName("metadata replay quarantines legacy ownership before namespaced replacement")
     void replaySummaryCitationMetadata_currentLegacySource_isUpdated() {
         final CallSummary summary = new CallSummary();
         summary.setId(99L);
@@ -635,21 +653,10 @@ class RetrievalIndexServiceTest {
         summary.setSummaryJson("{\"headline\":\"Stable\"}");
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
 
-        final RetrievalIndexChunk legacy = RetrievalIndexChunk.builder()
-                .patientId(42L)
-                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
-                .sourceRecordId("99")
-                .chunkText("Stable")
-                .consentScope("auto")
-                .chunkMetadata(
-                        "{\"contentHash\":\""
-                                + com.careconnect.util.ContentHashUtil.sha256(summary.getSummaryJson())
-                                + "\",\"chunkIndex\":0,\"citationMetadataVersion\":1}")
-                .build();
         when(chunkRepository.findCallSummaryChunksForReplacement(
                 eq(42L), eq("call-summary:99"), eq("99"),
                 eq(SummarySourceKey.CALL_KIND), anyCollection()))
-                .thenReturn(List.of(legacy));
+                .thenReturn(List.of());
 
         assertThat(service.replaySummaryCitationMetadata(99L, 42L))
                 .isEqualTo(SummaryCitationReplayOutcome.UPDATED);
@@ -657,6 +664,8 @@ class RetrievalIndexServiceTest {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
+        verify(chunkRepository).quarantineLegacySummarySource(
+                eq(42L), eq("99"), eq(RetrievalRecordType.summaryTypeNames()));
         assertThat(captor.getValue())
                 .allSatisfy(chunk -> {
                     assertThat(chunk.getSourceRecordId()).isEqualTo("call-summary:99");
