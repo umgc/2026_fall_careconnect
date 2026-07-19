@@ -7,6 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// switches between patient accounts doesn't skip one patient's brief
 /// because another patient's brief was already marked seen today.
 class DailyBriefGateService {
+  /// The STML backend (PR #277) hasn't merged to team-ae-develop yet, so the
+  /// brief/recall endpoints this trigger routes into will 404. Flip the
+  /// default to true once #277 is merged. Until then the auto-trigger is
+  /// off, but the screen stays reachable manually (menu) for whenever a
+  /// backend is available. Mutable (not const) so tests can override it.
+  static bool autoTriggerEnabled = false;
+
   static const _lastShownKeyPrefix = 'stml_daily_brief_last_shown_date_';
   static const _briefEarliestHour = 7;
 
@@ -15,6 +22,10 @@ class DailyBriefGateService {
   /// Read-only — call [markSeen] only after the brief actually loads, so a
   /// failed navigation/load doesn't consume the day's trigger.
   static Future<bool> shouldShow(int patientId, {DateTime? now}) async {
+    if (!autoTriggerEnabled) {
+      return false;
+    }
+
     final current = now ?? DateTime.now();
     if (current.hour < _briefEarliestHour) {
       return false;

@@ -13,6 +13,21 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    DailyBriefGateService.autoTriggerEnabled = true;
+  });
+
+  tearDown(() {
+    DailyBriefGateService.autoTriggerEnabled = false;
+  });
+
+  group('DailyBriefGateService.autoTriggerEnabled flag', () {
+    test('returns false regardless of time/day when disabled — STML '
+        'backend (#277) has not merged yet', () async {
+      DailyBriefGateService.autoTriggerEnabled = false;
+      final result =
+          await DailyBriefGateService.shouldShow(patientId, now: morning);
+      expect(result, isFalse);
+    });
   });
 
   group('DailyBriefGateService.shouldShow', () {
