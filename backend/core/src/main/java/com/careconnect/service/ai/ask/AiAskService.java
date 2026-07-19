@@ -39,6 +39,8 @@ import java.util.UUID;
  * {@link HybridRetrievalService} → min-necessary prompt → grounded Bedrock → citations.
  *
  * <p>Safety Tier-2 hold (SCC-3) is Task 6.x; this path delivers Tier 1 with mandatory disclaimer.
+ * Claim-level citation output and secondary semantic grounding validation are also deferred;
+ * the current contract validates model citation references against retrieved chunks.
  *
  * <p>TODO(Task 6.x): persist Ask AI audit rows (requestId/auditId, scope, retrieval meta,
  * delivery status) via the Ask AI audit pipeline. Until then {@code auditId} is a
@@ -137,8 +139,19 @@ public class AiAskService {
                 caller, request.patientId(), requestedTypes);
 
         final long retrievalStarted = System.nanoTime();
-        final HybridRetrievalResult retrieval =
-                hybridRetrievalService.search(scope, request.patientId(), sanitizedQuery);
+        final HybridRetrievalResult retrieval;
+        try {
+            retrieval = hybridRetrievalService.search(
+                    scope, request.patientId(), sanitizedQuery);
+        } catch (final RuntimeException ex) {
+            throw new AskAiUnavailableException(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "RETRIEVAL_UNAVAILABLE",
+                    "Record retrieval is temporarily unavailable",
+                    ex);
+        }
         final long retrievalLatencyMs = (System.nanoTime() - retrievalStarted) / 1_000_000L;
 
         if (retrieval == null || retrieval.isEmpty()) {
@@ -161,8 +174,12 @@ public class AiAskService {
 
         if (llmOpt.isEmpty()) {
             throw new AskAiUnavailableException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     "RETRIEVAL_UNAVAILABLE",
-                    "Grounded answer generation is temporarily unavailable");
+                    "Grounded answer generation is temporarily unavailable",
+                    null);
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
@@ -170,12 +187,15 @@ public class AiAskService {
                 citationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
         if (!citationResult.grounded()) {
             log.warn(
-                    "Ask AI WITHHELD ungrounded response requestId={} invalidRefs={}",
+                    "Ask AI WITHHELD ungrounded response requestId={} invalidRefCount={}",
                     requestId,
-                    citationResult.invalidRefs());
+                    citationResult.invalidRefs().size());
             // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
             // never deliver an answer whose model citations are missing or invalid.
             throw new AskAiGroundingException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     "Generated answer could not be verified against retrieved records");
         }
         final List<AiCitation> citations = citationResult.citations();

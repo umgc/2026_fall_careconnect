@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
@@ -163,9 +164,13 @@ final class CitationMetadataMapper {
                 return OffsetDateTime.parse(raw).toInstant();
             } catch (final Exception ignoredAgain) {
                 try {
-                    return LocalDate.parse(raw).atStartOfDay().toInstant(ZoneOffset.UTC);
-                } catch (final Exception ignoredDate) {
-                    return null;
+                    return LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC);
+                } catch (final Exception ignoredLocalDateTime) {
+                    try {
+                        return LocalDate.parse(raw).atStartOfDay().toInstant(ZoneOffset.UTC);
+                    } catch (final Exception ignoredDate) {
+                        return null;
+                    }
                 }
             }
         }

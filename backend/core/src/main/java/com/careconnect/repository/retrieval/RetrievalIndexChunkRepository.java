@@ -27,14 +27,25 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     List<RetrievalIndexChunk> findBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
 
+    List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdAndRecordTypeIn(
+            Long patientId,
+            String sourceRecordId,
+            Collection<String> recordTypes);
+
     long countByPatientId(Long patientId);
 
     void deleteBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
 
+    void deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
+            Long patientId,
+            String sourceRecordId,
+            Collection<String> recordTypes);
+
     /**
-     * Deletes all chunks for a source record (all record types). Used when re-indexing
-     * a summary that emits overview + typed item chunks under the same source id.
+     * Broad cleanup helper retained for tests and administrative maintenance.
+     * Production indexing must prefer patient/type-scoped deletion.
      */
+    @Deprecated
     void deleteBySourceRecordId(String sourceRecordId);
 
     /**
@@ -141,6 +152,63 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             nativeQuery = true)
     List<RetrievalIndexChunk> findBySourceRecordIdAndEmbeddingIsNull(
             @Param("sourceRecordId") String sourceRecordId);
+
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingForSummary(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForSummary(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT DISTINCT source_record_id
+                    FROM retrieval_index_chunk
+                    WHERE record_type IN (:recordTypes)
+                      AND source_record_id ~ '^[0-9]+$'
+                      AND (
+                        CASE
+                          WHEN COALESCE(chunk_metadata->>'citationMetadataVersion', '')
+                                 ~ '^[0-9]+$'
+                          THEN (chunk_metadata->>'citationMetadataVersion')::integer
+                          ELSE -1
+                        END
+                      ) < :version
+                    ORDER BY source_record_id
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<String> findStaleSummaryCitationSourceIds(
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("version") int version,
+            @Param("limit") int limit);
 
     /**
      * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).

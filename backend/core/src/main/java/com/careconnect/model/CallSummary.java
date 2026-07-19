@@ -116,7 +116,11 @@ public class CallSummary extends Auditable {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    /** Timestamp when the summary was generated. */
+    /**
+     * Timestamp when the summary was generated. This legacy offset-free column is written and
+     * interpreted as UTC. Migration to {@code Instant}/{@code TIMESTAMPTZ} is deferred so it can
+     * be coordinated with existing readers.
+     */
     @Column(name = "generated_at", nullable = false)
     private LocalDateTime generatedAt;
 

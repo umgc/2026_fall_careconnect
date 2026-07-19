@@ -6,10 +6,9 @@ import com.careconnect.model.User;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.ask.AskAiException;
 import com.careconnect.service.ai.ask.AiAskService;
-import com.careconnect.service.ai.ask.AskAiGroundingException;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
-import com.careconnect.service.ai.ask.AskAiUnavailableException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -71,17 +70,13 @@ public class AiAskController {
                     .body(AiAskService.withheld(
                             null, null, sessionId,
                             ex.getErrorCode(), ex.getMessage(), null));
-        } catch (final AskAiGroundingException ex) {
-            log.warn("Ask AI response failed grounding validation: {}", ex.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+        } catch (final AskAiException ex) {
+            log.warn("Ask AI failed code={} requestId={}", ex.getErrorCode(), ex.getRequestId());
+            return ResponseEntity.status(ex.getStatus())
                     .body(AiAskService.withheld(
-                            null, null, sessionId,
-                            ex.getErrorCode(), ex.getMessage(), null));
-        } catch (final AskAiUnavailableException ex) {
-            log.warn("Ask AI unavailable: {}", ex.getMessage());
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(AiAskService.withheld(
-                            null, null, sessionId,
+                            ex.getRequestId(),
+                            ex.getAuditId(),
+                            ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ex.getErrorCode(), ex.getMessage(), null));
         }
     }

@@ -5,6 +5,7 @@ import com.careconnect.service.ai.indexing.IndexingChunkDraft;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import org.springframework.stereotype.Component;
 
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,7 +49,9 @@ public class TranscriptSegmentChunker {
             metadata.put("source", source != null ? source : segment.getSource());
             metadata.put("actorUserId", segment.getActorUserId());
             if (segment.getOccurredAt() != null) {
-                metadata.put("occurredAt", segment.getOccurredAt().toString());
+                metadata.put(
+                        "occurredAt",
+                        segment.getOccurredAt().toInstant(ZoneOffset.UTC).toString());
             }
 
             final String text = formatSegmentText(segment);
