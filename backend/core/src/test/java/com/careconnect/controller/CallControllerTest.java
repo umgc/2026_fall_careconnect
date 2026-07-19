@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -100,6 +101,8 @@ class CallControllerTest {
 
     private static final String CALL_ID = "call-123";
     private static final String BASE_URL = "/api/v3/calls";
+    private static final UUID TERMINATION_CLAIM =
+            UUID.fromString("8f08f1de-a4f4-4dc4-b56a-04f93451841a");
 
     @BeforeEach
     void setUp() {
@@ -135,7 +138,10 @@ class CallControllerTest {
         when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
         when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
         when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
-                .thenReturn(new CallSessionService.LeaveResult(true, false, 0L));
+                .thenReturn(new CallSessionService.LeaveResult(
+                        true, false, 0L, TERMINATION_CLAIM, List.of()));
+        when(callSessionService.completeTermination(anyString(), any(UUID.class)))
+                .thenReturn(true);
         when(callSessionService.getOtherParticipantUserIds(anyString(), anyLong()))
                 .thenReturn(List.of());
 
@@ -623,8 +629,9 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCall_notifiesPendingConferenceInvitee() throws Exception {
             mockCurrentCaregiver();
-            when(callSessionService.getOtherParticipantUserIds(CALL_ID, 2L))
-                    .thenReturn(List.of(1L, 4L));
+            when(callSessionService.leaveOrBeginTermination(CALL_ID, 2L))
+                    .thenReturn(new CallSessionService.LeaveResult(
+                            true, false, 0L, TERMINATION_CLAIM, List.of(1L, 4L)));
 
             when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
                     callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
@@ -700,8 +707,9 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void endCall_threePartyEndNotifiesAllRemaining() throws Exception {
             mockCurrentPatient();
-            when(callSessionService.getOtherParticipantUserIds(CALL_ID, 1L))
-                    .thenReturn(List.of(4L));
+            when(callSessionService.leaveOrBeginTermination(CALL_ID, 1L))
+                    .thenReturn(new CallSessionService.LeaveResult(
+                            true, false, 0L, TERMINATION_CLAIM, List.of(4L)));
 
             when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
                     callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
@@ -754,6 +762,25 @@ class CallControllerTest {
                     .andExpect(jsonPath("$.status").value("ended"));
 
             verify(callNotificationHandler, never()).sendNotificationToUser(eq("4"), any());
+        }
+
+        @Test
+        @DisplayName("termination reconciliation reclaims and completes a failed attempt")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void reconcileTermination_completesReclaimedClaim() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.claimTerminationRetry(CALL_ID, 2L))
+                    .thenReturn(new CallSessionService.LeaveResult(
+                            true, false, 0L, TERMINATION_CLAIM, List.of(1L)));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/termination/reconcile")
+                            .with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(callSessionService).completeTermination(CALL_ID, TERMINATION_CLAIM);
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("1"), argThat(message -> "call-ended".equals(message.get("type"))));
         }
 
     }

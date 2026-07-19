@@ -365,8 +365,8 @@ public class RetrievalIndexService {
             return 0;
         }
 
-        chunkRepository.deleteBySourceRecordIdAndRecordType(
-                callId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, callId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
         return persistDrafts(patientId, callId, drafts);
     }
 
@@ -399,7 +399,7 @@ public class RetrievalIndexService {
         final String contentHash = mailpiece.getContentHash();
         if (contentHash != null
                 && !contentHash.isBlank()
-                && shouldSkipUspsMailReindex(sourceRecordId, contentHash, mailpiece)) {
+                && shouldSkipUspsMailReindex(patientId, sourceRecordId, contentHash, mailpiece)) {
             log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash+importance unchanged",
                     payload.mailpieceId());
             return 0;
@@ -425,8 +425,8 @@ public class RetrievalIndexService {
             return 0;
         }
 
-        chunkRepository.deleteBySourceRecordIdAndRecordType(
-                sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
         return persistDrafts(patientId, sourceRecordId, drafts);
     }
 
@@ -590,12 +590,13 @@ public class RetrievalIndexService {
      * (hash unchanged, importance newly present on the entity) must rebuild chunks.
      */
     private boolean shouldSkipUspsMailReindex(
+            final Long patientId,
             final String sourceRecordId,
             final String contentHash,
             final UspsMailpiece mailpiece) {
         final List<RetrievalIndexChunk> existing =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+                chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                        patientId, sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
         if (existing == null || existing.isEmpty()) {
             return false;
         }

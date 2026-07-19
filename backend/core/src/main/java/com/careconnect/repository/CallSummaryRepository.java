@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.Collection;
 
 public interface CallSummaryRepository
         extends JpaRepository<CallSummary, Long> {
@@ -22,6 +23,13 @@ public interface CallSummaryRepository
 
     Optional<CallSummary> findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
             String callId, String transcriptSnapshotVersion, String modelConfigVersion);
+
+    Optional<CallSummary>
+            findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+                    String callId,
+                    String transcriptSnapshotVersion,
+                    String modelConfigVersion,
+                    Collection<String> statuses);
 
     /** Serializes creation for an idempotency key, including when no summary row exists yet. */
     @Query(

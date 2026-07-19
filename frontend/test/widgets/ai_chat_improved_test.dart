@@ -987,7 +987,7 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('patient Ask AI renders delivered citation contract',
+    testWidgets('patient Ask AI renders delivered citation and safety contract',
         (tester) async {
       suppressOverflow();
       final mockClient = MockClient((request) async {
@@ -1008,6 +1008,21 @@ void main() {
                   'deepLink': null,
                 }
               ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
             }),
             200,
           );
@@ -1025,6 +1040,9 @@ void main() {
 
         expect(find.text('Metformin was started.'), findsWidgets);
         expect(find.textContaining('C1 — Call summary'), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-disclaimer')), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-escalation')), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-confirmation')), findsOneWidget);
       }, () => mockClient);
     });
 

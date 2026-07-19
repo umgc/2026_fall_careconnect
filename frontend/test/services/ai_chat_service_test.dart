@@ -1103,7 +1103,7 @@ void main() {
       expect(body.containsKey('userId'), isFalse);
     });
 
-    test('models delivered answer and citations', () async {
+    test('models delivered answer, citations, and safety metadata', () async {
       final result = await http.runWithClient(
         () => AIChatService.askRecords(query: 'metformin', patientId: 42),
         () => _mockJson(200, {
@@ -1119,6 +1119,21 @@ void main() {
               'deepLink': null,
             }
           ],
+          'disclaimer': {
+            'text': 'Records-based information; not medical advice.',
+            'aiNoticeRequired': true,
+            'recordsBasedFraming': true,
+            'locale': 'en-US',
+          },
+          'escalation': {
+            'tier': 1,
+            'reason': 'Tier1_auto_deliver',
+            'requiresClinicianReview': false,
+          },
+          'confirmation': {
+            'promptConfirmWithProvider': true,
+            'message': 'Confirm important details with your care provider.',
+          },
         }),
       );
 
@@ -1126,6 +1141,57 @@ void main() {
       expect(result.answer, 'Metformin was started.');
       expect(result.citations.single.citationId, 'C1');
       expect(result.citations.single.deepLink, isNull);
+      expect(result.disclaimer?.aiNoticeRequired, isTrue);
+      expect(result.escalation?.tier, 1);
+      expect(result.confirmation?.required, isTrue);
+    });
+
+    test('fails closed when DELIVERED omits mandatory safety metadata',
+        () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'DELIVERED',
+          'answer': {'text': 'Metformin was started.'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Metformin was started.',
+            }
+          ],
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+      expect(result.retryInput, 'metformin');
+    });
+
+    test('preserves supplied session, conversation, and bounded source types',
+        () async {
+      final (client, requests) = _capturingClient(200, {
+        'success': true,
+        'deliveryStatus': 'NO_RECORDS',
+        'citations': <Object>[],
+      });
+
+      await http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'medication',
+          patientId: 42,
+          sessionId: '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+          conversationId: 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+          sourceTypes: const ['MEDICATION'],
+        ),
+        () => client,
+      );
+
+      final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(body['sessionId'], '8aa0d978-a8fc-48bc-ab02-1af24f32e903');
+      expect(body['conversationId'], 'fd43f38b-ac0e-4adf-af84-d25992ce7855');
+      expect(body['sourceTypes'], ['MEDICATION']);
     });
 
     test('models correlated withheld errors even on non-200 status', () async {
@@ -1156,6 +1222,23 @@ void main() {
 
       expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
       expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('times out with the original input available for retry', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'retry this question',
+          patientId: 42,
+          timeout: const Duration(milliseconds: 1),
+        ),
+        () => MockClient((_) async {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return http.Response('{}', 200);
+        }),
+      );
+
+      expect(result.error?.code, 'TIMEOUT');
+      expect(result.retryInput, 'retry this question');
     });
   });
 }

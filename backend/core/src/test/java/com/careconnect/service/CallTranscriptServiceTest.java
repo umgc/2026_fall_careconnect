@@ -259,11 +259,9 @@ class CallTranscriptServiceTest {
     class PassthroughOperationTests {
 
         @Test
-        @DisplayName("archiveIfEligible trims callId and delegates merged segments")
+        @DisplayName("archiveIfEligible trims callId and delegates atomic archival")
         void archiveIfEligible_delegates() {
-            List<CallTranscriptSegment> segments = List.of(segment("PATIENT", "hello", 10L, 20L, "SRC", 2L, LocalDateTime.now()));
-            when(callTranscriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID)).thenReturn(segments);
-            when(callTranscriptArchiveService.archiveIfEligible(CALL_ID, segments)).thenReturn(true);
+            when(callTranscriptArchiveService.archiveIfEligible(CALL_ID)).thenReturn(true);
 
             assertThat(service.archiveIfEligible("  " + CALL_ID + "  ")).isTrue();
         }

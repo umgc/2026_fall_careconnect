@@ -36,7 +36,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     List<RetrievalIndexChunk> findByPatientIdAndRecordType(Long patientId, String recordType);
 
-    List<RetrievalIndexChunk> findBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
+    List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdAndRecordType(
+            Long patientId, String sourceRecordId, String recordType);
 
     List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdAndRecordTypeIn(
             Long patientId,
@@ -50,7 +51,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     long countByPatientId(Long patientId);
 
-    void deleteBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
+    void deleteByPatientIdAndSourceRecordIdAndRecordType(
+            Long patientId, String sourceRecordId, String recordType);
 
     void deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
             Long patientId,

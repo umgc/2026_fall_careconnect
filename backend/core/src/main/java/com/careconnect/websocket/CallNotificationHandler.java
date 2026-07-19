@@ -562,8 +562,10 @@ public class CallNotificationHandler extends TextWebSocketHandler {
           if (chimeService != null) {
             chimeService.endMeeting(callId);
           }
-          callSessionService.completeTermination(callId);
+          callSessionService.completeTermination(callId, decline.terminationClaimId());
         } catch (RuntimeException cleanupFailure) {
+          callSessionService.recordTerminationFailure(
+              callId, decline.terminationClaimId(), cleanupFailure);
           log.error("Declined call cleanup failed for callId={}", callId, cleanupFailure);
         }
       }

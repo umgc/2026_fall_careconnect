@@ -76,7 +76,8 @@ class RetrievalIndexChunkRepositoryTest {
                 .chunkText("Indexed once")
                 .build());
 
-        assertThat(repository.findBySourceRecordIdAndRecordType("summary-55", RetrievalRecordType.CALL_SUMMARY.name()))
+        assertThat(repository.findByPatientIdAndSourceRecordIdAndRecordType(
+                5L, "summary-55", RetrievalRecordType.CALL_SUMMARY.name()))
                 .hasSize(1);
     }
 
@@ -90,11 +91,70 @@ class RetrievalIndexChunkRepositoryTest {
                 .chunkText("Version 1")
                 .build());
 
-        repository.deleteBySourceRecordIdAndRecordType("summary-77", RetrievalRecordType.CALL_SUMMARY.name());
+        repository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                5L, "summary-77", RetrievalRecordType.CALL_SUMMARY.name());
         repository.flush();
 
-        assertThat(repository.findBySourceRecordIdAndRecordType("summary-77", RetrievalRecordType.CALL_SUMMARY.name()))
+        assertThat(repository.findByPatientIdAndSourceRecordIdAndRecordType(
+                5L, "summary-77", RetrievalRecordType.CALL_SUMMARY.name()))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("destructive replacement preserves duplicate source IDs owned by other patients")
+    void scopedReplacementPreservesDuplicateSourceIdAcrossPatients() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.TRANSCRIPT_SEGMENT.name())
+                .sourceRecordId("shared-call")
+                .chunkText("patient five")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(6L)
+                .recordType(RetrievalRecordType.TRANSCRIPT_SEGMENT.name())
+                .sourceRecordId("shared-call")
+                .chunkText("patient six")
+                .build());
+
+        repository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                5L, "shared-call", RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        repository.flush();
+
+        assertThat(repository.findByPatientId(5L)).isEmpty();
+        assertThat(repository.findByPatientId(6L))
+                .extracting(RetrievalIndexChunk::getChunkText)
+                .containsExactly("patient six");
+    }
+
+    @Test
+    @DisplayName("USPS lookup and replacement preserve colliding IDs across patients")
+    void scopedUspsLookupAndReplacementPreserveOtherPatient() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.USPS_MAIL.name())
+                .sourceRecordId("55")
+                .chunkText("patient five mail")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(6L)
+                .recordType(RetrievalRecordType.USPS_MAIL.name())
+                .sourceRecordId("55")
+                .chunkText("patient six mail")
+                .build());
+
+        assertThat(repository.findByPatientIdAndSourceRecordIdAndRecordType(
+                5L, "55", RetrievalRecordType.USPS_MAIL.name()))
+                .extracting(RetrievalIndexChunk::getChunkText)
+                .containsExactly("patient five mail");
+
+        repository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                5L, "55", RetrievalRecordType.USPS_MAIL.name());
+        repository.flush();
+
+        assertThat(repository.findByPatientIdAndSourceRecordIdAndRecordType(
+                6L, "55", RetrievalRecordType.USPS_MAIL.name()))
+                .extracting(RetrievalIndexChunk::getChunkText)
+                .containsExactly("patient six mail");
     }
 
     @Test

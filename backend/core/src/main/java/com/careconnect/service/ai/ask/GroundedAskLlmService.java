@@ -23,8 +23,8 @@ import java.util.Optional;
 /**
  * Grounded Ask AI Bedrock completion — structured claim-level citations only.
  *
- * <p>Does not reuse {@code BedrockAIChatService} (raw chat). Failures surface as empty
- * {@link Optional} so the gateway can return HTTP 503 instead of an ungrounded answer.
+ * <p>Does not reuse {@code BedrockAIChatService} (raw chat). Configuration, provider,
+ * and grounding failures remain distinct so the gateway can return an accurate contract.
  */
 @Service
 public class GroundedAskLlmService {
@@ -68,13 +68,17 @@ public class GroundedAskLlmService {
     /**
      * Invokes Bedrock with grounded system/user prompts and parses structured JSON.
      *
-     * @return empty when AWS/Bedrock is unavailable
+     * @return the validated grounded result
+     * @throws GroundedProviderException when configuration or provider invocation fails
      * @throws GroundedOutputValidationException when Bedrock responds with invalid output
      */
     public Optional<GroundedLlmResult> generate(final String systemPrompt, final String userPrompt) {
         if (!isAvailable()) {
             log.warn("GroundedAskLlmService unavailable (AWS disabled or Bedrock client missing)");
-            return Optional.empty();
+            throw new GroundedProviderException(
+                    GroundedProviderException.Kind.CONFIGURATION,
+                    "Grounded model provider is not configured",
+                    null);
         }
         try {
             final String modelId = BedrockModelSupport.resolveModelId(null, defaultModelId);
@@ -111,15 +115,24 @@ public class GroundedAskLlmService {
             if (log.isDebugEnabled()) {
                 log.debug("Grounded Ask AI Bedrock diagnostic", ex);
             }
-            return Optional.empty();
+            throw new GroundedProviderException(
+                    GroundedProviderException.Kind.PROVIDER,
+                    "Grounded model provider invocation failed",
+                    ex);
         } catch (final GroundedOutputValidationException ex) {
             throw ex;
+        } catch (final IllegalArgumentException ex) {
+            log.warn("Grounded Ask AI model configuration rejected");
+            throw new GroundedProviderException(
+                    GroundedProviderException.Kind.CONFIGURATION,
+                    "Grounded model configuration is invalid",
+                    ex);
         } catch (final RuntimeException ex) {
             log.warn("Grounded Ask AI inference failed");
-            if (log.isDebugEnabled()) {
-                log.debug("Grounded Ask AI inference diagnostic", ex);
-            }
-            return Optional.empty();
+            throw new GroundedProviderException(
+                    GroundedProviderException.Kind.PROVIDER,
+                    "Grounded model provider failed",
+                    ex);
         }
     }
 
@@ -181,9 +194,6 @@ public class GroundedAskLlmService {
             throw ex;
         } catch (final Exception ex) {
             log.warn("Unable to parse grounded Ask AI JSON");
-            if (log.isDebugEnabled()) {
-                log.debug("Grounded Ask AI parse diagnostic", ex);
-            }
             throw new GroundedOutputValidationException(
                     "Grounded model response was malformed", ex);
         }
