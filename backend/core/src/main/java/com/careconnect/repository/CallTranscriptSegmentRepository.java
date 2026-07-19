@@ -2,7 +2,10 @@ package com.careconnect.repository;
 
 import com.careconnect.model.CallTranscriptSegment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface CallTranscriptSegmentRepository
@@ -49,4 +52,23 @@ public interface CallTranscriptSegmentRepository
      * @return number of deleted rows
      */
     long deleteByCallId(String callId);
+
+    /**
+     * Serializes archive capture and deletion for one call.
+     *
+     * @param callId call identifier
+     */
+    @Query(
+            value = "SELECT pg_advisory_xact_lock(hashtextextended(:callId, 0))",
+            nativeQuery = true)
+    void acquireArchiveLock(@Param("callId") String callId);
+
+    /**
+     * Deletes only rows included in a successfully verified archive.
+     *
+     * @param callId call identifier
+     * @param ids captured segment identifiers
+     * @return number of deleted rows
+     */
+    long deleteByCallIdAndIdIn(String callId, Collection<Long> ids);
 }

@@ -16,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CallSummaryPersistenceService {
 
+    private static final String SUCCESS = "SUCCESS";
+    private static final String NO_TRANSCRIPT = "NO_TRANSCRIPT";
+
     private final CallSummaryRepository summaryRepository;
     private final IndexingEventEmitter indexingEventEmitter;
 
@@ -37,10 +40,21 @@ public class CallSummaryPersistenceService {
                         summary.getModelConfigVersion())
                 .orElse(null);
         if (existing != null) {
-            return existing;
+            if (isTerminalSuccess(existing)) {
+                return existing;
+            }
+            copyAttempt(summary, existing);
+            final CallSummary recovered = summaryRepository.save(existing);
+            emitSummaryCreatedIfSuccessful(recovered);
+            return recovered;
         }
         final CallSummary saved = summaryRepository.save(summary);
-        if ("SUCCESS".equals(saved.getStatus())) {
+        emitSummaryCreatedIfSuccessful(saved);
+        return saved;
+    }
+
+    private void emitSummaryCreatedIfSuccessful(final CallSummary saved) {
+        if (SUCCESS.equals(saved.getStatus())) {
             if (saved.getPatientId() == null) {
                 throw new IllegalStateException(
                         "Successful call summary requires authoritative patient ownership");
@@ -58,6 +72,24 @@ public class CallSummaryPersistenceService {
                     saved.getSummarizationEngine(),
                     ContentHashUtil.sha256(saved.getSummaryJson())));
         }
-        return saved;
+    }
+
+    private static boolean isTerminalSuccess(final CallSummary summary) {
+        return SUCCESS.equals(summary.getStatus()) || NO_TRANSCRIPT.equals(summary.getStatus());
+    }
+
+    private static void copyAttempt(final CallSummary source, final CallSummary target) {
+        target.setPatientId(source.getPatientId());
+        target.setSummaryJson(source.getSummaryJson());
+        target.setStatus(source.getStatus());
+        target.setTranscriptSegmentCount(source.getTranscriptSegmentCount());
+        target.setGeneratedByUserId(source.getGeneratedByUserId());
+        target.setErrorMessage(source.getErrorMessage());
+        target.setGeneratedAt(source.getGeneratedAt());
+        target.setRiskLevel(source.getRiskLevel());
+        target.setCaregiverVisibility(source.getCaregiverVisibility());
+        target.setSummaryConfidence(source.getSummaryConfidence());
+        target.setSummarizationEngine(source.getSummarizationEngine());
+        target.setTranscriptAvailable(source.getTranscriptAvailable());
     }
 }

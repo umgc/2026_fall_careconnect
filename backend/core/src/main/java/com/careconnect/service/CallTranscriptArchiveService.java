@@ -11,6 +11,7 @@ import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -152,26 +153,42 @@ public class CallTranscriptArchiveService {
    * Archives transcript data when the configured thresholds are satisfied.
    *
    * @param callId call identifier
-   * @param currentSegments transcript segments currently stored in the DB
+   * @return {@code true} when transcript data was archived
+   */
+  @Transactional
+  public boolean archiveIfEligible(final String callId) {
+    return archiveIfEligible(callId, null);
+  }
+
+  /**
+   * Compatibility overload; segments are recaptured under the per-call lock.
+   *
+   * @param callId call identifier
+   * @param ignoredSegments pre-lock segments, intentionally ignored
    * @return {@code true} when transcript data was archived
    */
   public boolean archiveIfEligible(
       final String callId,
-      final List<CallTranscriptSegment> currentSegments) {
+      final List<CallTranscriptSegment> ignoredSegments) {
     final String normalizedCallId = normalize(callId);
     final boolean archived;
     if (normalizedCallId == null || !archiveEnabled || s3StorageService == null) {
       archived = false;
-    } else if (archiveRepository.existsByCallId(normalizedCallId)) {
-      archived = false;
-    } else if (currentSegments == null || currentSegments.isEmpty()) {
-      archived = false;
     } else {
-      final int transcriptChars = countTranscriptChars(currentSegments);
-      if (currentSegments.size() < minArchiveSegments && transcriptChars < minArchiveChars) {
+      segmentRepository.acquireArchiveLock(normalizedCallId);
+      final List<CallTranscriptSegment> capturedSegments =
+          segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(normalizedCallId);
+      if (archiveRepository.existsByCallId(normalizedCallId)
+          || capturedSegments.isEmpty()) {
         archived = false;
       } else {
-        archived = archiveTranscript(normalizedCallId, currentSegments, transcriptChars);
+        final int transcriptChars = countTranscriptChars(capturedSegments);
+        if (capturedSegments.size() < minArchiveSegments
+            && transcriptChars < minArchiveChars) {
+          archived = false;
+        } else {
+          archived = archiveTranscript(normalizedCallId, capturedSegments, transcriptChars);
+        }
       }
     }
     return archived;
@@ -237,10 +254,21 @@ public class CallTranscriptArchiveService {
       final byte[] bytes = objectMapper.writeValueAsBytes(payload);
       final String storageKey = buildStorageKey(normalizedCallId);
       s3StorageService.upload(storageKey, bytes, "application/json");
+      final byte[] persistedBytes = s3StorageService.download(storageKey);
+      if (!Arrays.equals(MessageDigest.getInstance("SHA-256").digest(bytes),
+          MessageDigest.getInstance("SHA-256").digest(persistedBytes))) {
+        throw new IllegalStateException("Transcript archive checksum verification failed");
+      }
       archiveRepository.save(
           buildArchive(normalizedCallId, currentSegments, transcriptChars, storageKey, bytes));
       if (deleteDbRows) {
-        segmentRepository.deleteByCallId(normalizedCallId);
+        final List<Long> capturedIds = currentSegments.stream()
+            .map(CallTranscriptSegment::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (!capturedIds.isEmpty()) {
+          segmentRepository.deleteByCallIdAndIdIn(normalizedCallId, capturedIds);
+        }
       }
       logArchiveSuccess(normalizedCallId, currentSegments.size(), transcriptChars);
       archived = true;

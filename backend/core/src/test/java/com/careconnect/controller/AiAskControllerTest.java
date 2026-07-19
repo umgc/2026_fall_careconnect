@@ -164,15 +164,26 @@ class AiAskControllerTest {
     }
 
     @Test
-    @DisplayName("unknown request fields remain compatibility tolerant")
-    void ask_unknownFieldIsIgnored() throws Exception {
+    @DisplayName("unknown request fields are rejected by the strict contract")
+    void ask_unknownFieldIsRejected() throws Exception {
         mockMvc.perform(post("/api/ai/ask")
                         .contentType("application/json")
                         .content(requestJson(null).replace(
                                 "\"inputModality\": \"TEXT\"",
                                 "\"inputModality\": \"TEXT\", \"unknown\": true")))
-                .andExpect(status().isOk());
-        verify(aiAskService).ask(any(), any());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void ask_sourceTypesRejectsNullElements() throws Exception {
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null).replace(
+                                "\"locale\": \"en-US\"",
+                                "\"locale\": \"en-US\", \"sourceTypes\": [null]")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
     @Test

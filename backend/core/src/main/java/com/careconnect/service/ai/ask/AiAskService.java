@@ -209,6 +209,20 @@ public class AiAskService {
                     auditId,
                     sessionId,
                     "Generated answer did not satisfy the grounded response contract");
+        } catch (final GroundedProviderException ex) {
+            final boolean configuration =
+                    ex.getKind() == GroundedProviderException.Kind.CONFIGURATION;
+            throw new AskAiUnavailableException(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    configuration
+                            ? "MODEL_CONFIGURATION_UNAVAILABLE"
+                            : "MODEL_PROVIDER_UNAVAILABLE",
+                    configuration
+                            ? "Grounded answer generation is not configured"
+                            : "Grounded answer generation is temporarily unavailable",
+                    ex);
         }
         final long inferenceLatencyMs = (System.nanoTime() - inferenceStarted) / 1_000_000L;
 
@@ -217,7 +231,7 @@ public class AiAskService {
                     requestId,
                     auditId,
                     sessionId,
-                    "RETRIEVAL_UNAVAILABLE",
+                    "MODEL_PROVIDER_UNAVAILABLE",
                     "Grounded answer generation is temporarily unavailable",
                     null);
         }
@@ -553,10 +567,12 @@ public class AiAskService {
         }
         final EnumSet<RetrievalRecordType> set = EnumSet.noneOf(RetrievalRecordType.class);
         for (final RetrievalRecordType type : types) {
-            if (type != null) {
-                set.add(type);
+            if (type == null) {
+                throw new AskAiRejectedException(
+                        "INVALID_REQUEST", "sourceTypes must not contain null", 400);
             }
+            set.add(type);
         }
-        return set.isEmpty() ? null : set;
+        return set;
     }
 }

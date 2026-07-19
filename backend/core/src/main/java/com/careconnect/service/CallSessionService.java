@@ -11,8 +11,10 @@ import com.careconnect.repository.CaregiverRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class CallSessionService {
+
+    private static final long TERMINATION_LEASE_SECONDS = 120L;
+    private static final long TERMINATION_RETRY_SECONDS = 30L;
+    private static final int MAX_TERMINATION_ERROR_LENGTH = 2000;
 
     public static final String SESSION_CREATED = "CREATED";
     public static final String SESSION_ACTIVE = "ACTIVE";
@@ -44,8 +50,27 @@ public class CallSessionService {
     private final ScheduledVisitRepository scheduledVisitRepository;
     private final CaregiverRepository caregiverRepository;
 
-    public record LeaveResult(boolean terminationOwner, boolean ended, long remainingParticipants) {}
-    public record DeclineResult(List<Long> notifyUserIds, boolean terminationOwner) {}
+    public record LeaveResult(
+            boolean terminationOwner,
+            boolean ended,
+            long remainingParticipants,
+            UUID terminationClaimId,
+            List<Long> notifyUserIds) {
+        public LeaveResult(
+                final boolean terminationOwner,
+                final boolean ended,
+                final long remainingParticipants) {
+            this(terminationOwner, ended, remainingParticipants, null, List.of());
+        }
+    }
+
+    public record DeclineResult(
+            List<Long> notifyUserIds, boolean terminationOwner, UUID terminationClaimId) {
+        public DeclineResult(
+                final List<Long> notifyUserIds, final boolean terminationOwner) {
+            this(notifyUserIds, terminationOwner, null);
+        }
+    }
 
     public CallSession createSession(
             final String callId,
@@ -203,7 +228,7 @@ public class CallSessionService {
             return new LeaveResult(false, true, 0);
         }
         if (SESSION_TERMINATING.equals(session.getStatus())) {
-            return new LeaveResult(false, false, 0);
+            return claimExistingTermination(session, userId);
         }
         if (!PARTICIPANT_JOINED.equals(participant.getStatus())) {
             throw new AppException(HttpStatus.FORBIDDEN, "User must join the call before this operation");
@@ -215,18 +240,74 @@ public class CallSessionService {
         if (remaining > 1) {
             return new LeaveResult(false, false, remaining);
         }
+        final List<Long> notifyUserIds = terminationRecipients(session.getId(), userId);
+        final UUID claimId = UUID.randomUUID();
         final boolean owner = callSessionRepository.beginTermination(
-                session.getId(), SESSION_CREATED, SESSION_ACTIVE, SESSION_TERMINATING) == 1;
-        return new LeaveResult(owner, false, remaining);
+                session.getId(),
+                SESSION_CREATED,
+                SESSION_ACTIVE,
+                SESSION_TERMINATING,
+                claimId,
+                userId,
+                LocalDateTime.now().plusSeconds(TERMINATION_LEASE_SECONDS),
+                serializeUserIds(notifyUserIds)) == 1;
+        return new LeaveResult(
+                owner, false, remaining, owner ? claimId : null, owner ? notifyUserIds : List.of());
     }
 
-    public void completeTermination(final String callId) {
+    public boolean completeTermination(final String callId, final UUID claimId) {
+        if (claimId == null) {
+            return false;
+        }
         final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        final int completed = callSessionRepository.completeTermination(
+                session.getId(), SESSION_TERMINATING, SESSION_ENDED, claimId);
+        if (completed != 1) {
+            return false;
+        }
         callParticipantRepository.expireJoinedParticipants(
                 session.getId(), PARTICIPANT_JOINED, PARTICIPANT_EXPIRED);
-        callSessionRepository.completeTermination(
-                session.getId(), SESSION_TERMINATING, SESSION_ENDED);
+        return true;
+    }
+
+    public void recordTerminationFailure(
+            final String callId, final UUID claimId, final Throwable failure) {
+        if (claimId == null) {
+            return;
+        }
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        String message = failure == null ? "Unknown termination failure" : failure.getMessage();
+        if (message == null || message.isBlank()) {
+            message = failure == null ? "Unknown termination failure" : failure.getClass().getSimpleName();
+        }
+        if (message.length() > MAX_TERMINATION_ERROR_LENGTH) {
+            message = message.substring(0, MAX_TERMINATION_ERROR_LENGTH);
+        }
+        callSessionRepository.failTermination(
+                session.getId(),
+                SESSION_TERMINATING,
+                claimId,
+                LocalDateTime.now().plusSeconds(TERMINATION_RETRY_SECONDS),
+                message);
+    }
+
+    public LeaveResult claimTerminationRetry(final String callId, final Long userId) {
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (userId == null || callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), userId)
+                .isEmpty()) {
+            throw new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call");
+        }
+        if (SESSION_ENDED.equals(session.getStatus()) || SESSION_CANCELLED.equals(session.getStatus())) {
+            return new LeaveResult(false, true, 0);
+        }
+        if (!SESSION_TERMINATING.equals(session.getStatus())) {
+            throw new AppException(HttpStatus.CONFLICT, "Call termination has not started");
+        }
+        return claimExistingTermination(session, userId);
     }
 
     public DeclineResult declineInvitation(final String callId, final Long userId) {
@@ -249,9 +330,17 @@ public class CallSessionService {
         }
         final long joined = callParticipantRepository.countByCallSessionIdAndStatus(
                 session.getId(), PARTICIPANT_JOINED);
+        final UUID claimId = UUID.randomUUID();
         final boolean terminationOwner = joined <= 1 && callSessionRepository.beginTermination(
-                session.getId(), SESSION_CREATED, SESSION_ACTIVE, SESSION_TERMINATING) == 1;
-        return new DeclineResult(notify, terminationOwner);
+                session.getId(),
+                SESSION_CREATED,
+                SESSION_ACTIVE,
+                SESSION_TERMINATING,
+                claimId,
+                userId,
+                LocalDateTime.now().plusSeconds(TERMINATION_LEASE_SECONDS),
+                serializeUserIds(notify)) == 1;
+        return new DeclineResult(notify, terminationOwner, terminationOwner ? claimId : null);
     }
 
     @Transactional(readOnly = true)
@@ -301,6 +390,51 @@ public class CallSessionService {
                         || PARTICIPANT_JOINED.equals(p.getStatus())
                         || PARTICIPANT_LEFT.equals(p.getStatus()))
                 .map(CallParticipant::getUserId)
+                .toList();
+    }
+
+    private LeaveResult claimExistingTermination(
+            final CallSession session, final Long claimedByUserId) {
+        final UUID claimId = UUID.randomUUID();
+        final LocalDateTime now = LocalDateTime.now();
+        final boolean owner = callSessionRepository.reclaimTermination(
+                session.getId(),
+                SESSION_TERMINATING,
+                claimId,
+                claimedByUserId,
+                now,
+                now.plusSeconds(TERMINATION_LEASE_SECONDS)) == 1;
+        final List<Long> notifyUserIds =
+                deserializeUserIds(session.getTerminationNotifyUserIds());
+        return new LeaveResult(
+                owner, false, 0, owner ? claimId : null, notifyUserIds);
+    }
+
+    private List<Long> terminationRecipients(
+            final Long sessionId, final Long actorUserId) {
+        return callParticipantRepository.findByCallSessionId(sessionId).stream()
+                .filter(p -> !Objects.equals(p.getUserId(), actorUserId))
+                .filter(p -> PARTICIPANT_INVITED.equals(p.getStatus())
+                        || PARTICIPANT_JOINED.equals(p.getStatus())
+                        || PARTICIPANT_LEFT.equals(p.getStatus()))
+                .map(CallParticipant::getUserId)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private String serializeUserIds(final List<Long> userIds) {
+        return userIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+    }
+
+    private List<Long> deserializeUserIds(final String serialized) {
+        if (serialized == null || serialized.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(serialized.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(Long::valueOf)
                 .toList();
     }
 

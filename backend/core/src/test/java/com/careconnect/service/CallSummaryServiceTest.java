@@ -274,6 +274,45 @@ class CallSummaryServiceTest {
         }
 
         @Test
+        @DisplayName("ERROR is not a cache hit and a successful retry recovers the same row")
+        void generateAndStoreSummary_errorRowIsRetriedToSuccess() {
+            CallSummary failed = new CallSummary();
+            failed.setId(77L);
+            failed.setCallId(CALL_ID);
+            failed.setPatientId(42L);
+            failed.setStatus("ERROR");
+            failed.setSummaryJson("{\"headline\":\"Summary unavailable\"}");
+            failed.setErrorMessage("timeout");
+            failed.setTranscriptSnapshotVersion("snapshot-v1");
+            failed.setModelConfigVersion("amazon.nova-pro-v1:0:call-summary-v2");
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(new CallTranscriptService.TranscriptSnapshot(
+                            "[PATIENT] Recovered", 1L, "snapshot-v1"));
+            when(callSummaryRepository
+                    .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+                            CALL_ID,
+                            "snapshot-v1",
+                            "amazon.nova-pro-v1:0:call-summary-v2",
+                            List.of("SUCCESS", "NO_TRANSCRIPT")))
+                    .thenReturn(Optional.empty());
+            when(callSummaryRepository
+                    .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+                            CALL_ID, "snapshot-v1", "amazon.nova-pro-v1:0:call-summary-v2"))
+                    .thenReturn(Optional.of(failed));
+            when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
+                    .thenReturn(Map.of("headline", "Recovered"));
+            when(callSummaryRepository.save(failed)).thenAnswer(inv -> inv.getArgument(0));
+
+            Map<String, Object> result =
+                    service.generateAndStoreSummary(CALL_ID, 8L, Map.of());
+
+            assertThat(result).containsEntry("status", "SUCCESS");
+            assertThat(failed.getId()).isEqualTo(77L);
+            assertThat(failed.getErrorMessage()).isNull();
+            verify(indexingEventEmitter).emitSummaryCreated(any());
+        }
+
+        @Test
         @DisplayName("stores SUCCESS summary and persists riskLevel, caregiverVisibility, and summarizationEngine from Bedrock payload")
         void generateAndStoreSummary_success_persistsRiskAndVisibilityAndEngine() {
             when(callTranscriptService.captureSummarySnapshot(CALL_ID))

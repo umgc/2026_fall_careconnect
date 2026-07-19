@@ -269,6 +269,13 @@ class ChimeServiceTest {
         @DisplayName("independent nodes use the same AWS meeting idempotency token")
         void createMeeting_acrossNodes_usesDeterministicToken() {
             Meeting meeting = buildMeeting(MEETING_ID);
+            CallSession session = new CallSession();
+            session.setCallId(CALL_ID);
+            session.setStatus(CallSessionService.SESSION_CREATED);
+            when(callSessionRepository.findByCallId(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(callSessionRepository.persistMeetingIdIfAbsent(
+                    any(), any(), any(), any())).thenReturn(1);
             when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
                     .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
             ChimeService nodeOne = new ChimeService(
@@ -416,6 +423,7 @@ class ChimeServiceTest {
             CallSession session = new CallSession();
             session.setCallId(CALL_ID);
             session.setChimeMeetingId(MEETING_ID);
+            session.setStatus(CallSessionService.SESSION_ACTIVE);
             when(callSessionRepository.findByCallId(CALL_ID))
                     .thenReturn(Optional.of(session));
             when(chimeSdkMeetingsClient.getMeeting(any(GetMeetingRequest.class)))
@@ -428,6 +436,36 @@ class ChimeServiceTest {
 
             assertThat(result.get("meetingId")).isEqualTo(MEETING_ID);
             verify(chimeSdkMeetingsClient, never()).createMeeting(any(CreateMeetingRequest.class));
+        }
+
+        @Test
+        @DisplayName("new AWS meeting is compensated when persistence loses termination race")
+        void createMeeting_terminationRace_deletesNewMeeting() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            CallSession joinable = new CallSession();
+            joinable.setCallId(CALL_ID);
+            joinable.setStatus(CallSessionService.SESSION_CREATED);
+            CallSession terminating = new CallSession();
+            terminating.setCallId(CALL_ID);
+            terminating.setStatus(CallSessionService.SESSION_TERMINATING);
+            when(callSessionRepository.findByCallId(CALL_ID))
+                    .thenReturn(Optional.of(joinable))
+                    .thenReturn(Optional.of(joinable))
+                    .thenReturn(Optional.of(terminating));
+            when(callSessionRepository.persistMeetingIdIfAbsent(
+                    any(), any(), any(), any())).thenReturn(0);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.deleteMeeting(any(DeleteMeetingRequest.class)))
+                    .thenReturn(DeleteMeetingResponse.builder().build());
+            ChimeService raced = new ChimeService(
+                    chimeSdkMeetingsClient, callSessionRepository,
+                    true, false, "en-US", "us-east-1");
+
+            assertThatThrownBy(() -> raced.createMeeting(CALL_ID))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("non-joinable");
+            verify(chimeSdkMeetingsClient).deleteMeeting(any(DeleteMeetingRequest.class));
         }
     }
 

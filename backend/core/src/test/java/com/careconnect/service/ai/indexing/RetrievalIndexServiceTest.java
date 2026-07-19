@@ -773,8 +773,8 @@ class RetrievalIndexServiceTest {
                 new TranscriptIndexedPayload("call-1", 42L, 1, "sha256:v1"));
 
         assertThat(written).isEqualTo(1);
-        verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
-                "call-1", RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "call-1", RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
         verify(chunkRepository).saveAll(anyList());
     }
 
@@ -841,7 +841,8 @@ class RetrievalIndexServiceTest {
         assertThat(service.ingestTranscriptIndexed(
                 new TranscriptIndexedPayload("call-2", null, 0, "sha256:empty")))
                 .isZero();
-        verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
         verify(chunkRepository, never()).saveAll(anyList());
     }
 
@@ -857,7 +858,8 @@ class RetrievalIndexServiceTest {
                 .hasMessageContaining("CallSession")
                 .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
                         .isFalse());
-        verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
     }
 
     @Test
@@ -887,7 +889,8 @@ class RetrievalIndexServiceTest {
                 .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
                         .isFalse());
 
-        verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
     }
 
     private static CallTranscriptService.IndexingSnapshot indexingSnapshot(
@@ -908,7 +911,8 @@ class RetrievalIndexServiceTest {
         mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
         mailpiece.setConsentScope("on_consent");
         when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
-        when(chunkRepository.findBySourceRecordIdAndRecordType(eq("55"), any()))
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                eq(42L), eq("55"), any()))
                 .thenReturn(List.of());
 
         final MailpieceIndexedPayload payload = new MailpieceIndexedPayload(
@@ -919,8 +923,8 @@ class RetrievalIndexServiceTest {
         final int written = service.ingestMailpieceIndexed(payload);
 
         assertThat(written).isEqualTo(1);
-        verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
-                "55", RetrievalRecordType.USPS_MAIL.name());
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name());
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
@@ -951,8 +955,8 @@ class RetrievalIndexServiceTest {
                 .chunkText("old")
                 .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
                 .build();
-        when(chunkRepository.findBySourceRecordIdAndRecordType(
-                "55", RetrievalRecordType.USPS_MAIL.name()))
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name()))
                 .thenReturn(List.of(existing));
 
         final int written = service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
@@ -961,7 +965,8 @@ class RetrievalIndexServiceTest {
 
         assertThat(written).isZero();
         verify(chunkRepository, never()).saveAll(anyList());
-        verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
     }
 
     @Test
@@ -988,8 +993,8 @@ class RetrievalIndexServiceTest {
                 .chunkText("old without importance")
                 .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
                 .build();
-        when(chunkRepository.findBySourceRecordIdAndRecordType(
-                "55", RetrievalRecordType.USPS_MAIL.name()))
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name()))
                 .thenReturn(List.of(existing));
 
         final int written = service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
@@ -998,8 +1003,8 @@ class RetrievalIndexServiceTest {
                 java.time.LocalDate.of(2025, 3, 3), "on_consent"));
 
         assertThat(written).isEqualTo(1);
-        verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
-                "55", RetrievalRecordType.USPS_MAIL.name());
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name());
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
@@ -1034,15 +1039,16 @@ class RetrievalIndexServiceTest {
                 .isInstanceOf(IndexingDeferredException.class)
                 .hasMessageContaining("authoritative");
 
-        verify(chunkRepository, never()).findBySourceRecordIdAndRecordType(any(), any());
+        verify(chunkRepository, never())
+                .findByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
     }
 
     @Test
     void ingestMailpieceIndexed_duplicateDeliveryLocksAndSkipsExistingChunk() {
         final UspsMailpiece mailpiece = authoritativeMailpiece();
         when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
-        when(chunkRepository.findBySourceRecordIdAndRecordType(
-                "55", RetrievalRecordType.USPS_MAIL.name()))
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name()))
                 .thenReturn(List.of(RetrievalIndexChunk.builder()
                         .sourceRecordId("55")
                         .recordType(RetrievalRecordType.USPS_MAIL.name())

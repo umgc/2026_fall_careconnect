@@ -220,8 +220,8 @@ class IndexingPipelineE2ETest {
         assertThat(indexedChunks.get().get(0).getChunkText())
                 .contains("I started the new medication yesterday.");
 
-        verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
-                "call-tx", RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                55L, "call-tx", RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
         verify(outboxRepository).save(any(IndexingOutboxRow.class));
     }
 

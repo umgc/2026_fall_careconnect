@@ -21,6 +21,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'dart:convert';
 import 'package:care_connect_app/services/video_call_service.dart';
+import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal stub so VideoCallService can be instantiated without a live
@@ -74,6 +75,35 @@ void main() {
         ),
         throwsStateError,
       );
+    });
+
+    test('care-team ambiguity asks for explicit patient selection', () {
+      expect(
+        () => resolveCallSessionPatientUserId(
+          currentUserId: '2',
+          currentRole: 'CAREGIVER',
+          recipientId: '3',
+          recipientRole: 'CAREGIVER',
+          callKind: 'CARE_TEAM',
+          contextPatientUserIds: [7, 8],
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('Select one patient'),
+          ),
+        ),
+      );
+    });
+
+    test('call-session errors do not expose backend diagnostics', () {
+      final safe = safeCallSessionError(
+        Exception('500 patient@example.com database stack trace'),
+      );
+
+      expect(safe, isNot(contains('patient@example.com')));
+      expect(safe, isNot(contains('database')));
     });
 
     test('createCallSession posts durable ownership before joining', () async {
@@ -302,6 +332,27 @@ void main() {
             returnsNormally);
       },
     );
+  });
+
+  group('Active-call event scoping', () {
+    test('accepts only events carrying the active call ID', () {
+      expect(
+        isEventForActiveCall('call-a', {'callId': 'call-a'}),
+        isTrue,
+      );
+      expect(
+        isEventForActiveCall('call-a', {'callId': 'call-b'}),
+        isFalse,
+      );
+      expect(
+        isEventForActiveCall('call-a', {'type': 'recording-state'}),
+        isFalse,
+      );
+      expect(
+        isEventForActiveCall(null, {'callId': 'call-a'}),
+        isFalse,
+      );
+    });
   });
 
   // =========================================================================

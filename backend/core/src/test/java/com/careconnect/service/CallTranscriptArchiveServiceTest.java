@@ -85,9 +85,20 @@ class CallTranscriptArchiveServiceTest {
         List<CallTranscriptSegment> segments = new ArrayList<>();
         String text = "A".repeat(charsPerSegment);
         for (int i = 0; i < count; i++) {
-            segments.add(buildSegment(text, (long) (i % 3 + 1)));
+            CallTranscriptSegment segment = buildSegment(text, (long) (i % 3 + 1));
+            segment.setId((long) i + 1);
+            segments.add(segment);
         }
         return segments;
+    }
+
+    private boolean archiveCaptured(List<CallTranscriptSegment> segments) {
+        when(segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                .thenReturn(segments);
+        org.mockito.Mockito.lenient()
+                .when(s3StorageService.download(anyString()))
+                .thenReturn(new byte[]{1, 2, 3});
+        return service.archiveIfEligible(CALL_ID, segments);
     }
 
     private CallTranscriptArchive buildArchive(String callId, String storageKey,
@@ -436,7 +447,7 @@ class CallTranscriptArchiveServiceTest {
             // 5 segments with 10 chars each = 50 chars, well below both thresholds
             List<CallTranscriptSegment> segments = buildLargeSegmentList(5, 10);
 
-            assertThat(service.archiveIfEligible(CALL_ID, segments)).isFalse();
+            assertThat(archiveCaptured(segments)).isFalse();
         }
 
         @Test
@@ -450,7 +461,7 @@ class CallTranscriptArchiveServiceTest {
             // 601 segments, each 10 chars - exceeds minSegmentsForArchive (600)
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            assertThat(service.archiveIfEligible(CALL_ID, segments)).isTrue();
+            assertThat(archiveCaptured(segments)).isTrue();
             verify(archiveRepository).save(any(CallTranscriptArchive.class));
             verify(s3StorageService).upload(anyString(), any(byte[].class), eq("application/json"));
         }
@@ -466,7 +477,7 @@ class CallTranscriptArchiveServiceTest {
             // 100 segments, each 1300 chars = 130000 chars, exceeds minCharsForArchive (120000)
             List<CallTranscriptSegment> segments = buildLargeSegmentList(100, 1300);
 
-            assertThat(service.archiveIfEligible(CALL_ID, segments)).isTrue();
+            assertThat(archiveCaptured(segments)).isTrue();
             verify(archiveRepository).save(any(CallTranscriptArchive.class));
         }
 
@@ -480,9 +491,28 @@ class CallTranscriptArchiveServiceTest {
 
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            service.archiveIfEligible(CALL_ID, segments);
+            archiveCaptured(segments);
 
-            verify(segmentRepository).deleteByCallId(CALL_ID);
+            verify(segmentRepository).acquireArchiveLock(CALL_ID);
+            verify(segmentRepository).deleteByCallIdAndIdIn(eq(CALL_ID), any());
+        }
+
+        @Test
+        @DisplayName("Does not save or delete when uploaded checksum does not match")
+        void checksumMismatchPreservesCapturedSegments() throws Exception {
+            when(archiveRepository.existsByCallId(CALL_ID)).thenReturn(false);
+            when(callRecordingRepository.findTopByCallIdOrderByStartedAtDesc(anyString()))
+                    .thenReturn(Optional.empty());
+            when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[]{1, 2, 3});
+            when(s3StorageService.download(anyString())).thenReturn(new byte[]{9, 9, 9});
+            List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
+            when(segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(segments);
+
+            assertThat(service.archiveIfEligible(CALL_ID, segments)).isFalse();
+
+            verify(archiveRepository, never()).save(any());
+            verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
         }
 
         @Test
@@ -496,9 +526,9 @@ class CallTranscriptArchiveServiceTest {
 
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            service.archiveIfEligible(CALL_ID, segments);
+            archiveCaptured(segments);
 
-            verify(segmentRepository, never()).deleteByCallId(anyString());
+            verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
         }
 
         @Test
@@ -513,7 +543,7 @@ class CallTranscriptArchiveServiceTest {
 
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            service.archiveIfEligible(CALL_ID, segments);
+            archiveCaptured(segments);
 
             ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
             verify(s3StorageService).upload(keyCaptor.capture(), any(byte[].class),
@@ -532,7 +562,7 @@ class CallTranscriptArchiveServiceTest {
 
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            service.archiveIfEligible(CALL_ID, segments);
+            archiveCaptured(segments);
 
             ArgumentCaptor<CallTranscriptArchive> captor =
                     ArgumentCaptor.forClass(CallTranscriptArchive.class);
@@ -559,7 +589,7 @@ class CallTranscriptArchiveServiceTest {
 
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            assertThat(service.archiveIfEligible(CALL_ID, segments)).isFalse();
+            assertThat(archiveCaptured(segments)).isFalse();
             verify(archiveRepository, never()).save(any());
         }
 
@@ -574,7 +604,7 @@ class CallTranscriptArchiveServiceTest {
             // Segments with actorUserId 1, 2, 3 (repeating pattern from helper)
             List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
 
-            service.archiveIfEligible(CALL_ID, segments);
+            archiveCaptured(segments);
 
             ArgumentCaptor<CallTranscriptArchive> captor =
                     ArgumentCaptor.forClass(CallTranscriptArchive.class);
@@ -605,7 +635,10 @@ class CallTranscriptArchiveServiceTest {
             CallTranscriptSegment blankTextSeg = buildSegment("   ", 1L);
             segments.add(blankTextSeg);
 
-            service.archiveIfEligible(CALL_ID, segments);
+            for (int i = 0; i < segments.size(); i++) {
+                segments.get(i).setId((long) i + 1);
+            }
+            archiveCaptured(segments);
 
             ArgumentCaptor<CallTranscriptArchive> captor =
                     ArgumentCaptor.forClass(CallTranscriptArchive.class);

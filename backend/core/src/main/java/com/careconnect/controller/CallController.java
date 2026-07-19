@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -421,11 +422,6 @@ public class CallController {
     return activeParticipantIds;
   }
 
-  private Set<Long> resolveNotifyUserIds(final String callId, final Long excludeUserId) {
-    return new LinkedHashSet<>(
-        callSessionService.getOtherParticipantUserIds(callId, excludeUserId));
-  }
-
   @PostMapping("/{callId}/end")
   @Operation(summary = "End a Chime meeting and notify all participants")
   /** Handles end-call request. */
@@ -448,16 +444,19 @@ public class CallController {
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
 
       if (shouldEndMeeting) {
-        maybeRecordFinalOverallSentiment(callId, currentUser.getId(), null);
-        maybeGenerateAndStoreCallSummary(callId, currentUser.getId());
-        callRecordingService.stopRecording(callId);
-        chimeService.endMeeting(callId);
-        callSessionService.completeTermination(callId);
+        final boolean completed = finalizeTermination(
+            callId, currentUser.getId(), leave.terminationClaimId());
+        if (!completed) {
+          return ResponseEntity.status(HttpStatus.ACCEPTED).body(
+              Map.of(
+                  "status", "processing",
+                  "callId", callId,
+                  "remainingParticipantCount", "0"));
+        }
       }
 
       if (shouldEndMeeting) {
-        final Set<Long> notifyIds = resolveNotifyUserIds(callId, currentUser.getId());
-        notifyIds.stream()
+        leave.notifyUserIds().stream()
             .map(String::valueOf)
             .forEach(
                 participantId -> callNotificationHandler.sendNotificationToUser(
@@ -515,7 +514,7 @@ public class CallController {
       return ResponseEntity.ok(
           Map.of(
               "status",
-              shouldEndMeeting ? "ended" : "left",
+              shouldEndMeeting ? "ended" : leave.remainingParticipants() == 0 ? "processing" : "left",
               "callId",
               callId,
               "remainingParticipantCount",
@@ -535,6 +534,49 @@ public class CallController {
         log.error("Failed to end call {}: {}", callId, e.getMessage(), e);
       }
       throw internalServerError("Failed to end call: " + e.getMessage(), e);
+    }
+  }
+
+  @PostMapping("/{callId}/termination/reconcile")
+  @Operation(summary = "Retry a failed or abandoned call termination")
+  public final ResponseEntity<Map<String, String>> reconcileTermination(
+      @PathVariable final String callId) {
+    final User currentUser = getCurrentUser();
+    final CallSessionService.LeaveResult claim =
+        callSessionService.claimTerminationRetry(callId, currentUser.getId());
+    if (claim.ended()) {
+      return ResponseEntity.ok(Map.of("status", "ended", "callId", callId));
+    }
+    if (!claim.terminationOwner()) {
+      return ResponseEntity.status(HttpStatus.ACCEPTED)
+          .body(Map.of("status", "processing", "callId", callId));
+    }
+    if (!finalizeTermination(callId, currentUser.getId(), claim.terminationClaimId())) {
+      return ResponseEntity.status(HttpStatus.ACCEPTED)
+          .body(Map.of("status", "processing", "callId", callId));
+    }
+    claim.notifyUserIds().stream()
+        .map(String::valueOf)
+        .forEach(participantId -> callNotificationHandler.sendNotificationToUser(
+            participantId,
+            Map.of(
+                "type", "call-ended",
+                "callId", callId,
+                "endedBy", currentUser.getId().toString())));
+    return ResponseEntity.ok(Map.of("status", "ended", "callId", callId));
+  }
+
+  private boolean finalizeTermination(
+      final String callId, final Long actorUserId, final UUID claimId) {
+    try {
+      maybeRecordFinalOverallSentiment(callId, actorUserId, null);
+      maybeGenerateAndStoreCallSummary(callId, actorUserId);
+      callRecordingService.stopRecording(callId);
+      chimeService.endMeeting(callId);
+      return callSessionService.completeTermination(callId, claimId);
+    } catch (RuntimeException failure) {
+      callSessionService.recordTerminationFailure(callId, claimId, failure);
+      throw failure;
     }
   }
 
