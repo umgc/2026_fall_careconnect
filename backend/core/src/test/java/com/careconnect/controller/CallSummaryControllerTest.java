@@ -8,7 +8,6 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
-import com.careconnect.service.CaregiverService;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -29,8 +28,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -64,9 +66,6 @@ class CallSummaryControllerTest {
     private CallSessionService callSessionService;
 
     @MockitoBean
-    private CaregiverService caregiverService;
-
-    @MockitoBean
     private UserRepository userRepository;
 
     private static final long SUMMARY_ID = 101L;
@@ -89,7 +88,9 @@ class CallSummaryControllerTest {
         doThrow(new AppException(HttpStatus.FORBIDDEN, "User has no historical call access"))
                 .when(callSessionService)
                 .requireHistoricalParticipant(anyString(), anyLong());
-        when(caregiverService.hasAccessToPatient(anyLong(), anyLong())).thenReturn(false);
+        doThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"))
+                .when(callSessionService)
+                .requirePatientEntityAccess(any(), anyLong());
     }
 
     private Map<String, Object> exampleResponse() {
@@ -152,12 +153,15 @@ class CallSummaryControllerTest {
     void getSummaryById_patientRelationship_returns200() throws Exception {
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOwnedBy(OWNER_USER_ID)));
-        when(caregiverService.hasAccessToPatient(CURRENT_USER_ID, PATIENT_ID)).thenReturn(true);
+        doNothing().when(callSessionService)
+                .requirePatientEntityAccess(caregiverUser, PATIENT_ID);
         when(callSummaryService.getSummaryById(SUMMARY_ID))
                 .thenReturn(Optional.of(exampleResponse()));
 
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
                 .andExpect(status().isOk());
+
+        verify(callSessionService).requirePatientEntityAccess(caregiverUser, PATIENT_ID);
     }
 
     @Test
@@ -172,7 +176,7 @@ class CallSummaryControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(callSessionService).requireHistoricalParticipant(CALL_ID, CURRENT_USER_ID);
-        verify(caregiverService).hasAccessToPatient(CURRENT_USER_ID, PATIENT_ID);
+        verify(callSessionService).requirePatientEntityAccess(eq(caregiverUser), eq(PATIENT_ID));
         verify(callSummaryService, never()).getSummaryById(SUMMARY_ID);
     }
 

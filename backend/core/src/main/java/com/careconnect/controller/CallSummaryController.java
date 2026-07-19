@@ -7,7 +7,6 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
-import com.careconnect.service.CaregiverService;
 
 import java.util.Map;
 import java.util.Optional;
@@ -44,10 +43,12 @@ import org.springframework.web.bind.annotation.RestController;
  *       no-op until Brandon's {@code feature/bjackson-rbac-infrastructure}
  *       branch enables {@code @EnableMethodSecurity} in
  *       {@code SecurityConfig}.</li>
- *   <li>The endpoint authorizes only admin, durable historical call
- *       participants, or callers with a current patient relationship via
- *       existing scope APIs. Telemetry targets, transcript access, and
- *       summary generator ownership are not authorization sources.</li>
+ *   <li>The endpoint authorizes admin, durable historical call participants,
+ *       or callers with a current patient relationship via
+ *       {@link CallSessionService#requirePatientEntityAccess}. Same policy as
+ *       {@code CallController.requireDurableCallAccess} for call-scoped summary
+ *       reads. Telemetry targets, transcript access, and summary generator
+ *       ownership are not authorization sources.</li>
  * </ol>
  */
 @RestController
@@ -59,7 +60,6 @@ public class CallSummaryController {
 
     private final CallSummaryService callSummaryService;
     private final CallSessionService callSessionService;
-    private final CaregiverService caregiverService;
     private final UserRepository userRepository;
 
     /**
@@ -101,15 +101,15 @@ public class CallSummaryController {
                     summary.getCallId(), currentUser.getId());
             return true;
         } catch (AppException ignored) {
-            // Fall through to current patient relationship.
+            // Fall through to current patient relationship (same as callId summary path).
         }
         if (summary.getPatientId() == null) {
             return false;
         }
         try {
-            return caregiverService.hasAccessToPatient(
-                    currentUser.getId(), summary.getPatientId());
-        } catch (RuntimeException accessFailure) {
+            callSessionService.requirePatientEntityAccess(currentUser, summary.getPatientId());
+            return true;
+        } catch (AppException accessFailure) {
             return false;
         }
     }

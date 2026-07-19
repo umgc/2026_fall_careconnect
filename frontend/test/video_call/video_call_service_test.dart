@@ -1114,5 +1114,51 @@ void main() {
       expect(endBody!['participantUserIds'], containsAll(['user-2', 'user-4']));
       expect(endBody!['otherPartyId'], 'user-2');
     });
+
+    test('endCall_marksCompletedOnProcessingStatus', () async {
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: 'user-1',
+          jwtToken: 'tok',
+          enablePatientSentimentCapture: false,
+        );
+        await service.joinCall(
+          callId: 'call-processing-end',
+          otherPartyId: 'user-2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.endCall();
+
+        await expectLater(
+          service.joinCall(
+            callId: 'call-processing-end',
+            otherPartyId: 'user-2',
+            isVideoEnabled: true,
+            isAudioEnabled: true,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('already ended'),
+            ),
+          ),
+        );
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/end')) {
+            return http.Response('{"status":"processing"}', 202);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+    });
   });
 }
