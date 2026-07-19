@@ -14,6 +14,10 @@ class TemporalQueryIntentPolicyTest {
                 .isTrue();
         assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("Any recent medication changes?"))
                 .isTrue();
+        assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("What is my most recent A1C?"))
+                .isTrue();
+        assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("What meds am I on right now?"))
+                .isTrue();
     }
 
     @Test
@@ -21,6 +25,10 @@ class TemporalQueryIntentPolicyTest {
         assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("Was metformin changed in March?"))
                 .isFalse();
         assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("List allergies"))
+                .isFalse();
+        assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("What is the most common side effect?"))
+                .isFalse();
+        assertThat(TemporalQueryIntentPolicy.requiresDatedEvidence("I know now about my plan"))
                 .isFalse();
     }
 }

@@ -53,6 +53,7 @@ public class CallTerminationReconciler {
                         Map.of(
                                 "type", "call-ended",
                                 "callId", claim.callId(),
-                                "endedBy", "SYSTEM")));
+                                "endedBy", "SYSTEM",
+                                "status", "ended")));
     }
 }

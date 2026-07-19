@@ -255,6 +255,36 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void leaveOrBeginTermination_rejectsInvitedUserDuringTerminating() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 9L))
+                .thenReturn(Optional.of(participant(
+                        9L, CallSessionService.PARTICIPANT_INVITED)));
+
+        assertThatThrownBy(() -> service.leaveOrBeginTermination("call-1", 9L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("must join");
+    }
+
+    @Test
+    void revertJoinAfterChimeFailure_revertsJoinedAndClearsElection() {
+        final CallSession session = session(10L, 42L);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.revertJoinedToInvitedWithoutAttendee(
+                10L, 2L, CallSessionService.PARTICIPANT_JOINED,
+                CallSessionService.PARTICIPANT_INVITED)).thenReturn(1);
+        when(participantRepository.countByCallSessionIdAndStatus(
+                10L, CallSessionService.PARTICIPANT_JOINED)).thenReturn(0L);
+
+        service.revertJoinAfterChimeFailure("call-1", 2L);
+
+        verify(sessionRepository).clearRecordingStartElected(10L);
+    }
+
+    @Test
     void createSession_existingRowsAreIdempotent() {
         final User creator = user(2L, Role.CAREGIVER);
         final User patientUser = user(7L, Role.PATIENT);

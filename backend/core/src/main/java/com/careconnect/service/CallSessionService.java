@@ -300,6 +300,56 @@ public class CallSessionService {
                 session.getId(), meetingId, SESSION_CREATED, SESSION_ACTIVE);
     }
 
+    /**
+     * Rolls back a durable JOINED mark when Chime attendee creation fails before credentials are
+     * persisted. Also clears the recording-start election when fewer than two participants remain
+     * joined so a later successful join can re-elect.
+     */
+    public void revertJoinAfterChimeFailure(final String callId, final Long userId) {
+        final CallSession session = callSessionRepository.findByCallId(callId)
+                .orElse(null);
+        if (session == null || userId == null) {
+            return;
+        }
+        final int reverted = callParticipantRepository.revertJoinedToInvitedWithoutAttendee(
+                session.getId(), userId, PARTICIPANT_JOINED, PARTICIPANT_INVITED);
+        if (reverted != 1) {
+            return;
+        }
+        final long joined = callParticipantRepository.countByCallSessionIdAndStatus(
+                session.getId(), PARTICIPANT_JOINED);
+        if (joined < 2) {
+            callSessionRepository.clearRecordingStartElected(session.getId());
+        }
+    }
+
+    /**
+     * Authorizes access using the patient entity id from historical call artifacts when no
+     * durable session row exists.
+     */
+    @Transactional(readOnly = true)
+    public void requirePatientEntityAccess(final User user, final Long patientEntityId) {
+        if (user == null || user.getId() == null) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        }
+        if (user.getRole() == com.careconnect.security.Role.ADMIN) {
+            return;
+        }
+        if (patientEntityId == null) {
+            throw new AppException(HttpStatus.NOT_FOUND, "Call not found");
+        }
+        authorizeForPatient(user, requirePatientUserIdFromEntityId(patientEntityId));
+    }
+
+    private Long requirePatientUserIdFromEntityId(final Long patientEntityId) {
+        final Patient patient = patientRepository.findById(patientEntityId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient not found"));
+        if (patient.getUser() == null || patient.getUser().getId() == null) {
+            throw new AppException(HttpStatus.NOT_FOUND, "Patient user not found");
+        }
+        return patient.getUser().getId();
+    }
+
     public boolean recordJoin(
             final CallSession session, final Long userId, final String chimeMeetingId) {
         final CallSession locked = callSessionRepository.findByCallIdForLifecycle(session.getCallId())
@@ -334,6 +384,11 @@ public class CallSessionService {
             return new LeaveResult(false, true, 0);
         }
         if (SESSION_TERMINATING.equals(session.getStatus())) {
+            if (!PARTICIPANT_JOINED.equals(participant.getStatus())
+                    && !PARTICIPANT_LEFT.equals(participant.getStatus())) {
+                throw new AppException(
+                        HttpStatus.FORBIDDEN, "User must join the call before this operation");
+            }
             return claimExistingTermination(session, userId);
         }
         if (!PARTICIPANT_JOINED.equals(participant.getStatus())) {

@@ -160,6 +160,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 // Fail-closed coverage: every catalog entry is applied exactly once via the ledger.
                 applyOutstandingCatalogPatches();
             });
+            // Concurrent index builds must not hold the startup advisory lock.
+            ensureRetrievalConcurrentIndexes();
         } else {
             applyCallSessionPatches();
             applyRetrievalIndexChunkPatches();
@@ -400,44 +402,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "'SUMMARY_APPOINTMENT','SUMMARY_CARE_INSTRUCTION','SUMMARY_CONDITION'," +
             "'SUMMARY_SOAP','SUMMARY_CLINICAL_OBSERVATION') AND migration_status = 'ACTIVE'"
         );
-        ensureConcurrentIndex(
-            "V2607182130b – concurrent retrieval replay index",
-            "idx_retrieval_summary_replay",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
-            "  ON retrieval_index_chunk " +
-            "    (citation_replay_after, patient_id, source_record_id) " +
-            "  WHERE migration_status = 'ACTIVE'",
-            "CREATE INDEX idx_retrieval_summary_replay "
-                    + "ON retrieval_index_chunk "
-                    + "(citation_replay_after, patient_id, source_record_id) "
-                    + "WHERE migration_status = 'ACTIVE'"
-        );
-        ensureConcurrentIndex(
-            "V2607182130c – concurrent retrieval replay claim index",
-            "idx_retrieval_summary_replay_claim",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay_claim " +
-            "  ON retrieval_index_chunk " +
-            "    (citation_replay_claimed_until, citation_replay_after, " +
-            "     patient_id, source_record_id) " +
-            "  WHERE migration_status = 'ACTIVE'",
-            "CREATE INDEX idx_retrieval_summary_replay_claim "
-                    + "ON retrieval_index_chunk "
-                    + "(citation_replay_claimed_until, citation_replay_after, "
-                    + "patient_id, source_record_id) "
-                    + "WHERE migration_status = 'ACTIVE'"
-        );
         applyRequiredPatch(
             "V2607182105 – add retrieval source ownership discriminator",
             "ALTER TABLE retrieval_index_chunk " +
             "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL"
-        );
-        ensureConcurrentIndex(
-            "V2607182105b – concurrent retrieval source identity index",
-            "idx_retrieval_chunk_source_identity",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
-            "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)",
-            "CREATE INDEX idx_retrieval_chunk_source_identity "
-                    + "ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
         );
         applyRequiredPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
@@ -453,23 +421,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  ON retrieval_index_chunk (patient_id, record_type);" +
             "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source " +
             "  ON retrieval_index_chunk (source_record_id, record_type)"
-        );
-        ensureConcurrentIndex(
-            "V2607071921c – concurrent retrieval FTS index",
-            "idx_retrieval_chunk_fts",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_fts " +
-            "ON retrieval_index_chunk USING GIN (search_vector)",
-            "CREATE INDEX idx_retrieval_chunk_fts "
-                    + "ON retrieval_index_chunk USING GIN (search_vector)"
-        );
-        ensureConcurrentIndex(
-            "V2607071921c – concurrent retrieval embedding index",
-            "idx_retrieval_chunk_embedding",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_embedding " +
-            "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)",
-            "CREATE INDEX idx_retrieval_chunk_embedding "
-                    + "ON retrieval_index_chunk USING ivfflat "
-                    + "(embedding vector_cosine_ops) WITH (lists = 100)"
         );
         applyRequiredPatch(
             "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
@@ -689,6 +640,64 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     "Required schema patch could not be applied: " + name,
                     e);
         }
+    }
+
+    /**
+     * Builds large retrieval indexes outside the production migration advisory lock so peer
+     * nodes are not blocked beyond the lock wait timeout during CONCURRENTLY DDL.
+     */
+    private void ensureRetrievalConcurrentIndexes() {
+        ensureConcurrentIndex(
+            "V2607182130b – concurrent retrieval replay index",
+            "idx_retrieval_summary_replay",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
+            "  ON retrieval_index_chunk " +
+            "    (citation_replay_after, patient_id, source_record_id) " +
+            "  WHERE migration_status = 'ACTIVE'",
+            "CREATE INDEX idx_retrieval_summary_replay "
+                    + "ON retrieval_index_chunk "
+                    + "(citation_replay_after, patient_id, source_record_id) "
+                    + "WHERE migration_status = 'ACTIVE'"
+        );
+        ensureConcurrentIndex(
+            "V2607182130c – concurrent retrieval replay claim index",
+            "idx_retrieval_summary_replay_claim",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay_claim " +
+            "  ON retrieval_index_chunk " +
+            "    (citation_replay_claimed_until, citation_replay_after, " +
+            "     patient_id, source_record_id) " +
+            "  WHERE migration_status = 'ACTIVE'",
+            "CREATE INDEX idx_retrieval_summary_replay_claim "
+                    + "ON retrieval_index_chunk "
+                    + "(citation_replay_claimed_until, citation_replay_after, "
+                    + "patient_id, source_record_id) "
+                    + "WHERE migration_status = 'ACTIVE'"
+        );
+        ensureConcurrentIndex(
+            "V2607182105b – concurrent retrieval source identity index",
+            "idx_retrieval_chunk_source_identity",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
+            "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)",
+            "CREATE INDEX idx_retrieval_chunk_source_identity "
+                    + "ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
+        );
+        ensureConcurrentIndex(
+            "V2607071921c – concurrent retrieval FTS index",
+            "idx_retrieval_chunk_fts",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_fts " +
+            "ON retrieval_index_chunk USING GIN (search_vector)",
+            "CREATE INDEX idx_retrieval_chunk_fts "
+                    + "ON retrieval_index_chunk USING GIN (search_vector)"
+        );
+        ensureConcurrentIndex(
+            "V2607071921c – concurrent retrieval embedding index",
+            "idx_retrieval_chunk_embedding",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_embedding " +
+            "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)",
+            "CREATE INDEX idx_retrieval_chunk_embedding "
+                    + "ON retrieval_index_chunk USING ivfflat "
+                    + "(embedding vector_cosine_ops) WITH (lists = 100)"
+        );
     }
 
     private void ensureConcurrentIndex(
