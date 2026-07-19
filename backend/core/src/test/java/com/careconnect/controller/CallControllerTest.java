@@ -144,6 +144,8 @@ class CallControllerTest {
                 .thenReturn(durableSession);
         when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
         when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
+        when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(false);
+        doNothing().when(callSessionService).attachChimeMeetingId(anyString(), anyString());
         when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
                 .thenReturn(new CallSessionService.LeaveResult(
                         true, false, 0L, TERMINATION_CLAIM, List.of()));
@@ -303,6 +305,53 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(chimeService).joinMeeting(eq(CALL_ID), eq("2"), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("CHIME-001b: durable recordJoin happens before Chime joinMeeting")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void joinRecordsDurableParticipantBeforeChime() throws Exception {
+            mockCurrentCaregiver();
+            final org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                    callSessionService, chimeService);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            order.verify(callSessionService).recordJoin(any(), eq(2L), isNull());
+            order.verify(chimeService).joinMeeting(eq(CALL_ID), eq("2"), anyString(), anyString());
+            verify(callSessionService).attachChimeMeetingId(CALL_ID, "mtg-123");
+        }
+
+        @Test
+        @DisplayName("endCall returns 202 processing but still fans out call-ended")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void endCallProcessingStillNotifiesPeers() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.leaveOrBeginTermination(CALL_ID, 2L))
+                    .thenReturn(new CallSessionService.LeaveResult(
+                            true, false, 0L, TERMINATION_CLAIM, List.of(1L, 4L)));
+            when(callTerminationExecutor.execute(CALL_ID, 2L, TERMINATION_CLAIM))
+                    .thenReturn(false);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isAccepted())
+                    .andExpect(jsonPath("$.status").value("processing"));
+
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("1"),
+                    argThat(m -> "call-ended".equals(m.get("type"))
+                            && "processing".equals(m.get("status"))));
+            verify(callNotificationHandler).sendNotificationToUser(
+                    eq("4"),
+                    argThat(m -> "call-ended".equals(m.get("type"))
+                            && "processing".equals(m.get("status"))));
         }
 
         @Test

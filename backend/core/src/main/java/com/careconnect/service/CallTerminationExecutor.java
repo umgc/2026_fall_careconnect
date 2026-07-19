@@ -72,6 +72,15 @@ public class CallTerminationExecutor {
           return false;
         }
         recordingDone = recording == RecordingOutcome.DONE;
+        if (!recordingDone) {
+          // Park before meeting teardown so a retryable stop is not racing an ended meeting.
+          if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
+            return false;
+          }
+          callSessionService.recordTerminationRetry(
+              callId, claimId, "Recording stop remains retryable");
+          return false;
+        }
       }
 
       progress = callSessionService.renewTerminationOwnership(callId, claimId);
@@ -80,15 +89,6 @@ public class CallTerminationExecutor {
       }
       if (!progress.isDone(TerminationStep.MEETING)
           && !runMeetingStep(callId, claimId)) {
-        return false;
-      }
-
-      if (!recordingDone) {
-        if (callSessionService.verifyTerminationOwnership(callId, claimId) == null) {
-          return false;
-        }
-        callSessionService.recordTerminationRetry(
-            callId, claimId, "Recording stop remains retryable");
         return false;
       }
 
@@ -151,7 +151,7 @@ public class CallTerminationExecutor {
       }
       return RecordingOutcome.STALE;
     }
-    // Keep ownership through meeting shutdown; park for retry only after MEETING.
+    // Keep ownership and park for retry before meeting teardown when stop is not yet durable.
     return RecordingOutcome.DEFERRED;
   }
 

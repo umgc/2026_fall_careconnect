@@ -233,9 +233,29 @@ public class CallRecordingService {
           "No active Chime meeting found for callId: " + callId);
     }
 
-    recordingRepository.reserveActiveGeneration(
+    final int reserved = recordingRepository.reserveActiveGeneration(
         callId, purpose.name(), initiatedByUserId, consented);
     CallRecording recording = recordingRepository.findActiveByCallId(callId).orElse(null);
+    if (reserved == 0 && recording != null) {
+      // Another node owns this generation — never drive AWS on their RESERVED/STARTING row.
+      if (recording.getLifecycleStatus() != RecordingLifecycleStatus.RESERVED
+          && recording.getLifecycleStatus() != RecordingLifecycleStatus.STARTING) {
+        if (initiatedByUserId != null) {
+          return new RecordingStartResult(
+              RecordingStartResult.Status.POLICY_BLOCKED, callId, recording.getId(),
+              recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+              "A capture is already active");
+        }
+        return new RecordingStartResult(
+            RecordingStartResult.Status.ALREADY_RECORDING, callId, recording.getId(),
+            recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+            "Recording already in progress for this call");
+      }
+      return new RecordingStartResult(
+          RecordingStartResult.Status.ALREADY_RECORDING, callId, recording.getId(),
+          recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+          "Another node is starting capture for this call");
+    }
     if (recording != null && recording.getLifecycleStatus() != RecordingLifecycleStatus.RESERVED) {
       if (initiatedByUserId != null) {
         return new RecordingStartResult(
