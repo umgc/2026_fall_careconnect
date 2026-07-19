@@ -116,8 +116,8 @@ public class ChimeService {
     /** Maximum length for a Chime external user ID. */
     private static final int CHIME_USER_ID_MAX_LENGTH = 64;
 
-    /** Lease window for durable attendee-creation ownership. */
-    private static final long ATTENDEE_CLAIM_LEASE_SECONDS = 30L;
+    /** Lease window for durable attendee-creation ownership (covers slow AWS list/create). */
+    private static final long ATTENDEE_CLAIM_LEASE_SECONDS = 120L;
 
     @Autowired
     public ChimeService(
@@ -518,14 +518,20 @@ public class ChimeService {
             cacheAttendeeCredentials(callId, userId, credentials);
             return credentials;
         }
-        // Lost ownership after AWS create — compensate, then only return durable winner credentials.
-        if (createdHere) {
-            compensateCreatedAttendee(meetingId, String.valueOf(credentials.get("attendeeId")));
-        }
+        // Lost ownership after AWS create. Only delete an attendee we created when it is
+        // not the durable winner's id (a peer may have listed+finalized the same AWS attendee).
         releaseAttendeeClaim(callId, userId, claim.claimToken());
         final CallParticipant winner = callParticipantRepository
                 .findByCallSessionIdAndUserId(claim.sessionId(), claim.userId())
                 .orElse(null);
+        final String createdAttendeeId = String.valueOf(credentials.get("attendeeId"));
+        if (createdHere) {
+            final boolean winnerOwnsCreated = winner != null
+                    && createdAttendeeId.equals(winner.getChimeAttendeeId());
+            if (!winnerOwnsCreated) {
+                compensateCreatedAttendee(meetingId, createdAttendeeId);
+            }
+        }
         if (winner != null
                 && winner.getChimeAttendeeId() != null
                 && winner.getChimeJoinToken() != null) {

@@ -342,7 +342,12 @@ class VideoCallService {
       debugPrint('⚠️ Error notifying backend of call end: $e');
     }
 
-    _resetLocalCallState(callId: callId, markCompleted: endStatus == 'ended');
+    // 202 "processing" means termination is claimed server-side — treat like ended
+    // so clients do not retry join against a TERMINATING call.
+    _resetLocalCallState(
+      callId: callId,
+      markCompleted: endStatus == 'ended' || endStatus == 'processing',
+    );
     _onCallEnded?.call();
   }
 
