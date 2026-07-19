@@ -114,7 +114,7 @@ class CallNotificationService {
       debugPrint('📞 Received incoming video call: $data');
       _incomingCallController.add(data);
       _handleIncomingCall(data);
-    } else if (type == 'call-ended') {
+    } else if (type == 'call-ended' || type == 'call-ending') {
       debugPrint('📞 Call ended: $data');
       _incomingCallController.add(data);
       _dismissIncomingCallForCallId((data['callId'] ?? '').toString());

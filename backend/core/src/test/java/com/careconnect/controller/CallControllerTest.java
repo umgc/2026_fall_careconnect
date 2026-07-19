@@ -353,6 +353,14 @@ class CallControllerTest {
                     eq("4"),
                     argThat(m -> "call-ending".equals(m.get("type"))
                             && "processing".equals(m.get("status"))));
+            verify(callTelemetryService).recordCallEvent(
+                    eq(CALL_ID),
+                    eq("CALL_END"),
+                    eq(2L),
+                    isNull(),
+                    eq("SUCCESS"),
+                    argThat(meta -> "processing".equals(String.valueOf(meta.get("terminationStatus")))),
+                    isNull());
         }
 
         @Test
