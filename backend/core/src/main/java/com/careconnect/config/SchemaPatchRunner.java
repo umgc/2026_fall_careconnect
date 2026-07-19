@@ -10,11 +10,14 @@ import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Applies one-time schema patches via plain JDBC after the application context starts.
  * Production keeps Hibernate DDL and Flyway disabled, so this runner is the sole DDL
- * owner; retrieval changes additionally use a bounded PostgreSQL advisory lock.
+ * owner; required production changes additionally use a bounded PostgreSQL advisory lock.
  *
  * Each patch is idempotent: safe to execute on every restart.
  */
@@ -22,6 +25,12 @@ import java.sql.Statement;
 @Component
 @Order(1)
 public class SchemaPatchRunner implements CommandLineRunner {
+
+    private static final String PRODUCTION_SCHEMA_LOCK =
+            "hashtextextended('careconnect:production-schema', 0)";
+    private static final Pattern POSTGRES_TEXT_CAST = Pattern.compile(
+            "::(?:character varying|varchar|text)(?:\\(\\d+\\))?");
+    private static final Pattern QUOTED_NUMBER = Pattern.compile("'(\\d+)'");
 
     private final DataSource dataSource;
 
@@ -118,11 +127,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
             "))"
         );
-        applyCallSessionPatches();
         if (isPostgreSql()) {
-            applyCallSummaryIdempotencyPatch();
-            withRetrievalMigrationLock(this::applyRetrievalIndexChunkPatches);
+            withProductionSchemaMigrationLock(() -> {
+                applyCallSessionPatches();
+                applyCallSummaryIdempotencyPatch();
+                applyRetrievalIndexChunkPatches();
+            });
         } else {
+            applyCallSessionPatches();
             applyRetrievalIndexChunkPatches();
         }
         applyUspsMailpiecePatches();
@@ -143,10 +155,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         + "(call_id, transcript_snapshot_version, model_config_version) "
                         + "WHERE transcript_snapshot_version IS NOT NULL "
                         + "AND model_config_version IS NOT NULL",
-                "UNIQUE INDEX",
-                "(call_id, transcript_snapshot_version, model_config_version)",
-                "transcript_snapshot_version IS NOT NULL",
-                "model_config_version IS NOT NULL");
+                "CREATE UNIQUE INDEX uq_call_summary_generation_snapshot "
+                        + "ON call_summaries "
+                        + "(call_id, transcript_snapshot_version, model_config_version) "
+                        + "WHERE transcript_snapshot_version IS NOT NULL "
+                        + "AND model_config_version IS NOT NULL");
         verifyCallSummaryIdempotencySchema();
     }
 
@@ -248,10 +261,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
                             + "ON call_sessions "
                             + "(termination_next_retry_at, termination_lease_until) "
                             + "WHERE status = 'TERMINATING'",
-                    "INDEX",
-                    "(termination_next_retry_at, termination_lease_until)",
-                    "status",
-                    "TERMINATING");
+                    "CREATE INDEX idx_call_sessions_termination_retry "
+                            + "ON call_sessions "
+                            + "(termination_next_retry_at, termination_lease_until) "
+                            + "WHERE status = 'TERMINATING'");
             verifyForeignKeyCount(
                     "call termination claimant", "call_sessions",
                     "termination_claimed_by_user_id", "users", "id", 'a', 1);
@@ -331,8 +344,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  ON retrieval_index_chunk " +
             "    (citation_replay_after, patient_id, source_record_id) " +
             "  WHERE migration_status = 'ACTIVE'",
-            "(citation_replay_after, patient_id, source_record_id)",
-            "migration_status = 'ACTIVE'"
+            "CREATE INDEX idx_retrieval_summary_replay "
+                    + "ON retrieval_index_chunk "
+                    + "(citation_replay_after, patient_id, source_record_id) "
+                    + "WHERE migration_status = 'ACTIVE'"
         );
         ensureConcurrentIndex(
             "V2607182130c – concurrent retrieval replay claim index",
@@ -342,8 +357,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "    (citation_replay_claimed_until, citation_replay_after, " +
             "     patient_id, source_record_id) " +
             "  WHERE migration_status = 'ACTIVE'",
-            "(citation_replay_claimed_until, citation_replay_after, patient_id, source_record_id)",
-            "migration_status = 'ACTIVE'"
+            "CREATE INDEX idx_retrieval_summary_replay_claim "
+                    + "ON retrieval_index_chunk "
+                    + "(citation_replay_claimed_until, citation_replay_after, "
+                    + "patient_id, source_record_id) "
+                    + "WHERE migration_status = 'ACTIVE'"
         );
         applyRequiredPatch(
             "V2607182105 – add retrieval source ownership discriminator",
@@ -354,7 +372,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "V2607182105b – concurrent retrieval source identity index",
             "idx_retrieval_chunk_source_identity",
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
-            "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
+            "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)",
+            "CREATE INDEX idx_retrieval_chunk_source_identity "
+                    + "ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
         );
         applyRequiredPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
@@ -375,13 +395,18 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "V2607071921c – concurrent retrieval FTS index",
             "idx_retrieval_chunk_fts",
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_fts " +
-            "ON retrieval_index_chunk USING GIN (search_vector)"
+            "ON retrieval_index_chunk USING GIN (search_vector)",
+            "CREATE INDEX idx_retrieval_chunk_fts "
+                    + "ON retrieval_index_chunk USING GIN (search_vector)"
         );
         ensureConcurrentIndex(
             "V2607071921c – concurrent retrieval embedding index",
             "idx_retrieval_chunk_embedding",
             "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_embedding " +
-            "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+            "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)",
+            "CREATE INDEX idx_retrieval_chunk_embedding "
+                    + "ON retrieval_index_chunk USING ivfflat "
+                    + "(embedding vector_cosine_ops) WITH (lists = 100)"
         );
         applyRequiredPatch(
             "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
@@ -430,9 +455,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         + "(replay_after ASC NULLS FIRST, attempts ASC, patient_id, "
                         + "source_kind, source_record_id) "
                         + "WHERE migration_status = 'ACTIVE' AND claim_token IS NULL",
-                "(replay_after, attempts, patient_id, source_kind, source_record_id)",
-                "migration_status = 'ACTIVE'",
-                "claim_token IS NULL");
+                "CREATE INDEX idx_summary_replay_claim_fair "
+                        + "ON summary_citation_replay_source "
+                        + "(replay_after ASC NULLS FIRST, attempts ASC, patient_id, "
+                        + "source_kind, source_record_id) "
+                        + "WHERE migration_status = 'ACTIVE' AND claim_token IS NULL");
         ensureIndex(
                 "V2607190100 – expired source replay claim index",
                 "idx_summary_replay_expired_claim",
@@ -442,9 +469,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         + "(claimed_until, replay_after ASC NULLS FIRST, patient_id, "
                         + "source_kind, source_record_id) "
                         + "WHERE migration_status = 'ACTIVE' AND claim_token IS NOT NULL",
-                "(claimed_until, replay_after, patient_id, source_kind, source_record_id)",
-                "migration_status = 'ACTIVE'",
-                "claim_token IS NOT NULL");
+                "CREATE INDEX idx_summary_replay_expired_claim "
+                        + "ON summary_citation_replay_source "
+                        + "(claimed_until, replay_after ASC NULLS FIRST, patient_id, "
+                        + "source_kind, source_record_id) "
+                        + "WHERE migration_status = 'ACTIVE' AND claim_token IS NOT NULL");
         verifyForeignKeyCount(
                 "retrieval chunk patient", "retrieval_index_chunk", "patient_id",
                 "patient", "id", 'a', 1);
@@ -604,8 +633,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String name,
             final String indexName,
             final String createSql,
-            final String... expectedDefinitionParts) {
-        ensureIndex(name, indexName, true, createSql, expectedDefinitionParts);
+            final String expectedDefinition) {
+        ensureIndex(name, indexName, true, createSql, expectedDefinition);
     }
 
     private void ensureIndex(
@@ -613,19 +642,16 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String indexName,
             final boolean concurrent,
             final String createSql,
-            final String... expectedDefinitionParts) {
-        final String definitionChecks = java.util.Arrays.stream(expectedDefinitionParts)
-                .map(part -> " AND POSITION('" + part.replace("'", "''")
-                        + "' IN pg_get_indexdef(i.indexrelid)) > 0")
-                .collect(java.util.stream.Collectors.joining());
+            final String expectedDefinition) {
         final String statusSql = """
-                SELECT i.indisvalid AND i.indisready%s
+                SELECT i.indisvalid AND i.indisready, pg_get_indexdef(i.indexrelid),
+                       current_schema()
                 FROM pg_index i
                 JOIN pg_class c ON c.oid = i.indexrelid
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE c.relname = '%s'
                   AND n.nspname = current_schema()
-                """.formatted(definitionChecks, indexName.replace("'", "''"));
+                """.formatted(indexName.replace("'", "''"));
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);
@@ -635,7 +661,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             try (var result = stmt.executeQuery(statusSql)) {
                 if (result.next()) {
                     exists = true;
-                    healthy = result.getBoolean(1);
+                    healthy = result.getBoolean(1)
+                            && normalizeIndexDefinition(
+                                    result.getString(2), result.getString(3))
+                                    .equals(normalizeIndexDefinition(
+                                            expectedDefinition, result.getString(3)));
                 }
             }
             if (exists && !healthy) {
@@ -647,7 +677,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 stmt.execute(createSql);
             }
             try (var result = stmt.executeQuery(statusSql)) {
-                if (!result.next() || !result.getBoolean(1)) {
+                if (!result.next()
+                        || !result.getBoolean(1)
+                        || !normalizeIndexDefinition(result.getString(2), result.getString(3))
+                                .equals(normalizeIndexDefinition(
+                                        expectedDefinition, result.getString(3)))) {
                     throw new IllegalStateException(
                             "Index is not ready and valid: " + indexName);
                 }
@@ -657,6 +691,21 @@ public class SchemaPatchRunner implements CommandLineRunner {
             throw new IllegalStateException(
                     "Required concurrent index could not be prepared: " + name, e);
         }
+    }
+
+    static String normalizeIndexDefinition(final String definition, final String schema) {
+        String normalized = definition.toLowerCase(Locale.ROOT);
+        normalized = normalized.replace("\"", "");
+        normalized = normalized.replace(" concurrently", "");
+        normalized = normalized.replace(" if not exists", "");
+        normalized = normalized.replace(" using btree", "");
+        normalized = normalized.replace(" asc", "");
+        if (schema != null && !schema.isBlank()) {
+            normalized = normalized.replace(schema.toLowerCase(Locale.ROOT) + ".", "");
+        }
+        normalized = POSTGRES_TEXT_CAST.matcher(normalized).replaceAll("");
+        normalized = QUOTED_NUMBER.matcher(normalized).replaceAll("$1");
+        return normalized.replaceAll("[\\s()]+", "");
     }
 
     private void applyRequiredSqlResource(final String name, final String path) {
@@ -692,9 +741,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
-    private void withRetrievalMigrationLock(final Runnable work) {
+    private void withProductionSchemaMigrationLock(final Runnable work) {
         final long deadline = System.nanoTime()
-                + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+                + TimeUnit.SECONDS.toNanos(30);
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);
@@ -702,8 +751,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             boolean acquired = false;
             while (System.nanoTime() < deadline) {
                 try (var result = stmt.executeQuery(
-                        "SELECT pg_try_advisory_lock("
-                                + "hashtextextended('careconnect:retrieval-schema', 0))")) {
+                        "SELECT pg_try_advisory_lock(" + PRODUCTION_SCHEMA_LOCK + ")")) {
                     acquired = result.next() && result.getBoolean(1);
                 }
                 if (acquired) {
@@ -713,26 +761,25 @@ public class SchemaPatchRunner implements CommandLineRunner {
             }
             if (!acquired) {
                 throw new IllegalStateException(
-                        "Timed out waiting for retrieval schema migration lock");
+                        "Timed out waiting for production schema migration lock");
             }
             try {
                 work.run();
             } finally {
                 stmt.executeQuery(
-                        "SELECT pg_advisory_unlock("
-                                + "hashtextextended('careconnect:retrieval-schema', 0))")
+                        "SELECT pg_advisory_unlock(" + PRODUCTION_SCHEMA_LOCK + ")")
                         .close();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(
-                    "Interrupted waiting for retrieval schema migration lock", e);
+                    "Interrupted waiting for production schema migration lock", e);
         } catch (Exception e) {
             if (e instanceof IllegalStateException illegalState) {
                 throw illegalState;
             }
             throw new IllegalStateException(
-                    "Unable to coordinate retrieval schema migration", e);
+                    "Unable to coordinate production schema migration", e);
         }
     }
 

@@ -11,7 +11,6 @@ import com.careconnect.repository.CaregiverRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -71,6 +70,9 @@ public class CallSessionService {
             this(notifyUserIds, terminationOwner, null);
         }
     }
+
+    public record TerminationClaim(
+            String callId, UUID claimId, List<Long> notifyUserIds) {}
 
     public CallSession createSession(
             final String callId,
@@ -136,6 +138,21 @@ public class CallSessionService {
                 && !SESSION_ACTIVE.equals(session.getStatus())) {
             throw new AppException(HttpStatus.GONE, "Call is no longer active");
         }
+        final boolean joinableParticipant = userId != null && callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), userId)
+                .filter(participant -> PARTICIPANT_INVITED.equals(participant.getStatus())
+                        || PARTICIPANT_JOINED.equals(participant.getStatus()))
+                .isPresent();
+        if (!joinableParticipant) {
+            throw new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call");
+        }
+        return session;
+    }
+
+    /** Requires durable call membership for non-PHI signaling and telemetry attribution. */
+    @Transactional(readOnly = true)
+    public CallSession requireParticipant(final String callId, final Long userId) {
+        final CallSession session = requireSession(callId);
         if (userId == null || callParticipantRepository
                 .findByCallSessionIdAndUserId(session.getId(), userId)
                 .isEmpty()) {
@@ -144,14 +161,18 @@ public class CallSessionService {
         return session;
     }
 
-    /** Requires durable authorization, including historical participants who have left. */
+    /** Requires durable PHI access earned by joining the call. */
     @Transactional(readOnly = true)
-    public CallSession requireParticipant(final String callId, final Long userId) {
+    public CallSession requireHistoricalParticipant(final String callId, final Long userId) {
         final CallSession session = requireSession(callId);
-        if (userId == null || callParticipantRepository
+        final boolean hasHistoricalAccess = userId != null && callParticipantRepository
                 .findByCallSessionIdAndUserId(session.getId(), userId)
-                .isEmpty()) {
-            throw new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call");
+                .filter(participant -> PARTICIPANT_JOINED.equals(participant.getStatus())
+                        || PARTICIPANT_LEFT.equals(participant.getStatus())
+                        || PARTICIPANT_EXPIRED.equals(participant.getStatus()))
+                .isPresent();
+        if (!hasHistoricalAccess) {
+            throw new AppException(HttpStatus.FORBIDDEN, "User has no historical call access");
         }
         return session;
     }
@@ -249,7 +270,7 @@ public class CallSessionService {
                 SESSION_TERMINATING,
                 claimId,
                 userId,
-                LocalDateTime.now().plusSeconds(TERMINATION_LEASE_SECONDS),
+                TERMINATION_LEASE_SECONDS,
                 serializeUserIds(notifyUserIds)) == 1;
         return new LeaveResult(
                 owner, false, remaining, owner ? claimId : null, owner ? notifyUserIds : List.of());
@@ -289,18 +310,14 @@ public class CallSessionService {
                 session.getId(),
                 SESSION_TERMINATING,
                 claimId,
-                LocalDateTime.now().plusSeconds(TERMINATION_RETRY_SECONDS),
+                TERMINATION_RETRY_SECONDS,
                 message);
     }
 
     public LeaveResult claimTerminationRetry(final String callId, final Long userId) {
         final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
-        if (userId == null || callParticipantRepository
-                .findByCallSessionIdAndUserId(session.getId(), userId)
-                .isEmpty()) {
-            throw new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call");
-        }
+        requireHistoricalParticipant(callId, userId);
         if (SESSION_ENDED.equals(session.getStatus()) || SESSION_CANCELLED.equals(session.getStatus())) {
             return new LeaveResult(false, true, 0);
         }
@@ -323,11 +340,6 @@ public class CallSessionService {
                         || PARTICIPANT_JOINED.equals(p.getStatus()))
                 .map(CallParticipant::getUserId)
                 .toList();
-        if (SESSION_CREATED.equals(session.getStatus())) {
-            callSessionRepository.cancelIfNotActive(
-                    session.getId(), SESSION_CREATED, SESSION_CANCELLED);
-            return new DeclineResult(notify, false);
-        }
         final long joined = callParticipantRepository.countByCallSessionIdAndStatus(
                 session.getId(), PARTICIPANT_JOINED);
         final UUID claimId = UUID.randomUUID();
@@ -338,9 +350,29 @@ public class CallSessionService {
                 SESSION_TERMINATING,
                 claimId,
                 userId,
-                LocalDateTime.now().plusSeconds(TERMINATION_LEASE_SECONDS),
+                TERMINATION_LEASE_SECONDS,
                 serializeUserIds(notify)) == 1;
         return new DeclineResult(notify, terminationOwner, terminationOwner ? claimId : null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findDueTerminationIds(final int limit) {
+        return callSessionRepository.findDueTerminationIds(
+                SESSION_TERMINATING, Math.max(1, limit));
+    }
+
+    public TerminationClaim claimDueTermination(final Long sessionId) {
+        final CallSession session = callSessionRepository.findByIdForLifecycle(sessionId)
+                .orElse(null);
+        if (session == null || !SESSION_TERMINATING.equals(session.getStatus())) {
+            return null;
+        }
+        final LeaveResult claim = claimExistingTermination(session, null);
+        if (!claim.terminationOwner()) {
+            return null;
+        }
+        return new TerminationClaim(
+                session.getCallId(), claim.terminationClaimId(), claim.notifyUserIds());
     }
 
     @Transactional(readOnly = true)
@@ -396,14 +428,12 @@ public class CallSessionService {
     private LeaveResult claimExistingTermination(
             final CallSession session, final Long claimedByUserId) {
         final UUID claimId = UUID.randomUUID();
-        final LocalDateTime now = LocalDateTime.now();
         final boolean owner = callSessionRepository.reclaimTermination(
                 session.getId(),
                 SESSION_TERMINATING,
                 claimId,
                 claimedByUserId,
-                now,
-                now.plusSeconds(TERMINATION_LEASE_SECONDS)) == 1;
+                TERMINATION_LEASE_SECONDS) == 1;
         final List<Long> notifyUserIds =
                 deserializeUserIds(session.getTerminationNotifyUserIds());
         return new LeaveResult(
@@ -462,6 +492,21 @@ public class CallSessionService {
         final var existing = callParticipantRepository
                 .findByCallSessionIdAndUserId(session.getId(), userId);
         if (existing.isPresent()) {
+            final String existingStatus = existing.get().getStatus();
+            if (PARTICIPANT_INVITED.equals(initialStatus)
+                    && (PARTICIPANT_LEFT.equals(existingStatus)
+                            || PARTICIPANT_DECLINED.equals(existingStatus))) {
+                callParticipantRepository.reinviteIfInactive(
+                        session.getId(),
+                        userId,
+                        invitedByUserId,
+                        PARTICIPANT_INVITED,
+                        PARTICIPANT_LEFT,
+                        PARTICIPANT_DECLINED);
+                return callParticipantRepository
+                        .findByCallSessionIdAndUserId(session.getId(), userId)
+                        .orElseThrow();
+            }
             return existing.get();
         }
         callParticipantRepository.insertIfAbsent(

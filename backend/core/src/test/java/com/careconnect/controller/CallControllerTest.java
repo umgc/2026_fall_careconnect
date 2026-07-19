@@ -131,7 +131,7 @@ class CallControllerTest {
                 .thenReturn(durableSession);
         when(callSessionService.requireActiveParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
-        when(callSessionService.requireParticipant(anyString(), anyLong()))
+        when(callSessionService.requireHistoricalParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
         when(callSessionService.requireRecordingAccess(anyString(), any()))
                 .thenReturn(durableSession);
@@ -781,6 +781,22 @@ class CallControllerTest {
             verify(callSessionService).completeTermination(CALL_ID, TERMINATION_CLAIM);
             verify(callNotificationHandler).sendNotificationToUser(
                     eq("1"), argThat(message -> "call-ended".equals(message.get("type"))));
+        }
+
+        @Test
+        @DisplayName("termination reconciliation rejects users without joined history")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void reconcileTermination_rejectsInviteOnlyParticipant() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.claimTerminationRetry(CALL_ID, 2L))
+                    .thenThrow(new AppException(
+                            HttpStatus.FORBIDDEN, "User has no historical call access"));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/termination/reconcile")
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+
+            verify(chimeService, never()).endMeeting(CALL_ID);
         }
 
     }
@@ -1565,7 +1581,7 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getTranscriptSegmentsAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
-            when(callSessionService.requireParticipant(CALL_ID, 1L))
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 1L))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/transcript/segments")
@@ -1646,7 +1662,7 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getSummaryAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
-            when(callSessionService.requireParticipant(CALL_ID, 1L))
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 1L))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
@@ -1820,7 +1836,7 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getTelemetryAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
-            when(callSessionService.requireParticipant(CALL_ID, 1L))
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 1L))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
             // Return events that don't include the patient
             CallTelemetryEvent event = new CallTelemetryEvent();

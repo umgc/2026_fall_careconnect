@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.ResultSet;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -18,7 +19,29 @@ import static org.mockito.Mockito.when;
 class SchemaPatchRunnerTest {
 
     @Test
-    void run_abortsWhenRequiredRetrievalPatchFails() throws Exception {
+    void normalizeIndexDefinition_acceptsPostgresCanonicalPredicateCasts() {
+        final String requested = """
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_summary_replay_claim_fair
+                ON summary_citation_replay_source
+                (replay_after ASC NULLS FIRST, attempts ASC, patient_id,
+                 source_kind, source_record_id)
+                WHERE migration_status = 'ACTIVE' AND claim_token IS NULL
+                """;
+        final String catalogDefinition = """
+                CREATE INDEX idx_summary_replay_claim_fair
+                ON public.summary_citation_replay_source USING btree
+                (replay_after NULLS FIRST, attempts, patient_id, source_kind, source_record_id)
+                WHERE (((migration_status)::text = 'ACTIVE'::text) AND (claim_token IS NULL))
+                """;
+
+        assertThat(SchemaPatchRunner.normalizeIndexDefinition(
+                catalogDefinition, "public"))
+                .isEqualTo(SchemaPatchRunner.normalizeIndexDefinition(
+                        requested, "public"));
+    }
+
+    @Test
+    void run_abortsWhenRequiredProductionPatchFails() throws Exception {
         final DataSource dataSource = mock(DataSource.class);
         final Connection connection = mock(Connection.class);
         final Connection statementConnection = mock(Connection.class);
@@ -35,15 +58,11 @@ class SchemaPatchRunnerTest {
         when(statement.executeQuery(anyString())).thenReturn(resultSet);
         when(resultSet.next()).thenReturn(true);
         when(resultSet.getBoolean(1)).thenReturn(true);
-        when(resultSet.getInt("column_count")).thenReturn(2);
-        when(resultSet.getInt("index_count")).thenReturn(1);
-        // Call-session catalog verification is PostgreSQL-only; this test targets
-        // the independently required retrieval bootstrap failure path.
-        when(metadata.getDatabaseProductName()).thenReturn("H2", "PostgreSQL");
+        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
         doAnswer(invocation -> {
             final String sql = invocation.getArgument(0);
-            if (sql.contains("CREATE EXTENSION IF NOT EXISTS vector")) {
-                throw new SQLException("pgvector unavailable");
+            if (sql.contains("CREATE TABLE IF NOT EXISTS call_sessions")) {
+                throw new SQLException("required production DDL unavailable");
             }
             return false;
         }).when(statement).execute(anyString());
@@ -51,6 +70,6 @@ class SchemaPatchRunnerTest {
         assertThatThrownBy(() -> new SchemaPatchRunner(dataSource).run())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Required schema patch")
-                .hasRootCauseMessage("pgvector unavailable");
+                .hasRootCauseMessage("required production DDL unavailable");
     }
 }

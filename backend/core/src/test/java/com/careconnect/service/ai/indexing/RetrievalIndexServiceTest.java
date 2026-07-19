@@ -893,6 +893,41 @@ class RetrievalIndexServiceTest {
                 .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("ingestTranscriptIndexed accepts an older append-only snapshot as superseded")
+    void ingestTranscriptIndexed_olderSnapshotIsSuccessfulNoOp() {
+        when(callSessionRepository.findByCallIdForIndexing("call-growing"))
+                .thenReturn(Optional.of(callSession("call-growing", 42L)));
+        when(callTranscriptService.captureIndexingSnapshot("call-growing"))
+                .thenReturn(indexingSnapshot(
+                        List.of(new CallTranscriptSegment(), new CallTranscriptSegment()),
+                        "sha256:newer"));
+
+        assertThat(service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-growing", 42L, 1, "sha256:older")))
+                .isZero();
+
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestTranscriptIndexed still defers a future snapshot")
+    void ingestTranscriptIndexed_futureSnapshotStillDefers() {
+        when(callSessionRepository.findByCallIdForIndexing("call-future"))
+                .thenReturn(Optional.of(callSession("call-future", 42L)));
+        when(callTranscriptService.captureIndexingSnapshot("call-future"))
+                .thenReturn(indexingSnapshot(
+                        List.of(new CallTranscriptSegment()), "sha256:current"));
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-future", 42L, 2, "sha256:future")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isFalse());
+    }
+
     private static CallTranscriptService.IndexingSnapshot indexingSnapshot(
             final List<CallTranscriptSegment> segments, final String version) {
         return new CallTranscriptService.IndexingSnapshot(segments, version);

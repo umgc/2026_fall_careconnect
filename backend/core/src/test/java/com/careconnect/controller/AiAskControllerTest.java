@@ -3,6 +3,8 @@ package com.careconnect.controller;
 import com.careconnect.dto.ai.AiAskRequest;
 import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
+import com.careconnect.security.Permission;
+import com.careconnect.security.RequirePermission;
 import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.ask.AiAskService;
@@ -151,6 +153,19 @@ class AiAskControllerTest {
     }
 
     @Test
+    void ask_nonPositivePatientIdIsRejectedBeforeServiceInvocation() throws Exception {
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null).replace(
+                                "\"patientId\": 42", "\"patientId\": 0")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+        verify(aiAskService, org.mockito.Mockito.never()).ask(any(), any());
+    }
+
+    @Test
     @DisplayName("malformed JSON returns correlated Ask AI WITHHELD contract")
     void ask_malformedJsonUsesAskAiContract() throws Exception {
         mockMvc.perform(post("/api/ai/ask")
@@ -233,6 +248,16 @@ class AiAskControllerTest {
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN_SCOPE"))
                 .andExpect(jsonPath("$.error.message")
                         .value("Requested records are not available for Ask AI"));
+    }
+
+    @Test
+    void askEndpointRequiresAiFeaturePermission() throws Exception {
+        final RequirePermission requirement = AiAskController.class
+                .getMethod("ask", AiAskRequest.class)
+                .getAnnotation(RequirePermission.class);
+
+        assertThat(requirement).isNotNull();
+        assertThat(requirement.value()).isEqualTo(Permission.USE_AI_FEATURES);
     }
 
     private static String requestJson(final UUID sessionId) {

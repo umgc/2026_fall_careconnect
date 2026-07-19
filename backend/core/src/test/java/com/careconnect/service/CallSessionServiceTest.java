@@ -3,6 +3,7 @@ package com.careconnect.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -114,6 +115,23 @@ class CallSessionServiceTest {
         assertThatThrownBy(() -> service.requireJoinAuthorized("call-1", 99L))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("not authorized");
+    }
+
+    @Test
+    void requireJoinAuthorized_rejectsDeclinedOrLeftParticipantUntilReinvited() {
+        final CallSession session = session(10L, 42L);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_DECLINED)));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 3L))
+                .thenReturn(Optional.of(participant(
+                        3L, CallSessionService.PARTICIPANT_LEFT)));
+
+        assertThatThrownBy(() -> service.requireJoinAuthorized("call-1", 2L))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.requireJoinAuthorized("call-1", 3L))
+                .isInstanceOf(AppException.class);
     }
 
     @Test
@@ -246,11 +264,11 @@ class CallSessionServiceTest {
         assertThat(result.ended()).isTrue();
         assertThat(result.terminationOwner()).isFalse();
         verify(sessionRepository, never()).beginTermination(
-                any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), anyLong(), any());
     }
 
     @Test
-    void declineInvitation_cancelsUnansweredSessionAndNotifiesCreator() {
+    void declineInvitation_givesUnansweredSessionDurableCleanupOwnership() {
         final CallSession session = session(10L, 42L);
         final CallParticipant creator = new CallParticipant();
         creator.setUserId(2L);
@@ -261,13 +279,18 @@ class CallSessionServiceTest {
                 10L, 7L, CallSessionService.PARTICIPANT_INVITED,
                 CallSessionService.PARTICIPANT_DECLINED)).thenReturn(1);
         when(participantRepository.findByCallSessionId(10L)).thenReturn(java.util.List.of(creator));
+        when(sessionRepository.beginTermination(
+                eq(10L), eq(CallSessionService.SESSION_CREATED),
+                eq(CallSessionService.SESSION_ACTIVE),
+                eq(CallSessionService.SESSION_TERMINATING),
+                any(), eq(7L), anyLong(), eq("2"))).thenReturn(1);
 
         final CallSessionService.DeclineResult result =
                 service.declineInvitation("call-1", 7L);
         assertThat(result.notifyUserIds()).containsExactly(2L);
-        assertThat(result.terminationOwner()).isFalse();
-        verify(sessionRepository).cancelIfNotActive(
-                10L, CallSessionService.SESSION_CREATED, CallSessionService.SESSION_CANCELLED);
+        assertThat(result.terminationOwner()).isTrue();
+        assertThat(result.terminationClaimId()).isNotNull();
+        verify(sessionRepository, never()).cancelIfNotActive(any(), any(), any());
     }
 
     @Test
@@ -289,7 +312,7 @@ class CallSessionServiceTest {
                 eq(10L), eq(CallSessionService.SESSION_CREATED),
                 eq(CallSessionService.SESSION_ACTIVE),
                 eq(CallSessionService.SESSION_TERMINATING),
-                any(), eq(2L), any(), eq("7,9"))).thenReturn(1);
+                any(), eq(2L), anyLong(), eq("7,9"))).thenReturn(1);
 
         final CallSessionService.LeaveResult result =
                 service.leaveOrBeginTermination("call-1", 2L);
@@ -306,11 +329,12 @@ class CallSessionServiceTest {
         session.setTerminationNotifyUserIds("7,9");
         when(sessionRepository.findByCallIdForLifecycle("call-1"))
                 .thenReturn(Optional.of(session));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
         when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
                 .thenReturn(Optional.of(participant(2L, CallSessionService.PARTICIPANT_LEFT)));
         when(sessionRepository.reclaimTermination(
                 eq(10L), eq(CallSessionService.SESSION_TERMINATING),
-                any(), eq(2L), any(), any())).thenReturn(1);
+                any(), eq(2L), anyLong())).thenReturn(1);
 
         final CallSessionService.LeaveResult result =
                 service.claimTerminationRetry("call-1", 2L);
@@ -335,6 +359,92 @@ class CallSessionServiceTest {
 
         assertThat(service.completeTermination("call-1", staleClaim)).isFalse();
         verify(participantRepository, never()).expireJoinedParticipants(any(), any(), any());
+    }
+
+    @Test
+    void requireHistoricalParticipant_rejectsInvitedAndDeclinedParticipants() {
+        final CallSession session = session(10L, 42L);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_INVITED)));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 3L))
+                .thenReturn(Optional.of(participant(
+                        3L, CallSessionService.PARTICIPANT_DECLINED)));
+
+        assertThatThrownBy(() -> service.requireHistoricalParticipant("call-1", 2L))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.requireHistoricalParticipant("call-1", 3L))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void requireHistoricalParticipant_acceptsJoinedLeftAndExpiredParticipants() {
+        final CallSession session = session(10L, 42L);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(eq(10L), any()))
+                .thenAnswer(invocation -> Optional.of(participant(
+                        invocation.getArgument(1),
+                        invocation.getArgument(1).equals(2L)
+                                ? CallSessionService.PARTICIPANT_JOINED
+                                : invocation.getArgument(1).equals(3L)
+                                        ? CallSessionService.PARTICIPANT_LEFT
+                                        : CallSessionService.PARTICIPANT_EXPIRED)));
+
+        assertThat(service.requireHistoricalParticipant("call-1", 2L)).isSameAs(session);
+        assertThat(service.requireHistoricalParticipant("call-1", 3L)).isSameAs(session);
+        assertThat(service.requireHistoricalParticipant("call-1", 4L)).isSameAs(session);
+    }
+
+    @Test
+    void addAuthorizedParticipant_reinvitesDeclinedParticipantAtomically() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_ACTIVE);
+        final User inviter = user(2L, Role.CAREGIVER);
+        final User invitee = user(7L, Role.PATIENT);
+        final CallParticipant declined =
+                participant(7L, CallSessionService.PARTICIPANT_DECLINED);
+        final CallParticipant reinvited =
+                participant(7L, CallSessionService.PARTICIPANT_INVITED);
+        final java.util.concurrent.atomic.AtomicInteger participantLookup =
+                new java.util.concurrent.atomic.AtomicInteger();
+        final Patient patient = new Patient();
+        patient.setUser(invitee);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_JOINED)));
+        when(patientRepository.findById(42L)).thenReturn(Optional.of(patient));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 7L))
+                .thenAnswer(invocation -> participantLookup.getAndIncrement() == 0
+                        ? Optional.of(declined)
+                        : Optional.of(reinvited));
+        when(participantRepository.reinviteIfInactive(
+                10L, 7L, 2L,
+                CallSessionService.PARTICIPANT_INVITED,
+                CallSessionService.PARTICIPANT_LEFT,
+                CallSessionService.PARTICIPANT_DECLINED)).thenReturn(1);
+
+        assertThat(service.addAuthorizedParticipant("call-1", inviter, invitee).getStatus())
+                .isEqualTo(CallSessionService.PARTICIPANT_INVITED);
+    }
+
+    @Test
+    void claimTerminationRetry_rejectsInviteeWithoutHistoricalAccess() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_INVITED)));
+
+        assertThatThrownBy(() -> service.claimTerminationRetry("call-1", 2L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("historical");
+        verify(sessionRepository, never()).reclaimTermination(
+                any(), any(), any(), any(), anyLong());
     }
 
     private static User user(Long id, Role role) {
