@@ -152,7 +152,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 applyOutstandingCatalogPatches();
             });
             // Concurrent index builds must not hold the startup advisory lock.
+            // Verify only after those indexes exist — mid-lock verify would fail greenfield boots.
             ensureRetrievalConcurrentIndexes();
+            verifyRequiredRetrievalSchema();
         } else {
             applyCallSessionPatches();
             applyRetrievalIndexChunkPatches();
@@ -484,7 +486,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         verifyForeignKeyCount(
                 "summary replay patient", "summary_citation_replay_source", "patient_id",
                 "patient", "id", 'a', 1);
-        verifyRequiredRetrievalSchema();
+        // Full retrieval schema verify (including concurrent indexes) runs after unlock.
     }
 
     /**

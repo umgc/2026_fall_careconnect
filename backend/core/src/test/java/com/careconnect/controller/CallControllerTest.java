@@ -1778,6 +1778,73 @@ class CallControllerTest {
                             .with(csrf()))
                     .andExpect(status().isOk());
         }
+
+        @Test
+        @DisplayName("GET /{callId}/summary prefers PATIENT actor over forged contextPatientUserId")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void getSummaryPrefersServerPatientActorOverForgedContext() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.NOT_FOUND, "Call not found"));
+            when(callSummaryService.getLatestSummaryEntity(CALL_ID)).thenReturn(Optional.empty());
+
+            final CallTelemetryEvent forgedContext = new CallTelemetryEvent();
+            forgedContext.setActorUserId(2L);
+            forgedContext.setTargetUserId(98L);
+            forgedContext.setMetadataJson("{\"contextPatientUserId\":99}");
+
+            final CallTelemetryEvent patientJoin = new CallTelemetryEvent();
+            patientJoin.setActorUserId(1L);
+            patientJoin.setEventType("CALL_JOIN");
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID))
+                    .thenReturn(List.of(forgedContext, patientJoin));
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
+            when(userRepository.findById(98L)).thenReturn(Optional.of(
+                    buildUser(98L, "outsider@test.com", Role.FAMILY_MEMBER)));
+            when(userRepository.findById(99L)).thenReturn(Optional.of(
+                    buildUser(99L, "forged@test.com", Role.PATIENT)));
+            doNothing().when(callSessionService)
+                    .requirePatientUserAccess(caregiverUser, 1L);
+            when(callSummaryService.getLatestSummary(CALL_ID))
+                    .thenReturn(Optional.of(Map.of("status", "GENERATED")));
+
+            mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+
+            verify(callSessionService).requirePatientUserAccess(caregiverUser, 1L);
+            verify(callSessionService, never()).requirePatientUserAccess(caregiverUser, 99L);
+        }
+
+        @Test
+        @DisplayName("GET /{callId}/summary falls back to contextPatientUserId when no PATIENT actor")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void getSummaryFallsBackToContextPatientWhenNoPatientActor() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.NOT_FOUND, "Call not found"));
+            when(callSummaryService.getLatestSummaryEntity(CALL_ID)).thenReturn(Optional.empty());
+
+            final CallTelemetryEvent contextOnly = new CallTelemetryEvent();
+            contextOnly.setActorUserId(2L);
+            contextOnly.setMetadataJson("{\"contextPatientUserId\":1}");
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID))
+                    .thenReturn(List.of(contextOnly));
+            when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
+            doNothing().when(callSessionService)
+                    .requirePatientUserAccess(caregiverUser, 1L);
+            when(callSummaryService.getLatestSummary(CALL_ID))
+                    .thenReturn(Optional.of(Map.of("status", "GENERATED")));
+
+            mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+
+            verify(callSessionService).requirePatientUserAccess(caregiverUser, 1L);
+        }
     }
 
     // 

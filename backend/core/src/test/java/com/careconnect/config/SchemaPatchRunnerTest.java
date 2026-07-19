@@ -41,6 +41,29 @@ class SchemaPatchRunnerTest {
     }
 
     @Test
+    void run_appliesConcurrentRetrievalIndexesBeforeRequiredSchemaVerify() throws Exception {
+        // Contract: verifyRequiredRetrievalSchema expects GIN/ivfflat/source-identity indexes
+        // that are only created in ensureRetrievalConcurrentIndexes after the migration unlock.
+        // Guard the source ordering so greenfield PostgreSQL boots cannot regress.
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        final int unlockIndexes = source.indexOf("ensureRetrievalConcurrentIndexes();");
+        final int postUnlockVerify = source.indexOf(
+                "verifyRequiredRetrievalSchema();", unlockIndexes);
+        final String applyRetrievalBody = source.substring(
+                source.indexOf("private void applyRetrievalIndexChunkPatches()"),
+                source.indexOf("private void applyUspsMailpiecePatches()"));
+        assertThat(unlockIndexes).isGreaterThan(0);
+        assertThat(postUnlockVerify).isGreaterThan(unlockIndexes);
+        assertThat(applyRetrievalBody).doesNotContain("verifyRequiredRetrievalSchema();");
+    }
+
+    @Test
     void run_abortsWhenRequiredProductionPatchFails() throws Exception {
         final DataSource dataSource = mock(DataSource.class);
         final Connection connection = mock(Connection.class);

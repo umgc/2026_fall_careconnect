@@ -1473,17 +1473,12 @@ public class CallController {
   }
 
   /**
-   * Resolves a patient user id for pre-session historical calls from telemetry
-   * context metadata or PATIENT-role actors/targets on the call.
+   * Resolves a patient user id for pre-session historical calls.
+   * Prefers server-validated PATIENT-role actors/targets over client-supplied
+   * context metadata, which is not authz-trusted.
    */
   private Long resolveLegacyPatientUserId(final String callId) {
     final List<CallTelemetryEvent> events = callTelemetryService.getTelemetryForCall(callId);
-    for (final CallTelemetryEvent event : events) {
-      final Long fromContext = extractContextPatientUserId(event);
-      if (fromContext != null) {
-        return fromContext;
-      }
-    }
     for (final CallTelemetryEvent event : events) {
       final Long actor = event.getActorUserId();
       final Long target = event.getTargetUserId();
@@ -1492,6 +1487,12 @@ public class CallController {
       }
       if (isPatientUser(target)) {
         return target;
+      }
+    }
+    for (final CallTelemetryEvent event : events) {
+      final Long fromContext = extractContextPatientUserId(event);
+      if (fromContext != null) {
+        return fromContext;
       }
     }
     return null;
