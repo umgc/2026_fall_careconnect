@@ -126,6 +126,12 @@ class CallControllerTest {
         durableSession.setStatus(CallSessionService.SESSION_CREATED);
         when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
                 .thenReturn(durableSession);
+        when(callSessionService.requireActiveParticipant(anyString(), anyLong()))
+                .thenReturn(durableSession);
+        when(callSessionService.requireParticipant(anyString(), anyLong()))
+                .thenReturn(durableSession);
+        when(callSessionService.requireRecordingAccess(anyString(), any()))
+                .thenReturn(durableSession);
         when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
         when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
 
@@ -205,6 +211,16 @@ class CallControllerTest {
         event.setTargetUserId(targetUserId);
         event.setOccurredAt(occurredAt);
         return event;
+    }
+
+    private com.careconnect.model.CallParticipant durableParticipant(
+            Long userId, String status) {
+        com.careconnect.model.CallParticipant participant =
+                new com.careconnect.model.CallParticipant();
+        participant.setCallSessionId(10L);
+        participant.setUserId(userId);
+        participant.setStatus(status);
+        return participant;
     }
 
     // 
@@ -396,6 +412,9 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 4L, LocalDateTime.of(2026, 3, 23, 10, 0, 10)),
                     callEvent("CALL_LEAVE", 4L, LocalDateTime.of(2026, 3, 23, 10, 5, 0))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED)));
             when(caregiverPatientLinkService.getCaregiversByPatient(1L)).thenReturn(Collections.emptyList());
             when(familyMemberService.getFamilyMembersByPatient(1L)).thenReturn(List.of(
                     new FamilyMemberLinkResponse(
@@ -434,6 +453,14 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5)),
                     callEvent("CALL_JOIN", 4L, LocalDateTime.of(2026, 3, 23, 10, 0, 10))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_JOINED)));
+            when(callSessionService.getParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_JOINED)));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
                             .with(csrf())
@@ -461,6 +488,15 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
                     callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(5L, CallSessionService.PARTICIPANT_JOINED)));
+            when(callSessionService.getParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(5L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_INVITED)));
             when(familyMemberService.hasAccessToPatient(4L, 1L)).thenReturn(true);
             when(callNotificationHandler.isUserOnline("4")).thenReturn(true);
 
@@ -485,6 +521,25 @@ class CallControllerTest {
         }
 
         @Test
+        @DisplayName("INVITED participant cannot invite another participant")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void invitedParticipantCannotInvite() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireActiveParticipant(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/invite")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"targetUserId\":4}"))
+                    .andExpect(status().isForbidden());
+
+            verify(callNotificationHandler, never()).sendNotificationToUser(anyString(), any());
+            verify(callTelemetryService, never()).recordCallEvent(
+                    eq(CALL_ID), eq("CONFERENCE_INVITE"), any(), any(), anyString(), any(), any());
+        }
+
+        @Test
         @DisplayName("CHIME-016: POST /invite offline with phone sends SMS (L1a)")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void inviteParticipant_offlineWithPhone_sendsSms() throws Exception {
@@ -499,6 +554,12 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
                     callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_JOINED)));
+            when(callSessionService.getParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_JOINED)));
             when(familyMemberService.hasAccessToPatient(4L, 1L)).thenReturn(true);
             when(callNotificationHandler.isUserOnline("4")).thenReturn(false);
             when(snsService.publishSms(eq("+15559876543"), anyString())).thenReturn("sms-msg-id");
@@ -562,6 +623,13 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 2L, LocalDateTime.of(2026, 3, 23, 10, 0, 5)),
                     conferenceInviteEvent(2L, 4L, LocalDateTime.of(2026, 3, 23, 10, 1, 0))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED)));
+            when(callSessionService.getParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_INVITED)));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
                             .param("otherPartyId", "1")
@@ -595,6 +663,15 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 5L, LocalDateTime.of(2026, 3, 23, 10, 0, 10)),
                     conferenceInviteEvent(2L, 4L, LocalDateTime.of(2026, 3, 23, 10, 1, 0))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(5L, CallSessionService.PARTICIPANT_JOINED)));
+            when(callSessionService.getParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(2L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(5L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_INVITED)));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
                             .with(csrf())
@@ -620,6 +697,12 @@ class CallControllerTest {
                     callEvent("CALL_JOIN", 4L, LocalDateTime.of(2026, 3, 23, 10, 0, 10)),
                     callEvent("CALL_LEAVE", 2L, LocalDateTime.of(2026, 3, 23, 10, 5, 0))
             ));
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_JOINED)));
+            when(callSessionService.getParticipants(CALL_ID)).thenReturn(List.of(
+                    durableParticipant(1L, CallSessionService.PARTICIPANT_JOINED),
+                    durableParticipant(4L, CallSessionService.PARTICIPANT_JOINED)));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
                             .with(csrf())
@@ -637,7 +720,7 @@ class CallControllerTest {
         }
 
         @Test
-        @DisplayName("CHIME-017: POST /end merges participantUserIds from body into notify set (L8a)")
+        @DisplayName("CHIME-017: POST /end ignores client participant IDs")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCall_mergesParticipantUserIdsFromBody() throws Exception {
             mockCurrentCaregiver();
@@ -656,12 +739,9 @@ class CallControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.status").value("left"));
+                    .andExpect(jsonPath("$.status").value("ended"));
 
-            verify(callNotificationHandler).sendNotificationToUser(
-                    eq("1"), argThat(m -> "participant-left".equals(m.get("type"))));
-            verify(callNotificationHandler).sendNotificationToUser(
-                    eq("4"), argThat(m -> "participant-left".equals(m.get("type"))));
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("4"), any());
         }
 
     }
@@ -968,6 +1048,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getRecordingStatusAsNonParticipantPatientReturns403() throws Exception {
             mockCurrentPatient();
+            when(callSessionService.requireRecordingAccess(CALL_ID, patientUser))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording")
                             .with(csrf()))
@@ -1006,6 +1088,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getPlaybackUrlAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
+            when(callSessionService.requireRecordingAccess(CALL_ID, patientUser))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording/playback-url")
                             .with(csrf()))
@@ -1383,11 +1467,12 @@ class CallControllerTest {
         }
 
         @Test
-        @DisplayName("POST /{callId}/transcript/segments as ADMIN (non-participant) returns 200")
+        @DisplayName("POST /{callId}/transcript/segments as ADMIN non-participant returns 403")
         @WithMockUser(username = "admin@test.com", roles = {"ADMIN"})
         void saveTranscriptSegmentsAsAdminReturns200() throws Exception {
             mockCurrentAdmin();
-            when(callTranscriptService.recordSegments(anyString(), anyLong(), any())).thenReturn(1);
+            when(callSessionService.requireActiveParticipant(CALL_ID, 3L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
 
             Map<String, Object> body = new HashMap<>();
             body.put("speakerLabel", "Speaker 1");
@@ -1400,7 +1485,8 @@ class CallControllerTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isForbidden());
+            verify(callTranscriptService, never()).recordSegments(anyString(), anyLong(), any());
         }
 
         @Test
@@ -1408,7 +1494,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void saveTranscriptSegmentsAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
-            // Empty telemetry - not a participant
+            when(callSessionService.requireActiveParticipant(CALL_ID, 1L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
             Map<String, Object> body = Map.of("text", "test");
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/transcript/segments")
@@ -1439,6 +1526,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getTranscriptSegmentsAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
+            when(callSessionService.requireParticipant(CALL_ID, 1L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/transcript/segments")
                             .with(csrf()))
@@ -1518,6 +1607,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getSummaryAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
+            when(callSessionService.requireParticipant(CALL_ID, 1L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
                             .with(csrf()))
@@ -1606,7 +1697,29 @@ class CallControllerTest {
     class EndCallOtherPartyTests {
 
         @Test
-        @DisplayName("POST /end with otherPartyId query param notifies other party")
+        @DisplayName("POST /end unauthorized participant has no lifecycle side effects")
+        @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
+        void endCallUnauthorizedHasNoSideEffects() throws Exception {
+            mockCurrentPatient();
+            when(callSessionService.requireActiveParticipant(CALL_ID, 1L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"participantUserIds\":[\"99\"],\"otherPartyId\":\"98\"}"))
+                    .andExpect(status().isForbidden());
+
+            verify(chimeService, never()).endMeeting(anyString());
+            verify(callRecordingService, never()).stopRecording(anyString());
+            verify(callSummaryService, never()).generateAndStoreSummary(anyString(), anyLong(), any());
+            verify(callNotificationHandler, never()).sendNotificationToUser(anyString(), any());
+            verify(callTelemetryService, never()).recordCallEvent(
+                    eq(CALL_ID), eq("CALL_END"), any(), any(), anyString(), any(), any());
+        }
+
+        @Test
+        @DisplayName("POST /end ignores otherPartyId query param")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCallWithOtherPartyIdNotifiesOtherParty() throws Exception {
             mockCurrentCaregiver();
@@ -1619,11 +1732,11 @@ class CallControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("ended"));
 
-            verify(callNotificationHandler).sendNotificationToUser(eq("1"), any());
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("1"), any());
         }
 
         @Test
-        @DisplayName("POST /end with otherPartyId in body notifies other party")
+        @DisplayName("POST /end ignores otherPartyId in body")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCallWithOtherPartyIdInBodyNotifiesOtherParty() throws Exception {
             mockCurrentCaregiver();
@@ -1636,7 +1749,7 @@ class CallControllerTest {
                             .content(objectMapper.writeValueAsString(body)))
                     .andExpect(status().isOk());
 
-            verify(callNotificationHandler).sendNotificationToUser(eq("1"), any());
+            verify(callNotificationHandler, never()).sendNotificationToUser(eq("1"), any());
         }
 
         @Test
@@ -1668,6 +1781,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void getTelemetryAsNonParticipantReturns403() throws Exception {
             mockCurrentPatient();
+            when(callSessionService.requireParticipant(CALL_ID, 1L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
             // Return events that don't include the patient
             CallTelemetryEvent event = new CallTelemetryEvent();
             event.setActorUserId(99L);

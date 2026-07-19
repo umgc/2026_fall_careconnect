@@ -1,6 +1,9 @@
 package com.careconnect.service;
 
+import com.careconnect.model.CallSession;
+import com.careconnect.repository.CallSessionRepository;
 import lombok.extern.slf4j.Slf4j;
+import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,7 @@ public class ChimeService {
 
     /** AWS Chime SDK meetings client. */
     private final ChimeSdkMeetingsClient chimeSdkMeetingsClient;
+    private final CallSessionRepository callSessionRepository;
 
     /** Whether AWS integration is enabled. */
     private final boolean awsEnabled;
@@ -104,6 +108,7 @@ public class ChimeService {
     @Autowired
     public ChimeService(
             @Autowired(required = false) final ChimeSdkMeetingsClient chimeSdkMeetingsClient,
+            final CallSessionRepository callSessionRepository,
             @Value("${careconnect.aws.enabled:true}") final boolean awsEnabled,
             @Value("${careconnect.chime.transcription.enabled:true}") final boolean transcriptionEnabled,
             @Value("${careconnect.chime.transcription.language-code:en-US}")
@@ -111,10 +116,27 @@ public class ChimeService {
             @Value("${careconnect.chime.transcription.region:us-east-1}")
                 final String transcriptionRegion) {
         this.chimeSdkMeetingsClient = chimeSdkMeetingsClient;
+        this.callSessionRepository = callSessionRepository;
         this.awsEnabled = awsEnabled;
         this.transcriptionEnabled = transcriptionEnabled;
         this.transcriptionLanguageCode = transcriptionLanguageCode;
         this.transcriptionRegion = transcriptionRegion;
+    }
+
+    /** Compatibility constructor for isolated unit tests. */
+    ChimeService(
+            final ChimeSdkMeetingsClient chimeSdkMeetingsClient,
+            final boolean awsEnabled,
+            final boolean transcriptionEnabled,
+            final String transcriptionLanguageCode,
+            final String transcriptionRegion) {
+        this(
+                chimeSdkMeetingsClient,
+                null,
+                awsEnabled,
+                transcriptionEnabled,
+                transcriptionLanguageCode,
+                transcriptionRegion);
     }
 
     // ================================================================
@@ -132,7 +154,8 @@ public class ChimeService {
     public final Map<String, Object> createMeeting(final String callId) {
         log.info("Creating Chime meeting for callId: {}", callId);
 
-        // Check if meeting already exists (e.g. both parties called this simultaneously)
+        // This cache is an optimization only. The durable session and AWS's
+        // deterministic idempotency token coordinate concurrent callers/nodes.
         if (activeMeetings.containsKey(callId)) {
             log.info("Meeting already exists for callId: {}", callId);
             return buildMeetingResponse(activeMeetings.get(callId));
@@ -140,11 +163,12 @@ public class ChimeService {
 
         if (!isAwsChimeAvailable()) {
             final Meeting localMeeting = Meeting.builder()
-                    .meetingId("local-" + UUID.randomUUID())
+                    .meetingId("local-" + deterministicToken(callId))
                     .externalMeetingId(callId)
                     .mediaRegion(DEFAULT_MEDIA_REGION)
                     .build();
             activeMeetings.put(callId, localMeeting);
+            persistMeetingId(callId, localMeeting.meetingId());
             log.warn("AWS Chime unavailable/disabled; created local mock meeting for callId: {}",
                     callId);
             return buildMeetingResponse(localMeeting);
@@ -152,7 +176,7 @@ public class ChimeService {
 
         try {
             final CreateMeetingRequest request = CreateMeetingRequest.builder()
-                    .clientRequestToken(UUID.randomUUID().toString())
+                    .clientRequestToken(deterministicToken(callId))
                     .mediaRegion(DEFAULT_MEDIA_REGION)
                     .externalMeetingId(callId)
                     .build();
@@ -160,7 +184,8 @@ public class ChimeService {
             final CreateMeetingResponse response = chimeSdkMeetingsClient.createMeeting(request);
             final Meeting meeting = response.meeting();
 
-            // Store for later attendee creation and cleanup
+            persistMeetingId(callId, meeting.meetingId());
+            // Store only as a local response/credential optimization.
             activeMeetings.put(callId, meeting);
             transcriptionLastMeetingId.put(callId, meeting.meetingId());
 
@@ -300,10 +325,9 @@ public class ChimeService {
      * @return attendee credentials map
      */
     public final Map<String, Object> joinMeeting(final String callId, final String userId, final String role, final String displayName) {
-        // Ensure meeting exists
-        if (!activeMeetings.containsKey(callId)) {
-            createMeeting(callId);
-        }
+        // Always resolve via createMeeting. AWS returns the same meeting for the
+        // deterministic token, which hydrates a node that has no local cache.
+        createMeeting(callId);
         final Map<String, Object> cached = getCachedAttendeeCredentials(callId, userId);
         if (cached != null) {
             if (log.isInfoEnabled()) {
@@ -332,15 +356,16 @@ public class ChimeService {
         attendeeCredentials.remove(callId);
 
         final Meeting meeting = activeMeetings.remove(callId);
-        if (meeting == null) {
+        final String durableMeetingId = meeting == null ? getDurableMeetingId(callId) : meeting.meetingId();
+        if (durableMeetingId == null) {
             recordTranscriptionAttempt(callId, "endMeeting", "MEETING_ENDED", "no-active-meeting");
             log.warn("No active meeting found for callId: {} — may have already ended", callId);
             return;
         }
 
-        transcriptionLastMeetingId.put(callId, meeting.meetingId());
+        transcriptionLastMeetingId.put(callId, durableMeetingId);
         recordTranscriptionAttempt(
-                callId, "endMeeting", "MEETING_ENDED", "meetingId=" + meeting.meetingId());
+                callId, "endMeeting", "MEETING_ENDED", "meetingId=" + durableMeetingId);
 
         if (!isAwsChimeAvailable()) {
             log.info("Ended local mock meeting for callId: {}", callId);
@@ -349,19 +374,19 @@ public class ChimeService {
 
         try {
             final DeleteMeetingRequest request = DeleteMeetingRequest.builder()
-                    .meetingId(meeting.meetingId())
+                    .meetingId(durableMeetingId)
                     .build();
 
             chimeSdkMeetingsClient.deleteMeeting(request);
             if (log.isInfoEnabled()) {
-                log.info("Chime meeting deleted: {} for callId: {}", meeting.meetingId(), callId);
+                log.info("Chime meeting deleted: {} for callId: {}", durableMeetingId, callId);
             }
 
         } catch (Exception e) {
             // Log but don't throw — if Chime already cleaned it up, that's fine
             if (log.isWarnEnabled()) {
                 log.warn("Could not delete Chime meeting {} — may have already expired: {}",
-                    meeting.meetingId(), e.getMessage());
+                    durableMeetingId, e.getMessage());
             }
         }
     }
@@ -378,6 +403,13 @@ public class ChimeService {
      * @return true if a meeting is active
      */
     public final boolean isMeetingActive(final String callId) {
+        if (callSessionRepository != null) {
+            return callSessionRepository.findByCallId(callId)
+                    .filter(s -> CallSessionService.SESSION_ACTIVE.equals(s.getStatus()))
+                    .map(CallSession::getChimeMeetingId)
+                    .filter(id -> !id.isBlank())
+                    .isPresent();
+        }
         return activeMeetings.containsKey(callId);
     }
 
@@ -388,8 +420,12 @@ public class ChimeService {
      * @return Chime meeting ID or null
      */
     public final String getMeetingId(final String callId) {
+        final String durable = getDurableMeetingId(callId);
+        if (durable != null) {
+            return durable;
+        }
         final Meeting meeting = activeMeetings.get(callId);
-        return meeting != null ? meeting.meetingId() : null;
+        return meeting == null ? null : meeting.meetingId();
     }
 
     /**
@@ -402,7 +438,10 @@ public class ChimeService {
         final Map<String, Object> out = new HashMap<>();
         final Meeting meeting = activeMeetings.get(callId);
         final String meetingId = meeting != null
-                ? meeting.meetingId() : transcriptionLastMeetingId.get(callId);
+                ? meeting.meetingId()
+                : (getDurableMeetingId(callId) != null
+                    ? getDurableMeetingId(callId)
+                    : transcriptionLastMeetingId.get(callId));
 
         out.put("callId", callId);
         out.put("meetingActive", meeting != null);
@@ -438,6 +477,32 @@ public class ChimeService {
     private Map<String, Object> getCachedAttendeeCredentials(final String callId, final String userId) {
         final Map<String, Map<String, Object>> perCall = attendeeCredentials.get(callId);
         return perCall != null ? perCall.get(userId) : null;
+    }
+
+    private String deterministicToken(final String callId) {
+        return UUID.nameUUIDFromBytes(
+                ("careconnect-chime:" + callId).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private void persistMeetingId(final String callId, final String meetingId) {
+        if (callSessionRepository == null) {
+            return;
+        }
+        final int updated = callSessionRepository.persistMeetingIdIfAbsent(callId, meetingId);
+        final String persisted = getDurableMeetingId(callId);
+        if (updated == 0 && persisted != null && !persisted.equals(meetingId)) {
+            throw new IllegalStateException("Call session is already bound to another Chime meeting");
+        }
+    }
+
+    private String getDurableMeetingId(final String callId) {
+        if (callSessionRepository == null) {
+            return null;
+        }
+        return callSessionRepository.findByCallId(callId)
+                .map(CallSession::getChimeMeetingId)
+                .filter(id -> !id.isBlank())
+                .orElse(null);
     }
 
     private void cacheAttendeeCredentials(

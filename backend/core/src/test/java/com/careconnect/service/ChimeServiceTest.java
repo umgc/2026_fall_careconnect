@@ -1,11 +1,13 @@
 package com.careconnect.service;
 
+import com.careconnect.repository.CallSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -42,6 +44,8 @@ class ChimeServiceTest {
 
     @Mock
     private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
+    @Mock
+    private CallSessionRepository callSessionRepository;
 
     private static final String CALL_ID = "call-chime-001";
     private static final String USER_ID = "42";
@@ -255,6 +259,29 @@ class ChimeServiceTest {
             // createMeeting called only once — second returns cached
             verify(chimeSdkMeetingsClient).createMeeting(any(CreateMeetingRequest.class));
             assertThat(second.get("meetingId")).isEqualTo(MEETING_ID);
+        }
+
+        @Test
+        @DisplayName("independent nodes use the same AWS meeting idempotency token")
+        void createMeeting_acrossNodes_usesDeterministicToken() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            ChimeService nodeOne = new ChimeService(
+                    chimeSdkMeetingsClient, callSessionRepository,
+                    true, false, "en-US", "us-east-1");
+            ChimeService nodeTwo = new ChimeService(
+                    chimeSdkMeetingsClient, callSessionRepository,
+                    true, false, "en-US", "us-east-1");
+
+            nodeOne.createMeeting(CALL_ID);
+            nodeTwo.createMeeting(CALL_ID);
+
+            ArgumentCaptor<CreateMeetingRequest> requests =
+                    ArgumentCaptor.forClass(CreateMeetingRequest.class);
+            verify(chimeSdkMeetingsClient, times(2)).createMeeting(requests.capture());
+            assertThat(requests.getAllValues().get(0).clientRequestToken())
+                    .isEqualTo(requests.getAllValues().get(1).clientRequestToken());
         }
 
         @Test

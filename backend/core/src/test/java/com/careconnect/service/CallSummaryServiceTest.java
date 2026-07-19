@@ -59,8 +59,9 @@ class CallSummaryServiceTest {
                 callTranscriptService,
                 bedrockSentimentService,
                 new ObjectMapper(),
-                indexingEventEmitter,
-                callPatientResolver
+                callPatientResolver,
+                new CallSummaryPersistenceService(
+                        callSummaryRepository, indexingEventEmitter)
         );
         lenient().when(callPatientResolver.requirePatientId(CALL_ID)).thenReturn(42L);
     }
@@ -202,8 +203,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("stores NO_TRANSCRIPT summary when transcript is blank")
         void generateAndStoreSummary_noTranscript_storesNoTranscript() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn(" ");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(0L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot(" ", 0L));
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -231,8 +232,8 @@ class CallSummaryServiceTest {
             video.setSentimentLabel("CALM");
             video.setSentimentNotes("steady");
 
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Feeling okay");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(2L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Feeling okay", 2L));
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(true);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(true);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
@@ -271,8 +272,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("stores SUCCESS summary and persists riskLevel, caregiverVisibility, and summarizationEngine from Bedrock payload")
         void generateAndStoreSummary_success_persistsRiskAndVisibilityAndEngine() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Chest pain");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(5L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Chest pain", 5L));
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(true);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(true);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
@@ -293,6 +294,8 @@ class CallSummaryServiceTest {
             verify(callSummaryRepository).save(captor.capture());
             CallSummary saved = captor.getValue();
             assertThat(saved.getPatientId()).isEqualTo(42L);
+            assertThat(saved.getTranscriptSegmentCount()).isEqualTo(5);
+            assertThat(saved.getSummaryJson()).contains("\"transcriptSnapshotVersion\":\"sha256:test-5\"");
             assertThat(saved.getRiskLevel()).isEqualTo("HIGH");
             assertThat(saved.getCaregiverVisibility()).isEqualTo("auto");
             assertThat(saved.getSummarizationEngine()).isEqualTo("aws_bedrock:amazon.nova-pro-v1:0");
@@ -301,8 +304,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("SUCCESS summary defaults caregiverVisibility to on_consent when Bedrock omits it")
         void generateAndStoreSummary_success_defaultsCaregiverVisibilityWhenAbsent() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Routine check-in");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(2L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Routine check-in", 2L));
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
@@ -327,8 +330,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("emits SUMMARY_CREATED on SUCCESS path")
         void generateAndStoreSummary_success_emitsSummaryCreated() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Chest pain");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(3L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Chest pain", 3L));
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(true);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(true);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any())).thenReturn(Map.of(
@@ -357,8 +360,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("does not emit SUMMARY_CREATED when transcript is blank (NO_TRANSCRIPT path)")
         void generateAndStoreSummary_noTranscript_doesNotEmit() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn(" ");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(0L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot(" ", 0L));
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(callSummaryRepository.save(any(CallSummary.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -370,8 +373,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("does not emit SUMMARY_CREATED when Bedrock throws (ERROR path)")
         void generateAndStoreSummary_bedrockThrows_doesNotEmit() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Needs review");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(4L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Needs review", 4L));
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
@@ -386,8 +389,8 @@ class CallSummaryServiceTest {
         @Test
         @DisplayName("stores ERROR summary when Bedrock summarization throws")
         void generateAndStoreSummary_bedrockThrows_storesError() {
-            when(callTranscriptService.buildTranscriptTextForSummary(CALL_ID)).thenReturn("[PATIENT] Needs review");
-            when(callTranscriptService.countSegments(CALL_ID)).thenReturn(4L);
+            when(callTranscriptService.captureSummarySnapshot(CALL_ID))
+                    .thenReturn(snapshot("[PATIENT] Needs review", 4L));
             when(callTranscriptService.archiveIfEligible(CALL_ID)).thenReturn(false);
             when(callTranscriptService.isArchived(CALL_ID)).thenReturn(false);
             when(bedrockSentimentService.summarizeTranscript(any(), any(), any()))
@@ -412,6 +415,12 @@ class CallSummaryServiceTest {
             return (Map<String, Object>) rawMap;
         }
         throw new AssertionError("Expected a map but found: " + value.getClass());
+    }
+
+    private static CallTranscriptService.TranscriptSnapshot snapshot(
+            final String text, final long count) {
+        return new CallTranscriptService.TranscriptSnapshot(
+                text, count, "sha256:test-" + count);
     }
 
     @SuppressWarnings("unchecked")

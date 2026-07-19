@@ -25,4 +25,9 @@ jobs:
 
       - name: Run PostgreSQL repository contract
         working-directory: backend/core
-        run: ./mvnw -B -Dtest=RetrievalIndexChunkRepositoryPostgresCiTest test
+        run: >-
+          ./mvnw -B
+          -DskipTests=false
+          -Dsurefire.failIfNoSpecifiedTests=true
+          -Dtest=RetrievalIndexChunkRepositoryPostgresCiTest
+          test

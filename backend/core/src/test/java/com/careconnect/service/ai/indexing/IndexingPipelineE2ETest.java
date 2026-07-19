@@ -4,10 +4,12 @@ import com.careconnect.indexing.IndexingEventType;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
+import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
@@ -62,6 +64,8 @@ class IndexingPipelineE2ETest {
     @Mock
     private CallSummaryRepository callSummaryRepository;
     @Mock
+    private CallSessionRepository callSessionRepository;
+    @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
     private UspsMailpieceRepository uspsMailpieceRepository;
@@ -80,6 +84,7 @@ class IndexingPipelineE2ETest {
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         final RetrievalIndexService retrievalIndexService = new RetrievalIndexService(
                 callSummaryRepository,
+                callSessionRepository,
                 transcriptSegmentRepository,
                 uspsMailpieceRepository,
                 chunkRepository,
@@ -181,6 +186,11 @@ class IndexingPipelineE2ETest {
     @Test
     @DisplayName("E2E: TRANSCRIPT_INDEXED with patientId writes TRANSCRIPT_SEGMENT chunks")
     void transcriptIndexed_withPatientId_writesSegmentChunks() throws Exception {
+        final CallSession session = new CallSession();
+        session.setCallId("call-tx");
+        session.setPatientId(55L);
+        when(callSessionRepository.findByCallIdForIndexing("call-tx"))
+                .thenReturn(Optional.of(session));
         final CallTranscriptSegment segment = new CallTranscriptSegment();
         segment.setId(7L);
         segment.setCallId("call-tx");
@@ -279,9 +289,9 @@ class IndexingPipelineE2ETest {
     }
 
     @Test
-    @DisplayName("E2E: TRANSCRIPT_INDEXED without patientId is deferred (attempt burned, unprocessed)")
-    void transcriptIndexed_missingPatientId_defersAndBurnsAttempt() throws Exception {
-        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc("call-pending"))
+    @DisplayName("E2E: missing authoritative CallSession parks transcript without burning")
+    void transcriptIndexed_missingSessionDefersWithoutBurning() throws Exception {
+        when(callSessionRepository.findByCallIdForIndexing("call-pending"))
                 .thenReturn(Optional.empty());
 
         final TranscriptIndexedPayload payload =
@@ -296,9 +306,9 @@ class IndexingPipelineE2ETest {
         final ArgumentCaptor<IndexingOutboxRow> outboxCaptor =
                 ArgumentCaptor.forClass(IndexingOutboxRow.class);
         verify(outboxRepository).save(outboxCaptor.capture());
-        assertThat(outboxCaptor.getValue().getAttemptCount()).isEqualTo(2);
+        assertThat(outboxCaptor.getValue().getAttemptCount()).isEqualTo(1);
         assertThat(outboxCaptor.getValue().getProcessedAt()).isNull();
-        assertThat(outboxCaptor.getValue().getLastError()).contains("patientId");
+        assertThat(outboxCaptor.getValue().getLastError()).contains("CallSession");
     }
 
     @Test

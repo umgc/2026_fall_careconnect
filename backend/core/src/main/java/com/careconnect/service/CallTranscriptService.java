@@ -4,6 +4,7 @@ import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.util.ContentHashUtil;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -52,6 +53,9 @@ public class CallTranscriptService {
   /** Emits TRANSCRIPT_INDEXED events after successful segment batches. */
   private final IndexingEventEmitter indexingEventEmitter;
 
+  /** Resolves patient ownership from the authoritative call session. */
+  private final CallPatientResolver callPatientResolver;
+
   /**
    * Stores transcript segments for a call and emits a
    * {@code TRANSCRIPT_INDEXED} event to the indexing outbox when at
@@ -82,10 +86,11 @@ public class CallTranscriptService {
         saved += 1;
       }
       if (saved > 0) {
+        final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
         final String source = segments.get(0) != null ? segments.get(0).source() : null;
         indexingEventEmitter.emitTranscriptIndexed(new TranscriptIndexedPayload(
             normalizedCallId,
-            null, // patientId — nullable until telemetry lookup lands; resolved downstream by Ravi's poller (WBS 3.11.1 followup)
+            patientId,
             saved,
             source));
       }
@@ -171,7 +176,19 @@ public class CallTranscriptService {
    * @return transcript text used for summary generation
    */
   public String buildTranscriptTextForSummary(final String callId) {
-    final List<CallTranscriptSegment> segments = getSegmentsForCall(callId);
+    return captureSummarySnapshot(callId).transcriptText();
+  }
+
+  /**
+   * Captures text, count, and a deterministic version from one materialized segment list.
+   * The returned value is detached from later transcript writes and is safe to use during
+   * remote inference after this short read transaction completes.
+   */
+  @Transactional(readOnly = true)
+  public TranscriptSnapshot captureSummarySnapshot(final String callId) {
+    final String normalizedCallId = trim(callId);
+    final List<CallTranscriptSegment> segments =
+        normalizedCallId == null ? List.of() : getSegmentsForCall(normalizedCallId);
     final String transcriptText;
     if (segments.isEmpty()) {
       transcriptText = "";
@@ -191,7 +208,9 @@ public class CallTranscriptService {
       }
       transcriptText = out.toString().trim();
     }
-    return transcriptText;
+    final String version = ContentHashUtil.sha256(
+        transcriptText + "\nsegmentCount=" + segments.size());
+    return new TranscriptSnapshot(transcriptText, segments.size(), version);
   }
 
   /**
@@ -395,5 +414,9 @@ public class CallTranscriptService {
         String speakerLabel, String text, Long startMs, Long endMs, String source) {
       this(speakerLabel, text, startMs, endMs, source, null);
     }
+  }
+
+  /** Immutable transcript input used by one summary generation attempt. */
+  public record TranscriptSnapshot(String transcriptText, long segmentCount, String version) {
   }
 }

@@ -176,6 +176,14 @@ void main() {
             reason: 'Constant _transcriptFlushInterval must be 4 s');
       },
     );
+
+    test('transcript truncation preserves complete Unicode runes', () {
+      final truncated = truncateToUnicodeCodePoints('A😀B', 2);
+
+      expect(truncated, 'A😀');
+      expect(truncated.runes.length, 2);
+      expect(truncated.codeUnits.last, isNot(inInclusiveRange(0xD800, 0xDBFF)));
+    });
   });
 
   // =========================================================================

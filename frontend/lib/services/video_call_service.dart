@@ -6,6 +6,18 @@ import 'package:http/http.dart' as http;
 import '../config/environment_config.dart';
 import '../services/call_notification_service.dart';
 
+@visibleForTesting
+String truncateToUnicodeCodePoints(String value, int maxCodePoints) {
+  if (maxCodePoints < 0) {
+    throw ArgumentError.value(maxCodePoints, 'maxCodePoints');
+  }
+  final runes = value.runes;
+  if (runes.length <= maxCodePoints) {
+    return value;
+  }
+  return String.fromCharCodes(runes.take(maxCodePoints));
+}
+
 /// Resolves the one patient User ID that owns a durable outgoing call.
 String resolveCallSessionPatientUserId({
   required String currentUserId,
@@ -354,9 +366,7 @@ class VideoCallService {
     if (trimmed.isEmpty) {
       return false;
     }
-    if (trimmed.length > _maxTranscriptChars) {
-      trimmed = trimmed.substring(0, _maxTranscriptChars);
-    }
+    trimmed = truncateToUnicodeCodePoints(trimmed, _maxTranscriptChars);
     final resolvedEndMs = _resolveTranscriptEndMs(endMs);
     final resolvedStartMs =
         _resolveTranscriptStartMs(trimmed, startMs, resolvedEndMs);
