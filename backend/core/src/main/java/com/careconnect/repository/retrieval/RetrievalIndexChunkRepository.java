@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
@@ -32,6 +33,11 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             String sourceRecordId,
             Collection<String> recordTypes);
 
+    List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+            Long patientId,
+            Collection<String> sourceRecordIds,
+            Collection<String> recordTypes);
+
     long countByPatientId(Long patientId);
 
     void deleteBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
@@ -39,6 +45,11 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     void deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
             Long patientId,
             String sourceRecordId,
+            Collection<String> recordTypes);
+
+    void deleteByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+            Long patientId,
+            Collection<String> sourceRecordIds,
             Collection<String> recordTypes);
 
     /**
@@ -171,6 +182,22 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     @Query(
             value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id IN (:sourceRecordIds)
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingForSummarySources(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordIds") Collection<String> sourceRecordIds,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
                            chunk_metadata, indexed_at, consent_scope
                     FROM retrieval_index_chunk
@@ -189,10 +216,37 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     @Query(
             value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id IN (:sourceRecordIds)
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForSummarySources(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordIds") Collection<String> sourceRecordIds,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
                     SELECT DISTINCT source_record_id
                     FROM retrieval_index_chunk
                     WHERE record_type IN (:recordTypes)
-                      AND source_record_id ~ '^[0-9]+$'
+                      AND source_record_id ~ '^(call-summary:)?[0-9]+$'
+                      AND (
+                        source_record_id LIKE 'call-summary:%'
+                        OR record_type = 'CALL_SUMMARY'
+                        OR chunk_metadata->>'episodeType' = 'call'
+                      )
+                      AND (
+                        chunk_metadata->>'citationReplayAfter' IS NULL
+                        OR (chunk_metadata->>'citationReplayAfter')::timestamptz <= NOW()
+                      )
                       AND (
                         CASE
                           WHEN COALESCE(chunk_metadata->>'citationMetadataVersion', '')
@@ -209,6 +263,37 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("recordTypes") Collection<String> recordTypes,
             @Param("version") int version,
             @Param("limit") int limit);
+
+    @Modifying
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET chunk_metadata =
+                        jsonb_set(
+                            jsonb_set(
+                                COALESCE(chunk_metadata, '{}'::jsonb),
+                                '{citationReplayAttempts}',
+                                to_jsonb(
+                                    COALESCE(
+                                        CASE
+                                          WHEN COALESCE(
+                                                chunk_metadata->>'citationReplayAttempts', '')
+                                                ~ '^[0-9]+$'
+                                          THEN (chunk_metadata->>'citationReplayAttempts')::integer
+                                          ELSE 0
+                                        END,
+                                        0) + 1)),
+                            '{citationReplayAfter}',
+                            to_jsonb(CAST(:retryAfter AS text)))
+                    WHERE source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                    """,
+            nativeQuery = true)
+    int markSummaryCitationReplayFailure(
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("retryAfter") java.time.OffsetDateTime retryAfter);
 
     /**
      * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).

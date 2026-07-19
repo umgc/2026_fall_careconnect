@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,7 +31,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
     @BeforeEach
     void setUp() {
         worker = new SummaryCitationMetadataBackfillWorker(
-                chunkRepository, retrievalIndexService, 2);
+                chunkRepository, retrievalIndexService, 2, 60_000L);
     }
 
     @Test
@@ -43,6 +44,10 @@ class SummaryCitationMetadataBackfillWorkerTest {
         worker.pollAndBackfill();
 
         verify(retrievalIndexService).replaySummaryCitationMetadata(42L);
+        verify(chunkRepository).markSummaryCitationReplayFailure(
+                org.mockito.ArgumentMatchers.eq("not-a-number"),
+                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                any());
     }
 
     @Test
@@ -50,7 +55,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
         when(chunkRepository.findStaleSummaryCitationSourceIds(
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION,
-                2)).thenReturn(List.of("41", "42"));
+                2)).thenReturn(List.of("41", "call-summary:42"));
         when(retrievalIndexService.replaySummaryCitationMetadata(41L))
                 .thenThrow(new IllegalStateException("failed"));
 
@@ -59,6 +64,10 @@ class SummaryCitationMetadataBackfillWorkerTest {
         final InOrder order = inOrder(retrievalIndexService);
         order.verify(retrievalIndexService).replaySummaryCitationMetadata(41L);
         order.verify(retrievalIndexService).replaySummaryCitationMetadata(42L);
+        verify(chunkRepository).markSummaryCitationReplayFailure(
+                org.mockito.ArgumentMatchers.eq("41"),
+                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                any());
     }
 
     @Test

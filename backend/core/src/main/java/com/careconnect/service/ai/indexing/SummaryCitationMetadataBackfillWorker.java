@@ -9,6 +9,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 /** Bounded, idempotent replay worker for summary chunks with stale citation metadata. */
@@ -22,14 +25,20 @@ public class SummaryCitationMetadataBackfillWorker {
     private final RetrievalIndexChunkRepository chunkRepository;
     private final RetrievalIndexService retrievalIndexService;
     private final int batchSize;
+    private final long failureBackoffMs;
 
     public SummaryCitationMetadataBackfillWorker(
             final RetrievalIndexChunkRepository chunkRepository,
             final RetrievalIndexService retrievalIndexService,
-            @Value("${careconnect.ai.citation.backfill.batch-size:25}") final int batchSize) {
+            @Value("${careconnect.ai.citation.backfill.batch-size:25}") final int batchSize,
+            @Value("${careconnect.ai.citation.backfill.failure-backoff-ms:300000}")
+                    final long failureBackoffMs) {
         this.chunkRepository = chunkRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.batchSize = Math.max(1, batchSize);
+        this.failureBackoffMs = Math.min(
+                Duration.ofDays(7).toMillis(),
+                Math.max(1_000L, failureBackoffMs));
     }
 
     @Scheduled(
@@ -49,10 +58,23 @@ public class SummaryCitationMetadataBackfillWorker {
         int failed = 0;
         for (final String sourceId : sourceIds) {
             try {
-                rebuilt += retrievalIndexService.replaySummaryCitationMetadata(
-                        Long.valueOf(sourceId));
+                final Long summaryId = SummarySourceKey.parseCallSummaryId(sourceId)
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Invalid call summary source key"));
+                rebuilt += retrievalIndexService.replaySummaryCitationMetadata(summaryId);
             } catch (final RuntimeException ex) {
                 failed++;
+                try {
+                    chunkRepository.markSummaryCitationReplayFailure(
+                            sourceId,
+                            RetrievalRecordType.summaryTypeNames(),
+                            OffsetDateTime.now(ZoneOffset.UTC)
+                                    .plus(Duration.ofMillis(failureBackoffMs)));
+                } catch (final RuntimeException markFailure) {
+                    log.warn(
+                            "Unable to persist summary citation replay backoff type={}",
+                            markFailure.getClass().getSimpleName());
+                }
                 log.warn(
                         "Summary citation metadata replay failed type={}",
                         ex.getClass().getSimpleName());

@@ -17,6 +17,7 @@ import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,15 +28,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -120,21 +121,30 @@ public class RetrievalIndexService {
                     false);
         }
 
-        final String sourceRecordId = String.valueOf(payload.summaryId());
+        final String sourceRecordId = SummarySourceKey.call(payload.summaryId());
+        final String legacySourceRecordId = SummarySourceKey.legacy(payload.summaryId());
+        final List<String> sourceRecordIds =
+                List.of(sourceRecordId, legacySourceRecordId);
         final CallSummary summary = callSummaryRepository.findByIdForUpdate(payload.summaryId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + payload.summaryId()));
 
-        final Long patientId = firstNonNull(payload.patientId(), summary.getPatientId());
+        if (payload.patientId() != null
+                && summary.getPatientId() != null
+                && !payload.patientId().equals(summary.getPatientId())) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED patient scope does not match authoritative summary row");
+        }
+        final Long patientId = firstNonNull(summary.getPatientId(), payload.patientId());
         if (patientId == null) {
             throw new IndexingDeferredException(
                     "Cannot index summaryId=" + payload.summaryId()
                             + " — patientId is required on retrieval_index_chunk");
         }
 
-        final String episodeType = firstNonBlank(payload.episodeType(), "call");
+        final String episodeType = "call";
         final String caregiverVisibility = firstNonBlank(
-                payload.caregiverVisibility(), summary.getCaregiverVisibility());
+                summary.getCaregiverVisibility(), payload.caregiverVisibility());
         final String contentHash = firstNonBlank(payload.contentHash(), null);
         final String engine = firstNonBlank(
                 payload.summarizationEngine(), summary.getSummarizationEngine());
@@ -153,9 +163,9 @@ public class RetrievalIndexService {
                                 .toInstant()
                                 .toString());
         final List<RetrievalIndexChunk> existing =
-                chunkRepository.findByPatientIdAndSourceRecordIdAndRecordTypeIn(
+                chunkRepository.findByPatientIdAndSourceRecordIdInAndRecordTypeIn(
                         patientId,
-                        sourceRecordId,
+                        sourceRecordIds,
                         RetrievalRecordType.summaryTypeNames());
 
         if (drafts.isEmpty()) {
@@ -165,23 +175,23 @@ public class RetrievalIndexService {
             // Still recover NULL embeddings from a prior Bedrock failure if chunks remain.
             return retryMissingEmbeddingsOrSkip(
                     patientId,
-                    sourceRecordId,
+                    sourceRecordIds,
                     payload.summaryId(),
                     "no drafts; existing chunks left unchanged");
         }
 
         if (contentHash != null
-                && chunksMatchExpected(existing, drafts, contentHash)) {
+                && chunksMatchExpected(existing, drafts, contentHash, sourceRecordId)) {
             return retryMissingEmbeddingsOrSkip(
                     patientId,
-                    sourceRecordId,
+                    sourceRecordIds,
                     payload.summaryId(),
                     "contentHash and citation metadata unchanged");
         }
 
-        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
+        chunkRepository.deleteByPatientIdAndSourceRecordIdInAndRecordTypeIn(
                 patientId,
-                sourceRecordId,
+                sourceRecordIds,
                 RetrievalRecordType.summaryTypeNames());
         return persistDrafts(patientId, sourceRecordId, drafts);
     }
@@ -209,7 +219,7 @@ public class RetrievalIndexService {
                 summary.getTranscriptSegmentCount(),
                 summary.getCaregiverVisibility(),
                 summary.getSummarizationEngine(),
-                sha256(summary.getSummaryJson()));
+                ContentHashUtil.sha256(summary.getSummaryJson()));
         return ingestSummaryCreated(replay);
     }
 
@@ -218,18 +228,18 @@ public class RetrievalIndexService {
      */
     private int retryMissingEmbeddingsOrSkip(
             final Long patientId,
-            final String sourceRecordId,
+            final List<String> sourceRecordIds,
             final Long summaryId,
             final String skipReason) {
-        if (chunkRepository.countMissingEmbeddingForSummary(
-                patientId, sourceRecordId, RetrievalRecordType.summaryTypeNames()) > 0) {
+        if (chunkRepository.countMissingEmbeddingForSummarySources(
+                patientId, sourceRecordIds, RetrievalRecordType.summaryTypeNames()) > 0) {
             log.info(
                     "SUMMARY_CREATED for summaryId={} — embeddings missing; retrying embed without re-chunk",
                     summaryId);
             scheduleEmbeddingAfterCommit(
-                    chunkRepository.findMissingEmbeddingsForSummary(
+                    chunkRepository.findMissingEmbeddingsForSummarySources(
                             patientId,
-                            sourceRecordId,
+                            sourceRecordIds,
                             RetrievalRecordType.summaryTypeNames()));
         } else {
             log.info("Skipping SUMMARY_CREATED for summaryId={} — {}", summaryId, skipReason);
@@ -394,7 +404,8 @@ public class RetrievalIndexService {
     private boolean chunksMatchExpected(
             final List<RetrievalIndexChunk> existing,
             final List<IndexingChunkDraft> expectedDrafts,
-            final String contentHash) {
+            final String contentHash,
+            final String expectedSourceRecordId) {
         if (existing == null
                 || expectedDrafts == null
                 || existing.size() != expectedDrafts.size()
@@ -402,26 +413,50 @@ public class RetrievalIndexService {
             return false;
         }
 
-        final List<String> expectedSignatures = expectedDrafts.stream()
-                .map(draft -> draft.recordType().name()
-                        + ":" + draft.metadata().get("chunkIndex"))
-                .sorted()
-                .toList();
-        final List<String> actualSignatures = new ArrayList<>(existing.size());
+        final Map<String, IndexingChunkDraft> expectedBySignature = new HashMap<>();
+        for (final IndexingChunkDraft draft : expectedDrafts) {
+            final String signature =
+                    draft.recordType().name() + ":" + draft.metadata().get("chunkIndex");
+            if (expectedBySignature.put(signature, draft) != null) {
+                return false;
+            }
+        }
+
         for (final RetrievalIndexChunk chunk : existing) {
             final JsonNode metadata = parseChunkMetadata(chunk.getChunkMetadata());
             if (metadata == null
+                    || !expectedSourceRecordId.equals(chunk.getSourceRecordId())
                     || !contentHash.equals(metadata.path("contentHash").asText(null))
                     || metadata.path("citationMetadataVersion").asInt(-1)
                             < SummaryChunker.CITATION_METADATA_VERSION
                     || !metadata.path("chunkIndex").isIntegralNumber()) {
                 return false;
             }
-            actualSignatures.add(
-                    chunk.getRecordType() + ":" + metadata.path("chunkIndex").asInt());
+            final String signature =
+                    chunk.getRecordType() + ":" + metadata.path("chunkIndex").asInt();
+            final IndexingChunkDraft expected = expectedBySignature.remove(signature);
+            if (expected == null
+                    || !Objects.equals(
+                            truncateConsent(chunk.getConsentScope()),
+                            truncateConsent(expected.consentScope()))
+                    || !containsExpectedMetadata(metadata, expected.metadata())) {
+                return false;
+            }
         }
-        actualSignatures.sort(String::compareTo);
-        return expectedSignatures.equals(actualSignatures);
+        return expectedBySignature.isEmpty();
+    }
+
+    private boolean containsExpectedMetadata(
+            final JsonNode actual, final Map<String, Object> expectedMetadata) {
+        final JsonNode expected = objectMapper.valueToTree(expectedMetadata);
+        final Iterator<Map.Entry<String, JsonNode>> fields = expected.fields();
+        while (fields.hasNext()) {
+            final Map.Entry<String, JsonNode> field = fields.next();
+            if (!Objects.equals(actual.get(field.getKey()), field.getValue())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private JsonNode parseChunkMetadata(final String chunkMetadataJson) {
@@ -434,16 +469,6 @@ public class RetrievalIndexService {
         } catch (final Exception ex) {
             log.debug("Unable to parse retrieval chunk metadata: {}", ex.getMessage());
             return null;
-        }
-    }
-
-    private static String sha256(final String value) {
-        try {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(
-                    digest.digest((value == null ? "" : value).getBytes(StandardCharsets.UTF_8)));
-        } catch (final NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is unavailable", ex);
         }
     }
 
