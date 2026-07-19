@@ -547,21 +547,33 @@ class MedicalContextServiceTest {
     void shouldIncludeDocuments_flagTrue_true() throws Exception {
         final UserAIConfig c = cfg();
         c.setIncludeDocumentsByDefault(true);
-        assertThat(service.shouldIncludeDocuments(c)).isTrue();
+        assertThat(service.shouldIncludeDocuments(bareRequest(), c)).isTrue();
     }
 
     @Test
     void shouldIncludeDocuments_flagFalse_false() throws Exception {
         final UserAIConfig c = cfg();
         c.setIncludeDocumentsByDefault(false);
-        assertThat(service.shouldIncludeDocuments(c)).isFalse();
+        assertThat(service.shouldIncludeDocuments(bareRequest(), c)).isFalse();
     }
 
     @Test
     void shouldIncludeDocuments_flagNull_defaultsTrue() throws Exception {
         final UserAIConfig c = cfg();
         c.setIncludeDocumentsByDefault(null);
-        assertThat(service.shouldIncludeDocuments(c)).isTrue();
+        assertThat(service.shouldIncludeDocuments(bareRequest(), c)).isTrue();
+    }
+
+    @Test
+    void shouldIncludeDocuments_requestOverride_winsOverConfig() throws Exception {
+        final UserAIConfig c = cfg();
+        c.setIncludeDocumentsByDefault(true);
+        final ChatRequest req = bareRequest();
+        req.setIncludeDocuments(false);
+        assertThat(service.shouldIncludeDocuments(req, c)).isFalse();
+        req.setIncludeDocuments(true);
+        c.setIncludeDocumentsByDefault(false);
+        assertThat(service.shouldIncludeDocuments(req, c)).isTrue();
     }
 
     @Test

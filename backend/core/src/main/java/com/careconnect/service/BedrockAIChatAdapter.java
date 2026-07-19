@@ -97,7 +97,9 @@ public class BedrockAIChatAdapter implements AIChatService {
                 return request;
             }
             String userMessage = request.getMessage() == null ? "" : request.getMessage();
-            request.setMessage(context + "\n\nUSER QUESTION:\n" + userMessage);
+            return request.toBuilder()
+                    .message(context + "\n\nUSER QUESTION:\n" + userMessage)
+                    .build();
         } catch (Exception e) {
             // Never block the chat on context assembly — send the raw message instead.
             log.warn("Failed to assemble medical context for patient {}; sending message without context: {}",

@@ -83,7 +83,7 @@ public class MedicalContextService {
         }
         
         // Process uploaded files if any — gated by the documents data-source flag (WBS 3.15.7)
-        if (shouldIncludeDocuments(aiConfig)
+        if (shouldIncludeDocuments(request, aiConfig)
                 && request.getUploadedFiles() != null && !request.getUploadedFiles().isEmpty()) {
             context.append("UPLOADED FILES:\n");
             for (com.careconnect.dto.UploadedFileDTO file : request.getUploadedFiles()) {
@@ -124,8 +124,11 @@ public class MedicalContextService {
     }
 
     // WBS 3.15.7: gate uploaded documents on the data-source flag.
-    // Null (older configs) defaults to include, preserving prior behavior.
-    boolean shouldIncludeDocuments(UserAIConfig aiConfig) {
+    // Per-request override wins; null config (older records) defaults to include.
+    boolean shouldIncludeDocuments(ChatRequest request, UserAIConfig aiConfig) {
+        if (request.getIncludeDocuments() != null) {
+            return request.getIncludeDocuments();
+        }
         Boolean flag = aiConfig.getIncludeDocumentsByDefault();
         return flag == null || flag;
     }
