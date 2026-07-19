@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
 import 'package:care_connect_app/features/usps/domain/models/mail_image_availability.dart';
+import 'package:care_connect_app/features/usps/presentation/widgets/mail_envelope_read_aloud_button.dart';
 import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_image.dart';
 
 class UspsTestScreen extends StatefulWidget {
@@ -426,6 +427,12 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (!isPackage)
+                        MailEnvelopeReadAloudButton(
+                          sender: rawSender,
+                          summary: rawSubject,
+                          includeMissingImageNote: missingImageNormal,
+                        ),
                       const SizedBox(width: 8),
                       Chip(
                         label: Text(typeLabel),
@@ -1067,12 +1074,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   ],
                                 ],
                               ),
-                              trailing: IconButton(
-                                icon: Icon(trailingIcon),
-                                onPressed:
-                                    trailingUrl == null || trailingUrl.isEmpty
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!isPackage)
+                                    MailEnvelopeReadAloudButton(
+                                      sender: from,
+                                      summary: summaryText,
+                                      includeMissingImageNote:
+                                          missingImageNormal,
+                                    ),
+                                  IconButton(
+                                    icon: Icon(trailingIcon),
+                                    onPressed: trailingUrl == null ||
+                                            trailingUrl.isEmpty
                                         ? null
                                         : () => _openUri(trailingUrl),
+                                  ),
+                                ],
                               ),
                             ),
                           );
@@ -1382,12 +1401,23 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               subtitle: subtitleText != null
                                   ? Text(subtitleText)
                                   : const SizedBox.shrink(),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.open_in_new),
-                                onPressed:
-                                    trailingUrl == null || trailingUrl.isEmpty
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  MailEnvelopeReadAloudButton(
+                                    sender: senderName,
+                                    summary: summary,
+                                    includeMissingImageNote:
+                                        missingImageNormal,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.open_in_new),
+                                    onPressed: trailingUrl == null ||
+                                            trailingUrl.isEmpty
                                         ? null
                                         : () => _openUri(trailingUrl),
+                                  ),
+                                ],
                               ),
                             ),
                           );
