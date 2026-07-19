@@ -27,9 +27,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -117,14 +121,7 @@ public class RetrievalIndexService {
         }
 
         final String sourceRecordId = String.valueOf(payload.summaryId());
-        if (payload.contentHash() != null
-                && !payload.contentHash().isBlank()
-                && hasMatchingContentHash(sourceRecordId, payload.contentHash())) {
-            return retryMissingEmbeddingsOrSkip(
-                    sourceRecordId, payload.summaryId(), "contentHash unchanged");
-        }
-
-        final CallSummary summary = callSummaryRepository.findById(payload.summaryId())
+        final CallSummary summary = callSummaryRepository.findByIdForUpdate(payload.summaryId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + payload.summaryId()));
 
@@ -155,6 +152,11 @@ public class RetrievalIndexService {
                                 .atZone(ZoneOffset.UTC)
                                 .toInstant()
                                 .toString());
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findByPatientIdAndSourceRecordIdAndRecordTypeIn(
+                        patientId,
+                        sourceRecordId,
+                        RetrievalRecordType.summaryTypeNames());
 
         if (drafts.isEmpty()) {
             log.warn(
@@ -162,26 +164,73 @@ public class RetrievalIndexService {
                     payload.summaryId());
             // Still recover NULL embeddings from a prior Bedrock failure if chunks remain.
             return retryMissingEmbeddingsOrSkip(
+                    patientId,
                     sourceRecordId,
                     payload.summaryId(),
                     "no drafts; existing chunks left unchanged");
         }
 
-        chunkRepository.deleteBySourceRecordId(sourceRecordId);
+        if (contentHash != null
+                && chunksMatchExpected(existing, drafts, contentHash)) {
+            return retryMissingEmbeddingsOrSkip(
+                    patientId,
+                    sourceRecordId,
+                    payload.summaryId(),
+                    "contentHash and citation metadata unchanged");
+        }
+
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
+                patientId,
+                sourceRecordId,
+                RetrievalRecordType.summaryTypeNames());
         return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    /**
+     * Replays one call summary using authoritative entity data for citation metadata backfill.
+     * The row lock serializes this operation with normal outbox ingestion.
+     */
+    @Transactional
+    public int replaySummaryCitationMetadata(final Long summaryId) {
+        if (summaryId == null) {
+            throw new IllegalArgumentException("summaryId is required");
+        }
+        final CallSummary summary = callSummaryRepository.findByIdForUpdate(summaryId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "CallSummary not found for summaryId=" + summaryId));
+        final SummaryCreatedPayload replay = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                summary.getId(),
+                summary.getCallId(),
+                summary.getPatientId(),
+                summary.getStatus(),
+                summary.getGeneratedAt(),
+                summary.getTranscriptSegmentCount(),
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                sha256(summary.getSummaryJson()));
+        return ingestSummaryCreated(replay);
     }
 
     /**
      * Embed-only recovery when chunks already exist. Returns 0 (no new chunks written).
      */
     private int retryMissingEmbeddingsOrSkip(
-            final String sourceRecordId, final Long summaryId, final String skipReason) {
-        if (chunkRepository.countMissingEmbeddingForSource(sourceRecordId) > 0) {
+            final Long patientId,
+            final String sourceRecordId,
+            final Long summaryId,
+            final String skipReason) {
+        if (chunkRepository.countMissingEmbeddingForSummary(
+                patientId, sourceRecordId, RetrievalRecordType.summaryTypeNames()) > 0) {
             log.info(
                     "SUMMARY_CREATED for summaryId={} — embeddings missing; retrying embed without re-chunk",
                     summaryId);
             scheduleEmbeddingAfterCommit(
-                    chunkRepository.findBySourceRecordIdAndEmbeddingIsNull(sourceRecordId));
+                    chunkRepository.findMissingEmbeddingsForSummary(
+                            patientId,
+                            sourceRecordId,
+                            RetrievalRecordType.summaryTypeNames()));
         } else {
             log.info("Skipping SUMMARY_CREATED for summaryId={} — {}", summaryId, skipReason);
         }
@@ -342,35 +391,59 @@ public class RetrievalIndexService {
         }
     }
 
-    private boolean hasMatchingContentHash(final String sourceRecordId, final String contentHash) {
-        final List<RetrievalIndexChunk> existing =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.CALL_SUMMARY.name());
-        final List<RetrievalIndexChunk> visitExisting =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.VISIT_SUMMARY.name());
-        final List<RetrievalIndexChunk> all = new ArrayList<>(existing);
-        all.addAll(visitExisting);
-        for (final RetrievalIndexChunk chunk : all) {
-            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)
-                    && hasCurrentCitationMetadata(chunk.getChunkMetadata())) {
-                return true;
-            }
+    private boolean chunksMatchExpected(
+            final List<RetrievalIndexChunk> existing,
+            final List<IndexingChunkDraft> expectedDrafts,
+            final String contentHash) {
+        if (existing == null
+                || expectedDrafts == null
+                || existing.size() != expectedDrafts.size()
+                || existing.isEmpty()) {
+            return false;
         }
-        return false;
+
+        final List<String> expectedSignatures = expectedDrafts.stream()
+                .map(draft -> draft.recordType().name()
+                        + ":" + draft.metadata().get("chunkIndex"))
+                .sorted()
+                .toList();
+        final List<String> actualSignatures = new ArrayList<>(existing.size());
+        for (final RetrievalIndexChunk chunk : existing) {
+            final JsonNode metadata = parseChunkMetadata(chunk.getChunkMetadata());
+            if (metadata == null
+                    || !contentHash.equals(metadata.path("contentHash").asText(null))
+                    || metadata.path("citationMetadataVersion").asInt(-1)
+                            < SummaryChunker.CITATION_METADATA_VERSION
+                    || !metadata.path("chunkIndex").isIntegralNumber()) {
+                return false;
+            }
+            actualSignatures.add(
+                    chunk.getRecordType() + ":" + metadata.path("chunkIndex").asInt());
+        }
+        actualSignatures.sort(String::compareTo);
+        return expectedSignatures.equals(actualSignatures);
     }
 
-    private boolean hasCurrentCitationMetadata(final String chunkMetadataJson) {
+    private JsonNode parseChunkMetadata(final String chunkMetadataJson) {
         if (chunkMetadataJson == null || chunkMetadataJson.isBlank()) {
-            return false;
+            return null;
         }
         try {
             final JsonNode metadata = objectMapper.readTree(chunkMetadataJson);
-            return metadata.path("citationMetadataVersion").asInt(-1)
-                    >= SummaryChunker.CITATION_METADATA_VERSION;
+            return metadata != null && metadata.isObject() ? metadata : null;
         } catch (final Exception ex) {
-            log.debug("Unable to parse citation metadata version: {}", ex.getMessage());
-            return false;
+            log.debug("Unable to parse retrieval chunk metadata: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private static String sha256(final String value) {
+        try {
+            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(
+                    digest.digest((value == null ? "" : value).getBytes(StandardCharsets.UTF_8)));
+        } catch (final NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
         }
     }
 

@@ -33,10 +33,9 @@ class CitationDeepLinkBuilderTest {
     }
 
     @Test
-    @DisplayName("clinical-note links accept safe identifiers and omit unsafe path values")
-    void build_sourceSpecificRoutes_areSafeOrOmitted() {
-        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "note-1_2.3"))
-                .isEqualTo("/notetaker/detail/note-1_2.3");
+    @DisplayName("routes requiring transient Flutter state are omitted")
+    void build_sourceSpecificRoutes_areOmitted() {
+        assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "note-1_2.3")).isNull();
         assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "note/1")).isNull();
         assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "#fragment")).isNull();
         assertThat(build(RetrievalRecordType.CLINICAL_NOTE, "..")).isNull();
@@ -44,8 +43,7 @@ class CitationDeepLinkBuilderTest {
     }
 
     private String build(final RetrievalRecordType type, final String sourceId) {
-        return builder.build(
-                new RankedChunk(
+        return builder.build(new RankedChunk(
                         UUID.randomUUID(),
                         42L,
                         type,
@@ -56,7 +54,6 @@ class CitationDeepLinkBuilderTest {
                         0.1d,
                         1,
                         null,
-                        "C1"),
-                sourceId);
+                        "C1"));
     }
 }

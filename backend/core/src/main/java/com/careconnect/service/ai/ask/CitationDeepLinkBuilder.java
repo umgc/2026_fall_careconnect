@@ -3,10 +3,6 @@ package com.careconnect.service.ai.ask;
 import com.careconnect.service.ai.retrieval.RankedChunk;
 import org.springframework.stereotype.Component;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.regex.Pattern;
-
 /**
  * Builds citation destinations that are registered by the Flutter router.
  *
@@ -17,10 +13,7 @@ import java.util.regex.Pattern;
 @Component
 final class CitationDeepLinkBuilder {
 
-    private static final Pattern SAFE_PATH_IDENTIFIER =
-            Pattern.compile("^[A-Za-z0-9._-]+$");
-
-    String build(final RankedChunk chunk, final String sourceId) {
+    String build(final RankedChunk chunk) {
         if (chunk == null || chunk.recordType() == null) {
             return null;
         }
@@ -30,9 +23,7 @@ final class CitationDeepLinkBuilder {
                     SUMMARY_SOAP, SUMMARY_CLINICAL_OBSERVATION -> "/chatandcalls";
             case VISIT_SUMMARY -> null;
             case UPLOADED_DOCUMENT -> "/file-management";
-            case CLINICAL_NOTE -> isSafePathIdentifier(sourceId)
-                    ? "/notetaker/detail/" + encodePathSegment(sourceId)
-                    : null;
+            case CLINICAL_NOTE -> null;
             case USPS_MAIL -> "/informed-delivery";
             case MEDICATION -> "/medication";
             case TASK -> "/tasks";
@@ -41,14 +32,4 @@ final class CitationDeepLinkBuilder {
         };
     }
 
-    private static String encodePathSegment(final String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
-    }
-
-    private static boolean isSafePathIdentifier(final String value) {
-        return value != null
-                && !".".equals(value)
-                && !"..".equals(value)
-                && SAFE_PATH_IDENTIFIER.matcher(value).matches();
-    }
 }

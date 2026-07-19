@@ -103,7 +103,7 @@ final class CitationAssembler {
 
         final CitationMetadataMapper.CitationMetadata metadata =
                 metadataMapper.map(chunk.recordType(), chunk.chunkMetadata());
-        final String deepLink = deepLinkBuilder.build(chunk, sourceId);
+        final String deepLink = deepLinkBuilder.build(chunk);
 
         return Optional.of(new AiCitation(
                 ref,

@@ -94,4 +94,38 @@ class RetrievalIndexChunkRepositoryTest {
         assertThat(repository.findBySourceRecordIdAndRecordType("summary-77", RetrievalRecordType.CALL_SUMMARY.name()))
                 .isEmpty();
     }
+
+    @Test
+    @DisplayName("summary replacement is scoped by patient, source, and summary type")
+    void deletesSummaryChunksWithoutTouchingCollidingRows() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("target summary")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(6L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .chunkText("other patient's summary")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.TRANSCRIPT_SEGMENT.name())
+                .sourceRecordId("77")
+                .chunkText("same-patient non-summary")
+                .build());
+
+        repository.deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
+                5L, "77", RetrievalRecordType.summaryTypeNames());
+        repository.flush();
+
+        assertThat(repository.findByPatientId(5L))
+                .extracting(RetrievalIndexChunk::getRecordType)
+                .containsExactly(RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        assertThat(repository.findByPatientId(6L))
+                .extracting(RetrievalIndexChunk::getChunkText)
+                .containsExactly("other patient's summary");
+    }
 }
