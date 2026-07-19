@@ -1454,9 +1454,12 @@ public class CallController {
     try {
       callSessionService.requireHistoricalParticipant(callId, user.getId());
     } catch (AppException accessFailure) {
-      if (accessFailure.getStatus() != HttpStatus.NOT_FOUND) {
+      final boolean missing = accessFailure.getStatus() == HttpStatus.NOT_FOUND;
+      final boolean denied = accessFailure.getStatus() == HttpStatus.FORBIDDEN;
+      if (!missing && !denied) {
         throw accessFailure;
       }
+      // Align with CallSummaryController: historical participant OR current patient relationship.
       final Long patientEntityId = callSummaryService.getLatestSummaryEntity(callId)
           .map(summary -> summary.getPatientId())
           .orElse(null);
@@ -1464,6 +1467,10 @@ public class CallController {
         callSessionService.requirePatientEntityAccess(user, patientEntityId);
         return;
       }
+      if (denied) {
+        throw accessFailure;
+      }
+      // NOT_FOUND + no summary patient: legacy telemetry soft-auth (PATIENT-validated only).
       final Long patientUserId = resolveLegacyPatientUserId(callId);
       if (patientUserId == null) {
         throw new AppException(HttpStatus.NOT_FOUND, "Call not found");
@@ -1475,7 +1482,7 @@ public class CallController {
   /**
    * Resolves a patient user id for pre-session historical calls.
    * Prefers server-validated PATIENT-role actors/targets over client-supplied
-   * context metadata, which is not authz-trusted.
+   * context metadata. Context ids are accepted only when they resolve to Role.PATIENT.
    */
   private Long resolveLegacyPatientUserId(final String callId) {
     final List<CallTelemetryEvent> events = callTelemetryService.getTelemetryForCall(callId);
@@ -1491,7 +1498,7 @@ public class CallController {
     }
     for (final CallTelemetryEvent event : events) {
       final Long fromContext = extractContextPatientUserId(event);
-      if (fromContext != null) {
+      if (fromContext != null && isPatientUser(fromContext)) {
         return fromContext;
       }
     }

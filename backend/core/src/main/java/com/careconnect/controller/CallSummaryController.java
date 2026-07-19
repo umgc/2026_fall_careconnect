@@ -7,7 +7,6 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
-import com.careconnect.service.CaregiverService;
 import com.careconnect.service.consent.CaregiverVisibilityCheck;
 import com.careconnect.service.consent.CaregiverVisibilityService;
 import com.careconnect.service.consent.CaregiverVisibilityStatus;
@@ -45,8 +44,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code @PreAuthorize} gates the endpoint at the role level to
  *       {@code CAREGIVER}, {@code PATIENT}, or {@code ADMIN}.</li>
  *   <li>Durable access: admin, historical call participant, or current
- *       patient relationship via {@link CallSessionService} /
- *       {@link CaregiverService}.</li>
+ *       patient relationship via {@link CallSessionService} (aligned with
+ *       {@code CallController.requireDurableCallAccess}).</li>
  *   <li>TC-E-SUM-009: caregivers must still pass the {@code on_consent}
  *       visibility gate when {@code caregiverVisibility == on_consent}.</li>
  * </ol>
@@ -60,7 +59,6 @@ public class CallSummaryController {
 
     private final CallSummaryService callSummaryService;
     private final CallSessionService callSessionService;
-    private final CaregiverService caregiverService;
     private final UserRepository userRepository;
     private final CaregiverVisibilityService caregiverVisibilityService;
 
@@ -123,15 +121,15 @@ public class CallSummaryController {
                     summary.getCallId(), currentUser.getId());
             return true;
         } catch (AppException ignored) {
-            // Fall through to current patient relationship.
+            // Fall through to current patient relationship (same as callId summary path).
         }
         if (summary.getPatientId() == null) {
             return false;
         }
         try {
-            return caregiverService.hasAccessToPatient(
-                    currentUser.getId(), summary.getPatientId());
-        } catch (RuntimeException accessFailure) {
+            callSessionService.requirePatientEntityAccess(currentUser, summary.getPatientId());
+            return true;
+        } catch (AppException accessFailure) {
             return false;
         }
     }

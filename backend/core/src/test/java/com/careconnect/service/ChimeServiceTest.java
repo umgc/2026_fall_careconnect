@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.CreateAttendeeRequ
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateAttendeeResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingResponse;
+import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteAttendeeRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
@@ -537,6 +538,79 @@ class ChimeServiceTest {
             verify(participantRepository).finalizeAttendeeCreation(
                     any(), any(), any(), any(), any(), any());
             verify(chimeSdkMeetingsClient).createAttendee(any(CreateAttendeeRequest.class));
+        }
+
+        @Test
+        @DisplayName("lost finalize does not deleteAttendee when durable winner owns same AWS id")
+        void createAttendee_lostFinalize_skipsCompensateWhenWinnerOwnsAttendee() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            CallSession session = new CallSession();
+            session.setId(9L);
+            session.setCallId(CALL_ID);
+            session.setStatus(CallSessionService.SESSION_ACTIVE);
+            CallParticipant beforeCreate = new CallParticipant();
+            beforeCreate.setCallSessionId(9L);
+            beforeCreate.setUserId(42L);
+
+            CallParticipant winner = new CallParticipant();
+            winner.setCallSessionId(9L);
+            winner.setUserId(42L);
+            winner.setChimeAttendeeId("attendee-shared");
+            winner.setChimeJoinToken("winner-token");
+            winner.setChimeExternalUserId("opaque-ext");
+
+            CallParticipantRepository participantRepository =
+                    org.mockito.Mockito.mock(CallParticipantRepository.class);
+            org.springframework.transaction.PlatformTransactionManager txManager =
+                    org.mockito.Mockito.mock(
+                            org.springframework.transaction.PlatformTransactionManager.class);
+            when(txManager.getTransaction(any()))
+                    .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
+
+            when(callSessionRepository.findByCallId(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(callSessionRepository.findByCallIdForLifecycle(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(participantRepository.findByCallSessionIdAndUserId(9L, 42L))
+                    .thenReturn(Optional.of(beforeCreate), Optional.of(winner));
+            when(participantRepository.claimAttendeeCreation(
+                    any(), any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(participantRepository.finalizeAttendeeCreation(
+                    any(), any(), any(), any(), any(), any()))
+                    .thenReturn(0);
+            when(callSessionRepository.persistMeetingIdIfAbsent(any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
+                    .thenReturn(ListAttendeesResponse.builder().attendees(List.of()).build());
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenReturn(CreateAttendeeResponse.builder()
+                            .attendee(Attendee.builder()
+                                    .attendeeId("attendee-shared")
+                                    .externalUserId("opaque-ext")
+                                    .joinToken("loser-token")
+                                    .build())
+                            .build());
+
+            ChimeService coordinated = new ChimeService(
+                    chimeSdkMeetingsClient,
+                    callSessionRepository,
+                    participantRepository,
+                    txManager,
+                    true,
+                    false,
+                    "en-US",
+                    "us-east-1");
+            coordinated.createMeeting(CALL_ID);
+
+            Map<String, Object> result = coordinated.createAttendee(
+                    CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(result.get("attendeeId")).isEqualTo("attendee-shared");
+            assertThat(result.get("joinToken")).isEqualTo("winner-token");
+            verify(chimeSdkMeetingsClient, never()).deleteAttendee(any(DeleteAttendeeRequest.class));
         }
 
         @Test

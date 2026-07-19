@@ -1833,6 +1833,7 @@ class CallControllerTest {
 
             when(callTelemetryService.getTelemetryForCall(CALL_ID))
                     .thenReturn(List.of(contextOnly));
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
             when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
             doNothing().when(callSessionService)
                     .requirePatientUserAccess(caregiverUser, 1L);
@@ -1844,6 +1845,56 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(callSessionService).requirePatientUserAccess(caregiverUser, 1L);
+        }
+
+        @Test
+        @DisplayName("GET /{callId}/summary rejects non-PATIENT contextPatientUserId fallback")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void getSummaryRejectsNonPatientContextFallback() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.NOT_FOUND, "Call not found"));
+            when(callSummaryService.getLatestSummaryEntity(CALL_ID)).thenReturn(Optional.empty());
+
+            final CallTelemetryEvent contextOnly = new CallTelemetryEvent();
+            contextOnly.setActorUserId(2L);
+            contextOnly.setMetadataJson("{\"contextPatientUserId\":98}");
+
+            when(callTelemetryService.getTelemetryForCall(CALL_ID))
+                    .thenReturn(List.of(contextOnly));
+            when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
+            when(userRepository.findById(98L)).thenReturn(Optional.of(
+                    buildUser(98L, "family@test.com", Role.FAMILY_MEMBER)));
+
+            mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
+                            .with(csrf()))
+                    .andExpect(status().isNotFound());
+
+            verify(callSessionService, never()).requirePatientUserAccess(any(), anyLong());
+        }
+
+        @Test
+        @DisplayName("GET /{callId}/summary allows patient relationship when historical participant is FORBIDDEN")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void getSummaryAllowsPatientRelationshipOnForbiddenHistorical() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireHistoricalParticipant(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Access denied"));
+            com.careconnect.model.CallSummary summaryEntity = new com.careconnect.model.CallSummary();
+            summaryEntity.setPatientId(77L);
+            summaryEntity.setStatus("GENERATED");
+            when(callSummaryService.getLatestSummaryEntity(CALL_ID))
+                    .thenReturn(Optional.of(summaryEntity));
+            doNothing().when(callSessionService)
+                    .requirePatientEntityAccess(caregiverUser, 77L);
+            when(callSummaryService.getLatestSummary(CALL_ID))
+                    .thenReturn(Optional.of(Map.of("status", "GENERATED")));
+
+            mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+
+            verify(callSessionService).requirePatientEntityAccess(caregiverUser, 77L);
         }
     }
 

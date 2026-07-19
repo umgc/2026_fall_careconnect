@@ -445,6 +445,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "WHERE search_vector IS NULL"
         );
         applyRequiredPatch(
+            "V2607032257 – create indexing_outbox",
+            "CREATE TABLE IF NOT EXISTS indexing_outbox (" +
+            "  id BIGSERIAL PRIMARY KEY," +
+            "  event_type VARCHAR(64) NOT NULL," +
+            "  payload_json TEXT NOT NULL," +
+            "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+            "  processed_at TIMESTAMP NULL," +
+            "  attempt_count INTEGER NOT NULL DEFAULT 0," +
+            "  last_error TEXT NULL" +
+            ");" +
+            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_unprocessed " +
+            "  ON indexing_outbox (created_at) WHERE processed_at IS NULL;" +
+            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_event_type " +
+            "  ON indexing_outbox (event_type)"
+        );
+        applyRequiredPatch(
             "V2607122000 – indexing_outbox claimed_at lease column",
             "ALTER TABLE indexing_outbox " +
             "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
