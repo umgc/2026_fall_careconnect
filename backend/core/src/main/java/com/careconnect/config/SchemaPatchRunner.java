@@ -822,8 +822,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
     }
 
     private void withProductionSchemaMigrationLock(final Runnable work) {
+        // Peers must outwait locked DDL (statement_timeout up to 5min) on rolling deploys.
         final long deadline = System.nanoTime()
-                + TimeUnit.SECONDS.toNanos(30);
+                + TimeUnit.MINUTES.toNanos(10);
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);

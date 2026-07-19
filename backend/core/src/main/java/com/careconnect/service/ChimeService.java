@@ -618,22 +618,35 @@ public class ChimeService {
 
     private Map<String, Object> buildAttendeeCredentials(
             final Meeting meeting, final Attendee attendee) {
-        final String eventIngestionUrl = meeting.mediaPlacement().eventIngestionUrl() != null
+        final String mediaRegion = meeting.mediaRegion() == null
+                ? DEFAULT_MEDIA_REGION : meeting.mediaRegion();
+        final String eventIngestionUrl = meeting.mediaPlacement() != null
+                && meeting.mediaPlacement().eventIngestionUrl() != null
                 ? meeting.mediaPlacement().eventIngestionUrl() : "";
+        final Map<String, Object> mediaPlacement = meeting.mediaPlacement() == null
+                ? Map.of(
+                    "audioHostUrl", "",
+                    "audioFallbackUrl", "",
+                    "screenDataUrl", "",
+                    "screenSharingUrl", "",
+                    "screenViewingUrl", "",
+                    "signalingUrl", "",
+                    "turnControlUrl", "",
+                    "eventIngestionUrl", "")
+                : Map.of(
+                    "audioHostUrl", meeting.mediaPlacement().audioHostUrl(),
+                    "audioFallbackUrl", meeting.mediaPlacement().audioFallbackUrl(),
+                    "screenDataUrl", meeting.mediaPlacement().screenDataUrl(),
+                    "screenSharingUrl", meeting.mediaPlacement().screenSharingUrl(),
+                    "screenViewingUrl", meeting.mediaPlacement().screenViewingUrl(),
+                    "signalingUrl", meeting.mediaPlacement().signalingUrl(),
+                    "turnControlUrl", meeting.mediaPlacement().turnControlUrl(),
+                    "eventIngestionUrl", eventIngestionUrl);
         return Map.of(
             "meetingId",         meeting.meetingId(),
             "externalMeetingId", meeting.externalMeetingId(),
-            "mediaRegion",       meeting.mediaRegion(),
-            "mediaPlacement",    Map.of(
-                "audioHostUrl",      meeting.mediaPlacement().audioHostUrl(),
-                "audioFallbackUrl",  meeting.mediaPlacement().audioFallbackUrl(),
-                "screenDataUrl",     meeting.mediaPlacement().screenDataUrl(),
-                "screenSharingUrl",  meeting.mediaPlacement().screenSharingUrl(),
-                "screenViewingUrl",  meeting.mediaPlacement().screenViewingUrl(),
-                "signalingUrl",      meeting.mediaPlacement().signalingUrl(),
-                "turnControlUrl",    meeting.mediaPlacement().turnControlUrl(),
-                "eventIngestionUrl", eventIngestionUrl
-            ),
+            "mediaRegion",       mediaRegion,
+            "mediaPlacement",    mediaPlacement,
             "attendeeId",     attendee.attendeeId(),
             "externalUserId", attendee.externalUserId(),
             "joinToken",      attendee.joinToken()

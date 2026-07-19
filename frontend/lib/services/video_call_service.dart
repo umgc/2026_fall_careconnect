@@ -313,7 +313,7 @@ class VideoCallService {
     _sentimentTimer?.cancel();
     await _wakeTranscriptWorker(force: true);
 
-    String endStatus = 'ended';
+    String? endStatus;
 
     try {
       final response = await http.post(
@@ -342,8 +342,8 @@ class VideoCallService {
       debugPrint('⚠️ Error notifying backend of call end: $e');
     }
 
-    // 202 "processing" means termination is claimed server-side — treat like ended
-    // so clients do not retry join against a TERMINATING call.
+    // Only fence rejoin after a successful terminal end response.
+    // 202 "processing" means termination is claimed server-side.
     _resetLocalCallState(
       callId: callId,
       markCompleted: endStatus == 'ended' || endStatus == 'processing',

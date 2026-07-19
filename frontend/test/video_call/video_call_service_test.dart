@@ -1160,5 +1160,46 @@ void main() {
         });
       });
     });
+
+    test('endCall_doesNotMarkCompletedOnHttpFailure', () async {
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: 'user-1',
+          jwtToken: 'tok',
+          enablePatientSentimentCapture: false,
+        );
+        await service.joinCall(
+          callId: 'call-end-http-fail',
+          otherPartyId: 'user-2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.endCall();
+
+        // Failed end must not fence rejoin — server call may still be ACTIVE.
+        await expectLater(
+          service.joinCall(
+            callId: 'call-end-http-fail',
+            otherPartyId: 'user-2',
+            isVideoEnabled: true,
+            isAudioEnabled: true,
+          ),
+          completes,
+        );
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/end')) {
+            return http.Response('{"message":"unavailable"}', 503);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+    });
   });
 }
