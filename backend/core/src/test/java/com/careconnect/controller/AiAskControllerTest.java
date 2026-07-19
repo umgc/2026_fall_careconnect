@@ -1,17 +1,22 @@
 package com.careconnect.controller;
 
+import com.careconnect.dto.ai.AiAskRequest;
+import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
 import com.careconnect.security.Role;
 import com.careconnect.service.ai.ask.AiAskService;
 import com.careconnect.service.ai.ask.AskAiGroundingException;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
 import com.careconnect.service.ai.ask.AskAiUnavailableException;
+import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
+import com.careconnect.service.ai.retrieval.ScopeDenialReason;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -21,7 +26,9 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,6 +77,10 @@ class AiAskControllerTest {
                 .andExpect(jsonPath("$.answer").doesNotExist())
                 .andExpect(jsonPath("$.citations", hasSize(0)))
                 .andExpect(jsonPath("$.error.code").value("UNGROUNDED_RESPONSE"));
+        final ArgumentCaptor<AiAskRequest> requestCaptor =
+                ArgumentCaptor.forClass(AiAskRequest.class);
+        verify(aiAskService).ask(any(), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().inputModality()).isEqualTo(InputModality.TEXT);
     }
 
     @Test
@@ -151,6 +162,38 @@ class AiAskControllerTest {
                 .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
+    @Test
+    @DisplayName("unknown request fields are rejected")
+    void ask_unknownFieldUsesAskAiContract() throws Exception {
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null).replace(
+                                "\"inputModality\": \"TEXT\"",
+                                "\"inputModality\": \"TEXT\", \"unknown\": true")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void ask_forbiddenScopeDoesNotExposePatientOrRelationshipDetails() throws Exception {
+        final UUID auditId = UUID.randomUUID();
+        when(aiAskService.ask(any(), any())).thenThrow(ForbiddenScopeException.of(
+                ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                42L,
+                7L,
+                "Patient 42 has no active caregiver link for caller 7",
+                auditId));
+
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN_SCOPE"))
+                .andExpect(jsonPath("$.error.message")
+                        .value("Requested records are not available for Ask AI"));
+    }
+
     private static String requestJson(final UUID sessionId) {
         final String session = sessionId == null
                 ? "null"
@@ -159,7 +202,7 @@ class AiAskControllerTest {
                 {
                   "query": "What medication changed?",
                   "patientId": 42,
-                  "modality": "TEXT",
+                  "inputModality": "TEXT",
                   "locale": "en-US",
                   "sessionId": %s
                 }

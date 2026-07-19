@@ -88,6 +88,9 @@ public class RetrievalIndexChunk {
     @Column(name = "citation_replay_attempts", nullable = false)
     private Integer citationReplayAttempts;
 
+    @Column(name = "citation_replay_claimed_until")
+    private OffsetDateTime citationReplayClaimedUntil;
+
     @Column(name = "migration_status", nullable = false, length = 24)
     private String migrationStatus;
 

@@ -12,5 +12,5 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @EnabledIfEnvironmentVariable(named = "CI", matches = "(?i)true")
 @Testcontainers
 class RetrievalIndexChunkRepositoryPostgresCiTest
-        extends RetrievalIndexChunkRepositoryPostgresTest {
+        extends RetrievalIndexChunkRepositoryPostgresContract {
 }

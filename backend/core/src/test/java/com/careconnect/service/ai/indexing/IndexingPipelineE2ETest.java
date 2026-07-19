@@ -16,6 +16,7 @@ import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
+import com.careconnect.util.ContentHashUtil;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -144,7 +145,7 @@ class IndexingPipelineE2ETest {
                 4,
                 "on_consent",
                 "aws_bedrock:test",
-                "sha256:e2e-summary-1");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
         final IndexingOutboxRow row = outboxRow(
                 1001L, IndexingEventType.SUMMARY_CREATED, payload, 0);
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
@@ -231,7 +232,9 @@ class IndexingPipelineE2ETest {
                 .chunkText("already indexed")
                 .consentScope("on_consent")
                 .chunkMetadata(
-                        "{\"contentHash\":\"sha256:same-hash\",\"chunkIndex\":0,"
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256(summary.getSummaryJson())
+                                + "\",\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"already indexed\","
                                 + "\"citationMetadataVersion\":1,\"episodeType\":\"call\","
@@ -256,7 +259,7 @@ class IndexingPipelineE2ETest {
                 1,
                 "on_consent",
                 "engine",
-                "sha256:same-hash");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
         final IndexingOutboxRow row = outboxRow(
                 1003L, IndexingEventType.SUMMARY_CREATED, payload, 0);
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
@@ -304,6 +307,7 @@ class IndexingPipelineE2ETest {
         final CallSummary summary = new CallSummary();
         summary.setId(88L);
         summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
         summary.setSummaryJson("   ");
         summary.setCaregiverVisibility("on_consent");
         when(callSummaryRepository.findByIdForUpdate(88L)).thenReturn(Optional.of(summary));
@@ -326,7 +330,7 @@ class IndexingPipelineE2ETest {
                 0,
                 "on_consent",
                 null,
-                "sha256:blank");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
         final IndexingOutboxRow row = outboxRow(
                 1005L, IndexingEventType.SUMMARY_CREATED, payload, 0);
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));

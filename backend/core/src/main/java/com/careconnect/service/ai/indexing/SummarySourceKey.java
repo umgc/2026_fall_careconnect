@@ -55,6 +55,12 @@ public final class SummarySourceKey {
         return null;
     }
 
+    public static boolean isLegacyNumeric(final String sourceKey) {
+        return sourceKey != null
+                && !sourceKey.isBlank()
+                && sourceKey.chars().allMatch(Character::isDigit);
+    }
+
     private static Optional<Long> parseSummaryId(
             final String sourceKey,
             final String prefix,

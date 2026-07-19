@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -213,21 +214,26 @@ public class AiAskService {
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
+        final Map<String, String> verifiedEvidenceByRef = new LinkedHashMap<>();
         for (final GroundedAskLlmService.GroundedClaim claim : llm.claims()) {
             final CitationAssembler.CitationResult claimCitations =
                     citationAssembler.assemble(
                             claim.citationRefs(), context.citationRefMap());
             if (claim.text() == null
                     || claim.text().isBlank()
-                    || !hasExtractiveEvidence(claim, context.citationRefMap())
+                    || !hasExtractiveEvidence(claim, context.promptExcerptMap())
                     || !claimCitations.grounded()) {
                 throw groundingFailure(
                         requestId, auditId, sessionId,
                         "Generated answer contains an unsupported factual claim");
             }
+            verifiedEvidenceByRef.putAll(claim.evidenceByRef());
         }
         final CitationAssembler.CitationResult citationResult =
-                citationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
+                citationAssembler.assemble(
+                        llm.citationRefs(),
+                        context.citationRefMap(),
+                        verifiedEvidenceByRef);
         if (!citationResult.grounded()) {
             log.warn(
                     "Ask AI WITHHELD ungrounded response requestId={} invalidRefCount={}",
@@ -240,6 +246,14 @@ public class AiAskService {
                     "Generated answer could not be verified against retrieved records");
         }
         final List<AiCitation> citations = citationResult.citations();
+        final String verifiedAnswer = llm.claims().stream()
+                .map(GroundedAskLlmService.GroundedClaim::text)
+                .reduce((left, right) -> left + " " + right)
+                .orElseThrow(() -> groundingFailure(
+                        requestId,
+                        auditId,
+                        sessionId,
+                        "Generated answer did not contain verified claims"));
 
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
@@ -261,7 +275,7 @@ public class AiAskService {
                 1,
                 false,
                 null,
-                new AiAnswerBlock(llm.answerText(), locale),
+                new AiAnswerBlock(verifiedAnswer, locale),
                 citations,
                 disclaimer(locale),
                 new AiEscalation(1, "Tier1_auto_deliver", false),
@@ -280,19 +294,18 @@ public class AiAskService {
 
     private static boolean hasExtractiveEvidence(
             final GroundedAskLlmService.GroundedClaim claim,
-            final Map<String, RankedChunk> citationRefMap) {
-        if (claim.citationRefs().isEmpty() || claim.evidenceByRef().isEmpty()) {
+            final Map<String, String> promptExcerptMap) {
+        if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
             return false;
         }
-        return claim.citationRefs().stream().allMatch(ref -> {
-            final RankedChunk chunk = citationRefMap.get(ref);
-            final String evidence = claim.evidenceByRef().get(ref);
-            return chunk != null
-                    && chunk.chunkText() != null
-                    && evidence != null
-                    && !evidence.isBlank()
-                    && chunk.chunkText().contains(evidence);
-        });
+        final String ref = claim.citationRefs().get(0);
+        final String excerpt = promptExcerptMap.get(ref);
+        final String evidence = claim.evidenceByRef().get(ref);
+        return excerpt != null
+                && evidence != null
+                && evidence.codePointCount(0, evidence.length()) >= 20
+                && claim.text().equals(evidence)
+                && excerpt.contains(evidence);
     }
 
     private static AskAiGroundingException groundingFailure(

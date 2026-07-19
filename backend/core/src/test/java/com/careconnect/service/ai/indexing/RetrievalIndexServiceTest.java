@@ -16,6 +16,7 @@ import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -107,7 +108,7 @@ class RetrievalIndexServiceTest {
                 3,
                 "on_consent",
                 "aws_bedrock:test",
-                "sha256:new");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         final int written = service.ingestSummaryCreated(payload);
 
@@ -137,7 +138,8 @@ class RetrievalIndexServiceTest {
                 .chunkText("old")
                 .consentScope("on_consent")
                 .chunkMetadata(
-                        "{\"contentHash\":\"sha256:same\","
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256("{\"headline\":\"old\"}") + "\","
                                 + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"old\","
@@ -170,7 +172,7 @@ class RetrievalIndexServiceTest {
                 1,
                 "on_consent",
                 "engine",
-                "sha256:same");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(callSummaryRepository).findByIdForUpdate(99L);
@@ -200,7 +202,8 @@ class RetrievalIndexServiceTest {
                 .chunkText("old")
                 .consentScope("on_consent")
                 .chunkMetadata(
-                        "{\"contentHash\":\"sha256:same\","
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256("{\"headline\":\"old\"}") + "\","
                                 + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"old\","
@@ -213,7 +216,8 @@ class RetrievalIndexServiceTest {
 
         final int written = service.ingestSummaryCreated(new SummaryCreatedPayload(
                 "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
-                LocalDateTime.now(), 1, "on_consent", "engine", "sha256:same"));
+                LocalDateTime.now(), 1, "on_consent", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson())));
 
         assertThat(written).isEqualTo(1);
         @SuppressWarnings("unchecked")
@@ -246,6 +250,66 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
+    void ingestSummaryCreated_payloadOnlyOwnershipIsRejected() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(null);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("authoritative patientId");
+
+        verify(chunkRepository, never()).quarantineLegacySummarySourceAcrossPatients(
+                any(), anyCollection());
+    }
+
+    @Test
+    void ingestSummaryCreated_staleSuccessEventCannotOverrideFailedRow() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("FAILED");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("not successful");
+
+        verify(chunkRepository, never()).quarantineLegacySummarySourceAcrossPatients(
+                any(), anyCollection());
+    }
+
+    @Test
+    void ingestSummaryCreated_eventHashMismatchIsIntegrityFailure() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                "sha256:" + "0".repeat(64))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("content hash");
+
+        verify(chunkRepository, never()).quarantineLegacySummarySourceAcrossPatients(
+                any(), anyCollection());
+    }
+
+    @Test
     @DisplayName("summary row is locked before scoped chunks are inspected")
     void ingestSummaryCreated_locksBeforeReadingChunks() {
         final CallSummary summary = new CallSummary();
@@ -260,7 +324,8 @@ class RetrievalIndexServiceTest {
 
         service.ingestSummaryCreated(new SummaryCreatedPayload(
                 "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
-                LocalDateTime.now(), 1, "auto", "engine", "hash"));
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson())));
 
         final InOrder order = inOrder(callSummaryRepository, chunkRepository);
         order.verify(callSummaryRepository).findByIdForUpdate(99L);
@@ -306,7 +371,7 @@ class RetrievalIndexServiceTest {
                 1,
                 "on_consent",
                 "engine",
-                "sha256:same");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThat(service.ingestSummaryCreated(payload)).isEqualTo(1);
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
@@ -350,7 +415,8 @@ class RetrievalIndexServiceTest {
 
         final int written = service.ingestSummaryCreated(new SummaryCreatedPayload(
                 "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
-                LocalDateTime.now(), 1, "auto", "engine", "same"));
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson())));
 
         assertThat(written).isEqualTo(2);
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
@@ -370,7 +436,8 @@ class RetrievalIndexServiceTest {
                 .chunkText("old")
                 .consentScope("on_consent")
                 .chunkMetadata(
-                        "{\"contentHash\":\"sha256:same\","
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256("{\"headline\":\"old\"}") + "\","
                                 + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"old\","
@@ -406,7 +473,7 @@ class RetrievalIndexServiceTest {
                 1,
                 "on_consent",
                 "engine",
-                "sha256:same");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(chunkRepository, never()).saveAll(anyList());
@@ -433,6 +500,7 @@ class RetrievalIndexServiceTest {
         final CallSummary summary = new CallSummary();
         summary.setId(99L);
         summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
         summary.setSummaryJson("{\"headline\":\"Updated\"}");
         summary.setCaregiverVisibility("on_consent");
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
@@ -448,7 +516,7 @@ class RetrievalIndexServiceTest {
                 1,
                 "on_consent",
                 "engine",
-                "sha256:same");
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThat(service.ingestSummaryCreated(payload)).isGreaterThan(0);
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
@@ -468,6 +536,7 @@ class RetrievalIndexServiceTest {
         final CallSummary summary = new CallSummary();
         summary.setId(8L);
         summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
         summary.setSummaryJson("{}");
         summary.setCaregiverVisibility("on_consent");
         when(callSummaryRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(summary));
@@ -478,7 +547,8 @@ class RetrievalIndexServiceTest {
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
-                LocalDateTime.now(), 0, "on_consent", null, "sha256:empty");
+                LocalDateTime.now(), 0, "on_consent", null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         // "{}" no longer dumps compact JSON as overview — empty structured fields => no drafts.
         summary.setSummaryJson("{}");
@@ -504,6 +574,7 @@ class RetrievalIndexServiceTest {
         final CallSummary summary = new CallSummary();
         summary.setId(8L);
         summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
         summary.setSummaryJson("{}");
         summary.setCaregiverVisibility("on_consent");
         when(callSummaryRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(summary));
@@ -520,7 +591,8 @@ class RetrievalIndexServiceTest {
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
-                LocalDateTime.now(), 0, "on_consent", null, "sha256:empty");
+                LocalDateTime.now(), 0, "on_consent", null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
@@ -534,6 +606,7 @@ class RetrievalIndexServiceTest {
         final CallSummary summary = new CallSummary();
         summary.setId(9L);
         summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
         summary.setSummaryJson("   ");
         summary.setCaregiverVisibility("on_consent");
         when(callSummaryRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(summary));
@@ -544,7 +617,8 @@ class RetrievalIndexServiceTest {
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 9L, "c", 42L, "SUCCESS",
-                LocalDateTime.now(), 0, "on_consent", null, "sha256:blank");
+                LocalDateTime.now(), 0, "on_consent", null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThat(service.ingestSummaryCreated(payload)).isZero();
         verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
@@ -584,11 +658,13 @@ class RetrievalIndexServiceTest {
         summary.setId(7L);
         summary.setSummaryJson("{\"headline\":\"x\"}");
         summary.setPatientId(null);
+        summary.setStatus("SUCCESS");
         when(callSummaryRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(summary));
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call", "call_summaries", 7L, "c", null, "SUCCESS",
-                LocalDateTime.now(), 0, null, null, "sha256:x");
+                LocalDateTime.now(), 0, null, null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
 
         assertThatThrownBy(() -> service.ingestSummaryCreated(payload))
                 .isInstanceOf(IndexingDeferredException.class)
@@ -664,8 +740,8 @@ class RetrievalIndexServiceTest {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
-        verify(chunkRepository).quarantineLegacySummarySource(
-                eq(42L), eq("99"), eq(RetrievalRecordType.summaryTypeNames()));
+        verify(chunkRepository).quarantineLegacySummarySourceAcrossPatients(
+                eq("99"), eq(RetrievalRecordType.summaryTypeNames()));
         assertThat(captor.getValue())
                 .allSatisfy(chunk -> {
                     assertThat(chunk.getSourceRecordId()).isEqualTo("call-summary:99");

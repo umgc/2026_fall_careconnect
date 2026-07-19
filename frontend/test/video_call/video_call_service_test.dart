@@ -37,6 +37,78 @@ void main() {
     // call IDs to avoid collisions.
   });
 
+  group('Durable call patient ownership', () {
+    test('patient initiator owns the session by user ID', () {
+      expect(
+        resolveCallSessionPatientUserId(
+          currentUserId: '7',
+          currentRole: 'PATIENT',
+          recipientId: '2',
+          recipientRole: 'CAREGIVER',
+        ),
+        '7',
+      );
+    });
+
+    test('caregiver-to-patient call uses recipient user ID', () {
+      expect(
+        resolveCallSessionPatientUserId(
+          currentUserId: '2',
+          currentRole: 'CAREGIVER',
+          recipientId: '7',
+          recipientRole: 'PATIENT',
+        ),
+        '7',
+      );
+    });
+
+    test('care-team call requires one unambiguous context patient', () {
+      expect(
+        () => resolveCallSessionPatientUserId(
+          currentUserId: '2',
+          currentRole: 'CAREGIVER',
+          recipientId: '3',
+          recipientRole: 'CAREGIVER',
+          callKind: 'CARE_TEAM',
+          contextPatientUserIds: [7, 8],
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('createCallSession posts durable ownership before joining', () async {
+      final service = VideoCallService();
+      Map<String, dynamic>? requestBody;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '2',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: false,
+        );
+        await service.createCallSession(
+          callId: 'call-123',
+          patientUserId: '7',
+          inviteeUserId: '7',
+        );
+      }, () {
+        return MockClient((request) async {
+          requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(request.url.path, '/api/v3/calls/sessions');
+          expect(request.headers['Authorization'], 'Bearer test-token');
+          return http.Response('{"status":"CREATED"}', 201);
+        });
+      });
+
+      expect(requestBody, {
+        'callId': 'call-123',
+        'patientUserId': '7',
+        'inviteeUserId': '7',
+      });
+      service.dispose();
+    });
+  });
+
   // =========================================================================
   // GROUP: Constants and Configuration
   // TDD: SENT-001 — Validate pipeline configuration constants
@@ -424,7 +496,8 @@ void main() {
       () {
         // If we got here without exception the callback was wired correctly.
         expect(receivedUpdates, isEmpty,
-            reason: 'No WebSocket events arrive in unit tests without a broker');
+            reason:
+                'No WebSocket events arrive in unit tests without a broker');
       },
     );
 

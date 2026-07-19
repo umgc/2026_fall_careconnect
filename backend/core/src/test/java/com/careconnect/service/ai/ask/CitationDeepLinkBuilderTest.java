@@ -15,22 +15,22 @@ class CitationDeepLinkBuilderTest {
     private final CitationDeepLinkBuilder builder = new CitationDeepLinkBuilder();
 
     @Test
-    @DisplayName("builder emits only routes registered by the current Flutter router")
-    void build_supportedTypes_useRegisteredRoutes() {
+    @DisplayName("generic feature pages are not emitted as citation destinations")
+    void build_genericFeaturePages_areOmitted() {
         assertThat(build(RetrievalRecordType.CALL_SUMMARY, "summary-1"))
-                .isEqualTo("/chatandcalls");
+                .isNull();
         assertThat(build(RetrievalRecordType.UPLOADED_DOCUMENT, "file-1"))
-                .isEqualTo("/file-management");
+                .isNull();
         assertThat(build(RetrievalRecordType.USPS_MAIL, "mail-1"))
-                .isEqualTo("/informed-delivery");
+                .isNull();
         assertThat(build(RetrievalRecordType.MEDICATION, "med-1"))
-                .isEqualTo("/medication");
+                .isNull();
         assertThat(build(RetrievalRecordType.TASK, "task-1"))
-                .isEqualTo("/tasks");
+                .isNull();
         assertThat(build(RetrievalRecordType.EVV_RECORD, "evv-1"))
-                .isEqualTo("/evv/visit-history");
+                .isNull();
         assertThat(build(RetrievalRecordType.VITAL_SIGN, "vital-1"))
-                .isEqualTo("/wearables");
+                .isNull();
     }
 
     @Test
@@ -49,7 +49,7 @@ class CitationDeepLinkBuilderTest {
         assertThat(build(
                 RetrievalRecordType.SUMMARY_APPOINTMENT,
                 SummarySourceKey.CALL_KIND,
-                "call-summary:1")).isEqualTo("/chatandcalls");
+                "call-summary:1")).isNull();
         assertThat(build(
                 RetrievalRecordType.SUMMARY_APPOINTMENT,
                 SummarySourceKey.VISIT_KIND,
