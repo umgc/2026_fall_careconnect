@@ -13,10 +13,12 @@ import com.careconnect.model.CallParticipant;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
+import com.careconnect.model.schedule.ScheduledVisit;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.security.Role;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class CallSessionServiceTest {
@@ -34,6 +37,7 @@ class CallSessionServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private CaregiverPatientLinkService caregiverLinkService;
     @Mock private FamilyMemberService familyMemberService;
+    @Mock private ScheduledVisitRepository scheduledVisitRepository;
 
     private CallSessionService service;
 
@@ -46,6 +50,7 @@ class CallSessionServiceTest {
                 userRepository,
                 caregiverLinkService,
                 familyMemberService);
+        ReflectionTestUtils.setField(service, "scheduledVisitRepository", scheduledVisitRepository);
         lenient().when(sessionRepository.save(any(CallSession.class))).thenAnswer(invocation -> {
             CallSession session = invocation.getArgument(0);
             if (session.getId() == null) {
@@ -124,6 +129,76 @@ class CallSessionServiceTest {
         assertThat(session.getStatus()).isEqualTo(CallSessionService.SESSION_ACTIVE);
         assertThat(participant.getStatus()).isEqualTo(CallSessionService.PARTICIPANT_JOINED);
         assertThat(participant.getJoinedAt()).isNotNull();
+    }
+
+    @Test
+    void requireActiveParticipant_rejectsInvitedParticipant() {
+        final CallSession session = session(10L, 42L);
+        final CallParticipant participant = new CallParticipant();
+        participant.setCallSessionId(10L);
+        participant.setUserId(2L);
+        participant.setStatus(CallSessionService.PARTICIPANT_INVITED);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant));
+
+        assertThatThrownBy(() -> service.requireActiveParticipant("call-1", 2L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("must join");
+    }
+
+    @Test
+    void createSession_existingRowsAreIdempotent() {
+        final User creator = user(2L, Role.CAREGIVER);
+        final User patientUser = user(7L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(patientUser);
+        final CallSession existing = session(10L, 42L);
+        existing.setCreatedByUserId(2L);
+        final CallParticipant creatorParticipant = new CallParticipant();
+        creatorParticipant.setCallSessionId(10L);
+        creatorParticipant.setUserId(2L);
+        creatorParticipant.setStatus(CallSessionService.PARTICIPANT_INVITED);
+        final CallParticipant patientParticipant = new CallParticipant();
+        patientParticipant.setCallSessionId(10L);
+        patientParticipant.setUserId(7L);
+        patientParticipant.setStatus(CallSessionService.PARTICIPANT_INVITED);
+
+        when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(2L, 7L)).thenReturn(true);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(patientUser));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(existing));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(creatorParticipant));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 7L))
+                .thenReturn(Optional.of(patientParticipant));
+
+        assertThat(service.createSession("call-1", 7L, 7L, null, creator))
+                .isSameAs(existing);
+        verify(sessionRepository, never()).save(any(CallSession.class));
+        verify(participantRepository, never()).save(any(CallParticipant.class));
+    }
+
+    @Test
+    void createSession_rejectsScheduledVisitOwnedByAnotherPatient() {
+        final User creator = user(2L, Role.CAREGIVER);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(user(7L, Role.PATIENT));
+        final ScheduledVisit visit = new ScheduledVisit();
+        visit.setId(99L);
+        visit.setPatientId(77L);
+        when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(2L, 7L)).thenReturn(true);
+        when(scheduledVisitRepository.findById(99L)).thenReturn(Optional.of(visit));
+
+        assertThatThrownBy(() -> service.createSession(
+                "call-1", 7L, null, 99L, creator))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("does not belong");
+        verify(sessionRepository, never()).insertIfAbsent(
+                any(), any(), any(), any(), any());
     }
 
     private static User user(Long id, Role role) {

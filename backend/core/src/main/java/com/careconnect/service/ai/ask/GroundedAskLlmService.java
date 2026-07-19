@@ -107,12 +107,18 @@ public class GroundedAskLlmService {
         } catch (final BedrockRuntimeException ex) {
             final String code = ex.awsErrorDetails() != null
                     ? ex.awsErrorDetails().errorCode() : "UNKNOWN";
-            log.warn("Grounded Ask AI Bedrock invoke failed: {} - {}", code, ex.getMessage());
+            log.warn("Grounded Ask AI Bedrock invoke failed code={}", code);
+            if (log.isDebugEnabled()) {
+                log.debug("Grounded Ask AI Bedrock diagnostic", ex);
+            }
             return Optional.empty();
         } catch (final GroundedOutputValidationException ex) {
             throw ex;
         } catch (final RuntimeException ex) {
-            log.warn("Grounded Ask AI inference failed: {}", ex.getMessage());
+            log.warn("Grounded Ask AI inference failed");
+            if (log.isDebugEnabled()) {
+                log.debug("Grounded Ask AI inference diagnostic", ex);
+            }
             return Optional.empty();
         }
     }
@@ -171,7 +177,10 @@ public class GroundedAskLlmService {
         } catch (final GroundedOutputValidationException ex) {
             throw ex;
         } catch (final Exception ex) {
-            log.warn("Unable to parse grounded Ask AI JSON: {}", ex.getMessage());
+            log.warn("Unable to parse grounded Ask AI JSON");
+            if (log.isDebugEnabled()) {
+                log.debug("Grounded Ask AI parse diagnostic", ex);
+            }
             throw new GroundedOutputValidationException(
                     "Grounded model response was malformed", ex);
         }

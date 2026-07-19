@@ -68,6 +68,8 @@ public class UspsMailpiecePersistenceService {
             }
             final MailpieceNormalizer.NormalizedMailpiece normalized =
                     normalizer.normalize(piece, digest.digestDate());
+            mailpieceRepository.acquirePersistenceLock(
+                    "usps-mailpiece:" + patientId + ":" + normalized.sourceKey());
             final UspsMailpiece entity = mailpieceRepository
                     .findByPatientIdAndSourceKey(patientId, normalized.sourceKey())
                     .orElseGet(UspsMailpiece::new);

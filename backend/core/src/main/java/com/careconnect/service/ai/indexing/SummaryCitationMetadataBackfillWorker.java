@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 /** Bounded, idempotent replay worker for summary chunks with stale citation metadata. */
 @Service
@@ -52,13 +53,15 @@ public class SummaryCitationMetadataBackfillWorker {
             fixedDelayString =
                     "${careconnect.ai.citation.backfill.poll-interval-ms:60000}")
     public void pollAndBackfill() {
+        final UUID claimToken = UUID.randomUUID();
         final List<SummaryReplayCandidate> candidates =
                 chunkRepository.claimStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
                         SummaryChunker.CITATION_METADATA_VERSION,
                         batchSize,
                         OffsetDateTime.now(ZoneOffset.UTC)
-                                .plus(Duration.ofMillis(claimLeaseMs)));
+                                .plus(Duration.ofMillis(claimLeaseMs)),
+                        claimToken);
         if (candidates.isEmpty()) {
             return;
         }
@@ -74,7 +77,8 @@ public class SummaryCitationMetadataBackfillWorker {
                     quarantined += chunkRepository.quarantineSummarySource(
                             candidate.getPatientId(),
                             sourceId,
-                            RetrievalRecordType.summaryTypeNames());
+                            RetrievalRecordType.summaryTypeNames(),
+                            candidate.getClaimToken());
                     continue;
                 }
                 final Long summaryId = SummarySourceKey.parseCallSummaryId(sourceId)
@@ -92,7 +96,8 @@ public class SummaryCitationMetadataBackfillWorker {
                     quarantined += chunkRepository.quarantineSummarySource(
                             candidate.getPatientId(),
                             sourceId,
-                            RetrievalRecordType.summaryTypeNames());
+                            RetrievalRecordType.summaryTypeNames(),
+                            candidate.getClaimToken());
                 } else {
                     releaseClaim(candidate);
                 }
@@ -119,7 +124,8 @@ public class SummaryCitationMetadataBackfillWorker {
                     candidate.getSourceRecordId(),
                     RetrievalRecordType.summaryTypeNames(),
                     OffsetDateTime.now(ZoneOffset.UTC)
-                            .plus(Duration.ofMillis(failureBackoffMs)));
+                            .plus(Duration.ofMillis(failureBackoffMs)),
+                    candidate.getClaimToken());
         } catch (final RuntimeException markFailure) {
             log.warn(
                     "Unable to persist summary citation replay backoff type={}",
@@ -131,7 +137,8 @@ public class SummaryCitationMetadataBackfillWorker {
         chunkRepository.releaseSummaryCitationReplayClaim(
                 candidate.getPatientId(),
                 candidate.getSourceRecordId(),
-                RetrievalRecordType.summaryTypeNames());
+                RetrievalRecordType.summaryTypeNames(),
+                candidate.getClaimToken());
     }
 
 }

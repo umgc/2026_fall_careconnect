@@ -91,6 +91,10 @@ public class RetrievalIndexChunk {
     @Column(name = "citation_replay_claimed_until")
     private OffsetDateTime citationReplayClaimedUntil;
 
+    /** Fencing token: only the worker holding this exact claim may release or fail it. */
+    @Column(name = "citation_replay_claim_token")
+    private UUID citationReplayClaimToken;
+
     @Column(name = "migration_status", nullable = false, length = 24)
     private String migrationStatus;
 

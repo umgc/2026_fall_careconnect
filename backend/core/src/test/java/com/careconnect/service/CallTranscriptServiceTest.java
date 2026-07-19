@@ -1,6 +1,7 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,13 +37,23 @@ class CallTranscriptServiceTest {
     @Mock
     private CallTranscriptArchiveService callTranscriptArchiveService;
 
+    @Mock
+    private CallPatientResolver callPatientResolver;
+
     private CallTranscriptService service;
 
     private static final String CALL_ID = "call-1";
 
     @BeforeEach
     void setUp() {
-        service = new CallTranscriptService(callTranscriptSegmentRepository, callTranscriptArchiveService, indexingEventEmitter);
+        service = new CallTranscriptService(
+                callTranscriptSegmentRepository,
+                callTranscriptArchiveService,
+                indexingEventEmitter,
+                callPatientResolver);
+        org.mockito.Mockito.lenient()
+                .when(callPatientResolver.requirePatientId(CALL_ID))
+                .thenReturn(42L);
     }
 
     private CallTranscriptSegment segment(
@@ -119,6 +130,10 @@ class CallTranscriptServiceTest {
             assertThat(stored.get(1).getText()).hasSize(1200);
             assertThat(stored.get(1).getSource()).isEqualTo("CLIENT_TRANSCRIPT");
             assertThat(stored.get(1).getOccurredAt()).isNotNull();
+            final ArgumentCaptor<TranscriptIndexedPayload> eventCaptor =
+                    ArgumentCaptor.forClass(TranscriptIndexedPayload.class);
+            verify(indexingEventEmitter).emitTranscriptIndexed(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().patientId()).isEqualTo(42L);
         }
     }
 
@@ -189,6 +204,25 @@ class CallTranscriptServiceTest {
             assertThat(transcript).startsWith("[UNKNOWN] first line");
             assertThat(transcript).doesNotContain("[NURSE]");
             assertThat(transcript.length()).isLessThanOrEqualTo(16000);
+        }
+
+        @Test
+        @DisplayName("summary snapshot keeps text count and version from one segment read")
+        void captureSummarySnapshot_isStableAndVersioned() {
+            final List<CallTranscriptSegment> captured = List.of(
+                    segment("PATIENT", "first", 10L, 20L, "SRC", 1L, LocalDateTime.now()),
+                    segment("NURSE", "second", 30L, 40L, "SRC", 2L, LocalDateTime.now()));
+            when(callTranscriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(captured);
+            when(callTranscriptArchiveService.getArchivedSegments(CALL_ID)).thenReturn(List.of());
+
+            final CallTranscriptService.TranscriptSnapshot snapshot =
+                    service.captureSummarySnapshot(CALL_ID);
+
+            assertThat(snapshot.segmentCount()).isEqualTo(2);
+            assertThat(snapshot.transcriptText()).contains("[PATIENT] first", "[NURSE] second");
+            assertThat(snapshot.version()).startsWith("sha256:");
+            verify(callTranscriptSegmentRepository).findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID);
         }
     }
 

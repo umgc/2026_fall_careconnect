@@ -69,7 +69,7 @@ public class AiAskController {
                             "Requested records are not available for Ask AI",
                             null));
         } catch (final AskAiRejectedException ex) {
-            log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            log.warn("Ask AI rejected code={}", ex.getErrorCode());
             return ResponseEntity.status(ex.getHttpStatus())
                     .body(AiAskService.withheld(
                             ex.getRequestId(),

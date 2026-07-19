@@ -69,9 +69,11 @@ class AIChatService {
             'processingTimeMs': responseData['processingTimeMs'],
           };
         } else {
+          const safeMessage =
+              'The AI service could not complete your request. Please try again.';
           return {
             'success': false,
-            'errorMessage': responseData['errorMessage'] ?? responseData['error'] ?? 'Unknown error',
+            'errorMessage': safeMessage,
             'aiResponse': 'Sorry, I encountered an error. Please try again.',
           };
         }
@@ -79,102 +81,94 @@ class AIChatService {
         return {
           'success': false,
           'error': 'Authentication failed. Please log in again.',
-          'response': 'Your session has expired. Please log in again to continue chatting.',
-          'aiResponse': 'Your session has expired. Please log in again to continue chatting.',
+          'response':
+              'Your session has expired. Please log in again to continue chatting.',
+          'aiResponse':
+              'Your session has expired. Please log in again to continue chatting.',
         };
       } else if (response.statusCode == 403) {
         return {
           'success': false,
           'error': 'Access denied.',
           'response': 'You don\'t have permission to access this chat feature.',
-          'aiResponse': 'You don\'t have permission to access this chat feature.',
+          'aiResponse':
+              'You don\'t have permission to access this chat feature.',
         };
       } else if (response.statusCode == 429) {
         return {
           'success': false,
           'error': 'Rate limit exceeded.',
-          'response': 'You\'re sending messages too quickly. Please wait a moment and try again.',
-          'aiResponse': 'You\'re sending messages too quickly. Please wait a moment and try again.',
+          'response':
+              'You\'re sending messages too quickly. Please wait a moment and try again.',
+          'aiResponse':
+              'You\'re sending messages too quickly. Please wait a moment and try again.',
         };
       } else if (response.statusCode >= 500) {
-        final serverError = _extractServerErrorMessage(response.body);
-        final unavailableMessage = kDebugMode
-            ? 'The AI service is temporarily unavailable at $_baseUrl. Please verify BACKEND_URL and try again.'
-            : 'The AI service is temporarily unavailable. Please try again in a few minutes.';
+        const unavailableMessage =
+            'The AI service is temporarily unavailable. Please try again in a few minutes.';
+        if (kDebugMode) {
+          debugPrint('AI chat request failed with HTTP ${response.statusCode}');
+        }
         return {
           'success': false,
           'error': 'Server error: ${response.statusCode}',
-          'errorMessage': serverError,
-          'response': serverError ?? unavailableMessage,
-          'aiResponse': serverError ?? unavailableMessage,
+          'errorMessage': unavailableMessage,
+          'response': unavailableMessage,
+          'aiResponse': unavailableMessage,
         };
       } else {
-        final serverError = _extractServerErrorMessage(response.body);
+        const safeMessage =
+            'The AI request could not be completed. Please check your input and try again.';
+        if (kDebugMode) {
+          debugPrint(
+              'AI chat request rejected with HTTP ${response.statusCode}');
+        }
         return {
           'success': false,
           'error': 'Unexpected error: ${response.statusCode}',
-          'errorMessage': serverError,
-          'response': serverError ?? 'An unexpected error occurred. Please try again.',
-          'aiResponse': serverError ?? 'An unexpected error occurred. Please try again.',
+          'errorMessage': safeMessage,
+          'response': safeMessage,
+          'aiResponse': safeMessage,
         };
       }
-    } on http.ClientException catch (e) {
+    } on http.ClientException {
       return {
         'success': false,
-        'error': 'Network error: $e',
-        'response': 'Unable to connect to the AI service. Please check your internet connection and try again.',
-        'aiResponse': 'Unable to connect to the AI service. Please check your internet connection and try again.',
+        'error': 'Network error',
+        'response':
+            'Unable to connect to the AI service. Please check your internet connection and try again.',
+        'aiResponse':
+            'Unable to connect to the AI service. Please check your internet connection and try again.',
       };
-    } on FormatException catch (e) {
+    } on FormatException {
       return {
         'success': false,
-        'error': 'Invalid response format: $e',
-        'response': 'Received an unexpected response from the server. Please try again.',
-        'aiResponse': 'Received an unexpected response from the server. Please try again.',
+        'error': 'Invalid response format',
+        'response':
+            'Received an unexpected response from the server. Please try again.',
+        'aiResponse':
+            'Received an unexpected response from the server. Please try again.',
       };
-    } catch (e) {
+    } catch (_) {
       return {
         'success': false,
-        'error': 'Failed to send message: $e',
+        'error': 'Failed to send message',
         'response': 'Sorry, I encountered an error. Please try again later.',
         'aiResponse': 'Sorry, I encountered an error. Please try again later.',
       };
     }
   }
 
-  static String? _extractServerErrorMessage(String responseBody) {
-    try {
-      final parsed = jsonDecode(responseBody);
-      if (parsed is Map<String, dynamic>) {
-        final fromErrorMessage = parsed['errorMessage'];
-        if (fromErrorMessage is String && fromErrorMessage.trim().isNotEmpty) {
-          return fromErrorMessage;
-        }
-        final fromError = parsed['error'];
-        if (fromError is String && fromError.trim().isNotEmpty) {
-          return fromError;
-        }
-        final fromMessage = parsed['message'];
-        if (fromMessage is String && fromMessage.trim().isNotEmpty) {
-          return fromMessage;
-        }
-      }
-    } catch (_) {
-      // Ignore non-JSON error bodies.
-    }
-    return null;
-  }
-
   /// Clear a conversation from the backend
   static Future<void> clearConversation(String conversationId) async {
     try {
       final authHeaders = await ApiService.getAuthHeaders();
-      
+
       final response = await http.post(
         Uri.parse('$_baseUrl/conversation/$conversationId/deactivate'),
         headers: authHeaders,
       );
-      
+
       if (response.statusCode != 200) {
         throw Exception('Failed to clear conversation: ${response.statusCode}');
       }
@@ -196,7 +190,8 @@ class AIChatService {
         'userId': userId,
         if (conversationId != null) 'conversationId': conversationId,
         'limit': limit.toString(),
-        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(), // Prevent caching
+        'timestamp':
+            DateTime.now().millisecondsSinceEpoch.toString(), // Prevent caching
       };
 
       final uri = Uri.parse(
@@ -242,8 +237,10 @@ class AIChatService {
           'Failed to start new conversation: ${response.statusCode}',
         );
       }
-    } catch (e) {
-      print('❌ Error starting new conversation: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to start AI conversation');
+      }
       return null;
     }
   }
@@ -270,8 +267,10 @@ class AIChatService {
       } else {
         throw Exception('Failed to get conversations: ${response.statusCode}');
       }
-    } catch (e) {
-      print('❌ Error getting conversations: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to load AI conversations');
+      }
       return [];
     }
   }
@@ -289,8 +288,10 @@ class AIChatService {
       );
 
       return response.statusCode == 200;
-    } catch (e) {
-      print('❌ Error deleting conversation: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to delete AI conversation');
+      }
       return false;
     }
   }
@@ -323,12 +324,16 @@ class AIChatService {
         request.fields['conversationId'] = conversationId;
       }
 
-      print('🤖 Uploading file for AI analysis: $filePath');
+      if (kDebugMode) {
+        debugPrint('Uploading file for AI analysis');
+      }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      print('🤖 File analysis response status: ${response.statusCode}');
+      if (kDebugMode) {
+        debugPrint('File analysis response status: ${response.statusCode}');
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -336,8 +341,10 @@ class AIChatService {
       } else {
         throw Exception('Failed to analyze file: ${response.statusCode}');
       }
-    } catch (e) {
-      print('❌ Error analyzing file: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to analyze file');
+      }
       return 'Sorry, I encountered an error analyzing the file. Please try again later.';
     }
   }
@@ -359,8 +366,10 @@ class AIChatService {
         // Fallback to default if endpoint doesn't exist yet
         return 30;
       }
-    } catch (e) {
-      print('⚠️ Warning: Could not fetch retention period from backend: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to fetch AI chat retention period');
+      }
       // Return default retention period
       return 30;
     }

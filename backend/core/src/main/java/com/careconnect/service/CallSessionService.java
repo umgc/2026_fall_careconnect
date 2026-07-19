@@ -9,11 +9,13 @@ import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,8 @@ public class CallSessionService {
     private final UserRepository userRepository;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final FamilyMemberService familyMemberService;
+    @Autowired(required = false)
+    private ScheduledVisitRepository scheduledVisitRepository;
 
     public CallSession createSession(
             final String callId,
@@ -54,10 +58,20 @@ public class CallSessionService {
         final Patient patient = patientRepository.findByUserId(patientUserId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient not found"));
         authorizeForPatient(creator, patientUserId);
+        validateScheduledVisit(scheduledVisitId, patient.getId());
 
         final String normalizedCallId = callId.trim();
+        callSessionRepository.insertIfAbsent(
+                normalizedCallId,
+                patient.getId(),
+                creator.getId(),
+                scheduledVisitId,
+                SESSION_CREATED);
         final CallSession session = callSessionRepository.findByCallId(normalizedCallId)
-                .map(existing -> requireSameOwnership(existing, patient.getId(), creator.getId()))
+                .map(existing -> requireSameOwnership(
+                        existing, patient.getId(), creator.getId(), scheduledVisitId))
+                // Keeps isolated unit tests and non-PostgreSQL developer stores usable.
+                // Production PostgreSQL takes the atomic INSERT ... ON CONFLICT path above.
                 .orElseGet(() -> {
                     final CallSession created = new CallSession();
                     created.setCallId(normalizedCallId);
@@ -95,6 +109,57 @@ public class CallSessionService {
                 .isEmpty()) {
             throw new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call");
         }
+        return session;
+    }
+
+    /** Requires durable authorization, including historical participants who have left. */
+    @Transactional(readOnly = true)
+    public CallSession requireParticipant(final String callId, final Long userId) {
+        final CallSession session = requireSession(callId);
+        if (userId == null || callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), userId)
+                .isEmpty()) {
+            throw new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call");
+        }
+        return session;
+    }
+
+    /** Requires a participant who actually joined and has not left. */
+    @Transactional(readOnly = true)
+    public CallSession requireActiveParticipant(final String callId, final Long userId) {
+        final CallSession session = requireJoinAuthorized(callId, userId);
+        final CallParticipant participant = callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), userId)
+                .orElseThrow(() -> new AppException(
+                        HttpStatus.FORBIDDEN, "User is not authorized for this call"));
+        if (!PARTICIPANT_JOINED.equals(participant.getStatus())) {
+            throw new AppException(
+                    HttpStatus.FORBIDDEN, "User must join the call before this operation");
+        }
+        return session;
+    }
+
+    /**
+     * Recording metadata/playback requires active participation or a durable
+     * patient relationship. Administrator access is an explicit policy branch.
+     */
+    @Transactional(readOnly = true)
+    public CallSession requireRecordingAccess(final String callId, final User user) {
+        final CallSession session = requireSession(callId);
+        if (user == null || user.getId() == null) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        }
+        if (user.getRole() == com.careconnect.security.Role.ADMIN) {
+            return session;
+        }
+        final boolean activeParticipant = callParticipantRepository
+                .findByCallSessionIdAndUserId(session.getId(), user.getId())
+                .filter(p -> PARTICIPANT_JOINED.equals(p.getStatus()))
+                .isPresent();
+        if (activeParticipant) {
+            return session;
+        }
+        authorizeForPatient(user, requirePatientUserId(session));
         return session;
     }
 
@@ -156,10 +221,21 @@ public class CallSessionService {
         return callParticipantRepository.findByCallSessionId(session.getId());
     }
 
+    @Transactional(readOnly = true)
+    public List<CallParticipant> getJoinedParticipants(final String callId) {
+        final CallSession session = requireSession(callId);
+        return callParticipantRepository.findByCallSessionIdAndStatus(
+                session.getId(), PARTICIPANT_JOINED);
+    }
+
     private CallSession requireSameOwnership(
-            final CallSession existing, final Long patientId, final Long creatorUserId) {
+            final CallSession existing,
+            final Long patientId,
+            final Long creatorUserId,
+            final Long scheduledVisitId) {
         if (!Objects.equals(existing.getPatientId(), patientId)
                 || !Objects.equals(existing.getCreatedByUserId(), creatorUserId)
+                || !Objects.equals(existing.getScheduledVisitId(), scheduledVisitId)
                 || SESSION_ENDED.equals(existing.getStatus())) {
             throw new AppException(HttpStatus.CONFLICT, "callId is already in use");
         }
@@ -171,6 +247,8 @@ public class CallSessionService {
             final Long userId,
             final Long invitedByUserId,
             final String initialStatus) {
+        callParticipantRepository.insertIfAbsent(
+                session.getId(), userId, invitedByUserId, initialStatus);
         return callParticipantRepository
                 .findByCallSessionIdAndUserId(session.getId(), userId)
                 .orElseGet(() -> {
@@ -195,6 +273,20 @@ public class CallSessionService {
         if (!authorized) {
             throw new AppException(
                     HttpStatus.FORBIDDEN, "User is not authorized for this patient");
+        }
+    }
+
+    private void validateScheduledVisit(final Long scheduledVisitId, final Long patientId) {
+        if (scheduledVisitId == null || scheduledVisitRepository == null) {
+            return;
+        }
+        final com.careconnect.model.schedule.ScheduledVisit visit =
+                scheduledVisitRepository.findById(scheduledVisitId)
+                        .orElseThrow(() -> new AppException(
+                                HttpStatus.NOT_FOUND, "Scheduled visit not found"));
+        if (!Objects.equals(visit.getPatientId(), patientId)) {
+            throw new AppException(
+                    HttpStatus.FORBIDDEN, "Scheduled visit does not belong to this patient");
         }
     }
 

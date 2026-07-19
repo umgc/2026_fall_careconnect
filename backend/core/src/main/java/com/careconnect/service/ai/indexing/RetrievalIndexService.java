@@ -4,11 +4,13 @@ import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
+import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
@@ -37,7 +39,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Ingests Ask AI indexing events into {@code retrieval_index_chunk} (Task 4.1).
@@ -55,6 +56,7 @@ public class RetrievalIndexService {
     private static final Logger log = LoggerFactory.getLogger(RetrievalIndexService.class);
 
     private final CallSummaryRepository callSummaryRepository;
+    private final CallSessionRepository callSessionRepository;
     private final CallTranscriptSegmentRepository transcriptSegmentRepository;
     private final UspsMailpieceRepository uspsMailpieceRepository;
     private final RetrievalIndexChunkRepository chunkRepository;
@@ -66,6 +68,7 @@ public class RetrievalIndexService {
 
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
+            final CallSessionRepository callSessionRepository,
             final CallTranscriptSegmentRepository transcriptSegmentRepository,
             final UspsMailpieceRepository uspsMailpieceRepository,
             final RetrievalIndexChunkRepository chunkRepository,
@@ -75,6 +78,7 @@ public class RetrievalIndexService {
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
+        this.callSessionRepository = callSessionRepository;
         this.transcriptSegmentRepository = transcriptSegmentRepository;
         this.uspsMailpieceRepository = uspsMailpieceRepository;
         this.chunkRepository = chunkRepository;
@@ -302,9 +306,8 @@ public class RetrievalIndexService {
     /**
      * Indexes all transcript segments for a call. Uses {@code callId} as
      * {@code source_record_id} so re-delivery replaces the prior segment set.
-     * Defers when patientId cannot be resolved. {@code IndexWorker} burns attempt
-     * budget on {@link IndexingDeferredException} by default so deferred rows
-     * eventually dead-letter.
+     * Patient ownership comes only from the authoritative {@code CallSession}.
+     * A payload patient is an integrity assertion, never an ownership source.
      *
      * @return number of chunks written
      */
@@ -314,15 +317,35 @@ public class RetrievalIndexService {
             throw new IllegalArgumentException("TRANSCRIPT_INDEXED payload requires callId");
         }
         final String callId = payload.callId().trim();
-        final Long patientId = resolvePatientIdForCall(payload.patientId(), callId);
+        final CallSession session = callSessionRepository.findByCallIdForIndexing(callId)
+                .orElseThrow(() -> new IndexingDeferredException(
+                        "Cannot index transcript for callId=" + callId
+                                + " — authoritative CallSession is not available",
+                        false));
+        final Long patientId = session.getPatientId();
         if (patientId == null) {
             throw new IndexingDeferredException(
                     "Cannot index transcript for callId=" + callId
-                            + " — patientId is required on retrieval_index_chunk");
+                            + " — authoritative CallSession patientId is required",
+                    false);
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "TRANSCRIPT_INDEXED patient scope does not match authoritative CallSession");
         }
 
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name(), callId);
         final List<CallTranscriptSegment> segments =
                 transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(callId);
+        if (payload.segmentCount() > 0
+                && segments.size() < payload.segmentCount()) {
+            throw new IndexingDeferredException(
+                    "Transcript snapshot is incomplete for callId=" + callId
+                            + " (expected at least " + payload.segmentCount()
+                            + " segments, found " + segments.size() + ")",
+                    false);
+        }
         final List<IndexingChunkDraft> drafts =
                 transcriptSegmentChunker.chunk(callId, payload.source(), segments);
 
@@ -350,18 +373,21 @@ public class RetrievalIndexService {
         if (payload == null || payload.mailpieceId() == null) {
             throw new IllegalArgumentException("MAILPIECE_INDEXED payload requires mailpieceId");
         }
-        if (payload.patientId() == null) {
-            throw new IndexingDeferredException(
-                    "Cannot index mailpieceId=" + payload.mailpieceId()
-                            + " — patientId is required on retrieval_index_chunk");
-        }
-
         final String sourceRecordId = String.valueOf(payload.mailpieceId());
-        final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
+        final UspsMailpiece mailpiece = uspsMailpieceRepository.findByIdForUpdate(payload.mailpieceId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
+        final Long patientId = mailpiece.getPatientId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index mailpieceId=" + payload.mailpieceId()
+                            + " — authoritative patientId is required");
+        }
+        assertMailpieceEventMatches(payload, mailpiece);
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.USPS_MAIL.name(), sourceRecordId);
 
-        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
+        final String contentHash = mailpiece.getContentHash();
         if (contentHash != null
                 && !contentHash.isBlank()
                 && shouldSkipUspsMailReindex(sourceRecordId, contentHash, mailpiece)) {
@@ -370,20 +396,14 @@ public class RetrievalIndexService {
             return 0;
         }
 
-        final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
-        final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
-        final String sourceKey = firstNonBlank(payload.sourceKey(), mailpiece.getSourceKey());
-        final String consentScope = firstNonBlank(
-                payload.consentScope(), mailpiece.getConsentScope());
-
         final List<IndexingChunkDraft> drafts = mailpieceChunker.chunk(
-                sender,
-                summary,
+                mailpiece.getSender(),
+                mailpiece.getSummary(),
                 mailpiece.getOcrText(),
                 contentHash,
-                sourceKey,
-                payload.digestDate() != null ? payload.digestDate() : mailpiece.getDigestDate(),
-                consentScope,
+                mailpiece.getSourceKey(),
+                mailpiece.getDigestDate(),
+                mailpiece.getConsentScope(),
                 mailpiece.getImportanceLevel(),
                 mailpiece.getImportanceCategory(),
                 mailpiece.getClassificationMethod(),
@@ -398,7 +418,22 @@ public class RetrievalIndexService {
 
         chunkRepository.deleteBySourceRecordIdAndRecordType(
                 sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
-        return persistDrafts(payload.patientId(), sourceRecordId, drafts);
+        return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    private static void assertMailpieceEventMatches(
+            final MailpieceIndexedPayload payload,
+            final UspsMailpiece mailpiece) {
+        if (!Objects.equals(payload.patientId(), mailpiece.getPatientId())
+                || !Objects.equals(payload.sourceKey(), mailpiece.getSourceKey())
+                || !Objects.equals(payload.contentHash(), mailpiece.getContentHash())
+                || !Objects.equals(payload.sender(), mailpiece.getSender())
+                || !Objects.equals(payload.summary(), mailpiece.getSummary())
+                || !Objects.equals(payload.digestDate(), mailpiece.getDigestDate())
+                || !Objects.equals(payload.consentScope(), mailpiece.getConsentScope())) {
+            throw new IndexingDeferredException(
+                    "MAILPIECE_INDEXED event does not match authoritative UspsMailpiece");
+        }
     }
 
     private int persistDrafts(
@@ -609,15 +644,6 @@ public class RetrievalIndexService {
         }
     }
 
-    private Long resolvePatientIdForCall(final Long payloadPatientId, final String callId) {
-        if (payloadPatientId != null) {
-            return payloadPatientId;
-        }
-        final Optional<CallSummary> latest =
-                callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(callId);
-        return latest.map(CallSummary::getPatientId).orElse(null);
-    }
-
     private String toJson(final Object metadata) {
         if (metadata == null) {
             return null;
@@ -655,10 +681,6 @@ public class RetrievalIndexService {
             return trimmed;
         }
         return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
-    }
-
-    private static Long firstNonNull(final Long a, final Long b) {
-        return a != null ? a : b;
     }
 
     private static String firstNonBlank(final String a, final String b) {

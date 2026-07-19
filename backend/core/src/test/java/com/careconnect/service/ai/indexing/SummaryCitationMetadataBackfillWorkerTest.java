@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,6 +23,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SummaryCitationMetadataBackfillWorkerTest {
+
+    private static final UUID CLAIM_TOKEN =
+            UUID.fromString("00000000-0000-0000-0000-000000000099");
 
     @Mock
     private RetrievalIndexChunkRepository chunkRepository;
@@ -42,6 +46,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(RetrievalRecordType.summaryTypeNames()),
                 eq(SummaryChunker.CITATION_METADATA_VERSION),
                 eq(2),
+                any(),
                 any())).thenReturn(List.of(
                         candidate(42L, "not-a-number"),
                         candidate(42L, "42")));
@@ -55,6 +60,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 org.mockito.ArgumentMatchers.eq(42L),
                 org.mockito.ArgumentMatchers.eq("not-a-number"),
                 org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                any(),
                 any());
     }
 
@@ -64,6 +70,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(RetrievalRecordType.summaryTypeNames()),
                 eq(SummaryChunker.CITATION_METADATA_VERSION),
                 eq(2),
+                any(),
                 any())).thenReturn(List.of(
                         candidate(42L, "41"),
                         candidate(42L, "call-summary:42")));
@@ -81,6 +88,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 org.mockito.ArgumentMatchers.eq(42L),
                 org.mockito.ArgumentMatchers.eq("41"),
                 org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                any(),
                 any());
     }
 
@@ -90,6 +98,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(RetrievalRecordType.summaryTypeNames()),
                 eq(SummaryChunker.CITATION_METADATA_VERSION),
                 eq(2),
+                any(),
                 any())).thenReturn(List.of(candidate(42L, "42")), List.of());
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.UPDATED);
@@ -107,6 +116,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(RetrievalRecordType.summaryTypeNames()),
                 eq(SummaryChunker.CITATION_METADATA_VERSION),
                 eq(2),
+                any(),
                 any())).thenReturn(List.of(candidate(42L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.NO_DRAFTS);
@@ -117,6 +127,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 org.mockito.ArgumentMatchers.eq(42L),
                 org.mockito.ArgumentMatchers.eq("call-summary:42"),
                 org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                any(),
                 any());
     }
 
@@ -126,16 +137,17 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(RetrievalRecordType.summaryTypeNames()),
                 eq(SummaryChunker.CITATION_METADATA_VERSION),
                 eq(2),
+                any(),
                 any())).thenReturn(List.of(candidate(99L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 99L))
                 .thenReturn(SummaryCitationReplayOutcome.QUARANTINED);
         when(chunkRepository.quarantineSummarySource(
-                99L, "call-summary:42", RetrievalRecordType.summaryTypeNames())).thenReturn(2);
+                99L, "call-summary:42", RetrievalRecordType.summaryTypeNames(), CLAIM_TOKEN)).thenReturn(2);
 
         worker.pollAndBackfill();
 
         verify(chunkRepository).quarantineSummarySource(
-                99L, "call-summary:42", RetrievalRecordType.summaryTypeNames());
+                99L, "call-summary:42", RetrievalRecordType.summaryTypeNames(), CLAIM_TOKEN);
     }
 
     @Test
@@ -144,12 +156,13 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
                 org.mockito.ArgumentMatchers.eq(SummaryChunker.CITATION_METADATA_VERSION),
                 org.mockito.ArgumentMatchers.eq(2),
+                any(),
                 any())).thenReturn(List.of(candidate(42L, "77", null)));
 
         worker.pollAndBackfill();
 
         verify(chunkRepository).quarantineSummarySource(
-                42L, "77", RetrievalRecordType.summaryTypeNames());
+                42L, "77", RetrievalRecordType.summaryTypeNames(), CLAIM_TOKEN);
         verify(retrievalIndexService, never()).replaySummaryCitationMetadata(any(), any());
     }
 
@@ -177,6 +190,11 @@ class SummaryCitationMetadataBackfillWorkerTest {
             @Override
             public String getSourceKind() {
                 return sourceKind;
+            }
+
+            @Override
+            public UUID getClaimToken() {
+                return CLAIM_TOKEN;
             }
         };
     }

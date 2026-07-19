@@ -43,7 +43,8 @@ Future<void> _pumpHost(WidgetTester tester) async {
 }
 
 Future<void> _showIncomingPopup(WidgetTester tester) async {
-  CallNotificationService.processNotificationMessageForTest(_incomingCallPayload);
+  CallNotificationService.processNotificationMessageForTest(
+      _incomingCallPayload);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
@@ -54,6 +55,21 @@ void main() {
   });
 
   group('CallNotificationService incoming popup dismiss (L2d)', () {
+    testWidgets('care-team acceptance preserves typed patient context',
+        (tester) async {
+      await _pumpHost(tester);
+
+      final location = Uri.parse(
+        CallNotificationService.acceptedCallLocationForTest(
+          callKind: 'care-team',
+          contextPatientUserIds: const [7, 8],
+        ),
+      );
+
+      expect(location.queryParameters['callKind'], 'CARE_TEAM');
+      expect(location.queryParameters['contextPatientUserIds'], '7,8');
+    });
+
     testWidgets('callInvitationCancelled_dismissesIncomingPopup_byCallId',
         (tester) async {
       await _pumpHost(tester);
@@ -93,7 +109,8 @@ void main() {
         (tester) async {
       await _pumpHost(tester);
 
-      CallNotificationService.processNotificationMessageForTest(_incomingCallPayload);
+      CallNotificationService.processNotificationMessageForTest(
+          _incomingCallPayload);
       await tester.pump();
       CallNotificationService.clearIncomingCallIdForTest();
       expect(find.byType(IncomingCallPopup), findsOneWidget);
