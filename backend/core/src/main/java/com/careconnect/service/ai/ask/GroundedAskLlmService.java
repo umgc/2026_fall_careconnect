@@ -15,7 +15,9 @@ import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -66,7 +68,8 @@ public class GroundedAskLlmService {
     /**
      * Invokes Bedrock with grounded system/user prompts and parses structured JSON.
      *
-     * @return empty when AWS/Bedrock is unavailable or the response cannot be parsed
+     * @return empty when AWS/Bedrock is unavailable
+     * @throws GroundedOutputValidationException when Bedrock responds with invalid output
      */
     public Optional<GroundedLlmResult> generate(final String systemPrompt, final String userPrompt) {
         if (!isAvailable()) {
@@ -92,14 +95,22 @@ public class GroundedAskLlmService {
                     .build();
 
             final InvokeModelResponse response = bedrockRuntimeClient.invokeModel(request);
-            final String raw = response.body().asUtf8String();
-            final String text = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
+            final String text;
+            try {
+                final String raw = response.body().asUtf8String();
+                text = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
+            } catch (final RuntimeException ex) {
+                throw new GroundedOutputValidationException(
+                        "Bedrock response payload was malformed", ex);
+            }
             return parseStructured(text, modelId);
         } catch (final BedrockRuntimeException ex) {
             final String code = ex.awsErrorDetails() != null
                     ? ex.awsErrorDetails().errorCode() : "UNKNOWN";
             log.warn("Grounded Ask AI Bedrock invoke failed: {} - {}", code, ex.getMessage());
             return Optional.empty();
+        } catch (final GroundedOutputValidationException ex) {
+            throw ex;
         } catch (final RuntimeException ex) {
             log.warn("Grounded Ask AI inference failed: {}", ex.getMessage());
             return Optional.empty();
@@ -112,32 +123,43 @@ public class GroundedAskLlmService {
 
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {
         if (text == null || text.isBlank()) {
-            return Optional.empty();
+            throw new GroundedOutputValidationException(
+                    "Grounded model response was empty");
         }
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
             final JsonNode claimsNode = root.get("claims");
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
-                return Optional.empty();
+                throw new GroundedOutputValidationException(
+                        "Grounded model response did not contain claims");
             }
             final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
             for (final JsonNode claimNode : claimsNode) {
                 final String claimText = textOrEmpty(claimNode, "text").trim();
-                final JsonNode refsNode = claimNode.get("citationRefs");
+                final JsonNode citationsNode = claimNode.get("citations");
                 final List<String> claimRefs = new ArrayList<>();
-                if (refsNode != null && refsNode.isArray()) {
-                    for (final JsonNode n : refsNode) {
-                        if (n != null && n.isTextual() && !n.asText().isBlank()) {
-                            claimRefs.add(n.asText().trim());
+                final Map<String, String> evidenceByRef = new LinkedHashMap<>();
+                if (citationsNode != null && citationsNode.isArray()) {
+                    for (final JsonNode citationNode : citationsNode) {
+                        final String ref = textOrEmpty(citationNode, "ref").trim();
+                        final String evidence =
+                                textOrEmpty(citationNode, "evidence").trim();
+                        if (!ref.isBlank() && !evidence.isBlank()) {
+                            claimRefs.add(ref);
+                            evidenceByRef.put(ref, evidence);
                         }
                     }
                 }
                 if (claimText.isBlank() || claimRefs.isEmpty()) {
-                    return Optional.empty();
+                    throw new GroundedOutputValidationException(
+                            "Each grounded claim requires text and extractive evidence");
                 }
-                claims.add(new GroundedClaim(claimText, List.copyOf(claimRefs)));
+                claims.add(new GroundedClaim(
+                        claimText,
+                        List.copyOf(claimRefs),
+                        Map.copyOf(evidenceByRef)));
                 refs.addAll(claimRefs);
             }
             final String answerText = claims.stream()
@@ -146,9 +168,12 @@ public class GroundedAskLlmService {
                     .orElse("");
             return Optional.of(new GroundedLlmResult(
                     answerText, List.copyOf(refs), List.copyOf(claims), modelId));
+        } catch (final GroundedOutputValidationException ex) {
+            throw ex;
         } catch (final Exception ex) {
             log.warn("Unable to parse grounded Ask AI JSON: {}", ex.getMessage());
-            return Optional.empty();
+            throw new GroundedOutputValidationException(
+                    "Grounded model response was malformed", ex);
         }
     }
 
@@ -177,9 +202,20 @@ public class GroundedAskLlmService {
         return node.asText("");
     }
 
-    public record GroundedClaim(String text, List<String> citationRefs) {
+    public record GroundedClaim(
+            String text,
+            List<String> citationRefs,
+            Map<String, String> evidenceByRef) {
+
+        public GroundedClaim(
+                final String text,
+                final List<String> citationRefs) {
+            this(text, citationRefs, Map.of());
+        }
+
         public GroundedClaim {
             citationRefs = citationRefs == null ? List.of() : List.copyOf(citationRefs);
+            evidenceByRef = evidenceByRef == null ? Map.of() : Map.copyOf(evidenceByRef);
         }
     }
 

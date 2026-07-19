@@ -17,6 +17,7 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.HybridRetrievalResult;
 import com.careconnect.service.ai.retrieval.HybridRetrievalService;
+import com.careconnect.service.ai.retrieval.RankedChunk;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -40,7 +43,8 @@ import java.util.UUID;
  *
  * <p>Safety Tier-2 hold (SCC-3) is Task 6.x; this path delivers Tier 1 with mandatory disclaimer.
  * Claim-level citation output and secondary semantic grounding validation are also deferred;
- * the current contract validates model citation references against retrieved chunks.
+ * the current contract validates model citation references and extractive evidence
+ * against retrieved chunks.
  *
  * <p>TODO(Task 6.x): persist Ask AI audit rows (requestId/auditId, scope, retrieval meta,
  * delivery status) via the Ask AI audit pipeline. Until then {@code auditId} is a
@@ -185,8 +189,17 @@ public class AiAskService {
         }
 
         final long inferenceStarted = System.nanoTime();
-        final var llmOpt = groundedAskLlmService.generate(
-                context.systemPrompt(), context.userPrompt());
+        final Optional<GroundedAskLlmService.GroundedLlmResult> llmOpt;
+        try {
+            llmOpt = groundedAskLlmService.generate(
+                    context.systemPrompt(), context.userPrompt());
+        } catch (final GroundedOutputValidationException ex) {
+            throw groundingFailure(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "Generated answer did not satisfy the grounded response contract");
+        }
         final long inferenceLatencyMs = (System.nanoTime() - inferenceStarted) / 1_000_000L;
 
         if (llmOpt.isEmpty()) {
@@ -206,6 +219,7 @@ public class AiAskService {
                             claim.citationRefs(), context.citationRefMap());
             if (claim.text() == null
                     || claim.text().isBlank()
+                    || !hasExtractiveEvidence(claim, context.citationRefMap())
                     || !claimCitations.grounded()) {
                 throw groundingFailure(
                         requestId, auditId, sessionId,
@@ -262,6 +276,23 @@ public class AiAskService {
                 null,
                 null,
                 null);
+    }
+
+    private static boolean hasExtractiveEvidence(
+            final GroundedAskLlmService.GroundedClaim claim,
+            final Map<String, RankedChunk> citationRefMap) {
+        if (claim.citationRefs().isEmpty() || claim.evidenceByRef().isEmpty()) {
+            return false;
+        }
+        return claim.citationRefs().stream().allMatch(ref -> {
+            final RankedChunk chunk = citationRefMap.get(ref);
+            final String evidence = claim.evidenceByRef().get(ref);
+            return chunk != null
+                    && chunk.chunkText() != null
+                    && evidence != null
+                    && !evidence.isBlank()
+                    && chunk.chunkText().contains(evidence);
+        });
     }
 
     private static AskAiGroundingException groundingFailure(

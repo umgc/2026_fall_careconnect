@@ -123,8 +123,7 @@ public class RetrievalIndexService {
 
         final String sourceRecordId = SummarySourceKey.call(payload.summaryId());
         final String legacySourceRecordId = SummarySourceKey.legacy(payload.summaryId());
-        final List<String> sourceRecordIds =
-                List.of(sourceRecordId, legacySourceRecordId);
+        final List<String> sourceRecordIds = List.of(sourceRecordId);
         final CallSummary summary = callSummaryRepository.findByIdForUpdate(payload.summaryId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + payload.summaryId()));
@@ -141,6 +140,10 @@ public class RetrievalIndexService {
                     "Cannot index summaryId=" + payload.summaryId()
                             + " — patientId is required on retrieval_index_chunk");
         }
+        chunkRepository.quarantineLegacySummarySource(
+                patientId,
+                legacySourceRecordId,
+                RetrievalRecordType.summaryTypeNames());
 
         final String episodeType = "call";
         final String caregiverVisibility = firstNonBlank(
@@ -212,10 +215,17 @@ public class RetrievalIndexService {
         if (summaryId == null) {
             throw new IllegalArgumentException("summaryId is required");
         }
+        if (candidatePatientId == null) {
+            return SummaryCitationReplayOutcome.QUARANTINED;
+        }
+        final String lockKey = "summary-citation:"
+                + candidatePatientId + ":" + summaryId;
+        if (!chunkRepository.tryAcquireSummaryReplayLock(lockKey)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
         final CallSummary summary = callSummaryRepository.findByIdForUpdate(summaryId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "CallSummary not found for summaryId=" + summaryId));
-        if (candidatePatientId == null
+                .orElse(null);
+        if (summary == null
                 || summary.getPatientId() == null
                 || !candidatePatientId.equals(summary.getPatientId())) {
             return SummaryCitationReplayOutcome.QUARANTINED;

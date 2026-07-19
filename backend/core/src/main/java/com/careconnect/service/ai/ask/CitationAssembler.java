@@ -141,6 +141,9 @@ final class CitationAssembler {
     private static String citationSourceKind(
             final RankedChunk chunk,
             final String sourceKey) {
+        if (chunk != null && chunk.sourceKind() != null && !chunk.sourceKind().isBlank()) {
+            return chunk.sourceKind();
+        }
         final String namespacedKind = SummarySourceKey.sourceKind(sourceKey);
         if (namespacedKind != null) {
             return namespacedKind;

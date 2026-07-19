@@ -85,19 +85,26 @@ class RetrievalIndexChunkRepositoryPostgresTest {
         assertThat(staleSources()).isEmpty();
         assertThat(jdbcTemplate.queryForObject(
                 """
-                SELECT chunk_metadata->>'citationReplayAttempts'
+                SELECT citation_replay_attempts
                 FROM retrieval_index_chunk
                 WHERE source_record_id = '42'
                 """,
-                String.class)).isEqualTo("1");
+                Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT citation_replay_after IS NOT NULL
+                FROM retrieval_index_chunk
+                WHERE source_record_id = '42'
+                """,
+                Boolean.class)).isTrue();
     }
 
     @Test
-    void replayQuery_excludesAmbiguousLegacyCallVisitCollision() {
+    void replayQuery_returnsLegacySourceForAuthoritativeResolution() {
         insertChunk("00000000-0000-0000-0000-000000000001", "77", "CALL_SUMMARY");
         insertChunk("00000000-0000-0000-0000-000000000002", "77", "VISIT_SUMMARY");
 
-        assertThat(staleSources()).isEmpty();
+        assertThat(staleSources()).containsExactly("77");
         assertThat(repository.quarantineAmbiguousLegacySummarySources()).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
                 """

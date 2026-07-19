@@ -22,7 +22,8 @@ public class CallPatientResolver {
 
     public Long requirePatientId(final String callId) {
         final List<Long> patientIds = callTelemetryService.getTelemetryForCall(callId).stream()
-                .filter(event -> "CALL_JOIN".equals(event.getEventType()))
+                .filter(event -> "CALL_JOIN".equalsIgnoreCase(event.getEventType()))
+                .filter(event -> "SUCCESS".equalsIgnoreCase(event.getStatus()))
                 .map(event -> event.getActorUserId())
                 .filter(Objects::nonNull)
                 .distinct()
