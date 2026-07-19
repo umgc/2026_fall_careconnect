@@ -6,6 +6,33 @@ import 'package:http/http.dart' as http;
 import '../config/environment_config.dart';
 import '../services/call_notification_service.dart';
 
+/// Resolves the one patient User ID that owns a durable outgoing call.
+String resolveCallSessionPatientUserId({
+  required String currentUserId,
+  required String currentRole,
+  required String recipientId,
+  String? recipientRole,
+  String? callKind,
+  Iterable<int>? contextPatientUserIds,
+}) {
+  final normalizedCurrentRole = currentRole.trim().toUpperCase();
+  if (normalizedCurrentRole == 'PATIENT') return currentUserId;
+
+  final normalizedRecipientRole = (recipientRole ?? '').trim().toUpperCase();
+  if (normalizedRecipientRole == 'PATIENT') return recipientId;
+
+  if (normalizedCurrentRole == 'CAREGIVER' &&
+      normalizedRecipientRole.isEmpty &&
+      (callKind ?? 'GENERAL').trim().toUpperCase() != 'CARE_TEAM') {
+    return recipientId;
+  }
+
+  final contextIds =
+      (contextPatientUserIds ?? const <int>[]).where((id) => id > 0).toSet();
+  if (contextIds.length == 1) return contextIds.single.toString();
+  throw StateError('Outgoing calls require exactly one authoritative patient.');
+}
+
 /// VideoCallService — AWS Chime SDK video call implementation.
 ///
 /// Replaces legacy non-Chime call implementations.
@@ -109,6 +136,35 @@ class VideoCallService {
   // Both initiator and recipient call this after call is accepted
   // ================================================================
 
+  /// Creates the durable authorization record before an initiator joins Chime.
+  Future<void> createCallSession({
+    required String callId,
+    required String patientUserId,
+    required String inviteeUserId,
+    String? scheduledVisitId,
+  }) async {
+    if (!_isInitialized) throw Exception('VideoCallService not initialized');
+    final response = await http.post(
+      Uri.parse('${EnvironmentConfig.baseUrl}/api/v3/calls/sessions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_jwtToken',
+      },
+      body: jsonEncode({
+        'callId': callId.trim(),
+        'patientUserId': patientUserId.trim(),
+        'inviteeUserId': inviteeUserId.trim(),
+        if (scheduledVisitId != null && scheduledVisitId.trim().isNotEmpty)
+          'scheduledVisitId': scheduledVisitId.trim(),
+      }),
+    );
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception(
+        'Failed to create call session: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
   Future<ChimeCallSession> joinCall({
     required String callId,
     required String otherPartyId,
@@ -142,10 +198,11 @@ class VideoCallService {
     try {
       final requestBody =
           (_callContextMetadata == null || _callContextMetadata!.isEmpty)
-          ? null
-          : jsonEncode(_callContextMetadata);
+              ? null
+              : jsonEncode(_callContextMetadata);
       final response = await http.post(
-        Uri.parse('${EnvironmentConfig.baseUrl}/api/v3/calls/$normalizedCallId/join'),
+        Uri.parse(
+            '${EnvironmentConfig.baseUrl}/api/v3/calls/$normalizedCallId/join'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_jwtToken',
@@ -227,7 +284,8 @@ class VideoCallService {
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
-        endStatus = ((body['status'] as String?) ?? 'ended').trim().toLowerCase();
+        endStatus =
+            ((body['status'] as String?) ?? 'ended').trim().toLowerCase();
       } else {
         debugPrint(
           'Backend returned ${response.statusCode} while ending call: ${response.body}',
@@ -487,7 +545,9 @@ class VideoCallService {
     _aggregatedSentiment.clear();
     _pendingTranscriptSegments.clear();
     final normalizedCallId = callId?.trim();
-    if (markCompleted && normalizedCallId != null && normalizedCallId.isNotEmpty) {
+    if (markCompleted &&
+        normalizedCallId != null &&
+        normalizedCallId.isNotEmpty) {
       _completedCallIds.add(normalizedCallId);
     }
     CallNotificationService.clearActiveCall(normalizedCallId);
@@ -593,8 +653,7 @@ class VideoCallService {
     }
 
     final channel = (payload['channel'] as String?)?.toLowerCase();
-    final hasPerChannelShape =
-        payload.containsKey('text') ||
+    final hasPerChannelShape = payload.containsKey('text') ||
         payload.containsKey('voice') ||
         payload.containsKey('video') ||
         payload.containsKey('overall');
@@ -652,9 +711,7 @@ class VideoCallService {
       score,
     );
 
-    final resolvedStatus = isQuiet
-        ? 'QUIET'
-        : (muted ? 'MUTED' : 'AWAITING');
+    final resolvedStatus = isQuiet ? 'QUIET' : (muted ? 'MUTED' : 'AWAITING');
     final resolvedNotes = (event['notes'] as String?)?.trim();
 
     _aggregatedSentiment[channel!] = {
@@ -695,8 +752,8 @@ class VideoCallService {
     for (final key in channels) {
       final channelData = _aggregatedSentiment[key];
       if (channelData is Map<String, dynamic>) {
-        final status = (channelData['status'] as String? ?? 'AWAITING')
-            .toUpperCase();
+        final status =
+            (channelData['status'] as String? ?? 'AWAITING').toUpperCase();
         if (status == 'DEGRADED') hasDegraded = true;
         if (status == 'AWAITING' || status == 'MUTED') hasAwaiting = true;
         if (status != 'COMPLETED') {
@@ -763,8 +820,8 @@ class VideoCallService {
     Map<String, dynamic> raw,
     DateTime now,
   ) {
-    final normalizedChannel = (raw['channel'] as String? ?? sectionKey)
-        .toLowerCase();
+    final normalizedChannel =
+        (raw['channel'] as String? ?? sectionKey).toLowerCase();
     final rawScore = (raw['score'] as num?)?.toDouble();
     final clampedScore = rawScore == null ? 0.5 : rawScore.clamp(0.0, 1.0);
 
@@ -774,17 +831,15 @@ class VideoCallService {
         raw['fallback'] == true || _isFallbackSentimentNotes(rawNotes);
     // If a scored sentiment sample is present, treat it as a completed update
     // even when it is marked as fallback, so the dashboard can render it.
-    final status =
-      rawStatus ?? (rawScore == null ? 'AWAITING' : 'COMPLETED');
+    final status = rawStatus ?? (rawScore == null ? 'AWAITING' : 'COMPLETED');
 
     final notes = rawNotes.isNotEmpty
         ? rawNotes
         : (status == 'AWAITING'
-              ? 'Awaiting $normalizedChannel sentiment sample.'
-              : 'Sentiment sample received.');
+            ? 'Awaiting $normalizedChannel sentiment sample.'
+            : 'Sentiment sample received.');
 
-    final updatedAt =
-        _parseEventTime(raw['updatedAt']) ??
+    final updatedAt = _parseEventTime(raw['updatedAt']) ??
         _parseEventTime(raw['timestamp']) ??
         now;
 
@@ -892,7 +947,8 @@ class VideoCallService {
     return resolved;
   }
 
-  int? _resolveTranscriptStartMs(String text, int? startMs, int? resolvedEndMs) {
+  int? _resolveTranscriptStartMs(
+      String text, int? startMs, int? resolvedEndMs) {
     if (startMs != null) {
       return startMs < 0 ? 0 : startMs;
     }
@@ -951,7 +1007,8 @@ class VideoCallService {
   }
 
   @visibleForTesting
-  Set<String> get participantUserIdsForTest => Set<String>.unmodifiable(_participantUserIds);
+  Set<String> get participantUserIdsForTest =>
+      Set<String>.unmodifiable(_participantUserIds);
 
   void dispose() {
     _sentimentTimer?.cancel();
@@ -1043,7 +1100,8 @@ class VideoCallService {
   Future<List<Map<String, dynamic>>> getEligibleInvitees(String callId) async {
     try {
       final response = await http.get(
-        Uri.parse('${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/eligible-invitees'),
+        Uri.parse(
+            '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/eligible-invitees'),
         headers: {'Authorization': 'Bearer $_jwtToken'},
       );
       if (response.statusCode == 200) {
@@ -1073,7 +1131,8 @@ class VideoCallService {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         return (body['status'] as String?) ?? 'invited';
       }
-      debugPrint('inviteParticipant returned ${response.statusCode}: ${response.body}');
+      debugPrint(
+          'inviteParticipant returned ${response.statusCode}: ${response.body}');
     } catch (e) {
       debugPrint('inviteParticipant error: $e');
     }
@@ -1098,7 +1157,6 @@ class VideoCallService {
     }
     return null;
   }
-
 }
 
 class _BufferedTranscriptSegment {

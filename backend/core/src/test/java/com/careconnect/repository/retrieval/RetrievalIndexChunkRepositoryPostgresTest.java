@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -17,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,12 +29,11 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.sql.init.mode=never"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Testcontainers(disabledWithoutDocker = true)
-class RetrievalIndexChunkRepositoryPostgresTest {
+abstract class RetrievalIndexChunkRepositoryPostgresContract {
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+            new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
     @DynamicPropertySource
     static void postgresProperties(final DynamicPropertyRegistry registry) {
@@ -49,6 +51,9 @@ class RetrievalIndexChunkRepositoryPostgresTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private DataSource dataSource;
+
     @BeforeEach
     void createContractTable() {
         jdbcTemplate.execute("DROP TABLE IF EXISTS retrieval_index_chunk");
@@ -65,6 +70,7 @@ class RetrievalIndexChunkRepositoryPostgresTest {
                     consent_scope VARCHAR(40),
                     citation_replay_after TIMESTAMPTZ,
                     citation_replay_attempts INTEGER NOT NULL DEFAULT 0,
+                    citation_replay_claimed_until TIMESTAMPTZ,
                     migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'
                 )
                 """);
@@ -74,7 +80,20 @@ class RetrievalIndexChunkRepositoryPostgresTest {
     void replayQuery_executesJsonbCastCollectionBindingAndBackoffUpdate() {
         insertChunk("00000000-0000-0000-0000-000000000001", "42", "CALL_SUMMARY");
 
-        assertThat(staleSources()).containsExactly("42");
+        final OffsetDateTime claimedUntil =
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5);
+        assertThat(repository.claimStaleSummaryCitationSources(
+                        RetrievalRecordType.summaryTypeNames(),
+                        SummaryChunker.CITATION_METADATA_VERSION,
+                        25,
+                        claimedUntil))
+                .extracting(RetrievalIndexChunkRepository.SummaryReplayCandidate::getSourceRecordId)
+                .containsExactly("42");
+        assertThat(repository.claimStaleSummaryCitationSources(
+                RetrievalRecordType.summaryTypeNames(),
+                SummaryChunker.CITATION_METADATA_VERSION,
+                25,
+                claimedUntil)).isEmpty();
 
         final OffsetDateTime retryAfter =
                 OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
@@ -97,6 +116,13 @@ class RetrievalIndexChunkRepositoryPostgresTest {
                 WHERE source_record_id = '42'
                 """,
                 Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT citation_replay_claimed_until IS NULL
+                FROM retrieval_index_chunk
+                WHERE source_record_id = '42'
+                """,
+                Boolean.class)).isTrue();
     }
 
     @Test
@@ -113,6 +139,45 @@ class RetrievalIndexChunkRepositoryPostgresTest {
                   AND migration_status = 'QUARANTINED'
                 """,
                 Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void retrievalMigrations_executeAgainstPgvectorAndMatchRequiredSchema() throws Exception {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS retrieval_index_chunk");
+        jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS patient (id BIGINT PRIMARY KEY)");
+
+        try (var connection = dataSource.getConnection()) {
+            for (final String migration : List.of(
+                    "db/migration/V2607071921__create_retrieval_index_chunk.sql",
+                    "db/migration/V2607121930__backfill_retrieval_index_chunk_search_vector.sql",
+                    "db/migration/V2607161317__add_retrieval_chunk_embedding_backfill_index.sql",
+                    "db/migration/V2607182130__add_retrieval_source_ownership_and_replay_state.sql")) {
+                ScriptUtils.executeSqlScript(connection, new ClassPathResource(migration));
+            }
+        }
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_name = 'retrieval_index_chunk'
+                  AND column_name IN (
+                    'source_kind', 'citation_replay_after',
+                    'citation_replay_attempts', 'citation_replay_claimed_until',
+                    'migration_status')
+                """,
+                Integer.class)).isEqualTo(5);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'retrieval_index_chunk'
+                  AND indexname IN (
+                    'idx_retrieval_chunk_embedding',
+                    'idx_retrieval_chunk_source_identity',
+                    'idx_retrieval_summary_replay',
+                    'idx_retrieval_summary_replay_claim')
+                """,
+                Integer.class)).isEqualTo(4);
     }
 
     private List<String> staleSources() {
@@ -143,4 +208,9 @@ class RetrievalIndexChunkRepositoryPostgresTest {
                 recordType,
                 sourceRecordId);
     }
+}
+
+@Testcontainers(disabledWithoutDocker = true)
+class RetrievalIndexChunkRepositoryPostgresTest
+        extends RetrievalIndexChunkRepositoryPostgresContract {
 }

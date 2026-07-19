@@ -41,6 +41,13 @@ final class CitationAssembler {
 
     CitationResult assemble(
             final List<String> citationRefs, final Map<String, RankedChunk> refMap) {
+        return assemble(citationRefs, refMap, Map.of());
+    }
+
+    CitationResult assemble(
+            final List<String> citationRefs,
+            final Map<String, RankedChunk> refMap,
+            final Map<String, String> evidenceByRef) {
         if (refMap == null || refMap.isEmpty()) {
             return CitationResult.ungrounded();
         }
@@ -73,7 +80,8 @@ final class CitationAssembler {
                 continue;
             }
             final RankedChunk chunk = entry.getValue();
-            final Optional<AiCitation> citation = toCitation(ref, chunk);
+            final Optional<AiCitation> citation =
+                    toCitation(ref, chunk, evidenceByRef == null ? null : evidenceByRef.get(ref));
             if (citation.isEmpty()) {
                 invalidRefs.add(ref);
                 continue;
@@ -90,7 +98,10 @@ final class CitationAssembler {
                 grounded);
     }
 
-    private Optional<AiCitation> toCitation(final String ref, final RankedChunk chunk) {
+    private Optional<AiCitation> toCitation(
+            final String ref,
+            final RankedChunk chunk,
+            final String verifiedEvidence) {
         if (chunk == null
                 || chunk.chunkId() == null
                 || chunk.recordType() == null
@@ -100,7 +111,9 @@ final class CitationAssembler {
         final String sourceKey = validateIdentifier(chunk.sourceRecordId());
         final String sourceKind = citationSourceKind(chunk, sourceKey);
         final String sourceId = publicSourceId(chunk, sourceKey);
-        final String excerpt = normalizeAndTruncate(chunk.chunkText(), EXCERPT_CHARS);
+        final String excerpt = normalizeAndTruncate(
+                verifiedEvidence == null ? chunk.chunkText() : verifiedEvidence,
+                EXCERPT_CHARS);
         if (sourceId == null || excerpt.isBlank()) {
             return Optional.empty();
         }

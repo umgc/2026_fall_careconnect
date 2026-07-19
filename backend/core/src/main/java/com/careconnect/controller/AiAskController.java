@@ -55,14 +55,18 @@ public class AiAskController {
             final AiAskResponse response = aiAskService.ask(caller, request);
             return ResponseEntity.ok(response);
         } catch (final ForbiddenScopeException ex) {
-            log.warn("Ask AI forbidden scope code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            log.warn(
+                    "Ask AI forbidden scope reason={} auditId={} requestId={}",
+                    ex.getDenialReason(),
+                    ex.getAuditId(),
+                    ex.getRequestId());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(AiAskService.withheld(
                             ex.getRequestId(),
                             ex.getAuditId(),
                             ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ForbiddenScopeException.ERROR_CODE,
-                            ex.getMessage(),
+                            "Requested records are not available for Ask AI",
                             null));
         } catch (final AskAiRejectedException ex) {
             log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());

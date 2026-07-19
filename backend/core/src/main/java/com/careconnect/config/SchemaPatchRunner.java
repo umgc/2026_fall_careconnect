@@ -117,18 +117,65 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "))"
         );
         applyPatch(
-            "V75a – add session_id column to telemetry_events",
+            "V75a � add session_id column to telemetry_events",
             "ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS session_id VARCHAR(64)"
         );
         applyPatch(
-            "V75b – index session_id on telemetry_events",
+            "V75b � index session_id on telemetry_events",
             "CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id_time " +
             "ON telemetry_events (session_id, event_time DESC) " +
             "WHERE session_id IS NOT NULL"
         );
+        applyCallSessionPatches();
         applyRetrievalIndexChunkPatches();
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
+    }
+
+    /** Durable call authorization and patient ownership (reference migration V2607182230). */
+    private void applyCallSessionPatches() {
+        applyRequiredPatch(
+            "V2607182230a – create call_sessions",
+            "CREATE TABLE IF NOT EXISTS call_sessions (" +
+            "  id BIGSERIAL PRIMARY KEY," +
+            "  call_id VARCHAR(120) NOT NULL," +
+            "  patient_id BIGINT NOT NULL REFERENCES patient(id)," +
+            "  created_by_user_id BIGINT NOT NULL REFERENCES users(id)," +
+            "  scheduled_visit_id BIGINT NULL," +
+            "  chime_meeting_id VARCHAR(255) NULL," +
+            "  status VARCHAR(24) NOT NULL DEFAULT 'CREATED'," +
+            "  ended_at TIMESTAMP NULL," +
+            "  created_at TIMESTAMP NOT NULL DEFAULT now()," +
+            "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
+            "  CONSTRAINT uq_call_sessions_call_id UNIQUE (call_id)" +
+            ")"
+        );
+        applyRequiredPatch(
+            "V2607182230b – create call_participants",
+            "CREATE TABLE IF NOT EXISTS call_participants (" +
+            "  id BIGSERIAL PRIMARY KEY," +
+            "  call_session_id BIGINT NOT NULL REFERENCES call_sessions(id) ON DELETE CASCADE," +
+            "  user_id BIGINT NOT NULL REFERENCES users(id)," +
+            "  invited_by_user_id BIGINT NULL REFERENCES users(id)," +
+            "  status VARCHAR(24) NOT NULL DEFAULT 'INVITED'," +
+            "  joined_at TIMESTAMP NULL," +
+            "  left_at TIMESTAMP NULL," +
+            "  created_at TIMESTAMP NOT NULL DEFAULT now()," +
+            "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
+            "  CONSTRAINT uq_call_participants_session_user UNIQUE (call_session_id, user_id)" +
+            ")"
+        );
+        applyRequiredPatch(
+            "V2607182230c – call session authorization indexes",
+            "CREATE INDEX IF NOT EXISTS idx_call_sessions_patient_id " +
+            "  ON call_sessions(patient_id);" +
+            "CREATE INDEX IF NOT EXISTS idx_call_sessions_creator " +
+            "  ON call_sessions(created_by_user_id);" +
+            "CREATE INDEX IF NOT EXISTS idx_call_participants_user " +
+            "  ON call_participants(user_id, status);" +
+            "CREATE INDEX IF NOT EXISTS idx_call_participants_session " +
+            "  ON call_participants(call_session_id, status)"
+        );
     }
 
     /**
@@ -138,11 +185,15 @@ public class SchemaPatchRunner implements CommandLineRunner {
      * Mirrors db/migration reference SQL (applied via SchemaPatchRunner in all envs; not Flyway at ECS deploy).
      */
     private void applyRetrievalIndexChunkPatches() {
-        applyPatch(
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL retrieval schema patches for non-PostgreSQL datasource");
+            return;
+        }
+        applyRequiredPatch(
             "V2607071920 – enable pgvector extension",
             "CREATE EXTENSION IF NOT EXISTS vector"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607071921a – create retrieval_index_chunk table",
             "CREATE TABLE IF NOT EXISTS retrieval_index_chunk (" +
             "  id                UUID          PRIMARY KEY DEFAULT gen_random_uuid()," +
@@ -158,30 +209,47 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  consent_scope     VARCHAR(40)   NULL," +
             "  citation_replay_after TIMESTAMPTZ NULL," +
             "  citation_replay_attempts INTEGER NOT NULL DEFAULT 0," +
+            "  citation_replay_claimed_until TIMESTAMPTZ NULL," +
             "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
             ")"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607182130 – typed retrieval replay and migration state",
             "ALTER TABLE retrieval_index_chunk " +
             "  ADD COLUMN IF NOT EXISTS citation_replay_after TIMESTAMPTZ NULL;" +
             "ALTER TABLE retrieval_index_chunk " +
             "  ADD COLUMN IF NOT EXISTS citation_replay_attempts INTEGER NOT NULL DEFAULT 0;" +
             "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE';" +
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_summary_replay " +
+            "  ADD COLUMN IF NOT EXISTS citation_replay_claimed_until TIMESTAMPTZ NULL;" +
+            "ALTER TABLE retrieval_index_chunk " +
+            "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'"
+        );
+        applyRequiredPatch(
+            "V2607182130b – concurrent retrieval replay index",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
             "  ON retrieval_index_chunk " +
             "    (citation_replay_after, patient_id, source_record_id) " +
             "  WHERE migration_status = 'ACTIVE'"
         );
-        applyPatch(
+        applyRequiredPatch(
+            "V2607182130c – concurrent retrieval replay claim index",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay_claim " +
+            "  ON retrieval_index_chunk " +
+            "    (citation_replay_claimed_until, citation_replay_after, " +
+            "     patient_id, source_record_id) " +
+            "  WHERE migration_status = 'ACTIVE'"
+        );
+        applyRequiredPatch(
             "V2607182105 – add retrieval source ownership discriminator",
             "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL;" +
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source_identity " +
+            "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL"
+        );
+        applyRequiredPatch(
+            "V2607182105b – concurrent retrieval source identity index",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
             "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607071921b – retrieval_index_chunk patient FK",
             "DO $$ BEGIN " +
             "  ALTER TABLE retrieval_index_chunk " +
@@ -189,7 +257,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
             "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607071921c – retrieval_index_chunk indexes",
             "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id " +
             "  ON retrieval_index_chunk (patient_id);" +
@@ -203,7 +271,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) " +
             "  WITH (lists = 100)"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
             "CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger() " +
             "RETURNS TRIGGER AS $$ " +
@@ -217,20 +285,20 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk " +
             "  FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger()"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)",
             "UPDATE retrieval_index_chunk " +
             "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
             "WHERE search_vector IS NULL"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607122000 – indexing_outbox claimed_at lease column",
             "ALTER TABLE indexing_outbox " +
             "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
             "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
             "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
         );
-        applyPatch(
+        applyRequiredPatch(
             "V2607161317 – partial index for embedding backfill scans (Task 4.4, optional DBA follow-up)",
             "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding_null_backfill " +
             "  ON retrieval_index_chunk (indexed_at ASC NULLS LAST, id ASC) " +
@@ -238,6 +306,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "    AND chunk_text IS NOT NULL " +
             "    AND TRIM(BOTH FROM chunk_text) <> ''"
         );
+        verifyRequiredRetrievalSchema();
     }
 
     /**
@@ -369,6 +438,66 @@ public class SchemaPatchRunner implements CommandLineRunner {
             } else {
                 log.warn("Schema patch '{}' could not be applied: {}", name, msg);
             }
+        }
+    }
+
+    private void applyRequiredPatch(String name, String sql) {
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            conn.setAutoCommit(true);
+            stmt.execute(sql);
+            log.info("Required schema patch applied: {}", name);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required schema patch could not be applied: " + name,
+                    e);
+        }
+    }
+
+    private void verifyRequiredRetrievalSchema() {
+        final String sql = """
+                SELECT
+                  (SELECT COUNT(*)
+                   FROM information_schema.columns
+                   WHERE table_name = 'retrieval_index_chunk'
+                     AND column_name IN (
+                       'source_kind',
+                       'citation_replay_after',
+                       'citation_replay_attempts',
+                       'citation_replay_claimed_until',
+                       'migration_status')) AS column_count,
+                  (SELECT COUNT(*)
+                   FROM pg_indexes
+                   WHERE tablename = 'retrieval_index_chunk'
+                     AND indexname IN (
+                       'idx_retrieval_chunk_source_identity',
+                       'idx_retrieval_summary_replay',
+                       'idx_retrieval_summary_replay_claim')) AS index_count
+                """;
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             var result = stmt.executeQuery(sql)) {
+            if (!result.next()
+                    || result.getInt("column_count") != 5
+                    || result.getInt("index_count") != 3) {
+                throw new IllegalStateException(
+                        "Required retrieval schema verification failed");
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required retrieval schema verification failed",
+                    e);
+        }
+    }
+
+    private boolean isPostgreSql() {
+        try (Connection conn = dataSource.getConnection()) {
+            return conn.getMetaData()
+                    .getDatabaseProductName()
+                    .toLowerCase(java.util.Locale.ROOT)
+                    .contains("postgresql");
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to identify database for schema patches", e);
         }
     }
 }

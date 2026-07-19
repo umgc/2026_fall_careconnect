@@ -5,6 +5,7 @@ import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -255,7 +256,12 @@ public class CallTranscriptService {
     segment.setStartMs(input.startMs());
     segment.setEndMs(input.endMs());
     segment.setSource(normalizeSource(input.source()));
-    segment.setOccurredAt(input.occurredAt() != null ? input.occurredAt() : LocalDateTime.now());
+    // The legacy column has no offset; new values are normalized to UTC so index
+    // metadata can safely interpret them with ZoneOffset.UTC.
+    segment.setOccurredAt(
+        input.occurredAt() != null
+            ? input.occurredAt()
+            : LocalDateTime.now(ZoneOffset.UTC));
     return segment;
   }
 
@@ -377,7 +383,8 @@ public class CallTranscriptService {
 
   /**
    * Input payload for storing transcript segments.
-   * {@code occurredAt} is optional; when null the segment is timestamped to the current time.
+   * {@code occurredAt} is an offset-free UTC value. When null, the segment is
+   * timestamped from the UTC clock.
    */
   public record TranscriptSegmentInput(
       String speakerLabel, String text, Long startMs, Long endMs, String source,

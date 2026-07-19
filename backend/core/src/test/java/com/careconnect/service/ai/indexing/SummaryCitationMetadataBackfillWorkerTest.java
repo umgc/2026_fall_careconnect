@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -32,15 +33,18 @@ class SummaryCitationMetadataBackfillWorkerTest {
     @BeforeEach
     void setUp() {
         worker = new SummaryCitationMetadataBackfillWorker(
-                chunkRepository, retrievalIndexService, 2, 60_000L);
+                chunkRepository, retrievalIndexService, 2, 60_000L, 300_000L);
     }
 
     @Test
     void pollAndBackfill_usesBoundedBatchAndContinuesAfterMalformedId() {
-        when(chunkRepository.findStaleSummaryCitationSources(
-                RetrievalRecordType.summaryTypeNames(),
-                SummaryChunker.CITATION_METADATA_VERSION,
-                2)).thenReturn(List.of(candidate(42L, "not-a-number"), candidate(42L, "42")));
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                eq(RetrievalRecordType.summaryTypeNames()),
+                eq(SummaryChunker.CITATION_METADATA_VERSION),
+                eq(2),
+                any())).thenReturn(List.of(
+                        candidate(42L, "not-a-number"),
+                        candidate(42L, "42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.CURRENT);
 
@@ -56,10 +60,13 @@ class SummaryCitationMetadataBackfillWorkerTest {
 
     @Test
     void pollAndBackfill_failureDoesNotBlockRemainingSources() {
-        when(chunkRepository.findStaleSummaryCitationSources(
-                RetrievalRecordType.summaryTypeNames(),
-                SummaryChunker.CITATION_METADATA_VERSION,
-                2)).thenReturn(List.of(candidate(42L, "41"), candidate(42L, "call-summary:42")));
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                eq(RetrievalRecordType.summaryTypeNames()),
+                eq(SummaryChunker.CITATION_METADATA_VERSION),
+                eq(2),
+                any())).thenReturn(List.of(
+                        candidate(42L, "41"),
+                        candidate(42L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(41L, 42L))
                 .thenThrow(new IllegalStateException("failed"));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
@@ -79,10 +86,11 @@ class SummaryCitationMetadataBackfillWorkerTest {
 
     @Test
     void pollAndBackfill_secondNoOpPassDoesNotReplayAgain() {
-        when(chunkRepository.findStaleSummaryCitationSources(
-                RetrievalRecordType.summaryTypeNames(),
-                SummaryChunker.CITATION_METADATA_VERSION,
-                2)).thenReturn(List.of(candidate(42L, "42")), List.of());
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                eq(RetrievalRecordType.summaryTypeNames()),
+                eq(SummaryChunker.CITATION_METADATA_VERSION),
+                eq(2),
+                any())).thenReturn(List.of(candidate(42L, "42")), List.of());
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.UPDATED);
 
@@ -95,10 +103,11 @@ class SummaryCitationMetadataBackfillWorkerTest {
 
     @Test
     void pollAndBackfill_noDraftOutcomeIsBackedOff() {
-        when(chunkRepository.findStaleSummaryCitationSources(
-                RetrievalRecordType.summaryTypeNames(),
-                SummaryChunker.CITATION_METADATA_VERSION,
-                2)).thenReturn(List.of(candidate(42L, "call-summary:42")));
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                eq(RetrievalRecordType.summaryTypeNames()),
+                eq(SummaryChunker.CITATION_METADATA_VERSION),
+                eq(2),
+                any())).thenReturn(List.of(candidate(42L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.NO_DRAFTS);
 
@@ -113,24 +122,47 @@ class SummaryCitationMetadataBackfillWorkerTest {
 
     @Test
     void pollAndBackfill_ownerMismatchIsQuarantined() {
-        when(chunkRepository.findStaleSummaryCitationSources(
-                RetrievalRecordType.summaryTypeNames(),
-                SummaryChunker.CITATION_METADATA_VERSION,
-                2)).thenReturn(List.of(candidate(99L, "42")));
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                eq(RetrievalRecordType.summaryTypeNames()),
+                eq(SummaryChunker.CITATION_METADATA_VERSION),
+                eq(2),
+                any())).thenReturn(List.of(candidate(99L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 99L))
                 .thenReturn(SummaryCitationReplayOutcome.QUARANTINED);
         when(chunkRepository.quarantineSummarySource(
-                99L, "42", RetrievalRecordType.summaryTypeNames())).thenReturn(2);
+                99L, "call-summary:42", RetrievalRecordType.summaryTypeNames())).thenReturn(2);
 
         worker.pollAndBackfill();
 
         verify(chunkRepository).quarantineSummarySource(
-                99L, "42", RetrievalRecordType.summaryTypeNames());
+                99L, "call-summary:42", RetrievalRecordType.summaryTypeNames());
+    }
+
+    @Test
+    void pollAndBackfill_untypedNumericSourceIsQuarantinedWithoutReplay() {
+        when(chunkRepository.claimStaleSummaryCitationSources(
+                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                org.mockito.ArgumentMatchers.eq(SummaryChunker.CITATION_METADATA_VERSION),
+                org.mockito.ArgumentMatchers.eq(2),
+                any())).thenReturn(List.of(candidate(42L, "77", null)));
+
+        worker.pollAndBackfill();
+
+        verify(chunkRepository).quarantineSummarySource(
+                42L, "77", RetrievalRecordType.summaryTypeNames());
+        verify(retrievalIndexService, never()).replaySummaryCitationMetadata(any(), any());
     }
 
     private static SummaryReplayCandidate candidate(
             final Long patientId,
             final String sourceRecordId) {
+        return candidate(patientId, sourceRecordId, SummarySourceKey.CALL_KIND);
+    }
+
+    private static SummaryReplayCandidate candidate(
+            final Long patientId,
+            final String sourceRecordId,
+            final String sourceKind) {
         return new SummaryReplayCandidate() {
             @Override
             public Long getPatientId() {
@@ -140,6 +172,11 @@ class SummaryCitationMetadataBackfillWorkerTest {
             @Override
             public String getSourceRecordId() {
                 return sourceRecordId;
+            }
+
+            @Override
+            public String getSourceKind() {
+                return sourceKind;
             }
         };
     }

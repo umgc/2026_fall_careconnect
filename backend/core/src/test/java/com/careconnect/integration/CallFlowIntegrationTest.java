@@ -1,10 +1,16 @@
 package com.careconnect.integration;
 
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallParticipant;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.FamilyMemberLink;
+import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.repository.CallTelemetryEventRepository;
+import com.careconnect.repository.CallParticipantRepository;
+import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.security.Role;
@@ -17,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -198,6 +205,18 @@ class CallFlowIntegrationTest {
     private FamilyMemberLinkRepository familyMemberLinkRepository;
 
     @Autowired
+    private CallParticipantRepository callParticipantRepository;
+
+    @Autowired
+    private CallSessionRepository callSessionRepository;
+
+    @Autowired
+    private PatientRepository patientRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     // ── Test fixtures ───────────────────────────────────────────────────────────
@@ -234,6 +253,9 @@ class CallFlowIntegrationTest {
                     u.setName("Integration Caregiver");
                     return userRepository.save(u);
                 });
+        callParticipantRepository.deleteAll();
+        callSessionRepository.deleteAll();
+        authorizeCall(CALL_ID, patientUser, caregiverUser);
 
         // Mock Chime SDK — returns realistic meeting credentials
         Meeting mockMeeting = Meeting.builder()
@@ -278,6 +300,36 @@ class CallFlowIntegrationTest {
         // Mock Bedrock — return exception so fallback heuristic is used (SENT-007)
         when(bedrockRuntimeClient.invokeModel(any(InvokeModelRequest.class)))
                 .thenThrow(new RuntimeException("Bedrock unavailable in test"));
+    }
+
+    private void authorizeCall(final String callId, final User... users) {
+        if (patientRepository.findByUserId(patientUser.getId()).isEmpty()) {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO patient (first_name, last_name, email, user_id)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    "Integration",
+                    "Patient",
+                    patientUser.getEmail(),
+                    patientUser.getId());
+        }
+        final Patient patient = patientRepository.findByUserId(patientUser.getId())
+                .orElseThrow();
+        final CallSession session = new CallSession();
+        session.setCallId(callId);
+        session.setPatientId(patient.getId());
+        session.setCreatedByUserId(users[0].getId());
+        session.setStatus("CREATED");
+        final CallSession saved = callSessionRepository.save(session);
+        for (final User participantUser : users) {
+            final CallParticipant participant = new CallParticipant();
+            participant.setCallSessionId(saved.getId());
+            participant.setUserId(participantUser.getId());
+            participant.setInvitedByUserId(users[0].getId());
+            participant.setStatus("INVITED");
+            callParticipantRepository.save(participant);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -375,6 +427,7 @@ class CallFlowIntegrationTest {
         @DisplayName("CHIME-013: double POST /join same user is idempotent — single createAttendee (L5a)")
         void joinCall_doubleJoinSameUser_idempotent() throws Exception {
             String callId = "double-join-" + System.currentTimeMillis();
+            authorizeCall(callId, caregiverUser);
 
             mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
                             .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
@@ -440,6 +493,7 @@ class CallFlowIntegrationTest {
                 link.setPatientId(patientUser.getId());
                 familyMemberLinkRepository.save(link);
             }
+            authorizeCall(conferenceCallId, patientUser, caregiverUser);
 
             mockMvc.perform(post("/api/v3/calls/{callId}/join", conferenceCallId)
                             .with(user(patientUser.getEmail()).roles("PATIENT"))
@@ -511,6 +565,7 @@ class CallFlowIntegrationTest {
                 link.setPatientId(patientUser.getId());
                 familyMemberLinkRepository.save(link);
             }
+            authorizeCall(callId, patientUser, caregiverUser);
 
             mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
                             .with(user(patientUser.getEmail()).roles("PATIENT"))
@@ -580,6 +635,7 @@ class CallFlowIntegrationTest {
                 link.setPatientId(patientUser.getId());
                 familyMemberLinkRepository.save(link);
             }
+            authorizeCall(callId, patientUser, caregiverUser, familyUser);
 
             mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
                             .with(user(patientUser.getEmail()).roles("PATIENT"))
@@ -833,6 +889,7 @@ class CallFlowIntegrationTest {
         @DisplayName("Full flow: patient joins, submits text + voice sentiment, call ends — telemetry persisted for all events")
         void fullCallFlow_joinsSubmitsSentimentEnds_allEventsInDatabase() throws Exception {
             String flowCallId = "full-flow-call-" + System.currentTimeMillis();
+            authorizeCall(flowCallId, patientUser, caregiverUser);
 
             // 1. Patient joins
             mockMvc.perform(post("/api/v3/calls/{callId}/join", flowCallId)

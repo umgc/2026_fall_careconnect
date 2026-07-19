@@ -1,47 +1,21 @@
 package com.careconnect.service;
 
-import com.careconnect.model.Patient;
-import com.careconnect.model.User;
-import com.careconnect.repository.PatientRepository;
-import com.careconnect.repository.UserRepository;
-import com.careconnect.security.Role;
+import com.careconnect.repository.CallSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Objects;
 
 /** Resolves the single authoritative patient participant for a call. */
 @Service
 @RequiredArgsConstructor
 public class CallPatientResolver {
 
-    private final CallTelemetryService callTelemetryService;
-    private final UserRepository userRepository;
-    private final PatientRepository patientRepository;
+    private final CallSessionRepository callSessionRepository;
 
     public Long requirePatientId(final String callId) {
-        final List<Long> patientIds = callTelemetryService.getTelemetryForCall(callId).stream()
-                .filter(event -> "CALL_JOIN".equalsIgnoreCase(event.getEventType()))
-                .filter(event -> "SUCCESS".equalsIgnoreCase(event.getStatus()))
-                .map(event -> event.getActorUserId())
-                .filter(Objects::nonNull)
-                .distinct()
-                .map(userRepository::findById)
-                .flatMap(java.util.Optional::stream)
-                .filter(user -> user.getRole() == Role.PATIENT)
-                .map(User::getId)
-                .map(patientRepository::findByUserId)
-                .flatMap(java.util.Optional::stream)
-                .map(Patient::getId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        if (patientIds.size() != 1) {
-            throw new IllegalStateException(
-                    "Call must resolve to exactly one patient before summary persistence");
-        }
-        return patientIds.get(0);
+        return callSessionRepository.findByCallId(callId)
+                .map(session -> session.getPatientId())
+                .filter(patientId -> patientId != null)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Call must have an authoritative patient before summary persistence"));
     }
 }

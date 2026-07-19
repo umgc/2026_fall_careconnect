@@ -252,4 +252,41 @@ class RetrievalIndexChunkRepositoryTest {
                 .extracting(RetrievalIndexChunk::getMigrationStatus)
                 .containsOnly(RetrievalMigrationStatus.ACTIVE.name());
     }
+
+    @Test
+    void crossPatientLegacyQuarantine_removesCallRiskButPreservesTypedVisit() {
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(5L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("77")
+                .sourceKind(SummarySourceKey.CALL_KIND)
+                .chunkText("wrong patient call")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(6L)
+                .recordType(RetrievalRecordType.SUMMARY_ACTION_ITEM.name())
+                .sourceRecordId("77")
+                .chunkText("ambiguous legacy child")
+                .build());
+        repository.save(RetrievalIndexChunk.builder()
+                .patientId(6L)
+                .recordType(RetrievalRecordType.VISIT_SUMMARY.name())
+                .sourceRecordId("77")
+                .sourceKind(SummarySourceKey.VISIT_KIND)
+                .chunkText("typed visit")
+                .build());
+        repository.flush();
+
+        assertThat(repository.quarantineLegacySummarySourceAcrossPatients(
+                "77", RetrievalRecordType.summaryTypeNames())).isEqualTo(2);
+        repository.flush();
+
+        assertThat(repository.findByPatientId(5L))
+                .extracting(RetrievalIndexChunk::getMigrationStatus)
+                .containsOnly(RetrievalMigrationStatus.QUARANTINED.name());
+        assertThat(repository.findByPatientId(6L))
+                .filteredOn(chunk -> "typed visit".equals(chunk.getChunkText()))
+                .extracting(RetrievalIndexChunk::getMigrationStatus)
+                .containsExactly(RetrievalMigrationStatus.ACTIVE.name());
+    }
 }
