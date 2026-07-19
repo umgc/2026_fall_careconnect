@@ -1078,4 +1078,84 @@ void main() {
       expect(result, isNotEmpty);
     });
   });
+
+  group('askRecords() — grounded contract', () {
+    test('posts JWT-identity request without a userId', () async {
+      final (client, requests) = _capturingClient(200, {
+        'success': true,
+        'deliveryStatus': 'NO_RECORDS',
+        'citations': <Object>[],
+        'message': 'No matching records',
+      });
+
+      await http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'What medication changed?',
+          patientId: 42,
+        ),
+        () => client,
+      );
+
+      final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(requests.single.url.path, '/api/ai/ask');
+      expect(body['query'], 'What medication changed?');
+      expect(body['patientId'], 42);
+      expect(body.containsKey('userId'), isFalse);
+    });
+
+    test('models delivered answer and citations', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'DELIVERED',
+          'requestId': 'request-1',
+          'answer': {'text': 'Metformin was started.'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Metformin was started.',
+              'deepLink': null,
+            }
+          ],
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.answer, 'Metformin was started.');
+      expect(result.citations.single.citationId, 'C1');
+      expect(result.citations.single.deepLink, isNull);
+    });
+
+    test('models correlated withheld errors even on non-200 status', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(403, {
+          'success': false,
+          'requestId': 'request-2',
+          'deliveryStatus': 'WITHHELD',
+          'citations': <Object>[],
+          'error': {
+            'code': 'FORBIDDEN_SCOPE',
+            'message': 'Requested records are not available for Ask AI',
+          },
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.requestId, 'request-2');
+      expect(result.error?.code, 'FORBIDDEN_SCOPE');
+    });
+
+    test('fails closed on malformed payload', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockRaw(200, '<html>bad gateway</html>'),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+  });
 }

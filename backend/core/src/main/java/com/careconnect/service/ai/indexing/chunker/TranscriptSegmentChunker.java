@@ -22,7 +22,7 @@ public class TranscriptSegmentChunker {
      * Builds drafts for the given segments.
      *
      * @param callId  call identifier used in metadata
-     * @param source  segment source label from the indexing event
+     * @param source  ignored legacy event field; source comes from each persisted segment
      * @param segments ordered transcript segments
      * @return chunk drafts (empty segments skipped)
      */
@@ -46,7 +46,7 @@ public class TranscriptSegmentChunker {
             metadata.put("speakerLabel", segment.getSpeakerLabel());
             metadata.put("startMs", segment.getStartMs());
             metadata.put("endMs", segment.getEndMs());
-            metadata.put("source", source != null ? source : segment.getSource());
+            metadata.put("source", segment.getSource());
             metadata.put("actorUserId", segment.getActorUserId());
             if (segment.getOccurredAt() != null) {
                 metadata.put(

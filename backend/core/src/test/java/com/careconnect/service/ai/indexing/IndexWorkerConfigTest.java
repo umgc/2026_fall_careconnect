@@ -6,6 +6,7 @@ import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
@@ -32,6 +33,7 @@ class IndexWorkerConfigTest {
             .withBean(IndexingOutboxRepository.class, () -> mock(IndexingOutboxRepository.class))
             .withBean(CallSummaryRepository.class, () -> mock(CallSummaryRepository.class))
             .withBean(CallSessionRepository.class, () -> mock(CallSessionRepository.class))
+            .withBean(CallTranscriptService.class, () -> mock(CallTranscriptService.class))
             .withBean(CallTranscriptSegmentRepository.class,
                     () -> mock(CallTranscriptSegmentRepository.class))
             .withBean(UspsMailpieceRepository.class, () -> mock(UspsMailpieceRepository.class))

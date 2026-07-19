@@ -1,7 +1,6 @@
 package com.careconnect.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,7 +14,7 @@ import java.util.UUID;
  *
  * <p>Caller identity comes from JWT — do not send {@code userId}.
  */
-@JsonIgnoreProperties(ignoreUnknown = false)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record AiAskRequest(
         @NotBlank @Size(max = 2000) String query,
         @NotNull Long patientId,
@@ -25,8 +24,4 @@ public record AiAskRequest(
         @Size(max = 16) String locale,
         List<RetrievalRecordType> sourceTypes
 ) {
-    @JsonAnySetter
-    public void rejectUnknownField(final String name, final Object value) {
-        throw new IllegalArgumentException("Unknown Ask AI request field: " + name);
-    }
 }

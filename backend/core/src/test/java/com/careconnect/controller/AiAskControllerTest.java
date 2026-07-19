@@ -4,6 +4,7 @@ import com.careconnect.dto.ai.AiAskRequest;
 import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
 import com.careconnect.security.Role;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.ask.AiAskService;
 import com.careconnect.service.ai.ask.AskAiGroundingException;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
@@ -163,16 +164,45 @@ class AiAskControllerTest {
     }
 
     @Test
-    @DisplayName("unknown request fields are rejected")
-    void ask_unknownFieldUsesAskAiContract() throws Exception {
+    @DisplayName("unknown request fields remain compatibility tolerant")
+    void ask_unknownFieldIsIgnored() throws Exception {
         mockMvc.perform(post("/api/ai/ask")
                         .contentType("application/json")
                         .content(requestJson(null).replace(
                                 "\"inputModality\": \"TEXT\"",
                                 "\"inputModality\": \"TEXT\", \"unknown\": true")))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isOk());
+        verify(aiAskService).ask(any(), any());
+    }
+
+    @Test
+    void ask_authenticationFailureIs401Contract() throws Exception {
+        when(aiAskService.ask(any(), any()))
+                .thenThrow(new UnauthorizedException("token expired"));
+
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null)))
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
-                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void ask_unexpectedPipelineFailureIsStableCorrelatedContract() throws Exception {
+        when(aiAskService.ask(any(), any()))
+                .thenThrow(new IllegalStateException("patient@example.com"));
+
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content(requestJson(null)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
+                .andExpect(jsonPath("$.auditId").isNotEmpty())
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.error.message")
+                        .value("Ask AI could not complete the request"));
     }
 
     @Test

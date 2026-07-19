@@ -39,6 +39,7 @@ class HybridVideoCallWidget extends StatefulWidget {
   final String? recipientName;
   final String? callKind;
   final List<int>? contextPatientUserIds;
+  final String? scheduledVisitId;
   final String? returnPatientDetailsId;
   final bool forcePatientDetailsOnExit;
   final bool returnAsCaregiver;
@@ -61,6 +62,7 @@ class HybridVideoCallWidget extends StatefulWidget {
     this.recipientName,
     this.callKind,
     this.contextPatientUserIds,
+    this.scheduledVisitId,
     this.returnPatientDetailsId,
     this.forcePatientDetailsOnExit = false,
     this.returnAsCaregiver = false,
@@ -107,7 +109,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
   // Recording
   bool _isRecording = false;
   bool _isTogglingRecording = false;
-  DateTime? _recordingStartedAt;
   Timer? _recordingElapsedTimer;
   Duration _recordingElapsed = Duration.zero;
   DateTime? _lastAudioSampleSentAt;
@@ -278,6 +279,18 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                 '$declinedBy declined the call$reasonSuffix.';
           });
         },
+        onRecordingState: (event) {
+          if (!mounted) return;
+          final status = (event['status'] ?? '').toString().toUpperCase();
+          final active = status == 'STARTED' || status == 'ALREADY_RECORDING';
+          setState(() {
+            _isRecording = active;
+            if (!active) {
+              _recordingElapsed = Duration.zero;
+              _recordingElapsedTimer?.cancel();
+            }
+          });
+        },
       );
 
       if (widget.isInitiator) {
@@ -297,6 +310,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
           callId: widget.callId,
           patientUserId: patientUserId,
           inviteeUserId: recipientId,
+          scheduledVisitId: widget.scheduledVisitId,
         );
       }
 
@@ -395,7 +409,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         _recordingElapsedTimer?.cancel();
         setState(() {
           _isRecording = false;
-          _recordingStartedAt = null;
           _recordingElapsed = Duration.zero;
         });
       } else {
@@ -411,7 +424,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         });
         setState(() {
           _isRecording = true;
-          _recordingStartedAt = started;
           _recordingElapsed = Duration.zero;
         });
       }
@@ -1297,6 +1309,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         '&video=${widget.isVideoEnabled ? 'true' : 'false'}'
         '&audio=${widget.isAudioEnabled ? 'true' : 'false'}'
         '&callKind=$callKind'
+        '${widget.scheduledVisitId == null ? '' : '&scheduledVisitId=${Uri.encodeComponent(widget.scheduledVisitId!)}'}'
         '${contextIds.isEmpty ? '' : '&contextPatientUserIds=${Uri.encodeComponent(contextIds.join(','))}'}',
       );
     } catch (_) {

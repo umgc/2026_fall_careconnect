@@ -199,9 +199,12 @@ public class CallController {
       }
       // Auto-start a system-initiated recording when the 2nd participant joins.
       // The recording will be transcribed and deleted from S3 after the call ends.
-      if (meetingAlreadyActive) {
+      if (meetingAlreadyActive
+          && environment.getProperty(
+              "careconnect.recording.system-transcription-enabled", Boolean.class, false)) {
         try {
-          callRecordingService.startRecording(callId, null);
+          final Map<String, Object> recording = callRecordingService.startRecording(callId, null);
+          notifyRecordingState(callId, recording);
         } catch (Exception e) {
           if (log.isWarnEnabled()) {
             log.warn("Auto-recording start failed for call {}: {}", callId, e.getMessage());
@@ -418,22 +421,9 @@ public class CallController {
     return activeParticipantIds;
   }
 
-  private Set<Long> resolvePendingInviteeIds(final String callId) {
-    final Set<Long> pending = new LinkedHashSet<>();
-    callSessionService.getParticipants(callId).stream()
-        .filter(p -> CallSessionService.PARTICIPANT_INVITED.equals(p.getStatus()))
-        .map(com.careconnect.model.CallParticipant::getUserId)
-        .forEach(pending::add);
-    return pending;
-  }
-
   private Set<Long> resolveNotifyUserIds(final String callId, final Long excludeUserId) {
-    final Set<Long> notifyIds = new LinkedHashSet<>(resolveActiveParticipantIds(callId));
-    notifyIds.addAll(resolvePendingInviteeIds(callId));
-    if (excludeUserId != null) {
-      notifyIds.remove(excludeUserId);
-    }
-    return notifyIds;
+    return new LinkedHashSet<>(
+        callSessionService.getOtherParticipantUserIds(callId, excludeUserId));
   }
 
   @PostMapping("/{callId}/end")
@@ -444,11 +434,17 @@ public class CallController {
       @RequestParam(required = false) String otherPartyId,
       @RequestBody(required = false) final Map<String, Object> body) {
     final User currentUser = getCurrentUser();
-    callSessionService.requireActiveParticipant(callId, currentUser.getId());
     try {
-      final Set<Long> activeParticipantIds = resolveActiveParticipantIds(callId);
-      activeParticipantIds.remove(currentUser.getId());
-      final boolean shouldEndMeeting = activeParticipantIds.size() <= 1;
+      final CallSessionService.LeaveResult leave =
+          callSessionService.leaveOrBeginTermination(callId, currentUser.getId());
+      if (leave.ended()) {
+        return ResponseEntity.ok(
+            Map.of(
+                "status", "ended",
+                "callId", callId,
+                "remainingParticipantCount", "0"));
+      }
+      final boolean shouldEndMeeting = leave.terminationOwner();
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
 
       if (shouldEndMeeting) {
@@ -456,6 +452,7 @@ public class CallController {
         maybeGenerateAndStoreCallSummary(callId, currentUser.getId());
         callRecordingService.stopRecording(callId);
         chimeService.endMeeting(callId);
+        callSessionService.completeTermination(callId);
       }
 
       if (shouldEndMeeting) {
@@ -473,7 +470,7 @@ public class CallController {
                         "endedBy",
                         currentUser.getId().toString())));
       } else {
-        activeParticipantIds.stream()
+        resolveActiveParticipantIds(callId).stream()
             .map(String::valueOf)
             .forEach(
                 participantId -> callNotificationHandler.sendNotificationToUser(
@@ -486,7 +483,7 @@ public class CallController {
                         "leftBy",
                         currentUser.getId().toString(),
                         "remainingParticipantCount",
-                        activeParticipantIds.size())));
+                        leave.remainingParticipants())));
       }
 
       final String eventType = shouldEndMeeting ? EVT_CALL_END : EVT_CALL_LEAVE;
@@ -501,19 +498,18 @@ public class CallController {
                   "endedMeeting",
                   shouldEndMeeting,
                   "remainingParticipantCount",
-                  activeParticipantIds.size(),
+                  leave.remainingParticipants(),
                   "participantSource",
                   "DURABLE_SESSION"),
               contextMetadata),
           null);
-      callSessionService.recordLeave(callId, currentUser.getId(), shouldEndMeeting);
       if (log.isInfoEnabled()) {
         log.info(
             "User {} {} call {} (remainingParticipants={}, endedMeeting={})",
             currentUser.getId(),
             shouldEndMeeting ? "ended" : "left",
             callId,
-            activeParticipantIds.size(),
+            leave.remainingParticipants(),
             shouldEndMeeting);
       }
       return ResponseEntity.ok(
@@ -523,7 +519,7 @@ public class CallController {
               "callId",
               callId,
               "remainingParticipantCount",
-              String.valueOf(activeParticipantIds.size())));
+              String.valueOf(leave.remainingParticipants())));
     } catch (AppException e) {
       throw e;
     } catch (Exception e) {
@@ -1457,6 +1453,7 @@ public class CallController {
     User currentUser = getCurrentUser();
     callSessionService.requireActiveParticipant(callId, currentUser.getId());
     Map<String, Object> result = callRecordingService.startRecording(callId, currentUser.getId());
+    notifyRecordingState(callId, result);
     callTelemetryService.recordCallEvent(
         callId,
         "RECORDING_START",
@@ -1476,6 +1473,7 @@ public class CallController {
     User currentUser = getCurrentUser();
     callSessionService.requireActiveParticipant(callId, currentUser.getId());
     Map<String, Object> result = callRecordingService.stopRecording(callId);
+    notifyRecordingState(callId, result);
     callTelemetryService.recordCallEvent(
         callId,
         "RECORDING_STOP",
@@ -1541,6 +1539,19 @@ public class CallController {
     ensureDevOrLocalMode();
     callSessionService.requireRecordingAccess(callId, getCurrentUser());
     return ResponseEntity.ok(callRecordingService.cleanupRawArtifactsForCall(callId));
+  }
+
+  private void notifyRecordingState(final String callId, final Map<String, Object> state) {
+    final Map<String, Object> notification = new LinkedHashMap<>();
+    notification.put("type", "recording-state");
+    notification.put("callId", callId);
+    notification.put("status", state.getOrDefault("status", "UNKNOWN"));
+    notification.put("playbackReady", state.getOrDefault("playbackReady", false));
+    callSessionService.getParticipants(callId).stream()
+        .map(com.careconnect.model.CallParticipant::getUserId)
+        .distinct()
+        .forEach(id -> callNotificationHandler.sendNotificationToUser(
+            id.toString(), notification));
   }
 
   @DeleteMapping("/recordings")

@@ -4,9 +4,160 @@ import 'package:http/http.dart' as http;
 import 'api_service.dart';
 import '../config/env_constant.dart';
 
+enum AiAskDeliveryStatus { delivered, noRecords, withheld }
+
+class AiAskCitation {
+  final String citationId;
+  final String recordType;
+  final String? title;
+  final String excerpt;
+  final String? deepLink;
+
+  const AiAskCitation({
+    required this.citationId,
+    required this.recordType,
+    required this.excerpt,
+    this.title,
+    this.deepLink,
+  });
+
+  factory AiAskCitation.fromJson(Map<String, dynamic> json) => AiAskCitation(
+        citationId: json['citationId']?.toString() ?? '',
+        recordType: json['recordType']?.toString() ?? 'UNKNOWN',
+        title: json['title']?.toString(),
+        excerpt: json['excerpt']?.toString() ?? '',
+        deepLink: json['deepLink']?.toString(),
+      );
+}
+
+class AiAskError {
+  final String code;
+  final String message;
+  final List<String> details;
+
+  const AiAskError(this.code, this.message, [this.details = const []]);
+
+  factory AiAskError.fromJson(Map<String, dynamic> json) => AiAskError(
+        json['code']?.toString() ?? 'UNKNOWN_ERROR',
+        json['message']?.toString() ?? 'Ask AI could not complete the request.',
+        (json['details'] as List<dynamic>? ?? const [])
+            .map((item) => item.toString())
+            .toList(growable: false),
+      );
+}
+
+class AiAskResult {
+  final bool success;
+  final AiAskDeliveryStatus deliveryStatus;
+  final String? requestId;
+  final String? sessionId;
+  final String? answer;
+  final String? message;
+  final List<AiAskCitation> citations;
+  final AiAskError? error;
+
+  const AiAskResult({
+    required this.success,
+    required this.deliveryStatus,
+    this.requestId,
+    this.sessionId,
+    this.answer,
+    this.message,
+    this.citations = const [],
+    this.error,
+  });
+
+  factory AiAskResult.fromJson(Map<String, dynamic> json) {
+    final status = switch (json['deliveryStatus']?.toString()) {
+      'DELIVERED' => AiAskDeliveryStatus.delivered,
+      'NO_RECORDS' => AiAskDeliveryStatus.noRecords,
+      _ => AiAskDeliveryStatus.withheld,
+    };
+    final answerJson = json['answer'];
+    final errorJson = json['error'];
+    return AiAskResult(
+      success: json['success'] == true,
+      deliveryStatus: status,
+      requestId: json['requestId']?.toString(),
+      sessionId: json['sessionId']?.toString(),
+      answer: answerJson is Map<String, dynamic>
+          ? answerJson['text']?.toString()
+          : null,
+      message: json['message']?.toString(),
+      citations: (json['citations'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AiAskCitation.fromJson)
+          .toList(growable: false),
+      error: errorJson is Map<String, dynamic>
+          ? AiAskError.fromJson(errorJson)
+          : null,
+    );
+  }
+}
+
 /// Service for AI chat communication through Spring Boot backend
 class AIChatService {
   static String get _baseUrl => '${getBackendBaseUrl()}/v1/api/ai-chat';
+
+  /// Records-grounded Ask AI client. Identity is supplied only by the JWT.
+  static Future<AiAskResult> askRecords({
+    required String query,
+    required int patientId,
+    String? sessionId,
+    String? conversationId,
+    String locale = 'en-US',
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+      final response = await http.post(
+        Uri.parse('${getBackendBaseUrl()}/api/ai/ask'),
+        headers: headers,
+        body: jsonEncode({
+          'query': query,
+          'patientId': patientId,
+          'inputModality': 'TEXT',
+          'locale': locale,
+          if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+          if (conversationId != null && conversationId.isNotEmpty)
+            'conversationId': conversationId,
+        }),
+      );
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Ask AI response is not an object');
+      }
+      return AiAskResult.fromJson(decoded);
+    } on FormatException {
+      return const AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: AiAskError(
+          'INVALID_RESPONSE',
+          'Ask AI returned an unexpected response. Please try again.',
+        ),
+      );
+    } on http.ClientException {
+      return const AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: AiAskError(
+          'NETWORK_ERROR',
+          'Unable to connect to Ask AI. Please check your connection.',
+        ),
+      );
+    } catch (_) {
+      return const AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: AiAskError(
+          'REQUEST_FAILED',
+          'Ask AI could not complete the request. Please try again.',
+        ),
+      );
+    }
+  }
 
   /// Send a chat message to the AI through the backend
   static Future<Map<String, dynamic>> sendMessage({

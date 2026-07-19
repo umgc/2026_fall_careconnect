@@ -72,8 +72,8 @@ public class SummaryCitationMetadataBackfillWorker {
         for (final SummaryReplayCandidate candidate : candidates) {
             final String sourceId = candidate.getSourceRecordId();
             try {
-                if (SummarySourceKey.isLegacyNumeric(sourceId)
-                        && candidate.getSourceKind() == null) {
+                if (!SummarySourceKey.CALL_KIND.equals(candidate.getSourceKind())
+                        || SummarySourceKey.isLegacyNumeric(sourceId)) {
                     quarantined += chunkRepository.quarantineSummarySource(
                             candidate.getPatientId(),
                             sourceId,
@@ -89,6 +89,7 @@ public class SummaryCitationMetadataBackfillWorker {
                                 summaryId, candidate.getPatientId());
                 if (outcome == SummaryCitationReplayOutcome.UPDATED) {
                     updated++;
+                    releaseClaim(candidate);
                 } else if (outcome == SummaryCitationReplayOutcome.NO_DRAFTS) {
                     failed++;
                     markFailureBackoff(candidate);
@@ -122,7 +123,6 @@ public class SummaryCitationMetadataBackfillWorker {
             chunkRepository.markSummaryCitationReplayFailure(
                     candidate.getPatientId(),
                     candidate.getSourceRecordId(),
-                    RetrievalRecordType.summaryTypeNames(),
                     OffsetDateTime.now(ZoneOffset.UTC)
                             .plus(Duration.ofMillis(failureBackoffMs)),
                     candidate.getClaimToken());
@@ -137,7 +137,6 @@ public class SummaryCitationMetadataBackfillWorker {
         chunkRepository.releaseSummaryCitationReplayClaim(
                 candidate.getPatientId(),
                 candidate.getSourceRecordId(),
-                RetrievalRecordType.summaryTypeNames(),
                 candidate.getClaimToken());
     }
 

@@ -15,12 +15,14 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final String? errorMessage;
+  final List<AiAskCitation> citations;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
     this.errorMessage,
+    this.citations = const [],
   });
 }
 
@@ -77,11 +79,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   final double _chatWidth = 320.0;
   final double _chatHeight = 500.0;
   late AnimationController _animationController;
-  
+
   // Inactivity timer for 15-minute auto-clear
   Timer? _inactivityTimer;
   DateTime? _lastActivity;
-  
+
   // Flag to track if user manually cleared the chat
   bool _manuallyCleared = false;
 
@@ -92,22 +94,22 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
-    
+
     // Check if chat was manually cleared and load history accordingly
     _checkAndLoadHistory();
-    
+
     _startInactivityTimer(); // Start 15-minute inactivity timer
   }
 
   /// Check if chat was manually cleared and load history if not
   Future<void> _checkAndLoadHistory() async {
     if (widget.userId == null) return;
-    
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final clearedKey = 'chat_cleared_${widget.userId}';
       final wasCleared = prefs.getBool(clearedKey) ?? false;
-      
+
       if (!wasCleared) {
         await _loadConversationHistory();
       } else {
@@ -202,7 +204,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     if (confirmed == true) {
       // Store the conversation ID before clearing it
       final conversationToClear = _conversationId;
-      
+
       // Clear all messages and start fresh
       setState(() {
         _messages.clear();
@@ -210,7 +212,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         _isLoadingHistory = false;
         _manuallyCleared = true;
       });
-      
+
       // Store the cleared state persistently
       if (widget.userId != null) {
         try {
@@ -221,7 +223,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           // Failed to save cleared state, continue anyway
         }
       }
-      
+
       // Clear the conversation from the backend if it exists
       if (conversationToClear.isNotEmpty) {
         try {
@@ -230,10 +232,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           // If clearing fails, just continue - the local clear is more important
         }
       }
-      
+
       // Reset inactivity timer since user is actively using the chat
       _resetInactivityTimer();
-      
+
       // Show confirmation
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -403,7 +405,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     buffer.writeln('Chat Transcript - ${DateTime.now().toString()}');
     buffer.writeln('=' * 50);
     buffer.writeln();
-    
+
     for (final message in _messages) {
       final timestamp = message.timestamp.toString().substring(0, 19);
       final sender = message.isUser ? 'You' : 'AI Assistant';
@@ -411,7 +413,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       buffer.writeln(message.text);
       buffer.writeln();
     }
-    
+
     return buffer.toString();
   }
 
@@ -428,22 +430,22 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       });
       return;
     }
-    
+
     try {
       final response = await AIChatService.getConversationHistory(
         userId: widget.userId.toString(),
         conversationId: _conversationId.isNotEmpty ? _conversationId : null,
         limit: 20,
       );
-      
+
       if (mounted) {
         setState(() {
           // Clear existing messages and replace with fresh history
           _messages.clear();
-          
+
           // Extract messages from response
           final history = response['messages'] as List<dynamic>? ?? [];
-          
+
           if (history.isEmpty) {
             _messages.add(ChatMessage(
               text: '📭 No conversation history found',
@@ -454,24 +456,25 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             for (final messageData in history) {
               // Skip system messages for security
               if (messageData['messageType'] == 'SYSTEM') continue;
-              
+
               final message = ChatMessage(
                 text: messageData['content'] ?? '',
                 isUser: messageData['messageType'] == 'USER',
-                timestamp: DateTime.tryParse(messageData['createdAt'] ?? '') ?? DateTime.now(),
+                timestamp: DateTime.tryParse(messageData['createdAt'] ?? '') ??
+                    DateTime.now(),
               );
               _messages.add(message);
             }
           }
-          
+
           // Update conversationId if provided
           if (response['conversationId'] != null && _conversationId.isEmpty) {
             _conversationId = response['conversationId'];
           }
-          
+
           _isLoadingHistory = false;
         });
-        
+
         // Scroll to bottom after loading
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       }
@@ -619,35 +622,38 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     if (_controller.text.trim().isEmpty && _uploadedFiles.isEmpty) return;
     final userMessage = _controller.text.trim();
     _controller.clear();
-    
+
     // Reset inactivity timer on user activity
     _resetInactivityTimer();
-    
+
     setState(() {
       // Add user message (either text or file upload indication)
-      String displayMessage = userMessage.isNotEmpty 
-          ? userMessage 
+      String displayMessage = userMessage.isNotEmpty
+          ? userMessage
           : '📎 Uploaded ${_uploadedFiles.length} file${_uploadedFiles.length > 1 ? 's' : ''}';
-      
+
       _messages.add(
-        ChatMessage(text: displayMessage, isUser: true, timestamp: DateTime.now()),
+        ChatMessage(
+            text: displayMessage, isUser: true, timestamp: DateTime.now()),
       );
-      
+
       // Add file processing message if files are uploaded
       if (_uploadedFiles.isNotEmpty) {
         _messages.add(
           ChatMessage(
-            text: '📎 Analyzing ${_uploadedFiles.length} uploaded file${_uploadedFiles.length > 1 ? 's' : ''}...',
+            text:
+                '📎 Analyzing ${_uploadedFiles.length} uploaded file${_uploadedFiles.length > 1 ? 's' : ''}...',
             isUser: false,
             timestamp: DateTime.now(),
           ),
         );
       }
-      
+
       _isLoading = true;
-      _manuallyCleared = false; // Reset manual clear flag when user starts new conversation
+      _manuallyCleared =
+          false; // Reset manual clear flag when user starts new conversation
     });
-    
+
     // Clear the persistent cleared state when starting new conversation
     if (widget.userId != null) {
       try {
@@ -660,9 +666,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     try {
-      final userProvider = mounted
-          ? Provider.of<UserProvider>(context, listen: false)
-          : null;
+      final userProvider =
+          mounted ? Provider.of<UserProvider>(context, listen: false) : null;
 
       // Better userId validation - avoid defaulting to 1
       final currentUserId = widget.userId ?? userProvider?.user?.id;
@@ -670,7 +675,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         setState(() {
           _isLoading = false;
           _messages.add(ChatMessage(
-            text: 'Authentication error: Please log in to use the chat feature.',
+            text:
+                'Authentication error: Please log in to use the chat feature.',
             isUser: false,
             timestamp: DateTime.now(),
             errorMessage: 'User ID not found',
@@ -692,9 +698,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               fileBytes = File(file.path!).readAsBytesSync();
             } catch (_) {}
           }
-          String? base64Content = fileBytes != null
-              ? base64Encode(fileBytes)
-              : null;
+          String? base64Content =
+              fileBytes != null ? base64Encode(fileBytes) : null;
           String contentType = _guessMimeType(file.name);
           return {
             'filename': file.name,
@@ -705,38 +710,72 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       }
 
       // Only these fields are dynamic for the request
-      final response = await AIChatService.sendMessage(
-        message: userMessage.isNotEmpty ? userMessage : 'Please analyze the uploaded files',
-        patientId: currentPatientId, // Pass only if explicitly provided
-        userId: currentUserId,
-        conversationId: _conversationId.isNotEmpty ? _conversationId : null,
-        uploadedFiles: uploadedFilesJson,
-        // Include all medical context data
-        includeVitals: true,
-        includeMedications: true,
-        includeNotes: true,
-        includeMoodPainLogs: true,
-        includeAllergies: true,
-      );
+      final useGroundedAsk = currentPatientId != null && _uploadedFiles.isEmpty;
+      final AiAskResult? askResult = useGroundedAsk
+          ? await AIChatService.askRecords(
+              query: userMessage,
+              patientId: currentPatientId,
+            )
+          : null;
+      final Map<String, dynamic>? response = useGroundedAsk
+          ? null
+          : await AIChatService.sendMessage(
+              message: userMessage.isNotEmpty
+                  ? userMessage
+                  : 'Please analyze the uploaded files',
+              patientId: currentPatientId,
+              userId: currentUserId,
+              conversationId:
+                  _conversationId.isNotEmpty ? _conversationId : null,
+              uploadedFiles: uploadedFilesJson,
+              includeVitals: true,
+              includeMedications: true,
+              includeNotes: true,
+              includeMoodPainLogs: true,
+              includeAllergies: true,
+            );
       // Better error handling - show actual error messages instead of generic "No response"
       String aiText;
       String? errorMsg;
+      List<AiAskCitation> citations = const [];
 
-      if (response['success'] == false) {
+      if (askResult != null) {
+        citations = askResult.citations;
+        switch (askResult.deliveryStatus) {
+          case AiAskDeliveryStatus.delivered:
+            aiText = askResult.answer?.trim().isNotEmpty == true
+                ? askResult.answer!
+                : 'Ask AI returned no answer.';
+          case AiAskDeliveryStatus.noRecords:
+            aiText = askResult.message ??
+                'No matching records were found for this question.';
+          case AiAskDeliveryStatus.withheld:
+            errorMsg = askResult.error?.code ?? 'WITHHELD';
+            aiText = askResult.error?.message ??
+                askResult.message ??
+                'Ask AI could not safely answer this question.';
+        }
+      } else if (response!['success'] == false) {
         // If backend explicitly failed, show the error message
-        errorMsg = response['errorMessage'] ?? response['error'] ?? 'Unknown error occurred';
-        aiText = response['response'] ?? response['aiResponse'] ?? 'Sorry, I encountered an error. Please try again.';
+        errorMsg = response['errorMessage'] ??
+            response['error'] ??
+            'Unknown error occurred';
+        aiText = response['response'] ??
+            response['aiResponse'] ??
+            'Sorry, I encountered an error. Please try again.';
       } else {
         // Success case - get AI response or provide helpful fallback
         aiText = (response['aiResponse'] ?? '').toString();
         if (aiText.trim().isEmpty) {
-          aiText = 'I apologize, but I was unable to generate a response. Please try rephrasing your question or check your connection.';
+          aiText =
+              'I apologize, but I was unable to generate a response. Please try rephrasing your question or check your connection.';
           errorMsg = 'Empty response received from AI service';
         }
       }
       // Update conversationId for next request
       bool isNewConversation = false;
-      if (response['conversationId'] != null &&
+      if (response != null &&
+          response['conversationId'] != null &&
           response['conversationId'] is String) {
         if (_conversationId.isEmpty) {
           isNewConversation = true;
@@ -750,6 +789,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             isUser: false,
             timestamp: DateTime.now(),
             errorMessage: errorMsg,
+            citations: citations,
           ),
         );
         _isLoading = false;
@@ -757,7 +797,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         _uploadedFiles.clear();
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-      
+
       // If this was a new conversation, load any existing history
       if (isNewConversation) {
         await _loadConversationHistory();
@@ -931,7 +971,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+                  Icon(Icons.info_outline,
+                      size: 16, color: Colors.blue.shade700),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -988,6 +1029,33 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                 color: colorScheme.error,
                               ),
                             ),
+                          if (msg.citations.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            ...msg.citations.map(
+                              (citation) => Semantics(
+                                label:
+                                    'Citation ${citation.citationId}: ${citation.excerpt}',
+                                child: Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${citation.citationId}'
+                                    '${citation.title == null ? '' : ' — ${citation.title}'}\n'
+                                    '${citation.excerpt}',
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                           Text(
                             _formatTimestamp(msg.timestamp),
                             style: theme.textTheme.labelSmall?.copyWith(
@@ -1031,7 +1099,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                 height: 12,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      colorScheme.primary),
                                 ),
                               ),
                               const SizedBox(width: 4),

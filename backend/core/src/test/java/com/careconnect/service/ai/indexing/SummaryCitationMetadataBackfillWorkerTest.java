@@ -49,7 +49,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 any(),
                 any())).thenReturn(List.of(
                         candidate(42L, "not-a-number"),
-                        candidate(42L, "42")));
+                        candidate(42L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.CURRENT);
 
@@ -59,7 +59,6 @@ class SummaryCitationMetadataBackfillWorkerTest {
         verify(chunkRepository).markSummaryCitationReplayFailure(
                 org.mockito.ArgumentMatchers.eq(42L),
                 org.mockito.ArgumentMatchers.eq("not-a-number"),
-                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
                 any(),
                 any());
     }
@@ -72,7 +71,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(2),
                 any(),
                 any())).thenReturn(List.of(
-                        candidate(42L, "41"),
+                        candidate(42L, "call-summary:41"),
                         candidate(42L, "call-summary:42")));
         when(retrievalIndexService.replaySummaryCitationMetadata(41L, 42L))
                 .thenThrow(new IllegalStateException("failed"));
@@ -86,8 +85,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
         order.verify(retrievalIndexService).replaySummaryCitationMetadata(42L, 42L);
         verify(chunkRepository).markSummaryCitationReplayFailure(
                 org.mockito.ArgumentMatchers.eq(42L),
-                org.mockito.ArgumentMatchers.eq("41"),
-                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
+                org.mockito.ArgumentMatchers.eq("call-summary:41"),
                 any(),
                 any());
     }
@@ -99,7 +97,9 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(SummaryChunker.CITATION_METADATA_VERSION),
                 eq(2),
                 any(),
-                any())).thenReturn(List.of(candidate(42L, "42")), List.of());
+                any()))
+                .thenReturn(List.of(candidate(42L, "call-summary:42")))
+                .thenReturn(List.of());
         when(retrievalIndexService.replaySummaryCitationMetadata(42L, 42L))
                 .thenReturn(SummaryCitationReplayOutcome.UPDATED);
 
@@ -107,6 +107,8 @@ class SummaryCitationMetadataBackfillWorkerTest {
         worker.pollAndBackfill();
 
         verify(retrievalIndexService).replaySummaryCitationMetadata(42L, 42L);
+        verify(chunkRepository).releaseSummaryCitationReplayClaim(
+                42L, "call-summary:42", CLAIM_TOKEN);
         verify(retrievalIndexService, never()).replaySummaryCitationMetadata(43L, 42L);
     }
 
@@ -126,7 +128,6 @@ class SummaryCitationMetadataBackfillWorkerTest {
         verify(chunkRepository).markSummaryCitationReplayFailure(
                 org.mockito.ArgumentMatchers.eq(42L),
                 org.mockito.ArgumentMatchers.eq("call-summary:42"),
-                org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
                 any(),
                 any());
     }
@@ -151,7 +152,7 @@ class SummaryCitationMetadataBackfillWorkerTest {
     }
 
     @Test
-    void pollAndBackfill_untypedNumericSourceIsQuarantinedWithoutReplay() {
+    void pollAndBackfill_unexpectedUntypedSourceIsFencedAndQuarantined() {
         when(chunkRepository.claimStaleSummaryCitationSources(
                 org.mockito.ArgumentMatchers.eq(RetrievalRecordType.summaryTypeNames()),
                 org.mockito.ArgumentMatchers.eq(SummaryChunker.CITATION_METADATA_VERSION),
@@ -163,6 +164,8 @@ class SummaryCitationMetadataBackfillWorkerTest {
 
         verify(chunkRepository).quarantineSummarySource(
                 42L, "77", RetrievalRecordType.summaryTypeNames(), CLAIM_TOKEN);
+        verify(chunkRepository, never()).markSummaryCitationReplayFailure(
+                eq(42L), eq("77"), any(), eq(CLAIM_TOKEN));
         verify(retrievalIndexService, never()).replaySummaryCitationMetadata(any(), any());
     }
 

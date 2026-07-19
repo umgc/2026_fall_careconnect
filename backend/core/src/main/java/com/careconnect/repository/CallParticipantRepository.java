@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface CallParticipantRepository extends JpaRepository<CallParticipant, Long> {
     Optional<CallParticipant> findByCallSessionIdAndUserId(Long callSessionId, Long userId);
@@ -26,4 +27,58 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
             @Param("userId") Long userId,
             @Param("invitedByUserId") Long invitedByUserId,
             @Param("status") String status);
+
+    long countByCallSessionIdAndStatus(Long callSessionId, String status);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            UPDATE CallParticipant p
+               SET p.status = :joined, p.joinedAt = COALESCE(p.joinedAt, CURRENT_TIMESTAMP),
+                   p.leftAt = NULL
+             WHERE p.callSessionId = :sessionId AND p.userId = :userId
+               AND p.status IN (:invited, :joined)
+            """)
+    int markJoinedIfInvited(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("invited") String invited,
+            @Param("joined") String joined);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            UPDATE CallParticipant p SET p.status = :left, p.leftAt = CURRENT_TIMESTAMP
+             WHERE p.callSessionId = :sessionId AND p.userId = :userId
+               AND p.status = :joined
+            """)
+    int markLeftIfJoined(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("joined") String joined,
+            @Param("left") String left);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            UPDATE CallParticipant p SET p.status = :expired, p.leftAt = CURRENT_TIMESTAMP
+             WHERE p.callSessionId = :sessionId AND p.status = :joined
+            """)
+    int expireJoinedParticipants(
+            @Param("sessionId") Long sessionId,
+            @Param("joined") String joined,
+            @Param("expired") String expired);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            UPDATE CallParticipant p SET p.status = :declined, p.leftAt = CURRENT_TIMESTAMP
+             WHERE p.callSessionId = :sessionId AND p.userId = :userId
+               AND p.status = :invited
+            """)
+    int declineIfInvited(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("invited") String invited,
+            @Param("declined") String declined);
 }

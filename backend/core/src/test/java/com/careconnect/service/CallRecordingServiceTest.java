@@ -448,6 +448,26 @@ class CallRecordingServiceTest {
         }
 
         @Test
+        @DisplayName("system transcription capture never returns a playback URL")
+        void generatePlaybackUrl_systemCapture_suppressesPlayback() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setInitiatedByUserId(null);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            rec.setConcatenationStatus("READY");
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.generatePlaybackUrl(CALL_ID);
+
+            assertThat(result)
+                    .containsEntry("status", "TRANSCRIPTION_ONLY")
+                    .containsEntry("playbackReady", false)
+                    .doesNotContainKey("playbackUrl");
+            verify(s3Presigner, never()).presignGetObject(any(GetObjectPresignRequest.class));
+        }
+
+        @Test
         @DisplayName("SENT-CLIP-002 returns presigned URL with recordingStartedAt when video is available")
         void generatePlaybackUrl_withRecording_returnsUrl() throws Exception {
             String stitchedKey = S3_PREFIX + "concatenated/composited-video/concat-pipe-001.mp4";

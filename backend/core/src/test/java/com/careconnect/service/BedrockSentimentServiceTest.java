@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -1405,19 +1406,17 @@ class BedrockSentimentServiceTest {
         }
 
         @Test
-        @DisplayName("Bedrock throws → fallback with sentiment context (fault injection)")
-        void summarizeTranscript_bedrockThrows_fallsBackWithSentimentContext() {
+        @DisplayName("Bedrock throws → classified model inference failure")
+        void summarizeTranscript_bedrockThrows_isModelInferenceFailure() {
             service = awsBackedServiceThrowing(new RuntimeException("Bedrock 503"));
 
-            Map<String, Object> result = service.summarizeTranscript(
-                    CALL_ID,
-                    "Transcript available.",
-                    calmChannelResults());
-
-            assertThat(result).containsEntry("headline", "Call Summary");
-            assertThat(asList(result.get("keyConcerns")))
-                    .as("exception fallback should propagate COMBINED sentiment")
-                    .contains("Overall sentiment: CALM");
+            assertThatThrownBy(() -> service.summarizeTranscript(
+                            CALL_ID,
+                            "Transcript available.",
+                            calmChannelResults()))
+                    .isInstanceOf(ModelInferenceException.class)
+                    .hasMessageContaining("Bedrock transcript summary failed")
+                    .hasRootCauseMessage("Bedrock 503");
         }
 
         @Test

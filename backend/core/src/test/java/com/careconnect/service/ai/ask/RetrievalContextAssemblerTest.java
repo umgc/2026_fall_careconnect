@@ -35,7 +35,7 @@ class RetrievalContextAssemblerTest {
 
         assertThat(ctx.citationRefMap()).containsKey("C1");
         assertThat(ctx.usedChunks()).hasSize(1);
-        assertThat(ctx.promptExcerptMap()).containsEntry("C1", "Started metformin");
+        assertThat(ctx.promptExcerptMap().get("C1").text()).isEqualTo("Started metformin");
         assertThat(ctx.systemPrompt()).contains("JSON only");
         assertThat(ctx.systemPrompt()).contains("entire user message is one JSON data document");
         assertThat(ctx.userPrompt()).contains("\"ref\":\"C1\"");
@@ -111,8 +111,40 @@ class RetrievalContextAssemblerTest {
         final RetrievalContextAssembler.GroundedContext ctx =
                 RetrievalContextAssembler.assemble("Question", List.of(chunk), 2, 8_000);
 
-        assertThat(ctx.promptExcerptMap().get("C1")).isEqualTo("😀…");
-        assertThat(ctx.promptExcerptMap().get("C1").codePointCount(
-                0, ctx.promptExcerptMap().get("C1").length())).isEqualTo(2);
+        assertThat(ctx.promptExcerptMap().get("C1").text()).isEqualTo("😀😀");
+        assertThat(ctx.promptExcerptMap().get("C1").endTruncated()).isTrue();
+    }
+
+    @Test
+    void assemble_prefersWholeQueryCenteredSentenceAndCarriesBoundaryMetadata() {
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "Unrelated opening. The patient started metformin 500 mg twice daily. "
+                        + "Unrelated closing.",
+                null, "auto", 0.1d, 1, 1, "C1");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble("metformin dose", List.of(chunk), 55, 8_000);
+
+        assertThat(ctx.promptExcerptMap().get("C1").text())
+                .isEqualTo("The patient started metformin 500 mg twice daily.");
+        assertThat(ctx.promptExcerptMap().get("C1").truncated()).isTrue();
+        assertThat(ctx.promptExcerptMap().get("C1").startTruncated()).isFalse();
+        assertThat(ctx.promptExcerptMap().get("C1").endTruncated()).isFalse();
+        assertThat(ctx.userPrompt()).contains("\"truncated\":true");
+    }
+
+    @Test
+    void assemble_neverLetsFirstRecordExceedSerializedBudget() {
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "\"".repeat(2_000), null, "auto", 0.1d, 1, 1, "C1");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble("question", List.of(chunk), 600, 180);
+
+        assertThat(ctx.usedChunks()).isEmpty();
+        assertThat(ctx.userPrompt().codePointCount(0, ctx.userPrompt().length()))
+                .isLessThanOrEqualTo(180);
     }
 }

@@ -128,12 +128,19 @@ public class CallSummaryService {
     final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
     final CallTranscriptService.TranscriptSnapshot snapshot =
         transcriptService.captureSummarySnapshot(normalizedCallId);
+    final String modelConfigVersion = sentimentService.summaryModelConfigVersion();
+    final Optional<CallSummary> existing =
+        summaryRepository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+            normalizedCallId, snapshot.version(), modelConfigVersion);
+    if (existing.isPresent()) {
+      return toResponse(existing.get());
+    }
     final String transcript = snapshot.transcriptText();
     Map<String, Object> response = Map.of();
 
     if (transcript.isBlank()) {
       response = buildNoTranscriptResponse(
-          normalizedCallId, patientId, generatedByUserId, snapshot);
+          normalizedCallId, patientId, generatedByUserId, snapshot, modelConfigVersion);
     } else {
       final Map<String, BedrockSentimentService.SentimentResult> channelScores =
           toChannelScores(normalizedCallId, latestByChannel);
@@ -143,6 +150,7 @@ public class CallSummaryService {
           transcript,
           generatedByUserId,
           snapshot,
+          modelConfigVersion,
           channelScores);
     }
     return response;
@@ -152,13 +160,16 @@ public class CallSummaryService {
       final String normalizedCallId,
       final Long patientId,
       final Long generatedByUserId,
-      final CallTranscriptService.TranscriptSnapshot snapshot) {
+      final CallTranscriptService.TranscriptSnapshot snapshot,
+      final String modelConfigVersion) {
     final CallSummary summary = new CallSummary();
     summary.setCallId(normalizedCallId);
     summary.setPatientId(patientId);
     summary.setStatus("NO_TRANSCRIPT");
     summary.setTranscriptSegmentCount(Math.toIntExact(snapshot.segmentCount()));
     summary.setGeneratedByUserId(generatedByUserId);
+    summary.setTranscriptSnapshotVersion(snapshot.version());
+    summary.setModelConfigVersion(modelConfigVersion);
     summary.setErrorMessage("No transcript segments were available.");
     // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
     summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
@@ -175,21 +186,13 @@ public class CallSummaryService {
       final String transcript,
       final Long generatedByUserId,
       final CallTranscriptService.TranscriptSnapshot snapshot,
+      final String modelConfigVersion,
       final Map<String, BedrockSentimentService.SentimentResult> channelScores) {
-    Map<String, Object> response = Map.of();
+    final Map<String, Object> summaryPayload;
     try {
-      final Map<String, Object> summaryPayload =
+      summaryPayload =
           sentimentService.summarizeTranscript(normalizedCallId, transcript, channelScores);
-      final CallSummary stored = buildStoredSummary(
-          normalizedCallId,
-          patientId,
-          generatedByUserId,
-          snapshot.segmentCount(),
-          "SUCCESS",
-          null,
-          withSnapshotVersion(summaryPayload, snapshot.version()));
-      response = persistResponse(normalizedCallId, stored);
-    } catch (Exception ex) {
+    } catch (ModelInferenceException ex) {
       logSummaryFailure(normalizedCallId, ex);
       final CallSummary failed = buildStoredSummary(
           normalizedCallId,
@@ -201,9 +204,23 @@ public class CallSummaryService {
           withSnapshotVersion(
               emptySummaryPayload(FAILED_SUMMARY_HEADLINE, FAILED_SUMMARY_ASSESSMENT),
               snapshot.version()));
-      response = persistResponse(normalizedCallId, failed);
+      failed.setTranscriptSnapshotVersion(snapshot.version());
+      failed.setModelConfigVersion(modelConfigVersion);
+      failed.setSummarizationEngine(sentimentService.summaryEngine());
+      return persistResponse(normalizedCallId, failed);
     }
-    return response;
+    final CallSummary stored = buildStoredSummary(
+        normalizedCallId,
+        patientId,
+        generatedByUserId,
+        snapshot.segmentCount(),
+        "SUCCESS",
+        null,
+        withSnapshotVersion(summaryPayload, snapshot.version()));
+    stored.setTranscriptSnapshotVersion(snapshot.version());
+    stored.setModelConfigVersion(modelConfigVersion);
+    stored.setSummarizationEngine(sentimentService.summaryEngine());
+    return persistResponse(normalizedCallId, stored);
   }
 
   private CallSummary buildStoredSummary(
@@ -225,7 +242,6 @@ public class CallSummaryService {
     summary.setErrorMessage(errorMessage);
     summary.setRiskLevel(extractStringField(summaryPayload, "riskLevel"));
     summary.setCaregiverVisibility(extractCaregiverVisibility(summaryPayload));
-    summary.setSummarizationEngine(extractStringField(summaryPayload, "summarizationEngine"));
     summary.setSummaryJson(toJsonSafe(summaryPayload));
     return summary;
   }
@@ -379,13 +395,11 @@ public class CallSummaryService {
   }
 
   private String toJsonSafe(final Object value) {
-    String json = "{}";
     try {
-      json = objectMapper.writeValueAsString(value);
+      return objectMapper.writeValueAsString(value);
     } catch (Exception ex) {
-      json = "{}";
+      throw new IllegalStateException("Failed to serialize call summary payload", ex);
     }
-    return json;
   }
 
   private static String normalize(final String callId) {

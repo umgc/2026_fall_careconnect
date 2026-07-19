@@ -19,34 +19,52 @@ ALTER TABLE retrieval_index_chunk
     ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE';
 
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint
-                   WHERE conname = 'fk_retrieval_chunk_patient' AND contype = 'f') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint c
+                   JOIN pg_class t ON t.oid = c.conrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND c.conname = 'fk_retrieval_chunk_patient' AND c.contype = 'f') THEN
         ALTER TABLE retrieval_index_chunk
             ADD CONSTRAINT fk_retrieval_chunk_patient
             FOREIGN KEY (patient_id) REFERENCES patient(id);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint
-                   WHERE conname = 'fk_call_sessions_patient' AND contype = 'f') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint c
+                   JOIN pg_class t ON t.oid = c.conrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND c.conname = 'fk_call_sessions_patient' AND c.contype = 'f') THEN
         ALTER TABLE call_sessions ADD CONSTRAINT fk_call_sessions_patient
             FOREIGN KEY (patient_id) REFERENCES patient(id);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint
-                   WHERE conname = 'fk_call_sessions_created_by' AND contype = 'f') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint c
+                   JOIN pg_class t ON t.oid = c.conrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND c.conname = 'fk_call_sessions_created_by' AND c.contype = 'f') THEN
         ALTER TABLE call_sessions ADD CONSTRAINT fk_call_sessions_created_by
             FOREIGN KEY (created_by_user_id) REFERENCES users(id);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint
-                   WHERE conname = 'fk_call_participants_session' AND contype = 'f') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint c
+                   JOIN pg_class t ON t.oid = c.conrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND c.conname = 'fk_call_participants_session' AND c.contype = 'f') THEN
         ALTER TABLE call_participants ADD CONSTRAINT fk_call_participants_session
             FOREIGN KEY (call_session_id) REFERENCES call_sessions(id) ON DELETE CASCADE;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint
-                   WHERE conname = 'fk_call_participants_user' AND contype = 'f') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint c
+                   JOIN pg_class t ON t.oid = c.conrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND c.conname = 'fk_call_participants_user' AND c.contype = 'f') THEN
         ALTER TABLE call_participants ADD CONSTRAINT fk_call_participants_user
             FOREIGN KEY (user_id) REFERENCES users(id);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint
-                   WHERE conname = 'fk_call_participants_invited_by' AND contype = 'f') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint c
+                   JOIN pg_class t ON t.oid = c.conrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                   WHERE n.nspname = current_schema()
+                     AND c.conname = 'fk_call_participants_invited_by' AND c.contype = 'f') THEN
         ALTER TABLE call_participants ADD CONSTRAINT fk_call_participants_invited_by
             FOREIGN KEY (invited_by_user_id) REFERENCES users(id);
     END IF;

@@ -416,8 +416,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining(
-            'not a substitute for professional medical advice'),
+        find.textContaining('not a substitute for professional medical advice'),
         findsOneWidget,
       );
     });
@@ -433,8 +432,7 @@ void main() {
       expect(find.text('No conversation to download'), findsOneWidget);
     });
 
-    testWidgets(
-        'download transcript shows dialog when messages exist',
+    testWidgets('download transcript shows dialog when messages exist',
         (tester) async {
       suppressOverflow();
       // Use userId=1; the history load will fail and add an error message,
@@ -509,15 +507,15 @@ void main() {
 
       expect(find.text('Share with Provider'), findsOneWidget);
       expect(
-        find.textContaining('share your conversation with your healthcare provider'),
+        find.textContaining(
+            'share your conversation with your healthcare provider'),
         findsOneWidget,
       );
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Share'), findsOneWidget);
     });
 
-    testWidgets('share with provider cancel dismisses dialog',
-        (tester) async {
+    testWidgets('share with provider cancel dismisses dialog', (tester) async {
       suppressOverflow();
       await tester.pumpWidget(buildWidget(userId: 1));
       await tester.pump();
@@ -536,8 +534,7 @@ void main() {
       expect(find.text('Share with Provider'), findsNothing);
     });
 
-    testWidgets('share with provider confirm shows snackbar',
-        (tester) async {
+    testWidgets('share with provider confirm shows snackbar', (tester) async {
       suppressOverflow();
       await tester.pumpWidget(buildWidget(userId: 1));
       await tester.pump();
@@ -792,8 +789,7 @@ void main() {
     });
 
     // === SHARED PREFERENCES ===
-    testWidgets(
-        'chat cleared flag in SharedPreferences starts empty chat',
+    testWidgets('chat cleared flag in SharedPreferences starts empty chat',
         (tester) async {
       SharedPreferences.setMockInitialValues({'chat_cleared_1': true});
       await tester.pumpWidget(buildWidget(userId: 1));
@@ -802,8 +798,8 @@ void main() {
       expect(find.text('AI Chat'), findsOneWidget);
     });
 
-    testWidgets(
-        'chat cleared flag false loads history normally', (tester) async {
+    testWidgets('chat cleared flag false loads history normally',
+        (tester) async {
       SharedPreferences.setMockInitialValues({'chat_cleared_1': false});
       await tester.pumpWidget(buildWidget(userId: 1));
       await tester.pump();
@@ -860,8 +856,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.descendant(
-            of: find.byType(AIChat), matching: find.byType(Column)),
+        find.descendant(of: find.byType(AIChat), matching: find.byType(Column)),
         findsWidgets,
       );
     });
@@ -992,6 +987,47 @@ void main() {
       }, () => mockClient);
     });
 
+    testWidgets('patient Ask AI renders delivered citation contract',
+        (tester) async {
+      suppressOverflow();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body.containsKey('userId'), isFalse);
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'answer': {'text': 'Metformin was started.'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'title': 'Call summary',
+                  'excerpt': 'Metformin was started.',
+                  'deepLink': null,
+                }
+              ],
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(userId: 1, patientId: 42));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'What changed?');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+
+        expect(find.text('Metformin was started.'), findsWidgets);
+        expect(find.textContaining('C1 — Call summary'), findsOneWidget);
+      }, () => mockClient);
+    });
+
     testWidgets('sendMessage with failed API response shows error',
         (tester) async {
       suppressOverflow();
@@ -1045,8 +1081,7 @@ void main() {
     });
 
     // === CONVERSATION HISTORY ===
-    testWidgets('conversation history loads messages from API',
-        (tester) async {
+    testWidgets('conversation history loads messages from API', (tester) async {
       suppressOverflow();
       final mockClient = MockClient((request) async {
         if (request.url.path.contains('/history')) {
@@ -1083,8 +1118,7 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('conversation history skips SYSTEM messages',
-        (tester) async {
+    testWidgets('conversation history skips SYSTEM messages', (tester) async {
       suppressOverflow();
       final mockClient = MockClient((request) async {
         if (request.url.path.contains('/history')) {
@@ -1144,7 +1178,8 @@ void main() {
         await tester.pump(const Duration(seconds: 1));
 
         // Should show the "no history" message with emoji
-        expect(find.textContaining('No conversation history found'), findsOneWidget);
+        expect(find.textContaining('No conversation history found'),
+            findsOneWidget);
       }, () => mockClient);
     });
 

@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.UUID;
 
@@ -43,6 +44,16 @@ public class AiAskExceptionAdvice {
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<AiAskResponse> handleUnauthorized(
             final UnauthorizedException exception) {
+        return withheld(
+                HttpStatus.UNAUTHORIZED,
+                null,
+                "UNAUTHORIZED",
+                "Authentication is required for Ask AI");
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<AiAskResponse> handleForbidden(
+            final AccessDeniedException exception) {
         return withheld(
                 HttpStatus.FORBIDDEN,
                 null,
