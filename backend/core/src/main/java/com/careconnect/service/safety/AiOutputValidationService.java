@@ -14,6 +14,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,11 +46,20 @@ public class AiOutputValidationService {
 
     /** High-risk directive phrases that must not reach a patient without review. */
     private static final List<Pattern> HIGH_RISK_DIRECTIVES = List.of(
-            Pattern.compile("(?i)\\bstop taking (your|the|all)\\b.{0,20}\\b(medication|medicine|meds|prescription|pills?)\\b"),
-            Pattern.compile("(?i)\\b(double|triple|increase|decrease|reduce|halve) (your|the)\\b.{0,15}\\b(dose|dosage)\\b"),
-            Pattern.compile("(?i)\\b(don'?t|do not|no need to) (see|consult|contact|call|visit)\\b.{0,25}\\b(doctor|physician|provider|nurse|hospital|emergency)\\b"),
-            Pattern.compile("(?i)\\byou (definitely |certainly )?(have|are diagnosed with)\\b.{0,40}\\b(cancer|tumou?r|diabetes|disease|disorder|syndrome)\\b")
+            Pattern.compile("(?i)\\b(stop|quit|cease|discontinue|skip|halt)\\b.{0,20}\\b(medication|medicine|meds|prescription|pills?|insulin|dose|dosage|therapy|treatment)\\b"),
+            Pattern.compile("(?i)\\b(double|triple|increase|decrease|reduce|lower|raise|halve|adjust|change)\\b.{0,15}\\b(dose|dosage|insulin|medication|meds)\\b"),
+            Pattern.compile("(?i)\\b(don'?t|do not|no need to|avoid|skip)\\b.{0,25}\\b(see|consult|contact|call|visit|go to)\\b.{0,20}\\b(doctor|physician|provider|nurse|hospital|emergency|er|urgent care)\\b"),
+            Pattern.compile("(?i)\\byou (definitely |certainly |probably )?(have|are diagnosed with)\\b.{0,40}\\b(cancer|tumou?r|diabetes|disease|disorder|syndrome|infection)\\b")
     );
+
+    /** Upper bound on the secondary AI review call so a hung judge cannot stall delivery. */
+    static final long JUDGE_TIMEOUT_SECONDS = 8;
+
+    private final ExecutorService judgeExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "ai-output-judge");
+        t.setDaemon(true);
+        return t;
+    });
 
     private static final Pattern JUDGE_VERDICT = Pattern.compile("(?i)VERDICT\\s*:\\s*(PASS|HOLD|REJECT)");
     private static final Pattern JUDGE_REASON = Pattern.compile("(?i)REASON\\s*:\\s*(.+)");
@@ -105,13 +119,23 @@ public class AiOutputValidationService {
     }
 
     private ValidationResult judge(String userQuery, String output) {
-        try {
-            ChatRequest req = new ChatRequest();
-            req.setUserId(0L);
-            req.setMessage(buildJudgePrompt(userQuery, output));
+        // The judge invokes the model provider directly (aiServiceFactory.getService()),
+        // not the chat adapter, so the validation pass is never re-entered — no recursion.
+        ChatRequest req = new ChatRequest();
+        req.setUserId(0L);
+        req.setMessage(buildJudgePrompt(userQuery, output));
+        Future<String> future = judgeExecutor.submit(() -> {
             ChatResponse resp = aiServiceFactory.getService().processChat(req);
-            return parseVerdict(resp == null ? null : resp.getAiResponse());
+            return resp == null ? null : resp.getAiResponse();
+        });
+        try {
+            return parseVerdict(future.get(JUDGE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            log.warn("Secondary AI review timed out after {}s; holding output", JUDGE_TIMEOUT_SECONDS);
+            return new ValidationResult(ValidationOutcome.HOLD, "judge timeout");
         } catch (Exception e) {
+            future.cancel(true);
             log.warn("Secondary AI review unavailable; holding output: {}", e.getMessage());
             return new ValidationResult(ValidationOutcome.HOLD, "judge unavailable");
         }

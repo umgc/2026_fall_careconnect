@@ -82,6 +82,23 @@ class AiOutputValidationServiceTest {
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.HOLD);
     }
 
+    @Test
+    void expandedDirectivePhrases_areHeld_withoutJudge() {
+        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        for (String bad : java.util.List.of(
+                "You can just quit your meds.",
+                "Go ahead and discontinue therapy.",
+                "You can stop the insulin.",
+                "Feel free to skip your dose.",
+                "You should increase your insulin.",
+                "There is no need to call your doctor.")) {
+            ValidationResult r = validate(bad);
+            assertThat(r.outcome()).as(bad).isEqualTo(ValidationOutcome.HOLD);
+            assertThat(r.reason()).as(bad).contains("directive");
+        }
+        verify(aiServiceFactory, never()).getService();
+    }
+
     // ── Judge stage (second AI review) ────────────────────────────────────────
 
     @Test

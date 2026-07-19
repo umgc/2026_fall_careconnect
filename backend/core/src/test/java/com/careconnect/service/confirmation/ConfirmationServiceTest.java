@@ -6,7 +6,9 @@ import com.careconnect.exception.AppException;
 import com.careconnect.model.confirmation.ConfirmationItem;
 import com.careconnect.model.confirmation.ConfirmationSourceType;
 import com.careconnect.model.confirmation.ConfirmationStatus;
+import com.careconnect.model.safety.AuditSourceFeature;
 import com.careconnect.repository.confirmation.ConfirmationItemRepository;
+import com.careconnect.service.safety.AiAuditLedgerService;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +26,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +34,9 @@ class ConfirmationServiceTest {
 
     @Mock
     private ConfirmationItemRepository repository;
+
+    @Mock
+    private AiAuditLedgerService auditLedgerService;
 
     @InjectMocks
     private ConfirmationService service;
@@ -173,6 +178,18 @@ class ConfirmationServiceTest {
             assertThat(result.getResolvedBy()).isEqualTo(RESOLVER_ID);
             assertThat(result.getResolutionNote()).isEqualTo(NOTE);
             assertThat(result.getResolvedAt()).isNotNull();
+        }
+
+        @Test
+        void writesConfirmationAuditEvent() {
+            ConfirmationItem item = buildPendingItem(1L);
+            when(repository.findById(1L)).thenReturn(Optional.of(item));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.confirm(1L, RESOLVER_ID, NOTE);
+
+            verify(auditLedgerService).logConfirmation(
+                    eq(AuditSourceFeature.SUMMARY), eq(RESOLVER_ID), isNull(), eq(REFERENCE_ID), any());
         }
 
         @Test
