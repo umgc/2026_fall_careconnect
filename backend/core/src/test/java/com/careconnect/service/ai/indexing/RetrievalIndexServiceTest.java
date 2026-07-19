@@ -35,6 +35,7 @@ import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -680,17 +681,20 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
-    @DisplayName("metadata replay returns NO_DRAFTS for blank authoritative summary")
-    void replaySummaryCitationMetadata_blankSummary_returnsNoDrafts() {
+    @DisplayName("metadata replay returns RETRYABLE for blank authoritative summary")
+    void replaySummaryCitationMetadata_blankSummary_returnsRetryable() {
         final CallSummary summary = new CallSummary();
         summary.setId(99L);
         summary.setPatientId(42L);
         summary.setStatus("SUCCESS");
         summary.setSummaryJson(" ");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
 
-        assertThat(service.replaySummaryCitationMetadata(99L, 42L))
-                .isEqualTo(SummaryCitationReplayOutcome.NO_DRAFTS);
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.RETRYABLE);
 
         verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
                 any(), any(), any(), any(), anyCollection());
@@ -704,25 +708,63 @@ class RetrievalIndexServiceTest {
         summary.setPatientId(42L);
         summary.setStatus("SUCCESS");
         summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(43L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
 
-        assertThat(service.replaySummaryCitationMetadata(99L, 43L))
-                .isEqualTo(SummaryCitationReplayOutcome.QUARANTINED);
+        assertThat(service.replaySummaryCitationMetadata(99L, 43L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.TERMINAL_QUARANTINED);
 
         verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
                 any(), any(), any(), any(), anyCollection());
     }
 
     @Test
+    @DisplayName("metadata replay quarantines non-success summaries terminally")
+    void replaySummaryCitationMetadata_nonSuccess_isTerminal() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("FAILED");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000005");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.TERMINAL_QUARANTINED);
+    }
+
+    @Test
     @DisplayName("metadata replay does not race another application instance")
     void replaySummaryCitationMetadata_lockBusy_returnsBusy() {
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
         when(chunkRepository.tryAcquireSummaryReplayLock("summary-citation:42:99"))
                 .thenReturn(false);
 
-        assertThat(service.replaySummaryCitationMetadata(99L, 42L))
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
                 .isEqualTo(SummaryCitationReplayOutcome.BUSY);
 
         verify(callSummaryRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    @DisplayName("metadata replay refuses stale claim owners before mutation")
+    void replaySummaryCitationMetadata_staleOwner_mutatesNothing() {
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(0);
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.BUSY);
+
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
     }
 
     @Test
@@ -735,6 +777,11 @@ class RetrievalIndexServiceTest {
         summary.setStatus("SUCCESS");
         summary.setCaregiverVisibility("auto");
         summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000006");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(chunkRepository.hasActiveSummaryCitationReplayClaim(
+                42L, "call-summary:99", claim)).thenReturn(true);
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
 
         when(chunkRepository.findCallSummaryChunksForReplacement(
@@ -742,7 +789,7 @@ class RetrievalIndexServiceTest {
                 eq(SummarySourceKey.CALL_KIND), anyCollection()))
                 .thenReturn(List.of());
 
-        assertThat(service.replaySummaryCitationMetadata(99L, 42L))
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
                 .isEqualTo(SummaryCitationReplayOutcome.UPDATED);
 
         @SuppressWarnings("unchecked")

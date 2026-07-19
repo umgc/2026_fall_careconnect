@@ -1,19 +1,25 @@
 package com.careconnect.service;
 
+import com.careconnect.model.CallParticipant;
 import com.careconnect.model.CallSession;
+import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
 import lombok.extern.slf4j.Slf4j;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.chimesdkmeetings.ChimeSdkMeetingsClient;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Attendee;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateAttendeeRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateAttendeeResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingResponse;
+import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteAttendeeRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.EngineTranscribeSettings;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
@@ -25,7 +31,6 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTransc
 import software.amazon.awssdk.services.chimesdkmeetings.model.TranscriptionConfiguration;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,6 +52,8 @@ public class ChimeService {
     /** AWS Chime SDK meetings client. */
     private final ChimeSdkMeetingsClient chimeSdkMeetingsClient;
     private final CallSessionRepository callSessionRepository;
+    private final CallParticipantRepository callParticipantRepository;
+    private final TransactionTemplate transactionTemplate;
 
     /** Whether AWS integration is enabled. */
     private final boolean awsEnabled;
@@ -109,13 +116,15 @@ public class ChimeService {
     /** Maximum length for a Chime external user ID. */
     private static final int CHIME_USER_ID_MAX_LENGTH = 64;
 
-    /** Minimum length for a Chime external user ID. */
-    private static final int CHIME_USER_ID_MIN_LENGTH = 2;
+    /** Lease window for durable attendee-creation ownership. */
+    private static final long ATTENDEE_CLAIM_LEASE_SECONDS = 30L;
 
     @Autowired
     public ChimeService(
             @Autowired(required = false) final ChimeSdkMeetingsClient chimeSdkMeetingsClient,
             final CallSessionRepository callSessionRepository,
+            final CallParticipantRepository callParticipantRepository,
+            final PlatformTransactionManager transactionManager,
             @Value("${careconnect.aws.enabled:true}") final boolean awsEnabled,
             @Value("${careconnect.chime.transcription.enabled:true}") final boolean transcriptionEnabled,
             @Value("${careconnect.chime.transcription.language-code:en-US}")
@@ -124,6 +133,10 @@ public class ChimeService {
                 final String transcriptionRegion) {
         this.chimeSdkMeetingsClient = chimeSdkMeetingsClient;
         this.callSessionRepository = callSessionRepository;
+        this.callParticipantRepository = callParticipantRepository;
+        this.transactionTemplate = transactionManager == null
+                ? null
+                : new TransactionTemplate(transactionManager);
         this.awsEnabled = awsEnabled;
         this.transcriptionEnabled = transcriptionEnabled;
         this.transcriptionLanguageCode = transcriptionLanguageCode;
@@ -139,6 +152,27 @@ public class ChimeService {
             final String transcriptionRegion) {
         this(
                 chimeSdkMeetingsClient,
+                null,
+                null,
+                null,
+                awsEnabled,
+                transcriptionEnabled,
+                transcriptionLanguageCode,
+                transcriptionRegion);
+    }
+
+    /** Compatibility constructor used by multi-node unit tests. */
+    ChimeService(
+            final ChimeSdkMeetingsClient chimeSdkMeetingsClient,
+            final CallSessionRepository callSessionRepository,
+            final boolean awsEnabled,
+            final boolean transcriptionEnabled,
+            final String transcriptionLanguageCode,
+            final String transcriptionRegion) {
+        this(
+                chimeSdkMeetingsClient,
+                callSessionRepository,
+                null,
                 null,
                 awsEnabled,
                 transcriptionEnabled,
@@ -232,23 +266,25 @@ public class ChimeService {
      * Must be called for both the caller and the recipient.
      * Returns the attendee credentials the Flutter app needs to join.
      *
+     * <p>Durable claim/finalize transactions never wrap AWS list/create calls.
+     *
      * @param callId the unique call identifier
      * @param userId the user to add as an attendee
      * @return attendee credentials map
      */
-    @Transactional
     public Map<String, Object> createAttendee(
             final String callId,
             final String userId,
             final String role,
             final String displayName) {
         log.info("Creating Chime attendee for userId: {} in callId: {}", userId, callId);
+        // role/displayName retained for public join signature compatibility; never embedded in Chime IDs.
         final String attendeeKey = callId + "\u0000" + userId;
         final Object localLock = attendeeCreationLocks.computeIfAbsent(
                 attendeeKey, ignored -> new Object());
         synchronized (localLock) {
             try {
-                return createAttendeeCoordinated(callId, userId, role, displayName);
+                return createAttendeeCoordinated(callId, userId);
             } finally {
                 attendeeCreationLocks.remove(attendeeKey, localLock);
             }
@@ -257,19 +293,7 @@ public class ChimeService {
 
     private Map<String, Object> createAttendeeCoordinated(
             final String callId,
-            final String userId,
-            final String role,
-            final String displayName) {
-        // A row lock spans the AWS lookup/create operation. Other application nodes then
-        // observe the attendee in Chime before deciding whether another create is needed.
-        if (callSessionRepository != null) {
-            final CallSession locked = callSessionRepository.findByCallIdForLifecycle(callId)
-                    .orElseThrow(() -> new IllegalStateException("Call session does not exist"));
-            if (!isJoinableStatus(locked.getStatus())) {
-                throw new IllegalStateException("Call is no longer joinable");
-            }
-        }
-
+            final String userId) {
         final Meeting meeting = activeMeetings.get(callId);
         if (meeting == null) {
             throw new RuntimeException("No active meeting found for callId: " + callId
@@ -285,8 +309,14 @@ public class ChimeService {
             return cached;
         }
 
+        final String externalUserId = toOpaqueChimeExternalUserId(callId, userId);
+        final AttendeeClaim claim = claimAttendeeCreation(callId, userId, externalUserId);
+        if (claim != null && claim.existingCredentials() != null) {
+            cacheAttendeeCredentials(callId, userId, claim.existingCredentials());
+            return claim.existingCredentials();
+        }
+
         if (!isAwsChimeAvailable()) {
-            final String externalUserId = toChimeExternalUserId(userId, role, displayName);
             final String mediaRegion = meeting.mediaRegion() == null
                     ? DEFAULT_MEDIA_REGION : meeting.mediaRegion();
             final Map<String, Object> credentials = Map.of(
@@ -307,41 +337,252 @@ public class ChimeService {
                 "externalUserId",  externalUserId,
                 "joinToken",       "local-join-token-" + UUID.randomUUID()
             );
-            cacheAttendeeCredentials(callId, userId, credentials);
-            return credentials;
+            return finalizeOrCompensate(
+                    callId, userId, claim, meeting.meetingId(), credentials, false);
         }
 
         try {
-            final String externalUserId = toChimeExternalUserId(userId, role, displayName);
+            // AWS list/create intentionally runs outside any DB row-lock transaction.
             final Attendee existing = findAttendee(meeting.meetingId(), externalUserId);
+            final Attendee attendee;
+            final boolean createdHere;
             if (existing != null) {
-                final Map<String, Object> credentials = buildAttendeeCredentials(meeting, existing);
-                cacheAttendeeCredentials(callId, userId, credentials);
-                return credentials;
+                attendee = existing;
+                createdHere = false;
+            } else {
+                final CreateAttendeeRequest request = CreateAttendeeRequest.builder()
+                        .meetingId(meeting.meetingId())
+                        .externalUserId(externalUserId)
+                        .build();
+                final CreateAttendeeResponse response = chimeSdkMeetingsClient.createAttendee(request);
+                attendee = response.attendee();
+                createdHere = true;
             }
-            final CreateAttendeeRequest request = CreateAttendeeRequest.builder()
-                    .meetingId(meeting.meetingId())
-                    .externalUserId(externalUserId)
-                    .build();
-
-            final CreateAttendeeResponse response = chimeSdkMeetingsClient.createAttendee(request);
-            final Attendee attendee = response.attendee();
 
             if (log.isInfoEnabled()) {
-                log.info("Chime attendee created: {} for userId: {}", attendee.attendeeId(), userId);
+                log.info("Chime attendee ready: {} for userId: {}", attendee.attendeeId(), userId);
             }
 
-            // Retry transcription startup after attendee creation in case createMeeting
-            // happened before media signaling was fully ready.
             ensureMeetingTranscriptionStarted(callId, meeting, "createAttendee");
 
             final Map<String, Object> credentials = buildAttendeeCredentials(meeting, attendee);
-            cacheAttendeeCredentials(callId, userId, credentials);
-            return credentials;
-
+            return finalizeOrCompensate(
+                    callId, userId, claim, meeting.meetingId(), credentials, createdHere);
         } catch (Exception e) {
+            if (claim != null && claim.claimToken() != null) {
+                releaseAttendeeClaim(callId, userId, claim.claimToken());
+            }
             log.error("Failed to create attendee for userId: {} in callId: {}", userId, callId, e);
             throw new RuntimeException("Failed to join video call: " + e.getMessage(), e);
+        }
+    }
+
+    private record AttendeeClaim(
+            Long sessionId,
+            Long userId,
+            UUID claimToken,
+            Map<String, Object> existingCredentials) {
+    }
+
+    private AttendeeClaim claimAttendeeCreation(
+            final String callId, final String userId, final String externalUserId) {
+        if (callSessionRepository == null
+                || callParticipantRepository == null
+                || transactionTemplate == null) {
+            requireJoinableWithoutLock(callId);
+            return null;
+        }
+        return transactionTemplate.execute(status -> {
+            final CallSession locked = callSessionRepository.findByCallIdForLifecycle(callId)
+                    .orElseThrow(() -> new IllegalStateException("Call session does not exist"));
+            if (!isJoinableStatus(locked.getStatus())) {
+                throw new IllegalStateException("Call is no longer joinable");
+            }
+            final Long parsedUserId = Long.parseLong(userId);
+            final CallParticipant participant = callParticipantRepository
+                    .findByCallSessionIdAndUserId(locked.getId(), parsedUserId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "User is not a durable call participant"));
+            if (participant.getChimeAttendeeId() != null
+                    && participant.getChimeJoinToken() != null) {
+                final Meeting meeting = activeMeetings.get(callId);
+                final Map<String, Object> existing = buildPersistedCredentials(meeting, participant);
+                return new AttendeeClaim(locked.getId(), parsedUserId, null, existing);
+            }
+            final UUID claimToken = UUID.randomUUID();
+            final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+            final LocalDateTime until = now.plusSeconds(ATTENDEE_CLAIM_LEASE_SECONDS);
+            final int claimed = callParticipantRepository.claimAttendeeCreation(
+                    locked.getId(),
+                    parsedUserId,
+                    claimToken,
+                    until,
+                    externalUserId,
+                    now);
+            if (claimed == 1) {
+                return new AttendeeClaim(locked.getId(), parsedUserId, claimToken, null);
+            }
+            final CallParticipant refreshed = callParticipantRepository
+                    .findByCallSessionIdAndUserId(locked.getId(), parsedUserId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "User is not a durable call participant"));
+            if (refreshed.getChimeAttendeeId() != null && refreshed.getChimeJoinToken() != null) {
+                final Meeting meeting = activeMeetings.get(callId);
+                return new AttendeeClaim(
+                        locked.getId(),
+                        parsedUserId,
+                        null,
+                        buildPersistedCredentials(meeting, refreshed));
+            }
+            throw new IllegalStateException("Attendee creation is already in progress");
+        });
+    }
+
+    private Map<String, Object> buildPersistedCredentials(
+            final Meeting meeting, final CallParticipant participant) {
+        if (meeting == null) {
+            return Map.of(
+                    "meetingId", "",
+                    "externalMeetingId", "",
+                    "mediaRegion", DEFAULT_MEDIA_REGION,
+                    "mediaPlacement", Map.of(
+                            "audioHostUrl", "",
+                            "audioFallbackUrl", "",
+                            "screenDataUrl", "",
+                            "screenSharingUrl", "",
+                            "screenViewingUrl", "",
+                            "signalingUrl", "",
+                            "turnControlUrl", "",
+                            "eventIngestionUrl", ""),
+                    "attendeeId", participant.getChimeAttendeeId(),
+                    "externalUserId", participant.getChimeExternalUserId(),
+                    "joinToken", participant.getChimeJoinToken());
+        }
+        final String eventIngestionUrl = meeting.mediaPlacement() != null
+                && meeting.mediaPlacement().eventIngestionUrl() != null
+                ? meeting.mediaPlacement().eventIngestionUrl() : "";
+        final Map<String, Object> mediaPlacement = meeting.mediaPlacement() == null
+                ? Map.of(
+                    "audioHostUrl", "",
+                    "audioFallbackUrl", "",
+                    "screenDataUrl", "",
+                    "screenSharingUrl", "",
+                    "screenViewingUrl", "",
+                    "signalingUrl", "",
+                    "turnControlUrl", "",
+                    "eventIngestionUrl", "")
+                : Map.of(
+                    "audioHostUrl", meeting.mediaPlacement().audioHostUrl(),
+                    "audioFallbackUrl", meeting.mediaPlacement().audioFallbackUrl(),
+                    "screenDataUrl", meeting.mediaPlacement().screenDataUrl(),
+                    "screenSharingUrl", meeting.mediaPlacement().screenSharingUrl(),
+                    "screenViewingUrl", meeting.mediaPlacement().screenViewingUrl(),
+                    "signalingUrl", meeting.mediaPlacement().signalingUrl(),
+                    "turnControlUrl", meeting.mediaPlacement().turnControlUrl(),
+                    "eventIngestionUrl", eventIngestionUrl);
+        return Map.of(
+                "meetingId", meeting.meetingId(),
+                "externalMeetingId", meeting.externalMeetingId(),
+                "mediaRegion", meeting.mediaRegion() == null
+                        ? DEFAULT_MEDIA_REGION : meeting.mediaRegion(),
+                "mediaPlacement", mediaPlacement,
+                "attendeeId", participant.getChimeAttendeeId(),
+                "externalUserId",
+                        participant.getChimeExternalUserId() == null
+                                ? "" : participant.getChimeExternalUserId(),
+                "joinToken", participant.getChimeJoinToken());
+    }
+
+    private Map<String, Object> finalizeOrCompensate(
+            final String callId,
+            final String userId,
+            final AttendeeClaim claim,
+            final String meetingId,
+            final Map<String, Object> credentials,
+            final boolean createdHere) {
+        if (claim == null || claim.claimToken() == null
+                || callParticipantRepository == null
+                || transactionTemplate == null) {
+            cacheAttendeeCredentials(callId, userId, credentials);
+            return credentials;
+        }
+        final Integer finalized = transactionTemplate.execute(status ->
+                callParticipantRepository.finalizeAttendeeCreation(
+                        claim.sessionId(),
+                        claim.userId(),
+                        claim.claimToken(),
+                        String.valueOf(credentials.get("externalUserId")),
+                        String.valueOf(credentials.get("attendeeId")),
+                        String.valueOf(credentials.get("joinToken"))));
+        if (finalized != null && finalized == 1) {
+            cacheAttendeeCredentials(callId, userId, credentials);
+            return credentials;
+        }
+        // Lost ownership after AWS create — compensate then return durable winner credentials.
+        if (createdHere) {
+            compensateCreatedAttendee(meetingId, String.valueOf(credentials.get("attendeeId")));
+        }
+        releaseAttendeeClaim(callId, userId, claim.claimToken());
+        final CallParticipant winner = callParticipantRepository
+                .findByCallSessionIdAndUserId(claim.sessionId(), claim.userId())
+                .orElse(null);
+        if (winner != null
+                && winner.getChimeAttendeeId() != null
+                && winner.getChimeJoinToken() != null) {
+            final Map<String, Object> existing =
+                    buildPersistedCredentials(activeMeetings.get(callId), winner);
+            cacheAttendeeCredentials(callId, userId, existing);
+            return existing;
+        }
+        cacheAttendeeCredentials(callId, userId, credentials);
+        return credentials;
+    }
+
+    private void releaseAttendeeClaim(
+            final String callId, final String userId, final UUID claimToken) {
+        if (callParticipantRepository == null
+                || transactionTemplate == null
+                || claimToken == null
+                || callSessionRepository == null) {
+            return;
+        }
+        transactionTemplate.executeWithoutResult(status -> {
+            final CallSession session = callSessionRepository.findByCallId(callId).orElse(null);
+            if (session == null) {
+                return;
+            }
+            callParticipantRepository.releaseAttendeeClaim(
+                    session.getId(), Long.parseLong(userId), claimToken);
+        });
+    }
+
+    private void compensateCreatedAttendee(final String meetingId, final String attendeeId) {
+        if (!isAwsChimeAvailable() || meetingId == null || attendeeId == null) {
+            return;
+        }
+        try {
+            chimeSdkMeetingsClient.deleteAttendee(
+                    DeleteAttendeeRequest.builder()
+                            .meetingId(meetingId)
+                            .attendeeId(attendeeId)
+                            .build());
+        } catch (Exception e) {
+            log.error(
+                    "Failed to compensate Chime attendee {} in meeting {}",
+                    attendeeId,
+                    meetingId,
+                    e);
+        }
+    }
+
+    private void requireJoinableWithoutLock(final String callId) {
+        if (callSessionRepository == null) {
+            return;
+        }
+        final CallSession session = callSessionRepository.findByCallId(callId)
+                .orElseThrow(() -> new IllegalStateException("Call session does not exist"));
+        if (!isJoinableStatus(session.getStatus())) {
+            throw new IllegalStateException("Call is no longer joinable");
         }
     }
 
@@ -409,7 +650,6 @@ public class ChimeService {
      * @param userId the user joining the meeting
      * @return attendee credentials map
      */
-    @Transactional
     public Map<String, Object> joinMeeting(
             final String callId,
             final String userId,
@@ -686,63 +926,19 @@ public class ChimeService {
         );
     }
 
-    private String toChimeExternalUserId(final String userId, final String role, final String displayName) {
-        // Sanitize the numeric/string user-id portion
-        String normalizedId = userId == null ? "u0" : userId.trim();
-        if (normalizedId.isEmpty()) {
-            normalizedId = "u0";
-        }
-        normalizedId = normalizedId.replaceAll("[^A-Za-z0-9_-]", "_");
-        if (normalizedId.length() < CHIME_USER_ID_MIN_LENGTH) {
-            normalizedId = "u" + normalizedId;
-        }
-
-        // Build a name segment encoded as "First-LAST" (hyphen-delimited, no spaces).
-        // Transcript events carry externalUserId back to the frontend, so the Flutter
-        // client can decode it into a human-readable label like "John DOE".
-        final String nameSeg = buildNameSegment(displayName);
-        final String safeRole = role != null
-                ? role.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "")
-                : "";
-
-        final String combined;
-        if (!safeRole.isEmpty() && !nameSeg.isEmpty()) {
-            combined = safeRole + "_" + nameSeg + "_" + normalizedId;
-        } else if (!safeRole.isEmpty()) {
-            combined = safeRole + "_" + normalizedId;
-        } else {
-            combined = normalizedId;
-        }
-
-        return combined.length() > CHIME_USER_ID_MAX_LENGTH
-                ? combined.substring(0, CHIME_USER_ID_MAX_LENGTH)
-                : combined;
-    }
-
     /**
-     * Builds a hyphen-delimited name segment for embedding in externalUserId.
-     * "John Doe" → "John-DOE"; "John" → "John"; null/blank → ""
+     * Builds a durable opaque Chime externalUserId with no names, roles, or raw user IDs.
      */
-    private String buildNameSegment(final String displayName) {
-        if (displayName == null || displayName.isBlank()) {
-            return "";
-        }
-        final String[] parts = displayName.trim().split("\\s+");
-        if (parts.length == 0) {
-            return "";
-        }
-        // Keep only alphanumeric chars per part; first name title-case, last name upper-case
-        final String firstName = parts[0].replaceAll("[^A-Za-z0-9]", "");
-        if (firstName.isEmpty()) {
-            return "";
-        }
-        final String firstCased = firstName.substring(0, 1).toUpperCase(Locale.ROOT)
-                + (firstName.length() > 1 ? firstName.substring(1).toLowerCase(Locale.ROOT) : "");
-        if (parts.length == 1) {
-            return firstCased;
-        }
-        final String lastName = parts[parts.length - 1].replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
-        return lastName.isEmpty() ? firstCased : firstCased + "-" + lastName;
+    String toOpaqueChimeExternalUserId(final String callId, final String userId) {
+        final String material = "careconnect-attendee:"
+                + (callId == null ? "" : callId)
+                + ":"
+                + (userId == null ? "" : userId);
+        final String opaque = UUID.nameUUIDFromBytes(material.getBytes(StandardCharsets.UTF_8))
+                .toString();
+        return opaque.length() > CHIME_USER_ID_MAX_LENGTH
+                ? opaque.substring(0, CHIME_USER_ID_MAX_LENGTH)
+                : opaque;
     }
 
     private boolean isAwsChimeAvailable() {

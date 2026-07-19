@@ -124,6 +124,7 @@ dependencies:
   web_socket_channel: ^3.0.3
   universal_html: ^2.2.4
   flutter_secure_storage: ^9.2.4
+  hive_ce_flutter: ^2.3.4
   in_app_purchase: ^3.2.3
   in_app_purchase_android: ^0.4.0+8
   pay: ^3.3.0

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -728,7 +729,11 @@ void main() {
           value: provider,
           child: MaterialApp(
             home: Scaffold(
-              body: AIChat(role: 'PATIENT', userId: null),
+              body: AIChat(
+                role: 'PATIENT',
+                userId: null,
+                mode: AiChatMode.legacyGeneral,
+              ),
             ),
           ),
         ),
@@ -890,8 +895,8 @@ void main() {
       expect(chat.mode, AiChatMode.groundedRecords);
     });
 
-    testWidgets('AIChat defaults isModal to false', (tester) async {
-      const chat = AIChat(role: 'CAREGIVER');
+    testWidgets('AIChat requires explicit mode', (tester) async {
+      const chat = AIChat(role: 'CAREGIVER', mode: AiChatMode.legacyGeneral);
       expect(chat.isModal, false);
       expect(chat.healthDataContext, isNull);
       expect(chat.patientId, isNull);
@@ -1003,6 +1008,8 @@ void main() {
             jsonEncode({
               'success': true,
               'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
               'answer': {'text': 'Metformin was started.'},
               'citations': [
                 {
@@ -1309,6 +1316,72 @@ void main() {
 
       // No errors = success
       expect(true, isTrue);
+    });
+
+    testWidgets('dispose cancels grounded ask and blocks late completion',
+        (tester) async {
+      suppressOverflow();
+      final release = Completer<void>();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          await release.future;
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Disposed answer must not appear'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Disposed excerpt',
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Will dispose');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        await tester.pump();
+        release.complete();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Disposed answer must not appear'), findsNothing);
+        expect(find.text('Will dispose'), findsNothing);
+      }, () => mockClient);
     });
 
     // === OVERFLOW HANDLING ===
@@ -1750,6 +1823,255 @@ void main() {
 
       // The user message should appear
       expect(find.text('Patient context test'), findsOneWidget);
+    });
+
+    testWidgets('grounded mode never loads legacy history', (tester) async {
+      suppressOverflow();
+      var historyHits = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/history')) {
+          historyHits++;
+          return http.Response(
+            jsonEncode({
+              'messages': [
+                {
+                  'content': 'Legacy history must not appear',
+                  'messageType': 'USER',
+                  'createdAt': DateTime.now().toIso8601String(),
+                }
+              ],
+              'conversationId': 'legacy-conv',
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(historyHits, 0);
+        expect(find.text('Legacy history must not appear'), findsNothing);
+        expect(find.byIcon(Icons.attach_file), findsNothing);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded mode ignores stale completion after clear',
+        (tester) async {
+      suppressOverflow();
+      final release = Completer<void>();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          await release.future;
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Stale answer must not appear'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Stale excerpt',
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        if (request.url.path.contains('/retention-period')) {
+          return http.Response(jsonEncode({'retentionDays': 30}), 200);
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Will be cleared');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+
+        await selectPopupItem(tester, 'clear');
+        await tester.pump();
+        await tester.tap(find.text('Delete'));
+        await tester.pump();
+        release.complete();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Stale answer must not appear'), findsNothing);
+      }, () => mockClient);
+    });
+
+    testWidgets('patient switch resets grounded chat and disables retry',
+        (tester) async {
+      suppressOverflow();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': false,
+              'deliveryStatus': 'WITHHELD',
+              'error': {
+                'code': 'TIMEOUT',
+                'message': 'Ask AI took too long to respond. Please try again.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Original question');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.byKey(const Key('ask-ai-retry')), findsOneWidget);
+
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 99,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump();
+
+        expect(find.text('Original question'), findsNothing);
+        expect(find.byKey(const Key('ask-ai-retry')), findsNothing);
+      }, () => mockClient);
+    });
+
+    testWidgets('retry UI reuses original query without duplicate user bubble',
+        (tester) async {
+      suppressOverflow();
+      var askCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          askCount++;
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['query'], 'Stable retry question');
+          if (askCount == 1) {
+            return http.Response(
+              jsonEncode({
+                'success': false,
+                'deliveryStatus': 'WITHHELD',
+                'error': {
+                  'code': 'NETWORK_ERROR',
+                  'message': 'Unable to connect to Ask AI.',
+                },
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Retry succeeded'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Retry succeeded',
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Stable retry question');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Stable retry question'), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-retry')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('ask-ai-retry')));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Stable retry question'), findsOneWidget);
+        expect(find.text('Retry succeeded'), findsWidgets);
+        expect(askCount, 2);
+      }, () => mockClient);
+    });
+
+    testWidgets('explicit mode is required on constructed chat widgets',
+        (tester) async {
+      const grounded = AIChat(
+        role: 'patient',
+        mode: AiChatMode.groundedRecords,
+        patientId: 7,
+      );
+      const legacy = AIChat(
+        role: 'patient',
+        mode: AiChatMode.legacyGeneral,
+      );
+      expect(grounded.mode, AiChatMode.groundedRecords);
+      expect(legacy.mode, AiChatMode.legacyGeneral);
     });
   });
 }

@@ -309,6 +309,9 @@ class _ChatPageState extends State<ChatPage> {
                   builder: (context) => SizedBox(
                     height: MediaQuery.of(context).size.height * 0.75,
                     child: AIChat(
+                      key: const ValueKey(
+                        'ai-chat-legacyGeneral-social',
+                      ),
                       role: 'patient',
                       isModal: true,
                       mode: AiChatMode.legacyGeneral,

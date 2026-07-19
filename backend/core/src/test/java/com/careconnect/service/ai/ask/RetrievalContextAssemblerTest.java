@@ -147,4 +147,65 @@ class RetrievalContextAssemblerTest {
         assertThat(ctx.userPrompt().codePointCount(0, ctx.userPrompt().length()))
                 .isLessThanOrEqualTo(180);
     }
+
+    @Test
+    void assemble_includesValidatedOccurrenceTimestamp() {
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "BP was 128/82 mmHg.",
+                "{\"occurredAt\":\"2026-07-10T15:00:00Z\"}",
+                "auto", 0.1d, 1, 1, "C1");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble("What is BP?", List.of(chunk));
+
+        assertThat(ctx.userPrompt()).contains("\"occurredAt\":\"2026-07-10T15:00:00Z\"");
+    }
+
+    @Test
+    void assemble_temporalQuerySelectsNewestDatedRecordOnly() {
+        final RankedChunk older = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "BP was 150/95 mmHg.",
+                "{\"occurredAt\":\"2026-01-01T12:00:00Z\"}",
+                "auto", 0.2d, 1, 1, "C1");
+        final RankedChunk newer = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "10",
+                "BP was 128/82 mmHg.",
+                "{\"occurredAt\":\"2026-07-10T15:00:00Z\"}",
+                "auto", 0.1d, 2, 2, "C2");
+        final RankedChunk undated = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "11",
+                "BP looked fine.",
+                "{}",
+                "auto", 0.3d, 1, 1, "C3");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble(
+                        "What is my latest BP?", List.of(older, newer, undated));
+
+        assertThat(ctx.usedChunks()).extracting(RankedChunk::citationRef).containsExactly("C2");
+        assertThat(ctx.userPrompt()).contains("2026-07-10T15:00:00Z");
+        assertThat(ctx.userPrompt()).doesNotContain("150/95");
+        assertThat(ctx.requiresDatedEvidence()).isTrue();
+        assertThat(ctx.systemPrompt()).contains("newest dated record");
+    }
+
+    @Test
+    void selectNewestDated_isDeterministicOnEqualTimestamps() {
+        final RankedChunk left = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "Older wording.",
+                "{\"occurredAt\":\"2026-07-10T15:00:00Z\"}",
+                "auto", 0.1d, 1, 1, "C2");
+        final RankedChunk right = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "10",
+                "Preferred wording.",
+                "{\"occurredAt\":\"2026-07-10T15:00:00Z\"}",
+                "auto", 0.1d, 1, 1, "C1");
+
+        assertThat(RetrievalContextAssembler.selectNewestDated(List.of(left, right)))
+                .extracting(RankedChunk::citationRef)
+                .containsExactly("C1");
+    }
 }

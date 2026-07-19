@@ -1,6 +1,8 @@
 package com.careconnect.service;
 
 import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.repository.CallParticipantRepository;
+import com.careconnect.model.CallParticipant;
 import com.careconnect.model.CallSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -138,9 +140,12 @@ class ChimeServiceTest {
         void joinMeeting_localMode_returnsCredentials() {
             Map<String, Object> result = service.joinMeeting(CALL_ID, USER_ID, "CAREGIVER", "John Doe");
 
-            assertThat(result).containsKey("meetingId");
-            assertThat(result).containsKey("attendeeId");
-            assertThat(result).containsKey("joinToken");
+            assertThat(result).containsKeys(
+                    "meetingId", "attendeeId", "externalUserId", "joinToken");
+            assertThat(String.valueOf(result.get("externalUserId")))
+                    .doesNotContain("John")
+                    .doesNotContain("CAREGIVER")
+                    .doesNotContain(USER_ID);
         }
 
         @Test
@@ -372,7 +377,7 @@ class ChimeServiceTest {
         }
 
         @Test
-        @DisplayName("a second node reuses attendee discovered in Chime under durable lock")
+        @DisplayName("a second node reuses attendee discovered in Chime")
         void createAttendee_secondNode_reusesExistingAttendee() {
             Meeting meeting = buildMeeting(MEETING_ID);
             CallSession session = new CallSession();
@@ -381,30 +386,157 @@ class ChimeServiceTest {
             session.setStatus(CallSessionService.SESSION_ACTIVE);
             when(callSessionRepository.findByCallId(CALL_ID))
                     .thenReturn(Optional.of(session));
-            when(callSessionRepository.findByCallIdForLifecycle(CALL_ID))
-                    .thenReturn(Optional.of(session));
             when(chimeSdkMeetingsClient.getMeeting(any(GetMeetingRequest.class)))
                     .thenReturn(GetMeetingResponse.builder().meeting(meeting).build());
+            ChimeService secondNode = new ChimeService(
+                    chimeSdkMeetingsClient, callSessionRepository,
+                    true, false, "en-US", "us-east-1");
+            final String opaqueId = secondNode.toOpaqueChimeExternalUserId(CALL_ID, USER_ID);
             when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
                     .thenReturn(ListAttendeesResponse.builder()
                             .attendees(Attendee.builder()
                                     .attendeeId("attendee-xyz")
-                                    .externalUserId("CAREGIVER_John-DOE_42")
+                                    .externalUserId(opaqueId)
                                     .joinToken("join-token-abc")
                                     .build())
                             .build());
-            ChimeService secondNode = new ChimeService(
-                    chimeSdkMeetingsClient, callSessionRepository,
-                    true, false, "en-US", "us-east-1");
             secondNode.createMeeting(CALL_ID);
 
             Map<String, Object> result = secondNode.createAttendee(
                     CALL_ID, USER_ID, "CAREGIVER", "John Doe");
 
             assertThat(result.get("attendeeId")).isEqualTo("attendee-xyz");
-            verify(callSessionRepository).findByCallIdForLifecycle(CALL_ID);
+            assertThat(result.get("externalUserId")).isEqualTo(opaqueId);
             verify(chimeSdkMeetingsClient, never())
                     .createAttendee(any(CreateAttendeeRequest.class));
+        }
+
+        @Test
+        @DisplayName("Chime externalUserId contains no names, roles, or raw user IDs")
+        void createAttendee_externalUserId_isOpaquePseudonym() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
+                    .thenReturn(ListAttendeesResponse.builder().attendees(List.of()).build());
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenAnswer(invocation -> {
+                        CreateAttendeeRequest request = invocation.getArgument(0);
+                        return CreateAttendeeResponse.builder()
+                                .attendee(Attendee.builder()
+                                        .attendeeId("attendee-xyz")
+                                        .externalUserId(request.externalUserId())
+                                        .joinToken("join-token-abc")
+                                        .build())
+                                .build();
+                    });
+
+            service.createMeeting(CALL_ID);
+            Map<String, Object> result = service.createAttendee(
+                    CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            String externalUserId = String.valueOf(result.get("externalUserId"));
+            assertThat(externalUserId)
+                    .doesNotContain("John")
+                    .doesNotContain("DOE")
+                    .doesNotContain("CAREGIVER")
+                    .doesNotContain(USER_ID);
+            assertThat(externalUserId)
+                    .isEqualTo(service.toOpaqueChimeExternalUserId(CALL_ID, USER_ID));
+
+            ArgumentCaptor<CreateAttendeeRequest> captor =
+                    ArgumentCaptor.forClass(CreateAttendeeRequest.class);
+            verify(chimeSdkMeetingsClient).createAttendee(captor.capture());
+            assertThat(captor.getValue().externalUserId()).isEqualTo(externalUserId);
+        }
+
+        @Test
+        @DisplayName("AWS list/create run only after the short claim transaction finishes")
+        void createAttendee_awsOutsideClaimTransaction() {
+            Meeting meeting = buildMeeting(MEETING_ID);
+            CallSession session = new CallSession();
+            session.setId(9L);
+            session.setCallId(CALL_ID);
+            session.setStatus(CallSessionService.SESSION_ACTIVE);
+            CallParticipant participant = new CallParticipant();
+            participant.setCallSessionId(9L);
+            participant.setUserId(42L);
+
+            CallParticipantRepository participantRepository =
+                    org.mockito.Mockito.mock(CallParticipantRepository.class);
+            org.springframework.transaction.PlatformTransactionManager txManager =
+                    org.mockito.Mockito.mock(
+                            org.springframework.transaction.PlatformTransactionManager.class);
+            when(txManager.getTransaction(any()))
+                    .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
+
+            java.util.concurrent.atomic.AtomicBoolean insideClaim = new java.util.concurrent.atomic.AtomicBoolean();
+            when(callSessionRepository.findByCallId(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(callSessionRepository.findByCallIdForLifecycle(CALL_ID))
+                    .thenReturn(Optional.of(session));
+            when(participantRepository.findByCallSessionIdAndUserId(9L, 42L))
+                    .thenReturn(Optional.of(participant));
+            when(participantRepository.claimAttendeeCreation(
+                    any(), any(), any(), any(), any(), any()))
+                    .thenAnswer(invocation -> {
+                        insideClaim.set(true);
+                        try {
+                            Thread.sleep(20);
+                            return 1;
+                        } finally {
+                            insideClaim.set(false);
+                        }
+                    });
+            when(participantRepository.finalizeAttendeeCreation(
+                    any(), any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(callSessionRepository.persistMeetingIdIfAbsent(any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(chimeSdkMeetingsClient.createMeeting(any(CreateMeetingRequest.class)))
+                    .thenReturn(CreateMeetingResponse.builder().meeting(meeting).build());
+            when(chimeSdkMeetingsClient.listAttendees(any(ListAttendeesRequest.class)))
+                    .thenAnswer(invocation -> {
+                        assertThat(insideClaim.get())
+                                .as("listAttendees must not run under claim row lock")
+                                .isFalse();
+                        return ListAttendeesResponse.builder().attendees(List.of()).build();
+                    });
+            when(chimeSdkMeetingsClient.createAttendee(any(CreateAttendeeRequest.class)))
+                    .thenAnswer(invocation -> {
+                        assertThat(insideClaim.get())
+                                .as("createAttendee must not run under claim row lock")
+                                .isFalse();
+                        CreateAttendeeRequest request = invocation.getArgument(0);
+                        return CreateAttendeeResponse.builder()
+                                .attendee(Attendee.builder()
+                                        .attendeeId("attendee-xyz")
+                                        .externalUserId(request.externalUserId())
+                                        .joinToken("join-token-abc")
+                                        .build())
+                                .build();
+                    });
+
+            ChimeService coordinated = new ChimeService(
+                    chimeSdkMeetingsClient,
+                    callSessionRepository,
+                    participantRepository,
+                    txManager,
+                    true,
+                    false,
+                    "en-US",
+                    "us-east-1");
+            coordinated.createMeeting(CALL_ID);
+
+            Map<String, Object> result = coordinated.createAttendee(
+                    CALL_ID, USER_ID, "CAREGIVER", "John Doe");
+
+            assertThat(result.get("attendeeId")).isEqualTo("attendee-xyz");
+            verify(participantRepository).claimAttendeeCreation(
+                    any(), any(), any(), any(), any(), any());
+            verify(participantRepository).finalizeAttendeeCreation(
+                    any(), any(), any(), any(), any(), any());
+            verify(chimeSdkMeetingsClient).createAttendee(any(CreateAttendeeRequest.class));
         }
 
         @Test

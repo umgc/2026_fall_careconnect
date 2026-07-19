@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Ingests Ask AI indexing events into {@code retrieval_index_chunk} (Task 4.1).
@@ -224,21 +226,31 @@ public class RetrievalIndexService {
 
     /**
      * Replays one call summary using authoritative entity data for citation metadata backfill.
-     * The row lock serializes this operation with normal outbox ingestion.
+     * The row lock serializes this operation with normal outbox ingestion. Claim tokens are
+     * renewed and verified immediately before replacement so stale owners mutate nothing.
      */
     @Transactional
     public SummaryCitationReplayOutcome replaySummaryCitationMetadata(
             final Long summaryId,
-            final Long candidatePatientId) {
+            final Long candidatePatientId,
+            final UUID claimToken,
+            final long claimLeaseMs) {
         if (summaryId == null) {
             throw new IllegalArgumentException("summaryId is required");
         }
-        if (candidatePatientId == null) {
-            return SummaryCitationReplayOutcome.QUARANTINED;
+        if (candidatePatientId == null || claimToken == null) {
+            return SummaryCitationReplayOutcome.TERMINAL_QUARANTINED;
+        }
+        final String sourceRecordId = SummarySourceKey.call(summaryId);
+        if (!renewReplayClaim(candidatePatientId, sourceRecordId, claimToken, claimLeaseMs)) {
+            return SummaryCitationReplayOutcome.BUSY;
         }
         final String lockKey = "summary-citation:"
                 + candidatePatientId + ":" + summaryId;
         if (!chunkRepository.tryAcquireSummaryReplayLock(lockKey)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
+        if (!renewReplayClaim(candidatePatientId, sourceRecordId, claimToken, claimLeaseMs)) {
             return SummaryCitationReplayOutcome.BUSY;
         }
         final CallSummary summary = callSummaryRepository.findByIdForUpdate(summaryId)
@@ -246,7 +258,11 @@ public class RetrievalIndexService {
         if (summary == null
                 || summary.getPatientId() == null
                 || !candidatePatientId.equals(summary.getPatientId())) {
-            return SummaryCitationReplayOutcome.QUARANTINED;
+            return SummaryCitationReplayOutcome.TERMINAL_QUARANTINED;
+        }
+        if (summary.getStatus() == null
+                || !"SUCCESS".equalsIgnoreCase(summary.getStatus().trim())) {
+            return SummaryCitationReplayOutcome.TERMINAL_QUARANTINED;
         }
         final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
         final List<IndexingChunkDraft> expectedDrafts = summaryChunker.chunk(
@@ -262,10 +278,11 @@ public class RetrievalIndexService {
                                 .atZone(ZoneOffset.UTC)
                                 .toInstant()
                                 .toString());
-        if (expectedDrafts.isEmpty()
-                || (summary.getStatus() != null
-                    && !"SUCCESS".equalsIgnoreCase(summary.getStatus().trim()))) {
-            return SummaryCitationReplayOutcome.NO_DRAFTS;
+        if (expectedDrafts.isEmpty()) {
+            return SummaryCitationReplayOutcome.RETRYABLE;
+        }
+        if (!renewReplayClaim(candidatePatientId, sourceRecordId, claimToken, claimLeaseMs)) {
+            return SummaryCitationReplayOutcome.BUSY;
         }
         final SummaryCreatedPayload replay = new SummaryCreatedPayload(
                 "call",
@@ -279,10 +296,29 @@ public class RetrievalIndexService {
                 summary.getCaregiverVisibility(),
                 summary.getSummarizationEngine(),
                 contentHash);
+        if (!chunkRepository.hasActiveSummaryCitationReplayClaim(
+                candidatePatientId, sourceRecordId, claimToken)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
         final int written = ingestSummaryCreated(replay);
         return written > 0
                 ? SummaryCitationReplayOutcome.UPDATED
                 : SummaryCitationReplayOutcome.CURRENT;
+    }
+
+    private boolean renewReplayClaim(
+            final Long patientId,
+            final String sourceRecordId,
+            final UUID claimToken,
+            final long claimLeaseMs) {
+        final long leaseMs = Math.min(
+                Duration.ofHours(1).toMillis(),
+                Math.max(10_000L, claimLeaseMs));
+        return chunkRepository.renewSummaryCitationReplayClaim(
+                patientId,
+                sourceRecordId,
+                claimToken,
+                OffsetDateTime.now(ZoneOffset.UTC).plus(Duration.ofMillis(leaseMs))) > 0;
     }
 
     /**

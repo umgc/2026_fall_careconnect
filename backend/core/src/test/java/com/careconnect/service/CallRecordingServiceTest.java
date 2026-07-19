@@ -177,7 +177,14 @@ class CallRecordingServiceTest {
 
             service.startRecording(CALL_ID, null); // first call registers pipeline (null userId avoids RECORDING_CLAIMED)
 
-            // Second call — should hit ALREADY_RECORDING branch (null userId skips claim logic)
+            CallRecording active = buildRecording("STARTED");
+            active.setInitiatedByUserId(null);
+            active.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
+            when(recordingRepository.findActiveByCallId(CALL_ID))
+                    .thenReturn(Optional.of(active));
+
+            // Second call observes the durable active owner.
             Map<String, Object> result = service.startRecording(CALL_ID, null);
 
             assertThat(result).containsEntry("status", "ALREADY_RECORDING");
@@ -227,7 +234,7 @@ class CallRecordingServiceTest {
             assertThat(result).containsKey("s3Bucket");
             assertThat(result).containsKey("s3Prefix");
 
-            verify(recordingRepository).save(any(CallRecording.class));
+            verify(recordingRepository).saveAndFlush(any(CallRecording.class));
             verify(pipelinesClient).createMediaCapturePipeline(
                     any(CreateMediaCapturePipelineRequest.class));
         }
@@ -357,6 +364,10 @@ class CallRecordingServiceTest {
             rec.setS3Bucket(BUCKET);
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationStatus("NOT_REQUESTED");
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -872,6 +883,8 @@ class CallRecordingServiceTest {
             rec.setS3Bucket(BUCKET);
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationStatus("NOT_REQUESTED");
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -884,11 +897,6 @@ class CallRecordingServiceTest {
                                     .status("Initializing")
                                     .build())
                             .build());
-
-            @SuppressWarnings("unchecked")
-            Map<String, String> activePipelineIds =
-                    (Map<String, String>) ReflectionTestUtils.getField(service, "activePipelineIds");
-            activePipelineIds.put(CALL_ID, PIPELINE_ID);
 
             Map<String, Object> result = service.getRecordingStatus(CALL_ID);
 
@@ -1349,14 +1357,9 @@ class CallRecordingServiceTest {
     class StopRecordingAdditionalTests {
 
         @Test
-        @DisplayName("returns NOT_RECORDING when DB lookup returns null recording after pipeline removal")
+        @DisplayName("returns NOT_RECORDING when durable ownership is absent")
         void stopRecording_dbReturnsNullAfterPipelineRemoval_returnsNotRecording() {
-            // Seed activePipelineIds with a value, then the second DB lookup returns empty
-            @SuppressWarnings("unchecked")
-            Map<String, String> activePipelineIds =
-                    (Map<String, String>) ReflectionTestUtils.getField(service, "activePipelineIds");
-            activePipelineIds.put(CALL_ID, PIPELINE_ID);
-
+            when(recordingRepository.findActiveByCallId(CALL_ID)).thenReturn(Optional.empty());
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.empty());
 

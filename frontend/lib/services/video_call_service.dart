@@ -1,10 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../config/environment_config.dart';
 import '../services/call_notification_service.dart';
+import 'transcript_outbox/encrypted_transcript_outbox.dart';
+import 'transcript_outbox/pending_transcript_segment.dart';
+import 'transcript_outbox/transcript_retry_worker.dart';
+import 'transcript_outbox/transcript_upload.dart';
 
 @visibleForTesting
 String truncateToUnicodeCodePoints(String value, int maxCodePoints) {
@@ -73,10 +79,17 @@ bool isEventForActiveCall(String? activeCallId, Map<String, dynamic> event) {
 /// pointing to the Chime meeting URL, which works on both mobile and web.
 class VideoCallService {
   static const Duration _sentimentStaleThreshold = Duration(seconds: 45);
-  static const int _maxBufferedTranscriptSegments = 120;
   static const int _maxTranscriptChars = 1200;
-  static const Duration _transcriptFlushInterval = Duration(seconds: 4);
   static final Set<String> _completedCallIds = <String>{};
+
+  VideoCallService({
+    TranscriptOutbox? transcriptOutbox,
+    TranscriptSegmentUploader? transcriptUploader,
+    Stream<bool>? connectivityChanges,
+  })  : _transcriptOutbox = transcriptOutbox,
+        _transcriptUploader =
+            transcriptUploader ?? HttpTranscriptSegmentUploader(),
+        _connectivityChanges = connectivityChanges;
 
   bool _isInitialized = false;
   bool _isInCall = false;
@@ -88,6 +101,7 @@ class VideoCallService {
   String? _jwtToken;
   DateTime? _callStartedAt;
   int _lastTranscriptEndMs = 0;
+  String? _currentUserId;
 
   // Chime meeting credentials returned by the backend
   Map<String, dynamic>? _meetingCredentials;
@@ -100,9 +114,12 @@ class VideoCallService {
 
   // Sentiment posting timer — sends analysis data every 15 seconds
   Timer? _sentimentTimer;
-  Timer? _transcriptFlushTimer;
-  Future<void>? _transcriptFlushFuture;
-  final List<_BufferedTranscriptSegment> _pendingTranscriptSegments = [];
+  TranscriptOutbox? _transcriptOutbox;
+  final TranscriptSegmentUploader _transcriptUploader;
+  final Stream<bool>? _connectivityChanges;
+  TranscriptRetryWorker? _transcriptRetryWorker;
+  bool _ownsTranscriptOutbox = false;
+  int _pendingTranscriptCount = 0;
 
   // Stream for sentiment updates received via WebSocket
   StreamSubscription? _wsSubscription;
@@ -123,6 +140,7 @@ class VideoCallService {
     Function(Map<String, dynamic>)? onCallDeclined,
     Function(Map<String, dynamic>)? onRecordingState,
   }) async {
+    _currentUserId = userId.trim();
     _jwtToken = jwtToken;
     _onCallEnded = onCallEnded;
     _onSentimentUpdate = onSentimentUpdate;
@@ -130,6 +148,7 @@ class VideoCallService {
     _onRecordingState = onRecordingState;
     _isPatientSentimentSource = enablePatientSentimentCapture;
     _isInitialized = true;
+    await _initializeTranscriptOutbox();
 
     // Listen for sentiment updates pushed via WebSocket
     _wsSubscription = CallNotificationService.incomingCallStream.listen((data) {
@@ -162,7 +181,7 @@ class VideoCallService {
       }
     });
 
-    debugPrint('✅ VideoCallService initialized for user: $userId');
+    debugPrint('✅ VideoCallService initialized');
   }
 
   // ================================================================
@@ -225,7 +244,6 @@ class VideoCallService {
     _lastTranscriptEndMs = 0;
     _aggregatedSentiment.clear();
     _seedAwaitingSentimentState();
-    _startTranscriptFlushTimer();
 
     debugPrint('📹 Joining Chime call: $normalizedCallId');
 
@@ -274,7 +292,6 @@ class VideoCallService {
       _callStartedAt = null;
       _lastTranscriptEndMs = 0;
       _callContextMetadata = null;
-      _stopTranscriptFlushTimer();
       debugPrint('❌ Failed to join Chime call: $e');
       rethrow;
     }
@@ -294,12 +311,7 @@ class VideoCallService {
     debugPrint('📴 Ending call: $callId');
 
     _sentimentTimer?.cancel();
-    await _flushPendingTranscriptSegments(
-      callIdOverride: callId,
-      maxAttempts: 3,
-      respectInCallState: false,
-    );
-    _stopTranscriptFlushTimer();
+    await _wakeTranscriptWorker(force: true);
 
     String endStatus = 'ended';
 
@@ -397,20 +409,38 @@ class VideoCallService {
       _lastTranscriptEndMs = resolvedEndMs;
     }
 
-    _enqueueTranscriptSegment(
-      _BufferedTranscriptSegment(
-        callId: _currentCallId!,
-        speakerLabel: speakerLabel ?? 'PATIENT',
-        text: trimmed,
-        startMs: resolvedStartMs,
-        endMs: resolvedEndMs,
-        source: source ?? 'chime-transcript',
-      ),
+    final outbox = _transcriptOutbox;
+    if (outbox == null || _currentUserId == null) {
+      debugPrint('[CareConnect][Transcript] encrypted outbox unavailable');
+      return false;
+    }
+    final now = DateTime.now().toUtc();
+    final segment = PendingTranscriptSegment(
+      clientSegmentId: const Uuid().v4(),
+      ownerUserId: _currentUserId!,
+      callId: _currentCallId!,
+      speakerLabel: speakerLabel ?? 'PATIENT',
+      text: trimmed,
+      startMs: resolvedStartMs,
+      endMs: resolvedEndMs,
+      source: source ?? 'chime-transcript',
+      createdAt: now,
+      nextAttemptAt: now,
     );
+    try {
+      await outbox.add(segment);
+      _pendingTranscriptCount = (await outbox.all()).length;
+    } on TranscriptOutboxQuotaExceeded {
+      debugPrint('[CareConnect][Transcript] encrypted outbox quota exceeded');
+      return false;
+    } catch (_) {
+      debugPrint('[CareConnect][Transcript] encrypted outbox write failed');
+      return false;
+    }
     debugPrint(
-      '[CareConnect][Transcript] buffered len=${trimmed.length} queue=${_pendingTranscriptSegments.length}',
+      '[CareConnect][Transcript] segment persisted queue=$_pendingTranscriptCount',
     );
-    unawaited(_flushPendingTranscriptSegments());
+    unawaited(_wakeTranscriptWorker());
     return true;
   }
 
@@ -530,42 +560,12 @@ class VideoCallService {
   // PRIVATE
   // ================================================================
 
-  void _startSentimentTimer() {
-    _sentimentTimer?.cancel();
-  }
-
-  void _startTranscriptFlushTimer() {
-    _stopTranscriptFlushTimer();
-    _transcriptFlushTimer = Timer.periodic(_transcriptFlushInterval, (_) {
-      unawaited(_flushPendingTranscriptSegments());
-    });
-  }
-
-  void _stopTranscriptFlushTimer() {
-    _transcriptFlushTimer?.cancel();
-    _transcriptFlushTimer = null;
-  }
-
-  Future<void> _postCombinedSentiment() async {}
-
   Future<void> _handleRemoteCallEnd() async {
     if (!_isInCall) return;
     debugPrint('📴 Remote party ended the call');
     final callId = _currentCallId;
     _isInCall = false;
-    _stopTranscriptFlushTimer();
-    await _flushPendingTranscriptSegments(
-      callIdOverride: callId,
-      maxAttempts: 2,
-      respectInCallState: false,
-    );
-    // A flush already in flight may have returned after one failed request.
-    // Join it first, then make one final pass over the now-stable queue.
-    await _flushPendingTranscriptSegments(
-      callIdOverride: callId,
-      maxAttempts: 2,
-      respectInCallState: false,
-    );
+    await _wakeTranscriptWorker(force: true);
     _resetLocalCallState(callId: callId, markCompleted: true);
     _onCallEnded?.call();
   }
@@ -575,7 +575,6 @@ class VideoCallService {
     required bool markCompleted,
   }) {
     _sentimentTimer?.cancel();
-    _stopTranscriptFlushTimer();
     _isInCall = false;
     _currentCallId = null;
     _otherPartyId = null;
@@ -594,113 +593,41 @@ class VideoCallService {
     CallNotificationService.clearActiveCall(normalizedCallId);
   }
 
-  void _enqueueTranscriptSegment(_BufferedTranscriptSegment segment) {
-    _pendingTranscriptSegments.add(segment);
-    if (_pendingTranscriptSegments.length > _maxBufferedTranscriptSegments) {
-      _pendingTranscriptSegments.removeAt(0);
-    }
-  }
-
-  Future<void> _flushPendingTranscriptSegments({
-    String? callIdOverride,
-    int maxAttempts = 1,
-    bool respectInCallState = true,
-  }) async {
-    while (true) {
-      final inFlight = _transcriptFlushFuture;
-      if (inFlight != null) {
-        await inFlight;
-        if (identical(_transcriptFlushFuture, inFlight)) {
-          _transcriptFlushFuture = null;
-        }
-        continue;
-      }
-      if (_pendingTranscriptSegments.isEmpty) {
-        return;
-      }
-      if (_jwtToken == null || _jwtToken!.isEmpty) {
-        return;
-      }
-      if (respectInCallState && !_isInCall) {
-        return;
-      }
-
-      final activeCallId = callIdOverride ?? _currentCallId;
-      if (activeCallId == null || activeCallId.trim().isEmpty) {
-        return;
-      }
-
-      final flush = _runTranscriptFlush(activeCallId, maxAttempts);
-      _transcriptFlushFuture = flush;
-      try {
-        await flush;
-      } finally {
-        if (identical(_transcriptFlushFuture, flush)) {
-          _transcriptFlushFuture = null;
-        }
-      }
-      return;
-    }
-  }
-
-  Future<void> _runTranscriptFlush(String activeCallId, int maxAttempts) async {
-    var attempts = 0;
-    while (attempts < maxAttempts) {
-      final segmentIndex = _pendingTranscriptSegments.indexWhere(
-        (segment) => segment.callId == activeCallId,
-      );
-      if (segmentIndex < 0) {
-        return;
-      }
-      attempts += 1;
-      final segment = _pendingTranscriptSegments[segmentIndex];
-
-      try {
-        final response = await http
-            .post(
-              Uri.parse(
-                '${EnvironmentConfig.baseUrl}/api/v3/calls/${segment.callId}/transcript/segments',
-              ),
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $_jwtToken',
-              },
-              body: jsonEncode({
-                'speakerLabel': segment.speakerLabel,
-                'text': segment.text,
-                'startMs': segment.startMs,
-                'endMs': segment.endMs,
-                'source': segment.source,
-              }),
-            )
-            .timeout(const Duration(seconds: 8));
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          _pendingTranscriptSegments.remove(segment);
-          attempts = 0;
-          continue;
-        }
-
-        debugPrint(
-          '⚠️ Transcript upload failed: status=${response.statusCode} callId=${segment.callId}',
+  Future<void> _initializeTranscriptOutbox() async {
+    try {
+      if (_transcriptOutbox == null) {
+        _transcriptOutbox = await EncryptedTranscriptOutbox.open(
+          ownerUserId: _currentUserId!,
         );
-
-        if (response.statusCode == 400) {
-          _pendingTranscriptSegments.remove(segment);
-          attempts = 0;
-          continue;
-        }
-        if (response.statusCode >= 500 && response.statusCode < 600) {
-          continue;
-        }
-        return;
-      } on TimeoutException {
-        continue;
-      } on http.ClientException {
-        continue;
-      } catch (_) {
-        return;
+        _ownsTranscriptOutbox = true;
       }
+      _pendingTranscriptCount = (await _transcriptOutbox!.all()).length;
+      final connectivity = _connectivityChanges ??
+          (_ownsTranscriptOutbox
+              ? Connectivity().onConnectivityChanged.map(
+                    (results) => !results.contains(ConnectivityResult.none),
+                  )
+              : null);
+      _transcriptRetryWorker = TranscriptRetryWorker(
+        outbox: _transcriptOutbox!,
+        uploader: _transcriptUploader,
+        jwtToken: _jwtToken ?? '',
+        connectivityChanges: connectivity,
+      );
+      await _wakeTranscriptWorker();
+    } catch (_) {
+      _transcriptOutbox = null;
+      _transcriptRetryWorker = null;
+      debugPrint(
+          '[CareConnect][Transcript] encrypted outbox initialization failed');
+    }
+  }
+
+  Future<void> _wakeTranscriptWorker({bool force = false}) async {
+    await _transcriptRetryWorker?.wake(force: force);
+    final outbox = _transcriptOutbox;
+    if (outbox != null) {
+      _pendingTranscriptCount = (await outbox.all()).length;
     }
   }
 
@@ -1063,6 +990,12 @@ class VideoCallService {
     _isPatientSentimentSource = enabled;
   }
 
+  Future<void> updateTranscriptAuthentication(String jwtToken) async {
+    _jwtToken = jwtToken;
+    await _transcriptRetryWorker?.updateAuth(jwtToken);
+    await _wakeTranscriptWorker();
+  }
+
   /// Records a user ID known to be in (or invited to) the active conference.
   void trackParticipant(String userId) {
     final normalized = userId.trim();
@@ -1077,15 +1010,17 @@ class VideoCallService {
       Set<String>.unmodifiable(_participantUserIds);
 
   @visibleForTesting
-  int get pendingTranscriptSegmentCountForTest =>
-      _pendingTranscriptSegments.length;
+  int get pendingTranscriptSegmentCountForTest => _pendingTranscriptCount;
 
   @visibleForTesting
   Future<void> handleRemoteCallEndForTest() => _handleRemoteCallEnd();
 
   void dispose() {
     _sentimentTimer?.cancel();
-    _stopTranscriptFlushTimer();
+    unawaited(_transcriptRetryWorker?.dispose() ?? Future<void>.value());
+    if (_ownsTranscriptOutbox) {
+      unawaited(_transcriptOutbox?.close() ?? Future<void>.value());
+    }
     _wsSubscription?.cancel();
     _aggregatedSentiment.clear();
     _onCallDeclined = null;
@@ -1099,6 +1034,7 @@ class VideoCallService {
     _callContextMetadata = null;
     _callStartedAt = null;
     _lastTranscriptEndMs = 0;
+    _currentUserId = null;
   }
 
   // ================================================================
@@ -1257,24 +1193,6 @@ class VideoCallService {
     }
     return null;
   }
-}
-
-class _BufferedTranscriptSegment {
-  final String callId;
-  final String speakerLabel;
-  final String text;
-  final int? startMs;
-  final int? endMs;
-  final String source;
-
-  const _BufferedTranscriptSegment({
-    required this.callId,
-    required this.speakerLabel,
-    required this.text,
-    required this.startMs,
-    required this.endMs,
-    required this.source,
-  });
 }
 
 // ================================================================

@@ -44,11 +44,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
   /** JSON mapper used to serialize websocket payloads. */
   private final ObjectMapper objectMapper;
 
-  /** Store active connections: userId -> WebSocketSession. */
-  private final Map<String, WebSocketSession> userSessions = new ConcurrentHashMap<>();
-
-  /** Store user info for sessions: sessionId -> User. */
-  private final Map<String, User> sessionUsers = new ConcurrentHashMap<>();
+  /** Identity-fenced user↔session registry shared pattern with CareConnectWebSocketHandler. */
+  private final WebSocketIdentityRegistry identities = new WebSocketIdentityRegistry();
 
   /**
    * Creates the websocket notification handler with its required collaborators.
@@ -170,7 +167,10 @@ public class CallNotificationHandler extends TextWebSocketHandler {
           break;
         default:
           log.warn("Unknown message type: {}", type);
-          sendErrorMessage(session, "Unknown message type: " + type);
+          sendErrorMessage(
+              session,
+              WebSocketPublicErrors.CODE_UNKNOWN_TYPE,
+              WebSocketPublicErrors.MSG_UNKNOWN_TYPE);
           break;
       }
 
@@ -178,7 +178,10 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     } catch (Exception e) {
       recordTelemetry(type, session, payload, "ERROR", e.getMessage());
       log.error("Error handling WebSocket message from session {}", session.getId(), e);
-      sendErrorMessage(session, "Error processing message: " + e.getMessage());
+      sendErrorMessage(
+          session,
+          WebSocketPublicErrors.CODE_INTERNAL,
+          WebSocketPublicErrors.MSG_INTERNAL);
     }
   }
 
@@ -188,9 +191,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       final Map<String, Object> payload,
       final String status,
       final String errorMessage) {
-    final User actor = sessionUsers.get(session.getId());
+    final User actor = identities.getUser(session.getId());
     final Long actorUserId = actor != null ? actor.getId() : null;
-    final Long targetUserId = resolveTargetUserId(payload);
+    Long targetUserId = resolveTargetUserId(payload);
     final String eventType = "WS_" + type.replace('-', '_').toUpperCase(Locale.ROOT);
     final String callId =
         payload.get("callId") == null ? null : String.valueOf(payload.get("callId"));
@@ -199,6 +202,18 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       if (callId != null && !callId.isBlank() && actorUserId != null
           && callSessionService != null) {
         callSessionService.requireParticipant(callId, actorUserId);
+      }
+      if (callId != null && !callId.isBlank() && targetUserId != null
+          && callSessionService != null) {
+        try {
+          callSessionService.requireParticipant(callId, targetUserId);
+        } catch (RuntimeException forgedTarget) {
+          log.warn(
+              "Dropping non-participant telemetry target callId={} targetUserId={}",
+              callId,
+              targetUserId);
+          targetUserId = null;
+        }
       }
       callTelemetryService.recordWebSocketEvent(
           callId,
@@ -283,8 +298,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       return;
     }
 
-    userSessions.put(user.getId().toString(), session);
-    sessionUsers.put(session.getId(), user);
+    identities.bind(session, user);
 
     sendJsonMessage(
         session,
@@ -299,16 +313,16 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleUserJoin(final WebSocketSession session, final Map<String, Object> payload)
       throws Exception {
-    final User user = sessionUsers.get(session.getId());
+    final User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
     final String userId = user.getId().toString();
     final String userRole = user.getRole().name();
 
-    userSessions.put(userId, session);
+    identities.bind(session, user);
 
     log.debug("User joined room userId={} role={}", user.getId(), userRole);
 
@@ -324,9 +338,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleCallInvitation(
       final WebSocketSession session, final Map<String, Object> payload) throws Exception {
-    final User sender = sessionUsers.get(session.getId());
+    final User sender = identities.getUser(session.getId());
     if (sender == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
@@ -344,7 +358,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
     final User recipient = userRepository.findById(Long.parseLong(recipientId)).orElse(null);
     if (recipient == null) {
-      sendErrorMessage(session, "Recipient not found");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_NOT_FOUND, WebSocketPublicErrors.MSG_RECIPIENT_NOT_FOUND);
       return;
     }
 
@@ -396,7 +410,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       }
     }
 
-    final WebSocketSession recipientSession = userSessions.get(recipientId);
+    final WebSocketSession recipientSession = identities.getSession(recipientId);
 
     if (recipientSession != null && recipientSession.isOpen()) {
       final Map<String, Object> callNotification = new HashMap<>();
@@ -453,9 +467,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleSmsNotification(
       final WebSocketSession session, final Map<String, Object> payload) throws Exception {
-    final User sender = sessionUsers.get(session.getId());
+    final User sender = identities.getUser(session.getId());
     if (sender == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
@@ -465,11 +479,11 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
     final User recipient = userRepository.findById(Long.parseLong(recipientId)).orElse(null);
     if (recipient == null) {
-      sendErrorMessage(session, "Recipient not found");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_NOT_FOUND, WebSocketPublicErrors.MSG_RECIPIENT_NOT_FOUND);
       return;
     }
 
-    final WebSocketSession recipientSession = userSessions.get(recipientId);
+    final WebSocketSession recipientSession = identities.getSession(recipientId);
 
     if (recipientSession != null && recipientSession.isOpen()) {
       final Map<String, Object> smsNotification =
@@ -507,9 +521,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleCallAccept(final WebSocketSession session, final Map<String, Object> payload)
       throws Exception {
-    final User user = sessionUsers.get(session.getId());
+    final User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
@@ -523,7 +537,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
         : callSessionService.getOtherParticipantUserIds(callId, user.getId());
     for (final Long recipientId : recipients) {
       if (recipientId == null) continue;
-      final WebSocketSession senderSession = userSessions.get(recipientId.toString());
+      final WebSocketSession senderSession = identities.getSession(recipientId.toString());
       if (senderSession == null || !senderSession.isOpen()) continue;
       final Map<String, Object> response =
           Map.of(
@@ -540,9 +554,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleCallDecline(final WebSocketSession session, final Map<String, Object> payload)
       throws Exception {
-    final User user = sessionUsers.get(session.getId());
+    final User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
@@ -567,7 +581,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
     for (final Long recipientId : recipients) {
       if (recipientId == null) continue;
-      final WebSocketSession senderSession = userSessions.get(recipientId.toString());
+      final WebSocketSession senderSession = identities.getSession(recipientId.toString());
       if (senderSession == null || !senderSession.isOpen()) continue;
       final Map<String, Object> response =
           Map.of(
@@ -585,9 +599,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleCallEnd(final WebSocketSession session, final Map<String, Object> payload)
       throws Exception {
-    final User user = sessionUsers.get(session.getId());
+    final User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
@@ -609,9 +623,9 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void handleSentimentChannelState(
       final WebSocketSession session, final Map<String, Object> payload) throws Exception {
-    final User user = sessionUsers.get(session.getId());
+    final User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendUnauthenticated(session);
       return;
     }
 
@@ -620,7 +634,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
             ? ""
             : String.valueOf(payload.get("channel")).trim().toLowerCase(Locale.ROOT);
     if (!("text".equals(channel) || "voice".equals(channel) || "video".equals(channel))) {
-      sendErrorMessage(session, "Invalid channel: " + channel);
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_INVALID_REQUEST, WebSocketPublicErrors.MSG_INVALID_CHANNEL);
       return;
     }
 
@@ -639,7 +653,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     }
 
     if (callSessionService == null && otherPartyId.isBlank()) {
-      sendErrorMessage(session, "otherPartyId is required");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_INVALID_REQUEST, WebSocketPublicErrors.MSG_MISSING_OTHER_PARTY);
       return;
     }
 
@@ -653,7 +667,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       recipientIds.add(otherPartyId);
     }
     for (final String recipientId : recipientIds) {
-      final WebSocketSession otherSession = userSessions.get(recipientId);
+      final WebSocketSession otherSession = identities.getSession(recipientId);
       if (otherSession == null || !otherSession.isOpen()) {
         continue;
       }
@@ -678,24 +692,35 @@ public class CallNotificationHandler extends TextWebSocketHandler {
   }
 
   private void sendErrorMessage(final WebSocketSession session, final String errorMessage) {
+    sendErrorMessage(session, WebSocketPublicErrors.CODE_INTERNAL, errorMessage);
+  }
+
+  private void sendErrorMessage(
+      final WebSocketSession session, final String code, final String errorMessage) {
     try {
-      final Map<String, Object> error =
-          Map.of(
-              "type", "error",
-              "message", errorMessage,
-              "timestamp", System.currentTimeMillis());
+      final Map<String, Object> error = new HashMap<>();
+      error.put("type", "error");
+      error.put("code", code);
+      error.put("message", errorMessage);
+      error.put("timestamp", System.currentTimeMillis());
       sendJsonMessage(session, error);
     } catch (Exception e) {
       log.error("Failed to send error message to session {}", session.getId(), e);
     }
   }
 
+  private void sendUnauthenticated(final WebSocketSession session) {
+    sendErrorMessage(
+        session,
+        WebSocketPublicErrors.CODE_UNAUTHENTICATED,
+        WebSocketPublicErrors.MSG_UNAUTHENTICATED);
+  }
+
   @Override
   public void afterConnectionClosed(final WebSocketSession session, final CloseStatus status)
       throws Exception {
-    final User user = sessionUsers.remove(session.getId());
+    final User user = identities.unbind(session);
     if (user != null) {
-      userSessions.remove(user.getId().toString(), session);
       log.debug(
           "WebSocket connection closed for userId={} status={}", user.getId(), status);
     } else {
@@ -706,7 +731,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
   @Override
   public void handleTransportError(final WebSocketSession session, final Throwable exception)
       throws Exception {
-    final User user = sessionUsers.get(session.getId());
+    final User user = identities.getUser(session.getId());
     final Long userId = user != null ? user.getId() : null;
     log.error(
         "WebSocket transport error userId={} session={}", userId, session.getId());
@@ -722,8 +747,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
    * @return {@code true} if the user has an open session
    */
   public boolean isUserOnline(final String userId) {
-    final WebSocketSession session = userSessions.get(userId);
-    return session != null && session.isOpen();
+    return identities.isOnline(userId);
   }
 
   /**
@@ -734,7 +758,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
    */
   public void sendNotificationToUser(
       final String userId, final Map<String, Object> notification) {
-    final WebSocketSession session = userSessions.get(userId);
+    final WebSocketSession session = identities.getSession(userId);
     if (session != null && session.isOpen()) {
       try {
         sendJsonMessage(session, notification);
@@ -755,8 +779,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
    */
   public Map<String, String> getOnlineUsers() {
     final Map<String, String> onlineUsers = new ConcurrentHashMap<>();
-    sessionUsers
-        .values()
+    identities
+        .users()
         .forEach(user -> onlineUsers.put(user.getId().toString(), user.getEmail()));
     return onlineUsers;
   }

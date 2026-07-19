@@ -3,7 +3,6 @@ package com.careconnect.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -24,6 +23,7 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.security.Role;
 import java.util.Optional;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -177,6 +177,36 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void transcriptUpload_allowsHistoricalParticipantWithinGrace() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_ENDED);
+        session.setEndedAt(LocalDateTime.now(java.time.ZoneOffset.UTC).minusSeconds(30));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_LEFT)));
+
+        assertThat(service.requireTranscriptUploadParticipant("call-1", 2L))
+                .isSameAs(session);
+    }
+
+    @Test
+    void transcriptUpload_rejectsHistoricalParticipantAfterGrace() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_ENDED);
+        session.setEndedAt(LocalDateTime.now(java.time.ZoneOffset.UTC).minusMinutes(10));
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_LEFT)));
+
+        assertThatThrownBy(() ->
+                service.requireTranscriptUploadParticipant("call-1", 2L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("grace period");
+    }
+
+    @Test
     void createSession_existingRowsAreIdempotent() {
         final User creator = user(2L, Role.CAREGIVER);
         final User patientUser = user(7L, Role.PATIENT);
@@ -273,7 +303,7 @@ class CallSessionServiceTest {
         assertThat(result.ended()).isTrue();
         assertThat(result.terminationOwner()).isFalse();
         verify(sessionRepository, never()).beginTermination(
-                any(), any(), any(), any(), any(), any(), anyLong(), any());
+                any(), any(), any(), any(), any(), any(), any(LocalDateTime.class), any());
     }
 
     @Test
@@ -293,7 +323,7 @@ class CallSessionServiceTest {
                 10L, CallSessionService.SESSION_CREATED,
                 CallSessionService.SESSION_CANCELLED);
         verify(sessionRepository, never()).beginTermination(
-                any(), any(), any(), any(), any(), any(), anyLong(), any());
+                any(), any(), any(), any(), any(), any(), any(LocalDateTime.class), any());
     }
 
     @Test
@@ -322,7 +352,7 @@ class CallSessionServiceTest {
         assertThat(result.notifyUserIds()).containsExactly(3L, 4L);
         assertThat(result.terminationOwner()).isFalse();
         verify(sessionRepository, never()).beginTermination(
-                any(), any(), any(), any(), any(), any(), anyLong(), any());
+                any(), any(), any(), any(), any(), any(), any(LocalDateTime.class), any());
         verify(sessionRepository, never()).cancelIfNotActive(any(), any(), any());
     }
 
@@ -345,7 +375,7 @@ class CallSessionServiceTest {
                 eq(10L), eq(CallSessionService.SESSION_CREATED),
                 eq(CallSessionService.SESSION_ACTIVE),
                 eq(CallSessionService.SESSION_TERMINATING),
-                any(), eq(2L), anyLong(), eq("7,9"))).thenReturn(1);
+                any(), eq(2L), any(LocalDateTime.class), eq("7,9"))).thenReturn(1);
 
         final CallSessionService.LeaveResult result =
                 service.leaveOrBeginTermination("call-1", 2L);
@@ -367,7 +397,7 @@ class CallSessionServiceTest {
                 .thenReturn(Optional.of(participant(2L, CallSessionService.PARTICIPANT_LEFT)));
         when(sessionRepository.reclaimTermination(
                 eq(10L), eq(CallSessionService.SESSION_TERMINATING),
-                any(), eq(2L), anyLong())).thenReturn(1);
+                any(), eq(2L), any(LocalDateTime.class))).thenReturn(1);
 
         final CallSessionService.LeaveResult result =
                 service.claimTerminationRetry("call-1", 2L);
@@ -384,15 +414,127 @@ class CallSessionServiceTest {
         final java.util.UUID staleClaim = java.util.UUID.randomUUID();
         when(sessionRepository.findByCallIdForLifecycle("call-1"))
                 .thenReturn(Optional.of(session));
-        when(sessionRepository.completeTermination(
-                10L,
-                CallSessionService.SESSION_TERMINATING,
-                CallSessionService.SESSION_ENDED,
-                staleClaim)).thenReturn(0);
+        when(sessionRepository.renewTerminationLease(
+                eq(10L), eq(CallSessionService.SESSION_TERMINATING),
+                eq(staleClaim), any(LocalDateTime.class))).thenReturn(0);
 
         assertThat(service.completeTermination("call-1", staleClaim)).isFalse();
+        verify(sessionRepository, never()).completeTermination(
+                any(), any(), any(), any());
         verify(participantRepository, never()).expireJoinedParticipants(any(), any(), any());
     }
+
+    @Test
+    void renewTerminationOwnership_rejectsExpiredForeignClaim() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationClaimId(java.util.UUID.randomUUID());
+        final java.util.UUID otherClaim = java.util.UUID.randomUUID();
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+
+        assertThat(service.renewTerminationOwnership("call-1", otherClaim)).isNull();
+        verify(sessionRepository, never()).renewTerminationLease(
+                any(), any(), any(), any(LocalDateTime.class));
+    }
+
+    @Test
+    void renewTerminationOwnership_extendsLeaseAndReturnsStepProgress() {
+        final java.util.UUID claimId = java.util.UUID.randomUUID();
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationClaimId(claimId);
+        session.setTerminationSentimentAt(LocalDateTime.now());
+        session.setTerminationSummaryAt(LocalDateTime.now());
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(sessionRepository.renewTerminationLease(
+                eq(10L), eq(CallSessionService.SESSION_TERMINATING),
+                eq(claimId), any(LocalDateTime.class))).thenReturn(1);
+
+        final CallSessionService.TerminationProgress progress =
+                service.renewTerminationOwnership("call-1", claimId);
+
+        assertThat(progress).isNotNull();
+        assertThat(progress.sentimentDone()).isTrue();
+        assertThat(progress.summaryDone()).isTrue();
+        assertThat(progress.recordingDone()).isFalse();
+        assertThat(progress.meetingDone()).isFalse();
+    }
+
+    @Test
+    void advanceTerminationStep_isTokenFencedCompareAndSet() {
+        final java.util.UUID claimId = java.util.UUID.randomUUID();
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationClaimId(claimId);
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+        when(sessionRepository.markTerminationRecording(
+                eq(10L), eq(CallSessionService.SESSION_TERMINATING),
+                eq(claimId), any(LocalDateTime.class))).thenReturn(1);
+
+        assertThat(service.advanceTerminationStep(
+                "call-1", claimId, com.careconnect.model.TerminationStep.RECORDING))
+                .isTrue();
+        verify(sessionRepository).markTerminationRecording(
+                eq(10L), eq(CallSessionService.SESSION_TERMINATING),
+                eq(claimId), any(LocalDateTime.class));
+    }
+
+    @Test
+    void advanceTerminationStep_staleOwnerHasZeroSideEffects() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationClaimId(java.util.UUID.randomUUID());
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+
+        assertThat(service.advanceTerminationStep(
+                "call-1",
+                java.util.UUID.randomUUID(),
+                com.careconnect.model.TerminationStep.MEETING))
+                .isFalse();
+        verify(sessionRepository, never()).markTerminationMeeting(
+                any(), any(), any(), any(LocalDateTime.class));
+    }
+
+    @Test
+    void recordTerminationRetry_ignoresStaleOwner() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationClaimId(java.util.UUID.randomUUID());
+        when(sessionRepository.findByCallIdForLifecycle("call-1"))
+                .thenReturn(Optional.of(session));
+
+        service.recordTerminationRetry("call-1", java.util.UUID.randomUUID(), "retry");
+
+        verify(sessionRepository, never()).failTermination(
+                any(), any(), any(), any(LocalDateTime.class), any());
+    }
+
+    @Test
+    void claimDueTermination_reclaimsExpiredLeaseWithoutResettingProgress() {
+        final CallSession session = session(10L, 42L);
+        session.setStatus(CallSessionService.SESSION_TERMINATING);
+        session.setTerminationNotifyUserIds("7");
+        session.setTerminationSentimentAt(LocalDateTime.now());
+        session.setTerminationLeaseUntil(LocalDateTime.now().minusMinutes(5));
+        when(sessionRepository.findByIdForLifecycle(10L)).thenReturn(Optional.of(session));
+        when(sessionRepository.reclaimTermination(
+                eq(10L), eq(CallSessionService.SESSION_TERMINATING),
+                any(), eq(null), any(LocalDateTime.class))).thenReturn(1);
+
+        final CallSessionService.TerminationClaim claim = service.claimDueTermination(10L);
+
+        assertThat(claim).isNotNull();
+        assertThat(claim.callId()).isEqualTo("call-1");
+        assertThat(claim.notifyUserIds()).containsExactly(7L);
+        assertThat(session.getTerminationSentimentAt()).isNotNull();
+        verify(sessionRepository, never()).markTerminationSentiment(
+                any(), any(), any(), any(LocalDateTime.class));
+    }
+
 
     @Test
     void requireHistoricalParticipant_rejectsInvitedAndDeclinedParticipants() {
@@ -477,7 +619,7 @@ class CallSessionServiceTest {
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("historical");
         verify(sessionRepository, never()).reclaimTermination(
-                any(), any(), any(), any(), anyLong());
+                any(), any(), any(), any(), any(LocalDateTime.class));
     }
 
     private static User user(Long id, Role role) {

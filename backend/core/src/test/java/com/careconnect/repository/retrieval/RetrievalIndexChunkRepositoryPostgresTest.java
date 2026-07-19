@@ -93,6 +93,7 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                     claimed_until TIMESTAMPTZ,
                     claim_token UUID,
                     migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE',
+                    quarantine_reason VARCHAR(255),
                     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                     PRIMARY KEY (patient_id, source_kind, source_record_id)
@@ -106,21 +107,23 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
 
         final OffsetDateTime claimedUntil =
                 OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5);
-        final UUID claimToken = UUID.randomUUID();
-        assertThat(repository.claimStaleSummaryCitationSources(
+        final var claimed = repository.claimStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
                         SummaryChunker.CITATION_METADATA_VERSION,
                         25,
                         claimedUntil,
-                        claimToken))
+                        8);
+        assertThat(claimed)
                 .extracting(RetrievalIndexChunkRepository.SummaryReplayCandidate::getSourceRecordId)
                 .containsExactly("42");
+        final UUID claimToken = claimed.get(0).getClaimToken();
+        assertThat(claimToken).isNotNull();
         assertThat(repository.claimStaleSummaryCitationSources(
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION,
                 25,
                 claimedUntil,
-                UUID.randomUUID())).isEmpty();
+                8)).isEmpty();
 
         final OffsetDateTime retryAfter =
                 OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
@@ -159,7 +162,8 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         jdbcTemplate.update("UPDATE retrieval_index_chunk SET source_kind = NULL");
 
         assertThat(staleSources()).isEmpty();
-        assertThat(repository.quarantineAmbiguousLegacySummarySources()).isEqualTo(2);
+        assertThat(repository.quarantineLegacySummarySourceAcrossPatients(
+                "77", RetrievalRecordType.summaryTypeNames())).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*) FROM retrieval_index_chunk
@@ -230,11 +234,11 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
             var first = executor.submit(() -> repository.claimStaleSummaryCitationSources(
                     RetrievalRecordType.summaryTypeNames(),
                     SummaryChunker.CITATION_METADATA_VERSION, 1,
-                    OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), UUID.randomUUID()));
+                    OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8));
             var second = executor.submit(() -> repository.claimStaleSummaryCitationSources(
                     RetrievalRecordType.summaryTypeNames(),
                     SummaryChunker.CITATION_METADATA_VERSION, 1,
-                    OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), UUID.randomUUID()));
+                    OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8));
 
             final var claimed = new java.util.HashSet<String>();
             first.get().forEach(candidate -> claimed.add(candidate.getSourceRecordId()));
@@ -248,22 +252,24 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
     @Test
     void expiredWorkerCannotReleaseOrFailNewerLease() {
         insertChunk("00000000-0000-0000-0000-000000000001", "call-summary:42", "CALL_SUMMARY");
-        final UUID expiredToken = UUID.randomUUID();
         final var first = repository.claimStaleSummaryCitationSources(
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION, 1,
-                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), expiredToken);
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8);
         assertThat(first).hasSize(1);
+        final UUID expiredToken = first.get(0).getClaimToken();
         jdbcTemplate.update("""
                 UPDATE summary_citation_replay_source
                 SET claimed_until = NOW() - INTERVAL '1 second'
                 """);
 
-        final UUID currentToken = UUID.randomUUID();
-        assertThat(repository.claimStaleSummaryCitationSources(
+        final var second = repository.claimStaleSummaryCitationSources(
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION, 1,
-                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), currentToken)).hasSize(1);
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8);
+        assertThat(second).hasSize(1);
+        final UUID currentToken = second.get(0).getClaimToken();
+        assertThat(currentToken).isNotEqualTo(expiredToken);
 
         assertThat(repository.releaseSummaryCitationReplayClaim(
                 42L, "call-summary:42", expiredToken))
@@ -274,6 +280,35 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         assertThat(repository.releaseSummaryCitationReplayClaim(
                 42L, "call-summary:42", currentToken))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void claimBatch_assignsUniqueClaimTokensPerSource() {
+        insertChunk("00000000-0000-0000-0000-000000000001", "call-summary:41", "CALL_SUMMARY");
+        insertChunk("00000000-0000-0000-0000-000000000002", "call-summary:42", "CALL_SUMMARY");
+        final var claimed = repository.claimStaleSummaryCitationSources(
+                RetrievalRecordType.summaryTypeNames(),
+                SummaryChunker.CITATION_METADATA_VERSION, 2,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8);
+        assertThat(claimed).hasSize(2);
+        assertThat(claimed.get(0).getClaimToken())
+                .isNotNull()
+                .isNotEqualTo(claimed.get(1).getClaimToken());
+    }
+
+    @Test
+    void claimBatch_excludesSourcesAtMaxAttempts() {
+        insertChunk("00000000-0000-0000-0000-000000000001", "call-summary:42", "CALL_SUMMARY");
+        jdbcTemplate.update("""
+                UPDATE summary_citation_replay_source
+                SET attempts = 8
+                WHERE source_record_id = 'call-summary:42'
+                """);
+        assertThat(repository.claimStaleSummaryCitationSources(
+                RetrievalRecordType.summaryTypeNames(),
+                SummaryChunker.CITATION_METADATA_VERSION, 1,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8))
+                .isEmpty();
     }
 
     @Test
@@ -292,7 +327,7 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         assertThat(repository.claimStaleSummaryCitationSources(
                 RetrievalRecordType.summaryTypeNames(),
                 SummaryChunker.CITATION_METADATA_VERSION, 2,
-                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), UUID.randomUUID()))
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5), 8))
                 .hasSize(2);
     }
 
@@ -337,7 +372,7 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                 SummaryChunker.CITATION_METADATA_VERSION,
                 1,
                 OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5),
-                UUID.randomUUID()))
+                8))
                 .extracting(RetrievalIndexChunkRepository.SummaryReplayCandidate::getSourceRecordId)
                 .containsExactly("call-summary:77");
     }
@@ -371,7 +406,7 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
                 SummaryChunker.CITATION_METADATA_VERSION,
                 1,
                 OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5),
-                UUID.randomUUID())).isEmpty();
+                8)).isEmpty();
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT migration_status
                 FROM retrieval_index_chunk
@@ -622,7 +657,8 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         return repository.findStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
                         SummaryChunker.CITATION_METADATA_VERSION,
-                        25)
+                        25,
+                        8)
                 .stream()
                 .map(RetrievalIndexChunkRepository.SummaryReplayCandidate::getSourceRecordId)
                 .toList();

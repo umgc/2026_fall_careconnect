@@ -1,8 +1,10 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.CallParticipant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -100,4 +102,66 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
             @Param("userId") Long userId,
             @Param("invited") String invited,
             @Param("declined") String declined);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+            UPDATE call_participants
+               SET attendee_claim_token = :claimToken,
+                   attendee_claimed_until = :claimedUntil,
+                   chime_external_user_id = COALESCE(chime_external_user_id, :externalUserId),
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE call_session_id = :sessionId
+               AND user_id = :userId
+               AND chime_attendee_id IS NULL
+               AND (attendee_claim_token IS NULL
+                    OR attendee_claimed_until IS NULL
+                    OR attendee_claimed_until < :now)
+            """, nativeQuery = true)
+    int claimAttendeeCreation(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("claimToken") UUID claimToken,
+            @Param("claimedUntil") LocalDateTime claimedUntil,
+            @Param("externalUserId") String externalUserId,
+            @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+            UPDATE call_participants
+               SET chime_external_user_id = :externalUserId,
+                   chime_attendee_id = :attendeeId,
+                   chime_join_token = :joinToken,
+                   attendee_claim_token = NULL,
+                   attendee_claimed_until = NULL,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE call_session_id = :sessionId
+               AND user_id = :userId
+               AND attendee_claim_token = :claimToken
+            """, nativeQuery = true)
+    int finalizeAttendeeCreation(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("claimToken") UUID claimToken,
+            @Param("externalUserId") String externalUserId,
+            @Param("attendeeId") String attendeeId,
+            @Param("joinToken") String joinToken);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+            UPDATE call_participants
+               SET attendee_claim_token = NULL,
+                   attendee_claimed_until = NULL,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE call_session_id = :sessionId
+               AND user_id = :userId
+               AND attendee_claim_token = :claimToken
+               AND chime_attendee_id IS NULL
+            """, nativeQuery = true)
+    int releaseAttendeeClaim(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("claimToken") UUID claimToken);
 }
