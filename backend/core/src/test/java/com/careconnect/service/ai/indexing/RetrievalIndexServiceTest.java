@@ -14,6 +14,7 @@ import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
+import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
@@ -57,6 +58,8 @@ class RetrievalIndexServiceTest {
     @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
+    private CallTranscriptService callTranscriptService;
+    @Mock
     private UspsMailpieceRepository uspsMailpieceRepository;
     @Mock
     private RetrievalIndexChunkRepository chunkRepository;
@@ -71,7 +74,7 @@ class RetrievalIndexServiceTest {
         service = new RetrievalIndexService(
                 callSummaryRepository,
                 callSessionRepository,
-                transcriptSegmentRepository,
+                callTranscriptService,
                 uspsMailpieceRepository,
                 chunkRepository,
                 new SummaryChunker(mapper),
@@ -763,11 +766,11 @@ class RetrievalIndexServiceTest {
         segment.setId(5L);
         segment.setText("Feeling better today");
         segment.setSpeakerLabel("Patient");
-        when(transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc("call-1"))
-                .thenReturn(List.of(segment));
+        when(callTranscriptService.captureIndexingSnapshot("call-1"))
+                .thenReturn(indexingSnapshot(List.of(segment), "sha256:v1"));
 
         final int written = service.ingestTranscriptIndexed(
-                new TranscriptIndexedPayload("call-1", 42L, 1, "CLIENT_TRANSCRIPT"));
+                new TranscriptIndexedPayload("call-1", 42L, 1, "sha256:v1"));
 
         assertThat(written).isEqualTo(1);
         verify(chunkRepository).deleteBySourceRecordIdAndRecordType(
@@ -776,15 +779,67 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
+    @DisplayName("later live batches retain archived chunks and use persisted segment sources")
+    void ingestTranscriptIndexed_archiveThenLaterBatch_keepsCompleteSnapshot() {
+        when(callSessionRepository.findByCallIdForIndexing("call-archive"))
+                .thenReturn(Optional.of(callSession("call-archive", 42L)));
+        final CallTranscriptSegment archived = new CallTranscriptSegment();
+        archived.setText("Archived opening");
+        archived.setSpeakerLabel("Patient");
+        archived.setSource("ARCHIVE_S3");
+        final CallTranscriptSegment live = new CallTranscriptSegment();
+        live.setId(22L);
+        live.setText("Later live segment");
+        live.setSpeakerLabel("Nurse");
+        live.setSource("POST_CALL_TRANSCRIBE");
+        when(callTranscriptService.captureIndexingSnapshot("call-archive"))
+                .thenReturn(indexingSnapshot(List.of(archived, live), "sha256:complete"));
+
+        assertThat(service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload(
+                        "call-archive", 42L, 2, "sha256:complete"))).isEqualTo(2);
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(2);
+        assertThat(captor.getValue().get(0).getChunkMetadata()).contains("ARCHIVE_S3");
+        assertThat(captor.getValue().get(1).getChunkMetadata())
+                .contains("POST_CALL_TRANSCRIBE");
+    }
+
+    @Test
+    void ingestSummaryCreated_rejectsTamperedEngineMetadata() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummarizationEngine("aws_bedrock:trusted");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "on_consent", "aws_bedrock:tampered",
+                ContentHashUtil.sha256(summary.getSummaryJson()))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("engine");
+
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
     @DisplayName("ingestTranscriptIndexed does not delete when no segment drafts")
     void ingestTranscriptIndexed_emptyDrafts_doesNotDelete() {
         when(callSessionRepository.findByCallIdForIndexing("call-2"))
                 .thenReturn(Optional.of(callSession("call-2", 77L)));
-        when(transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc("call-2"))
-                .thenReturn(List.of());
+        when(callTranscriptService.captureIndexingSnapshot("call-2"))
+                .thenReturn(indexingSnapshot(List.of(), "sha256:empty"));
 
         assertThat(service.ingestTranscriptIndexed(
-                new TranscriptIndexedPayload("call-2", null, 0, "CLIENT_TRANSCRIPT")))
+                new TranscriptIndexedPayload("call-2", null, 0, "sha256:empty")))
                 .isZero();
         verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
         verify(chunkRepository, never()).saveAll(anyList());
@@ -797,7 +852,7 @@ class RetrievalIndexServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.ingestTranscriptIndexed(
-                new TranscriptIndexedPayload("call-3", null, 1, "CLIENT_TRANSCRIPT")))
+                new TranscriptIndexedPayload("call-3", null, 1, "sha256:v1")))
                 .isInstanceOf(IndexingDeferredException.class)
                 .hasMessageContaining("CallSession")
                 .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
@@ -811,7 +866,7 @@ class RetrievalIndexServiceTest {
                 .thenReturn(Optional.of(callSession("call-4", 77L)));
 
         assertThatThrownBy(() -> service.ingestTranscriptIndexed(
-                new TranscriptIndexedPayload("call-4", 42L, 1, "CLIENT_TRANSCRIPT")))
+                new TranscriptIndexedPayload("call-4", 42L, 1, "sha256:v1")))
                 .isInstanceOf(IndexingDeferredException.class)
                 .hasMessageContaining("CallSession");
 
@@ -822,17 +877,22 @@ class RetrievalIndexServiceTest {
     void ingestTranscriptIndexed_defersIncompleteLongCallSnapshotWithoutBurning() {
         when(callSessionRepository.findByCallIdForIndexing("call-long"))
                 .thenReturn(Optional.of(callSession("call-long", 42L)));
-        when(transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc("call-long"))
-                .thenReturn(List.of(new CallTranscriptSegment()));
+        when(callTranscriptService.captureIndexingSnapshot("call-long"))
+                .thenReturn(indexingSnapshot(List.of(new CallTranscriptSegment()), "sha256:short"));
 
         assertThatThrownBy(() -> service.ingestTranscriptIndexed(
-                new TranscriptIndexedPayload("call-long", 42L, 200, "CLIENT_TRANSCRIPT")))
+                new TranscriptIndexedPayload("call-long", 42L, 200, "sha256:long")))
                 .isInstanceOf(IndexingDeferredException.class)
                 .hasMessageContaining("incomplete")
                 .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
                         .isFalse());
 
         verify(chunkRepository, never()).deleteBySourceRecordIdAndRecordType(any(), any());
+    }
+
+    private static CallTranscriptService.IndexingSnapshot indexingSnapshot(
+            final List<CallTranscriptSegment> segments, final String version) {
+        return new CallTranscriptService.IndexingSnapshot(segments, version);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.careconnect.repository.retrieval;
 
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
@@ -9,6 +10,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * deliberately fails instead, preventing PostgreSQL-only SQL regressions from merging.
  */
 @Testcontainers
+@EnabledIfEnvironmentVariable(named = "CI", matches = "(?i)true")
 class RetrievalIndexChunkRepositoryPostgresCiTest
         extends RetrievalIndexChunkRepositoryPostgresContract {
 }

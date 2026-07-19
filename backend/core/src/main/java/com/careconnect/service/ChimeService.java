@@ -15,6 +15,7 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingReque
 import software.amazon.awssdk.services.chimesdkmeetings.model.CreateMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.DeleteMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.EngineTranscribeSettings;
+import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Meeting;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTranscriptionResponse;
@@ -159,6 +160,12 @@ public class ChimeService {
         if (activeMeetings.containsKey(callId)) {
             log.info("Meeting already exists for callId: {}", callId);
             return buildMeetingResponse(activeMeetings.get(callId));
+        }
+
+        final Meeting durableMeeting = hydrateDurableMeeting(callId);
+        if (durableMeeting != null) {
+            activeMeetings.put(callId, durableMeeting);
+            return buildMeetingResponse(durableMeeting);
         }
 
         if (!isAwsChimeAvailable()) {
@@ -382,12 +389,14 @@ public class ChimeService {
                 log.info("Chime meeting deleted: {} for callId: {}", durableMeetingId, callId);
             }
 
-        } catch (Exception e) {
-            // Log but don't throw — if Chime already cleaned it up, that's fine
-            if (log.isWarnEnabled()) {
-                log.warn("Could not delete Chime meeting {} — may have already expired: {}",
-                    durableMeetingId, e.getMessage());
+        } catch (software.amazon.awssdk.services.chimesdkmeetings.model.ChimeSdkMeetingsException e) {
+            if (e.statusCode() == 404) {
+                log.info("Chime meeting {} was already absent", durableMeetingId);
+                return;
             }
+            throw new RuntimeException("Retryable failure deleting Chime meeting", e);
+        } catch (Exception e) {
+            throw new RuntimeException("Retryable failure deleting Chime meeting", e);
         }
     }
 
@@ -503,6 +512,23 @@ public class ChimeService {
                 .map(CallSession::getChimeMeetingId)
                 .filter(id -> !id.isBlank())
                 .orElse(null);
+    }
+
+    private Meeting hydrateDurableMeeting(final String callId) {
+        final String meetingId = getDurableMeetingId(callId);
+        if (meetingId == null || !isAwsChimeAvailable()) {
+            return null;
+        }
+        try {
+            return chimeSdkMeetingsClient.getMeeting(
+                    GetMeetingRequest.builder().meetingId(meetingId).build()).meeting();
+        } catch (software.amazon.awssdk.services.chimesdkmeetings.model.ChimeSdkMeetingsException e) {
+            if (e.statusCode() == 404) {
+                callSessionRepository.clearMeetingId(callId, meetingId);
+                return null;
+            }
+            throw new RuntimeException("Failed to probe durable Chime meeting", e);
+        }
     }
 
     private void cacheAttendeeCredentials(

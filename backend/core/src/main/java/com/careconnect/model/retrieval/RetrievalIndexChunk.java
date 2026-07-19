@@ -82,16 +82,22 @@ public class RetrievalIndexChunk {
     @Column(name = "consent_scope", length = RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH)
     private String consentScope;
 
+    /**
+     * Compatibility-only replay state. New claims are owned by one
+     * summary_citation_replay_source row per source identity.
+     */
     @Column(name = "citation_replay_after")
     private OffsetDateTime citationReplayAfter;
 
+    /** Compatibility-only; source-level attempts are authoritative. */
     @Column(name = "citation_replay_attempts", nullable = false)
     private Integer citationReplayAttempts;
 
+    /** Compatibility-only; source-level leases are authoritative. */
     @Column(name = "citation_replay_claimed_until")
     private OffsetDateTime citationReplayClaimedUntil;
 
-    /** Fencing token: only the worker holding this exact claim may release or fail it. */
+    /** Compatibility-only; the source table's UUID token is the active fence. */
     @Column(name = "citation_replay_claim_token")
     private UUID citationReplayClaimToken;
 

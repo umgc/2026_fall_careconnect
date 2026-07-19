@@ -1001,6 +1001,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
           userId: userId,
           callId: callId,
           recipientId: recipientId,
+          recipientRole: state.uri.queryParameters['recipientRole'],
           userRole: state.uri.queryParameters['userRole'],
           isVideoEnabled: isVideoEnabled,
           isAudioEnabled: isAudioEnabled,
@@ -1008,6 +1009,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
           userName: state.uri.queryParameters['userName'],
           recipientName: state.uri.queryParameters['recipientName'],
           callKind: state.uri.queryParameters['callKind'],
+          scheduledVisitId: state.uri.queryParameters['scheduledVisitId'],
           contextPatientUserIds: contextPatientUserIds,
           returnPatientDetailsId:
               state.uri.queryParameters['returnPatientDetailsId'],

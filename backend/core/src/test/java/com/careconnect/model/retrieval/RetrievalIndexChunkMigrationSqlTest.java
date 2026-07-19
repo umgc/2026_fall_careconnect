@@ -91,6 +91,23 @@ class RetrievalIndexChunkMigrationSqlTest {
         assertThat(sql).contains("WHERE source_kind IS NULL");
     }
 
+    @Test
+    @DisplayName("citation replay ownership is source-level and fenced")
+    void sourceLevelReplayMigrationDefinesRecoveryAndInvariants() throws Exception {
+        String sql = readMigration(
+                "V2607190100__create_summary_citation_replay_source.sql");
+
+        assertThat(sql).contains("CREATE TABLE IF NOT EXISTS summary_citation_replay_source");
+        assertThat(sql).contains("PRIMARY KEY (patient_id, source_kind, source_record_id)");
+        assertThat(sql).contains("ck_summary_replay_lease_token");
+        assertThat(sql).contains("ck_retrieval_replay_lease_token");
+        assertThat(sql).contains("idx_summary_replay_claim_fair");
+        assertThat(sql).contains("JOIN call_summaries cs");
+        assertThat(sql).contains("'call-summary:' || cs.id");
+        assertThat(sql).doesNotContain(
+                "SET source_kind = 'CALL_SUMMARY',\n    migration_status = 'ACTIVE'");
+    }
+
     private static String readMigration(String filename) throws Exception {
         try (var stream = RetrievalIndexChunkMigrationSqlTest.class.getClassLoader()
                 .getResourceAsStream("db/migration/" + filename)) {

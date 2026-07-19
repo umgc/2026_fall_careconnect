@@ -134,6 +134,10 @@ class CallControllerTest {
                 .thenReturn(durableSession);
         when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
         when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
+        when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
+                .thenReturn(new CallSessionService.LeaveResult(true, false, 0L));
+        when(callSessionService.getOtherParticipantUserIds(anyString(), anyLong()))
+                .thenReturn(List.of());
 
         // Default sentiment stub
         SentimentResult positiveResult = new SentimentResult(
@@ -441,6 +445,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void chime011_endCallReturnsLeftWhenConferenceParticipantsRemain() throws Exception {
             mockCurrentCaregiver();
+            when(callSessionService.leaveOrBeginTermination(CALL_ID, 2L))
+                    .thenReturn(new CallSessionService.LeaveResult(false, false, 2L));
 
             User patient = buildUser(1L, "patient@test.com", Role.PATIENT);
             User invitee = buildUser(4L, "family@test.com", Role.FAMILY_MEMBER);
@@ -617,6 +623,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCall_notifiesPendingConferenceInvitee() throws Exception {
             mockCurrentCaregiver();
+            when(callSessionService.getOtherParticipantUserIds(CALL_ID, 2L))
+                    .thenReturn(List.of(1L, 4L));
 
             when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
                     callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
@@ -653,6 +661,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void endCall_partialLeaveDoesNotNotifyPendingInvitee() throws Exception {
             mockCurrentCaregiver();
+            when(callSessionService.leaveOrBeginTermination(CALL_ID, 2L))
+                    .thenReturn(new CallSessionService.LeaveResult(false, false, 2L));
 
             User joinedFamily = buildUser(5L, "joined-family@test.com", Role.FAMILY_MEMBER);
             when(userRepository.findById(5L)).thenReturn(Optional.of(joinedFamily));
@@ -690,6 +700,8 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void endCall_threePartyEndNotifiesAllRemaining() throws Exception {
             mockCurrentPatient();
+            when(callSessionService.getOtherParticipantUserIds(CALL_ID, 1L))
+                    .thenReturn(List.of(4L));
 
             when(callTelemetryService.getTelemetryForCall(CALL_ID)).thenReturn(List.of(
                     callEvent("CALL_JOIN", 1L, LocalDateTime.of(2026, 3, 23, 10, 0, 0)),
@@ -1701,7 +1713,7 @@ class CallControllerTest {
         @WithMockUser(username = "patient@test.com", roles = {"PATIENT"})
         void endCallUnauthorizedHasNoSideEffects() throws Exception {
             mockCurrentPatient();
-            when(callSessionService.requireActiveParticipant(CALL_ID, 1L))
+            when(callSessionService.leaveOrBeginTermination(CALL_ID, 1L))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "Must join"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")

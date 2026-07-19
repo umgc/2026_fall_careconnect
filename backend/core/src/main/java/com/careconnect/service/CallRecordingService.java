@@ -204,25 +204,11 @@ public class CallRecordingService {
     }
 
     if (activePipelineIds.containsKey(callId)) {
-      // If a user explicitly toggles recording while the system recording is already running,
-      // claim the system recording for playback by setting initiatedByUserId on it.
       if (initiatedByUserId != null) {
-        recordingRepository
-            .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
-            .ifPresent(
-                sys -> {
-                  sys.setInitiatedByUserId(initiatedByUserId);
-                  recordingRepository.save(sys);
-                  if (log.isInfoEnabled()) {
-                    log.info(
-                        "System recording {} claimed for playback by user {} on call {}",
-                        sys.getId(), initiatedByUserId, callId);
-                  }
-                });
         return Map.of(
-            "status", "RECORDING_CLAIMED",
+            "status", "POLICY_BLOCKED",
             "pipelineId", activePipelineIds.get(callId),
-            "message", "Recording claimed for playback");
+            "message", "A transcription-only system capture is already active");
       }
       return Map.of(
           "status", "ALREADY_RECORDING",
@@ -521,6 +507,13 @@ public class CallRecordingService {
     }
 
     final CallRecording rec = opt.get();
+    if (rec.getInitiatedByUserId() == null) {
+      return Map.of(
+          "status", "TRANSCRIPTION_ONLY",
+          "callId", callId,
+          "playbackReady", false,
+          "message", "System capture is retained for transcription only");
+    }
     refreshConcatenationStatus(rec);
     if (rec.getS3Bucket() == null || rec.getS3Prefix() == null) {
       return Map.of("status", "ERROR", "message", "Recording has no S3 location stored");

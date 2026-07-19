@@ -85,6 +85,7 @@ class VideoCallService {
   VoidCallback? _onCallEnded;
   Function(Map<String, dynamic>)? _onSentimentUpdate;
   Function(Map<String, dynamic>)? _onCallDeclined;
+  Function(Map<String, dynamic>)? _onRecordingState;
 
   // Sentiment posting timer — sends analysis data every 15 seconds
   Timer? _sentimentTimer;
@@ -109,11 +110,13 @@ class VideoCallService {
     VoidCallback? onCallEnded,
     Function(Map<String, dynamic>)? onSentimentUpdate,
     Function(Map<String, dynamic>)? onCallDeclined,
+    Function(Map<String, dynamic>)? onRecordingState,
   }) async {
     _jwtToken = jwtToken;
     _onCallEnded = onCallEnded;
     _onSentimentUpdate = onSentimentUpdate;
     _onCallDeclined = onCallDeclined;
+    _onRecordingState = onRecordingState;
     _isPatientSentimentSource = enablePatientSentimentCapture;
     _isInitialized = true;
 
@@ -137,6 +140,9 @@ class VideoCallService {
       }
       if (type == 'call-ended') {
         _handleRemoteCallEnd();
+      }
+      if (type == 'recording-state') {
+        _onRecordingState?.call(data);
       }
     });
 
@@ -1027,6 +1033,7 @@ class VideoCallService {
     _aggregatedSentiment.clear();
     _pendingTranscriptSegments.clear();
     _onCallDeclined = null;
+    _onRecordingState = null;
     _isPatientSentimentSource = false;
     _isInitialized = false;
     _isInCall = false;

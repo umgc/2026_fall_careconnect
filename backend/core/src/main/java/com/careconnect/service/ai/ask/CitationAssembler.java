@@ -48,6 +48,18 @@ final class CitationAssembler {
             final List<String> citationRefs,
             final Map<String, RankedChunk> refMap,
             final Map<String, String> evidenceByRef) {
+        final Map<String, List<String>> windows = new java.util.LinkedHashMap<>();
+        if (evidenceByRef != null) {
+            evidenceByRef.forEach((ref, evidence) -> windows.put(
+                    ref, evidence == null ? List.of() : List.of(evidence)));
+        }
+        return assembleWithEvidence(citationRefs, refMap, windows);
+    }
+
+    CitationResult assembleWithEvidence(
+            final List<String> citationRefs,
+            final Map<String, RankedChunk> refMap,
+            final Map<String, List<String>> evidenceByRef) {
         if (refMap == null || refMap.isEmpty()) {
             return CitationResult.ungrounded();
         }
@@ -81,7 +93,8 @@ final class CitationAssembler {
             }
             final RankedChunk chunk = entry.getValue();
             final Optional<AiCitation> citation =
-                    toCitation(ref, chunk, evidenceByRef == null ? null : evidenceByRef.get(ref));
+                    toCitation(ref, chunk, joinedEvidence(
+                            evidenceByRef == null ? null : evidenceByRef.get(ref)));
             if (citation.isEmpty()) {
                 invalidRefs.add(ref);
                 continue;
@@ -98,6 +111,18 @@ final class CitationAssembler {
                 grounded);
     }
 
+    private static String joinedEvidence(final List<String> windows) {
+        if (windows == null || windows.isEmpty()) {
+            return null;
+        }
+        return windows.stream()
+                .filter(window -> window != null && !window.isBlank())
+                .map(String::trim)
+                .distinct()
+                .reduce((left, right) -> left + " … " + right)
+                .orElse(null);
+    }
+
     private Optional<AiCitation> toCitation(
             final String ref,
             final RankedChunk chunk,
@@ -111,9 +136,9 @@ final class CitationAssembler {
         final String sourceKey = validateIdentifier(chunk.sourceRecordId());
         final String sourceKind = citationSourceKind(chunk, sourceKey);
         final String sourceId = publicSourceId(chunk, sourceKey);
-        final String excerpt = normalizeAndTruncate(
-                verifiedEvidence == null ? chunk.chunkText() : verifiedEvidence,
-                EXCERPT_CHARS);
+        final String excerpt = verifiedEvidence == null
+                ? normalizeAndTruncate(chunk.chunkText(), EXCERPT_CHARS)
+                : normalizeVerifiedEvidence(verifiedEvidence);
         if (sourceId == null || excerpt.isBlank()) {
             return Optional.empty();
         }
@@ -172,7 +197,10 @@ final class CitationAssembler {
     }
 
     private static String validateIdentifier(final String value) {
-        if (value == null || value.isBlank() || !value.equals(value.trim())) {
+        if (value == null
+                || value.isBlank()
+                || !value.equals(value.trim())
+                || AskAiTextPolicy.containsBidiControl(value)) {
             return null;
         }
         if (value.codePointCount(0, value.length()) > SOURCE_ID_CHARS) {
@@ -192,7 +220,7 @@ final class CitationAssembler {
         if (text == null) {
             return "";
         }
-        final String normalized = text
+        final String normalized = AskAiTextPolicy.normalize(text)
                 .replaceAll("\\p{Cntrl}", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
@@ -202,6 +230,13 @@ final class CitationAssembler {
         }
         final int end = normalized.offsetByCodePoints(0, maxCodePoints - 1);
         return normalized.substring(0, end).stripTrailing() + "…";
+    }
+
+    private static String normalizeVerifiedEvidence(final String text) {
+        return AskAiTextPolicy.normalize(text)
+                .replaceAll("\\p{Cntrl}", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     /**

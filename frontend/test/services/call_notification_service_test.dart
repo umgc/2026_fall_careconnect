@@ -70,6 +70,23 @@ void main() {
       expect(location.queryParameters['contextPatientUserIds'], '7,8');
     });
 
+    testWidgets('accepted family route preserves owner and scheduled visit',
+        (tester) async {
+      await _pumpHost(tester);
+
+      final location = Uri.parse(
+        CallNotificationService.acceptedCallLocationForTest(
+          callKind: 'general',
+          contextPatientUserIds: const [7],
+          callerRole: 'FAMILY_MEMBER',
+          scheduledVisitId: '55',
+        ),
+      );
+
+      expect(location.queryParameters['recipientRole'], 'FAMILY_MEMBER');
+      expect(location.queryParameters['scheduledVisitId'], '55');
+    });
+
     testWidgets('callInvitationCancelled_dismissesIncomingPopup_byCallId',
         (tester) async {
       await _pumpHost(tester);

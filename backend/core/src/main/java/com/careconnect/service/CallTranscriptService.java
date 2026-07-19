@@ -87,12 +87,12 @@ public class CallTranscriptService {
       }
       if (saved > 0) {
         final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
-        final String source = segments.get(0) != null ? segments.get(0).source() : null;
+        final IndexingSnapshot snapshot = captureIndexingSnapshot(normalizedCallId);
         indexingEventEmitter.emitTranscriptIndexed(new TranscriptIndexedPayload(
             normalizedCallId,
             patientId,
-            saved,
-            source));
+            Math.toIntExact(snapshot.segments().size()),
+            snapshot.version()));
       }
     }
     return saved;
@@ -188,7 +188,9 @@ public class CallTranscriptService {
   public TranscriptSnapshot captureSummarySnapshot(final String callId) {
     final String normalizedCallId = trim(callId);
     final List<CallTranscriptSegment> segments =
-        normalizedCallId == null ? List.of() : getSegmentsForCall(normalizedCallId);
+        normalizedCallId == null
+            ? List.of()
+            : getAuthoritativeSegmentsForCall(normalizedCallId);
     final String transcriptText;
     if (segments.isEmpty()) {
       transcriptText = "";
@@ -211,6 +213,25 @@ public class CallTranscriptService {
     final String version = ContentHashUtil.sha256(
         transcriptText + "\nsegmentCount=" + segments.size());
     return new TranscriptSnapshot(transcriptText, segments.size(), version);
+  }
+
+  /**
+   * Materializes the complete archive-plus-live transcript used by retrieval indexing.
+   */
+  @Transactional(readOnly = true)
+  public IndexingSnapshot captureIndexingSnapshot(final String callId) {
+    final String normalizedCallId = trim(callId);
+    final List<CallTranscriptSegment> segments =
+        normalizedCallId == null
+            ? List.of()
+            : List.copyOf(getAuthoritativeSegmentsForCall(normalizedCallId));
+    final StringBuilder versionInput = new StringBuilder();
+    for (final CallTranscriptSegment segment : segments) {
+      versionInput.append(segmentKey(segment)).append('\n');
+    }
+    versionInput.append("segmentCount=").append(segments.size());
+    return new IndexingSnapshot(
+        segments, ContentHashUtil.sha256(versionInput.toString()));
   }
 
   /**
@@ -282,6 +303,30 @@ public class CallTranscriptService {
             ? input.occurredAt()
             : LocalDateTime.now(ZoneOffset.UTC));
     return segment;
+  }
+
+  private List<CallTranscriptSegment> getAuthoritativeSegmentsForCall(
+      final String normalizedCallId) {
+    final List<CallTranscriptSegment> dbSegments =
+        segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(normalizedCallId);
+    final List<CallTranscriptSegment> archivedSegments =
+        archiveService.getArchivedSegments(normalizedCallId);
+    if (archiveService.isArchived(normalizedCallId)) {
+      final long expectedArchivedCount =
+          archiveService.getArchivedSegmentCount(normalizedCallId);
+      if (archivedSegments.size() != expectedArchivedCount) {
+        throw new IllegalStateException(
+            "Authoritative transcript archive is unavailable or incomplete for callId="
+                + normalizedCallId);
+      }
+    }
+    if (archivedSegments.isEmpty()) {
+      return dbSegments;
+    }
+    if (dbSegments.isEmpty()) {
+      return archivedSegments;
+    }
+    return mergeSegments(archivedSegments, dbSegments);
   }
 
   private static void validateSegmentCount(final List<TranscriptSegmentInput> segments) {
@@ -418,5 +463,9 @@ public class CallTranscriptService {
 
   /** Immutable transcript input used by one summary generation attempt. */
   public record TranscriptSnapshot(String transcriptText, long segmentCount, String version) {
+  }
+
+  /** Complete immutable transcript snapshot used by retrieval indexing. */
+  public record IndexingSnapshot(List<CallTranscriptSegment> segments, String version) {
   }
 }

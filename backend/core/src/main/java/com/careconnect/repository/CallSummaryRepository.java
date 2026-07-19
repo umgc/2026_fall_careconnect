@@ -20,6 +20,15 @@ public interface CallSummaryRepository
      */
     Optional<CallSummary> findTopByCallIdOrderByGeneratedAtDesc(String callId);
 
+    Optional<CallSummary> findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+            String callId, String transcriptSnapshotVersion, String modelConfigVersion);
+
+    /** Serializes creation for an idempotency key, including when no summary row exists yet. */
+    @Query(
+            value = "SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))",
+            nativeQuery = true)
+    void acquireGenerationLock(@Param("lockKey") String lockKey);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT summary FROM CallSummary summary WHERE summary.id = :id")
     Optional<CallSummary> findByIdForUpdate(@Param("id") Long id);

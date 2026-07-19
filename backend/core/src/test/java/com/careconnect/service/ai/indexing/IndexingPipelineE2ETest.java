@@ -6,6 +6,7 @@ import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.service.CallTranscriptService;
 import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
@@ -68,6 +69,8 @@ class IndexingPipelineE2ETest {
     @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
     @Mock
+    private CallTranscriptService callTranscriptService;
+    @Mock
     private UspsMailpieceRepository uspsMailpieceRepository;
     @Mock
     private RetrievalIndexChunkRepository chunkRepository;
@@ -85,7 +88,7 @@ class IndexingPipelineE2ETest {
         final RetrievalIndexService retrievalIndexService = new RetrievalIndexService(
                 callSummaryRepository,
                 callSessionRepository,
-                transcriptSegmentRepository,
+                callTranscriptService,
                 uspsMailpieceRepository,
                 chunkRepository,
                 new SummaryChunker(objectMapper),
@@ -197,11 +200,12 @@ class IndexingPipelineE2ETest {
         segment.setSpeakerLabel("Patient");
         segment.setText("I started the new medication yesterday.");
         segment.setSource("CLIENT_TRANSCRIPT");
-        when(transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc("call-tx"))
-                .thenReturn(List.of(segment));
+        when(callTranscriptService.captureIndexingSnapshot("call-tx"))
+                .thenReturn(new CallTranscriptService.IndexingSnapshot(
+                        List.of(segment), "sha256:call-tx"));
 
         final TranscriptIndexedPayload payload =
-                new TranscriptIndexedPayload("call-tx", 55L, 1, "CLIENT_TRANSCRIPT");
+                new TranscriptIndexedPayload("call-tx", 55L, 1, "sha256:call-tx");
         final IndexingOutboxRow row = outboxRow(
                 1002L, IndexingEventType.TRANSCRIPT_INDEXED, payload, 0);
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));
@@ -295,7 +299,7 @@ class IndexingPipelineE2ETest {
                 .thenReturn(Optional.empty());
 
         final TranscriptIndexedPayload payload =
-                new TranscriptIndexedPayload("call-pending", null, 2, "CLIENT_TRANSCRIPT");
+                new TranscriptIndexedPayload("call-pending", null, 2, "sha256:pending");
         final IndexingOutboxRow row = outboxRow(
                 1004L, IndexingEventType.TRANSCRIPT_INDEXED, payload, 1);
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));

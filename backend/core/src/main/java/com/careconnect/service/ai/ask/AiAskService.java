@@ -31,6 +31,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -119,9 +120,10 @@ public class AiAskService {
         final String conversationKey = request.conversationId() == null
                 ? requestId.toString()
                 : request.conversationId().toString();
+        final String normalizedInput = AskAiTextPolicy.normalize(request.query());
 
         final LangChainGovernanceService.GovernanceResult governance =
-                governanceService.validateRequest(caller.getId(), conversationKey, request.query());
+                governanceService.validateRequest(caller.getId(), conversationKey, normalizedInput);
         if (!governance.isAllowed()) {
             final boolean rateLimited = "RATE_LIMIT".equals(governance.getAction());
             throw new AskAiRejectedException(
@@ -135,7 +137,7 @@ public class AiAskService {
 
         final InputSanitizationService.SanitizationResult sanitization =
                 inputSanitizationService.sanitizeUserInput(
-                        request.query(), caller.getId(), conversationKey);
+                        normalizedInput, caller.getId(), conversationKey);
         if (sanitization.isBlocked()) {
             throw new AskAiRejectedException(
                     requestId,
@@ -145,7 +147,8 @@ public class AiAskService {
                     "Query blocked by input safety checks",
                     422);
         }
-        final String sanitizedQuery = sanitization.getSanitizedContent();
+        final String sanitizedQuery =
+                AskAiTextPolicy.normalize(sanitization.getSanitizedContent()).trim();
         if (sanitizedQuery == null || sanitizedQuery.isBlank()) {
             throw new AskAiRejectedException(
                     requestId,
@@ -220,7 +223,7 @@ public class AiAskService {
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
-        final Map<String, String> verifiedEvidenceByRef = new LinkedHashMap<>();
+        final Map<String, List<String>> verifiedEvidenceByRef = new LinkedHashMap<>();
         for (final GroundedAskLlmService.GroundedClaim claim : llm.claims()) {
             final CitationAssembler.CitationResult claimCitations =
                     citationAssembler.assemble(
@@ -228,21 +231,23 @@ public class AiAskService {
             if (claim.text() == null
                     || claim.text().isBlank()
                     || !hasExtractiveEvidence(
-                            claim, sanitizedQuery, context.promptExcerptMap())
+                            claim,
+                            sanitizedQuery,
+                            context.promptExcerptMap(),
+                            context.citationRefMap())
                     || !claimCitations.grounded()) {
                 throw groundingFailure(
                         requestId, auditId, sessionId,
                         "Generated answer contains an unsupported factual claim");
             }
             final String ref = claim.citationRefs().get(0);
-            verifiedEvidenceByRef.put(
-                    ref,
-                    surroundingCitationContext(
-                            context.promptExcerptMap().get(ref),
+            verifiedEvidenceByRef.computeIfAbsent(ref, ignored -> new ArrayList<>())
+                    .add(surroundingCitationContext(
+                            context.promptExcerptMap().get(ref).text(),
                             claim.evidenceByRef().get(ref)));
         }
         final CitationAssembler.CitationResult citationResult =
-                citationAssembler.assemble(
+                citationAssembler.assembleWithEvidence(
                         llm.citationRefs(),
                         context.citationRefMap(),
                         verifiedEvidenceByRef);
@@ -307,28 +312,35 @@ public class AiAskService {
     private static boolean hasExtractiveEvidence(
             final GroundedAskLlmService.GroundedClaim claim,
             final String query,
-            final Map<String, String> promptExcerptMap) {
+            final Map<String, RetrievalContextAssembler.PromptExcerpt> promptExcerptMap,
+            final Map<String, com.careconnect.service.ai.retrieval.RankedChunk> refMap) {
         if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
             return false;
         }
         final String ref = claim.citationRefs().get(0);
-        final String excerpt = promptExcerptMap.get(ref);
+        final RetrievalContextAssembler.PromptExcerpt excerpt = promptExcerptMap.get(ref);
         final String evidence = claim.evidenceByRef().get(ref);
         return excerpt != null
                 && evidence != null
                 && evidence.codePointCount(0, evidence.length()) >= 20
                 && claim.text().equals(evidence)
                 && isCompleteSpan(excerpt, evidence)
-                && isRelevantExtract(query, evidence, excerpt);
+                && isRelevantExtract(query, evidence, excerpt.text(), refMap.get(ref));
     }
 
-    private static boolean isCompleteSpan(final String excerpt, final String evidence) {
-        final int start = excerpt.indexOf(evidence);
-        if (start < 0 || excerpt.indexOf(evidence, start + 1) >= 0) {
+    private static boolean isCompleteSpan(
+            final RetrievalContextAssembler.PromptExcerpt excerpt,
+            final String evidence) {
+        final int start = excerpt.text().indexOf(evidence);
+        if (start < 0 || excerpt.text().indexOf(evidence, start + 1) >= 0) {
             return false;
         }
         final int end = start + evidence.length();
-        return isSentenceStart(excerpt, start) && isSentenceEnd(excerpt, end);
+        if ((start == 0 && excerpt.startTruncated())
+                || (end == excerpt.text().length() && excerpt.endTruncated())) {
+            return false;
+        }
+        return isSentenceStart(excerpt.text(), start) && isSentenceEnd(excerpt.text(), end);
     }
 
     private static boolean isSentenceStart(final String text, final int start) {
@@ -365,19 +377,57 @@ public class AiAskService {
      * Generic questions such as "What meds?" continue to rely on ranked retrieval.
      */
     private static boolean isRelevantExtract(
-            final String query, final String evidence, final String excerpt) {
+            final String query,
+            final String evidence,
+            final String excerpt,
+            final com.careconnect.service.ai.retrieval.RankedChunk chunk) {
         final Set<String> queryTerms = normalizedTerms(query);
         if (queryTerms.isEmpty()) {
-            return true;
+            return strongRetrievalForWholeRecord(evidence, excerpt, chunk);
         }
         final Set<String> excerptTerms = normalizedTerms(excerpt);
         excerptTerms.retainAll(queryTerms);
         if (excerptTerms.isEmpty()) {
-            return true;
+            return conceptRelevant(queryTerms, normalizedTerms(evidence))
+                    || strongRetrievalForWholeRecord(evidence, excerpt, chunk);
         }
         final Set<String> evidenceTerms = normalizedTerms(evidence);
         evidenceTerms.retainAll(queryTerms);
         return !evidenceTerms.isEmpty();
+    }
+
+    private static boolean conceptRelevant(
+            final Set<String> queryTerms, final Set<String> evidenceTerms) {
+        final Map<String, Set<String>> concepts = Map.of(
+                "medication", Set.of("medication", "medicine", "drug", "dose", "dosage",
+                        "mg", "tablet", "metformin", "insulin"),
+                "allergy", Set.of("allergy", "allergic", "reaction"),
+                "pain", Set.of("pain", "ache", "sore"),
+                "appointment", Set.of("appointment", "visit", "followup", "follow-up"));
+        for (final Map.Entry<String, Set<String>> concept : concepts.entrySet()) {
+            final boolean queryMatches = queryTerms.stream().anyMatch(term ->
+                    concept.getValue().contains(term)
+                            || ("meds".equals(term) && "medication".equals(concept.getKey())));
+            if (queryMatches && evidenceTerms.stream().anyMatch(concept.getValue()::contains)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean strongRetrievalForWholeRecord(
+            final String evidence,
+            final String excerpt,
+            final com.careconnect.service.ai.retrieval.RankedChunk chunk) {
+        if (chunk == null || excerpt == null || excerpt.isBlank()) {
+            return false;
+        }
+        final boolean strongRank = (chunk.ftsRank() != null && chunk.ftsRank() <= 3)
+                || (chunk.vectorRank() != null && chunk.vectorRank() <= 2);
+        final boolean scoreFloor = Double.isFinite(chunk.rrfScore()) && chunk.rrfScore() >= 0.02d;
+        final double coverage = (double) evidence.codePointCount(0, evidence.length())
+                / Math.max(1, excerpt.codePointCount(0, excerpt.length()));
+        return strongRank && scoreFloor && coverage >= 0.5d;
     }
 
     private static Set<String> normalizedTerms(final String value) {

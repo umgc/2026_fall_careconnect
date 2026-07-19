@@ -160,6 +160,14 @@ public class CallSummary extends Auditable {
     @Column(name = "summarization_engine", length = SUMMARIZATION_ENGINE_LENGTH)
     private String summarizationEngine;
 
+    /** Deterministic version of the authoritative transcript snapshot. */
+    @Column(name = "transcript_snapshot_version", length = 80)
+    private String transcriptSnapshotVersion;
+
+    /** Version of the model and server-side summary configuration. */
+    @Column(name = "model_config_version", length = 160)
+    private String modelConfigVersion;
+
     /**
      * Whether a usable transcript was available when the summary was generated.
      * False is set when the pipeline records an empty-state summary because no
