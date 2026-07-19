@@ -108,12 +108,14 @@ class AiAskServiceTest {
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
-                        "Patient started metformin 500mg.",
+                        "Started metformin 500mg twice daily",
                         List.of("C1"),
                         List.of(new GroundedAskLlmService.GroundedClaim(
-                                "Patient started metformin 500mg.",
+                                "Started metformin 500mg twice daily",
                                 List.of("C1"),
-                                java.util.Map.of("C1", "Started metformin 500mg"))),
+                                java.util.Map.of(
+                                        "C1",
+                                        "Started metformin 500mg twice daily"))),
                         "amazon.nova-lite-v1:0")));
 
         final AiAskResponse response = service.ask(caller(), request("metformin"));
@@ -162,6 +164,45 @@ class AiAskServiceTest {
 
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
                 .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_oneCharacterEvidence_failsClosed() throws Exception {
+        stubExtractiveResult("A sufficiently long source record", "A", "A");
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_claimThatContradictsExactEvidence_failsClosed() throws Exception {
+        stubExtractiveResult(
+                "The patient explicitly denied chest pain today.",
+                "The patient reported chest pain today.",
+                "The patient explicitly denied chest pain today.");
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_evidenceOutsidePromptExcerpt_failsClosed() throws Exception {
+        final String hiddenEvidence = "The hidden tail contains a medication change.";
+        stubExtractiveResult("x".repeat(650) + hiddenEvidence, hiddenEvidence, hiddenEvidence);
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
+    void ask_unicodeExtractiveEvidence_isDeliveredWithoutBoundaryDamage() throws Exception {
+        final String evidence = "El paciente tomó café ☕ y comenzó metformina 500 mg.";
+        stubExtractiveResult(evidence, evidence, evidence);
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.answer().text()).isEqualTo(evidence);
+        assertThat(response.citations().get(0).excerpt()).isEqualTo(evidence);
     }
 
     @Test
@@ -378,6 +419,37 @@ class AiAskServiceTest {
                         Set.of(),
                         new CaregiverVisibilityFilter(Role.PATIENT, true),
                         true));
+    }
+
+    private void stubExtractiveResult(
+            final String chunkText,
+            final String claimText,
+            final String evidence) throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                chunkText,
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(
+                        List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        claimText,
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                claimText,
+                                List.of("C1"),
+                                java.util.Map.of("C1", evidence))),
+                        "amazon.nova-lite-v1:0")));
     }
 
     private static User caller() {

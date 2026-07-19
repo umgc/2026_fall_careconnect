@@ -194,8 +194,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     super.initState();
     _adaptiveActiveIntervalMs =
         (_isAdaptiveSentimentMode || _isRealtimeSentimentMode)
-        ? _realtimeIntervalMs
-        : _balancedIntervalMs;
+            ? _realtimeIntervalMs
+            : _balancedIntervalMs;
     _loadCurrentRole();
     _initializeCall();
   }
@@ -205,8 +205,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       final role = await _resolveCurrentRole();
       final isCaregiver = role?.toUpperCase() == 'CAREGIVER';
       final isPatient = role?.toUpperCase() == 'PATIENT';
-      _isCareTeamCall = (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
-      _videoCallService.setPatientSentimentSourceEnabled(isPatient && !_isCareTeamCall);
+      _isCareTeamCall =
+          (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
+      _videoCallService
+          .setPatientSentimentSourceEnabled(isPatient && !_isCareTeamCall);
       if (!mounted) return;
       setState(() {
         _isCaregiverView = isCaregiver;
@@ -231,7 +233,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       final role = await _resolveCurrentRole();
       final isCaregiverRole = role?.toUpperCase() == 'CAREGIVER';
       final isPatientRole = role?.toUpperCase() == 'PATIENT';
-      _isCareTeamCall = (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
+      _isCareTeamCall =
+          (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
 
       if (mounted) {
         setState(() {
@@ -277,6 +280,26 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         },
       );
 
+      if (widget.isInitiator) {
+        final recipientId = widget.recipientId?.trim();
+        if (recipientId == null || recipientId.isEmpty) {
+          throw Exception('Missing recipient ID for outgoing call.');
+        }
+        final patientUserId = resolveCallSessionPatientUserId(
+          currentUserId: widget.userId,
+          currentRole: role ?? '',
+          recipientId: recipientId,
+          recipientRole: widget.recipientRole,
+          callKind: widget.callKind,
+          contextPatientUserIds: widget.contextPatientUserIds,
+        );
+        await _videoCallService.createCallSession(
+          callId: widget.callId,
+          patientUserId: patientUserId,
+          inviteeUserId: recipientId,
+        );
+      }
+
       final session = await _videoCallService.joinCall(
         callId: widget.callId,
         otherPartyId: widget.recipientId ?? '',
@@ -301,11 +324,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         }
 
         final currentRole = (role ?? '').toUpperCase();
-        String recipientRole = (widget.recipientRole ?? '').trim().toUpperCase();
+        String recipientRole =
+            (widget.recipientRole ?? '').trim().toUpperCase();
         if (recipientRole != 'PATIENT' && recipientRole != 'CAREGIVER') {
-          recipientRole = currentRole == 'CAREGIVER'
-            ? 'PATIENT'
-            : 'CAREGIVER';
+          recipientRole = currentRole == 'CAREGIVER' ? 'PATIENT' : 'CAREGIVER';
         }
 
         final invitationSent = await CallNotificationService.sendCallInvitation(
@@ -378,7 +400,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         await _videoCallService.startRecording(widget.callId);
         final started = DateTime.now();
         _recordingElapsedTimer?.cancel();
-        _recordingElapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _recordingElapsedTimer =
+            Timer.periodic(const Duration(seconds: 1), (_) {
           if (!mounted) return;
           setState(() {
             _recordingElapsed = DateTime.now().difference(started);
@@ -528,7 +551,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     }
 
     // Fall back to role label
-    if (roleCandidate.startsWith('CAREGIVER') || roleCandidate.startsWith('ADMIN')) {
+    if (roleCandidate.startsWith('CAREGIVER') ||
+        roleCandidate.startsWith('ADMIN')) {
       return 'CAREGIVER';
     }
     if (roleCandidate.startsWith('PATIENT')) return 'PATIENT';
@@ -542,7 +566,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     if (hyphenParts.length == 1) {
       // Only first name
       final n = hyphenParts[0];
-      return n.isEmpty ? nameSeg : n[0].toUpperCase() + n.substring(1).toLowerCase();
+      return n.isEmpty
+          ? nameSeg
+          : n[0].toUpperCase() + n.substring(1).toLowerCase();
     }
     final first = hyphenParts[0];
     final last = hyphenParts.sublist(1).join(' ');
@@ -626,8 +652,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     if (!_isAdaptiveSentimentMode) return;
 
     final now = DateTime.now();
-    final switchedRecently =
-        _lastAdaptiveSwitchAt != null &&
+    final switchedRecently = _lastAdaptiveSwitchAt != null &&
         now.difference(_lastAdaptiveSwitchAt!) < _adaptiveSwitchCooldown;
 
     final isSlowSuccess =
@@ -905,7 +930,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                         ? Colors.teal.shade100
                         : Colors.blue.shade100,
                     child: Icon(
-                      role == 'FAMILY_MEMBER' ? Icons.people : Icons.medical_services,
+                      role == 'FAMILY_MEMBER'
+                          ? Icons.people
+                          : Icons.medical_services,
                       size: 18,
                       color: role == 'FAMILY_MEMBER'
                           ? Colors.teal.shade700
@@ -913,7 +940,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                     ),
                   ),
                   title: Text(name, style: const TextStyle(fontSize: 14)),
-                  subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+                  subtitle:
+                      Text(subtitle, style: const TextStyle(fontSize: 12)),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _inviteParticipant(
@@ -947,7 +975,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     required String userId,
     required String name,
   }) async {
-    final status = await _videoCallService.inviteParticipant(widget.callId, userId);
+    final status =
+        await _videoCallService.inviteParticipant(widget.callId, userId);
     if (!mounted) return;
     final String message;
     final Color bgColor;
@@ -980,8 +1009,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     _isExitingCall = true;
 
     final returnPatientId = widget.returnPatientDetailsId?.trim();
-    final shouldForcePatientDetails =
-        widget.forcePatientDetailsOnExit &&
+    final shouldForcePatientDetails = widget.forcePatientDetailsOnExit &&
         returnPatientId != null &&
         returnPatientId.isNotEmpty;
 
@@ -1198,9 +1226,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _isRetryingRejectedCall
-                            ? null
-                            : _retryRejectedCall,
+                        onPressed:
+                            _isRetryingRejectedCall ? null : _retryRejectedCall,
                         icon: _isRetryingRejectedCall
                             ? const SizedBox(
                                 width: 16,
@@ -1290,8 +1317,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
 
     final mediaPlacement = _callSession!.mediaPlacement;
     final hasMediaEndpoints = mediaPlacement.values.whereType<String>().any(
-      (value) => value.trim().isNotEmpty,
-    );
+          (value) => value.trim().isNotEmpty,
+        );
     final isLocalMockSession = _callSession!.joinToken.startsWith(
       'local-join-token-',
     );
@@ -1369,7 +1396,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     );
   }
 
-
   Widget _buildRecordingConsentBanner() {
     return Container(
       width: double.infinity,
@@ -1404,9 +1430,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         mainAxisSize: MainAxisSize.max,
         children: [
           IconButton(
-            tooltip: _localAudioEnabled
-                ? 'Mute microphone'
-                : 'Unmute microphone',
+            tooltip:
+                _localAudioEnabled ? 'Mute microphone' : 'Unmute microphone',
             onPressed: _toggleLocalAudio,
             icon: Icon(
               _localAudioEnabled ? Icons.mic : Icons.mic_off,
@@ -1459,7 +1484,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                     ),
                   )
                 : IconButton(
-                    tooltip: _isRecording ? 'Stop recording' : 'Start recording',
+                    tooltip:
+                        _isRecording ? 'Stop recording' : 'Start recording',
                     onPressed: _toggleRecording,
                     icon: Icon(
                       _isRecording
@@ -1582,14 +1608,10 @@ class _CallDurationTimerState extends State<_CallDurationTimer> {
       stream: _ticker,
       builder: (context, snapshot) {
         final elapsed = DateTime.now().difference(widget.startTime);
-        final minutes = elapsed.inMinutes
-            .remainder(60)
-            .toString()
-            .padLeft(2, '0');
-        final seconds = elapsed.inSeconds
-            .remainder(60)
-            .toString()
-            .padLeft(2, '0');
+        final minutes =
+            elapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
+        final seconds =
+            elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
         return Text(
           '$minutes:$seconds',
           style: const TextStyle(
@@ -1635,9 +1657,8 @@ class _BlinkingDotState extends State<_BlinkingDot>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _ctrl,
-      child: const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
+      child:
+          const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
     );
   }
 }
-
-

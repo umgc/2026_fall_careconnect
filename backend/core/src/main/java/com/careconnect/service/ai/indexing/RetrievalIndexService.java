@@ -128,27 +128,32 @@ public class RetrievalIndexService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + payload.summaryId()));
 
-        if (payload.patientId() != null
-                && summary.getPatientId() != null
-                && !payload.patientId().equals(summary.getPatientId())) {
+        if (!"SUCCESS".equalsIgnoreCase(
+                java.util.Objects.toString(summary.getStatus(), "").trim())) {
             throw new IndexingDeferredException(
-                    "SUMMARY_CREATED patient scope does not match authoritative summary row");
+                    "Authoritative CallSummary is not successful");
         }
-        final Long patientId = firstNonNull(summary.getPatientId(), payload.patientId());
+        final Long patientId = summary.getPatientId();
         if (patientId == null) {
             throw new IndexingDeferredException(
                     "Cannot index summaryId=" + payload.summaryId()
-                            + " — patientId is required on retrieval_index_chunk");
+                            + " — authoritative patientId is required");
         }
-        chunkRepository.quarantineLegacySummarySource(
-                patientId,
-                legacySourceRecordId,
-                RetrievalRecordType.summaryTypeNames());
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED patient scope does not match authoritative summary row");
+        }
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED content hash does not match authoritative summary");
+        }
 
         final String episodeType = "call";
         final String caregiverVisibility = firstNonBlank(
                 summary.getCaregiverVisibility(), payload.caregiverVisibility());
-        final String contentHash = firstNonBlank(payload.contentHash(), null);
         final String engine = firstNonBlank(
                 payload.summarizationEngine(), summary.getSummarizationEngine());
 
@@ -185,6 +190,9 @@ public class RetrievalIndexService {
                     "no drafts; existing chunks left unchanged");
         }
 
+        chunkRepository.quarantineLegacySummarySourceAcrossPatients(
+                legacySourceRecordId,
+                RetrievalRecordType.summaryTypeNames());
         if (contentHash != null
                 && chunksMatchExpected(existing, drafts, contentHash, sourceRecordId)) {
             return retryMissingEmbeddingsOrSkip(

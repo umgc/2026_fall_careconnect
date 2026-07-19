@@ -2,12 +2,14 @@ package com.careconnect.controller;
 
 import com.careconnect.config.CareconnectTestConfig;
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallRecordingService;
+import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTranscriptService;
@@ -76,6 +78,7 @@ class CallControllerExtendedTest {
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;
     @MockitoBean private SnsService snsService;
+    @MockitoBean private CallSessionService callSessionService;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -92,6 +95,16 @@ class CallControllerExtendedTest {
         patientUser = buildUser(1L, "patient@test.com", Role.PATIENT);
         caregiverUser = buildUser(2L, "caregiver@test.com", Role.CAREGIVER);
         adminUser = buildUser(3L, "admin@test.com", Role.ADMIN);
+        CallSession durableSession = new CallSession();
+        durableSession.setId(10L);
+        durableSession.setCallId(CALL_ID);
+        durableSession.setPatientId(42L);
+        durableSession.setCreatedByUserId(2L);
+        durableSession.setStatus(CallSessionService.SESSION_CREATED);
+        when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
+                .thenReturn(durableSession);
+        when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
+        when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
 
         // User repository stubs
         when(userRepository.findByEmail("patient@test.com")).thenReturn(Optional.of(patientUser));

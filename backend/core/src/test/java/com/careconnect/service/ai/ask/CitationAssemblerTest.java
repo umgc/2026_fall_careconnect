@@ -57,7 +57,7 @@ class CitationAssemblerTest {
                 .extracting(AiCitation::citationId)
                 .containsExactly("C1", "C2");
         final AiCitation first = result.citations().get(0);
-        assertThat(first.deepLink()).isEqualTo("/chatandcalls");
+        assertThat(first.deepLink()).isNull();
         assertThat(first.title()).isEqualTo("Medication check");
         assertThat(first.occurredAt()).hasToString("2026-07-17T14:30:00Z");
         assertThat(first.confidence()).isEqualTo(0.82d);
@@ -111,7 +111,7 @@ class CitationAssemblerTest {
         assertThat(result.grounded()).isTrue();
         assertThat(result.citations().get(0).confidence()).isNull();
         assertThat(result.citations().get(0).excerpt()).isEqualTo("First line second line");
-        assertThat(result.citations().get(0).deepLink()).isEqualTo("/file-management");
+        assertThat(result.citations().get(0).deepLink()).isNull();
         assertThat(result.citations().get(0).metadata()).isEmpty();
     }
 

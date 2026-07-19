@@ -3,12 +3,14 @@ package com.careconnect.controller;
 import com.careconnect.config.CareconnectTestConfig;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallRecordingService;
+import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTranscriptService;
@@ -89,6 +91,7 @@ class CallControllerTest {
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;
     @MockitoBean private SnsService snsService;
+    @MockitoBean private CallSessionService callSessionService;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -115,6 +118,16 @@ class CallControllerTest {
         );
         when(chimeService.joinMeeting(anyString(), anyString(), anyString(), anyString())).thenReturn(chimeCreds);
         when(chimeService.isMeetingActive(anyString())).thenReturn(true);
+        CallSession durableSession = new CallSession();
+        durableSession.setId(10L);
+        durableSession.setCallId(CALL_ID);
+        durableSession.setPatientId(42L);
+        durableSession.setCreatedByUserId(2L);
+        durableSession.setStatus(CallSessionService.SESSION_CREATED);
+        when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
+                .thenReturn(durableSession);
+        when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
+        when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
 
         // Default sentiment stub
         SentimentResult positiveResult = new SentimentResult(
@@ -201,6 +214,48 @@ class CallControllerTest {
     @Nested
     @DisplayName("Chime Meeting Join/End")
     class ChimeMeetingTests {
+
+        @Test
+        @DisplayName("POST /sessions creates durable authorization before Chime")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void createSession_returnsCreatedDurableSession() throws Exception {
+            mockCurrentCaregiver();
+            CallSession created = new CallSession();
+            created.setCallId(CALL_ID);
+            created.setPatientId(42L);
+            created.setCreatedByUserId(2L);
+            created.setStatus(CallSessionService.SESSION_CREATED);
+            when(callSessionService.createSession(
+                    eq(CALL_ID), eq(1L), eq(1L), isNull(), eq(caregiverUser)))
+                    .thenReturn(created);
+
+            mockMvc.perform(post(BASE_URL + "/sessions")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"callId\":\"call-123\",\"patientUserId\":1,"
+                                    + "\"inviteeUserId\":1}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.patientId").value(42))
+                    .andExpect(jsonPath("$.status").value("CREATED"));
+        }
+
+        @Test
+        @DisplayName("POST /join rejects users missing from durable participants")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void join_rejectsBeforeCallingChimeWhenNotAuthorized() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.requireJoinAuthorized(CALL_ID, 2L))
+                    .thenThrow(new AppException(HttpStatus.FORBIDDEN, "not authorized"));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isForbidden());
+
+            verify(chimeService, never())
+                    .joinMeeting(anyString(), anyString(), anyString(), anyString());
+        }
 
         @Test
         @DisplayName("CHIME-001: POST /join invokes chimeService.joinMeeting with callId and userId")

@@ -2,12 +2,14 @@ package com.careconnect.controller;
 
 import com.careconnect.exception.AppException;
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallRecordingService;
+import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTranscriptService;
@@ -104,6 +106,8 @@ public class CallController {
   private SnsService snsService;
   @Autowired
   private Environment environment;
+  @Autowired
+  private CallSessionService callSessionService;
 
   private User getCurrentUser() {
     final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -141,6 +145,29 @@ public class CallController {
         HttpStatus.FORBIDDEN, "Call telemetry deletion is only available in local/dev mode");
   }
 
+  @PostMapping("/sessions")
+  @Operation(summary = "Create an authorized durable call session")
+  public final ResponseEntity<Map<String, Object>> createSession(
+      @RequestBody final Map<String, Object> body) {
+    final User currentUser = getCurrentUser();
+    final String callId = asString(body == null ? null : body.get("callId"));
+    final Long patientUserId = asLong(body == null ? null : body.get("patientUserId"));
+    final Long inviteeUserId = asLong(body == null ? null : body.get("inviteeUserId"));
+    final Long scheduledVisitId = asLong(body == null ? null : body.get("scheduledVisitId"));
+    final CallSession session = callSessionService.createSession(
+        callId, patientUserId, inviteeUserId, scheduledVisitId, currentUser);
+
+    final Map<String, Object> response = new LinkedHashMap<>();
+    response.put("callId", session.getCallId());
+    response.put("patientId", session.getPatientId());
+    response.put("createdByUserId", session.getCreatedByUserId());
+    response.put("status", session.getStatus());
+    if (session.getScheduledVisitId() != null) {
+      response.put("scheduledVisitId", session.getScheduledVisitId());
+    }
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+  }
+
   @PostMapping("/{callId}/join")
   @Operation(summary = "Join or create a Chime meeting for a call")
   /** Handles join-call request. */
@@ -149,9 +176,15 @@ public class CallController {
       @RequestBody(required = false) final Map<String, Object> body) {
     try {
       final User currentUser = getCurrentUser();
+      final CallSession callSession = callSessionService.requireJoinAuthorized(
+          callId, currentUser.getId());
       final boolean meetingAlreadyActive = chimeService.isMeetingActive(callId);
       final Map<String, Object> response = chimeService.joinMeeting(callId, currentUser.getId().toString(),
           currentUser.getRole().name(), getCallUserDisplayName(currentUser));
+      callSessionService.recordJoin(
+          callSession,
+          currentUser.getId(),
+          response.get("meetingId") == null ? null : response.get("meetingId").toString());
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
       callTelemetryService.recordCallEvent(
           callId,
@@ -214,6 +247,7 @@ public class CallController {
     if (currentUser.getRole() != Role.CAREGIVER) {
       throw new AppException(HttpStatus.FORBIDDEN, "Only caregivers can invite participants");
     }
+    callSessionService.requireJoinAuthorized(callId, currentUser.getId());
     if (!chimeService.isMeetingActive(callId)) {
       throw new AppException(HttpStatus.GONE, "Call is no longer active");
     }
@@ -270,6 +304,7 @@ public class CallController {
     if (currentUser.getRole() != Role.CAREGIVER) {
       throw new AppException(HttpStatus.FORBIDDEN, "Only caregivers can invite participants");
     }
+    callSessionService.requireJoinAuthorized(callId, currentUser.getId());
     if (!chimeService.isMeetingActive(callId)) {
       throw new AppException(HttpStatus.GONE, "Call is no longer active");
     }
@@ -300,7 +335,8 @@ public class CallController {
       throw new AppException(HttpStatus.FORBIDDEN, "User is not in this patient's care circle");
     }
 
-    // Notify only on invite; invitee gets createAttendee on POST /join
+    // Persist authorization before notification; invitee gets Chime credentials on POST /join.
+    callSessionService.addAuthorizedParticipant(callId, currentUser, target);
 
     final Map<String, Object> invite = new HashMap<>();
     invite.put("type", "incoming-video-call");
@@ -343,13 +379,8 @@ public class CallController {
   }
 
   private Long findPatientInCall(String callId) {
-    return callTelemetryService.getTelemetryForCall(callId).stream()
-        .filter(e -> "CALL_JOIN".equals(e.getEventType()) && e.getActorUserId() != null)
-        .map(e -> userRepository.findById(e.getActorUserId()).orElse(null))
-        .filter(u -> u != null && u.getRole() == Role.PATIENT)
-        .map(User::getId)
-        .findFirst()
-        .orElse(null);
+    final CallSession session = callSessionService.requireSession(callId);
+    return callSessionService.requirePatientUserId(session);
   }
 
   private String getCallUserDisplayName(User user) {
@@ -545,6 +576,7 @@ public class CallController {
                   otherPartyId != null && !otherPartyId.isBlank()),
               contextMetadata),
           null);
+      callSessionService.recordLeave(callId, currentUser.getId(), shouldEndMeeting);
       if (log.isInfoEnabled()) {
         log.info(
             "User {} {} call {} (remainingParticipants={}, endedMeeting={})",

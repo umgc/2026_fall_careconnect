@@ -27,19 +27,25 @@ public class SummaryCitationMetadataBackfillWorker {
     private final RetrievalIndexService retrievalIndexService;
     private final int batchSize;
     private final long failureBackoffMs;
+    private final long claimLeaseMs;
 
     public SummaryCitationMetadataBackfillWorker(
             final RetrievalIndexChunkRepository chunkRepository,
             final RetrievalIndexService retrievalIndexService,
             @Value("${careconnect.ai.citation.backfill.batch-size:25}") final int batchSize,
             @Value("${careconnect.ai.citation.backfill.failure-backoff-ms:300000}")
-                    final long failureBackoffMs) {
+                    final long failureBackoffMs,
+            @Value("${careconnect.ai.citation.backfill.claim-lease-ms:300000}")
+                    final long claimLeaseMs) {
         this.chunkRepository = chunkRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.batchSize = Math.max(1, batchSize);
         this.failureBackoffMs = Math.min(
                 Duration.ofDays(7).toMillis(),
                 Math.max(1_000L, failureBackoffMs));
+        this.claimLeaseMs = Math.min(
+                Duration.ofHours(1).toMillis(),
+                Math.max(10_000L, claimLeaseMs));
     }
 
     @Scheduled(
@@ -47,10 +53,12 @@ public class SummaryCitationMetadataBackfillWorker {
                     "${careconnect.ai.citation.backfill.poll-interval-ms:60000}")
     public void pollAndBackfill() {
         final List<SummaryReplayCandidate> candidates =
-                chunkRepository.findStaleSummaryCitationSources(
+                chunkRepository.claimStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
                         SummaryChunker.CITATION_METADATA_VERSION,
-                        batchSize);
+                        batchSize,
+                        OffsetDateTime.now(ZoneOffset.UTC)
+                                .plus(Duration.ofMillis(claimLeaseMs)));
         if (candidates.isEmpty()) {
             return;
         }
@@ -61,6 +69,14 @@ public class SummaryCitationMetadataBackfillWorker {
         for (final SummaryReplayCandidate candidate : candidates) {
             final String sourceId = candidate.getSourceRecordId();
             try {
+                if (SummarySourceKey.isLegacyNumeric(sourceId)
+                        && candidate.getSourceKind() == null) {
+                    quarantined += chunkRepository.quarantineSummarySource(
+                            candidate.getPatientId(),
+                            sourceId,
+                            RetrievalRecordType.summaryTypeNames());
+                    continue;
+                }
                 final Long summaryId = SummarySourceKey.parseCallSummaryId(sourceId)
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Invalid call summary source key"));
@@ -77,6 +93,8 @@ public class SummaryCitationMetadataBackfillWorker {
                             candidate.getPatientId(),
                             sourceId,
                             RetrievalRecordType.summaryTypeNames());
+                } else {
+                    releaseClaim(candidate);
                 }
             } catch (final RuntimeException ex) {
                 failed++;
@@ -107,6 +125,13 @@ public class SummaryCitationMetadataBackfillWorker {
                     "Unable to persist summary citation replay backoff type={}",
                     markFailure.getClass().getSimpleName());
         }
+    }
+
+    private void releaseClaim(final SummaryReplayCandidate candidate) {
+        chunkRepository.releaseSummaryCitationReplayClaim(
+                candidate.getPatientId(),
+                candidate.getSourceRecordId(),
+                RetrievalRecordType.summaryTypeNames());
     }
 
 }
