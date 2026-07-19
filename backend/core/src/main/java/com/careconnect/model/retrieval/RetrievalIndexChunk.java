@@ -82,6 +82,15 @@ public class RetrievalIndexChunk {
     @Column(name = "consent_scope", length = RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH)
     private String consentScope;
 
+    @Column(name = "citation_replay_after")
+    private OffsetDateTime citationReplayAfter;
+
+    @Column(name = "citation_replay_attempts", nullable = false)
+    private Integer citationReplayAttempts;
+
+    @Column(name = "migration_status", nullable = false, length = 24)
+    private String migrationStatus;
+
     public RetrievalRecordType getRecordTypeEnum() {
         return recordType == null ? null : RetrievalRecordType.valueOf(recordType);
     }
@@ -108,6 +117,12 @@ public class RetrievalIndexChunk {
     private void onCreate() {
         if (indexedAt == null) {
             indexedAt = OffsetDateTime.now();
+        }
+        if (citationReplayAttempts == null) {
+            citationReplayAttempts = 0;
+        }
+        if (migrationStatus == null) {
+            migrationStatus = "ACTIVE";
         }
     }
 }

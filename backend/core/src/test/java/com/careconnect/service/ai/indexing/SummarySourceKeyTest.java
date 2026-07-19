@@ -11,6 +11,12 @@ class SummarySourceKeyTest {
         assertThat(SummarySourceKey.parseCallSummaryId(SummarySourceKey.call(42L)))
                 .contains(42L);
         assertThat(SummarySourceKey.parseCallSummaryId("42")).contains(42L);
+        assertThat(SummarySourceKey.parseVisitSummaryId(SummarySourceKey.visit(42L)))
+                .contains(42L);
+        assertThat(SummarySourceKey.parsePublicSummaryId(SummarySourceKey.call(42L)))
+                .contains(42L);
+        assertThat(SummarySourceKey.sourceKind(SummarySourceKey.call(42L)))
+                .isEqualTo(SummarySourceKey.CALL_KIND);
     }
 
     @Test

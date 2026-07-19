@@ -599,8 +599,25 @@ class RetrievalIndexServiceTest {
         summary.setSummaryJson(" ");
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
 
-        assertThat(service.replaySummaryCitationMetadata(99L))
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L))
                 .isEqualTo(SummaryCitationReplayOutcome.NO_DRAFTS);
+
+        verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("metadata replay quarantines a candidate under the wrong patient")
+    void replaySummaryCitationMetadata_ownerMismatch_returnsQuarantined() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 43L))
+                .isEqualTo(SummaryCitationReplayOutcome.QUARANTINED);
 
         verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
                 any(), any(), any(), any(), anyCollection());
@@ -634,7 +651,7 @@ class RetrievalIndexServiceTest {
                 eq(SummarySourceKey.CALL_KIND), anyCollection()))
                 .thenReturn(List.of(legacy));
 
-        assertThat(service.replaySummaryCitationMetadata(99L))
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L))
                 .isEqualTo(SummaryCitationReplayOutcome.UPDATED);
 
         @SuppressWarnings("unchecked")

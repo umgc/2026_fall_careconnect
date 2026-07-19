@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,11 +41,12 @@ class AiAskControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new AiAskController(aiAskService, securityUtil))
+                .setControllerAdvice(new AiAskExceptionAdvice())
                 .build();
         caller = new User();
         caller.setId(7L);
         caller.setRole(Role.PATIENT);
-        when(securityUtil.resolveCurrentUser()).thenReturn(caller);
+        lenient().when(securityUtil.resolveCurrentUser()).thenReturn(caller);
     }
 
     @Test
@@ -120,6 +122,33 @@ class AiAskControllerTest {
                 .andExpect(jsonPath("$.sessionId").value(sessionId.toString()))
                 .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
                 .andExpect(jsonPath("$.error.code").value("SAFETY_VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("bean validation returns correlated Ask AI WITHHELD contract")
+    void ask_invalidRequestUsesAskAiContract() throws Exception {
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content("{\"query\":\" \",\"patientId\":null}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
+                .andExpect(jsonPath("$.auditId").isNotEmpty())
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("malformed JSON returns correlated Ask AI WITHHELD contract")
+    void ask_malformedJsonUsesAskAiContract() throws Exception {
+        mockMvc.perform(post("/api/ai/ask")
+                        .contentType("application/json")
+                        .content("{not-json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
+                .andExpect(jsonPath("$.auditId").isNotEmpty())
+                .andExpect(jsonPath("$.deliveryStatus").value("WITHHELD"))
+                .andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
     }
 
     private static String requestJson(final UUID sessionId) {

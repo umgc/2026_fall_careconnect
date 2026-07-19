@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS retrieval_index_chunk (
     patient_id        BIGINT        NOT NULL,
     record_type       VARCHAR(40)   NOT NULL,
     source_record_id  VARCHAR(120)  NOT NULL,
-    source_kind       VARCHAR(40)   NULL,
     chunk_text        TEXT          NOT NULL,
     chunk_metadata    JSONB         NULL,
     search_vector     TSVECTOR      NULL,
@@ -42,9 +41,6 @@ CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_record_type
 CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source
     ON retrieval_index_chunk (source_record_id, record_type);
 
-CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source_identity
-    ON retrieval_index_chunk (patient_id, source_kind, source_record_id);
-
 -- Full-text search over chunk_text (hybrid retrieval keyword leg).
 CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_fts
     ON retrieval_index_chunk USING GIN (search_vector);
@@ -66,9 +62,6 @@ COMMENT ON COLUMN retrieval_index_chunk.record_type IS
 
 COMMENT ON COLUMN retrieval_index_chunk.source_record_id IS
     'Stable id of the upstream source row (summary id, call id, document id, etc.) for idempotent indexing.';
-
-COMMENT ON COLUMN retrieval_index_chunk.source_kind IS
-    'Optional first-class upstream source family used to disambiguate table-local ids.';
 
 COMMENT ON COLUMN retrieval_index_chunk.chunk_text IS
     'Searchable excerpt indexed for FTS and embedding generation. Minimum-necessary text only (FR-AI-9).';

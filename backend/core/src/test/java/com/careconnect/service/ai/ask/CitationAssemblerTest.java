@@ -135,6 +135,24 @@ class CitationAssemblerTest {
     }
 
     @Test
+    @DisplayName("namespaced summary identity is separated from public source ID")
+    void assemble_namespacedSummary_exposesRawIdAndSourceKind() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "call-summary:99",
+                RetrievalRecordType.CALL_SUMMARY,
+                "Patient summary",
+                "{\"callId\":\"call-1\"}",
+                0.1d);
+
+        final AiCitation citation =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk)).citations().get(0);
+
+        assertThat(citation.sourceRecordId()).isEqualTo("99");
+        assertThat(citation.sourceKind()).isEqualTo("CALL_SUMMARY");
+    }
+
+    @Test
     @DisplayName("blank source text cannot become a grounded citation")
     void assemble_blankExcerpt_invalidatesCitation() {
         final RankedChunk chunk = chunk(

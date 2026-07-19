@@ -4,5 +4,6 @@ package com.careconnect.service.ai.indexing;
 public enum SummaryCitationReplayOutcome {
     UPDATED,
     CURRENT,
-    NO_DRAFTS
+    NO_DRAFTS,
+    QUARANTINED
 }

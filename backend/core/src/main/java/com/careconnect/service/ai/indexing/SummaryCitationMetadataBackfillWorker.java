@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.indexing;
 
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository.SummaryReplayCandidate;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import lombok.extern.slf4j.Slf4j;
@@ -45,49 +46,63 @@ public class SummaryCitationMetadataBackfillWorker {
             fixedDelayString =
                     "${careconnect.ai.citation.backfill.poll-interval-ms:60000}")
     public void pollAndBackfill() {
-        final List<String> sourceIds =
-                chunkRepository.findStaleSummaryCitationSourceIds(
+        final int quarantinedAmbiguous = quarantineAmbiguousSources();
+        final List<SummaryReplayCandidate> candidates =
+                chunkRepository.findStaleSummaryCitationSources(
                         RetrievalRecordType.summaryTypeNames(),
                         SummaryChunker.CITATION_METADATA_VERSION,
                         batchSize);
-        if (sourceIds.isEmpty()) {
+        if (candidates.isEmpty()) {
+            if (quarantinedAmbiguous > 0) {
+                log.warn(
+                        "Quarantined {} ambiguous legacy summary chunk(s)",
+                        quarantinedAmbiguous);
+            }
             return;
         }
 
         int updated = 0;
         int failed = 0;
-        for (final String sourceId : sourceIds) {
+        int quarantined = quarantinedAmbiguous;
+        for (final SummaryReplayCandidate candidate : candidates) {
+            final String sourceId = candidate.getSourceRecordId();
             try {
                 final Long summaryId = SummarySourceKey.parseCallSummaryId(sourceId)
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Invalid call summary source key"));
                 final SummaryCitationReplayOutcome outcome =
-                        retrievalIndexService.replaySummaryCitationMetadata(summaryId);
+                        retrievalIndexService.replaySummaryCitationMetadata(
+                                summaryId, candidate.getPatientId());
                 if (outcome == SummaryCitationReplayOutcome.UPDATED) {
                     updated++;
                 } else if (outcome == SummaryCitationReplayOutcome.NO_DRAFTS) {
                     failed++;
-                    markFailureBackoff(sourceId);
+                    markFailureBackoff(candidate);
+                } else if (outcome == SummaryCitationReplayOutcome.QUARANTINED) {
+                    quarantined += chunkRepository.quarantineSummarySource(
+                            candidate.getPatientId(), sourceId);
                 }
             } catch (final RuntimeException ex) {
                 failed++;
-                markFailureBackoff(sourceId);
+                markFailureBackoff(candidate);
                 log.warn(
                         "Summary citation metadata replay failed type={}",
                         ex.getClass().getSimpleName());
             }
         }
         log.info(
-                "Summary citation metadata replay processed {} source(s), updated {} source(s), failed {}",
-                sourceIds.size(),
+                "Summary citation metadata replay processed {} source(s), updated {}, quarantined {}, failed {}",
+                candidates.size(),
                 updated,
+                quarantined,
                 failed);
     }
 
-    private void markFailureBackoff(final String sourceId) {
+    private void markFailureBackoff(final SummaryReplayCandidate candidate) {
         try {
             chunkRepository.markSummaryCitationReplayFailure(
-                    sourceId,
+                    candidate.getPatientId(),
+                    candidate.getSourceRecordId(),
                     RetrievalRecordType.summaryTypeNames(),
                     OffsetDateTime.now(ZoneOffset.UTC)
                             .plus(Duration.ofMillis(failureBackoffMs)));
@@ -95,6 +110,17 @@ public class SummaryCitationMetadataBackfillWorker {
             log.warn(
                     "Unable to persist summary citation replay backoff type={}",
                     markFailure.getClass().getSimpleName());
+        }
+    }
+
+    private int quarantineAmbiguousSources() {
+        try {
+            return chunkRepository.quarantineAmbiguousLegacySummarySources();
+        } catch (final RuntimeException ex) {
+            log.warn(
+                    "Unable to quarantine ambiguous legacy summary sources type={}",
+                    ex.getClass().getSimpleName());
+            return 0;
         }
     }
 }

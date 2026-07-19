@@ -189,6 +189,39 @@ class AiAskServiceTest {
     }
 
     @Test
+    @DisplayName("ask fails closed when any factual claim is uncited")
+    void ask_partiallyUncitedClaims_failsClosed() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                "Started metformin 500mg twice daily",
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Metformin started. Symptoms improved.",
+                        List.of("C1"),
+                        List.of(
+                                new GroundedAskLlmService.GroundedClaim(
+                                        "Metformin started.", List.of("C1")),
+                                new GroundedAskLlmService.GroundedClaim(
+                                        "Symptoms improved.", List.of())),
+                        "amazon.nova-lite-v1:0")));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
     @DisplayName("ask throws unavailable when grounded LLM returns empty")
     void ask_llmUnavailable() throws Exception {
         stubHappyPathPreRetrieval("pain");
