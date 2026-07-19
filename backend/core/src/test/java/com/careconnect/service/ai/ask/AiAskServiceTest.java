@@ -110,6 +110,10 @@ class AiAskServiceTest {
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
                         "Patient started metformin 500mg.",
                         List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Patient started metformin 500mg.",
+                                List.of("C1"),
+                                java.util.Map.of("C1", "Started metformin 500mg"))),
                         "amazon.nova-lite-v1:0")));
 
         final AiAskResponse response = service.ask(caller(), request("metformin"));
@@ -126,6 +130,38 @@ class AiAskServiceTest {
         assertThat(response.escalation().reason()).isEqualTo("Tier1_auto_deliver");
         assertThat(response.retrievalMeta().chunksUsed()).isEqualTo(1);
         assertThat(response.retrievalMeta().model().provider()).isEqualTo("bedrock");
+    }
+
+    @Test
+    @DisplayName("ask rejects evidence that is absent from the cited chunk")
+    void ask_nonExtractiveEvidence_failsClosed() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                "Started metformin 500mg twice daily",
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Symptoms improved.",
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Symptoms improved.",
+                                List.of("C1"),
+                                java.util.Map.of("C1", "Symptoms improved"))),
+                        "amazon.nova-lite-v1:0")));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
     }
 
     @Test
@@ -180,6 +216,12 @@ class AiAskServiceTest {
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
                         "Patient started metformin 500mg.",
                         List.of("C1", "C99"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Patient started metformin 500mg.",
+                                List.of("C1", "C99"),
+                                java.util.Map.of(
+                                        "C1", "Started metformin 500mg",
+                                        "C99", "Started metformin 500mg"))),
                         "amazon.nova-lite-v1:0")));
 
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
@@ -212,7 +254,9 @@ class AiAskServiceTest {
                         List.of("C1"),
                         List.of(
                                 new GroundedAskLlmService.GroundedClaim(
-                                        "Metformin started.", List.of("C1")),
+                                        "Metformin started.",
+                                        List.of("C1"),
+                                        java.util.Map.of("C1", "Started metformin 500mg")),
                                 new GroundedAskLlmService.GroundedClaim(
                                         "Symptoms improved.", List.of())),
                         "amazon.nova-lite-v1:0")));
@@ -243,6 +287,33 @@ class AiAskServiceTest {
 
         assertThatThrownBy(() -> service.ask(caller(), request("pain")))
                 .isInstanceOf(AskAiUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("ask maps invalid model schema to grounding failure")
+    void ask_invalidModelOutput_isGroundingFailure() throws Exception {
+        stubHappyPathPreRetrieval("pain");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "1",
+                "Reports mild pain",
+                null,
+                "auto",
+                0.02d,
+                1,
+                null,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("pain")))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "pain", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenThrow(new GroundedOutputValidationException("missing claims"));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("pain")))
+                .isInstanceOf(AskAiGroundingException.class)
+                .satisfies(ex -> assertThat(((AskAiGroundingException) ex).getStatus().value())
+                        .isEqualTo(502));
     }
 
     @Test

@@ -68,28 +68,9 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     FROM retrieval_index_chunk ric
                     WHERE ric.patient_id = :patientId
                       AND ric.record_type IN (:recordTypes)
-                      AND (
-                        (
-                          ric.source_record_id = :currentSourceRecordId
-                          AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
-                        )
-                        OR (
-                          ric.source_record_id = :legacySourceRecordId
-                          AND ric.source_kind IS NULL
-                          AND EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk call_overview
-                            WHERE call_overview.patient_id = ric.patient_id
-                              AND call_overview.source_record_id = ric.source_record_id
-                              AND call_overview.record_type = 'CALL_SUMMARY'
-                          )
-                          AND NOT EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk visit_overview
-                            WHERE visit_overview.patient_id = ric.patient_id
-                              AND visit_overview.source_record_id = ric.source_record_id
-                              AND visit_overview.record_type = 'VISIT_SUMMARY'
-                          )
-                        )
-                      )
+                      AND ric.source_record_id = :currentSourceRecordId
+                      AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
+                      AND ric.source_record_id <> :legacySourceRecordId
                     """,
             nativeQuery = true)
     List<RetrievalIndexChunk> findCallSummaryChunksForReplacement(
@@ -105,28 +86,9 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     DELETE FROM retrieval_index_chunk ric
                     WHERE ric.patient_id = :patientId
                       AND ric.record_type IN (:recordTypes)
-                      AND (
-                        (
-                          ric.source_record_id = :currentSourceRecordId
-                          AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
-                        )
-                        OR (
-                          ric.source_record_id = :legacySourceRecordId
-                          AND ric.source_kind IS NULL
-                          AND EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk call_overview
-                            WHERE call_overview.patient_id = ric.patient_id
-                              AND call_overview.source_record_id = ric.source_record_id
-                              AND call_overview.record_type = 'CALL_SUMMARY'
-                          )
-                          AND NOT EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk visit_overview
-                            WHERE visit_overview.patient_id = ric.patient_id
-                              AND visit_overview.source_record_id = ric.source_record_id
-                              AND visit_overview.record_type = 'VISIT_SUMMARY'
-                          )
-                        )
-                      )
+                      AND ric.source_record_id = :currentSourceRecordId
+                      AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
+                      AND ric.source_record_id <> :legacySourceRecordId
                     """,
             nativeQuery = true)
     int deleteCallSummaryChunksForReplacement(
@@ -331,8 +293,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT DISTINCT
-                           ric.patient_id AS patientId,
-                           ric.source_record_id AS sourceRecordId
+                           ric.patient_id AS "patientId",
+                           ric.source_record_id AS "sourceRecordId"
                     FROM retrieval_index_chunk ric
                     WHERE ric.record_type IN (:recordTypes)
                       AND ric.migration_status = 'ACTIVE'
@@ -346,18 +308,6 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                         OR (
                           ric.source_record_id ~ '^[0-9]+$'
                           AND ric.source_kind IS NULL
-                          AND EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk call_overview
-                            WHERE call_overview.patient_id = ric.patient_id
-                              AND call_overview.source_record_id = ric.source_record_id
-                              AND call_overview.record_type = 'CALL_SUMMARY'
-                          )
-                          AND NOT EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk visit_overview
-                            WHERE visit_overview.patient_id = ric.patient_id
-                              AND visit_overview.source_record_id = ric.source_record_id
-                              AND visit_overview.record_type = 'VISIT_SUMMARY'
-                          )
                         )
                       )
                       AND (
@@ -405,22 +355,6 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                         OR (
                           source_record_id ~ '^[0-9]+$'
                           AND source_kind IS NULL
-                          AND EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk call_overview
-                            WHERE call_overview.patient_id =
-                                    retrieval_index_chunk.patient_id
-                              AND call_overview.source_record_id =
-                                    retrieval_index_chunk.source_record_id
-                              AND call_overview.record_type = 'CALL_SUMMARY'
-                          )
-                          AND NOT EXISTS (
-                            SELECT 1 FROM retrieval_index_chunk visit_overview
-                            WHERE visit_overview.patient_id =
-                                    retrieval_index_chunk.patient_id
-                              AND visit_overview.source_record_id =
-                                    retrieval_index_chunk.source_record_id
-                              AND visit_overview.record_type = 'VISIT_SUMMARY'
-                          )
                         )
                       )
                     """,
@@ -439,37 +373,64 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SET migration_status = 'QUARANTINED'
                     WHERE patient_id = :patientId
                       AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
                       AND migration_status = 'ACTIVE'
+                      AND (source_kind = 'CALL_SUMMARY' OR source_kind IS NULL)
                     """,
             nativeQuery = true)
     int quarantineSummarySource(
             @Param("patientId") Long patientId,
-            @Param("sourceRecordId") String sourceRecordId);
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
 
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
             value = """
-                    UPDATE retrieval_index_chunk ric
+                    UPDATE retrieval_index_chunk
                     SET migration_status = 'QUARANTINED'
-                    WHERE ric.source_record_id ~ '^[0-9]+$'
-                      AND ric.source_kind IS NULL
-                      AND ric.migration_status = 'ACTIVE'
-                      AND EXISTS (
-                        SELECT 1 FROM retrieval_index_chunk call_overview
-                        WHERE call_overview.patient_id = ric.patient_id
-                          AND call_overview.source_record_id = ric.source_record_id
-                          AND call_overview.record_type = 'CALL_SUMMARY'
-                      )
-                      AND EXISTS (
-                        SELECT 1 FROM retrieval_index_chunk visit_overview
-                        WHERE visit_overview.patient_id = ric.patient_id
-                          AND visit_overview.source_record_id = ric.source_record_id
-                          AND visit_overview.record_type = 'VISIT_SUMMARY'
-                      )
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND source_kind IS NULL
+                      AND migration_status = 'ACTIVE'
+                    """,
+            nativeQuery = true)
+    int quarantineLegacySummarySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    /**
+     * Administrative fail-closed cleanup for all unowned numeric summary sources.
+     * New replay code quarantines each authoritative candidate independently.
+     */
+    @Deprecated
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET migration_status = 'QUARANTINED'
+                    WHERE source_record_id ~ '^[0-9]+$'
+                      AND source_kind IS NULL
+                      AND record_type IN (
+                        'CALL_SUMMARY', 'VISIT_SUMMARY', 'SUMMARY_ACTION_ITEM',
+                        'SUMMARY_APPOINTMENT', 'SUMMARY_CARE_INSTRUCTION',
+                        'SUMMARY_CONDITION', 'SUMMARY_SOAP',
+                        'SUMMARY_CLINICAL_OBSERVATION')
+                      AND migration_status = 'ACTIVE'
                     """,
             nativeQuery = true)
     int quarantineAmbiguousLegacySummarySources();
+
+    @Query(
+            value = """
+                    SELECT pg_try_advisory_xact_lock(
+                        hashtextextended(:lockKey, 0))
+                    """,
+            nativeQuery = true)
+    boolean tryAcquireSummaryReplayLock(@Param("lockKey") String lockKey);
 
     /**
      * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).

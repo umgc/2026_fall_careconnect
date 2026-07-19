@@ -2,6 +2,7 @@ package com.careconnect.service.ai.ask;
 
 import com.careconnect.service.ai.retrieval.RankedChunk;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.careconnect.service.ai.indexing.SummarySourceKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -42,11 +43,32 @@ class CitationDeepLinkBuilderTest {
         assertThat(build(RetrievalRecordType.VISIT_SUMMARY, "visit-1")).isNull();
     }
 
+    @Test
+    @DisplayName("shared summary child routes depend on source ownership")
+    void build_sharedSummaryType_routesOnlyCallOwnedRows() {
+        assertThat(build(
+                RetrievalRecordType.SUMMARY_APPOINTMENT,
+                SummarySourceKey.CALL_KIND,
+                "call-summary:1")).isEqualTo("/chatandcalls");
+        assertThat(build(
+                RetrievalRecordType.SUMMARY_APPOINTMENT,
+                SummarySourceKey.VISIT_KIND,
+                "visit-summary:1")).isNull();
+    }
+
     private String build(final RetrievalRecordType type, final String sourceId) {
+        return build(type, null, sourceId);
+    }
+
+    private String build(
+            final RetrievalRecordType type,
+            final String sourceKind,
+            final String sourceId) {
         return builder.build(new RankedChunk(
                         UUID.randomUUID(),
                         42L,
                         type,
+                        sourceKind,
                         sourceId,
                         "text",
                         null,
