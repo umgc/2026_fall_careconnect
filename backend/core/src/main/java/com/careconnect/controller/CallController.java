@@ -1465,7 +1465,7 @@ public class CallController {
 
   private void requireDurableCallAccess(final String callId, final User user) {
     if (user.getRole() != Role.ADMIN) {
-      callSessionService.requireParticipant(callId, user.getId());
+      callSessionService.requireHistoricalParticipant(callId, user.getId());
     } else {
       callSessionService.requireSession(callId);
     }

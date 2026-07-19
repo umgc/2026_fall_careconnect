@@ -129,7 +129,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
             "type", "connection-established",
             "message", "Connected to CareConnect call service",
             "sessionId", session.getId());
-    session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+    sendText(session, objectMapper.writeValueAsString(response));
   }
 
   @Override
@@ -235,7 +235,13 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
   private void sendJsonMessage(final WebSocketSession session, final Map<String, Object> payload)
       throws Exception {
-    session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+    sendText(session, objectMapper.writeValueAsString(payload));
+  }
+
+  private void sendText(final WebSocketSession session, final String payload) throws Exception {
+    synchronized (session) {
+      session.sendMessage(new TextMessage(payload));
+    }
   }
 
   private Map<String, Object> errorResponse(final String type, final String message) {
@@ -422,8 +428,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       }
       callNotification.put("timestamp", System.currentTimeMillis());
 
-      recipientSession.sendMessage(
-          new TextMessage(objectMapper.writeValueAsString(callNotification)));
+      sendJsonMessage(recipientSession, callNotification);
 
       sendJsonMessage(
           session,
@@ -482,8 +487,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "messageType", messageType,
               "timestamp", System.currentTimeMillis());
 
-      recipientSession.sendMessage(
-          new TextMessage(objectMapper.writeValueAsString(smsNotification)));
+      sendJsonMessage(recipientSession, smsNotification);
 
       sendJsonMessage(
           session,
@@ -533,7 +537,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "answeredBy", user.getId(),
               "answeredByName", getUserDisplayName(user),
               "timestamp", System.currentTimeMillis());
-      senderSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      sendJsonMessage(senderSession, response);
 
       log.debug("Call {} accepted by userId={}", callId, user.getId());
     }
@@ -585,7 +589,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "declinedByName", getUserDisplayName(user),
               "reason", reason,
               "timestamp", System.currentTimeMillis());
-      senderSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      sendJsonMessage(senderSession, response);
 
       log.debug("Call {} declined by userId={}", callId, user.getId());
     }
@@ -681,7 +685,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       }
       response.put("timestamp", System.currentTimeMillis());
 
-      otherSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      sendJsonMessage(otherSession, response);
     }
   }
 
@@ -692,7 +696,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "type", "error",
               "message", errorMessage,
               "timestamp", System.currentTimeMillis());
-      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(error)));
+      sendJsonMessage(session, error);
     } catch (Exception e) {
       log.error("Failed to send error message to session {}", session.getId(), e);
     }
@@ -703,7 +707,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       throws Exception {
     final User user = sessionUsers.remove(session.getId());
     if (user != null) {
-      userSessions.remove(user.getId().toString());
+      userSessions.remove(user.getId().toString(), session);
       log.debug(
           "WebSocket connection closed for userId={} status={}", user.getId(), status);
     } else {
@@ -745,7 +749,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     final WebSocketSession session = userSessions.get(userId);
     if (session != null && session.isOpen()) {
       try {
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(notification)));
+        sendJsonMessage(session, notification);
         log.info("Notification sent to user {}: {}", userId, notification.get("type"));
       } catch (Exception e) {
         log.error("Failed to send notification to user {}", userId, e);

@@ -35,7 +35,6 @@ import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * Task 5.3 — Ask AI gateway orchestrator.
@@ -66,11 +65,6 @@ public class AiAskService {
                     + "CareConnect Ask AI only answers from your stored health records "
                     + "and cannot provide general medical advice.";
     private static final int CITATION_CONTEXT_CODE_POINTS = 80;
-    private static final Pattern WORD_BOUNDARY = Pattern.compile("[^\\p{L}\\p{N}]+");
-    private static final Set<String> QUERY_STOP_WORDS = Set.of(
-            "about", "could", "does", "from", "have", "please", "record",
-            "records", "show", "tell", "that", "these", "this", "what",
-            "when", "where", "which", "with", "would");
 
     private final RetrievalScopeService retrievalScopeService;
     private final HybridRetrievalService hybridRetrievalService;
@@ -339,7 +333,8 @@ public class AiAskService {
                 && evidence.codePointCount(0, evidence.length()) >= 20
                 && claim.text().equals(evidence)
                 && isCompleteSpan(excerpt, evidence)
-                && isRelevantExtract(query, evidence, excerpt.text(), refMap.get(ref));
+                && GroundingRelevancePolicy.isRelevant(
+                        query, evidence, excerpt.text(), refMap.get(ref));
     }
 
     private static boolean isCompleteSpan(
@@ -383,79 +378,6 @@ public class AiAskService {
                 || lastEvidenceCodePoint == '!'
                 || lastEvidenceCodePoint == '?')
                 && Character.isWhitespace(nextCodePoint);
-    }
-
-    /**
-     * Deterministic fail-closed relevance safeguard. If query terms occur in the
-     * prompted excerpt, the chosen complete span must retain at least one of them.
-     * Generic questions such as "What meds?" continue to rely on ranked retrieval.
-     */
-    private static boolean isRelevantExtract(
-            final String query,
-            final String evidence,
-            final String excerpt,
-            final com.careconnect.service.ai.retrieval.RankedChunk chunk) {
-        final Set<String> queryTerms = normalizedTerms(query);
-        if (queryTerms.isEmpty()) {
-            return strongRetrievalForWholeRecord(evidence, excerpt, chunk);
-        }
-        final Set<String> excerptTerms = normalizedTerms(excerpt);
-        excerptTerms.retainAll(queryTerms);
-        if (excerptTerms.isEmpty()) {
-            return conceptRelevant(queryTerms, normalizedTerms(evidence))
-                    || strongRetrievalForWholeRecord(evidence, excerpt, chunk);
-        }
-        final Set<String> evidenceTerms = normalizedTerms(evidence);
-        evidenceTerms.retainAll(queryTerms);
-        return !evidenceTerms.isEmpty();
-    }
-
-    private static boolean conceptRelevant(
-            final Set<String> queryTerms, final Set<String> evidenceTerms) {
-        final Map<String, Set<String>> concepts = Map.of(
-                "medication", Set.of("medication", "medicine", "drug", "dose", "dosage",
-                        "mg", "tablet", "metformin", "insulin"),
-                "allergy", Set.of("allergy", "allergic", "reaction"),
-                "pain", Set.of("pain", "ache", "sore"),
-                "appointment", Set.of("appointment", "visit", "followup", "follow-up"));
-        for (final Map.Entry<String, Set<String>> concept : concepts.entrySet()) {
-            final boolean queryMatches = queryTerms.stream().anyMatch(term ->
-                    concept.getValue().contains(term)
-                            || ("meds".equals(term) && "medication".equals(concept.getKey())));
-            if (queryMatches && evidenceTerms.stream().anyMatch(concept.getValue()::contains)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean strongRetrievalForWholeRecord(
-            final String evidence,
-            final String excerpt,
-            final com.careconnect.service.ai.retrieval.RankedChunk chunk) {
-        if (chunk == null || excerpt == null || excerpt.isBlank()) {
-            return false;
-        }
-        final boolean strongRank = (chunk.ftsRank() != null && chunk.ftsRank() <= 3)
-                || (chunk.vectorRank() != null && chunk.vectorRank() <= 2);
-        final boolean scoreFloor = Double.isFinite(chunk.rrfScore()) && chunk.rrfScore() >= 0.02d;
-        final double coverage = (double) evidence.codePointCount(0, evidence.length())
-                / Math.max(1, excerpt.codePointCount(0, excerpt.length()));
-        return strongRank && scoreFloor && coverage >= 0.5d;
-    }
-
-    private static Set<String> normalizedTerms(final String value) {
-        final Set<String> terms = new java.util.HashSet<>();
-        if (value == null) {
-            return terms;
-        }
-        for (final String token : WORD_BOUNDARY.split(value.toLowerCase(java.util.Locale.ROOT))) {
-            if (token.codePointCount(0, token.length()) >= 4
-                    && !QUERY_STOP_WORDS.contains(token)) {
-                terms.add(token);
-            }
-        }
-        return terms;
     }
 
     private static String surroundingCitationContext(

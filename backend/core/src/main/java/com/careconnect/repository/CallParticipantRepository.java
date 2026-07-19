@@ -28,6 +28,22 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
             @Param("invitedByUserId") Long invitedByUserId,
             @Param("status") String status);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE CallParticipant p
+               SET p.status = :invited, p.invitedByUserId = :invitedByUserId,
+                   p.joinedAt = NULL, p.leftAt = NULL, p.updatedAt = CURRENT_TIMESTAMP
+             WHERE p.callSessionId = :sessionId AND p.userId = :userId
+               AND p.status IN (:left, :declined)
+            """)
+    int reinviteIfInactive(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("invitedByUserId") Long invitedByUserId,
+            @Param("invited") String invited,
+            @Param("left") String left,
+            @Param("declined") String declined);
+
     long countByCallSessionIdAndStatus(Long callSessionId, String status);
 
     @Modifying

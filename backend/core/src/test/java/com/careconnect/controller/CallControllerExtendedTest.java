@@ -295,7 +295,8 @@ class CallControllerExtendedTest {
             when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
             when(callSummaryService.getLatestSummaryEntity(anyString())).thenReturn(Optional.empty());
             doThrow(new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call"))
-                    .when(callSessionService).requireParticipant(CALL_ID, patientUser.getId());
+                    .when(callSessionService)
+                    .requireHistoricalParticipant(CALL_ID, patientUser.getId());
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
                             .with(csrf()))
@@ -340,7 +341,8 @@ class CallControllerExtendedTest {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
             when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
             doThrow(new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call"))
-                    .when(callSessionService).requireParticipant(CALL_ID, patientUser.getId());
+                    .when(callSessionService)
+                    .requireHistoricalParticipant(CALL_ID, patientUser.getId());
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/transcript/segments")
                             .with(csrf()))

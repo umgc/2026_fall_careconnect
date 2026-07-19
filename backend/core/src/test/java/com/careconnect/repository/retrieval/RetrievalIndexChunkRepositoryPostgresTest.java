@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -403,6 +404,56 @@ abstract class RetrievalIndexChunkRepositoryPostgresContract {
         new SchemaPatchRunner(dataSource).run();
 
         assertThat(indexReadyAndValid("idx_retrieval_summary_replay")).isTrue();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void productionBootstrap_freshReplayIndexesValidateOnSecondRun() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS summary_citation_replay_source");
+        prepareBootstrapDependencies();
+
+        new SchemaPatchRunner(dataSource).run();
+        new SchemaPatchRunner(dataSource).run();
+
+        assertThat(indexDefinition("idx_summary_replay_claim_fair"))
+                .contains("replay_after NULLS FIRST")
+                .contains("(migration_status)::text = 'ACTIVE'::text");
+        assertThat(indexDefinition("idx_summary_replay_expired_claim"))
+                .contains("replay_after NULLS FIRST")
+                .contains("(migration_status)::text = 'ACTIVE'::text");
+        assertThat(indexReadyAndValid("idx_summary_replay_claim_fair")).isTrue();
+        assertThat(indexReadyAndValid("idx_summary_replay_expired_claim")).isTrue();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void productionBootstrap_serializesRequiredDdlAcrossConcurrentNodes() throws Exception {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS summary_citation_replay_source");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS retrieval_index_chunk");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS call_participants");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS call_sessions");
+        prepareBootstrapDependencies();
+        final var executor = Executors.newFixedThreadPool(2);
+        try {
+            final var first = executor.submit(() -> new SchemaPatchRunner(dataSource).run());
+            final var second = executor.submit(() -> new SchemaPatchRunner(dataSource).run());
+
+            first.get(90, TimeUnit.SECONDS);
+            second.get(90, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema = current_schema()
+                  AND table_name IN (
+                    'call_sessions', 'call_participants',
+                    'call_summaries', 'retrieval_index_chunk',
+                    'summary_citation_replay_source')
+                """, Integer.class)).isEqualTo(5);
+        assertThat(indexReadyAndValid("idx_summary_replay_claim_fair")).isTrue();
+        assertThat(indexReadyAndValid("idx_summary_replay_expired_claim")).isTrue();
     }
 
     @Test

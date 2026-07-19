@@ -24,8 +24,7 @@ public final class BedrockModelSupport {
             "anthropic.claude-3-haiku-20240307-v1:0",
             "anthropic.claude-3-5-sonnet-20240620-v1:0",
             "anthropic.claude-sonnet-4-20250514-v1:0",
-            "anthropic.claude-sonnet-4-5-20250929-v1:0",
-            "anthropic.claude-sonnet-4-6"
+            "anthropic.claude-sonnet-4-5-20250929-v1:0"
     );
     public static final Set<String> APPROVED_INFERENCE_PROFILE_IDS = Set.of(
             "us.anthropic.claude-sonnet-4-20250514-v1:0",
@@ -36,7 +35,7 @@ public final class BedrockModelSupport {
     private static final String CLAUDE_PREFIX = "anthropic.claude";
     private static final String CLAUDE_PROFILE_SEGMENT = ".anthropic.claude";
 
-        private static final Map<String, String> CLAUDE_MODEL_TO_PROFILE_ID = Map.of(
+    private static final Map<String, String> CLAUDE_MODEL_TO_PROFILE_ID = Map.of(
             "anthropic.claude-sonnet-4-20250514-v1:0", "us.anthropic.claude-sonnet-4-20250514-v1:0",
             "anthropic.claude-sonnet-4-5-20250929-v1:0", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         );

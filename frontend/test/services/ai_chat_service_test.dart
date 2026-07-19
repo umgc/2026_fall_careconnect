@@ -1169,6 +1169,75 @@ void main() {
       expect(result.retryInput, 'metformin');
     });
 
+    test('never accepts DELIVERED from a non-2xx response', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(503, _validDeliveredAskResponse()),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    for (final invalidCitation in <Map<String, dynamic>>[
+      {
+        'citationId': ' ',
+        'recordType': 'CALL_SUMMARY',
+        'excerpt': 'Metformin was started.',
+      },
+      {
+        'citationId': 'C1',
+        'recordType': 'UNKNOWN',
+        'excerpt': 'Metformin was started.',
+      },
+      {
+        'citationId': 'C1',
+        'recordType': 'CALL_SUMMARY',
+        'excerpt': ' ',
+      },
+    ]) {
+      test('fails closed on invalid delivered citation $invalidCitation',
+          () async {
+        final body = _validDeliveredAskResponse();
+        body['citations'] = [invalidCitation];
+
+        final result = await http.runWithClient(
+          () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+          () => _mockJson(200, body),
+        );
+
+        expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+        expect(result.answer, isNull);
+        expect(result.citations, isEmpty);
+        expect(result.error?.code, 'INVALID_RESPONSE');
+      });
+    }
+
+    for (final status in const ['WITHHELD', 'NO_RECORDS']) {
+      test('discards injected answer and citations for $status', () async {
+        final result = await http.runWithClient(
+          () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+          () => _mockJson(200, {
+            'success': status == 'NO_RECORDS',
+            'deliveryStatus': status,
+            'answer': {'text': 'Injected answer'},
+            'citations': [
+              {
+                'citationId': 'C1',
+                'recordType': 'CALL_SUMMARY',
+                'excerpt': 'Injected evidence',
+              }
+            ],
+          }),
+        );
+
+        expect(result.answer, isNull);
+        expect(result.citations, isEmpty);
+      });
+    }
+
     test('preserves supplied session, conversation, and bounded source types',
         () async {
       final (client, requests) = _capturingClient(200, {
@@ -1242,3 +1311,31 @@ void main() {
     });
   });
 }
+
+Map<String, dynamic> _validDeliveredAskResponse() => {
+      'success': true,
+      'deliveryStatus': 'DELIVERED',
+      'answer': {'text': 'Metformin was started.'},
+      'citations': [
+        {
+          'citationId': 'C1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        }
+      ],
+      'disclaimer': {
+        'text': 'Records-based information; not medical advice.',
+        'aiNoticeRequired': true,
+        'recordsBasedFraming': true,
+        'locale': 'en-US',
+      },
+      'escalation': {
+        'tier': 1,
+        'reason': 'Tier1_auto_deliver',
+        'requiresClinicianReview': false,
+      },
+      'confirmation': {
+        'promptConfirmWithProvider': true,
+        'message': 'Confirm important details with your care provider.',
+      },
+    };

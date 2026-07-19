@@ -339,17 +339,27 @@ public class RetrievalIndexService {
             throw new IndexingDeferredException(
                     "TRANSCRIPT_INDEXED patient scope does not match authoritative CallSession");
         }
+        if (payload.totalSegmentCount() < 0) {
+            throw new IllegalArgumentException(
+                    "TRANSCRIPT_INDEXED totalSegmentCount cannot be negative");
+        }
 
         chunkRepository.acquireSourceReplacementLock(
                 patientId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name(), callId);
         final CallTranscriptService.IndexingSnapshot snapshot =
                 callTranscriptService.captureIndexingSnapshot(callId);
         final List<CallTranscriptSegment> segments = snapshot.segments();
-        if (segments.size() != payload.totalSegmentCount()
+        if (segments.size() > payload.totalSegmentCount()) {
+            log.info(
+                    "TRANSCRIPT_INDEXED snapshot superseded for callId={} expectedCount={} currentCount={}",
+                    callId, payload.totalSegmentCount(), segments.size());
+            return 0;
+        }
+        if (segments.size() < payload.totalSegmentCount()
                 || payload.snapshotVersion() == null
                 || !payload.snapshotVersion().equals(snapshot.version())) {
             throw new IndexingDeferredException(
-                    "Transcript snapshot is incomplete or stale for callId="
+                    "Transcript snapshot is incomplete or not yet authoritative for callId="
                             + callId + " (expected count/version "
                             + payload.totalSegmentCount() + "/" + payload.snapshotVersion()
                             + ", found " + segments.size() + "/" + snapshot.version() + ")",

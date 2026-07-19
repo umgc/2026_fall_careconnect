@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Grounded Ask AI Bedrock completion — structured claim-level citations only.
@@ -30,6 +31,16 @@ import java.util.Optional;
 public class GroundedAskLlmService {
 
     private static final Logger log = LoggerFactory.getLogger(GroundedAskLlmService.class);
+    private static final Set<String> CONFIGURATION_ERROR_CODES = Set.of(
+            "AccessDeniedException",
+            "ValidationException",
+            "ResourceNotFoundException");
+    private static final Set<String> TRANSIENT_PROVIDER_ERROR_CODES = Set.of(
+            "ThrottlingException",
+            "ServiceUnavailableException",
+            "InternalServerException",
+            "ModelTimeoutException",
+            "ModelNotReadyException");
 
     private final BedrockRuntimeClient bedrockRuntimeClient;
     private final ObjectMapper objectMapper;
@@ -115,10 +126,7 @@ public class GroundedAskLlmService {
             if (log.isDebugEnabled()) {
                 log.debug("Grounded Ask AI Bedrock diagnostic", ex);
             }
-            throw new GroundedProviderException(
-                    GroundedProviderException.Kind.PROVIDER,
-                    "Grounded model provider invocation failed",
-                    ex);
+            throw classifyProviderFailure(code, ex);
         } catch (final GroundedOutputValidationException ex) {
             throw ex;
         } catch (final IllegalArgumentException ex) {
@@ -138,6 +146,22 @@ public class GroundedAskLlmService {
 
     public boolean isAvailable() {
         return awsEnabled && bedrockRuntimeClient != null;
+    }
+
+    private static GroundedProviderException classifyProviderFailure(
+            final String errorCode, final BedrockRuntimeException cause) {
+        if (CONFIGURATION_ERROR_CODES.contains(errorCode)) {
+            return new GroundedProviderException(
+                    GroundedProviderException.Kind.CONFIGURATION,
+                    false,
+                    "Grounded model configuration is unavailable",
+                    cause);
+        }
+        return new GroundedProviderException(
+                GroundedProviderException.Kind.PROVIDER,
+                TRANSIENT_PROVIDER_ERROR_CODES.contains(errorCode),
+                "Grounded model provider invocation failed",
+                cause);
     }
 
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {

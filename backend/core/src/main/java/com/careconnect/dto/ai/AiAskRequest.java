@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.UUID;
 @JsonIgnoreProperties(ignoreUnknown = false)
 public record AiAskRequest(
         @NotBlank @Size(max = 2000) String query,
-        @NotNull Long patientId,
+        @NotNull @Positive Long patientId,
         UUID sessionId,
         UUID conversationId,
         InputModality inputModality,

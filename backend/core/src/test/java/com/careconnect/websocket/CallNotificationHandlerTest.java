@@ -930,4 +930,17 @@ class CallNotificationHandlerTest {
         assertThat(online).doesNotContainKey("1");
         assertThat(online).containsKey("2");
     }
+
+    @Test
+    void afterConnectionClosed_oldSessionDoesNotRemoveReplacementSession() throws Exception {
+        authenticate(session, "s1", user, 1L, "u@u.com", "tok1");
+        authenticate(recipientSession, "s2", user, 1L, "u@u.com", "tok2");
+        when(recipientSession.isOpen()).thenReturn(true);
+
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+        handler.sendNotificationToUser("1", Map.of("type", "test"));
+
+        assertThat(handler.isUserOnline("1")).isTrue();
+        verify(recipientSession, atLeast(2)).sendMessage(any(TextMessage.class));
+    }
 }

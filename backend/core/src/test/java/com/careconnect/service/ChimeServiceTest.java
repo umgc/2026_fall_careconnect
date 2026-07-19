@@ -465,6 +465,8 @@ class ChimeServiceTest {
             assertThatThrownBy(() -> raced.createMeeting(CALL_ID))
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("non-joinable");
+            verify(callSessionRepository).attachMeetingToTermination(
+                    CALL_ID, MEETING_ID, CallSessionService.SESSION_TERMINATING);
             verify(chimeSdkMeetingsClient).deleteMeeting(any(DeleteMeetingRequest.class));
         }
     }
