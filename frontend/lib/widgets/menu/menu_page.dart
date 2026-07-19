@@ -200,6 +200,16 @@ class _MenuPageState extends State<MenuPage> {
         visibleFor: const {'CAREGIVER', 'ADMIN'},
       ),
       _MenuItem(
+        icon: Icons.insights_outlined,
+        label: 'Product Analytics',
+        route: '/admin/analytics',
+        visibleFor: const {'ADMIN'},
+        onTap: () {
+          Navigator.pop(context);
+          context.go('/admin/analytics');
+        },
+      ),
+      _MenuItem(
         icon: Icons.settings,
         label: local.menupage_settingsItem,
         route: '/settings',
