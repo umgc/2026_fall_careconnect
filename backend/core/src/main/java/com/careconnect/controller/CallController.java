@@ -480,6 +480,24 @@ public class CallController {
                         "status",
                         completed ? "ended" : "processing")));
         if (!completed) {
+          callTelemetryService.recordCallEvent(
+              callId,
+              EVT_CALL_END,
+              currentUser.getId(),
+              null,
+              STATUS_SUCCESS,
+              mergeMetadata(
+                  Map.of(
+                      "endedMeeting",
+                      true,
+                      "terminationStatus",
+                      "processing",
+                      "remainingParticipantCount",
+                      leave.remainingParticipants(),
+                      "participantSource",
+                      "DURABLE_SESSION"),
+                  contextMetadata),
+              null);
           return ResponseEntity.status(HttpStatus.ACCEPTED).body(
               Map.of(
                   "status", "processing",
@@ -1441,8 +1459,74 @@ public class CallController {
       }
       final Long patientEntityId = callSummaryService.getLatestSummaryEntity(callId)
           .map(summary -> summary.getPatientId())
-          .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call not found"));
-      callSessionService.requirePatientEntityAccess(user, patientEntityId);
+          .orElse(null);
+      if (patientEntityId != null) {
+        callSessionService.requirePatientEntityAccess(user, patientEntityId);
+        return;
+      }
+      final Long patientUserId = resolveLegacyPatientUserId(callId);
+      if (patientUserId == null) {
+        throw new AppException(HttpStatus.NOT_FOUND, "Call not found");
+      }
+      callSessionService.requirePatientUserAccess(user, patientUserId);
+    }
+  }
+
+  /**
+   * Resolves a patient user id for pre-session historical calls from telemetry
+   * context metadata or PATIENT-role actors/targets on the call.
+   */
+  private Long resolveLegacyPatientUserId(final String callId) {
+    final List<CallTelemetryEvent> events = callTelemetryService.getTelemetryForCall(callId);
+    for (final CallTelemetryEvent event : events) {
+      final Long fromContext = extractContextPatientUserId(event);
+      if (fromContext != null) {
+        return fromContext;
+      }
+    }
+    for (final CallTelemetryEvent event : events) {
+      final Long actor = event.getActorUserId();
+      final Long target = event.getTargetUserId();
+      if (isPatientUser(actor)) {
+        return actor;
+      }
+      if (isPatientUser(target)) {
+        return target;
+      }
+    }
+    return null;
+  }
+
+  private boolean isPatientUser(final Long userId) {
+    if (userId == null) {
+      return false;
+    }
+    return userRepository.findById(userId)
+        .map(candidateUser -> candidateUser.getRole() == Role.PATIENT)
+        .orElse(false);
+  }
+
+  private Long extractContextPatientUserId(final CallTelemetryEvent event) {
+    if (event == null
+        || event.getMetadataJson() == null
+        || event.getMetadataJson().isBlank()) {
+      return null;
+    }
+    try {
+      final Map<?, ?> metadata = new com.fasterxml.jackson.databind.ObjectMapper()
+          .readValue(event.getMetadataJson(), Map.class);
+      final Object multi = metadata.get("contextPatientUserIds");
+      if (multi instanceof List<?> values) {
+        for (final Object value : values) {
+          final Long parsed = asLong(value);
+          if (parsed != null) {
+            return parsed;
+          }
+        }
+      }
+      return asLong(metadata.get("contextPatientUserId"));
+    } catch (Exception ignored) {
+      return null;
     }
   }
 

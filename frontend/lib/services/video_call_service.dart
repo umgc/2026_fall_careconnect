@@ -171,7 +171,7 @@ class VideoCallService {
           _onCallDeclined!(data);
         }
       }
-      if (type == 'call-ended') {
+      if (type == 'call-ended' || type == 'call-ending') {
         if (!belongsToActiveCall) return;
         unawaited(_handleRemoteCallEnd());
       }
