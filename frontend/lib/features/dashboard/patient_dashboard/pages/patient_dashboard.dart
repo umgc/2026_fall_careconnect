@@ -114,6 +114,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
     try {
       final user = Provider.of<UserProvider>(context, listen: false).user;
       final int? id = user?.id;
+      final int? patientId = user?.patientId;
 
       if (id == null) {
         setState(() {
@@ -124,7 +125,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       }
 
       await _loadMedicationReminders();
-      final alerts = await _buildAlerts(id);
+      final alerts = await _buildAlerts(id, patientId: patientId);
 
       if (!mounted) {
         return;
@@ -748,14 +749,83 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   /// Build alerts from real dashboard data only.
-  Future<List<AlertNotification>> _buildAlerts(int userId) async {
+  AlertType _alertTypeForVitalSeverity(String severity) {
+    switch (severity.toUpperCase()) {
+      case 'CRITICAL':
+      case 'HIGH':
+        return AlertType.important;
+      case 'LOW':
+        return AlertType.info;
+      default:
+        return AlertType.info;
+    }
+  }
+
+  String _vitalLabel(String metricType) {
+    switch (metricType.toLowerCase()) {
+      case 'heart_rate':
+        return 'heart rate';
+      case 'blood_pressure':
+        return 'blood pressure';
+      default:
+        return metricType.replaceAll('_', ' ');
+    }
+  }
+
+  List<AlertNotification> _buildVitalAlertNotifications(
+    List<Map<String, dynamic>> events,
+  ) {
+    return events.map((event) {
+      final metricType = (event['metricType'] ?? '').toString();
+      final measuredValue = (event['measuredValue'] ?? '').toString();
+      final alertLevel = (event['alertLevel'] ?? '').toString();
+      final successCount = event['successCount'] is int
+          ? event['successCount'] as int
+          : int.tryParse('${event['successCount']}') ?? 0;
+      final failureCount = event['failureCount'] is int
+          ? event['failureCount'] as int
+          : int.tryParse('${event['failureCount']}') ?? 0;
+
+      final deliverySummary = failureCount > 0
+          ? ' ($successCount delivered, $failureCount failed)'
+          : ' ($successCount delivered)';
+      final message =
+          '${_vitalLabel(metricType)} alert: $measuredValue [$alertLevel]$deliverySummary';
+
+      return AlertNotification(
+        type: _alertTypeForVitalSeverity(alertLevel),
+        message: message,
+      );
+    }).toList();
+  }
+
+  Future<List<AlertNotification>> _buildAlerts(
+    int userId, {
+    int? patientId,
+  }) async {
     final moodHistory = await ApiService.getMoodHistory(userId);
     final averageMood = _averageMoodLast7Days(moodHistory);
     final moodAlerts = _withMoodAlertForAverage(<AlertNotification>[], averageMood);
-    return _withMedicationReminderAlert(
+    final withMedication = _withMedicationReminderAlert(
       moodAlerts,
       hasPendingUntaken: _hasPendingMedicationReminders(medicationReminders),
     );
+    if (patientId == null) {
+      return withMedication;
+    }
+
+    final recentVitalEvents = await ApiService.getRecentVitalAlerts(
+      patientId,
+      limit: 3,
+    );
+    if (recentVitalEvents.isEmpty) {
+      return withMedication;
+    }
+
+    return [
+      ..._buildVitalAlertNotifications(recentVitalEvents),
+      ...withMedication,
+    ];
   }
 
   /// Load family members

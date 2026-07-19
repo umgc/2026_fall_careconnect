@@ -8,10 +8,16 @@ import com.careconnect.exception.AppException;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.model.VitalSample;
+import com.careconnect.model.VitalAlertEvent;
 import com.careconnect.model.WearableMetric;
+import com.careconnect.model.CaregiverPatientLink;
+import com.careconnect.model.FamilyMemberLink;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.VitalSampleRepository;
 import com.careconnect.repository.WearableMetricRepository;
+import com.careconnect.repository.PatientCaregiverRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.repository.VitalAlertEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,10 +27,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +47,9 @@ public class VitalSampleService {
     private final WearableMetricRepository wearableMetricRepository;
     private final CaregiverService caregiverService;
     private final NotificationService notificationService;
+    private final PatientCaregiverRepository patientCaregiverRepository;
+    private final FamilyMemberLinkRepository familyMemberLinkRepository;
+    private final VitalAlertEventRepository vitalAlertEventRepository;
     private final VitalAlertThresholdProperties vitalAlertThresholdProperties;
 
     /**
@@ -293,6 +306,7 @@ public class VitalSampleService {
                 String alertLevel = determineHeartRateAlert(vitalSample.getHeartRate());
                 if (!"NORMAL".equals(alertLevel)) {
                     sendVitalAlertIfEnabled(
+                        vitalSample.getPatient(),
                         patientUserId,
                         "heart_rate",
                         vitalSample.getHeartRate() + " bpm",
@@ -306,6 +320,7 @@ public class VitalSampleService {
                 String alertLevel = determineSpO2Alert(vitalSample.getSpo2());
                 if (!"NORMAL".equals(alertLevel)) {
                     sendVitalAlertIfEnabled(
+                        vitalSample.getPatient(),
                         patientUserId,
                         "spo2",
                         vitalSample.getSpo2() + "%",
@@ -321,6 +336,7 @@ public class VitalSampleService {
                     String bpValue = (vitalSample.getSystolic() != null ? vitalSample.getSystolic() : "?") + 
                                    "/" + (vitalSample.getDiastolic() != null ? vitalSample.getDiastolic() : "?");
                     sendVitalAlertIfEnabled(
+                        vitalSample.getPatient(),
                         patientUserId,
                         "blood_pressure",
                         bpValue + " mmHg",
@@ -332,6 +348,7 @@ public class VitalSampleService {
             // Check mood alerts (severe depression or anxiety)
             if (vitalSample.getMoodValue() != null && vitalSample.getMoodValue() <= 2) {
                 sendVitalAlertIfEnabled(
+                    vitalSample.getPatient(),
                     patientUserId,
                     "mood",
                     "score=" + vitalSample.getMoodValue(),
@@ -342,6 +359,7 @@ public class VitalSampleService {
             // Check pain alerts (severe pain)
             if (vitalSample.getPainValue() != null && vitalSample.getPainValue() >= 8) {
                 sendVitalAlertIfEnabled(
+                    vitalSample.getPatient(),
                     patientUserId,
                     "pain",
                     "score=" + vitalSample.getPainValue(),
@@ -508,18 +526,200 @@ public class VitalSampleService {
     /**
      * Helper method to send vital alerts only if Firebase is enabled
      */
-    private void sendVitalAlertIfEnabled(Long patientUserId, String metricType, String measuredValue, String alertLevel) {
-        notificationService.sendVitalAlert(patientUserId, metricType, measuredValue, alertLevel)
-            .exceptionally(ex -> {
-                LOG.warn(
-                    "Failed to send vital alert notification for user {} (metricType={}, measuredValue={}, severity={})",
+    private void sendVitalAlertIfEnabled(
+            Patient patient,
+            Long patientUserId,
+            String metricType,
+            String measuredValue,
+            String alertLevel
+    ) {
+        if (patient == null || patient.getId() == null) {
+            LOG.warn("Skipping vital alert event because patient context is missing for user {}", patientUserId);
+            return;
+        }
+
+        Set<Long> recipientUserIds = resolveAlertRecipientUserIds(patient.getUser(), patientUserId);
+        if (recipientUserIds.isEmpty()) {
+            saveVitalAlertEvent(
+                    patient.getId(),
+                    patientUserId,
+                    metricType,
+                    measuredValue,
+                    alertLevel,
+                    "NO_RECIPIENTS",
+                    0,
+                    0,
+                    0,
+                    "No active care-circle recipients found"
+            );
+            return;
+        }
+
+        String patientDisplayName = buildPatientDisplayName(patient);
+        CompletableFuture.runAsync(() -> dispatchVitalAlertAndRecordEvent(
+                patient.getId(),
+                patientUserId,
+                patientDisplayName,
+                metricType,
+                measuredValue,
+                alertLevel,
+                recipientUserIds
+        )).exceptionally(ex -> {
+            LOG.warn(
+                    "Failed to dispatch vital alert event for patientUserId={} (metricType={}, measuredValue={}, severity={})",
                     patientUserId,
                     metricType,
                     measuredValue,
                     alertLevel,
                     ex
+            );
+            saveVitalAlertEvent(
+                    patient.getId(),
+                    patientUserId,
+                    metricType,
+                    measuredValue,
+                    alertLevel,
+                    "FAILED",
+                    recipientUserIds.size(),
+                    0,
+                    recipientUserIds.size(),
+                    rootCauseMessage(ex)
+            );
+            return null;
+        });
+    }
+
+    private void dispatchVitalAlertAndRecordEvent(
+            Long patientId,
+            Long patientUserId,
+            String patientDisplayName,
+            String metricType,
+            String measuredValue,
+            String alertLevel,
+            Set<Long> recipientUserIds
+    ) {
+        int successCount = 0;
+        int failureCount = 0;
+        String firstFailure = null;
+
+        for (Long recipientUserId : recipientUserIds) {
+            try {
+                List<com.careconnect.dto.NotificationResponse> responses = notificationService.sendVitalAlertToRecipient(
+                        recipientUserId,
+                        patientDisplayName,
+                        metricType,
+                        measuredValue,
+                        alertLevel
                 );
-                return java.util.List.of();
-            });
+                boolean recipientSucceeded = responses.stream().anyMatch(com.careconnect.dto.NotificationResponse::isSuccess);
+                if (recipientSucceeded) {
+                    successCount++;
+                } else {
+                    failureCount++;
+                    if (firstFailure == null) {
+                        firstFailure = "No channels succeeded for recipient userId=" + recipientUserId;
+                    }
+                }
+            } catch (Exception ex) {
+                failureCount++;
+                if (firstFailure == null) {
+                    firstFailure = "Recipient userId=" + recipientUserId + " failed: " + rootCauseMessage(ex);
+                }
+            }
+        }
+
+        String status = failureCount == 0 ? "DELIVERED" : (successCount > 0 ? "PARTIAL_FAILURE" : "FAILED");
+        saveVitalAlertEvent(
+                patientId,
+                patientUserId,
+                metricType,
+                measuredValue,
+                alertLevel,
+                status,
+                recipientUserIds.size(),
+                successCount,
+                failureCount,
+                firstFailure
+        );
+    }
+
+    private Set<Long> resolveAlertRecipientUserIds(User patientUser, Long patientUserId) {
+        Set<Long> recipientUserIds = new HashSet<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        List<CaregiverPatientLink> caregiverLinks = patientCaregiverRepository.findByPatientUser(patientUser);
+        for (CaregiverPatientLink link : caregiverLinks) {
+            if (link == null || link.getCaregiverUser() == null || link.getCaregiverUser().getId() == null) {
+                continue;
+            }
+            if (link.getStatus() != CaregiverPatientLink.LinkStatus.ACTIVE) {
+                continue;
+            }
+            if (link.getExpiresAt() != null && link.getExpiresAt().isBefore(now)) {
+                continue;
+            }
+            recipientUserIds.add(link.getCaregiverUser().getId());
+        }
+
+        List<FamilyMemberLink> familyLinks = familyMemberLinkRepository.findActiveFamilyMembersByPatient(patientUserId, now);
+        for (FamilyMemberLink link : familyLinks) {
+            if (link != null && link.getFamilyUser() != null && link.getFamilyUser().getId() != null) {
+                recipientUserIds.add(link.getFamilyUser().getId());
+            }
+        }
+
+        return recipientUserIds;
+    }
+
+    private String buildPatientDisplayName(Patient patient) {
+        String first = patient.getFirstName() == null ? "" : patient.getFirstName().trim();
+        String last = patient.getLastName() == null ? "" : patient.getLastName().trim();
+        String fullName = (first + " " + last).trim();
+        if (!fullName.isEmpty()) {
+            return fullName;
+        }
+        if (patient.getUser() != null && patient.getUser().getName() != null && !patient.getUser().getName().isBlank()) {
+            return patient.getUser().getName().trim();
+        }
+        return "Patient";
+    }
+
+    private void saveVitalAlertEvent(
+            Long patientId,
+            Long patientUserId,
+            String metricType,
+            String measuredValue,
+            String alertLevel,
+            String status,
+            int recipientCount,
+            int successCount,
+            int failureCount,
+            String failureReason
+    ) {
+        try {
+            VitalAlertEvent event = VitalAlertEvent.builder()
+                    .patientId(patientId)
+                    .patientUserId(patientUserId)
+                    .metricType(metricType)
+                    .measuredValue(measuredValue)
+                    .alertLevel(alertLevel)
+                    .status(status)
+                    .recipientCount(recipientCount)
+                    .successCount(successCount)
+                    .failureCount(failureCount)
+                    .failureReason(failureReason)
+                    .occurredAt(Instant.now())
+                    .build();
+            vitalAlertEventRepository.save(event);
+        } catch (Exception ex) {
+            LOG.warn(
+                    "Unable to persist vital alert event audit trail for patientId={}, patientUserId={}, metricType={}, alertLevel={}",
+                    patientId,
+                    patientUserId,
+                    metricType,
+                    alertLevel,
+                    ex
+            );
+        }
     }
 }

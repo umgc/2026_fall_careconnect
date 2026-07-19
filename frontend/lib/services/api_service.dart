@@ -1288,6 +1288,40 @@ class ApiService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> getRecentVitalAlerts(
+    int patientId, {
+    int limit = 5,
+  }) async {
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
+      final response = await _httpClient
+          .get(
+            Uri.parse(
+              '${ApiConstants.baseUrl}analytics/alerts/recent?patientId=$patientId&limit=$limit',
+            ),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        return const [];
+      }
+
+      final decoded = jsonDecode(response.body);
+      final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+      if (data is! List) {
+        return const [];
+      }
+
+      return data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static Future<Map<String, dynamic>> getPatientStatus(int patientId) async {
     final headers = await AuthTokenManager.getAuthHeaders();
     final response = await http
