@@ -514,6 +514,11 @@ public class ChimeService {
         }
         final CallSession session = callSessionRepository.findByCallId(callId).orElse(null);
         if (session == null || !isJoinableStatus(session.getStatus())) {
+            if (session != null
+                    && CallSessionService.SESSION_TERMINATING.equals(session.getStatus())) {
+                callSessionRepository.attachMeetingToTermination(
+                        callId, meetingId, CallSessionService.SESSION_TERMINATING);
+            }
             return false;
         }
         final String persisted = session.getChimeMeetingId();

@@ -24,4 +24,23 @@ class BedrockModelSupportTest {
                 null, "us.anthropic.claude-lookalike-v1:0"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void sonnet46DirectIdIsNotApprovedWithoutSupportedProfileMapping() {
+        final String sonnet46 = "anthropic.claude-sonnet-4-6";
+
+        assertThat(BedrockModelSupport.isApprovedModelId(sonnet46)).isFalse();
+        assertThatThrownBy(() -> BedrockModelSupport.resolveModelId(null, sonnet46))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(BedrockModelSupport.resolveModelId(
+                sonnet46, "amazon.nova-lite-v1:0"))
+                .isEqualTo("amazon.nova-lite-v1:0");
+    }
+
+    @Test
+    void supportedClaudeDirectIdsNormalizeToProfiles() {
+        assertThat(BedrockModelSupport.resolveModelId(
+                null, "anthropic.claude-sonnet-4-5-20250929-v1:0"))
+                .isEqualTo("us.anthropic.claude-sonnet-4-5-20250929-v1:0");
+    }
 }

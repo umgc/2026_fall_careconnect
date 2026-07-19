@@ -7,6 +7,25 @@ import '../config/env_constant.dart';
 
 enum AiAskDeliveryStatus { delivered, noRecords, withheld }
 
+const Set<String> _aiAskRecordTypes = {
+  'TRANSCRIPT_SEGMENT',
+  'CALL_SUMMARY',
+  'VISIT_SUMMARY',
+  'UPLOADED_DOCUMENT',
+  'CLINICAL_NOTE',
+  'USPS_MAIL',
+  'SUMMARY_ACTION_ITEM',
+  'SUMMARY_APPOINTMENT',
+  'SUMMARY_CARE_INSTRUCTION',
+  'SUMMARY_CONDITION',
+  'SUMMARY_SOAP',
+  'SUMMARY_CLINICAL_OBSERVATION',
+  'MEDICATION',
+  'TASK',
+  'EVV_RECORD',
+  'VITAL_SIGN',
+};
+
 class AiAskDisclaimer {
   final String text;
   final bool aiNoticeRequired;
@@ -128,7 +147,10 @@ class AiAskResult {
     this.retryInput,
   });
 
-  factory AiAskResult.fromJson(Map<String, dynamic> json) {
+  factory AiAskResult.fromJson(
+    Map<String, dynamic> json, {
+    bool allowDelivered = true,
+  }) {
     final status = switch (json['deliveryStatus']?.toString()) {
       'DELIVERED' => AiAskDeliveryStatus.delivered,
       'NO_RECORDS' => AiAskDeliveryStatus.noRecords,
@@ -155,11 +177,19 @@ class AiAskResult {
     final confirmation = confirmationJson is Map<String, dynamic>
         ? AiAskConfirmation.fromJson(confirmationJson)
         : null;
+    final deliveredCitationsValid = citations.every(
+      (citation) =>
+          citation.citationId.trim().isNotEmpty &&
+          _aiAskRecordTypes.contains(citation.recordType) &&
+          citation.excerpt.trim().isNotEmpty,
+    );
     if (status == AiAskDeliveryStatus.delivered &&
-        (json['success'] != true ||
+        (!allowDelivered ||
+            json['success'] != true ||
             answer == null ||
             answer.isEmpty ||
             citations.isEmpty ||
+            !deliveredCitationsValid ||
             disclaimer == null ||
             !disclaimer.aiNoticeRequired ||
             !disclaimer.recordsBasedFraming ||
@@ -173,15 +203,16 @@ class AiAskResult {
         'DELIVERED response violates the Ask AI safety contract',
       );
     }
+    final exposeDeliveredContent = status == AiAskDeliveryStatus.delivered;
     return AiAskResult(
       success: json['success'] == true,
       deliveryStatus: status,
       requestId: json['requestId']?.toString(),
       sessionId: json['sessionId']?.toString(),
       conversationId: json['conversationId']?.toString(),
-      answer: answer,
+      answer: exposeDeliveredContent ? answer : null,
       message: json['message']?.toString(),
-      citations: citations,
+      citations: exposeDeliveredContent ? citations : const [],
       error: errorJson is Map<String, dynamic>
           ? AiAskError.fromJson(errorJson)
           : null,
@@ -237,7 +268,10 @@ class AIChatService {
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Ask AI response is not an object');
       }
-      return AiAskResult.fromJson(decoded);
+      return AiAskResult.fromJson(
+        decoded,
+        allowDelivered: response.statusCode >= 200 && response.statusCode < 300,
+      );
     } on FormatException {
       return AiAskResult(
         success: false,

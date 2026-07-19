@@ -16,10 +16,12 @@
 // expose them as public static constants (e.g. `static const int
 // maxBufferedTranscriptSegments = 120;`) and update the references below.
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'dart:convert';
 import 'package:care_connect_app/services/video_call_service.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 
@@ -135,6 +137,72 @@ void main() {
         'patientUserId': '7',
         'inviteeUserId': '7',
       });
+      service.dispose();
+    });
+  });
+
+  group('Remote call end transcript buffering', () {
+    test('awaits an in-flight transcript batch before clearing call state',
+        () async {
+      final service = VideoCallService();
+      final transcriptRequestStarted = Completer<void>();
+      final transcriptResponse = Completer<http.Response>();
+      var endedCallbackCalled = false;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+          onCallEnded: () => endedCallbackCalled = true,
+        );
+        await service.joinCall(
+          callId: 'remote-end-buffer-test',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        expect(
+          await service.sendTranscriptSegment(text: 'Buffered final words'),
+          isTrue,
+        );
+        await transcriptRequestStarted.future;
+
+        final remoteEnd = service.handleRemoteCallEndForTest();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(endedCallbackCalled, isFalse);
+        expect(service.pendingTranscriptSegmentCountForTest, 1);
+
+        transcriptResponse.complete(http.Response('{}', 201));
+        await remoteEnd;
+
+        expect(endedCallbackCalled, isTrue);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+        expect(service.currentCallId, isNull);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              jsonEncode({
+                'meetingId': 'meeting-1',
+                'attendeeId': 'attendee-1',
+                'joinToken': 'token-1',
+                'mediaPlacement': <String, dynamic>{},
+              }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            if (!transcriptRequestStarted.isCompleted) {
+              transcriptRequestStarted.complete();
+            }
+            return transcriptResponse.future;
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
       service.dispose();
     });
   });

@@ -2,7 +2,7 @@ package com.careconnect.repository;
 
 import com.careconnect.model.CallSession;
 import jakarta.persistence.LockModeType;
-import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +18,10 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT session FROM CallSession session WHERE session.callId = :callId")
     Optional<CallSession> findByCallIdForLifecycle(@Param("callId") String callId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT session FROM CallSession session WHERE session.id = :sessionId")
+    Optional<CallSession> findByIdForLifecycle(@Param("sessionId") Long sessionId);
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT session FROM CallSession session WHERE session.callId = :callId")
@@ -76,19 +80,20 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             @Param("active") String active);
 
     @Modifying
-    @Query("""
-            UPDATE CallSession s
-               SET s.status = :terminating,
-                   s.terminationClaimId = :claimId,
-                   s.terminationClaimedByUserId = :claimedByUserId,
-                   s.terminationLeaseUntil = :leaseUntil,
-                   s.terminationAttemptCount = s.terminationAttemptCount + 1,
-                   s.terminationNextRetryAt = NULL,
-                   s.terminationLastError = NULL,
-                   s.terminationNotifyUserIds = :notifyUserIds,
-                   s.updatedAt = CURRENT_TIMESTAMP
-             WHERE s.id = :sessionId AND s.status IN (:created, :active)
-            """)
+    @Query(value = """
+            UPDATE call_sessions
+               SET status = :terminating,
+                   termination_claim_id = :claimId,
+                   termination_claimed_by_user_id = :claimedByUserId,
+                   termination_lease_until =
+                       CURRENT_TIMESTAMP + (:leaseSeconds * INTERVAL '1 second'),
+                   termination_attempt_count = termination_attempt_count + 1,
+                   termination_next_retry_at = NULL,
+                   termination_last_error = NULL,
+                   termination_notify_user_ids = :notifyUserIds,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = :sessionId AND status IN (:created, :active)
+            """, nativeQuery = true)
     int beginTermination(
             @Param("sessionId") Long sessionId,
             @Param("created") String created,
@@ -96,31 +101,33 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             @Param("terminating") String terminating,
             @Param("claimId") UUID claimId,
             @Param("claimedByUserId") Long claimedByUserId,
-            @Param("leaseUntil") LocalDateTime leaseUntil,
+            @Param("leaseSeconds") long leaseSeconds,
             @Param("notifyUserIds") String notifyUserIds);
 
     @Modifying
-    @Query("""
-            UPDATE CallSession s
-               SET s.terminationClaimId = :claimId,
-                   s.terminationClaimedByUserId = :claimedByUserId,
-                   s.terminationLeaseUntil = :leaseUntil,
-                   s.terminationAttemptCount = s.terminationAttemptCount + 1,
-                   s.terminationNextRetryAt = NULL,
-                   s.terminationLastError = NULL,
-                   s.updatedAt = CURRENT_TIMESTAMP
-             WHERE s.id = :sessionId
-               AND s.status = :terminating
-               AND (s.terminationLeaseUntil IS NULL OR s.terminationLeaseUntil <= :now)
-               AND (s.terminationNextRetryAt IS NULL OR s.terminationNextRetryAt <= :now)
-            """)
+    @Query(value = """
+            UPDATE call_sessions
+               SET termination_claim_id = :claimId,
+                   termination_claimed_by_user_id = :claimedByUserId,
+                   termination_lease_until =
+                       CURRENT_TIMESTAMP + (:leaseSeconds * INTERVAL '1 second'),
+                   termination_attempt_count = termination_attempt_count + 1,
+                   termination_next_retry_at = NULL,
+                   termination_last_error = NULL,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = :sessionId
+               AND status = :terminating
+               AND (termination_lease_until IS NULL
+                    OR termination_lease_until <= CURRENT_TIMESTAMP)
+               AND (termination_next_retry_at IS NULL
+                    OR termination_next_retry_at <= CURRENT_TIMESTAMP)
+            """, nativeQuery = true)
     int reclaimTermination(
             @Param("sessionId") Long sessionId,
             @Param("terminating") String terminating,
             @Param("claimId") UUID claimId,
             @Param("claimedByUserId") Long claimedByUserId,
-            @Param("now") LocalDateTime now,
-            @Param("leaseUntil") LocalDateTime leaseUntil);
+            @Param("leaseSeconds") long leaseSeconds);
 
     @Modifying
     @Query("""
@@ -138,21 +145,49 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             @Param("claimId") UUID claimId);
 
     @Modifying
-    @Query("""
-            UPDATE CallSession s
-               SET s.terminationLeaseUntil = NULL,
-                   s.terminationNextRetryAt = :nextRetryAt,
-                   s.terminationLastError = :lastError,
-                   s.updatedAt = CURRENT_TIMESTAMP
-             WHERE s.id = :sessionId AND s.status = :terminating
-               AND s.terminationClaimId = :claimId
-            """)
+    @Query(value = """
+            UPDATE call_sessions
+               SET termination_lease_until = NULL,
+                   termination_next_retry_at =
+                       CURRENT_TIMESTAMP + (:retrySeconds * INTERVAL '1 second'),
+                   termination_last_error = :lastError,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = :sessionId AND status = :terminating
+               AND termination_claim_id = :claimId
+            """, nativeQuery = true)
     int failTermination(
             @Param("sessionId") Long sessionId,
             @Param("terminating") String terminating,
             @Param("claimId") UUID claimId,
-            @Param("nextRetryAt") LocalDateTime nextRetryAt,
+            @Param("retrySeconds") long retrySeconds,
             @Param("lastError") String lastError);
+
+    @Query(value = """
+            SELECT id
+              FROM call_sessions
+             WHERE status = :terminating
+               AND (termination_lease_until IS NULL
+                    OR termination_lease_until <= CURRENT_TIMESTAMP)
+               AND (termination_next_retry_at IS NULL
+                    OR termination_next_retry_at <= CURRENT_TIMESTAMP)
+             ORDER BY COALESCE(termination_next_retry_at, updated_at), id
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findDueTerminationIds(
+            @Param("terminating") String terminating, @Param("limit") int limit);
+
+    @Modifying
+    @Query("""
+            UPDATE CallSession s
+               SET s.chimeMeetingId = COALESCE(s.chimeMeetingId, :meetingId),
+                   s.updatedAt = CURRENT_TIMESTAMP
+             WHERE s.callId = :callId AND s.status = :terminating
+               AND (s.chimeMeetingId IS NULL OR s.chimeMeetingId = :meetingId)
+            """)
+    int attachMeetingToTermination(
+            @Param("callId") String callId,
+            @Param("meetingId") String meetingId,
+            @Param("terminating") String terminating);
 
     @Modifying
     @Query("""

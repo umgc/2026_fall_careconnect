@@ -101,7 +101,7 @@ class VideoCallService {
   // Sentiment posting timer — sends analysis data every 15 seconds
   Timer? _sentimentTimer;
   Timer? _transcriptFlushTimer;
-  bool _transcriptFlushInProgress = false;
+  Future<void>? _transcriptFlushFuture;
   final List<_BufferedTranscriptSegment> _pendingTranscriptSegments = [];
 
   // Stream for sentiment updates received via WebSocket
@@ -154,7 +154,7 @@ class VideoCallService {
       }
       if (type == 'call-ended') {
         if (!belongsToActiveCall) return;
-        _handleRemoteCallEnd();
+        unawaited(_handleRemoteCallEnd());
       }
       if (type == 'recording-state') {
         if (!belongsToActiveCall) return;
@@ -549,15 +549,24 @@ class VideoCallService {
 
   Future<void> _postCombinedSentiment() async {}
 
-  void _handleRemoteCallEnd() {
+  Future<void> _handleRemoteCallEnd() async {
     if (!_isInCall) return;
     debugPrint('📴 Remote party ended the call');
     final callId = _currentCallId;
-    unawaited(_flushPendingTranscriptSegments(
+    _isInCall = false;
+    _stopTranscriptFlushTimer();
+    await _flushPendingTranscriptSegments(
       callIdOverride: callId,
       maxAttempts: 2,
       respectInCallState: false,
-    ));
+    );
+    // A flush already in flight may have returned after one failed request.
+    // Join it first, then make one final pass over the now-stable queue.
+    await _flushPendingTranscriptSegments(
+      callIdOverride: callId,
+      maxAttempts: 2,
+      respectInCallState: false,
+    );
     _resetLocalCallState(callId: callId, markCompleted: true);
     _onCallEnded?.call();
   }
@@ -599,7 +608,9 @@ class VideoCallService {
     int maxAttempts = 1,
     bool respectInCallState = true,
   }) async {
-    if (_transcriptFlushInProgress) {
+    final inFlight = _transcriptFlushFuture;
+    if (inFlight != null) {
+      await inFlight;
       return;
     }
     if (_pendingTranscriptSegments.isEmpty) {
@@ -617,58 +628,65 @@ class VideoCallService {
       return;
     }
 
-    _transcriptFlushInProgress = true;
+    final flush = _runTranscriptFlush(activeCallId, maxAttempts);
+    _transcriptFlushFuture = flush;
     try {
-      var attempts = 0;
-      while (_pendingTranscriptSegments.isNotEmpty && attempts < maxAttempts) {
-        attempts += 1;
-        final segment = _pendingTranscriptSegments.first;
-        if (segment.callId != activeCallId) {
+      await flush;
+    } finally {
+      if (identical(_transcriptFlushFuture, flush)) {
+        _transcriptFlushFuture = null;
+      }
+    }
+  }
+
+  Future<void> _runTranscriptFlush(String activeCallId, int maxAttempts) async {
+    var attempts = 0;
+    while (_pendingTranscriptSegments.isNotEmpty && attempts < maxAttempts) {
+      attempts += 1;
+      final segment = _pendingTranscriptSegments.first;
+      if (segment.callId != activeCallId) {
+        _pendingTranscriptSegments.removeAt(0);
+        continue;
+      }
+
+      try {
+        final response = await http
+            .post(
+              Uri.parse(
+                '${EnvironmentConfig.baseUrl}/api/v3/calls/${segment.callId}/transcript/segments',
+              ),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_jwtToken',
+              },
+              body: jsonEncode({
+                'speakerLabel': segment.speakerLabel,
+                'text': segment.text,
+                'startMs': segment.startMs,
+                'endMs': segment.endMs,
+                'source': segment.source,
+              }),
+            )
+            .timeout(const Duration(seconds: 8));
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
           _pendingTranscriptSegments.removeAt(0);
+          attempts = 0;
           continue;
         }
 
-        try {
-          final response = await http
-              .post(
-                Uri.parse(
-                  '${EnvironmentConfig.baseUrl}/api/v3/calls/${segment.callId}/transcript/segments',
-                ),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer $_jwtToken',
-                },
-                body: jsonEncode({
-                  'speakerLabel': segment.speakerLabel,
-                  'text': segment.text,
-                  'startMs': segment.startMs,
-                  'endMs': segment.endMs,
-                  'source': segment.source,
-                }),
-              )
-              .timeout(const Duration(seconds: 8));
+        debugPrint(
+          '⚠️ Transcript upload failed: status=${response.statusCode} callId=${segment.callId}',
+        );
 
-          if (response.statusCode >= 200 && response.statusCode < 300) {
-            _pendingTranscriptSegments.removeAt(0);
-            attempts = 0;
-            continue;
-          }
-
-          debugPrint(
-            '⚠️ Transcript upload failed: status=${response.statusCode} callId=${segment.callId}',
-          );
-
-          if (response.statusCode == 400) {
-            _pendingTranscriptSegments.removeAt(0);
-            continue;
-          }
-          break;
-        } catch (_) {
-          break;
+        if (response.statusCode == 400) {
+          _pendingTranscriptSegments.removeAt(0);
+          continue;
         }
+        break;
+      } catch (_) {
+        break;
       }
-    } finally {
-      _transcriptFlushInProgress = false;
     }
   }
 
@@ -1043,6 +1061,13 @@ class VideoCallService {
   @visibleForTesting
   Set<String> get participantUserIdsForTest =>
       Set<String>.unmodifiable(_participantUserIds);
+
+  @visibleForTesting
+  int get pendingTranscriptSegmentCountForTest =>
+      _pendingTranscriptSegments.length;
+
+  @visibleForTesting
+  Future<void> handleRemoteCallEndForTest() => _handleRemoteCallEnd();
 
   void dispose() {
     _sentimentTimer?.cancel();

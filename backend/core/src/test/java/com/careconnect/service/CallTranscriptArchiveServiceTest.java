@@ -13,11 +13,16 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +35,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,13 +59,21 @@ class CallTranscriptArchiveServiceTest {
     @Mock
     private S3StorageService s3StorageService;
 
-    @InjectMocks
     private CallTranscriptArchiveService service;
+
+    private TrackingTransactionManager transactionManager;
 
     private static final String CALL_ID = "call-abc-123";
 
     @BeforeEach
     void setUp() {
+        transactionManager = new TrackingTransactionManager();
+        service = new CallTranscriptArchiveService(
+                archiveRepository,
+                segmentRepository,
+                callRecordingRepository,
+                objectMapper,
+                transactionManager);
         ReflectionTestUtils.setField(service, "s3StorageService", s3StorageService);
         ReflectionTestUtils.setField(service, "archiveEnabled", true);
         ReflectionTestUtils.setField(service, "minArchiveSegments", 600);
@@ -112,6 +127,14 @@ class CallTranscriptArchiveServiceTest {
         archive.setParticipantUserIds(participantUserIds);
         archive.setArchivedAt(LocalDateTime.now());
         return archive;
+    }
+
+    private static String sha256(byte[] bytes) throws Exception {
+        StringBuilder value = new StringBuilder();
+        for (byte item : MessageDigest.getInstance("SHA-256").digest(bytes)) {
+            value.append(String.format("%02x", item));
+        }
+        return value.toString();
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -325,6 +348,7 @@ class CallTranscriptArchiveServiceTest {
                     + "\"startMs\":0,\"endMs\":1000,\"source\":\"chime\","
                     + "\"actorUserId\":1,\"occurredAt\":\"2026-03-17T10:00:00\"}]";
             byte[] bytes = json.getBytes();
+            archive.setSha256Checksum(sha256(bytes));
             when(s3StorageService.download("transcripts/data.json")).thenReturn(bytes);
 
             // Use real ObjectMapper for deserialization
@@ -352,6 +376,7 @@ class CallTranscriptArchiveServiceTest {
                     + "{\"speakerLabel\":\"S2\",\"text\":\"Valid text\",\"startMs\":100,\"endMs\":200,"
                     + "\"source\":\"chime\",\"actorUserId\":1,\"occurredAt\":null}]";
             byte[] bytes = json.getBytes();
+            archive.setSha256Checksum(sha256(bytes));
             when(s3StorageService.download("key.json")).thenReturn(bytes);
 
             ObjectMapper realMapper = new ObjectMapper();
@@ -374,6 +399,20 @@ class CallTranscriptArchiveServiceTest {
                     .thenThrow(new RuntimeException("S3 unavailable"));
 
             assertThat(service.getArchivedSegments(CALL_ID)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Fails closed when archived bytes do not match the stored checksum")
+        void checksumMismatchReturnsNoSegments() throws Exception {
+            CallTranscriptArchive archive = buildArchive(CALL_ID, "key.json", "1");
+            archive.setSha256Checksum(sha256("trusted".getBytes()));
+            when(archiveRepository.findTopByCallIdOrderByArchivedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(archive));
+            when(s3StorageService.download("key.json"))
+                    .thenReturn("[{\"text\":\"tampered\"}]".getBytes());
+
+            assertThat(service.getArchivedSegments(CALL_ID)).isEmpty();
+            verifyNoInteractions(objectMapper);
         }
     }
 
@@ -493,7 +532,7 @@ class CallTranscriptArchiveServiceTest {
 
             archiveCaptured(segments);
 
-            verify(segmentRepository).acquireArchiveLock(CALL_ID);
+            verify(segmentRepository, times(2)).acquireArchiveLock(CALL_ID);
             verify(segmentRepository).deleteByCallIdAndIdIn(eq(CALL_ID), any());
         }
 
@@ -513,6 +552,32 @@ class CallTranscriptArchiveServiceTest {
 
             verify(archiveRepository, never()).save(any());
             verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("S3 I/O runs outside transactions and a concurrent winner preserves DB rows")
+        void concurrentArchiveWinnerMakesUploadAnIdempotentNoOp() throws Exception {
+            List<CallTranscriptSegment> segments = buildLargeSegmentList(601, 10);
+            when(segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(segments);
+            when(archiveRepository.existsByCallId(CALL_ID)).thenReturn(false, true);
+            when(callRecordingRepository.findTopByCallIdOrderByStartedAtDesc(anyString()))
+                    .thenReturn(Optional.empty());
+            when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[]{1, 2, 3});
+            when(s3StorageService.download(anyString())).thenAnswer(invocation -> {
+                assertThat(transactionManager.isActive()).isFalse();
+                return new byte[]{1, 2, 3};
+            });
+            org.mockito.Mockito.doAnswer(invocation -> {
+                assertThat(transactionManager.isActive()).isFalse();
+                return null;
+            }).when(s3StorageService).upload(anyString(), any(byte[].class), anyString());
+
+            assertThat(service.archiveIfEligible(CALL_ID)).isFalse();
+
+            verify(archiveRepository, never()).save(any());
+            verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
+            verify(s3StorageService).deleteFile(anyString());
         }
 
         @Test
@@ -753,6 +818,32 @@ class CallTranscriptArchiveServiceTest {
             service.purgeArchiveForCall("  " + CALL_ID + "  ");
 
             verify(archiveRepository).findByCallIdOrderByArchivedAtDesc(CALL_ID);
+        }
+    }
+
+    private static final class TrackingTransactionManager
+            implements PlatformTransactionManager {
+        private boolean active;
+
+        boolean isActive() {
+            return active;
+        }
+
+        @Override
+        public TransactionStatus getTransaction(final TransactionDefinition definition)
+                throws TransactionException {
+            active = true;
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(final TransactionStatus status) throws TransactionException {
+            active = false;
+        }
+
+        @Override
+        public void rollback(final TransactionStatus status) throws TransactionException {
+            active = false;
         }
     }
 }
