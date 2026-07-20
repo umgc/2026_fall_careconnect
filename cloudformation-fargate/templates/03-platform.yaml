@@ -87,7 +87,9 @@ Resources:
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/careconnect/${Environment}/*
 
-  # Task role: application IAM surface. Empty now, ready for future permissions.
+  # Task role: runtime permissions for Chime, recording, Bedrock, S3, Transcribe,
+  # SSM (prod profile), and related AWS SDK clients.
+  # See cloudformation-fargate/README.md — ECS task role permissions.
   EcsTaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -100,6 +102,132 @@ Resources:
               Service:
                 - ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub careconnect-${Environment}-ecs-task-app
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ChimeMeetings
+                Effect: Allow
+                Action:
+                  - chime:CreateMeeting
+                  - chime:DeleteMeeting
+                  - chime:GetMeeting
+                  - chime:ListMeetings
+                  - chime:CreateAttendee
+                  - chime:DeleteAttendee
+                  - chime:GetAttendee
+                  - chime:ListAttendees
+                  - chime:StartMeetingTranscription
+                  - chime:StopMeetingTranscription
+                  - chime:GetMeetingTranscriptionStatus
+                Resource: '*'
+              - Sid: ChimeMediaPipelines
+                Effect: Allow
+                Action:
+                  - chime:CreateMediaCapturePipeline
+                  - chime:CreateMediaConcatenationPipeline
+                  - chime:DeleteMediaCapturePipeline
+                  - chime:DeleteMediaPipeline
+                  - chime:GetMediaCapturePipeline
+                  - chime:GetMediaPipeline
+                  - chime:CreateMediaStreamPipeline
+                  - chime:CreateMediaInsightsPipeline
+                  - chime:DeleteMediaInsightsPipeline
+                  - chime:GetMediaInsightsPipeline
+                  - chime:CreateMediaInsightsPipelineConfiguration
+                  - chime:GetMediaInsightsPipelineConfiguration
+                  - chime:ListMediaInsightsPipelineConfigurations
+                Resource: '*'
+              - Sid: KinesisVideoStreams
+                Effect: Allow
+                Action:
+                  - kinesisvideo:CreateStream
+                  - kinesisvideo:DescribeStream
+                  - kinesisvideo:GetDataEndpoint
+                  - kinesisvideo:GetMedia
+                  - kinesisvideo:GetMediaForFragmentList
+                  - kinesisvideo:PutMedia
+                  - kinesisvideo:TagStream
+                  - kinesisvideo:ListStreams
+                  - kinesisvideo:ListFragments
+                Resource: !Sub arn:aws:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*
+              - Sid: S3CareConnectBuckets
+                Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketCors
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:DeleteObject
+                Resource:
+                  - arn:aws:s3:::careconnect-recordings-*
+                  - arn:aws:s3:::careconnect-recordings-*/*
+                  - arn:aws:s3:::careconnect-uploads-*
+                  - arn:aws:s3:::careconnect-uploads-*/*
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/*
+                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+              - Sid: TranscribeJobs
+                Effect: Allow
+                Action:
+                  - transcribe:StartTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:ListTranscriptionJobs
+                Resource: '*'
+              - Sid: TextractOcr
+                Effect: Allow
+                Action:
+                  - textract:StartDocumentTextDetection
+                  - textract:GetDocumentTextDetection
+                  - textract:DetectDocumentText
+                Resource: '*'
+              - Sid: Notifications
+                Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                  - sns:Publish
+                Resource: '*'
+              - Sid: SsmParameters
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/careconnect/${Environment}/*
+              # SecureString GetParameter (withDecryption=true) needs kms:Decrypt on the SSM CMK.
+              - Sid: KmsDecryptViaSsm
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+              - Sid: IamChimeMediaPipelinesServiceLinkedRole
+                Effect: Allow
+                Action:
+                  - iam:CreateServiceLinkedRole
+                Resource: arn:aws:iam::*:role/aws-service-role/mediapipelines.chime.amazonaws.com/*
+                Condition:
+                  StringEquals:
+                    iam:AWSServiceName: mediapipelines.chime.amazonaws.com
+              - Sid: StsGetCallerIdentity
+                Effect: Allow
+                Action:
+                  - sts:GetCallerIdentity
+                Resource: '*'
 
 Outputs:
   # Exported outputs are consumed by the service stack.

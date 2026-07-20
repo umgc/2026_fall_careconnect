@@ -7,6 +7,7 @@ import 'package:care_connect_app/config/env_constant.dart';
 import 'package:care_connect_app/features/analytics/web_utils.dart'
     if (dart.library.html) 'package:care_connect_app/features/analytics/web_utils_web.dart'
     as download_utils;
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/auth_token_manager.dart';
 import 'package:file_picker/file_picker.dart';
@@ -132,6 +133,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       }
       _controller.addListener(_handleComposerChanged);
       _initialized = true;
+      unawaited(
+        Telemetry.event('feature_use', {'feature': 'chat_room'}),
+      );
     }
   }
 

@@ -1,26 +1,25 @@
 package com.careconnect.service;
 
-import com.careconnect.service.DeepSeekService.DeepSeekResponse;
-import com.careconnect.service.DeepSeekService.Message;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Locale;
-import java.util.Optional;
 
 final class AiParsingUtils {
     private AiParsingUtils() {}
 
-    static String extractContent(DeepSeekResponse resp) {
-        try {
-            return Optional.ofNullable(resp.getChoices())
-                    .filter(c -> !c.isEmpty())
-                    .map(c -> c.get(0).getMessage())
-                    .map(Message::getContent)
-                    .orElse("");
-        } catch (Exception ignored) {
+    static String normalizeModelContent(String content) {
+        if (content == null) {
             return "";
         }
+        return stripCodeFences(content.trim());
+    }
+
+    static String stripCodeFences(String text) {
+        if (text == null || text.isBlank()) {
+            return text == null ? "" : text.trim();
+        }
+        return text.replaceAll("```(?:json)?", "").replace("```", "").trim();
     }
 
     static JsonNode tryParseJson(ObjectMapper om, String content) {
@@ -28,7 +27,7 @@ final class AiParsingUtils {
         try {
             return om.readTree(content);
         } catch (Exception e) {
-            return null; // let caller fall back
+            return null;
         }
     }
 

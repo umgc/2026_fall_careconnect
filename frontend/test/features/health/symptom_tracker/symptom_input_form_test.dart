@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/widgets/symptom_input_form.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
@@ -45,6 +46,29 @@ void main() {
       await tester.pumpWidget(_form());
       expect(find.text('Use AI Voice'), findsOneWidget);
       expect(find.byIcon(Icons.mic), findsOneWidget);
+    });
+
+    // TC-M3-SYM-VOICE-001
+    testWidgets('voice handoff consumes the returned transcript',
+        (tester) async {
+      await tester.pumpWidget(_form());
+
+      await tester.tap(find.text('Use AI Voice'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final voicePage = tester.widget<VoiceCommandAI>(
+        find.byType(VoiceCommandAI),
+      );
+      expect(voicePage.singleShot, isTrue);
+
+      Navigator.of(tester.element(find.byType(VoiceCommandAI))).pop(
+        '  persistent headache  ',
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('persistent headache'), findsOneWidget);
     });
 
     testWidgets('shows Use AI Service button', (tester) async {
