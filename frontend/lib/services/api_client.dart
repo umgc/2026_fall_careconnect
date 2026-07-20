@@ -99,6 +99,19 @@ class ApiClient {
   static final ApiClient instance = ApiClient._internal();
   late final Dio _dio;
 
+  /// Replaces the underlying Dio HTTP adapter so tests can return canned
+  /// responses without touching the network. Also clears the connect/send/
+  /// receive timeouts so Dio does not schedule timeout timers, which would
+  /// otherwise remain pending under flutter_test's fake-async clock and fail
+  /// the "no pending timers" invariant. Intended for widget/unit tests only.
+  @visibleForTesting
+  void debugSetHttpClientAdapter(HttpClientAdapter adapter) {
+    _dio.httpClientAdapter = adapter;
+    _dio.options.connectTimeout = null;
+    _dio.options.receiveTimeout = null;
+    _dio.options.sendTimeout = null;
+  }
+
   // --------------- Public generic methods ---------------
 
   Future<T> getJson<T>(
