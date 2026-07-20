@@ -15,6 +15,9 @@ import 'package:care_connect_app/features/invite_accept/services/pending_invite.
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_brief_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_recall_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_search_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
@@ -192,6 +195,23 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
     GoRoute(path: '/stml/brief', builder: (_, __) => const StmlBriefPage()),
     GoRoute(path: '/stml/recall', builder: (_, __) => const StmlRecallPage()),
+    GoRoute(path: '/stml/search', builder: (_, __) => const StmlSearchPage()),
+    GoRoute(
+      path: '/stml/checkin',
+      builder: (_, __) => const StmlCheckInPatientSelectionPage(),
+    ),
+    GoRoute(
+      path: '/stml/checkin/:patientId',
+      builder: (_, state) {
+        final patientId = int.tryParse(state.pathParameters['patientId'] ?? '');
+        if (patientId == null) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid patient id')),
+          );
+        }
+        return StmlCheckInPage(patientId: patientId);
+      },
+    ),
     GoRoute(path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
     GoRoute(
       path: '/login',

@@ -1,8 +1,9 @@
 {
   "am": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -86,8 +87,9 @@
 
   "ar": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -171,8 +173,9 @@
 
   "bn": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -256,8 +259,9 @@
 
   "fa": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -341,8 +345,9 @@
 
   "fr": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -426,8 +431,9 @@
 
   "hi": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -511,8 +517,9 @@
 
   "ja": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -596,8 +603,9 @@
 
   "ne": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -681,8 +689,9 @@
 
   "pt": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -766,8 +775,9 @@
 
   "ru": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -851,8 +861,9 @@
 
   "ur": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -936,8 +947,9 @@
 
   "zh": [
     "voiceCommands",
-    "askAi",
     "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",

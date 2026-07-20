@@ -187,6 +187,18 @@ class _MenuPageState extends State<MenuPage> {
         visibleFor: const {'PATIENT'},
       ),
       _MenuItem(
+        icon: Icons.manage_search,
+        label: local.stmlSearch,
+        route: '/stml/search',
+        visibleFor: const {'PATIENT'},
+      ),
+      _MenuItem(
+        icon: Icons.fact_check_outlined,
+        label: local.stmlCheckIn,
+        route: '/stml/checkin',
+        visibleFor: const {'CAREGIVER'},
+      ),
+      _MenuItem(
         icon: Icons.sensors,
         label: local.fallDetection,
         route: '/alertpage',
