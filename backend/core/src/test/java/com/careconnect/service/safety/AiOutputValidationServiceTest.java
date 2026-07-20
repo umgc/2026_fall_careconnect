@@ -83,6 +83,14 @@ class AiOutputValidationServiceTest {
     }
 
     @Test
+    void heldOutput_isTruncatedToMaxLength_whenQueued() {
+        validate("x".repeat(AiOutputValidationService.MAX_OUTPUT_LENGTH + 500));
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(confirmationService).createItem(any(), payload.capture(), any(), anyLong());
+        assertThat(payload.getValue().length()).isEqualTo(AiOutputValidationService.MAX_OUTPUT_LENGTH);
+    }
+
+    @Test
     void expandedDirectivePhrases_areHeld_withoutJudge() {
         when(anonymizer.containsPHI(anyString())).thenReturn(false);
         for (String bad : java.util.List.of(

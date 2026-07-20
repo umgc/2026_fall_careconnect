@@ -7,6 +7,7 @@ import com.careconnect.model.confirmation.ConfirmationSourceType;
 import com.careconnect.model.safety.AuditSourceFeature;
 import com.careconnect.service.MedicalDataAnonymizer;
 import com.careconnect.service.confirmation.ConfirmationService;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,11 +56,18 @@ public class AiOutputValidationService {
     /** Upper bound on the secondary AI review call so a hung judge cannot stall delivery. */
     static final long JUDGE_TIMEOUT_SECONDS = 8;
 
-    private final ExecutorService judgeExecutor = Executors.newCachedThreadPool(r -> {
+    private static final int JUDGE_POOL_SIZE = 4;
+
+    private final ExecutorService judgeExecutor = Executors.newFixedThreadPool(JUDGE_POOL_SIZE, r -> {
         Thread t = new Thread(r, "ai-output-judge");
         t.setDaemon(true);
         return t;
     });
+
+    @PreDestroy
+    void shutdown() {
+        judgeExecutor.shutdownNow();
+    }
 
     private static final Pattern JUDGE_VERDICT = Pattern.compile("(?i)VERDICT\\s*:\\s*(PASS|HOLD|REJECT)");
     private static final Pattern JUDGE_REASON = Pattern.compile("(?i)REASON\\s*:\\s*(.+)");
@@ -177,7 +185,10 @@ public class AiOutputValidationService {
     private void queueForReview(String output, AuditSourceFeature source,
                                 Long actorUserId, String sessionId, String reason) {
         try {
-            confirmationService.createItem(toConfirmationSource(source), output, sessionId, actorUserId);
+            String held = output != null && output.length() > MAX_OUTPUT_LENGTH
+                    ? output.substring(0, MAX_OUTPUT_LENGTH)
+                    : output;
+            confirmationService.createItem(toConfirmationSource(source), held, sessionId, actorUserId);
             log.info("AI output held for human review (source={}, reason={})", source, reason);
         } catch (Exception e) {
             log.warn("Could not queue held AI output for review: {}", e.getMessage());
@@ -188,6 +199,7 @@ public class AiOutputValidationService {
         try {
             return ConfirmationSourceType.valueOf(source.name());
         } catch (IllegalArgumentException e) {
+            log.warn("No ConfirmationSourceType for audit source {}; defaulting to ASK_AI", source);
             return ConfirmationSourceType.ASK_AI;
         }
     }

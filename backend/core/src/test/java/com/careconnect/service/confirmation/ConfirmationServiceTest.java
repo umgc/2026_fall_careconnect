@@ -189,7 +189,7 @@ class ConfirmationServiceTest {
             service.confirm(1L, RESOLVER_ID, NOTE);
 
             verify(auditLedgerService).logConfirmation(
-                    eq(AuditSourceFeature.SUMMARY), eq(RESOLVER_ID), isNull(), eq(REFERENCE_ID), any());
+                    eq(AuditSourceFeature.SUMMARY), eq(RESOLVER_ID), isNull(), isNull(), any());
         }
 
         @Test

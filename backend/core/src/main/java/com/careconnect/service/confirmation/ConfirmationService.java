@@ -67,10 +67,13 @@ public class ConfirmationService {
         try {
             source = AuditSourceFeature.valueOf(item.getSourceType().name());
         } catch (IllegalArgumentException e) {
+            log.warn("No AuditSourceFeature for confirmation source {}; defaulting to CONFIRMATION_SERVICE",
+                    item.getSourceType());
             source = AuditSourceFeature.CONFIRMATION_SERVICE;
         }
-        auditLedgerService.logConfirmation(source, resolverUserId, null, item.getReferenceId(),
+        auditLedgerService.logConfirmation(source, resolverUserId, null, null,
                 Map.of("itemId", item.getId(),
+                       "referenceId", item.getReferenceId() == null ? "" : item.getReferenceId(),
                        "resolution", resolution.name(),
                        "note", note == null ? "" : note));
     }
