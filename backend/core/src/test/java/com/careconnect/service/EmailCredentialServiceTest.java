@@ -68,7 +68,7 @@ class EmailCredentialServiceTest {
 
             when(credRepo.findFirstByUserIdAndProviderOrderByIdDesc("42", EmailCredential.Provider.GMAIL))
                     .thenReturn(Optional.of(credential));
-            when(googleOAuthService.ensureFreshToken(credential)).thenReturn(true);
+            when(googleOAuthService.ensureFreshToken(credential)).thenReturn(credential);
 
             EmailConnectionStatus status = service.getGmailConnectionStatus(null);
 

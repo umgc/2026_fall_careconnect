@@ -30,7 +30,8 @@ public class EmailCredentialService {
     private final OAuthStateSigner oauthStateSigner;
     private final OAuthRedirectValidator oauthRedirectValidator;
 
-    public EmailConnectionStatus getGmailConnectionStatus(String patientIdentifier) throws UnauthorizedException {
+    public EmailConnectionStatus getGmailConnectionStatus(String patientIdentifier)
+            throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = resolvePatientUser(patientIdentifier, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
@@ -96,8 +97,10 @@ public class EmailCredentialService {
         return oauthStateSigner.signStartToken(String.valueOf(patientUser.getId()), sanitizedReturnUrl);
     }
 
-    private User resolvePatientUser(String patientIdentifier, User currentUser) throws UnauthorizedException {
-        if (patientIdentifier == null || patientIdentifier.isBlank() || "demo-user".equals(patientIdentifier)) {
+    private User resolvePatientUser(String patientIdentifier, User currentUser)
+            throws UnauthorizedException {
+        if (patientIdentifier == null || patientIdentifier.isBlank()
+                || "demo-user".equals(patientIdentifier)) {
             return currentUser;
         }
         return userRepository.findByEmail(patientIdentifier)

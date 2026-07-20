@@ -1,30 +1,102 @@
 package com.careconnect.controller;
 
 import com.careconnect.dto.EmailConnectionStatus;
+import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.dto.GmailConnectUrlResponse;
+import com.careconnect.model.EmailCredential;
+import com.careconnect.model.User;
+import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.Permission;
+import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.EmailCredentialLifecycleService;
 import com.careconnect.service.EmailCredentialService;
+import com.careconnect.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Gmail credential status / disconnect / connect-url APIs.
+ *
+ * <p>Combines Task 3.14.9 lifecycle endpoints with HMAC connect-url and structured
+ * Gmail status from the OAuth-hardening PR.
+ */
 @RestController
-@RequestMapping("/v1/api/email-credentials")
+@RequestMapping({"/api/email-credentials", "/v1/api/email-credentials"})
 @RequiredArgsConstructor
 public class EmailCredentialController {
 
+    private final SecurityUtil securityUtil;
+    private final AuthorizationService authorizationService;
+    private final EmailCredentialLifecycleService credentialLifecycle;
     private final EmailCredentialService emailCredentialService;
 
+    /**
+     * Legacy boolean status — true only when Gmail sync is ACTIVE.
+     * Frontend historically called {@code /api/email-credentials/status}.
+     */
+    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
     @GetMapping("/status")
-    public ResponseEntity<EmailConnectionStatus> getConnectionStatus(
+    public ResponseEntity<Boolean> getConnectionStatus(@RequestParam String userId)
+            throws UnauthorizedException {
+        requireCredentialOwnerAccess(userId);
+        return ResponseEntity.ok(credentialLifecycle.isActivelyConnected(userId));
+    }
+
+    /**
+     * Rich connection status including needsReconnect + reconnectPath (Task 3.14.9).
+     */
+    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
+    @GetMapping("/connection")
+    public ResponseEntity<EmailConnectionStatusResponse> getConnectionDetails(
+            @RequestParam String userId) throws UnauthorizedException {
+        requireCredentialOwnerAccess(userId);
+        return ResponseEntity.ok(credentialLifecycle.connectionStatus(userId));
+    }
+
+    /**
+     * Structured Gmail connection status (HMAC / patient-scoped flow).
+     */
+    @GetMapping("/gmail/status")
+    public ResponseEntity<EmailConnectionStatus> getGmailConnectionStatus(
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
         String identifier = firstNonBlank(patientEmail, userId);
         return ResponseEntity.ok(emailCredentialService.getGmailConnectionStatus(identifier));
     }
 
+    /**
+     * Disconnect Gmail and halt mail sync; user can reconnect via OAuth start.
+     */
+    @RequirePermission(Permission.CREATE_TASKS)
+    @PostMapping("/disconnect")
+    public ResponseEntity<Map<String, Object>> disconnect(@RequestParam String userId)
+            throws UnauthorizedException {
+        requireCredentialOwnerAccess(userId);
+
+        EmailCredential disconnected = credentialLifecycle.disconnect(userId);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("disconnected", disconnected != null);
+        body.put("status", disconnected == null ? "DISCONNECTED" : disconnected.getStatus().name());
+        body.put("syncEnabled", false);
+        body.put("reconnectPath", EmailCredentialLifecycleService.RECONNECT_PATH);
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Patient-scoped Gmail disconnect with best-effort token revoke.
+     */
     @DeleteMapping("/gmail")
     public ResponseEntity<Void> disconnectGmail(
             @RequestParam(required = false) String patientEmail,
@@ -34,6 +106,9 @@ public class EmailCredentialController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Issues a signed start URL for external-browser OAuth.
+     */
     @GetMapping("/gmail/connect-url")
     public ResponseEntity<GmailConnectUrlResponse> getGmailConnectUrl(
             HttpServletRequest request,
@@ -50,9 +125,27 @@ public class EmailCredentialController {
         return ResponseEntity.ok(new GmailConnectUrlResponse(url));
     }
 
+    /**
+     * Caregivers may only inspect/disconnect their own Gmail credential; admins may
+     * act on any userId. Prevents cross-user lastError reads and forced disconnects.
+     */
+    private void requireCredentialOwnerAccess(final String userId) throws UnauthorizedException {
+        final User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+        try {
+            authorizationService.requireSelfOrAdmin(currentUser, Long.parseLong(userId));
+        } catch (final NumberFormatException ex) {
+            throw new UnauthorizedException("Invalid userId");
+        }
+    }
+
     private static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) return first.trim();
-        if (second != null && !second.isBlank()) return second.trim();
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        if (second != null && !second.isBlank()) {
+            return second.trim();
+        }
         return null;
     }
 }

@@ -450,7 +450,7 @@ class EmailOAuthFlowE2ETest {
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
                     eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
-            when(googleOAuthService.ensureFreshToken(cred)).thenReturn(true);
+            when(googleOAuthService.ensureFreshToken(cred)).thenReturn(cred);
 
             // Second call after refresh
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
@@ -489,7 +489,7 @@ class EmailOAuthFlowE2ETest {
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
                     eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
-            when(googleOAuthService.ensureFreshToken(cred)).thenReturn(false);
+            when(googleOAuthService.ensureFreshToken(cred)).thenReturn(null);
 
             mockMvc.perform(get("/v1/api/email-credentials/status")
                             .param("patientEmail", ADMIN_EMAIL)
@@ -714,7 +714,7 @@ class EmailOAuthFlowE2ETest {
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
                     eq(adminId), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(storedCred));
-            when(googleOAuthService.ensureFreshToken(storedCred)).thenReturn(true);
+            when(googleOAuthService.ensureFreshToken(storedCred)).thenReturn(storedCred);
 
             mockMvc.perform(get("/v1/api/email-credentials/status")
                             .param("patientEmail", ADMIN_EMAIL)

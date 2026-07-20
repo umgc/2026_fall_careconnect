@@ -70,11 +70,9 @@ public class GoogleOAuthService {
                 throw new IllegalStateException("Google token exchange failed - no access token received");
             }
 
-            System.out.println("[GoogleOAuth] Access token received, updating EmailCredential");
+            System.out.println("[GoogleOAuth] Access token received, creating EmailCredential");
 
-            EmailCredential ec = credRepo
-                    .findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL)
-                    .orElseGet(EmailCredential::new);
+            EmailCredential ec = new EmailCredential();
             ec.setUserId(userId);
             ec.setProvider(provider);
             ec.setAccessTokenEnc(tokenCryptor.encrypt(token.accessToken()));
@@ -117,7 +115,7 @@ public class GoogleOAuthService {
      * Refresh access token when near expiry. Halts sync only on auth-revocation
      * signals from the token endpoint ({@code invalid_grant}, HTTP 401). Transient
      * failures (429 / 5xx) are retried with backoff and do not set NEEDS_REAUTH.
-     * Gmail API 401/403 â†’ halt remains in {@link GmailClient}.
+     * Gmail API 401/403 Ã¢â€ â€™ halt remains in {@link GmailClient}.
      */
     public EmailCredential ensureFreshToken(EmailCredential current) {
         if (current == null) {
@@ -296,6 +294,7 @@ public class GoogleOAuthService {
         if (id == null) return "null";
         return id.length() <= 12 ? id : id.substring(0, 12) + "...";
     }
+
     /**
      * Best-effort Google token revoke used when the user explicitly disconnects.
      * Local credential deletion still proceeds even if revoke fails.
