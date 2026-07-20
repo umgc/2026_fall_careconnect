@@ -5,7 +5,6 @@ import com.careconnect.model.EmailCredential;
 import com.careconnect.model.USPSDigest;
 import com.careconnect.model.USPSDigestCache;
 import com.careconnect.repository.EmailCredentialRepo;
-import com.careconnect.repository.EmailCredentialRepository;
 import com.careconnect.repository.USPSDigestCacheRepo;
 import com.careconnect.security.TokenCryptor;
 import org.junit.jupiter.api.Test;
@@ -85,7 +84,6 @@ class USPSDigestServiceTest {
         cached.setPayloadJson("{\"digestDate\":null,\"mailpieces\":[],\"packages\":[]}");
         cacheStub.nextLookup = Optional.of(cached);
 
-        USPSDigestService service = buildService(
         final RecordingMailpiecePersistence persistence = new RecordingMailpiecePersistence();
         final GoogleOAuthService oauth = org.mockito.Mockito.mock(GoogleOAuthService.class);
         org.mockito.Mockito.when(oauth.ensureFreshToken(org.mockito.ArgumentMatchers.any()))
@@ -96,11 +94,10 @@ class USPSDigestServiceTest {
                         org.mockito.Mockito.mock(NotificationService.class));
         USPSDigestService service = new USPSDigestService(
                 emailCredentialRepository(Optional.empty()),
-                cacheStub,
+                cacheStub.asRepo(),
                 new StubGmailClient(),
                 new OutlookClient(),
                 new StubGmailParser(),
-                new OutlookParser()
                 new OutlookParser(),
                 new TokenCryptor("test-secret-key"),
                 oauth,
@@ -444,10 +441,10 @@ class USPSDigestServiceTest {
     // ── New: clearCacheForUser ────────────────────────────────────────────────
 
     /**
-     * clearCacheForUser() must delete every cache entry belonging to the specified user.
+     * clearCacheForUser() must hard-delete all cache rows for the user via deleteByUserId.
      */
     @Test
-    void clearCacheForUserDeletesAllEntriesForUser() throws Exception {
+    void clearCacheForUserDeletesByUserId() throws Exception {
         var cacheStub = new CacheRepoStub();
 
         USPSDigestService service = buildService(
@@ -462,7 +459,7 @@ class USPSDigestServiceTest {
         service.clearCacheForUser("user-10");
 
         assertEquals("user-10", cacheStub.deletedUserId,
-                "deleteByUserId should be called with the target user id");
+                "clearCacheForUser should call deleteByUserId with the target user");
     }
 
     // ── New: latestForUser Outlook fallback when Gmail fetch empty ────────────
@@ -733,21 +730,6 @@ class USPSDigestServiceTest {
             GmailParser gmailParser,
             OutlookParser outlookParser
     ) throws Exception {
-        GoogleOAuthService googleOAuthService = new GoogleOAuthService(
-                new org.springframework.web.client.RestTemplate(),
-                (EmailCredentialRepository) Proxy.newProxyInstance(
-                        EmailCredentialRepository.class.getClassLoader(),
-                        new Class[]{EmailCredentialRepository.class},
-                        (proxy, method, args) -> null),
-                new TokenCryptor("unit-test-secret-32-bytes-long!!!")
-        ) {
-            @Override
-            public boolean ensureFreshToken(EmailCredential current) {
-                return current != null
-                        && current.getAccessTokenEnc() != null
-                        && !current.getAccessTokenEnc().isBlank();
-            }
-        };
         final GoogleOAuthService oauth = org.mockito.Mockito.mock(GoogleOAuthService.class);
         org.mockito.Mockito.when(oauth.ensureFreshToken(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -763,7 +745,6 @@ class USPSDigestServiceTest {
                 gmailParser,
                 outlookParser,
                 new TokenCryptor("unit-test-secret-32-bytes-long!!!"),
-                googleOAuthService
                 oauth,
                 lifecycle,
                 noOpMailpiecePersistence()
@@ -870,10 +851,7 @@ class USPSDigestServiceTest {
         /** Return value for findByUserIdOrderByDigestDateDesc (search cache-scan path). */
         List<USPSDigestCache> listByUser = List.of();
 
-        /** Records userId passed to deleteByUserId (clearCacheForUser path). */
-        String deletedUserId = null;
-
-        /** Return value for findAll (legacy tests). */
+        /** Return value for findAll (legacy soft-expire path). */
         List<USPSDigestCache> allEntries = List.of();
 
         /** Records the most-recently saved entry (used to assert caching behaviour). */
@@ -884,6 +862,9 @@ class USPSDigestServiceTest {
          * Used by clearCacheForUser tests to verify all updated entries were persisted.
          */
         List<USPSDigestCache> savedAll = null;
+
+        /** User id passed to deleteByUserId (hard-delete clearCache path). */
+        String deletedUserId = null;
 
         USPSDigestCacheRepo asRepo() throws Exception {
             InvocationHandler handler = new InvocationHandler() {

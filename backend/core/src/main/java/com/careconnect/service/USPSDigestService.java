@@ -60,11 +60,6 @@ public class USPSDigestService {
         }
 
         // 2) Gmail
-        var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
-        if (g.isPresent() && googleOAuthService.ensureFreshToken(g.get())) {
-            var refreshed = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
-            if (refreshed.isPresent()) {
-                var at = decrypt(refreshed.get().getAccessTokenEnc());
         var g = prepareGmailCredential(userId);
         if (g.isPresent()) {
             try {
@@ -119,11 +114,6 @@ public class USPSDigestService {
             }
         }
 
-        var g = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
-        if (g.isPresent() && googleOAuthService.ensureFreshToken(g.get())) {
-            var refreshed = credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
-            if (refreshed.isPresent()) {
-                var at = decrypt(refreshed.get().getAccessTokenEnc());
         var g = prepareGmailCredential(userId);
         if (g.isPresent()) {
             try {

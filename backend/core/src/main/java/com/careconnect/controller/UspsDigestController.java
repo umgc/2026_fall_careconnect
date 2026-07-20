@@ -37,15 +37,17 @@ public class UspsDigestController {
     private final AuthorizationService authorizationService;
     private final USPSDigestService uspsDigestService;
     private final UspsPatientResolver patientResolver;
+    private final NaturalLanguageMailSearchService naturalLanguageMailSearchService;
 
     public UspsDigestController(SecurityUtil securityUtil, AuthorizationService authorizationService,
-                                USPSDigestService uspsDigestService, UspsPatientResolver patientResolver) {
+                                USPSDigestService uspsDigestService, UspsPatientResolver patientResolver,
+                                NaturalLanguageMailSearchService naturalLanguageMailSearchService) {
         this.securityUtil = securityUtil;
         this.authorizationService = authorizationService;
         this.uspsDigestService = uspsDigestService;
         this.patientResolver = patientResolver;
+        this.naturalLanguageMailSearchService = naturalLanguageMailSearchService;
     }
-    private final NaturalLanguageMailSearchService naturalLanguageMailSearchService;
 
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
 
