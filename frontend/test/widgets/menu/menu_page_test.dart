@@ -133,7 +133,7 @@ void main() {
       );
     });
 
-    testWidgets('Team C smoke: renders logged-in menu integration surfaces',
+    testWidgets('TC-S4-REG-SHELL-001 renders logged-in shell integration surfaces',
         (tester) async {
       await tester.pumpWidget(_buildApp(session: caregiverSession));
       await tester.pumpAndSettle();
@@ -250,7 +250,7 @@ void main() {
       expect(find.byType(Card), findsWidgets);
     });
 
-    testWidgets('renders Voice Commands menu tile with mic icon',
+    testWidgets('TC-S4-REG-SHELL-002 voice tile navigates to the voice route',
         (tester) async {
       final local = _localizationsFor('en');
 

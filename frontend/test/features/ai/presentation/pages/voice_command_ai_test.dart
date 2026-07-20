@@ -244,7 +244,7 @@ void main() {
     setUp(setupDefaultMocks);
     tearDown(clearMocks);
 
-    testWidgets('Team C smoke: renders primary voice controls', (tester) async {
+    testWidgets('TC-S4-REG-VOICE-001 renders an actionable voice entry state', (tester) async {
       await tester.pumpWidget(const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -253,6 +253,8 @@ void main() {
       expect(find.text('Say wake word or tap mic'), findsOneWidget);
       expect(find.byType(FloatingActionButton), findsOneWidget);
       expect(find.byIcon(Icons.mic), findsOneWidget);
+      expect(tester.widget<FloatingActionButton>(find.byType(FloatingActionButton)).onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('renders Scaffold with AppBar titled Voice Commands - English',
