@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/services/informed_delivery_service.dart';
+import 'package:care_connect_app/features/usps/presentation/widgets/mail_envelope_read_aloud_button.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -536,8 +537,10 @@ class _InformedDeliveryScreenState extends State<InformedDeliveryScreen> {
                       return _ImageTile(
                         url: url,
                         onTap: () => _openImageViewer(url),
-                        sender: 'Sender: ${meta?.sender}',
-                        summary: 'Summary: ${meta?.summary}',
+                        sender: meta?.sender,
+                        summary: meta?.summary,
+                        senderLabel: 'Sender: ${meta?.sender}',
+                        summaryLabel: 'Summary: ${meta?.summary}',
                       );
                     },
                   ),
@@ -668,12 +671,16 @@ class _ImageTile extends StatelessWidget {
   final String url;
   final String? sender;
   final String? summary;
+  final String? senderLabel;
+  final String? summaryLabel;
   final VoidCallback onTap;
   const _ImageTile({
     required this.url,
     required this.onTap,
     this.sender,
     this.summary,
+    this.senderLabel,
+    this.summaryLabel,
   });
 
   @override
@@ -702,33 +709,62 @@ class _ImageTile extends StatelessWidget {
       );
     }
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
+    final displaySender = senderLabel ?? sender;
+    final displaySummary = summaryLabel ?? summary;
+
+    return Semantics(
+      label: [
+        if (sender != null && sender!.trim().isNotEmpty) 'From ${sender!.trim()}',
+        if (summary != null && summary!.trim().isNotEmpty) summary!.trim(),
+      ].join('. '),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: imageWidget),
-            if (sender != null || summary != null)
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  InkWell(onTap: onTap, child: imageWidget),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Material(
+                      color: Colors.black45,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(12),
+                      ),
+                      child: MailEnvelopeReadAloudButton(
+                        sender: sender,
+                        summary: summary,
+                        iconSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (displaySender != null || displaySummary != null)
               Padding(
                 padding: const EdgeInsets.all(6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (sender != null)
+                    if (displaySender != null)
                       Text(
-                        sender!,
+                        displaySender,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
                       ),
-                    if (summary != null)
+                    if (displaySummary != null)
                       Text(
-                        summary!,
+                        displaySummary,
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,

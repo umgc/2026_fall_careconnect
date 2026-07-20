@@ -10,6 +10,8 @@ import 'package:care_connect_app/features/notetaker/presentation/notetaker_detai
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_search.dart';
 import 'package:care_connect_app/features/informed_delivery/informed_delivery_screen.dart';
 import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
+import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
+import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
@@ -52,6 +54,8 @@ import '../../features/payments/presentation/pages/native_billing_page.dart';
 import '../../features/payments/presentation/pages/web_pay_page.dart';
 import '../../features/payments/presentation/pages/subscription_tier_selection_page.dart';
 import '../../features/analytics/analytics_page.dart';
+import '../../features/admin_analytics/presentation/pages/admin_analytics_dashboard_page.dart';
+import '../../utils/role_helper.dart';
 import '../../features/payments/presentation/pages/payment_success_page.dart';
 import '../../features/payments/presentation/pages/payment_cancel_page.dart';
 import '../../features/dashboard/presentation/pages/patient_status_page.dart';
@@ -136,6 +140,17 @@ final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
 Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+  // Issue #75: if the user authenticated in the middle of accepting an invite,
+  // route them back to the invite landing screen to complete the join instead
+  // of going straight to the dashboard. The landing screen accepts the invite
+  // (now that they're signed in) and then sends them onward.
+  if (PendingInvite.hasPending) {
+    final token = PendingInvite.token!;
+    if (context.mounted) {
+      context.go('/invite/$token');
+      return;
+    }
+  }
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,
@@ -344,10 +359,8 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/caregiver-dashboard',
       builder: (context, state) {
         final caregiverIdStr = state.uri.queryParameters['caregiverId'];
-        final patientIdStr = state.uri.queryParameters['patientId'];
 
         final caregiverId = caregiverIdStr != null ? int.tryParse(caregiverIdStr) : null;
-        final patientId = patientIdStr != null ? int.tryParse(patientIdStr) : null;
 
         if (caregiverId == null || caregiverId <= 0) {
           return Scaffold(
@@ -413,6 +426,17 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
           invitedEmail: extra?['invitedEmail'] as String?,
           inviteReason: extra?['inviteReason'] as String?,
         );
+      },
+    ),
+    // Issue #75: invite-aware entry screen. Opened by an invite link; shows the
+    // "Who Invited Me?" context and hands off into registration/login, then
+    // accepts the invite once the user is authenticated.
+    GoRoute(
+      path: '/invite/:token',
+      name: 'inviteLanding',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        return InviteLandingScreen(token: token);
       },
     ),
     GoRoute(
@@ -619,6 +643,20 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         }
         return AnalyticsPage(patientId: patientId);
       },
+    ),
+    GoRoute(
+      path: '/admin/analytics',
+      redirect: (context, state) async {
+        final userData = await UserRoleStorageService.instance.getUserData();
+        if (userData?.isLoggedIn != true) {
+          return '/login';
+        }
+        if (!RoleHelper.isAdmin(userData!.role)) {
+          return '/dashboard';
+        }
+        return null;
+      },
+      builder: (_, __) => const AdminAnalyticsDashboardPage(),
     ),
     GoRoute(
       path: '/oauth/callback',
@@ -886,7 +924,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
             body: Center(child: Text('Invalid note ID or missing note data')),
           );
         }
-        final note = extra;
         return NotetakerDetailView();
       },
     ),
@@ -952,8 +989,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/alexaLogin/:redirectUri/:state',
       builder: (context, state) {
-    final redirectUri = state.pathParameters['redirectUri'];
-    final oauthState = state.pathParameters['state'];
     return AlexaLoginPage(
       key: ValueKey('alexaLoginPage'),
       // optionally pass them into your widget if you modify its constructor

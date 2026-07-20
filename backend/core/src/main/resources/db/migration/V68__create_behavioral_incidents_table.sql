@@ -18,3 +18,8 @@ CREATE TABLE IF NOT EXISTS behavioral_incidents (
 CREATE INDEX IF NOT EXISTS idx_behavioral_incidents_client_occurred_at
     ON behavioral_incidents (client_id, occurred_at DESC);
 
+DROP TRIGGER IF EXISTS tr_behavioral_incidents_immutable ON behavioral_incidents;
+CREATE TRIGGER tr_behavioral_incidents_immutable
+    BEFORE UPDATE OR DELETE ON behavioral_incidents
+    FOR EACH ROW EXECUTE FUNCTION reject_update_delete_immutable();
+

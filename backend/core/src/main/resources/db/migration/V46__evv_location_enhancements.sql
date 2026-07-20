@@ -1,6 +1,22 @@
 -- EVV Location Enhancements: federal compliance fields
--- Adds noGpsReason, manualAddress to evv_record_location
--- Adds caregiverName snapshot to evv_record
+-- Creates evv_record_location if missing (JPA-only installs), then adds compliance columns.
+
+CREATE TABLE IF NOT EXISTS evv_record_location (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    evv_record_id           BIGINT NOT NULL REFERENCES evv_record(id),
+    role                    VARCHAR(20) NOT NULL,
+    type                    VARCHAR(20) NOT NULL,
+    latitude                NUMERIC(9, 6),
+    longitude               NUMERIC(9, 6),
+    accuracy_m              NUMERIC(6, 2),
+    address_snapshot_json   JSONB,
+    no_gps_reason           VARCHAR(50),
+    manual_address          VARCHAR(500),
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_evv_record_location_record_role
+    ON evv_record_location (evv_record_id, role);
 
 -- Add no_gps_reason column - stores why GPS could not be captured (federal EVV requirement)
 ALTER TABLE evv_record_location

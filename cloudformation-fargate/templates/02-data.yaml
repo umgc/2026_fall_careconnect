@@ -45,6 +45,15 @@ Parameters:
     Type: Number
     Default: 20
 
+  # PostgreSQL major version family for the RDS parameter group (must match EngineVersion).
+  DatabaseParameterGroupFamily:
+    Type: String
+    Default: postgres17
+    AllowedValues:
+      - postgres15
+      - postgres16
+      - postgres17
+
 Resources:
   # RDS requires a DB subnet group covering at least two AZs.
   DbSubnetGroup:
@@ -72,11 +81,23 @@ Resources:
       Name: !Sub /careconnect/${Environment}/jwt-secret
       SecretString: !Ref JwtSecret
 
-  # Standard single-instance PostgreSQL RDS deployment.
+  # Allow pgvector (and uuid-ossp) so SchemaPatchRunner can run CREATE EXTENSION vector.
+  # Requires PostgreSQL 15+ on RDS; apply parameter group before or with the DB instance.
+  DatabaseParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub careconnect-${Environment}-pg-pgvector
+      Description: !Sub CareConnect ${Environment} PostgreSQL with pgvector extension allowed
+      Family: !Ref DatabaseParameterGroupFamily
+      Parameters:
+        rds.allowed_extensions: vector,uuid-ossp
+
+  # Standard single-instance PostgreSQL RDS deployment (pgvector-capable; extension created at app startup).
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
+    DependsOn: DatabaseParameterGroup
     Properties:
       DBInstanceIdentifier: !Sub careconnect-${Environment}-db
       Engine: postgres
@@ -95,6 +116,7 @@ Resources:
       AutoMinorVersionUpgrade: true
       MultiAZ: false
       DBSubnetGroupName: !Ref DbSubnetGroup
+      DBParameterGroupName: !Ref DatabaseParameterGroup
       VPCSecurityGroups:
         - Fn::ImportValue: !Sub careconnect-${Environment}-RdsSecurityGroupId
       CopyTagsToSnapshot: true

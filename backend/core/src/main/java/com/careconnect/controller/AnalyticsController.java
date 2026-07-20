@@ -167,6 +167,9 @@ private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
 @GetMapping("/vitals")
 public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int days) {
   try {
+        if (days < 1) {
+            days = 1;
+        }
         // Get user details from JWT token
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String userEmail = auth.getName();
@@ -218,9 +221,8 @@ public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int 
             "message", "Vitals data retrieved successfully"
         ));
     } catch (Exception e) {
-        return ResponseEntity.ok(Map.of(
-            "data", Collections.emptyList(),
-            "message", "No vitals data available"
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+            "error", "Failed to retrieve vitals data"
         ));
     }
     }

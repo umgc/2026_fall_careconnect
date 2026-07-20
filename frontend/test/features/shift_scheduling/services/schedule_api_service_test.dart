@@ -5,9 +5,16 @@
 // injecting ApiClient.instance which is a separate singleton.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/shift_scheduling/services/schedule_api_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('ScheduleApiService', () {
     late ScheduleApiService service;
 
