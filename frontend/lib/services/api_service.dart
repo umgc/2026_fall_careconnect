@@ -51,11 +51,20 @@ class ApiConstants {
   // Invoices endpoints
   static final String invoices = '$_host/v1/api/invoices';
 
+  // Home Care Document Digitization endpoints
+  static final String homeCareDocuments = '$_host/v1/api/homecare-documents';
+
+  // Document Completion & Compliance Tracking endpoints
+  static final String documentCompliance = '$_host/v1/api/document-compliance';
+
   // EVV endpoints
   static final String evv = '$_host/v1/api/evv';
 
   // Telemetry endpoints
   static final String telemetryV3 = '$_host/v1/api/dev/telemetry';
+
+  // Admin analytics endpoints
+  static final String adminAnalytics = '$_host/v1/api/admin/analytics';
 }
 
 class ApiService {
@@ -2597,7 +2606,8 @@ class ApiService {
     return null;
   }
 
-  static Future<String?> getCallRecordingPlaybackUrl(String callId) async {
+  static Future<Map<String, dynamic>?> getCallRecordingPlaybackData(
+      String callId) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
       final response = await _httpClient
@@ -2608,10 +2618,17 @@ class ApiService {
           .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map) return decoded['playbackUrl'] as String?;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
       }
     } catch (_) {}
     return null;
+  }
+
+  static Future<String?> getCallRecordingPlaybackUrl(String callId) async {
+    final data = await getCallRecordingPlaybackData(callId);
+    final url = data?['playbackUrl'];
+    if (url is String) return url;
+    return url?.toString();
   }
 
   static Future<List<Map<String, dynamic>>> getMyCallTelemetry() async {

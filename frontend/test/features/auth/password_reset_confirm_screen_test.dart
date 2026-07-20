@@ -12,8 +12,13 @@
 // The submit ElevatedButton is found by type (only one on the page).
 
 import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/password_reset_confirm_screen.dart';
+
+import '../../helpers/fake_http_overrides.dart';
 
 Widget _wrap() => MaterialApp(
       home: const PasswordResetConfirmScreen(
@@ -21,6 +26,24 @@ Widget _wrap() => MaterialApp(
         email: 'user@example.com',
       ),
     );
+
+// Router-backed wrap for the success path, which calls context.go('/login').
+Widget _wrapRouter() {
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, __) => const PasswordResetConfirmScreen(
+          token: 'test-token-123',
+          email: 'user@example.com',
+        ),
+      ),
+      GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
+    ],
+  );
+  return MaterialApp.router(routerConfig: router);
+}
 
 // Helpers to find the two password fields by index.
 Finder get _newPasswordField => find.byType(TextFormField).at(0);
@@ -194,6 +217,48 @@ void main() {
       await tester.pumpWidget(_wrap());
       expect(find.byType(Scaffold), findsOneWidget);
       expect(find.byType(AppBar), findsOneWidget);
+    });
+  });
+
+  group('PasswordResetConfirmScreen – submit network paths', () {
+    Future<void> fillAndSubmit(WidgetTester tester) async {
+      await tester.enterText(find.byType(TextFormField).at(0), 'password123');
+      await tester.enterText(find.byType(TextFormField).at(1), 'password123');
+      await tester.pump();
+      final btn = find.byType(ElevatedButton);
+      await tester.ensureVisible(btn);
+      await tester.tap(btn);
+      await tester.pump(); // start the async request
+      await tester.pump(const Duration(seconds: 1)); // let it resolve
+    }
+
+    testWidgets('successful reset shows the backend message', (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(200, '{"message":"All set"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrapRouter());
+      await tester.pump();
+      await fillAndSubmit(tester);
+
+      expect(find.text('All set'), findsOneWidget);
+      // Advance past the delayed redirect so no Timer is left pending.
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('backend failure shows "Failed to reset password"',
+        (tester) async {
+      HttpOverrides.global = FakeHttpOverrides(
+        (method, uri) => FakeResponse(400, '{"error":"nope"}'),
+      );
+      addTearDown(() => HttpOverrides.global = null);
+
+      await tester.pumpWidget(_wrapRouter());
+      await tester.pump();
+      await fillAndSubmit(tester);
+
+      expect(find.textContaining('Failed to reset password'), findsOneWidget);
     });
   });
 }

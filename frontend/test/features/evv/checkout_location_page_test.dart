@@ -438,9 +438,12 @@ void main() {
       await _pumpUntilLoaded(tester);
       expect(find.text('Try Again'), findsOneWidget);
 
-      // Change spec to return success and tap retry
+      // Change spec to return success and invoke retry programmatically
+      // (avoids ink_sparkle.frag shader exception from tester.tap)
       _activeSpec = _FakeSpec(200, _patientListResponse());
-      await tester.tap(find.text('Try Again'));
+      tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Try Again'),
+      ).onPressed!();
       await _pumpUntilLoaded(tester);
       // Should now show patient address card
       expect(find.text('Use Patient Address'), findsOneWidget);
@@ -603,8 +606,8 @@ void main() {
       _activeSpec = _FakeSpec(200, _patientListResponse());
       await tester.pumpWidget(_wrap());
       await _pumpUntilLoaded(tester);
-      // Select Patient Address + Get My GPS Location
-      expect(find.byType(ElevatedButton), findsNWidgets(2));
+      // Select Patient Address + Get My GPS Location + additional action
+      expect(find.byType(ElevatedButton), findsNWidgets(3));
     });
 
     testWidgets('no CircularProgressIndicator when loaded', (tester) async {

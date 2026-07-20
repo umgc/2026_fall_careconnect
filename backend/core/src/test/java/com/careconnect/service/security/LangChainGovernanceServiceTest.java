@@ -7,6 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Field;
+import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -153,5 +154,76 @@ class LangChainGovernanceServiceTest {
         assertThat(result.isAllowed()).isFalse();
         assertThat(result.getReason()).isEqualTo("Rate limit exceeded");
         assertThat(result.getAction()).isEqualTo("RATE_LIMIT");
+    }
+
+    // ----- Reflection helpers for the private UserRequestTracker -----
+
+    @SuppressWarnings("unchecked")
+    private ConcurrentHashMap<Long, Object> trackers() throws Exception {
+        final Field f = LangChainGovernanceService.class.getDeclaredField("userRequestTrackers");
+        f.setAccessible(true);
+        return (ConcurrentHashMap<Long, Object>) f.get(langChainGovernanceService);
+    }
+
+    private Object trackerFor(Long id) throws Exception {
+        return trackers().get(id);
+    }
+
+    private void setField(Object target, String name, Object value) throws Exception {
+        final Field f = target.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(target, value);
+    }
+
+    private AtomicInteger counter(Object tracker, String name) throws Exception {
+        final Field f = tracker.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return (AtomicInteger) f.get(tracker);
+    }
+
+    // ----- Additional branch coverage -----
+
+    @Test
+    void validateRequest_resetsCountersAfterTimeWindow() throws Exception {
+        final Long userId = 30L;
+        langChainGovernanceService.validateRequest(userId, "conv-30", "msg");
+        final Object tracker = trackerFor(userId);
+        // Age both reset timestamps so the next call takes the minute & hour reset branches.
+        setField(tracker, "lastMinuteReset", LocalDateTime.now().minusMinutes(2));
+        setField(tracker, "lastHourReset", LocalDateTime.now().minusHours(2));
+        counter(tracker, "requestsThisMinute").set(5);
+        counter(tracker, "requestsThisHour").set(5);
+
+        final LangChainGovernanceService.GovernanceResult result =
+                langChainGovernanceService.validateRequest(userId, "conv-30", "msg");
+
+        assertThat(result.isAllowed()).isTrue();
+        // Counters were reset to 0 then incremented to 1.
+        assertThat(counter(tracker, "requestsThisMinute").get()).isEqualTo(1);
+    }
+
+    @Test
+    void validateModelUsage_gpt4_withLowUsageTracker_isAllowed() throws Exception {
+        final Long userId = 32L;
+        langChainGovernanceService.validateRequest(userId, "conv-32", "msg"); // tracker with 1 request
+
+        final LangChainGovernanceService.GovernanceResult result =
+                langChainGovernanceService.validateModelUsage(userId, "conv-32", "gpt-4");
+
+        assertThat(result.isAllowed()).isTrue();
+    }
+
+    @Test
+    void scheduledTrackerCleanup_removesStaleTrackers() throws Exception {
+        final Long userId = 31L;
+        langChainGovernanceService.validateRequest(userId, "conv-31", "msg");
+        final Object tracker = trackerFor(userId);
+        // lastMinuteReset after lastHourReset (covers the isAfter ternary) and both stale (> 2h).
+        setField(tracker, "lastHourReset", LocalDateTime.now().minusHours(4));
+        setField(tracker, "lastMinuteReset", LocalDateTime.now().minusHours(3));
+
+        langChainGovernanceService.scheduledTrackerCleanup();
+
+        assertThat(trackers().containsKey(userId)).isFalse();
     }
 }

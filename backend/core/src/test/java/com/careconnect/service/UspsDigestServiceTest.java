@@ -86,12 +86,26 @@ class USPSDigestServiceTest {
         cacheStub.nextLookup = Optional.of(cached);
 
         USPSDigestService service = buildService(
+        final RecordingMailpiecePersistence persistence = new RecordingMailpiecePersistence();
+        final GoogleOAuthService oauth = org.mockito.Mockito.mock(GoogleOAuthService.class);
+        org.mockito.Mockito.when(oauth.ensureFreshToken(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        final EmailCredentialLifecycleService lifecycle =
+                new EmailCredentialLifecycleService(
+                        org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
+                        org.mockito.Mockito.mock(NotificationService.class));
+        USPSDigestService service = new USPSDigestService(
                 emailCredentialRepository(Optional.empty()),
                 cacheStub,
                 new StubGmailClient(),
                 new OutlookClient(),
                 new StubGmailParser(),
                 new OutlookParser()
+                new OutlookParser(),
+                new TokenCryptor("test-secret-key"),
+                oauth,
+                lifecycle,
+                persistence
         );
 
         Optional<USPSDigest> result = service.latestForUser("user-2");
@@ -99,6 +113,9 @@ class USPSDigestServiceTest {
         assertTrue(result.isPresent());
         assertNull(result.get().digestDate());
         assertNull(cacheStub.saved, "Cached value should be reused without overwriting");
+        assertEquals(1, persistence.calls,
+                "Cache hit must still retry idempotent durable persist");
+        assertEquals("user-2", persistence.lastUserId);
     }
 
     // ── New: latestForUser ────────────────────────────────────────────────────
@@ -209,18 +226,33 @@ class USPSDigestServiceTest {
         cached.setPayloadJson("{\"digestDate\":null,\"mailpieces\":[],\"packages\":[]}");
         cacheStub.dateRangeLookup = Optional.of(cached);
 
-        USPSDigestService service = buildService(
+        final RecordingMailpiecePersistence persistence = new RecordingMailpiecePersistence();
+        final GoogleOAuthService oauth = org.mockito.Mockito.mock(GoogleOAuthService.class);
+        org.mockito.Mockito.when(oauth.ensureFreshToken(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        final EmailCredentialLifecycleService lifecycle =
+                new EmailCredentialLifecycleService(
+                        org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
+                        org.mockito.Mockito.mock(NotificationService.class));
+        USPSDigestService service = new USPSDigestService(
                 emailCredentialRepositoryByProvider(Optional.empty(), Optional.empty()),
-                cacheStub,
+                cacheStub.asRepo(),
                 new StubGmailClient(),
                 new OutlookClient(),
                 new StubGmailParser(),
-                new OutlookParser()
+                new OutlookParser(),
+                cryptor,
+                oauth,
+                lifecycle,
+                persistence
         );
 
         var result = service.digestForDate("user-5", LocalDate.of(2025, 6, 15));
         assertTrue(result.isPresent(), "Should return the date-specific cached entry");
         assertNull(cacheStub.saved, "No new save should happen when a cache hit is found");
+        assertEquals(1, persistence.calls,
+                "Date cache hit must still retry idempotent durable persist");
+        assertEquals("user-5", persistence.lastUserId);
     }
 
     /**
@@ -716,6 +748,13 @@ class USPSDigestServiceTest {
                         && !current.getAccessTokenEnc().isBlank();
             }
         };
+        final GoogleOAuthService oauth = org.mockito.Mockito.mock(GoogleOAuthService.class);
+        org.mockito.Mockito.when(oauth.ensureFreshToken(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        final EmailCredentialLifecycleService lifecycle =
+                new EmailCredentialLifecycleService(
+                        org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
+                        org.mockito.Mockito.mock(NotificationService.class));
         return new USPSDigestService(
                 credRepo,
                 cacheStub.asRepo(),
@@ -725,7 +764,35 @@ class USPSDigestServiceTest {
                 outlookParser,
                 new TokenCryptor("unit-test-secret-32-bytes-long!!!"),
                 googleOAuthService
+                oauth,
+                lifecycle,
+                noOpMailpiecePersistence()
         );
+    }
+
+    private static UspsMailpiecePersistenceService noOpMailpiecePersistence() {
+        return new RecordingMailpiecePersistence();
+    }
+
+    /**
+     * Counts persistAndIndex invocations so cache-hit retry can be asserted.
+     */
+    private static final class RecordingMailpiecePersistence extends UspsMailpiecePersistenceService {
+        int calls;
+        String lastUserId;
+        USPSDigest lastDigest;
+
+        RecordingMailpiecePersistence() {
+            super(null, null, new MailpieceNormalizer(), null, null);
+        }
+
+        @Override
+        public int persistAndIndex(String userId, USPSDigest digest) {
+            calls++;
+            lastUserId = userId;
+            lastDigest = digest;
+            return 0;
+        }
     }
 
     /**
