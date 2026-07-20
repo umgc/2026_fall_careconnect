@@ -110,6 +110,8 @@ dependencies:
   # ag added as a fix
   porcupine_flutter: ^3.0.5
   speech_to_text: ^7.3.0
+  # ADA audio readout for envelope-level USPS mail text (Task 3.14.10)
+  flutter_tts: ^4.2.5
 
   # device integration
   fitbitter: ^2.0.6
