@@ -8,8 +8,6 @@ package com.careconnect.service.consent;
  *   <li>Skip the consent gate entirely when {@code status == NONE}
  *       (user is not registered as a caregiver for this patient at
  *       all — the on_consent policy does not apply to them).</li>
- *   <li>Build a 403 response body distinguishing PENDING_REVIEW from
- *       REVOKED when the gate blocks access.</li>
  * </ul>
  *
  * <p>Mirrors the record contract David is shipping in WBS 3.15.5.
