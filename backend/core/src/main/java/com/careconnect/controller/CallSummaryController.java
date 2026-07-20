@@ -8,6 +8,9 @@ import com.careconnect.security.Role;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.consent.CaregiverVisibilityCheck;
+import com.careconnect.service.consent.CaregiverVisibilityService;
+import com.careconnect.service.consent.CaregiverVisibilityStatus;
 
 import java.util.Map;
 import java.util.Optional;
@@ -62,6 +65,7 @@ public class CallSummaryController {
     private final CallTelemetryService callTelemetryService;
     private final CallTranscriptService callTranscriptService;
     private final UserRepository userRepository;
+    private final CaregiverVisibilityService caregiverVisibilityService;
 
     /**
      * Returns the stored summary payload for the given database identifier,
@@ -94,6 +98,28 @@ public class CallSummaryController {
 
         if (!isAdmin && !inTelemetry && !inTranscript && !isSummaryOwner) {
             throw new AppException(HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED);
+        }
+
+        // TC-E-SUM-009 — on-consent gate for caregivers.
+        // Independent of the four-way check above: a caregiver who passes
+        // the four-way check (e.g. via telemetry participation) must still
+        // be blocked when the summary's caregiverVisibility='on_consent'
+        // and no active consent record exists for this (caregiver, patient)
+        // pair. Admins bypass the gate. Users whose CaregiverVisibilityStatus
+        // is NONE also bypass — the consent policy doesn't apply to
+        // non-caregivers, who reach this endpoint via their own legitimate
+        // access paths.
+        if (!isAdmin
+                && summary.getPatientId() != null
+                && "on_consent".equalsIgnoreCase(summary.getCaregiverVisibility())) {
+            final CaregiverVisibilityCheck check =
+                    caregiverVisibilityService.getStatus(
+                            currentUser.getId(),
+                            summary.getPatientId());
+            if (check.status() != CaregiverVisibilityStatus.NONE
+                    && !check.canViewSummaries()) {
+                throw new AppException(HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED);
+            }
         }
 
         return callSummaryService.getSummaryById(id)
