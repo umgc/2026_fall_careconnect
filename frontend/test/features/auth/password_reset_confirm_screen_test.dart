@@ -11,6 +11,7 @@
 // TextFormFields are found by index: 0 = New Password, 1 = Confirm New Password.
 // The submit ElevatedButton is found by type (only one on the page).
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 
@@ -21,6 +22,7 @@ import 'package:care_connect_app/features/auth/presentation/pages/password_reset
 import '../../helpers/fake_http_overrides.dart';
 
 Widget _wrap() => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'),
       home: const PasswordResetConfirmScreen(
         token: 'test-token-123',
         email: 'user@example.com',
@@ -42,7 +44,7 @@ Widget _wrapRouter() {
       GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
 }
 
 // Helpers to find the two password fields by index.
@@ -173,10 +175,10 @@ void main() {
   });
 
   group('PasswordResetConfirmScreen – layout & labels', () {
-    testWidgets('shows "Closer Connections. Better Care." subtitle',
+    testWidgets('shows "Connecting Care, Empowering Health" subtitle',
         (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.text('Closer Connections. Better Care.'), findsOneWidget);
+      expect(find.text('Connecting Care, Empowering Health'), findsOneWidget);
     });
 
     testWidgets('button text is "Reset Password"', (tester) async {

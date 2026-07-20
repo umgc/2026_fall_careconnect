@@ -4,6 +4,7 @@
 // Pure StatelessWidget — no Provider, no HTTP.
 // With empty reminders list shows "No active medication reminders".
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/medication_reminder_widget.dart';
@@ -19,10 +20,16 @@ final _sampleItem = MedicationReminderItem(
 );
 
 Widget _wrapEmpty() => const MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales, 
       home: Scaffold(body: MedicationRemindersWidget(reminders: [])),
     );
 
 Widget _wrapWithReminder() => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales, 
       home: Scaffold(
         body: MedicationRemindersWidget(reminders: [_sampleItem]),
       ),
@@ -85,6 +92,9 @@ void main() {
     testWidgets('calls onMarkTaken with medicationId when tapped', (tester) async {
       int? takenId;
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: MedicationRemindersWidget(
             reminders: [_sampleItem],
@@ -99,6 +109,9 @@ void main() {
     testWidgets('calls onMarkMissed with medicationId when tapped', (tester) async {
       int? missedId;
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: MedicationRemindersWidget(
             reminders: [_sampleItem],

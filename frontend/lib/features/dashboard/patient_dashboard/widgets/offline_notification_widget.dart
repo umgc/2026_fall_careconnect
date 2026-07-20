@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 /// Offline Notification Widget
@@ -7,21 +8,22 @@ class OfflineNotification extends StatelessWidget {
   const OfflineNotification({super.key, this.lastSynced});
 
   /// Formats the time since the last sync
-  String _getTimeSinceSync() {
-    if (lastSynced == null) return 'Never synced';
+  String _getTimeSinceSync(AppLocalizations t) {
+    if (lastSynced == null) return t.offlinenotiwidget_neverSynced;
 
     final difference = DateTime.now().difference(lastSynced!);
     if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} minutes ago';
+      return '${difference.inMinutes} ${t.offlinenotiwidget_minutesAgo}';
     } else if (difference.inHours < 24) {
-      return '${difference.inHours} hours ago';
+      return '${difference.inHours} ${t.offlinenotiwidget_hoursAgo}';
     } else {
-      return '${difference.inDays} days ago';
+      return '${difference.inDays} ${t.offlinenotiwidget_daysAgo}';
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -43,7 +45,7 @@ class OfflineNotification extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Offline Mode',
+                  t.offlinenotiwidget_offlineMode,
                   style: TextStyle(
                     color: theme.colorScheme.onInverseSurface,
                     fontWeight: FontWeight.bold,
@@ -52,7 +54,7 @@ class OfflineNotification extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Last synced ${_getTimeSinceSync()}. Your data will sync when reconnected. The application will have limited functionality.',
+                  '${t.offlinenotiwidget_lastSynced} ${_getTimeSinceSync(t)}. ${t.offlinenotiwidget_syncOnReconnect}',
                   style: TextStyle(
                     color: theme.colorScheme.onInverseSurface.withValues(
                       alpha: 0.8,
