@@ -2,10 +2,6 @@ package com.careconnect.service;
 
 import com.careconnect.dto.AiAllergyDTO;
 import com.careconnect.model.Allergy;
-import com.careconnect.service.DeepSeekService.Choice;
-import com.careconnect.service.DeepSeekService.DeepSeekChatRequest;
-import com.careconnect.service.DeepSeekService.DeepSeekResponse;
-import com.careconnect.service.DeepSeekService.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +23,7 @@ import static org.mockito.Mockito.when;
 class AiAllergyServiceTest {
 
     @Mock
-    private DeepSeekService deepSeekService;
+    private BedrockStructuredAnalysisService bedrockAnalysisService;
 
     @Mock
     private DeepSeekContextBuilder contextBuilder;
@@ -40,7 +36,6 @@ class AiAllergyServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        // Inject the real ObjectMapper since @InjectMocks won't do it for final fields
         try {
             var field = AiAllergyService.class.getDeclaredField("objectMapper");
             field.setAccessible(true);
@@ -48,19 +43,6 @@ class AiAllergyServiceTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private DeepSeekResponse buildResponse(String content) {
-        Message msg = new Message();
-        msg.setRole("assistant");
-        msg.setContent(content);
-
-        Choice choice = new Choice();
-        choice.setMessage(msg);
-
-        DeepSeekResponse resp = new DeepSeekResponse();
-        resp.setChoices(List.of(choice));
-        return resp;
     }
 
     private AiAllergyDTO.Request buildRequest(Long patientId, String text, Map<String, Object> context) {
@@ -71,16 +53,13 @@ class AiAllergyServiceTest {
         return req;
     }
 
-    // ── Valid JSON response ──
-
     @Test
     @DisplayName("analyze_validJsonResponse_returnsPopulatedResult")
-    void analyze_validJsonResponse_returnsPopulatedResult() throws Exception {
+    void analyze_validJsonResponse_returnsPopulatedResult() {
         String json = "{\"allergen\":\"Penicillin\",\"reaction\":\"Hives\",\"severity\":\"SEVERE\"}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("No known allergies.");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "I am allergic to penicillin", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -92,12 +71,11 @@ class AiAllergyServiceTest {
 
     @Test
     @DisplayName("analyze_mildSeverityInJson_normalizesMild")
-    void analyze_mildSeverityInJson_normalizesMild() throws Exception {
+    void analyze_mildSeverityInJson_normalizesMild() {
         String json = "{\"allergen\":\"Dust\",\"reaction\":\"Sneezing\",\"severity\":\"mild\"}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "dust allergy", Map.of("hint", "sneezing"));
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -108,12 +86,11 @@ class AiAllergyServiceTest {
 
     @Test
     @DisplayName("analyze_moderateSeverityInJson_normalizesModerate")
-    void analyze_moderateSeverityInJson_normalizesModerate() throws Exception {
+    void analyze_moderateSeverityInJson_normalizesModerate() {
         String json = "{\"allergen\":\"Shellfish\",\"reaction\":\"Swelling\",\"severity\":\"MODERATE\"}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "shellfish", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -121,14 +98,12 @@ class AiAllergyServiceTest {
         assertEquals("MODERATE", result.getSeverity());
     }
 
-    // ── Non-JSON content (not blank) ──
-
     @Test
     @DisplayName("analyze_nonJsonContent_fallsBackToTranscript")
-    void analyze_nonJsonContent_fallsBackToTranscript() throws Exception {
+    void analyze_nonJsonContent_fallsBackToTranscript() {
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse("I'm not sure about the allergy"));
+        when(bedrockAnalysisService.complete(anyString(), anyString()))
+                .thenReturn("I'm not sure about the allergy");
 
         AiAllergyDTO.Request req = buildRequest(1L, "penicillin allergy", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -138,14 +113,11 @@ class AiAllergyServiceTest {
         assertEquals("", result.getSeverity());
     }
 
-    // ── Empty content ──
-
     @Test
     @DisplayName("analyze_emptyContent_fallsBackToTranscript")
-    void analyze_emptyContent_fallsBackToTranscript() throws Exception {
+    void analyze_emptyContent_fallsBackToTranscript() {
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(""));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn("");
 
         AiAllergyDTO.Request req = buildRequest(1L, "my transcript", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -156,10 +128,9 @@ class AiAllergyServiceTest {
 
     @Test
     @DisplayName("analyze_nullText_fallsBackToEmptyString")
-    void analyze_nullText_fallsBackToEmptyString() throws Exception {
+    void analyze_nullText_fallsBackToEmptyString() {
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(""));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn("");
 
         AiAllergyDTO.Request req = buildRequest(1L, null, null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -169,10 +140,9 @@ class AiAllergyServiceTest {
 
     @Test
     @DisplayName("analyze_nullTextWithNonJsonContent_fallsBackToEmptyString")
-    void analyze_nullTextWithNonJsonContent_fallsBackToEmptyString() throws Exception {
+    void analyze_nullTextWithNonJsonContent_fallsBackToEmptyString() {
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse("some non-json content"));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn("some non-json content");
 
         AiAllergyDTO.Request req = buildRequest(1L, null, null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -180,16 +150,13 @@ class AiAllergyServiceTest {
         assertEquals("", result.getReaction());
     }
 
-    // ── JSON with missing fields ──
-
     @Test
     @DisplayName("analyze_jsonMissingFields_returnsEmptyStrings")
-    void analyze_jsonMissingFields_returnsEmptyStrings() throws Exception {
+    void analyze_jsonMissingFields_returnsEmptyStrings() {
         String json = "{\"allergen\":\"Pollen\"}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "pollen", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -201,12 +168,11 @@ class AiAllergyServiceTest {
 
     @Test
     @DisplayName("analyze_jsonWithUnknownSeverity_returnsEmptySeverity")
-    void analyze_jsonWithUnknownSeverity_returnsEmptySeverity() throws Exception {
+    void analyze_jsonWithUnknownSeverity_returnsEmptySeverity() {
         String json = "{\"allergen\":\"Eggs\",\"reaction\":\"Rash\",\"severity\":\"UNKNOWN\"}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "egg allergy", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -214,11 +180,9 @@ class AiAllergyServiceTest {
         assertEquals("", result.getSeverity());
     }
 
-    // ── With allergy history ──
-
     @Test
     @DisplayName("analyze_withAllergyHistory_passesHistoryToContextBuilder")
-    void analyze_withAllergyHistory_passesHistoryToContextBuilder() throws Exception {
+    void analyze_withAllergyHistory_passesHistoryToContextBuilder() {
         Allergy allergy = Allergy.builder()
                 .allergen("Aspirin")
                 .severity(Allergy.AllergySeverity.MODERATE)
@@ -229,8 +193,7 @@ class AiAllergyServiceTest {
         String json = "{\"allergen\":\"Latex\",\"reaction\":\"Swelling\",\"severity\":\"SEVERE\"}";
 
         when(contextBuilder.buildAllergyContext(eq(1L), eq(List.of(allergy)))).thenReturn("history ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "latex gloves cause swelling", Map.of("source", "voice"));
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, List.of(allergy));
@@ -239,17 +202,11 @@ class AiAllergyServiceTest {
         assertEquals("SEVERE", result.getSeverity());
     }
 
-    // ── Null choices in response ──
-
     @Test
-    @DisplayName("analyze_nullChoicesInResponse_fallsBackToTranscript")
-    void analyze_nullChoicesInResponse_fallsBackToTranscript() throws Exception {
-        DeepSeekResponse resp = new DeepSeekResponse();
-        resp.setChoices(null);
-
+    @DisplayName("analyze_emptyBedrockResponse_fallsBackToTranscript")
+    void analyze_emptyBedrockResponse_fallsBackToTranscript() {
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(resp);
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn("");
 
         AiAllergyDTO.Request req = buildRequest(1L, "some text", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -258,29 +215,41 @@ class AiAllergyServiceTest {
     }
 
     @Test
-    @DisplayName("analyze_emptyChoicesInResponse_fallsBackToTranscript")
-    void analyze_emptyChoicesInResponse_fallsBackToTranscript() throws Exception {
-        DeepSeekResponse resp = new DeepSeekResponse();
-        resp.setChoices(Collections.emptyList());
+    @DisplayName("analyze_jsonWithMedicationKey_mapsToAllergen")
+    void analyze_jsonWithMedicationKey_mapsToAllergen() {
+        String json = "{\"medication\":\"Penicillin\",\"reaction\":\"Hives\",\"severity\":\"SEVERE\"}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(resp);
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
-        AiAllergyDTO.Request req = buildRequest(1L, "some text", null);
+        AiAllergyDTO.Request req = buildRequest(1L, "allergic to penicillin", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
 
-        assertEquals("some text", result.getReaction());
+        assertEquals("Penicillin", result.getAllergen());
+        assertEquals("Hives", result.getReaction());
+    }
+
+    @Test
+    @DisplayName("analyze_missingAllergenInJson_infersFromTranscript")
+    void analyze_missingAllergenInJson_infersFromTranscript() {
+        String json = "{\"reaction\":\"Hives\",\"severity\":\"MILD\"}";
+
+        when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
+
+        AiAllergyDTO.Request req = buildRequest(1L, "I am allergic to penicillin and get hives", null);
+        AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
+
+        assertEquals("penicillin", result.getAllergen());
     }
 
     @Test
     @DisplayName("analyze_jsonWithNullSeverity_returnsEmptySeverity")
-    void analyze_jsonWithNullSeverity_returnsEmptySeverity() throws Exception {
+    void analyze_jsonWithNullSeverity_returnsEmptySeverity() {
         String json = "{\"allergen\":\"Milk\",\"reaction\":\"Cramps\",\"severity\":null}";
 
         when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
-        when(deepSeekService.buildChatRequest(anyString(), anyString())).thenReturn(new DeepSeekChatRequest());
-        when(deepSeekService.sendChatRequest(any())).thenReturn(buildResponse(json));
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
 
         AiAllergyDTO.Request req = buildRequest(1L, "milk cramps", null);
         AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
@@ -288,5 +257,20 @@ class AiAllergyServiceTest {
         assertEquals("Milk", result.getAllergen());
         assertEquals("Cramps", result.getReaction());
         assertEquals("", result.getSeverity());
+    }
+
+    @Test
+    @DisplayName("analyze_jsonWrappedInCodeFences_parsesCorrectly")
+    void analyze_jsonWrappedInCodeFences_parsesCorrectly() {
+        String json = "```json\n{\"allergen\":\"Ibuprofen\",\"reaction\":\"Rash\",\"severity\":\"MILD\"}\n```";
+
+        when(contextBuilder.buildAllergyContext(any(), any())).thenReturn("ctx");
+        when(bedrockAnalysisService.complete(anyString(), anyString())).thenReturn(json);
+
+        AiAllergyDTO.Request req = buildRequest(1L, "ibuprofen rash", null);
+        AiAllergyDTO.Result result = aiAllergyService.analyze(req, Collections.emptyList());
+
+        assertEquals("Ibuprofen", result.getAllergen());
+        assertEquals("MILD", result.getSeverity());
     }
 }

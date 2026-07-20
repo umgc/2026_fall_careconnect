@@ -43,6 +43,9 @@ public class VitalSample {
     
     @Column(name = "pain_value")
     private Integer painValue; // 1-10 scale
+
+    @Column(name = "source", length = 64)
+    private String source;
     
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

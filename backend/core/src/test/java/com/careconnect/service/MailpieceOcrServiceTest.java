@@ -395,4 +395,38 @@ class MailpieceOcrServiceTest {
                 new byte[] { 1, 2, 3 }, "meta");
         assertThat(result).isEmpty();
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // extractMailpieceMetadata - sender + summary enrichment
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("extractMailpieceMetadata - returns sender and summary line from top region")
+    void extractMailpieceMetadata_returnsSenderAndSummaryLine() throws Exception {
+        when(textractClient.detectDocumentText(any(DetectDocumentTextRequest.class)))
+                .thenReturn(responseWithBlocks(
+                        lineBlock("Acme Corp", 0.02, 0.05),
+                        lineBlock("Invoice enclosed", 0.08, 0.05),
+                        lineBlock("Footer text", 0.90, 0.50)));
+
+        final Optional<MailpieceOcrResult> result = mailpieceOcrService.extractMailpieceMetadata(
+                new byte[] { 1, 2, 3 }, "image/png");
+        assertThat(result).isPresent();
+        assertThat(result.get().sender()).isEqualTo("Acme Corp");
+        assertThat(result.get().summaryLine()).isEqualTo("Invoice enclosed");
+    }
+
+    @Test
+    @DisplayName("extractMailpieceMetadata - summary line omitted when only sender is present")
+    void extractMailpieceMetadata_summaryOmittedWhenOnlySenderPresent() throws Exception {
+        when(textractClient.detectDocumentText(any(DetectDocumentTextRequest.class)))
+                .thenReturn(responseWithBlocks(
+                        lineBlock("Solo Sender LLC", 0.02, 0.05)));
+
+        final Optional<MailpieceOcrResult> result = mailpieceOcrService.extractMailpieceMetadata(
+                new byte[] { 1, 2, 3 }, "image/png");
+        assertThat(result).isPresent();
+        assertThat(result.get().sender()).isEqualTo("Solo Sender LLC");
+        assertThat(result.get().summaryLine()).isNull();
+    }
 }

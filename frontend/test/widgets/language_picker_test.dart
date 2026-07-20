@@ -213,4 +213,93 @@ void main() {
       expect(find.byIcon(Icons.translate), findsWidgets);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // LanguagePicker.show — responsive layout (landscape / tablet)
+  // ──────────────────────────────────────────────────────────────
+
+  group('LanguagePicker.show - responsive layout', () {
+    // Opens the picker at whatever surface size the test has configured.
+    Future<void> openPicker(WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        Builder(builder: (ctx) {
+          return ElevatedButton(
+            onPressed: () => LanguagePicker.show(ctx),
+            child: const Text('Open'),
+          );
+        }),
+      ));
+      await tester.pump();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('mobile-landscape: sheet renders and list is shrink-wrapped',
+            (tester) async {
+          // Short landscape phone: height is scarce, so the sheet must be
+          // scroll-controlled + shrink-wrapped rather than capped at ~56%.
+          tester.view.physicalSize = const Size(800, 360);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
+          await openPicker(tester);
+
+          final listView = tester.widget<ListView>(find.byType(ListView));
+          expect(listView.shrinkWrap, isTrue);
+        });
+
+    testWidgets('mobile-landscape: can scroll to the last locale',
+            (tester) async {
+          // The core requirement: every language stays reachable on a short
+          // landscape screen where only a few rows fit at once.
+          tester.view.physicalSize = const Size(800, 360);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
+          await openPicker(tester);
+
+          final lastLocale = AppLocalizations.supportedLocales.last;
+          final lastLabel = LanguagePicker.labelFor(lastLocale);
+
+          // Off-screen initially on a short sheet; scroll to reveal it.
+          await tester.scrollUntilVisible(
+            find.text(lastLabel),
+            200,
+            scrollable: find.byType(Scrollable).last,
+          );
+          expect(find.text(lastLabel), findsOneWidget);
+        });
+
+    testWidgets('tablet width: rows are centered within a max width',
+            (tester) async {
+          // Wide surface: content is inset so rows don't stretch edge-to-edge.
+          // (1000 - 640) / 2 = 180 of horizontal inset per side.
+          tester.view.physicalSize = const Size(1000, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
+          await openPicker(tester);
+
+          final listView = tester.widget<ListView>(find.byType(ListView));
+          final padding = listView.padding as EdgeInsets;
+          expect(padding.left, 180);
+          expect(padding.right, 180);
+        });
+
+    testWidgets('narrow width: keeps a standard 16px horizontal inset',
+            (tester) async {
+          // Narrow (mobile-portrait) surface stays below the max row width, so
+          // the sheet keeps the standard 16px inset instead of centering.
+          tester.view.physicalSize = const Size(400, 800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+
+          await openPicker(tester);
+
+          final listView = tester.widget<ListView>(find.byType(ListView));
+          final padding = listView.padding as EdgeInsets;
+          expect(padding.left, 16);
+          expect(padding.right, 16);
+        });
+  });
 }

@@ -1,5 +1,7 @@
 package com.careconnect.service;
 
+import com.careconnect.indexing.IndexingEventEmitter;
+import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import java.time.LocalDateTime;
@@ -46,14 +48,22 @@ public class CallTranscriptService {
   /** Service used to read and archive transcript payloads. */
   private final CallTranscriptArchiveService archiveService;
 
+  /** Emits TRANSCRIPT_INDEXED events after successful segment batches. */
+  private final IndexingEventEmitter indexingEventEmitter;
+
   /**
-   * Stores transcript segments for a call.
+   * Stores transcript segments for a call and emits a
+   * {@code TRANSCRIPT_INDEXED} event to the indexing outbox when at
+   * least one segment was persisted. The persist and the emit share
+   * one transaction so downstream indexing never sees a segment batch
+   * without its notification (or vice versa).
    *
    * @param callId call identifier
    * @param actorUserId speaking or submitting user identifier
    * @param segments transcript segments to persist
    * @return number of stored segments
    */
+  @Transactional
   public int recordSegments(
       final String callId,
       final Long actorUserId,
@@ -69,6 +79,14 @@ public class CallTranscriptService {
         }
         segmentRepository.save(createSegment(normalizedCallId, actorUserId, input, text));
         saved += 1;
+      }
+      if (saved > 0) {
+        final String source = segments.get(0) != null ? segments.get(0).source() : null;
+        indexingEventEmitter.emitTranscriptIndexed(new TranscriptIndexedPayload(
+            normalizedCallId,
+            null, // patientId — nullable until telemetry lookup lands; resolved downstream by Ravi's poller (WBS 3.11.1 followup)
+            saved,
+            source));
       }
     }
     return saved;

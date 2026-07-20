@@ -3,6 +3,10 @@ package com.careconnect.model;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "user_files")
@@ -88,10 +92,111 @@ public class UserFile {
     }
     
     public enum FileCategory {
+        // Core healthcare
         PROFILE_IMAGE, MEDICAL_RECORD, CLINICAL_NOTE, PRESCRIPTION, LAB_RESULT,
-        INSURANCE_DOCUMENT, CONSENT_FORM, CARE_PLAN, OTHER_DOCUMENT,
-        // Hiring & onboarding document digitization (see com.careconnect.model.forms)
-        ONBOARDING_FORM, HIRING_DOCUMENT
+        INSURANCE_DOCUMENT, CONSENT_FORM, CARE_PLAN,
+
+        // Home Care Document Digitization: employment & onboarding intake document types
+        EMPLOYMENT_APPLICATION, ONBOARDING_FORM, BACKGROUND_CHECK, CERTIFICATION,
+        REFERENCE, EMPLOYMENT_CONTRACT, TAX_FORM, WORK_AUTHORIZATION, EMERGENCY_CONTACT,
+
+        // Legacy hiring bucket retained from team-d-develop (see com.careconnect.model.forms)
+        HIRING_DOCUMENT,
+
+        // Fallback bucket for general/uncategorized documents
+        OTHER_DOCUMENT;
+
+        /**
+         * Document types that belong to the employment / home-care intake workflow.
+         * Kept in sync with the frontend {@code FileCategory.employmentIntake} list (8 types).
+         * EMERGENCY_CONTACT and HIRING_DOCUMENT are valid categories but not intake types.
+         */
+        public static final Set<FileCategory> EMPLOYMENT_INTAKE = Set.of(
+                EMPLOYMENT_APPLICATION, ONBOARDING_FORM, BACKGROUND_CHECK, CERTIFICATION,
+                REFERENCE, EMPLOYMENT_CONTRACT, TAX_FORM, WORK_AUTHORIZATION);
+
+        /**
+         * Accepted client aliases (frontend values, legacy names and friendly synonyms)
+         * that resolve to a canonical category. Keys are normalized (UPPER_SNAKE_CASE).
+         */
+        private static final Map<String, FileCategory> ALIASES = Map.ofEntries(
+                Map.entry("PROFILE", PROFILE_IMAGE),
+                Map.entry("PROFILE_PICTURE", PROFILE_IMAGE),
+                Map.entry("MEDICAL", MEDICAL_RECORD),
+                Map.entry("MEDICAL_REPORT", MEDICAL_RECORD),
+                Map.entry("CLINICAL", CLINICAL_NOTE),
+                Map.entry("CLINICAL_NOTES", CLINICAL_NOTE),
+                Map.entry("LAB", LAB_RESULT),
+                Map.entry("INSURANCE", INSURANCE_DOCUMENT),
+                Map.entry("CONSENT", CONSENT_FORM),
+                Map.entry("CARE", CARE_PLAN),
+                Map.entry("EMPLOYMENT", EMPLOYMENT_APPLICATION),
+                Map.entry("EMPLOYMENT_FORM", EMPLOYMENT_APPLICATION),
+                Map.entry("APPLICATION", EMPLOYMENT_APPLICATION),
+                Map.entry("ONBOARDING", ONBOARDING_FORM),
+                Map.entry("BACKGROUND", BACKGROUND_CHECK),
+                Map.entry("CERT", CERTIFICATION),
+                Map.entry("CERTIFICATIONS", CERTIFICATION),
+                Map.entry("LICENSE", CERTIFICATION),
+                Map.entry("REFERENCES", REFERENCE),
+                Map.entry("CONTRACT", EMPLOYMENT_CONTRACT),
+                Map.entry("CONTRACTS", EMPLOYMENT_CONTRACT),
+                Map.entry("TAX", TAX_FORM),
+                Map.entry("W4", TAX_FORM),
+                Map.entry("W_4", TAX_FORM),
+                Map.entry("I9", WORK_AUTHORIZATION),
+                Map.entry("I_9", WORK_AUTHORIZATION),
+                Map.entry("WORK_AUTH", WORK_AUTHORIZATION),
+                Map.entry("EMERGENCY", EMERGENCY_CONTACT),
+                Map.entry("EMERGENCY_CONTACTS", EMERGENCY_CONTACT),
+                Map.entry("HIRING", HIRING_DOCUMENT),
+                Map.entry("DOCUMENT", OTHER_DOCUMENT),
+                Map.entry("DOCUMENTS", OTHER_DOCUMENT),
+                Map.entry("GENERAL", OTHER_DOCUMENT),
+                Map.entry("OTHER", OTHER_DOCUMENT),
+                Map.entry("AI_CHAT_UPLOAD", OTHER_DOCUMENT),
+                Map.entry("CHAT_ATTACHMENT", OTHER_DOCUMENT),
+                Map.entry("HEALTH_DATA_IMPORT", OTHER_DOCUMENT),
+                Map.entry("BACKUP_FILE", OTHER_DOCUMENT));
+
+        /**
+         * Resolve a raw, client-supplied category string to a canonical {@link FileCategory}.
+         * Matching is case- and separator-insensitive ({@code medical-report},
+         * {@code Medical Report} and {@code MEDICAL_REPORT} all resolve identically) and
+         * accepts both canonical names and {@link #ALIASES known aliases}.
+         *
+         * <p>A {@code null}/blank value defaults to {@link #OTHER_DOCUMENT}; any value that
+         * cannot be mapped throws so callers can surface a clear validation error.</p>
+         *
+         * @throws IllegalArgumentException if the value does not map to a known category
+         */
+        public static FileCategory fromClientValue(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return OTHER_DOCUMENT;
+            }
+            String key = raw.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+            try {
+                return FileCategory.valueOf(key);
+            } catch (IllegalArgumentException ignored) {
+                // Not a canonical name; fall through to alias resolution.
+            }
+            FileCategory mapped = ALIASES.get(key);
+            if (mapped != null) {
+                return mapped;
+            }
+            throw new IllegalArgumentException(
+                    "Invalid file category '" + raw + "'. Valid categories: " + canonicalNames());
+        }
+
+        /** @return whether this category is a hiring / onboarding intake document type. */
+        public boolean isEmploymentIntake() {
+            return EMPLOYMENT_INTAKE.contains(this);
+        }
+
+        /** @return comma-separated list of canonical category names, for error messages. */
+        public static String canonicalNames() {
+            return Arrays.stream(values()).map(Enum::name).collect(Collectors.joining(", "));
+        }
     }
     
     public enum StorageType {
