@@ -1,11 +1,12 @@
 // Tests for SosScreen from lib/features/dashboard/presentation/sosscreen.dart.
 // Pure StatelessWidget — no HTTP, no Provider.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/presentation/sosscreen.dart';
 
-Widget _wrap() => const MaterialApp(home: SosScreen());
+Widget _wrap() => const MaterialApp(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: SosScreen());
 
 void main() {
   group('SosScreen – initial render', () {
@@ -31,7 +32,7 @@ void main() {
 
     testWidgets('shows AppBar with CarConnect title', (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.text('CarConnect'), findsOneWidget);
+      expect(find.text('CareConnect'), findsOneWidget);
     });
 
     testWidgets('shows AppBar', (tester) async {

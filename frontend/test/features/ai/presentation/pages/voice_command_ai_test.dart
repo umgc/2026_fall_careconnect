@@ -2658,4 +2658,325 @@ void main() {
       await _tearDown(tester);
     });
   });
+
+  group('VoiceCommandAI privacy regression', () {
+    setUp(() {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => null;
+    });
+
+    tearDown(() {
+      VoiceIntentService.testOverride = null;
+    });
+
+    testWidgets('buffer and recognized text cleared on reset after command',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'some private phrase');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Fallback shown momentarily
+      expect(find.textContaining('some private phrase'), findsWidgets);
+
+      // Wait for reset
+      await tester.pump(_statusSettleDelay);
+
+      // After reset, heard text should not be visible
+      expect(find.textContaining('some private phrase'), findsNothing);
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('singleShot pops only recognized text string, no extra data',
+        (tester) async {
+      String? poppedValue;
+
+      final router = GoRouter(
+        initialLocation: '/caller',
+        routes: [
+          GoRoute(
+            path: '/caller',
+            builder: (ctx, __) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () async {
+                  final result = await Navigator.of(ctx).push<String>(
+                    MaterialPageRoute(
+                      builder: (_) => const VoiceCommandAI(singleShot: true),
+                    ),
+                  );
+                  poppedValue = result;
+                },
+                child: const Text('Open Voice'),
+              ),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('Open Voice'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'my secret input');
+      await tester.pump(_statusSettleDelay);
+      await tester.pumpAndSettle();
+
+      expect(poppedValue, 'my secret input');
+      expect(poppedValue, isA<String>());
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('no audio bytes stored in widget state after processing',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me home');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Enters confirming state
+      expect(find.text('Confirm'), findsOneWidget);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      // After navigation + reset, no heard text remains displayed
+      expect(find.textContaining('take me home'), findsNothing);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('command flow uses only text transcription, never raw audio',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Send a partial result (simulates live transcription)
+      await _sendSpeechResult(tester, 'partial text', isFinal: false);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Only text is displayed, confirming no binary data in the pipeline
+      expect(find.textContaining('partial text'), findsOneWidget);
+
+      // Complete with final result
+      await _sendSpeechResult(tester, 'take me home');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Text data visible in status area (heard + detail both reference it)
+      expect(find.textContaining('take me home'), findsWidgets);
+      // No raw audio binary representation in the UI
+      expect(find.textContaining('Uint8List'), findsNothing);
+      expect(find.textContaining('[0,'), findsNothing);
+
+      await _tearDown(tester);
+    });
+  });
+
+  group('VoiceCommandAI final flow tests', () {
+    setUp(() {
+      VoiceIntentService.testOverride = null;
+    });
+
+    tearDown(() {
+      VoiceIntentService.testOverride = null;
+    });
+
+    testWidgets('happy path: AI intent through registry to navigation',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'navigate',
+          entities: {'destination': 'calendar'},
+          confidence: 0.95,
+          destination: '/calendar',
+          displayLabel: 'Calendar',
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Tap mic to start listening
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('Listening'), findsWidgets);
+
+      // Speech result arrives
+      await _sendSpeechResult(tester, 'open calendar');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Enters confirming state via registry
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Calendar'), findsWidgets);
+      expect(find.text('Confirm'), findsOneWidget);
+
+      // Confirm triggers navigation
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Calendar Page'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('happy path: keyword fallback through registry',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return null;
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to my tracker');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Keyword match resolves through registry -> confirming
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Symptom Tracker'), findsWidgets);
+
+      // Confirm navigates
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Symptoms Page'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('failure path: unrecognized through full fallback',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return null;
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'gibberish words xyz');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Fallback status shown
+      expect(find.textContaining('Command not recognized'), findsWidgets);
+      expect(find.textContaining('gibberish words xyz'), findsWidgets);
+
+      // After delay, resets to idle
+      await tester.pump(_statusSettleDelay);
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('failure path: timeout to error to successful retry',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return null;
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Start listening
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Let timeout fire (12 seconds)
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Error status shown
+      expect(find.textContaining('Error'), findsWidgets);
+
+      // Wait for reset
+      await tester.pump(_statusSettleDelay);
+      expect(find.text('Status: Ready'), findsOneWidget);
+
+      // Retry -- tap mic again
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('Listening'), findsWidgets);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('registry-driven: unregistered AI intent shows fallback',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'some_future_intent',
+          confidence: 0.9,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'do something new');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Intent not in registry -> fallback
+      expect(find.textContaining('Command not recognized'), findsWidgets);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+  });
 }

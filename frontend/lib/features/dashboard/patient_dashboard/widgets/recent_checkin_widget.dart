@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/services/checkin_service.dart';
@@ -45,6 +46,7 @@ class RecentCheckInsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     
     // Update the counter each time this widget rebuilds
@@ -77,7 +79,7 @@ class RecentCheckInsWidget extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Recent Check-Ins',
+                t.recentcheckinwidget_widgetTitle,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -97,8 +99,8 @@ class RecentCheckInsWidget extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
               icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-              label: const Text(
-                'Open Check-In',
+              label: Text(
+                t.recentcheckinwidget_openCheckInButton,
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -123,7 +125,7 @@ class RecentCheckInsWidget extends StatelessWidget {
                       Text(checkIn.emoji, style: const TextStyle(fontSize: 24)),
                       const SizedBox(width: 16),
                       Text(
-                        _formatDate(checkIn.date),
+                        _formatDate(checkIn.date, t),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -133,7 +135,7 @@ class RecentCheckInsWidget extends StatelessWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          checkIn.status,
+                          _translateMood(checkIn.status, t),
                           style: const TextStyle(fontSize: 14),
                         ),
                       ),
@@ -146,21 +148,40 @@ class RecentCheckInsWidget extends StatelessWidget {
     );
   }
 
+String _translateMood(String status, AppLocalizations t){
+  switch(status){
+    case('Sad'):
+      return t.recentcheckinwidget_moodSad;
+    case('Down'):
+      return t.recentcheckinwidget_moodDown;
+    case('Okay'):
+      return t.recentcheckinwidget_moodOkay;
+    case('Happy'):
+      return t.recentcheckinwidget_moodHappy;
+    case('Great'):
+      return t.recentcheckinwidget_moodGreat;
+    case('Excellent'):
+      return t.recentcheckinwidget_moodExcellent;
+    default:
+      return status;
+  }
+}
+
   /// Formats the date into a more readable format
-  String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+  String _formatDate(DateTime date, AppLocalizations t) {
+    final months = [
+      t.recentcheckinwidget_janShort,
+      t.recentcheckinwidget_febShort,
+      t.recentcheckinwidget_marShort,
+      t.recentcheckinwidget_aprShort,
+      t.recentcheckinwidget_mayShort,
+      t.recentcheckinwidget_junShort,
+      t.recentcheckinwidget_julShort,
+      t.recentcheckinwidget_augShort,
+      t.recentcheckinwidget_sepShort,
+      t.recentcheckinwidget_octShort,
+      t.recentcheckinwidget_novShort,
+      t.recentcheckinwidget_decShort,
     ];
     return '${months[date.month - 1]} ${date.day}';
   }
