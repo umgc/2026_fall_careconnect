@@ -31,6 +31,9 @@ class CallTranscriptServiceTest {
     private CallTranscriptSegmentRepository callTranscriptSegmentRepository;
 
     @Mock
+    private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
+
+    @Mock
     private CallTranscriptArchiveService callTranscriptArchiveService;
 
     private CallTranscriptService service;
@@ -39,7 +42,7 @@ class CallTranscriptServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CallTranscriptService(callTranscriptSegmentRepository, callTranscriptArchiveService);
+        service = new CallTranscriptService(callTranscriptSegmentRepository, callTranscriptArchiveService, indexingEventEmitter);
     }
 
     private CallTranscriptSegment segment(

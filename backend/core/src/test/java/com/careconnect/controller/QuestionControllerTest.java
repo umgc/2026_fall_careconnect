@@ -220,6 +220,100 @@ class QuestionControllerTest {
     }
 
     @Nested
+    @DisplayName("POST /questions – validation")
+    class CreateValidation {
+
+        @Test
+        @WithMockUser(username = "admin@test.com")
+        @DisplayName("Returns 400 when prompt is blank")
+        void returns400WhenPromptIsBlank() throws Exception {
+            final QuestionUpsertDTO invalid = new QuestionUpsertDTO(
+                    "", QuestionType.TEXT, false, 1);
+
+            mockMvc.perform(post("/api/questions")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(invalid)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Validation failed"))
+                    .andExpect(jsonPath("$.fields[0]").value("prompt: prompt must not be blank"));
+
+            verifyNoInteractions(questionService);
+        }
+
+        @Test
+        @WithMockUser(username = "admin@test.com")
+        @DisplayName("Returns 400 when type is null")
+        void returns400WhenTypeIsNull() throws Exception {
+            final String payload = "{\"prompt\":\"How are you?\",\"type\":null,\"required\":false,\"ordinal\":1}";
+
+            mockMvc.perform(post("/api/questions")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Validation failed"));
+
+            verifyNoInteractions(questionService);
+        }
+
+        @Test
+        @WithMockUser(username = "admin@test.com")
+        @DisplayName("Returns 400 when ordinal is null")
+        void returns400WhenOrdinalIsNull() throws Exception {
+            final String payload = "{\"prompt\":\"How are you?\",\"type\":\"TEXT\",\"required\":false,\"ordinal\":null}";
+
+            mockMvc.perform(post("/api/questions")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Validation failed"));
+
+            verifyNoInteractions(questionService);
+        }
+
+        @Test
+        @WithMockUser(username = "admin@test.com")
+        @DisplayName("Returns 400 when ordinal is negative")
+        void returns400WhenOrdinalIsNegative() throws Exception {
+            final QuestionUpsertDTO invalid = new QuestionUpsertDTO(
+                    "Some question", QuestionType.TEXT, false, -1);
+
+            mockMvc.perform(post("/api/questions")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(invalid)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Validation failed"))
+                    .andExpect(jsonPath("$.fields[0]").value("ordinal: ordinal must be 0 or greater"));
+
+            verifyNoInteractions(questionService);
+        }
+    }
+
+    @Nested
+    @DisplayName("PUT /questions/{id} – validation")
+    class UpdateValidation {
+
+        @Test
+        @WithMockUser(username = "admin@test.com")
+        @DisplayName("Returns 400 when prompt is blank on update")
+        void returns400WhenPromptIsBlankOnUpdate() throws Exception {
+            final QuestionUpsertDTO invalid = new QuestionUpsertDTO(
+                    "   ", QuestionType.YES_NO, true, 0);
+
+            mockMvc.perform(put("/api/questions/1")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(invalid)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Validation failed"));
+
+            verifyNoInteractions(questionService);
+        }
+    }
+    @Nested
     @DisplayName("PATCH /questions/{id}/active")
     class SetActive {
 

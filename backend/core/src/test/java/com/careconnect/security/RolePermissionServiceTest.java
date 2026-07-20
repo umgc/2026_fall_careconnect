@@ -38,11 +38,11 @@ public class RolePermissionServiceTest {
     }
 
     @Test
-    @DisplayName("Patient should have exactly 6 permissions")
+    @DisplayName("Patient should have exactly 7 permissions")
     public void testPatientHasCorrectPermissionCount() throws Exception {
         Set<Permission> patientPerms = RolePermissionService.getPermissionsForRole(Role.PATIENT);
-        assertEquals(6, patientPerms.size(),
-            "Patient should have exactly 6 permissions");
+        assertEquals(7, patientPerms.size(),
+            "Patient should have exactly 7 permissions");
     }
 
     @Test
@@ -200,6 +200,61 @@ public class RolePermissionServiceTest {
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.EXPORT_REPORTS));
     }
 
+    // ========== Task 2.2 — PATIENT USE_AI_FEATURES (Ask AI gateway) ==========
+
+    @Test
+    @DisplayName("Task 2.2: Patient should have USE_AI_FEATURES for Ask AI")
+    public void testPatientHasUseAiFeaturesPermission() {
+        assertTrue(
+            RolePermissionService.hasPermission(Role.PATIENT, Permission.USE_AI_FEATURES),
+            "Patient must have USE_AI_FEATURES to access Ask AI on own records");
+        assertTrue(
+            RolePermissionService.getPermissionsForRole(Role.PATIENT).contains(Permission.USE_AI_FEATURES));
+    }
+
+    @Test
+    @DisplayName("Task 2.2: Patient USE_AI_FEATURES does not grant device or admin AI permissions")
+    public void testPatientUseAiFeaturesDoesNotGrantExtraAiOrDevicePermissions() {
+        assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.MANAGE_DEVICES),
+            "USE_AI_FEATURES must not imply MANAGE_DEVICES for patients");
+        assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.VIEW_ALL_PATIENTS));
+        assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.VIEW_ANALYTICS));
+    }
+
+    @Test
+    @DisplayName("Task 2.2: Admin and Caregiver retain USE_AI_FEATURES")
+    public void testAdminAndCaregiverRetainUseAiFeatures() {
+        assertTrue(RolePermissionService.hasPermission(Role.ADMIN, Permission.USE_AI_FEATURES));
+        assertTrue(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.USE_AI_FEATURES));
+    }
+
+    @Test
+    @DisplayName("Task 2.2: Family Member should NOT have USE_AI_FEATURES")
+    public void testFamilyMemberDoesNotHaveUseAiFeatures() {
+        assertFalse(
+            RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.USE_AI_FEATURES),
+            "Family members remain read-only; Ask AI for linked patients is a separate scope decision");
+    }
+
+    @Test
+    @DisplayName("Task 2.2: hasAllPermissions(PATIENT, USE_AI_FEATURES, VIEW_TASKS) is true")
+    public void testPatientHasAllPermissionsIncludingUseAiFeatures() {
+        assertTrue(RolePermissionService.hasAllPermissions(
+            Role.PATIENT,
+            Permission.USE_AI_FEATURES,
+            Permission.VIEW_TASKS,
+            Permission.VIEW_HEALTH_DATA));
+    }
+
+    @Test
+    @DisplayName("Task 2.2: hasAnyPermission finds USE_AI_FEATURES among unrelated permissions")
+    public void testHasAnyPermissionFindsPatientUseAiFeatures() {
+        assertTrue(RolePermissionService.hasAnyPermission(
+            Role.PATIENT,
+            Permission.CREATE_TASKS,
+            Permission.USE_AI_FEATURES));
+    }
+
     // ========== Specific Permission Tests - Family Member ==========
 
     @Test
@@ -294,7 +349,7 @@ public class RolePermissionServiceTest {
     public void testGetPermissionCount() throws Exception {
         assertEquals(28, RolePermissionService.getPermissionCount(Role.ADMIN));
         assertEquals(21, RolePermissionService.getPermissionCount(Role.CAREGIVER));
-        assertEquals(6, RolePermissionService.getPermissionCount(Role.PATIENT));
+        assertEquals(7, RolePermissionService.getPermissionCount(Role.PATIENT));
         assertEquals(3, RolePermissionService.getPermissionCount(Role.FAMILY_MEMBER));
     }
 
@@ -360,7 +415,7 @@ public class RolePermissionServiceTest {
         
         assertEquals(28, summary.get("Administrator"));
         assertEquals(21, summary.get("Caregiver"));
-        assertEquals(6, summary.get("Patient"));
+        assertEquals(7, summary.get("Patient"));
         assertEquals(3, summary.get("Family Member"));
     }
 

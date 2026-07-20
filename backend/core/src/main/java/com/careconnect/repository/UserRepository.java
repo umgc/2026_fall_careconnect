@@ -15,6 +15,7 @@
         Optional<User> findByEmail(String email);
         boolean existsByEmail(String email);
         Optional<User> findByEmailAndRole(String email, Role role);
+        List<User> findByRole(Role role);
         boolean existsByEmailAndRole(String email, String role);
         Optional<User> findByVerificationToken(String token);
         List<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(String name, String email);

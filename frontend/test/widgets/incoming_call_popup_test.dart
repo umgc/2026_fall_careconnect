@@ -68,7 +68,7 @@ void main() {
       expect(find.text('Caregiver'), findsOneWidget);
     });
 
-    testWidgets('shows role in "from" subtitle', (tester) async {
+    testWidgets('shows Caregiver label in "from" subtitle', (tester) async {
       await tester.pumpWidget(_popup(callerRole: 'CAREGIVER'));
       await tester.pump();
       expect(find.text('from Caregiver'), findsOneWidget);
@@ -100,6 +100,27 @@ void main() {
       await tester.pumpWidget(_popup(callId: 'abc123456789'));
       await tester.pump();
       expect(find.byType(IncomingCallPopup), findsOneWidget);
+    });
+
+    testWidgets('shows conference invite header when isConferenceInvite=true',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IncomingCallPopup(
+            callId: 'abc123456789',
+            callerId: 'user-1',
+            callerName: 'Dr. Smith',
+            isVideoCall: true,
+            callerRole: 'CAREGIVER',
+            isConferenceInvite: true,
+            onAccept: () {},
+            onDecline: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Joining Existing Call'), findsOneWidget);
+      expect(find.text('invited by Caregiver'), findsOneWidget);
     });
 
     testWidgets('shows tap hint text', (tester) async {

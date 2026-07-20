@@ -100,3 +100,19 @@ jobs:
             --environment "${{ steps.settings.outputs.deploy_environment }}" \
             --region "${{ env.AWS_REGION }}" \
             --image-tag "${{ steps.settings.outputs.image_tag }}"
+
+      - name: Print API endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          STACK_NAME="careconnect-service-${{ steps.settings.outputs.deploy_environment }}"
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --region "${{ env.AWS_REGION }}" \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+            --output text)
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Environment:** ${{ steps.settings.outputs.deploy_environment }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image Tag:** ${{ steps.settings.outputs.image_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **API Endpoint:** ${API_ENDPOINT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Health Check:** ${API_ENDPOINT}/v1/api/test/health" >> "$GITHUB_STEP_SUMMARY"

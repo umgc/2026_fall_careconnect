@@ -101,6 +101,21 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "WHERE user_id IN (SELECT id FROM users WHERE email IN ('caregiver@careconnect.com', 'sarah.mitchell@careconnect.com')) " +
             "AND city IN ('Springfield', 'Chicago')"
         );
+        applyPatch(
+            "V75 – align user_files.file_category CHECK constraint with typed category model",
+            // Recreate the constraint so the employment / home-care intake categories are
+            // accepted. Superset of the previous allow-list (legacy HIRING_DOCUMENT retained
+            // for backward compatibility), so all existing rows remain valid. Idempotent.
+            "ALTER TABLE user_files DROP CONSTRAINT IF EXISTS user_files_file_category_check;" +
+            "ALTER TABLE user_files ADD CONSTRAINT user_files_file_category_check CHECK (" +
+            "file_category IN (" +
+            "  'PROFILE_IMAGE','MEDICAL_RECORD','CLINICAL_NOTE','PRESCRIPTION','LAB_RESULT'," +
+            "  'INSURANCE_DOCUMENT','CONSENT_FORM','CARE_PLAN'," +
+            "  'EMPLOYMENT_APPLICATION','ONBOARDING_FORM','BACKGROUND_CHECK','CERTIFICATION'," +
+            "  'REFERENCE','EMPLOYMENT_CONTRACT','TAX_FORM','WORK_AUTHORIZATION','EMERGENCY_CONTACT'," +
+            "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
+            "))"
+        );
         seedDemoScheduledVisits();
     }
 
