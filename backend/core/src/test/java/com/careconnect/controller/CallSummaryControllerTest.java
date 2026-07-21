@@ -246,13 +246,14 @@ class CallSummaryControllerTest {
     @DisplayName("TC-E-SUM-009: caregiver reads on_consent summary without consent → 403")
     void getSummaryById_onConsentSummary_caregiverWithoutConsent_returns403()
             throws Exception {
-        Long patientId = 700L;
+        final Long patientId = 700L;
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOnConsentOwnedBy(OWNER_USER_ID, patientId)));
         grantHistoricalAccess();
         when(caregiverVisibilityService.getStatus(CURRENT_USER_ID, patientId))
                 .thenReturn(new CaregiverVisibilityCheck(
                         CaregiverVisibilityStatus.PENDING_REVIEW, false));
+
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
                 .andExpect(status().isForbidden());
     }
@@ -262,7 +263,7 @@ class CallSummaryControllerTest {
     @DisplayName("TC-E-SUM-009: registered caregiver whose service returns canView=true → 200")
     void getSummaryById_onConsentSummary_caregiverStatusRegisteredWithCanView_returns200()
             throws Exception {
-        Long patientId = 700L;
+        final Long patientId = 700L;
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOnConsentOwnedBy(OWNER_USER_ID, patientId)));
         grantHistoricalAccess();
@@ -271,6 +272,7 @@ class CallSummaryControllerTest {
                         CaregiverVisibilityStatus.PENDING_REVIEW, true));
         when(callSummaryService.getSummaryById(SUMMARY_ID))
                 .thenReturn(Optional.of(exampleResponse()));
+
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
                 .andExpect(status().isOk());
     }
@@ -280,7 +282,7 @@ class CallSummaryControllerTest {
     @DisplayName("TC-E-SUM-009: non-caregiver (status=NONE) with durable access bypasses gate → 200")
     void getSummaryById_onConsentSummary_nonCaregiverStatusNone_bypassesGate()
             throws Exception {
-        Long patientId = 700L;
+        final Long patientId = 700L;
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOnConsentOwnedBy(OWNER_USER_ID, patientId)));
         grantHistoricalAccess();
@@ -289,6 +291,7 @@ class CallSummaryControllerTest {
                         CaregiverVisibilityStatus.NONE, true));
         when(callSummaryService.getSummaryById(SUMMARY_ID))
                 .thenReturn(Optional.of(exampleResponse()));
+
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
                 .andExpect(status().isOk());
     }
@@ -298,7 +301,7 @@ class CallSummaryControllerTest {
     @DisplayName("TC-E-SUM-009: admin bypasses on_consent gate → 200 (even with denied consent)")
     void getSummaryById_onConsentSummary_adminBypassesGate() throws Exception {
         caregiverUser.setRole(Role.ADMIN);
-        Long patientId = 700L;
+        final Long patientId = 700L;
         when(callSummaryService.getSummaryEntityById(SUMMARY_ID))
                 .thenReturn(Optional.of(entityOnConsentOwnedBy(OWNER_USER_ID, patientId)));
         when(caregiverVisibilityService.getStatus(CURRENT_USER_ID, patientId))
@@ -306,6 +309,7 @@ class CallSummaryControllerTest {
                         CaregiverVisibilityStatus.REVOKED, false));
         when(callSummaryService.getSummaryById(SUMMARY_ID))
                 .thenReturn(Optional.of(exampleResponse()));
+
         mockMvc.perform(get("/api/v3/summaries/{id}", SUMMARY_ID))
                 .andExpect(status().isOk());
     }
