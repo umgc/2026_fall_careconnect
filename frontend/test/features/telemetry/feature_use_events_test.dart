@@ -28,9 +28,10 @@ import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import '../../mock_user_provider.dart';
 
 const _joinCredentials = <String, dynamic>{
-  'meetingId': 'meeting-1',
-  'attendeeId': 'attendee-1',
-  'joinToken': 'join-token',
+  // meetingId/attendeeId must be >= 8 chars — UI calls .substring(0, 8).
+  'meetingId': 'meeting-12345678',
+  'attendeeId': 'attendee-12345678',
+  'joinToken': 'join-token-12345678',
   'mediaPlacement': <String, dynamic>{
     'AudioHostUrl': 'https://example.com/audio',
     'AudioFallbackUrl': 'https://example.com/audio-fallback',
@@ -38,7 +39,7 @@ const _joinCredentials = <String, dynamic>{
     'TurnControlUrl': 'https://example.com/turn',
   },
   'mediaRegion': 'us-east-1',
-  'externalUserId': 'user-1',
+  'externalUserId': 'user-12345678',
 };
 
 Future<List<Map<String, dynamic>>> _runWidgetAndCaptureEvents(
