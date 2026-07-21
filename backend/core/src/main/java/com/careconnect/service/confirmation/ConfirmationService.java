@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,15 +30,26 @@ public class ConfirmationService {
             String payload,
             String referenceId,
             Long requestedBy) {
+        return createItem(sourceType, payload, referenceId, requestedBy, null);
+    }
+
+    @Transactional
+    public ConfirmationItem createItem(
+            ConfirmationSourceType sourceType,
+            String payload,
+            String referenceId,
+            Long requestedBy,
+            Long patientId) {
         var item = ConfirmationItem.builder()
                 .sourceType(sourceType)
                 .payload(payload)
                 .referenceId(referenceId)
                 .requestedBy(requestedBy)
+                .patientId(patientId)
                 .build();
         var saved = repository.save(item);
-        log.info("Confirmation item created: id={}, sourceType={}, referenceId={}, requestedBy={}",
-                saved.getId(), sourceType, referenceId, requestedBy);
+        log.info("Confirmation item created: id={}, sourceType={}, referenceId={}, requestedBy={}, patientId={}",
+                saved.getId(), sourceType, referenceId, requestedBy, patientId);
         return saved;
     }
 
@@ -47,7 +59,8 @@ public class ConfirmationService {
                 parseSourceType(req.getSourceType()),
                 req.getPayload(),
                 req.getReferenceId(),
-                req.getRequestedBy());
+                req.getRequestedBy(),
+                req.getPatientId());
     }
 
     public static ConfirmationSourceType parseSourceType(String raw) {
@@ -106,6 +119,14 @@ public class ConfirmationService {
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
+    public List<ConfirmationItemResponse> getPendingItemsForPatients(Collection<Long> patientIds) {
+        if (patientIds == null || patientIds.isEmpty()) {
+            return List.of();
+        }
+        return repository.findByStatusAndPatientIdInOrderByCreatedAtDesc(ConfirmationStatus.PENDING, patientIds)
+                .stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
     public List<ConfirmationItemResponse> getPendingItemsBySourceType(ConfirmationSourceType type) {
         return repository.findBySourceTypeAndStatusOrderByCreatedAtDesc(type, ConfirmationStatus.PENDING)
                 .stream().map(this::toResponse).collect(Collectors.toList());
@@ -130,6 +151,7 @@ public class ConfirmationService {
                 .payload(item.getPayload())
                 .referenceId(item.getReferenceId())
                 .requestedBy(item.getRequestedBy())
+                .patientId(item.getPatientId())
                 .resolvedBy(item.getResolvedBy())
                 .resolvedAt(item.getResolvedAt())
                 .resolutionNote(item.getResolutionNote())

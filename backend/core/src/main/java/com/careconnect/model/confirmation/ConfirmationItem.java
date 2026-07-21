@@ -6,7 +6,12 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-@Entity @Table(name = "confirmation_items")
+@Entity
+@Table(name = "confirmation_items", indexes = {
+        @Index(name = "idx_confirmation_items_status", columnList = "status"),
+        @Index(name = "idx_confirmation_items_source_type", columnList = "source_type"),
+        @Index(name = "idx_confirmation_items_requested_by", columnList = "requested_by")
+})
 public class ConfirmationItem {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,6 +34,9 @@ public class ConfirmationItem {
 
     @Column(name = "requested_by", nullable = false)
     private Long requestedBy;
+
+    @Column(name = "patient_id")
+    private Long patientId;
 
     @Column(name = "resolved_by")
     private Long resolvedBy;

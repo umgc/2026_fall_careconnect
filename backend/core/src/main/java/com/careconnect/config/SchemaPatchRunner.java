@@ -174,6 +174,40 @@ public class SchemaPatchRunner implements CommandLineRunner {
             applyH2VisitSummariesAndAskConfirmationTables();
             applyH2ConsentGrantsTable();
         }
+        // Confirmation items use only plain types, so they apply unconditionally on H2 and Postgres.
+        applyPatch(
+            "V300626 – create confirmation_items table",
+            "CREATE TABLE IF NOT EXISTS confirmation_items (" +
+            "  id              BIGSERIAL PRIMARY KEY," +
+            "  source_type     VARCHAR(32)  NOT NULL," +
+            "  status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING'," +
+            "  payload         TEXT         NOT NULL," +
+            "  reference_id    VARCHAR(120)," +
+            "  requested_by    BIGINT       NOT NULL," +
+            "  patient_id      BIGINT," +
+            "  resolved_by     BIGINT," +
+            "  resolved_at     TIMESTAMP," +
+            "  resolution_note VARCHAR(500)," +
+            "  version         BIGINT       NOT NULL DEFAULT 0," +
+            "  created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP," +
+            "  updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP)"
+        );
+        applyPatch(
+            "V300626d – add patient_id to confirmation_items",
+            "ALTER TABLE confirmation_items ADD COLUMN IF NOT EXISTS patient_id BIGINT"
+        );
+        applyPatch(
+            "V300626a – index confirmation_items(status)",
+            "CREATE INDEX IF NOT EXISTS idx_confirmation_items_status ON confirmation_items (status)"
+        );
+        applyPatch(
+            "V300626b – index confirmation_items(source_type)",
+            "CREATE INDEX IF NOT EXISTS idx_confirmation_items_source_type ON confirmation_items (source_type)"
+        );
+        applyPatch(
+            "V300626c – index confirmation_items(requested_by)",
+            "CREATE INDEX IF NOT EXISTS idx_confirmation_items_requested_by ON confirmation_items (requested_by)"
+        );
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
     }

@@ -65,6 +65,22 @@ class ConfirmationServiceTest {
         }
 
         @Test
+        void fourArgOverload_leavesPatientIdNull() {
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            ConfirmationItem item = service.createItem(ConfirmationSourceType.ASK_AI, PAYLOAD, REFERENCE_ID, USER_ID);
+            assertThat(item.getPatientId()).isNull();
+        }
+
+        @Test
+        void withPatientId_persistsAndMapsToResponse() {
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            ConfirmationItem item = service.createItem(
+                    ConfirmationSourceType.SUMMARY, PAYLOAD, REFERENCE_ID, USER_ID, 42L);
+            assertThat(item.getPatientId()).isEqualTo(42L);
+            assertThat(service.toResponse(item).getPatientId()).isEqualTo(42L);
+        }
+
+        @Test
         void defaultsStatusToPending() {
             when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -377,6 +393,26 @@ class ConfirmationServiceTest {
             assertThat(result.get(0).getId()).isEqualTo(1L);
             assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
             assertThat(result.get(0).getSourceType()).isEqualTo("SUMMARY");
+        }
+
+        @Test
+        void getPendingItemsForPatients_emptyIds_returnsEmptyWithoutQuery() {
+            assertThat(service.getPendingItemsForPatients(List.of())).isEmpty();
+            verify(repository, never())
+                    .findByStatusAndPatientIdInOrderByCreatedAtDesc(any(), any());
+        }
+
+        @Test
+        void getPendingItemsForPatients_scopesByPatientIds() {
+            ConfirmationItem item = buildPendingItem(1L);
+            item.setPatientId(42L);
+            when(repository.findByStatusAndPatientIdInOrderByCreatedAtDesc(
+                    ConfirmationStatus.PENDING, List.of(42L))).thenReturn(List.of(item));
+
+            List<ConfirmationItemResponse> result = service.getPendingItemsForPatients(List.of(42L));
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getPatientId()).isEqualTo(42L);
         }
 
         @Test

@@ -16,6 +16,7 @@ public class ConfirmationDtos {
         private String payload;
         private String referenceId;
         private Long requestedBy;
+        private Long patientId;
         private Long resolvedBy;
         private LocalDateTime resolvedAt;
         private String resolutionNote;
@@ -29,6 +30,7 @@ public class ConfirmationDtos {
         @NotNull private String payload;
         private String referenceId;
         @NotNull private Long requestedBy;
+        private Long patientId;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

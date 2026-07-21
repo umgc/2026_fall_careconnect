@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS confirmation_items (
     payload         TEXT         NOT NULL,
     reference_id    VARCHAR(120),
     requested_by    BIGINT       NOT NULL,
+    patient_id      BIGINT,
     resolved_by     BIGINT,
     resolved_at     TIMESTAMP,
     resolution_note VARCHAR(500),
