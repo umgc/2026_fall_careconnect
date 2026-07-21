@@ -1212,13 +1212,13 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me to calendar', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya al calendario', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Estado: Confirmar comando'), findsOneWidget);
-      expect(find.text('Escuchó: "take me to calendar"'), findsOneWidget);
+      expect(find.text('Escuchó: "vaya al calendario"'), findsOneWidget);
       expect(
-        find.text('Reconocido: "take me to calendar" — ¿abrir el Calendario?'),
+        find.text('Reconocido: "vaya al calendario" — ¿abrir el Calendario?'),
         findsOneWidget,
       );
 
@@ -1535,11 +1535,11 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya a la página de inicio', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Estado: Confirmar comando'), findsOneWidget);
-      expect(find.text('Escuchó: "take me home"'), findsOneWidget);
+      expect(find.text('Escuchó: "vaya a la página de inicio"'), findsOneWidget);
       // Should NOT have navigated yet
       expect(find.text('Dashboard Page'), findsNothing);
 
@@ -1573,7 +1573,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya a la página de inicio', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
@@ -1632,7 +1632,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me home', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya a la página de inicio', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byKey(const Key('voice_cancel_btn')));
@@ -1673,7 +1673,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       // "take me to" matches both "take me to calendar" and "take me to my tracker"
-      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya al', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Estado: Aclarar comando'), findsOneWidget);
@@ -1709,7 +1709,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya al', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('el Calendario'), findsOneWidget);
@@ -1748,7 +1748,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya al', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
@@ -1788,7 +1788,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump(const Duration(milliseconds: 200));
 
-      await _sendSpeechResult(tester, 'take me to', isFinal: true);
+      await _sendSpeechResult(tester, 'vaya al', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byKey(const Key('voice_clarify_cancel_btn')));
