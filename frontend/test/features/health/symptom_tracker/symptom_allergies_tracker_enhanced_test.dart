@@ -72,6 +72,14 @@ void main() {
     });
 
     testWidgets('shows subtitle about tracking', (tester) async {
+      // Subtitle is portrait-only; default 800x600 surface is landscape.
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
       await tester.pumpWidget(_wrapWithPatientId(null));
       await tester.pump();
       expect(

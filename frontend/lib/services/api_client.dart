@@ -99,6 +99,28 @@ class ApiClient {
   static final ApiClient instance = ApiClient._internal();
   late final Dio _dio;
 
+  /// Replace Dio's HTTP adapter so tests fail fast without real network I/O.
+  @visibleForTesting
+  void debugSetHttpClientAdapter(HttpClientAdapter adapter) {
+    _dio.httpClientAdapter = adapter;
+  }
+
+  /// Current Dio HTTP adapter (tests only — for restore after overrides).
+  @visibleForTesting
+  HttpClientAdapter get debugHttpClientAdapter => _dio.httpClientAdapter;
+
+  /// Apply very short Dio timeouts (tests only).
+  @visibleForTesting
+  void debugSetTimeouts({
+    Duration connect = const Duration(milliseconds: 50),
+    Duration receive = const Duration(milliseconds: 50),
+    Duration send = const Duration(milliseconds: 50),
+  }) {
+    _dio.options.connectTimeout = connect;
+    _dio.options.receiveTimeout = receive;
+    _dio.options.sendTimeout = send;
+  }
+
   // --------------- Public generic methods ---------------
 
   Future<T> getJson<T>(

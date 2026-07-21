@@ -17,9 +17,9 @@ runs:
     - name: Run tests
       working-directory: ./careconnect2025/backend/core
       shell: bash
-      run: mvn test --batch-mode
+      run: mvn test --batch-mode -T 1C
 
     - name: Build with Maven
       working-directory: ./careconnect2025/backend/core
       shell: bash
-      run: mvn clean install --batch-mode
+      run: mvn clean install --batch-mode -T 1C

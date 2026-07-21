@@ -29,6 +29,14 @@ on:
 env:
   FLUTTER_VERSION: '3.x'
   JAVA_VERSION: '17'
+  # Parallel test runners — keep suites moving and avoid long serial hangs.
+  FLUTTER_TEST_CONCURRENCY: '4'
+  MAVEN_TEST_THREADS: '1C'
+
+# Cancel superseded runs on the same branch/PR so CI does not pile up.
+concurrency:
+  group: team-b-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   team-b-pipeline:
@@ -95,13 +103,16 @@ jobs:
         working-directory: frontend
         continue-on-error: true
         run: |
-          flutter test --exclude-tags integration --reporter expanded 2>&1 | tail -5
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --exclude-tags integration \
+            --reporter expanded 2>&1 | tail -5
           echo "Note: pre-existing test failures are tracked — coverage gate enforces quality."
 
       - name: Maven unit tests
         working-directory: backend/core
         continue-on-error: true
-        run: mvn -B test
+        run: mvn -B -T "${MAVEN_TEST_THREADS}" test
 
       # ----------------------------------------------------------------
       # Stage 4: Coverage generation + artifact upload
@@ -109,12 +120,16 @@ jobs:
       - name: Flutter test with coverage
         working-directory: frontend
         continue-on-error: true
-        run: flutter test --coverage --exclude-tags integration
+        run: >
+          flutter test
+          --concurrency="${FLUTTER_TEST_CONCURRENCY}"
+          --coverage
+          --exclude-tags integration
 
       - name: Maven verify (JaCoCo report + check)
         working-directory: backend/core
         continue-on-error: true
-        run: mvn -B verify -DskipTests=false
+        run: mvn -B -T "${MAVEN_TEST_THREADS}" verify -DskipTests=false
 
       - name: Upload raw coverage artifacts
         uses: actions/upload-artifact@v4

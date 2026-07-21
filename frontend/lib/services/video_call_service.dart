@@ -601,9 +601,11 @@ class VideoCallService {
   Future<void> _initializeTranscriptOutbox() async {
     try {
       if (_transcriptOutbox == null) {
+        // Bound init so Hive.initFlutter / path_provider hangs (e.g. in
+        // flutter_test) cannot block joining the call forever.
         _transcriptOutbox = await EncryptedTranscriptOutbox.open(
           ownerUserId: _currentUserId!,
-        );
+        ).timeout(const Duration(seconds: 3));
         _ownsTranscriptOutbox = true;
       }
       _pendingTranscriptCount = (await _transcriptOutbox!.all()).length;

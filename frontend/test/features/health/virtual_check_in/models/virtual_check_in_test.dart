@@ -29,13 +29,22 @@ void main() {
   });
 
   group('CheckInStatus enum', () {
-    test('has completed, missed, cancelled', () {
-      expect(CheckInStatus.values,
-          containsAll([CheckInStatus.completed, CheckInStatus.missed, CheckInStatus.cancelled]));
+    test('has draft, submitted, reviewed, completed, missed, cancelled', () {
+      expect(
+        CheckInStatus.values,
+        containsAll([
+          CheckInStatus.draft,
+          CheckInStatus.submitted,
+          CheckInStatus.reviewed,
+          CheckInStatus.completed,
+          CheckInStatus.missed,
+          CheckInStatus.cancelled,
+        ]),
+      );
     });
 
-    test('has exactly 3 values', () {
-      expect(CheckInStatus.values.length, 3);
+    test('has exactly 6 values', () {
+      expect(CheckInStatus.values.length, 6);
     });
   });
 
