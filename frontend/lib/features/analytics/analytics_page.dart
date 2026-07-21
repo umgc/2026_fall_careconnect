@@ -1663,6 +1663,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               builder: (context) => SizedBox(
                 height: sheetHeight,
                 child: AIChat(
+                  key: ValueKey(
+                    'ai-chat-${AiChatMode.groundedRecords.name}-${widget.patientId}',
+                  ),
                   role: 'caregiver',
                   healthDataContext: _getHealthDataContext(),
                   isModal: true,

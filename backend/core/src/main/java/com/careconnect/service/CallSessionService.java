@@ -4,6 +4,7 @@ import com.careconnect.exception.AppException;
 import com.careconnect.model.CallParticipant;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.Patient;
+import com.careconnect.model.TerminationStep;
 import com.careconnect.model.User;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
@@ -14,10 +15,13 @@ import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 /** Owns durable call authorization, patient mapping, and lifecycle state. */
 @Service
@@ -49,6 +53,9 @@ public class CallSessionService {
     private final ScheduledVisitRepository scheduledVisitRepository;
     private final CaregiverRepository caregiverRepository;
 
+    @Value("${careconnect.call.transcript.post-call-upload-grace-seconds:120}")
+    private long transcriptUploadGraceSeconds = 120L;
+
     public record LeaveResult(
             boolean terminationOwner,
             boolean ended,
@@ -73,6 +80,27 @@ public class CallSessionService {
 
     public record TerminationClaim(
             String callId, UUID claimId, List<Long> notifyUserIds) {}
+
+    /** Snapshot of independently fenced termination step completion. */
+    public record TerminationProgress(
+            boolean sentimentDone,
+            boolean summaryDone,
+            boolean recordingDone,
+            boolean meetingDone) {
+        public boolean isDone(final TerminationStep step) {
+            return switch (step) {
+                case SENTIMENT -> sentimentDone;
+                case SUMMARY -> summaryDone;
+                case RECORDING -> recordingDone;
+                case MEETING -> meetingDone;
+                case COMPLETE -> sentimentDone && summaryDone && recordingDone && meetingDone;
+            };
+        }
+
+        public boolean allRequiredDone() {
+            return isDone(TerminationStep.COMPLETE);
+        }
+    }
 
     public CallSession createSession(
             final String callId,
@@ -202,6 +230,29 @@ public class CallSessionService {
     }
 
     /**
+     * Allows a joined historical participant to finish durable transcript retries briefly after
+     * call termination. The transcript purge fence is checked independently by the writer.
+     */
+    @Transactional(readOnly = true)
+    public CallSession requireTranscriptUploadParticipant(
+            final String callId, final Long userId) {
+        final CallSession session = requireSession(callId);
+        if (SESSION_CREATED.equals(session.getStatus())
+                || SESSION_ACTIVE.equals(session.getStatus())) {
+            return requireActiveParticipant(callId, userId);
+        }
+        requireHistoricalParticipant(callId, userId);
+        final LocalDateTime endedAt = session.getEndedAt();
+        final LocalDateTime deadline = endedAt == null
+                ? null
+                : endedAt.plusSeconds(Math.max(0L, transcriptUploadGraceSeconds));
+        if (deadline == null || LocalDateTime.now(ZoneOffset.UTC).isAfter(deadline)) {
+            throw new AppException(HttpStatus.GONE, "Transcript upload grace period has expired");
+        }
+        return session;
+    }
+
+    /**
      * Recording metadata/playback requires active participation or a durable
      * patient relationship. Administrator access is an explicit policy branch.
      */
@@ -226,7 +277,7 @@ public class CallSessionService {
         throw new AppException(HttpStatus.FORBIDDEN, "User has no durable recording access");
     }
 
-    public void recordJoin(
+    public boolean recordJoin(
             final CallSession session, final Long userId, final String chimeMeetingId) {
         final CallSession locked = callSessionRepository.findByCallIdForLifecycle(session.getCallId())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
@@ -236,6 +287,8 @@ public class CallSessionService {
                         locked.getId(), userId, PARTICIPANT_INVITED, PARTICIPANT_JOINED) != 1) {
             throw new AppException(HttpStatus.GONE, "Call is no longer joinable");
         }
+        return callSessionRepository.electRecordingStart(
+                locked.getId(), PARTICIPANT_JOINED, 2) == 1;
     }
 
     public CallParticipant addAuthorizedParticipant(
@@ -279,10 +332,88 @@ public class CallSessionService {
                 SESSION_TERMINATING,
                 claimId,
                 userId,
-                TERMINATION_LEASE_SECONDS,
+                leaseUntil(TERMINATION_LEASE_SECONDS),
                 serializeUserIds(notifyUserIds)) == 1;
         return new LeaveResult(
                 owner, false, remaining, owner ? claimId : null, owner ? notifyUserIds : List.of());
+    }
+
+    /**
+     * Renews the termination lease when {@code claimId} still owns the session.
+     *
+     * @return progress snapshot when ownership is confirmed; {@code null} when stale
+     */
+    public TerminationProgress renewTerminationOwnership(
+            final String callId, final UUID claimId) {
+        if (claimId == null) {
+            return null;
+        }
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (!SESSION_TERMINATING.equals(session.getStatus())
+                || !claimId.equals(session.getTerminationClaimId())) {
+            return null;
+        }
+        if (callSessionRepository.renewTerminationLease(
+                session.getId(),
+                SESSION_TERMINATING,
+                claimId,
+                leaseUntil(TERMINATION_LEASE_SECONDS)) != 1) {
+            return null;
+        }
+        final CallSession refreshed = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        return toProgress(refreshed);
+    }
+
+    /**
+     * Verifies claim ownership without extending the lease.
+     *
+     * @return progress when still owner; {@code null} when stale
+     */
+    public TerminationProgress verifyTerminationOwnership(
+            final String callId, final UUID claimId) {
+        if (claimId == null) {
+            return null;
+        }
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (!SESSION_TERMINATING.equals(session.getStatus())
+                || !claimId.equals(session.getTerminationClaimId())) {
+            return null;
+        }
+        return toProgress(session);
+    }
+
+    /**
+     * Token-fenced compare-and-set that records a completed termination step.
+     *
+     * @return {@code true} when this claim advanced the step
+     */
+    public boolean advanceTerminationStep(
+            final String callId, final UUID claimId, final TerminationStep step) {
+        if (claimId == null || step == null || step == TerminationStep.COMPLETE) {
+            return false;
+        }
+        final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (!SESSION_TERMINATING.equals(session.getStatus())
+                || !claimId.equals(session.getTerminationClaimId())) {
+            return false;
+        }
+        final LocalDateTime lease = leaseUntil(TERMINATION_LEASE_SECONDS);
+        final int advanced = switch (step) {
+            case SENTIMENT -> callSessionRepository.markTerminationSentiment(
+                    session.getId(), SESSION_TERMINATING, claimId, lease);
+            case SUMMARY -> callSessionRepository.markTerminationSummary(
+                    session.getId(), SESSION_TERMINATING, claimId, lease);
+            case RECORDING -> callSessionRepository.markTerminationRecording(
+                    session.getId(), SESSION_TERMINATING, claimId, lease);
+            case MEETING -> callSessionRepository.markTerminationMeeting(
+                    session.getId(), SESSION_TERMINATING, claimId, lease);
+            case COMPLETE -> 0;
+        };
+        return advanced == 1;
     }
 
     public boolean completeTermination(final String callId, final UUID claimId) {
@@ -291,6 +422,13 @@ public class CallSessionService {
         }
         final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+        if (callSessionRepository.renewTerminationLease(
+                session.getId(),
+                SESSION_TERMINATING,
+                claimId,
+                leaseUntil(TERMINATION_LEASE_SECONDS)) != 1) {
+            return false;
+        }
         final int completed = callSessionRepository.completeTermination(
                 session.getId(), SESSION_TERMINATING, SESSION_ENDED, claimId);
         if (completed != 1) {
@@ -306,21 +444,27 @@ public class CallSessionService {
         if (claimId == null) {
             return;
         }
+        recordTerminationRetry(callId, claimId, failureMessage(failure));
+    }
+
+    /** Parks a still-owned TERMINATING session for retry without clearing step progress. */
+    public void recordTerminationRetry(
+            final String callId, final UUID claimId, final String message) {
+        if (claimId == null) {
+            return;
+        }
         final CallSession session = callSessionRepository.findByCallIdForLifecycle(callId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
-        String message = failure == null ? "Unknown termination failure" : failure.getMessage();
-        if (message == null || message.isBlank()) {
-            message = failure == null ? "Unknown termination failure" : failure.getClass().getSimpleName();
-        }
-        if (message.length() > MAX_TERMINATION_ERROR_LENGTH) {
-            message = message.substring(0, MAX_TERMINATION_ERROR_LENGTH);
+        if (!SESSION_TERMINATING.equals(session.getStatus())
+                || !claimId.equals(session.getTerminationClaimId())) {
+            return;
         }
         callSessionRepository.failTermination(
                 session.getId(),
                 SESSION_TERMINATING,
                 claimId,
-                TERMINATION_RETRY_SECONDS,
-                message);
+                leaseUntil(TERMINATION_RETRY_SECONDS),
+                truncateTerminationError(message));
     }
 
     public LeaveResult claimTerminationRetry(final String callId, final Long userId) {
@@ -369,7 +513,7 @@ public class CallSessionService {
                 SESSION_TERMINATING,
                 claimId,
                 userId,
-                TERMINATION_LEASE_SECONDS,
+                leaseUntil(TERMINATION_LEASE_SECONDS),
                 serializeUserIds(notify)) == 1;
         return new DeclineResult(notify, terminationOwner, terminationOwner ? claimId : null);
     }
@@ -444,6 +588,39 @@ public class CallSessionService {
                 .toList();
     }
 
+    private TerminationProgress toProgress(final CallSession session) {
+        return new TerminationProgress(
+                session.getTerminationSentimentAt() != null,
+                session.getTerminationSummaryAt() != null,
+                session.getTerminationRecordingAt() != null,
+                session.getTerminationMeetingAt() != null);
+    }
+
+    private String failureMessage(final Throwable failure) {
+        if (failure == null) {
+            return "Unknown termination failure";
+        }
+        final String message = failure.getMessage();
+        if (message == null || message.isBlank()) {
+            return failure.getClass().getSimpleName();
+        }
+        return message;
+    }
+
+    private String truncateTerminationError(final String message) {
+        if (message == null || message.isBlank()) {
+            return "Unknown termination failure";
+        }
+        if (message.length() > MAX_TERMINATION_ERROR_LENGTH) {
+            return message.substring(0, MAX_TERMINATION_ERROR_LENGTH);
+        }
+        return message;
+    }
+
+    private static LocalDateTime leaseUntil(final long seconds) {
+        return LocalDateTime.now(ZoneOffset.UTC).plusSeconds(seconds);
+    }
+
     private LeaveResult claimExistingTermination(
             final CallSession session, final Long claimedByUserId) {
         final UUID claimId = UUID.randomUUID();
@@ -452,7 +629,7 @@ public class CallSessionService {
                 SESSION_TERMINATING,
                 claimId,
                 claimedByUserId,
-                TERMINATION_LEASE_SECONDS) == 1;
+                leaseUntil(TERMINATION_LEASE_SECONDS)) == 1;
         final List<Long> notifyUserIds =
                 deserializeUserIds(session.getTerminationNotifyUserIds());
         return new LeaveResult(

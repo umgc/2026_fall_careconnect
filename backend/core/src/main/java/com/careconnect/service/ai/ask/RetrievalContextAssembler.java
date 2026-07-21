@@ -1,9 +1,15 @@
 package com.careconnect.service.ai.ask;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.careconnect.service.ai.retrieval.RankedChunk;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,6 +47,12 @@ final class RetrievalContextAssembler {
             final List<RankedChunk> chunks,
             final int excerptChars,
             final int maxContextChars) {
+        final boolean requiresDatedEvidence =
+                TemporalQueryIntentPolicy.requiresDatedEvidence(query);
+        final List<RankedChunk> selectedChunks = requiresDatedEvidence
+                ? selectNewestDated(chunks)
+                : (chunks == null ? List.of() : chunks);
+
         final Map<String, RankedChunk> refMap = new LinkedHashMap<>();
         final Map<String, PromptExcerpt> excerptMap = new LinkedHashMap<>();
         final List<Map<String, Object>> records = new ArrayList<>();
@@ -54,15 +66,19 @@ final class RetrievalContextAssembler {
                     normalizedQuery, questionGraphemeLimit);
         }
 
-        for (final RankedChunk chunk : chunks == null ? List.<RankedChunk>of() : chunks) {
+        for (final RankedChunk chunk : selectedChunks) {
             if (chunk == null || chunk.citationRef() == null || chunk.citationRef().isBlank()) {
+                continue;
+            }
+            final Instant occurredAt = parseOccurredAt(chunk.chunkMetadata());
+            if (requiresDatedEvidence && occurredAt == null) {
                 continue;
             }
             final PromptExcerpt excerpt = excerpt(normalizedQuery, chunk.chunkText(), excerptChars);
             if (excerpt.text().isBlank()) {
                 continue;
             }
-            final Map<String, Object> record = formatRecord(chunk, excerpt);
+            final Map<String, Object> record = formatRecord(chunk, excerpt, occurredAt);
             final List<Map<String, Object>> candidateRecords = new ArrayList<>(records);
             candidateRecords.add(record);
             final String candidatePayload = serializeUserPayload(normalizedQuery, candidateRecords);
@@ -74,7 +90,95 @@ final class RetrievalContextAssembler {
             records.add(record);
         }
 
-        final String systemPrompt = """
+        final String systemPrompt = buildSystemPrompt(requiresDatedEvidence);
+
+        final String userPrompt = serializeUserPayload(normalizedQuery, records);
+
+        return new GroundedContext(
+                systemPrompt,
+                userPrompt,
+                List.copyOf(refMap.values()),
+                Collections.unmodifiableMap(new LinkedHashMap<>(refMap)),
+                Collections.unmodifiableMap(new LinkedHashMap<>(excerptMap)),
+                requiresDatedEvidence);
+    }
+
+    /**
+     * Deterministically keeps the single newest dated retrieval hit for
+     * current/latest/recent questions. Undated chunks are ineligible.
+     */
+    static List<RankedChunk> selectNewestDated(final List<RankedChunk> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        RankedChunk newest = null;
+        Instant newestAt = null;
+        for (final RankedChunk chunk : chunks) {
+            if (chunk == null) {
+                continue;
+            }
+            final Instant occurredAt = parseOccurredAt(chunk.chunkMetadata());
+            if (occurredAt == null) {
+                continue;
+            }
+            if (newestAt == null
+                    || occurredAt.isAfter(newestAt)
+                    || (occurredAt.equals(newestAt)
+                        && chunk.citationRef() != null
+                        && newest != null
+                        && newest.citationRef() != null
+                        && chunk.citationRef().compareTo(newest.citationRef()) < 0)) {
+                newest = chunk;
+                newestAt = occurredAt;
+            }
+        }
+        return newest == null ? List.of() : List.of(newest);
+    }
+
+    static Instant parseOccurredAt(final String metadataJson) {
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return null;
+        }
+        try {
+            final JsonNode node = OBJECT_MAPPER.readTree(metadataJson);
+            if (node == null || !node.isObject()) {
+                return null;
+            }
+            final String raw = firstText(node, "occurredAt", "generatedAt", "digestDate");
+            if (raw == null) {
+                return null;
+            }
+            try {
+                return Instant.parse(raw);
+            } catch (final Exception ignored) {
+                try {
+                    return OffsetDateTime.parse(raw).toInstant();
+                } catch (final Exception ignoredAgain) {
+                    try {
+                        return LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC);
+                    } catch (final Exception ignoredLocalDateTime) {
+                        try {
+                            return LocalDate.parse(raw).atStartOfDay().toInstant(ZoneOffset.UTC);
+                        } catch (final Exception ignoredDate) {
+                            return null;
+                        }
+                    }
+                }
+            }
+        } catch (final Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String buildSystemPrompt(final boolean requiresDatedEvidence) {
+        final String temporalRule = requiresDatedEvidence
+                ? """
+                The question asks for current/latest/recent information. Use only the single
+                newest dated record provided. Its occurredAt field is authoritative; do not
+                invent a more recent date or rely on undated text.
+                """.stripIndent()
+                : "";
+        return ("""
                 You are CareConnect Ask AI. Answer ONLY using the numbered patient records below.
                 Do not invent facts, medications, dates, or advice beyond those records.
                 If the records are insufficient, say so briefly.
@@ -90,23 +194,19 @@ final class RetrievalContextAssembler {
                 Do not include uncited answer text outside the claims array.
                 Citation refs must be chosen from the record labels provided (for example C1).
                 This is records-based information, not medical advice.
-                """.stripIndent().trim();
-
-        final String userPrompt = serializeUserPayload(normalizedQuery, records);
-
-        return new GroundedContext(
-                systemPrompt,
-                userPrompt,
-                List.copyOf(refMap.values()),
-                Collections.unmodifiableMap(new LinkedHashMap<>(refMap)),
-                Collections.unmodifiableMap(new LinkedHashMap<>(excerptMap)));
+                """ + temporalRule).stripIndent().trim();
     }
 
     private static Map<String, Object> formatRecord(
-            final RankedChunk chunk, final PromptExcerpt excerpt) {
+            final RankedChunk chunk,
+            final PromptExcerpt excerpt,
+            final Instant occurredAt) {
         final Map<String, Object> record = new LinkedHashMap<>();
         record.put("ref", chunk.citationRef());
         record.put("type", chunk.recordType() == null ? "UNKNOWN" : chunk.recordType().name());
+        if (occurredAt != null) {
+            record.put("occurredAt", occurredAt.toString());
+        }
         record.put("text", excerpt.text());
         record.put("truncated", excerpt.truncated());
         record.put("startTruncated", excerpt.startTruncated());
@@ -201,12 +301,31 @@ final class RetrievalContextAssembler {
         return result;
     }
 
+    private static String firstText(final JsonNode node, final String... fieldNames) {
+        for (final String fieldName : fieldNames) {
+            final JsonNode value = node.path(fieldName);
+            if (value.isTextual() && !value.asText().isBlank()) {
+                return value.asText().trim();
+            }
+        }
+        return null;
+    }
+
     record GroundedContext(
             String systemPrompt,
             String userPrompt,
             List<RankedChunk> usedChunks,
             Map<String, RankedChunk> citationRefMap,
-            Map<String, PromptExcerpt> promptExcerptMap) {
+            Map<String, PromptExcerpt> promptExcerptMap,
+            boolean requiresDatedEvidence) {
+        GroundedContext(
+                final String systemPrompt,
+                final String userPrompt,
+                final List<RankedChunk> usedChunks,
+                final Map<String, RankedChunk> citationRefMap,
+                final Map<String, PromptExcerpt> promptExcerptMap) {
+            this(systemPrompt, userPrompt, usedChunks, citationRefMap, promptExcerptMap, false);
+        }
     }
 
     record PromptExcerpt(

@@ -51,7 +51,7 @@ class CallTranscriptArchiveServiceTest {
     @Mock
     private CallTranscriptSegmentRepository segmentRepository;
 
-    @Mock
+    @Mock(lenient = true)
     private CallRecordingRepository callRecordingRepository;
 
     @Mock
@@ -62,6 +62,9 @@ class CallTranscriptArchiveServiceTest {
 
     @Mock
     private TranscriptArchiveLifecycleRepository lifecycleRepository;
+
+    @Mock
+    private DatabaseLockService databaseLockService;
 
     private CallTranscriptArchiveService service;
 
@@ -75,9 +78,9 @@ class CallTranscriptArchiveServiceTest {
         service = new CallTranscriptArchiveService(
                 archiveRepository,
                 segmentRepository,
-                callRecordingRepository,
                 objectMapper,
                 lifecycleRepository,
+                databaseLockService,
                 transactionManager);
         org.mockito.Mockito.lenient()
                 .when(lifecycleRepository.find(anyString()))
@@ -553,7 +556,7 @@ class CallTranscriptArchiveServiceTest {
 
             archiveCaptured(segments);
 
-            verify(segmentRepository, times(2)).acquireArchiveLock(CALL_ID);
+            verify(databaseLockService, times(2)).acquireCallArchiveLock(CALL_ID);
             verify(segmentRepository).deleteByCallIdAndIdIn(eq(CALL_ID), any());
         }
 
@@ -620,8 +623,8 @@ class CallTranscriptArchiveServiceTest {
         }
 
         @Test
-        @DisplayName("Uses recording S3 prefix when available")
-        void usesRecordingS3PrefixWhenAvailable() throws Exception {
+        @DisplayName("Never places immutable archives under a recording prefix")
+        void ignoresRecordingS3Prefix() throws Exception {
             when(archiveRepository.existsByCallId(CALL_ID)).thenReturn(false);
             CallRecording recording = new CallRecording();
             recording.setS3Prefix("recordings/call-abc-123/20260317_100000/");
@@ -637,7 +640,8 @@ class CallTranscriptArchiveServiceTest {
             verify(s3StorageService).upload(keyCaptor.capture(), any(byte[].class),
                     eq("application/json"));
             assertThat(keyCaptor.getValue())
-                    .startsWith("recordings/call-abc-123/20260317_100000/transcripts/");
+                    .startsWith("transcript-archives/call-abc-123/0/")
+                    .doesNotStartWith("recordings/");
         }
 
         @Test
@@ -783,6 +787,27 @@ class CallTranscriptArchiveServiceTest {
             verify(lifecycleRepository).enqueueDeletion("key2.json");
             verifyNoInteractions(s3StorageService);
             verify(archiveRepository).deleteByCallId(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("Atomic purge fences then deletes live and archive metadata under the call lock")
+        void atomicTranscriptPurgeDeletesBothMetadataSources() {
+            when(segmentRepository.deleteByCallId(CALL_ID)).thenReturn(4L);
+            when(archiveRepository.deleteByCallId(CALL_ID)).thenReturn(2L);
+            when(archiveRepository.findByCallIdOrderByArchivedAtDesc(CALL_ID))
+                    .thenReturn(List.of());
+
+            final CallTranscriptArchiveService.TranscriptPurgeResult result =
+                    service.purgeTranscriptForCall(CALL_ID);
+
+            assertThat(result.deletedSegments()).isEqualTo(4L);
+            assertThat(result.deletedArchives()).isEqualTo(2L);
+            final org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                    databaseLockService, lifecycleRepository, segmentRepository, archiveRepository);
+            order.verify(databaseLockService).acquireCallArchiveLock(CALL_ID);
+            order.verify(lifecycleRepository).markPurged(CALL_ID);
+            order.verify(segmentRepository).deleteByCallId(CALL_ID);
+            order.verify(archiveRepository).deleteByCallId(CALL_ID);
         }
 
         @Test

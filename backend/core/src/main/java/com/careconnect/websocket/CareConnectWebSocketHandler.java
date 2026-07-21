@@ -26,7 +26,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
     user.setName(userName);
     user.setEmail(userName + "@dummy.local");
     // No WebSocketSession, but store user info for monitoring
-    sessionUsers.put(userId, user);
+    identities.registerUserWithoutSession(userId, user);
     log.info("Registered user {} ({}) for undying HTTP session", userId, userName);
   }
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CareConnectWebSocketHandler.class);
@@ -43,14 +43,8 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   private final JwtTokenProvider jwtTokenProvider;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
-  // Store active connections: userId -> WebSocketSession
-  private final Map<String, WebSocketSession> userSessions = new ConcurrentHashMap<>();
-
-  // Store user info for sessions: sessionId -> User
-  private final Map<String, User> sessionUsers = new ConcurrentHashMap<>();
-
-  // Serializes identity changes so a socket cannot remain bound to two accounts.
-  private final Object authenticationLock = new Object();
+  /** Identity-fenced user↔session registry (same class as CallNotificationHandler). */
+  private final WebSocketIdentityRegistry identities = new WebSocketIdentityRegistry();
 
   // Store email verification sessions: email -> WebSocketSession
   private final Map<String, WebSocketSession> emailVerificationSessions = new ConcurrentHashMap<>();
@@ -111,6 +105,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
       }
     } catch (Exception e) {
       log.error("Error handling CareConnect WebSocket message from session {}", session.getId(), e);
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_INTERNAL, WebSocketPublicErrors.MSG_INTERNAL);
     }
   }
 
@@ -140,15 +135,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
       return;
     }
     
-    // Atomically detach any prior identity for this socket before binding the new account.
-    synchronized (authenticationLock) {
-      final User priorUser = sessionUsers.remove(session.getId());
-      if (priorUser != null) {
-        userSessions.remove(priorUser.getId().toString(), session);
-      }
-      userSessions.put(user.getId().toString(), session);
-      sessionUsers.put(session.getId(), user);
-    }
+    identities.bind(session, user);
     
     Map<String, Object> response = Map.of(
       "type", "authentication-success",
@@ -162,9 +149,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void handleSubscribeToUpdates(WebSocketSession session, Map<String, Object> payload) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_UNAUTHENTICATED, WebSocketPublicErrors.MSG_UNAUTHENTICATED);
       return;
     }
     
@@ -183,9 +170,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void handleAIChatNotification(WebSocketSession session, Map<String, Object> payload) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_UNAUTHENTICATED, WebSocketPublicErrors.MSG_UNAUTHENTICATED);
       return;
     }
     
@@ -194,7 +181,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
     String conversationId = (String) payload.get("conversationId");
     
     // Send AI chat notification to target user
-    WebSocketSession targetSession = userSessions.get(targetUserId);
+    WebSocketSession targetSession = identities.getSession(targetUserId);
     if (targetSession != null && targetSession.isOpen()) {
       Map<String, Object> notification = Map.of(
         "type", "ai-chat-response",
@@ -216,9 +203,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void handleMoodPainLogUpdate(WebSocketSession session, Map<String, Object> payload) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_UNAUTHENTICATED, WebSocketPublicErrors.MSG_UNAUTHENTICATED);
       return;
     }
     
@@ -238,9 +225,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void handleMedicationReminder(WebSocketSession session, Map<String, Object> payload) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_UNAUTHENTICATED, WebSocketPublicErrors.MSG_UNAUTHENTICATED);
       return;
     }
     
@@ -249,7 +236,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
     String reminderTime = (String) payload.get("reminderTime");
     
     // Send medication reminder to patient
-    WebSocketSession patientSession = userSessions.get(patientId);
+    WebSocketSession patientSession = identities.getSession(patientId);
     if (patientSession != null && patientSession.isOpen()) {
       Map<String, Object> reminder = Map.of(
         "type", "medication-reminder",
@@ -265,9 +252,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void handleVitalSignsAlert(WebSocketSession session, Map<String, Object> payload) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_UNAUTHENTICATED, WebSocketPublicErrors.MSG_UNAUTHENTICATED);
       return;
     }
     
@@ -290,9 +277,9 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void handleFamilyMemberRequest(WebSocketSession session, Map<String, Object> payload) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     if (user == null) {
-      sendErrorMessage(session, "User not authenticated");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_UNAUTHENTICATED, WebSocketPublicErrors.MSG_UNAUTHENTICATED);
       return;
     }
     
@@ -300,7 +287,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
     String requestType = (String) payload.get("requestType");
     
     // Notify patient about family member request
-    WebSocketSession patientSession = userSessions.get(targetPatientId);
+    WebSocketSession patientSession = identities.getSession(targetPatientId);
     if (patientSession != null && patientSession.isOpen()) {
       Map<String, Object> request = Map.of(
         "type", "family-member-request",
@@ -330,9 +317,14 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void sendErrorMessage(WebSocketSession session, String errorMessage) {
+    sendErrorMessage(session, WebSocketPublicErrors.CODE_INTERNAL, errorMessage);
+  }
+
+  private void sendErrorMessage(WebSocketSession session, String code, String errorMessage) {
     try {
       Map<String, Object> error = Map.of(
         "type", "error",
+        "code", code,
         "message", errorMessage,
         "timestamp", System.currentTimeMillis()
       );
@@ -344,13 +336,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
 
   @Override
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-    final User user;
-    synchronized (authenticationLock) {
-      user = sessionUsers.remove(session.getId());
-      if (user != null) {
-        userSessions.remove(user.getId().toString(), session);
-      }
-    }
+    final User user = identities.unbind(session);
     if (user != null) {
       log.info("CareConnect WebSocket connection closed for user: {} - Status: {}", user.getEmail(), status);
     } else {
@@ -360,14 +346,14 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
 
   @Override
   public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
-    User user = sessionUsers.get(session.getId());
+    User user = identities.getUser(session.getId());
     String userInfo = user != null ? user.getEmail() : "Unknown user";
     log.error("CareConnect WebSocket transport error for user: {} - Session: {}", userInfo, session.getId(), exception);
   }
 
   // Public method to send real-time updates from other services
   public void sendRealTimeUpdate(String userId, Map<String, Object> update) {
-    WebSocketSession session = userSessions.get(userId);
+    WebSocketSession session = identities.getSession(userId);
     if (session != null && session.isOpen()) {
       try {
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(update)));
@@ -383,7 +369,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
   // Broadcast to all connected users (admin feature)
   public void broadcastToAllUsers(Map<String, Object> message) {
     int sentCount = 0;
-    for (WebSocketSession session : userSessions.values()) {
+    for (WebSocketSession session : identities.sessions()) {
       if (session.isOpen()) {
         try {
           session.sendMessage(new TextMessage(objectMapper.writeValueAsString(message)));
@@ -398,12 +384,12 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
 
   // Get online users count
   public int getOnlineUsersCount() {
-    return userSessions.size();
+    return identities.onlineCount();
   }
 
   // Check if user is online
   public boolean isUserOnline(String userId) {
-    return userSessions.containsKey(userId) && userSessions.get(userId).isOpen();
+    return identities.isOnline(userId);
   }
 
   /**
@@ -414,7 +400,7 @@ public class CareConnectWebSocketHandler extends TextWebSocketHandler {
     String email = (String) payload.get("email");
 
     if (email == null || email.isEmpty()) {
-      sendErrorMessage(session, "Email is required for email verification subscription");
+      sendErrorMessage(session, WebSocketPublicErrors.CODE_INVALID_REQUEST, WebSocketPublicErrors.MSG_EMAIL_REQUIRED);
       return;
     }
 

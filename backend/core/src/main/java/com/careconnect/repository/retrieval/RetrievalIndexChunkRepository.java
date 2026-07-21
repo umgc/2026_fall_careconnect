@@ -30,6 +30,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
         String getSourceKind();
 
         UUID getClaimToken();
+
+        Integer getAttempts();
     }
 
     List<RetrievalIndexChunk> findByPatientId(Long patientId);
@@ -106,13 +108,6 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("recordTypes") Collection<String> recordTypes);
 
     /**
-     * Broad cleanup helper retained for tests and administrative maintenance.
-     * Production indexing must prefer patient/type-scoped deletion.
-     */
-    @Deprecated
-    void deleteBySourceRecordId(String sourceRecordId);
-
-    /**
      * Patient-scoped full-text search over {@code search_vector} (Task 4.2).
      *
      * <p>Uses {@code plainto_tsquery('english', :query)} and ranks with
@@ -136,7 +131,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND migration_status = 'ACTIVE'
                       AND search_vector @@ plainto_tsquery('english', :query)
                     ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
-                             indexed_at DESC
+                             indexed_at DESC,
+                             id ASC
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -165,7 +161,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND search_vector @@ plainto_tsquery('english', :query)
                       AND record_type IN (:recordTypes)
                     ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
-                             indexed_at DESC
+                             indexed_at DESC,
+                             id ASC
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -180,53 +177,25 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
      * Should be zero once the Task 4.2 trigger + backfill have run.
      */
     @Query(
-            value = "SELECT COUNT(*) FROM retrieval_index_chunk WHERE search_vector IS NULL",
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE search_vector IS NULL
+                      AND migration_status = 'ACTIVE'
+                    """,
             nativeQuery = true)
     long countMissingSearchVector();
 
     /**
-     * Counts chunks still missing an embedding after Task 4.3 ingest (ops / Task 4.4 backfill).
-     */
-    @Query(
-            value = "SELECT COUNT(*) FROM retrieval_index_chunk WHERE embedding IS NULL",
-            nativeQuery = true)
-    long countMissingEmbedding();
-
-    /**
-     * Counts NULL embeddings for a single source record (Task 4.3 contentHash short-circuit).
-     * Only counts embeddable rows (non-blank {@code chunk_text}) — same filter as backfill/retry.
+     * Counts ACTIVE chunks still missing an embedding after Task 4.3 ingest.
      */
     @Query(
             value = """
                     SELECT COUNT(*) FROM retrieval_index_chunk
-                    WHERE source_record_id = :sourceRecordId
-                      AND embedding IS NULL
-                      AND chunk_text IS NOT NULL
-                      AND TRIM(chunk_text) <> ''
+                    WHERE embedding IS NULL
+                      AND migration_status = 'ACTIVE'
                     """,
             nativeQuery = true)
-    long countMissingEmbeddingForSource(@Param("sourceRecordId") String sourceRecordId);
-
-    /**
-     * Loads portable columns for chunks that still need Titan embeddings (retry path).
-     * Only embeddable rows (non-blank {@code chunk_text}) — aligned with backfill batch query.
-     */
-    @Query(
-            value = """
-                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope, source_kind,
-                           citation_replay_after, citation_replay_attempts,
-                           citation_replay_claimed_until, citation_replay_claim_token,
-                           migration_status
-                    FROM retrieval_index_chunk
-                    WHERE source_record_id = :sourceRecordId
-                      AND embedding IS NULL
-                      AND chunk_text IS NOT NULL
-                      AND TRIM(chunk_text) <> ''
-                    """,
-            nativeQuery = true)
-    List<RetrievalIndexChunk> findBySourceRecordIdAndEmbeddingIsNull(
-            @Param("sourceRecordId") String sourceRecordId);
+    long countMissingEmbedding();
 
     @Query(
             value = """
@@ -235,6 +204,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
                       AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
                       AND chunk_text IS NOT NULL
                       AND TRIM(chunk_text) <> ''
                     """,
@@ -251,6 +221,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND source_record_id IN (:sourceRecordIds)
                       AND record_type IN (:recordTypes)
                       AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
                       AND chunk_text IS NOT NULL
                       AND TRIM(chunk_text) <> ''
                     """,
@@ -272,6 +243,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND source_record_id = :sourceRecordId
                       AND record_type IN (:recordTypes)
                       AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
                       AND chunk_text IS NOT NULL
                       AND TRIM(chunk_text) <> ''
                     """,
@@ -293,6 +265,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND source_record_id IN (:sourceRecordIds)
                       AND record_type IN (:recordTypes)
                       AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
                       AND chunk_text IS NOT NULL
                       AND TRIM(chunk_text) <> ''
                     """,
@@ -307,10 +280,12 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     SELECT DISTINCT
                            replay.patient_id AS "patientId",
                            replay.source_record_id AS "sourceRecordId",
-                           replay.source_kind AS "sourceKind"
+                           replay.source_kind AS "sourceKind",
+                           replay.attempts AS "attempts"
                     FROM summary_citation_replay_source replay
                     WHERE replay.source_kind = 'CALL_SUMMARY'
                       AND replay.migration_status = 'ACTIVE'
+                      AND replay.attempts < :maxAttempts
                       AND (replay.replay_after IS NULL OR replay.replay_after <= NOW())
                       AND (replay.claimed_until IS NULL OR replay.claimed_until <= NOW())
                       AND EXISTS (
@@ -367,7 +342,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     List<SummaryReplayCandidate> findStaleSummaryCitationSources(
             @Param("recordTypes") Collection<String> recordTypes,
             @Param("version") int version,
-            @Param("limit") int limit);
+            @Param("limit") int limit,
+            @Param("maxAttempts") int maxAttempts);
 
     @Transactional
     @Query(
@@ -378,6 +354,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       FROM summary_citation_replay_source replay
                       WHERE replay.source_kind = 'CALL_SUMMARY'
                         AND replay.migration_status = 'ACTIVE'
+                        AND replay.attempts < :maxAttempts
                         AND (replay.replay_after IS NULL OR replay.replay_after <= NOW())
                         AND (replay.claimed_until IS NULL OR replay.claimed_until <= NOW())
                         AND EXISTS (
@@ -435,19 +412,21 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     claimed_sources AS (
                       UPDATE summary_citation_replay_source replay
                       SET claimed_until = :claimedUntil,
-                          claim_token = :claimToken,
+                          claim_token = gen_random_uuid(),
                           updated_at = NOW()
                       FROM locked_sources candidate
                       WHERE replay.patient_id = candidate.patient_id
                         AND replay.source_kind = candidate.source_kind
                         AND replay.source_record_id = candidate.source_record_id
                       RETURNING replay.patient_id, replay.source_kind,
-                                replay.source_record_id, replay.claim_token
+                                replay.source_record_id, replay.claim_token,
+                                replay.attempts
                     )
                     SELECT claimed.patient_id AS "patientId",
                            claimed.source_record_id AS "sourceRecordId",
                            claimed.source_kind AS "sourceKind",
-                           claimed.claim_token AS "claimToken"
+                           claimed.claim_token AS "claimToken",
+                           claimed.attempts AS "attempts"
                     FROM claimed_sources claimed
                     ORDER BY claimed.patient_id, claimed.source_record_id
                     """,
@@ -457,7 +436,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("version") int version,
             @Param("limit") int limit,
             @Param("claimedUntil") java.time.OffsetDateTime claimedUntil,
-            @Param("claimToken") UUID claimToken);
+            @Param("maxAttempts") int maxAttempts);
 
     @Modifying(clearAutomatically = true)
     @Transactional
@@ -505,6 +484,52 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("sourceRecordId") String sourceRecordId,
             @Param("claimToken") UUID claimToken);
 
+    /**
+     * Extends an owned replay lease. Returns 0 when the claim token is stale.
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE summary_citation_replay_source
+                    SET claimed_until = :claimedUntil,
+                        updated_at = NOW()
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND source_kind = 'CALL_SUMMARY'
+                      AND migration_status = 'ACTIVE'
+                      AND claim_token = :claimToken
+                    """,
+            nativeQuery = true)
+    int renewSummaryCitationReplayClaim(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("claimToken") UUID claimToken,
+            @Param("claimedUntil") java.time.OffsetDateTime claimedUntil);
+
+    /**
+     * True when the caller still owns the active lease for this source.
+     */
+    @Query(
+            value = """
+                    SELECT EXISTS (
+                      SELECT 1
+                      FROM summary_citation_replay_source
+                      WHERE patient_id = :patientId
+                        AND source_record_id = :sourceRecordId
+                        AND source_kind = 'CALL_SUMMARY'
+                        AND migration_status = 'ACTIVE'
+                        AND claim_token = :claimToken
+                        AND claimed_until IS NOT NULL
+                        AND claimed_until > NOW()
+                    )
+                    """,
+            nativeQuery = true)
+    boolean hasActiveSummaryCitationReplayClaim(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("claimToken") UUID claimToken);
+
     @Modifying(clearAutomatically = true)
     @Transactional
     @Query(
@@ -512,6 +537,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     WITH fenced AS (
                       UPDATE summary_citation_replay_source
                       SET migration_status = 'QUARANTINED',
+                          quarantine_reason = :reason,
                           claimed_until = NULL,
                           claim_token = NULL,
                           updated_at = NOW()
@@ -537,7 +563,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("patientId") Long patientId,
             @Param("sourceRecordId") String sourceRecordId,
             @Param("recordTypes") Collection<String> recordTypes,
-            @Param("claimToken") UUID claimToken);
+            @Param("claimToken") UUID claimToken,
+            @Param("reason") String reason);
 
     @Modifying
     @Transactional
@@ -547,7 +574,9 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       patient_id, source_kind, source_record_id)
                     VALUES (:patientId, :sourceKind, :sourceRecordId)
                     ON CONFLICT (patient_id, source_kind, source_record_id)
-                    DO UPDATE SET migration_status = 'ACTIVE', updated_at = NOW()
+                    DO UPDATE SET migration_status = 'ACTIVE',
+                                  quarantine_reason = NULL,
+                                  updated_at = NOW()
                     """,
             nativeQuery = true)
     void registerSummaryCitationReplaySource(
@@ -578,6 +607,7 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                           AND ric.migration_status = 'QUARANTINED')
                     ON CONFLICT (patient_id, source_kind, source_record_id)
                     DO UPDATE SET migration_status = 'ACTIVE',
+                                  quarantine_reason = NULL,
                                   replay_after = NULL,
                                   claimed_until = NULL,
                                   claim_token = NULL,
@@ -630,29 +660,6 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     int quarantineLegacySummarySourceAcrossPatients(
             @Param("sourceRecordId") String sourceRecordId,
             @Param("recordTypes") Collection<String> recordTypes);
-
-    /**
-     * Administrative fail-closed cleanup for all unowned numeric summary sources.
-     * New replay code quarantines each authoritative candidate independently.
-     */
-    @Deprecated
-    @Modifying(clearAutomatically = true)
-    @Transactional
-    @Query(
-            value = """
-                    UPDATE retrieval_index_chunk
-                    SET migration_status = 'QUARANTINED'
-                    WHERE source_record_id ~ '^[0-9]+$'
-                      AND source_kind IS NULL
-                      AND record_type IN (
-                        'CALL_SUMMARY', 'VISIT_SUMMARY', 'SUMMARY_ACTION_ITEM',
-                        'SUMMARY_APPOINTMENT', 'SUMMARY_CARE_INSTRUCTION',
-                        'SUMMARY_CONDITION', 'SUMMARY_SOAP',
-                        'SUMMARY_CLINICAL_OBSERVATION')
-                      AND migration_status = 'ACTIVE'
-                    """,
-            nativeQuery = true)
-    int quarantineAmbiguousLegacySummarySources();
 
     @Query(
             value = """
@@ -731,7 +738,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND migration_status = 'ACTIVE'
                       AND embedding IS NOT NULL
                     ORDER BY embedding <=> CAST(:queryEmbedding AS vector),
-                             indexed_at DESC
+                             indexed_at DESC,
+                             id ASC
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -756,7 +764,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                       AND embedding IS NOT NULL
                       AND record_type IN (:recordTypes)
                     ORDER BY embedding <=> CAST(:queryEmbedding AS vector),
-                             indexed_at DESC
+                             indexed_at DESC,
+                             id ASC
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -775,7 +784,38 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
      */
     @Modifying(clearAutomatically = true)
     @Query(
-            value = "UPDATE retrieval_index_chunk SET embedding = CAST(:embedding AS vector) WHERE id = :id",
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET embedding = CAST(:embedding AS vector)
+                    WHERE id = :id
+                      AND migration_status = 'ACTIVE'
+                    """,
             nativeQuery = true)
-    void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
+    int updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
+
+    /**
+     * Writes an embedding only while the caller still owns the replay lease for the
+     * chunk's source. Stale owners mutate nothing.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk ric
+                    SET embedding = CAST(:embedding AS vector)
+                    FROM summary_citation_replay_source replay
+                    WHERE ric.id = :id
+                      AND ric.migration_status = 'ACTIVE'
+                      AND replay.patient_id = ric.patient_id
+                      AND replay.source_kind = ric.source_kind
+                      AND replay.source_record_id = ric.source_record_id
+                      AND replay.migration_status = 'ACTIVE'
+                      AND replay.claim_token = :claimToken
+                      AND replay.claimed_until IS NOT NULL
+                      AND replay.claimed_until > NOW()
+                    """,
+            nativeQuery = true)
+    int updateEmbeddingIfReplayClaimHeld(
+            @Param("id") UUID id,
+            @Param("embedding") String embedding,
+            @Param("claimToken") UUID claimToken);
 }

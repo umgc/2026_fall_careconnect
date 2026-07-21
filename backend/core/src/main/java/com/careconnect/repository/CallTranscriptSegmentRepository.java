@@ -7,6 +7,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface CallTranscriptSegmentRepository
         extends JpaRepository<CallTranscriptSegment, Long> {
@@ -54,14 +57,35 @@ public interface CallTranscriptSegmentRepository
     long deleteByCallId(String callId);
 
     /**
-     * Serializes archive capture and deletion for one call.
-     *
-     * @param callId call identifier
+     * Inserts one segment, ignoring only a retry of the same stable client segment id.
+     * Null ids remain supported for trusted server-produced legacy segments.
      */
+    @Modifying
     @Query(
-            value = "SELECT pg_advisory_xact_lock(hashtextextended(:callId, 0))",
+            value = """
+                    INSERT INTO call_transcript_segments (
+                      call_id, client_segment_id, speaker_label, transcript_text,
+                      start_ms, end_ms, source, actor_user_id, occurred_at,
+                      created_at, updated_at)
+                    VALUES (
+                      :callId, :clientSegmentId, :speakerLabel, :text,
+                      :startMs, :endMs, :source, :actorUserId, :occurredAt,
+                      now(), now())
+                    ON CONFLICT (call_id, client_segment_id)
+                      WHERE client_segment_id IS NOT NULL
+                    DO NOTHING
+                    """,
             nativeQuery = true)
-    void acquireArchiveLock(@Param("callId") String callId);
+    int insertIdempotent(
+            @Param("callId") String callId,
+            @Param("clientSegmentId") UUID clientSegmentId,
+            @Param("speakerLabel") String speakerLabel,
+            @Param("text") String text,
+            @Param("startMs") Long startMs,
+            @Param("endMs") Long endMs,
+            @Param("source") String source,
+            @Param("actorUserId") Long actorUserId,
+            @Param("occurredAt") LocalDateTime occurredAt);
 
     /**
      * Deletes only rows included in a successfully verified archive.

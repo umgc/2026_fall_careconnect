@@ -20,6 +20,9 @@ class ChatMessage {
   final AiAskDisclaimer? disclaimer;
   final AiAskEscalation? escalation;
   final AiAskConfirmation? confirmation;
+  final bool showRetry;
+  final String? retryQuery;
+  final String? requestIdentity;
 
   ChatMessage({
     required this.text,
@@ -30,6 +33,9 @@ class ChatMessage {
     this.disclaimer,
     this.escalation,
     this.confirmation,
+    this.showRetry = false,
+    this.retryQuery,
+    this.requestIdentity,
   });
 }
 
@@ -68,11 +74,11 @@ class AIChat extends StatefulWidget {
   const AIChat({
     super.key,
     required this.role,
+    required this.mode,
     this.healthDataContext,
     this.isModal = false,
     this.patientId,
     this.userId,
-    this.mode = AiChatMode.legacyGeneral,
   });
 
   @override
@@ -86,6 +92,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   final List<ChatMessage> _messages = [];
   final List<UploadedFile> _uploadedFiles = [];
   bool _isLoading = false;
+  // ignore: unused_field — retained for legacy history loading state transitions
   bool _isLoadingHistory = false;
   bool _isFilePickerOpen = false;
   final double _chatWidth = 320.0;
@@ -94,10 +101,22 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
   // Inactivity timer for 15-minute auto-clear
   Timer? _inactivityTimer;
+  // ignore: unused_field — updated by activity hooks for future idle diagnostics
   DateTime? _lastActivity;
 
   // Flag to track if user manually cleared the chat
+  // ignore: unused_field — retained until patient-scoped history API lands
   bool _manuallyCleared = false;
+
+  /// Incremented on clear/delete/inactivity/patient switch/dispose so late
+  /// completions cannot resurrect content or call setState after invalidate.
+  int _requestEpoch = 0;
+  Completer<void>? _activeAbort;
+  String? _retryQuery;
+  String? _retryRequestIdentity;
+  bool _retryEnabled = false;
+
+  bool get _isGrounded => widget.mode == AiChatMode.groundedRecords;
 
   @override
   void initState() {
@@ -113,31 +132,91 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     _startInactivityTimer(); // Start 15-minute inactivity timer
   }
 
-  /// Check if chat was manually cleared and load history if not
+  @override
+  void didUpdateWidget(AIChat oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.patientId != widget.patientId ||
+        oldWidget.mode != widget.mode) {
+      _resetChatForScopeChange();
+    }
+  }
+
+  /// Check if chat was manually cleared and load history if not.
+  /// Grounded mode never loads or adopts legacy conversation history.
   Future<void> _checkAndLoadHistory() async {
+    if (_isGrounded) {
+      return;
+    }
     if (widget.userId == null) return;
 
+    final epoch = _requestEpoch;
     try {
       final prefs = await SharedPreferences.getInstance();
       final clearedKey = 'chat_cleared_${widget.userId}';
       final wasCleared = prefs.getBool(clearedKey) ?? false;
 
+      if (!_isCurrentEpoch(epoch)) return;
+
       if (!wasCleared) {
         await _loadConversationHistory();
       } else {
         // Chat was manually cleared, start with empty chat
-        setState(() {
+        if (!_safeSetState(epoch, () {
           _manuallyCleared = true;
-        });
+        })) {
+          return;
+        }
       }
     } catch (e) {
+      if (!_isCurrentEpoch(epoch)) return;
       // If there's an error, just load history normally
       await _loadConversationHistory();
     }
   }
 
+  bool _isCurrentEpoch(int epoch) => mounted && epoch == _requestEpoch;
+
+  bool _safeSetState(int epoch, VoidCallback fn) {
+    if (!_isCurrentEpoch(epoch)) return false;
+    setState(fn);
+    return true;
+  }
+
+  void _invalidatePendingRequests() {
+    _requestEpoch++;
+    final abort = _activeAbort;
+    _activeAbort = null;
+    if (abort != null && !abort.isCompleted) {
+      abort.complete();
+    }
+    _clearRetryState();
+  }
+
+  void _clearRetryState() {
+    _retryQuery = null;
+    _retryRequestIdentity = null;
+    _retryEnabled = false;
+  }
+
+  void _resetChatForScopeChange() {
+    _invalidatePendingRequests();
+    _inactivityTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _messages.clear();
+      _conversationId = "";
+      _askSessionId = null;
+      _uploadedFiles.clear();
+      _isLoading = false;
+      _isLoadingHistory = false;
+      _manuallyCleared = true;
+    });
+    _startInactivityTimer();
+  }
+
   @override
   void dispose() {
+    _invalidatePendingRequests();
     _controller.dispose();
     _animationController.dispose();
     _inactivityTimer?.cancel();
@@ -164,18 +243,20 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
   /// Clear chat due to 15 minutes of inactivity
   void _clearChatDueToInactivity() {
-    if (mounted) {
-      setState(() {
-        _messages.clear();
-        _conversationId = "";
-        _askSessionId = null;
-        _messages.add(ChatMessage(
-          text: '⏰ Chat cleared due to 15 minutes of inactivity',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-      });
-    }
+    _invalidatePendingRequests();
+    if (!mounted) return;
+    setState(() {
+      _messages.clear();
+      _conversationId = "";
+      _askSessionId = null;
+      _uploadedFiles.clear();
+      _isLoading = false;
+      _messages.add(ChatMessage(
+        text: '⏰ Chat cleared due to 15 minutes of inactivity',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
   }
 
   /// Fetch retention period from backend
@@ -217,18 +298,26 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     if (confirmed == true) {
       // Store the conversation ID before clearing it
       final conversationToClear = _conversationId;
+      final shouldClearLegacyBackend =
+          !_isGrounded && conversationToClear.isNotEmpty;
+
+      _invalidatePendingRequests();
 
       // Clear all messages and start fresh
-      setState(() {
-        _messages.clear();
-        _conversationId = "";
-        _askSessionId = null;
-        _isLoadingHistory = false;
-        _manuallyCleared = true;
-      });
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+          _conversationId = "";
+          _askSessionId = null;
+          _uploadedFiles.clear();
+          _isLoading = false;
+          _isLoadingHistory = false;
+          _manuallyCleared = true;
+        });
+      }
 
-      // Store the cleared state persistently
-      if (widget.userId != null) {
+      // Store the cleared state persistently (legacy mode only)
+      if (!_isGrounded && widget.userId != null) {
         try {
           final prefs = await SharedPreferences.getInstance();
           final clearedKey = 'chat_cleared_${widget.userId}';
@@ -238,8 +327,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
       }
 
-      // Clear the conversation from the backend if it exists
-      if (conversationToClear.isNotEmpty) {
+      // Clear the conversation from the backend if it exists (legacy only)
+      if (shouldClearLegacyBackend) {
         try {
           await AIChatService.clearConversation(conversationToClear);
         } catch (e) {
@@ -431,9 +520,14 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     return buffer.toString();
   }
 
-  /// Load conversation history from the backend
+  /// Load conversation history from the backend.
+  /// Grounded mode never adopts legacy history or conversation IDs.
   Future<void> _loadConversationHistory() async {
+    if (_isGrounded) {
+      return;
+    }
     if (widget.userId == null) {
+      if (!mounted) return;
       setState(() {
         _messages.add(ChatMessage(
           text: '❌ Cannot load history: userId is null',
@@ -445,6 +539,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       return;
     }
 
+    final epoch = _requestEpoch;
     try {
       final response = await AIChatService.getConversationHistory(
         userId: widget.userId.toString(),
@@ -452,61 +547,73 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         limit: 20,
       );
 
-      if (mounted) {
-        setState(() {
-          // Clear existing messages and replace with fresh history
-          _messages.clear();
+      if (!_isCurrentEpoch(epoch)) return;
 
-          // Extract messages from response
-          final history = response['messages'] as List<dynamic>? ?? [];
+      setState(() {
+        // Clear existing messages and replace with fresh history
+        _messages.clear();
 
-          if (history.isEmpty) {
-            _messages.add(ChatMessage(
-              text: '📭 No conversation history found',
-              isUser: false,
-              timestamp: DateTime.now(),
-            ));
-          } else {
-            for (final messageData in history) {
-              // Skip system messages for security
-              if (messageData['messageType'] == 'SYSTEM') continue;
+        // Extract messages from response
+        final history = response['messages'] as List<dynamic>? ?? [];
 
-              final message = ChatMessage(
-                text: messageData['content'] ?? '',
-                isUser: messageData['messageType'] == 'USER',
-                timestamp: DateTime.tryParse(messageData['createdAt'] ?? '') ??
-                    DateTime.now(),
-              );
-              _messages.add(message);
-            }
-          }
-
-          // Update conversationId if provided
-          if (response['conversationId'] != null && _conversationId.isEmpty) {
-            _conversationId = response['conversationId'];
-          }
-
-          _isLoadingHistory = false;
-        });
-
-        // Scroll to bottom after loading
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
+        if (history.isEmpty) {
           _messages.add(ChatMessage(
-            text: '❌ Error loading history: $e',
+            text: '📭 No conversation history found',
             isUser: false,
             timestamp: DateTime.now(),
           ));
-          _isLoadingHistory = false;
-        });
-      }
+        } else {
+          for (final messageData in history) {
+            // Skip system messages for security
+            if (messageData['messageType'] == 'SYSTEM') continue;
+
+            final message = ChatMessage(
+              text: messageData['content'] ?? '',
+              isUser: messageData['messageType'] == 'USER',
+              timestamp: DateTime.tryParse(messageData['createdAt'] ?? '') ??
+                  DateTime.now(),
+            );
+            _messages.add(message);
+          }
+        }
+
+        // Update conversationId if provided
+        if (response['conversationId'] != null && _conversationId.isEmpty) {
+          _conversationId = response['conversationId'];
+        }
+
+        _isLoadingHistory = false;
+      });
+
+      // Scroll to bottom after loading
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    } catch (e) {
+      if (!_isCurrentEpoch(epoch)) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          text: '❌ Error loading history: $e',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+        _isLoadingHistory = false;
+      });
     }
   }
 
   Future<void> _pickFiles() async {
+    if (_isGrounded) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          text:
+              'File uploads are not available in grounded records mode. Start a general file-upload chat instead.',
+          isUser: false,
+          timestamp: DateTime.now(),
+          errorMessage: 'File upload requires legacy general mode',
+        ));
+      });
+      return;
+    }
     setState(() => _isFilePickerOpen = true);
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -523,7 +630,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
       }
     } finally {
-      setState(() => _isFilePickerOpen = false);
+      if (mounted) {
+        setState(() => _isFilePickerOpen = false);
+      }
     }
   }
 
@@ -631,45 +740,115 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     });
   }
 
-  void _sendMessage() async {
-    // Allow sending if there's a message OR uploaded files
-    if (_controller.text.trim().isEmpty && _uploadedFiles.isEmpty) return;
+  void _sendMessage() {
+    // Allow sending if there's a message OR (legacy) uploaded files
+    if (_controller.text.trim().isEmpty &&
+        (_isGrounded || _uploadedFiles.isEmpty)) {
+      return;
+    }
     final userMessage = _controller.text.trim();
     _controller.clear();
+    unawaited(_dispatchMessage(
+      userMessage: userMessage,
+      isRetry: false,
+    ));
+  }
 
+  void _retryGroundedAsk() {
+    if (!_retryEnabled ||
+        _retryQuery == null ||
+        _retryRequestIdentity == null ||
+        _isLoading) {
+      return;
+    }
+    unawaited(_dispatchMessage(
+      userMessage: _retryQuery!,
+      isRetry: true,
+      requestIdentity: _retryRequestIdentity,
+    ));
+  }
+
+  Future<void> _dispatchMessage({
+    required String userMessage,
+    required bool isRetry,
+    String? requestIdentity,
+  }) async {
     // Reset inactivity timer on user activity
     _resetInactivityTimer();
 
-    setState(() {
-      // Add user message (either text or file upload indication)
-      String displayMessage = userMessage.isNotEmpty
-          ? userMessage
-          : '📎 Uploaded ${_uploadedFiles.length} file${_uploadedFiles.length > 1 ? 's' : ''}';
+    final epoch = _requestEpoch;
+    final abortCompleter = Completer<void>();
+    final previousAbort = _activeAbort;
+    _activeAbort = abortCompleter;
+    if (previousAbort != null && !previousAbort.isCompleted) {
+      previousAbort.complete();
+    }
 
-      _messages.add(
-        ChatMessage(
-            text: displayMessage, isUser: true, timestamp: DateTime.now()),
-      );
+    final stableRequestIdentity = requestIdentity ??
+        (isRetry ? _retryRequestIdentity : null) ??
+        const Uuid().v4();
 
-      // Add file processing message if files are uploaded
-      if (_uploadedFiles.isNotEmpty) {
+    if (!isRetry) {
+      if (!_safeSetState(epoch, () {
+        // Add user message (either text or file upload indication)
+        String displayMessage = userMessage.isNotEmpty
+            ? userMessage
+            : '📎 Uploaded ${_uploadedFiles.length} file${_uploadedFiles.length > 1 ? 's' : ''}';
+
         _messages.add(
           ChatMessage(
-            text:
-                '📎 Analyzing ${_uploadedFiles.length} uploaded file${_uploadedFiles.length > 1 ? 's' : ''}...',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ),
+              text: displayMessage, isUser: true, timestamp: DateTime.now()),
         );
-      }
 
-      _isLoading = true;
-      _manuallyCleared =
-          false; // Reset manual clear flag when user starts new conversation
-    });
+        // Add file processing message if files are uploaded (legacy only)
+        if (!_isGrounded && _uploadedFiles.isNotEmpty) {
+          _messages.add(
+            ChatMessage(
+              text:
+                  '📎 Analyzing ${_uploadedFiles.length} uploaded file${_uploadedFiles.length > 1 ? 's' : ''}...',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+
+        _isLoading = true;
+        _manuallyCleared = false;
+        _clearRetryState();
+        if (_isGrounded) {
+          _retryQuery = userMessage;
+          _retryRequestIdentity = stableRequestIdentity;
+        }
+      })) {
+        return;
+      }
+    } else {
+      if (!_safeSetState(epoch, () {
+        _isLoading = true;
+        // Strip previous retry affordance without duplicating the user bubble.
+        for (var i = _messages.length - 1; i >= 0; i--) {
+          final msg = _messages[i];
+          if (msg.showRetry && msg.requestIdentity == stableRequestIdentity) {
+            _messages[i] = ChatMessage(
+              text: msg.text,
+              isUser: msg.isUser,
+              timestamp: msg.timestamp,
+              errorMessage: msg.errorMessage,
+              citations: msg.citations,
+              disclaimer: msg.disclaimer,
+              escalation: msg.escalation,
+              confirmation: msg.confirmation,
+            );
+            break;
+          }
+        }
+      })) {
+        return;
+      }
+    }
 
     // Clear the persistent cleared state when starting new conversation
-    if (widget.userId != null) {
+    if (!_isGrounded && widget.userId != null) {
       try {
         final prefs = await SharedPreferences.getInstance();
         final clearedKey = 'chat_cleared_${widget.userId}';
@@ -678,6 +857,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         // Failed to clear persistent state, continue anyway
       }
     }
+    if (!_isCurrentEpoch(epoch)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     try {
       final userProvider =
@@ -686,7 +866,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       // Better userId validation - avoid defaulting to 1
       final currentUserId = widget.userId ?? userProvider?.user?.id;
       if (currentUserId == null) {
-        setState(() {
+        _safeSetState(epoch, () {
           _isLoading = false;
           _messages.add(ChatMessage(
             text:
@@ -701,10 +881,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
       // Only use patientId if explicitly provided, never default to user ID
       final currentPatientId = widget.patientId;
-      if (widget.mode == AiChatMode.groundedRecords &&
-          (currentPatientId == null || currentPatientId <= 0)) {
-        setState(() {
+      if (_isGrounded && (currentPatientId == null || currentPatientId <= 0)) {
+        _safeSetState(epoch, () {
           _isLoading = false;
+          _clearRetryState();
           _messages.add(ChatMessage(
             text:
                 'Ask AI cannot access grounded records without a selected patient.',
@@ -715,10 +895,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         });
         return;
       }
-      if (widget.mode == AiChatMode.groundedRecords &&
-          _uploadedFiles.isNotEmpty) {
-        setState(() {
+      if (_isGrounded && _uploadedFiles.isNotEmpty) {
+        _safeSetState(epoch, () {
           _isLoading = false;
+          _uploadedFiles.clear();
+          _clearRetryState();
           _messages.add(ChatMessage(
             text:
                 'File uploads are not available in grounded records mode. Start a general file-upload chat instead.',
@@ -730,9 +911,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         return;
       }
 
-      // Prepare uploadedFiles for API if any
+      // Prepare uploadedFiles for API if any (legacy only)
       List<Map<String, dynamic>>? uploadedFilesJson;
-      if (_uploadedFiles.isNotEmpty) {
+      if (!_isGrounded && _uploadedFiles.isNotEmpty) {
         uploadedFilesJson = _uploadedFiles.map((file) {
           List<int>? fileBytes = file.bytes;
           if (fileBytes == null && file.path != null) {
@@ -751,8 +932,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }).toList();
       }
 
-      // Only these fields are dynamic for the request
-      final useGroundedAsk = widget.mode == AiChatMode.groundedRecords;
+      final useGroundedAsk = _isGrounded;
       if (useGroundedAsk && _conversationId.isEmpty) {
         _conversationId = const Uuid().v4();
       }
@@ -762,8 +942,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               patientId: currentPatientId!,
               sessionId: _askSessionId,
               conversationId: _conversationId,
+              abortTrigger: abortCompleter.future,
             )
           : null;
+      if (!_isCurrentEpoch(epoch)) return;
+
       final Map<String, dynamic>? response = useGroundedAsk
           ? null
           : await AIChatService.sendMessage(
@@ -781,27 +964,56 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               includeMoodPainLogs: true,
               includeAllergies: true,
             );
+      if (!_isCurrentEpoch(epoch)) return;
+
       // Better error handling - show actual error messages instead of generic "No response"
       String aiText;
       String? errorMsg;
       List<AiAskCitation> citations = const [];
+      AiAskDisclaimer? disclaimer;
+      AiAskEscalation? escalation;
+      AiAskConfirmation? confirmation;
+      var showRetry = false;
 
       if (askResult != null) {
-        _askSessionId = askResult.sessionId ?? _askSessionId;
+        if (askResult.cancelled) {
+          _safeSetState(epoch, () {
+            _isLoading = false;
+          });
+          return;
+        }
+        if (askResult.sessionId != null) {
+          _askSessionId = askResult.sessionId;
+        }
         citations = askResult.citations;
+        disclaimer = askResult.disclaimer;
+        escalation = askResult.escalation;
+        confirmation = askResult.confirmation;
         switch (askResult.deliveryStatus) {
           case AiAskDeliveryStatus.delivered:
             aiText = askResult.answer?.trim().isNotEmpty == true
                 ? askResult.answer!
                 : 'Ask AI returned no answer.';
+            _clearRetryState();
           case AiAskDeliveryStatus.noRecords:
             aiText = askResult.message ??
                 'No matching records were found for this question.';
+            _clearRetryState();
           case AiAskDeliveryStatus.withheld:
             errorMsg = askResult.error?.code ?? 'WITHHELD';
             aiText = askResult.error?.message ??
                 askResult.message ??
                 'Ask AI could not safely answer this question.';
+            showRetry = askResult.retryable &&
+                askResult.retryInput != null &&
+                _retryRequestIdentity == stableRequestIdentity;
+            if (showRetry) {
+              _retryQuery = askResult.retryInput;
+              _retryRequestIdentity = stableRequestIdentity;
+              _retryEnabled = true;
+            } else {
+              _clearRetryState();
+            }
         }
       } else if (response!['success'] == false) {
         // If backend explicitly failed, show the error message
@@ -820,9 +1032,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           errorMsg = 'Empty response received from AI service';
         }
       }
-      // Update conversationId for next request
+      // Update conversationId for next request (legacy only)
       bool isNewConversation = false;
-      if (response != null &&
+      if (!_isGrounded &&
+          response != null &&
           response['conversationId'] != null &&
           response['conversationId'] is String) {
         if (_conversationId.isEmpty) {
@@ -830,7 +1043,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
         _conversationId = response['conversationId'];
       }
-      setState(() {
+      if (!_safeSetState(epoch, () {
         _messages.add(
           ChatMessage(
             text: aiText,
@@ -838,23 +1051,29 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             timestamp: DateTime.now(),
             errorMessage: errorMsg,
             citations: citations,
-            disclaimer: askResult?.disclaimer,
-            escalation: askResult?.escalation,
-            confirmation: askResult?.confirmation,
+            disclaimer: disclaimer,
+            escalation: escalation,
+            confirmation: confirmation,
+            showRetry: showRetry,
+            retryQuery: showRetry ? _retryQuery : null,
+            requestIdentity: showRetry ? stableRequestIdentity : null,
           ),
         );
         _isLoading = false;
         // Clear uploaded files after successful processing
         _uploadedFiles.clear();
-      });
+      })) {
+        return;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
-      // If this was a new conversation, load any existing history
-      if (isNewConversation) {
+      // If this was a new conversation, load any existing history (legacy only)
+      if (!_isGrounded && isNewConversation) {
         await _loadConversationHistory();
       }
     } catch (e) {
-      setState(() {
+      if (!_isCurrentEpoch(epoch)) return;
+      _safeSetState(epoch, () {
         _messages.add(
           ChatMessage(
             text: 'Sorry, I encountered an error: $e',
@@ -865,6 +1084,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         _isLoading = false;
         // Clear uploaded files even on error to prevent confusion
         _uploadedFiles.clear();
+        _clearRetryState();
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
@@ -1135,6 +1355,18 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                               ),
                             ),
                           ],
+                          if (msg.showRetry &&
+                              msg.retryQuery != null &&
+                              _retryEnabled &&
+                              msg.requestIdentity == _retryRequestIdentity) ...[
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              key: const Key('ask-ai-retry'),
+                              onPressed: _isLoading ? null : _retryGroundedAsk,
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Retry'),
+                            ),
+                          ],
                           Text(
                             _formatTimestamp(msg.timestamp),
                             style: theme.textTheme.labelSmall?.copyWith(
@@ -1148,8 +1380,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                 },
               ),
             ),
-            // File preview (if any files uploaded)
-            if (_uploadedFiles.isNotEmpty)
+            // File preview (if any files uploaded) — never in grounded mode
+            if (!_isGrounded && _uploadedFiles.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 8, bottom: 4),
                 padding: const EdgeInsets.all(8),
@@ -1231,18 +1463,21 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             // Input row
             Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.attach_file, color: colorScheme.primary),
-                  onPressed: _isFilePickerOpen ? null : _pickFiles,
-                  tooltip: 'Attach file',
-                ),
+                if (!_isGrounded)
+                  IconButton(
+                    icon: Icon(Icons.attach_file, color: colorScheme.primary),
+                    onPressed: _isFilePickerOpen ? null : _pickFiles,
+                    tooltip: 'Attach file',
+                  ),
                 Expanded(
                   child: TextField(
                     controller: _controller,
                     minLines: 1,
                     maxLines: 4,
                     decoration: InputDecoration(
-                      hintText: 'Type your message...',
+                      hintText: _isGrounded
+                          ? 'Ask about this patient\'s records...'
+                          : 'Type your message...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(

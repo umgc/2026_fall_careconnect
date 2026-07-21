@@ -31,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -180,10 +181,9 @@ public class CallController {
     final CallSession callSession = callSessionService.requireJoinAuthorized(
         callId, currentUser.getId());
     try {
-      final boolean meetingAlreadyActive = chimeService.isMeetingActive(callId);
       final Map<String, Object> response = chimeService.joinMeeting(callId, currentUser.getId().toString(),
           currentUser.getRole().name(), getCallUserDisplayName(currentUser));
-      callSessionService.recordJoin(
+      final boolean recordingStartOwner = callSessionService.recordJoin(
           callSession,
           currentUser.getId(),
           response.get("meetingId") == null ? null : response.get("meetingId").toString());
@@ -200,13 +200,13 @@ public class CallController {
       if (log.isInfoEnabled()) {
         log.info("User {} joined call {}", currentUser.getId(), callId);
       }
-      // Auto-start a system-initiated recording when the 2nd participant joins.
-      // The recording will be transcribed and deleted from S3 after the call ends.
-      if (meetingAlreadyActive
+      // Exactly one join transaction wins this durable threshold election across all nodes.
+      if (recordingStartOwner
           && environment.getProperty(
               "careconnect.recording.system-transcription-enabled", Boolean.class, false)) {
         try {
-          final Map<String, Object> recording = callRecordingService.startRecording(callId, null);
+          final Map<String, Object> recording =
+              callRecordingService.startRecordingTyped(callId, null, true).toMap();
           notifyRecordingState(callId, recording);
         } catch (Exception e) {
           if (log.isWarnEnabled()) {
@@ -910,7 +910,7 @@ public class CallController {
       throw new AppException(HttpStatus.BAD_REQUEST, "Invalid callId");
     }
     final User currentUser = getCurrentUser();
-    callSessionService.requireActiveParticipant(callId, currentUser.getId());
+    callSessionService.requireTranscriptUploadParticipant(callId, currentUser.getId());
     final List<CallTranscriptService.TranscriptSegmentInput> segments = extractTranscriptSegments(body);
     if (segments.size() > MAX_TRANSCRIPT_SEGMENTS) {
       throw new AppException(HttpStatus.BAD_REQUEST, "Too many transcript segments in one request");
@@ -1346,6 +1346,7 @@ public class CallController {
 
     segments.add(
         new CallTranscriptService.TranscriptSegmentInput(
+            requireClientSegmentId(body.get("clientSegmentId")),
             asString(body.get("speakerLabel")),
             asString(body.get("text")),
             asLong(body.get("startMs")),
@@ -1356,11 +1357,29 @@ public class CallController {
 
   private CallTranscriptService.TranscriptSegmentInput toTranscriptInput(Map<?, ?> rawSegment) {
     return new CallTranscriptService.TranscriptSegmentInput(
+        requireClientSegmentId(rawSegment.get("clientSegmentId")),
         asString(rawSegment.get("speakerLabel")),
         asString(rawSegment.get("text")),
         asLong(rawSegment.get("startMs")),
         asLong(rawSegment.get("endMs")),
         asString(rawSegment.get("source")));
+  }
+
+  private UUID requireClientSegmentId(final Object value) {
+    final String text = asString(value);
+    if (text == null) {
+      throw new AppException(HttpStatus.BAD_REQUEST, "clientSegmentId is required");
+    }
+    try {
+      final UUID parsed = UUID.fromString(text);
+      if (!parsed.toString().equalsIgnoreCase(text)) {
+        throw new IllegalArgumentException("Non-canonical UUID");
+      }
+      return parsed;
+    } catch (IllegalArgumentException ex) {
+      throw new AppException(
+          HttpStatus.BAD_REQUEST, "clientSegmentId must be a canonical UUID");
+    }
   }
 
   private String asString(Object value) {
@@ -1413,10 +1432,16 @@ public class CallController {
 
   @PostMapping("/{callId}/recording/start")
   @Operation(summary = "Start recording a call via AWS Chime Media Capture Pipeline")
-  public ResponseEntity<Map<String, Object>> startRecording(@PathVariable String callId) {
+  public ResponseEntity<Map<String, Object>> startRecording(
+      @PathVariable String callId,
+      @RequestParam(name = "consent", defaultValue = "false") boolean consent) {
     User currentUser = getCurrentUser();
     callSessionService.requireActiveParticipant(callId, currentUser.getId());
-    Map<String, Object> result = callRecordingService.startRecording(callId, currentUser.getId());
+    final com.careconnect.service.RecordingStartResult typedResult =
+        callRecordingService.startRecordingTyped(callId, currentUser.getId(), consent);
+    Map<String, Object> result = typedResult == null
+        ? callRecordingService.startRecording(callId, currentUser.getId())
+        : typedResult.toMap();
     notifyRecordingState(callId, result);
     callTelemetryService.recordCallEvent(
         callId,
@@ -1431,11 +1456,32 @@ public class CallController {
     return ResponseEntity.ok(result);
   }
 
+  /** Source-compatible entry point for direct callers predating the consent parameter. */
+  public ResponseEntity<Map<String, Object>> startRecording(final String callId) {
+    final User currentUser = getCurrentUser();
+    callSessionService.requireActiveParticipant(callId, currentUser.getId());
+    final Map<String, Object> result =
+        callRecordingService.startRecording(callId, currentUser.getId());
+    notifyRecordingState(callId, result);
+    return ResponseEntity.ok(result);
+  }
+
   @PostMapping("/{callId}/recording/stop")
   @Operation(summary = "Stop the active recording pipeline for a call")
   public ResponseEntity<Map<String, Object>> stopRecording(@PathVariable String callId) {
     User currentUser = getCurrentUser();
     callSessionService.requireActiveParticipant(callId, currentUser.getId());
+    final Map<String, Object> current = callRecordingService.getRecordingStatus(callId);
+    final Object owner = current == null ? null : current.get("ownerUserId");
+    final boolean hasRecording = current != null
+        && current.get("status") != null
+        && !"NO_RECORDING".equals(String.valueOf(current.get("status")));
+    if (currentUser.getRole() != Role.ADMIN
+        && hasRecording
+        && (owner == null || !currentUser.getId().toString().equals(owner.toString()))) {
+      throw new AppException(
+          HttpStatus.FORBIDDEN, "Only the recording owner or an administrator may stop it");
+    }
     Map<String, Object> result = callRecordingService.stopRecording(callId);
     notifyRecordingState(callId, result);
     callTelemetryService.recordCallEvent(
