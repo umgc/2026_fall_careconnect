@@ -44,7 +44,12 @@ void main() {
     test('returns Spanish label for es locale', () async {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(LanguagePicker.labelFor(const Locale('es'), l10n),
-          contains('Spanish'));
+          'Español (Spanish)');
+    });
+
+    test('returns Spanish-localized Spanish label for es locale', () async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('es'));
+      expect(LanguagePicker.labelFor(const Locale('es'), l10n), 'Español');
     });
 
     test('returns French label for fr locale', () async {
@@ -135,6 +140,8 @@ void main() {
     testWidgets(
         'TC-S4-REG-L10N-002 selecting Spanish updates and persists locale',
         (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final spanishLabel = LanguagePicker.labelFor(const Locale('es'), l10n);
       final localeProvider = LocaleProvider();
       await tester.pumpWidget(
         ChangeNotifierProvider<LocaleProvider>.value(
@@ -155,9 +162,13 @@ void main() {
 
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -400));
-      await tester.pumpAndSettle();
-      await tester.tap(find.textContaining('Spanish'));
+      await tester.scrollUntilVisible(
+        find.text(spanishLabel),
+        100,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text(spanishLabel), findsOneWidget);
+      await tester.tap(find.text(spanishLabel));
       await tester.pumpAndSettle();
 
       expect(localeProvider.locale, const Locale('es'));
@@ -241,73 +252,73 @@ void main() {
     }
 
     testWidgets('TC-S4-REG-RESP-003 mobile landscape sheet stays in viewport',
-            (tester) async {
-          tester.view.physicalSize = const Size(800, 360);
-          tester.view.devicePixelRatio = 1.0;
-          addTearDown(tester.view.reset);
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 360);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-          await openPicker(tester);
+      await openPicker(tester);
 
-          final listRect = tester.getRect(find.byType(ListView));
-          expect(listRect.left, greaterThanOrEqualTo(0));
-          expect(listRect.right, lessThanOrEqualTo(800));
-          expect(listRect.top, greaterThanOrEqualTo(0));
-          expect(listRect.bottom, lessThanOrEqualTo(360));
-          expect(tester.takeException(), isNull);
-        });
+      final listRect = tester.getRect(find.byType(ListView));
+      expect(listRect.left, greaterThanOrEqualTo(0));
+      expect(listRect.right, lessThanOrEqualTo(800));
+      expect(listRect.top, greaterThanOrEqualTo(0));
+      expect(listRect.bottom, lessThanOrEqualTo(360));
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('mobile-landscape: can scroll to the last locale',
-            (tester) async {
-          // The core requirement: every language stays reachable on a short
-          // landscape screen where only a few rows fit at once.
-          tester.view.physicalSize = const Size(800, 360);
-          tester.view.devicePixelRatio = 1.0;
-          addTearDown(tester.view.reset);
+        (tester) async {
+      // The core requirement: every language stays reachable on a short
+      // landscape screen where only a few rows fit at once.
+      tester.view.physicalSize = const Size(800, 360);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-          await openPicker(tester);
+      await openPicker(tester);
 
-          final lastLocale = AppLocalizations.supportedLocales.last;
-          final context = tester.element(find.byType(ListView));
-          final lastLabel = LanguagePicker.labelFor(
-            lastLocale,
-            AppLocalizations.of(context)!,
-          );
+      final lastLocale = AppLocalizations.supportedLocales.last;
+      final context = tester.element(find.byType(ListView));
+      final lastLabel = LanguagePicker.labelFor(
+        lastLocale,
+        AppLocalizations.of(context)!,
+      );
 
-          // Off-screen initially on a short sheet; scroll to reveal it.
-          await tester.scrollUntilVisible(
-            find.text(lastLabel),
-            200,
-            scrollable: find.byType(Scrollable).last,
-          );
-          expect(find.text(lastLabel), findsOneWidget);
-        });
+      // Off-screen initially on a short sheet; scroll to reveal it.
+      await tester.scrollUntilVisible(
+        find.text(lastLabel),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text(lastLabel), findsOneWidget);
+    });
 
     testWidgets('tablet width: sheet remains bounded and usable',
-            (tester) async {
-          tester.view.physicalSize = const Size(1000, 800);
-          tester.view.devicePixelRatio = 1.0;
-          addTearDown(tester.view.reset);
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-          await openPicker(tester);
+      await openPicker(tester);
 
-          final listRect = tester.getRect(find.byType(ListView));
-          expect(listRect.left, greaterThanOrEqualTo(0));
-          expect(listRect.right, lessThanOrEqualTo(1000));
-          expect(tester.takeException(), isNull);
-        });
+      final listRect = tester.getRect(find.byType(ListView));
+      expect(listRect.left, greaterThanOrEqualTo(0));
+      expect(listRect.right, lessThanOrEqualTo(1000));
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('narrow width: sheet remains bounded and usable',
-            (tester) async {
-          tester.view.physicalSize = const Size(400, 800);
-          tester.view.devicePixelRatio = 1.0;
-          addTearDown(tester.view.reset);
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-          await openPicker(tester);
+      await openPicker(tester);
 
-          final listRect = tester.getRect(find.byType(ListView));
-          expect(listRect.left, greaterThanOrEqualTo(0));
-          expect(listRect.right, lessThanOrEqualTo(400));
-          expect(tester.takeException(), isNull);
-        });
+      final listRect = tester.getRect(find.byType(ListView));
+      expect(listRect.left, greaterThanOrEqualTo(0));
+      expect(listRect.right, lessThanOrEqualTo(400));
+      expect(tester.takeException(), isNull);
+    });
   });
 }
