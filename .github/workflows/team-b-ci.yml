@@ -29,9 +29,8 @@ on:
 env:
   FLUTTER_VERSION: '3.x'
   JAVA_VERSION: '17'
-  # Parallel test runners — keep suites moving and avoid long serial hangs.
+  # Parallel Flutter test runners — matches local full-suite verification.
   FLUTTER_TEST_CONCURRENCY: '4'
-  MAVEN_TEST_THREADS: '1C'
 
 # Cancel superseded runs on the same branch/PR so CI does not pile up.
 concurrency:
@@ -112,7 +111,7 @@ jobs:
       - name: Maven unit tests
         working-directory: backend/core
         continue-on-error: true
-        run: mvn -B -T "${MAVEN_TEST_THREADS}" test
+        run: mvn -B test
 
       # ----------------------------------------------------------------
       # Stage 4: Coverage generation + artifact upload
@@ -129,7 +128,7 @@ jobs:
       - name: Maven verify (JaCoCo report + check)
         working-directory: backend/core
         continue-on-error: true
-        run: mvn -B -T "${MAVEN_TEST_THREADS}" verify -DskipTests=false
+        run: mvn -B verify -DskipTests=false
 
       - name: Upload raw coverage artifacts
         uses: actions/upload-artifact@v4
