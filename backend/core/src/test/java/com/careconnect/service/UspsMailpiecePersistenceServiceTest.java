@@ -29,6 +29,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +61,8 @@ class UspsMailpiecePersistenceServiceTest {
                 mailpieceRepository,
                 new MailpieceNormalizer(),
                 classifier,
-                indexingEventEmitter);
+                new UspsMailpieceAtomicPersistenceService(
+                        mailpieceRepository, indexingEventEmitter));
     }
 
     @Test
@@ -103,6 +105,8 @@ class UspsMailpiecePersistenceServiceTest {
         final int upserted = service.persistAndIndex("7", digestWithOnePiece());
 
         assertThat(upserted).isEqualTo(1);
+        verify(mailpieceRepository).acquirePersistenceLock(
+                "usps-mailpiece:42:2025-03-03|m-1");
         final ArgumentCaptor<MailpieceIndexedPayload> payloadCaptor =
                 ArgumentCaptor.forClass(MailpieceIndexedPayload.class);
         verify(indexingEventEmitter).emitMailpieceIndexed(payloadCaptor.capture());
@@ -141,8 +145,26 @@ class UspsMailpiecePersistenceServiceTest {
         when(mailpieceRepository.save(any(UspsMailpiece.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(service.persistAndIndex("7", digest)).isEqualTo(1);
+        verify(mailpieceRepository).acquirePersistenceLock(
+                "usps-mailpiece:42:" + normalized.sourceKey());
         verify(indexingEventEmitter, never()).emitMailpieceIndexed(any());
         verify(mailpieceRepository, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("remote classification orchestration is outside the atomic DB transaction")
+    void transactionBoundary_classificationOutsideAtomicPersistence() throws Exception {
+        assertThat(UspsMailpiecePersistenceService.class
+                .getMethod("persistAndIndex", String.class, USPSDigest.class)
+                .getAnnotation(Transactional.class)).isNull();
+        assertThat(UspsMailpieceAtomicPersistenceService.class
+                .getMethod(
+                        "persist",
+                        Long.class,
+                        String.class,
+                        MailpieceNormalizer.NormalizedMailpiece.class,
+                        com.careconnect.service.mail.MailpieceImportanceResult.class)
+                .getAnnotation(Transactional.class)).isNotNull();
     }
 
     private static USPSDigest digestWithOnePiece() {

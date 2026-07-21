@@ -335,9 +335,9 @@ class AnalyticsControllerTest {
 
             final ResponseEntity<?> response = controller.vitals(PATIENT_ID, 7);
 
-            // Controller catches generic exceptions and returns 200 with empty list
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(bodyValue(response, "message")).isEqualTo("No vitals data available");
+            // Controller catches generic exceptions and returns 500
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(bodyValue(response, "error")).isEqualTo("Failed to retrieve vitals data");
         }
     }
 

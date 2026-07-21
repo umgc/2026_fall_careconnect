@@ -214,7 +214,8 @@ void main() {
           await openPicker(tester);
 
           final lastLocale = AppLocalizations.supportedLocales.last;
-          final lastLabel = LanguagePicker.labelFor(lastLocale);
+          final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+          final lastLabel = LanguagePicker.labelFor(lastLocale, l10n);
 
           // Off-screen initially on a short sheet; scroll to reveal it.
           await tester.scrollUntilVisible(

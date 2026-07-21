@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -43,10 +44,11 @@ public class PermissionAspect {
         log.debug("Checking permission {} for user {}", requirePermission.value(), userEmail);
         
         User currentUser = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userEmail));
+                .orElseThrow(() -> new UnauthorizedException("Authenticated user could not be resolved"));
         
-        // This will throw UnauthorizedException if permission is denied
-        authorizationService.requirePermission(currentUser, requirePermission.value());
+        if (!authorizationService.hasPermission(currentUser, requirePermission.value())) {
+            throw new AccessDeniedException("Required permission is not granted");
+        }
         
         log.debug("Permission {} granted for user {}", requirePermission.value(), userEmail);
     }

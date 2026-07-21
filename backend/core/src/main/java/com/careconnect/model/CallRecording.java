@@ -2,6 +2,8 @@ package com.careconnect.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -12,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -77,9 +80,34 @@ public class CallRecording extends Auditable {
     @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
     private String callId;
 
+    /** Monotonic capture generation within a call. */
+    @Column(name = "generation", nullable = false)
+    private long generation;
+
+    /** Whether the capture is retained for playback or only for transcription. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose", nullable = false, length = 32)
+    private RecordingPurpose purpose;
+
+    /** Authoritative lifecycle state used for cross-node ownership. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_status", nullable = false, length = 32)
+    private RecordingLifecycleStatus lifecycleStatus;
+
+    /** Token fencing the current worker claim. */
+    @Column(name = "claim_token")
+    private UUID claimToken;
+
+    @Column(name = "claim_lease_until")
+    private LocalDateTime claimLeaseUntil;
+
     /** AWS Chime media pipeline identifier used to stop the pipeline. */
     @Column(name = "pipeline_id", length = STANDARD_ID_LENGTH)
     private String pipelineId;
+
+    /** Explicit AWS identifier; pipelineId remains as a compatibility alias. */
+    @Column(name = "aws_pipeline_id", length = STANDARD_ID_LENGTH)
+    private String awsPipelineId;
 
     /** AWS Chime concatenation pipeline identifier for stitched output. */
     @Column(name = "concatenation_pipeline_id", length = STANDARD_ID_LENGTH)
@@ -108,6 +136,15 @@ public class CallRecording extends Auditable {
     @Column(name = "initiated_by_user_id")
     private Long initiatedByUserId;
 
+    @Column(name = "owner_user_id")
+    private Long ownerUserId;
+
+    @Column(name = "consented_at")
+    private LocalDateTime consentedAt;
+
+    @Column(name = "consented_by_user_id")
+    private Long consentedByUserId;
+
     /** Timestamp when recording started. */
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
@@ -123,6 +160,22 @@ public class CallRecording extends Auditable {
     /** Error details captured while managing the recording. */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
+    @Column(name = "last_error", columnDefinition = "TEXT")
+    private String lastError;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purge_state", nullable = false, length = 24)
+    private RecordingPurgeState purgeState;
+
+    @Column(name = "purge_requested_at")
+    private LocalDateTime purgeRequestedAt;
 
     /** Post-call transcription lifecycle status value. */
     @Column(name = "transcription_status", length = TRANSCRIPTION_STATUS_LENGTH)
