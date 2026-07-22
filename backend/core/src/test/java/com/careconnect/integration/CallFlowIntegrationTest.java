@@ -1,18 +1,19 @@
 package com.careconnect.integration;
 
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallAttendee;
 import com.careconnect.model.CallParticipant;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.FamilyMemberLink;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
+import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallTelemetryEventRepository;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.FamilyMemberLinkRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.security.Role;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,6 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.MediaPlacement;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Meeting;
-import software.amazon.awssdk.services.chimesdkmeetings.model.NotFoundException;
 import software.amazon.awssdk.services.chimesdkmediapipelines.ChimeSdkMediaPipelinesClient;
 import com.careconnect.service.ChimeService;
 import com.careconnect.service.OpenRouterService;
@@ -60,7 +60,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -202,6 +201,9 @@ class CallFlowIntegrationTest {
     private CallTelemetryEventRepository callTelemetryEventRepository;
 
     @Autowired
+    private CallAttendeeRepository callAttendeeRepository;
+
+    @Autowired
     private FamilyMemberLinkRepository familyMemberLinkRepository;
 
     @Autowired
@@ -232,6 +234,7 @@ class CallFlowIntegrationTest {
     void setUp() {
         // Clean telemetry between tests
         callTelemetryEventRepository.deleteAll();
+        callAttendeeRepository.deleteAll();
 
         // Ensure test users exist (idempotent)
         patientUser = userRepository.findByEmail("patient@integration.test")
@@ -383,6 +386,25 @@ class CallFlowIntegrationTest {
             assertThat(events).isNotEmpty();
             assertThat(events).anyMatch(e -> "CALL_JOIN".equals(e.getEventType()));
             assertThat(events).anyMatch(e -> "SUCCESS".equals(e.getStatus()));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-011: POST /join persists call_attendees row in database")
+        void joinCall_persistsCallAttendeeRow() throws Exception {
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", CALL_ID)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            final List<CallAttendee> attendees = callAttendeeRepository.findByCallId(CALL_ID);
+            assertThat(attendees).hasSize(1);
+            assertThat(attendees.get(0).getUserId()).isEqualTo(caregiverUser.getId());
+            assertThat(attendees.get(0).getRole()).isEqualTo("CAREGIVER");
+            assertThat(attendees.get(0).getChimeAttendeeId()).isNotBlank();
+            assertThat(attendees.get(0).getJoinedAt()).isNotNull();
+            assertThat(attendees.get(0).getLeftAt()).isNull();
         }
 
         @Test

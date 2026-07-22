@@ -113,6 +113,10 @@ public class CallRecording extends Auditable {
     @Column(name = "concatenation_pipeline_id", length = STANDARD_ID_LENGTH)
     private String concatenationPipelineId;
 
+    /** AWS Kinesis Video Streams / Media Insights pipeline identifier for per-attendee capture. */
+    @Column(name = "kvs_pipeline_id", length = STANDARD_ID_LENGTH)
+    private String kvsPipelineId;
+
     /** S3 bucket where recording artifacts are written. */
     @Column(name = "s3_bucket", length = STANDARD_ID_LENGTH)
     private String s3Bucket;
