@@ -5,9 +5,14 @@ import com.careconnect.dto.VitalSampleDTO;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.model.VitalSample;
+import com.careconnect.model.CaregiverPatientLink;
+import com.careconnect.model.FamilyMemberLink;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.VitalSampleRepository;
 import com.careconnect.repository.WearableMetricRepository;
+import com.careconnect.repository.PatientCaregiverRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.repository.VitalAlertEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,15 +21,16 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,9 +46,16 @@ class VitalSampleServiceTest {
     private CaregiverService caregiverService;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private PatientCaregiverRepository patientCaregiverRepository;
+    @Mock
+    private FamilyMemberLinkRepository familyMemberLinkRepository;
+    @Mock
+    private VitalAlertEventRepository vitalAlertEventRepository;
 
     private VitalSampleService vitalSampleService;
     private Patient patient;
+    private User caregiverUser;
 
     @BeforeEach
     void setUp() {
@@ -55,14 +68,28 @@ class VitalSampleServiceTest {
             wearableMetricRepository,
             caregiverService,
             notificationService,
+            patientCaregiverRepository,
+            familyMemberLinkRepository,
+            vitalAlertEventRepository,
             thresholdProperties
         );
 
         User user = User.builder().id(101L).name("John Doe").build();
         patient = Patient.builder().id(1L).user(user).firstName("John").lastName("Doe").build();
+        caregiverUser = User.builder().id(201L).name("Caregiver One").build();
 
-        when(notificationService.sendVitalAlert(any(), any(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(List.of()));
+        CaregiverPatientLink activeLink = new CaregiverPatientLink();
+        activeLink.setCaregiverUser(caregiverUser);
+        activeLink.setPatientUser(user);
+        activeLink.setStatus(CaregiverPatientLink.LinkStatus.ACTIVE);
+        activeLink.setExpiresAt(LocalDateTime.now().plusDays(7));
+
+        when(patientCaregiverRepository.findByPatientUser(any(User.class)))
+                .thenReturn(List.of(activeLink));
+        when(familyMemberLinkRepository.findActiveFamilyMembersByPatient(any(), any()))
+                .thenReturn(List.<FamilyMemberLink>of());
+        when(notificationService.sendVitalAlertToRecipient(any(), any(), any(), any(), any()))
+                .thenReturn(List.of(com.careconnect.dto.NotificationResponse.success("ok-1")));
     }
 
     @Test
@@ -74,7 +101,7 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(80.0).build()
         );
 
-        verify(notificationService, never()).sendVitalAlert(any(), any(), any(), any());
+        verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -86,7 +113,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(55.0).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "heart_rate", "55.0 bpm", "LOW");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "heart_rate", "55.0 bpm", "LOW");
     }
 
     @Test
@@ -98,7 +126,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(110.0).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "heart_rate", "110.0 bpm", "HIGH");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "heart_rate", "110.0 bpm", "HIGH");
     }
 
     @Test
@@ -110,7 +139,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(130.0).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "heart_rate", "130.0 bpm", "CRITICAL");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "heart_rate", "130.0 bpm", "CRITICAL");
     }
 
     @Test
@@ -125,6 +155,9 @@ class VitalSampleServiceTest {
             wearableMetricRepository,
             caregiverService,
             notificationService,
+            patientCaregiverRepository,
+            familyMemberLinkRepository,
+            vitalAlertEventRepository,
             thresholdProperties
         );
 
@@ -134,7 +167,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(105.0).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "heart_rate", "105.0 bpm", "CRITICAL");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "heart_rate", "105.0 bpm", "CRITICAL");
     }
 
     @Test
@@ -146,7 +180,7 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(97.0).build()
         );
 
-        verify(notificationService, never()).sendVitalAlert(any(), any(), any(), any());
+        verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -158,7 +192,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(92.0).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "spo2", "92.0%", "HIGH");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "spo2", "92.0%", "HIGH");
     }
 
     @Test
@@ -170,7 +205,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(85.0).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "spo2", "85.0%", "CRITICAL");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "spo2", "85.0%", "CRITICAL");
     }
 
     @Test
@@ -182,7 +218,7 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(120).diastolic(80).build()
         );
 
-        verify(notificationService, never()).sendVitalAlert(any(), any(), any(), any());
+        verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -194,7 +230,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(85).diastolic(55).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "blood_pressure", "85/55 mmHg", "LOW");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "blood_pressure", "85/55 mmHg", "LOW");
     }
 
     @Test
@@ -206,7 +243,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(150).diastolic(95).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "blood_pressure", "150/95 mmHg", "HIGH");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "blood_pressure", "150/95 mmHg", "HIGH");
     }
 
     @Test
@@ -218,7 +256,8 @@ class VitalSampleServiceTest {
             VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(190).diastolic(115).build()
         );
 
-        verify(notificationService).sendVitalAlert(101L, "blood_pressure", "190/115 mmHg", "CRITICAL");
+        verify(notificationService, timeout(1000))
+                .sendVitalAlertToRecipient(201L, "John Doe", "blood_pressure", "190/115 mmHg", "CRITICAL");
     }
 
     @Test
@@ -234,8 +273,9 @@ class VitalSampleServiceTest {
         ArgumentCaptor<String> valueCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> severityCaptor = ArgumentCaptor.forClass(String.class);
 
-        verify(notificationService).sendVitalAlert(
-            eq(101L),
+        verify(notificationService, timeout(1000)).sendVitalAlertToRecipient(
+            eq(201L),
+            eq("John Doe"),
             metricTypeCaptor.capture(),
             valueCaptor.capture(),
             severityCaptor.capture()
@@ -255,6 +295,21 @@ class VitalSampleServiceTest {
             IllegalArgumentException.class,
             () -> vitalSampleService.createVitalSample(VitalSampleDTO.builder().patientId(999L).build())
         );
+    }
+
+    @Test
+    @DisplayName("no active care-circle recipients skips dispatch and records event")
+    void createVitalSample_noRecipients_recordsNoRecipientsEvent() {
+        when(patientCaregiverRepository.findByPatientUser(any(User.class))).thenReturn(List.of());
+        when(familyMemberLinkRepository.findActiveFamilyMembersByPatient(any(), any())).thenReturn(List.of());
+        mockCreateFlow(VitalSample.builder().patient(patient).heartRate(130.0).build());
+
+        vitalSampleService.createVitalSample(
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(130.0).build()
+        );
+
+        verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
+        verify(vitalAlertEventRepository).save(any(com.careconnect.model.VitalAlertEvent.class));
     }
 
     private void mockCreateFlow(VitalSample returnedSample) {
