@@ -985,6 +985,13 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         if (askResult.sessionId != null) {
           _askSessionId = askResult.sessionId;
         }
+        if (askResult.deliveryStatus == AiAskDeliveryStatus.held) {
+          await _handleHeldAskResult(
+            epoch: epoch,
+            askResult: askResult,
+          );
+          return;
+        }
         citations = askResult.citations;
         disclaimer = askResult.disclaimer;
         escalation = askResult.escalation;
@@ -1014,6 +1021,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             } else {
               _clearRetryState();
             }
+          case AiAskDeliveryStatus.held:
+            // Handled above; keep switch exhaustive.
+            aiText = askResult.message ??
+                "We're reviewing this before showing it to you.";
+            _clearRetryState();
         }
       } else if (response!['success'] == false) {
         // If backend explicitly failed, show the error message
@@ -1088,6 +1100,168 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
+  }
+
+  static const int _hitlMaxPollAttempts = 60;
+  static const Duration _hitlPollInterval = Duration(seconds: 5);
+  static const String _hitlReviewingFallback =
+      "We're reviewing this before showing it to you.";
+  static const String _hitlUnavailableFallback =
+      'This answer is no longer available. Please ask again or contact your care provider.';
+  static const String _hitlStillReviewingFallback =
+      'Still under review. Check back later or contact your care provider.';
+  static const String _hitlUnauthorizedFallback =
+      'Unable to check review status for this answer. Please ask again or contact your care provider.';
+
+  static bool _isHitlTerminalDelivery(String deliveryStatus) {
+    return deliveryStatus == 'DELIVERED' ||
+        deliveryStatus == 'REJECTED' ||
+        deliveryStatus == 'EXPIRED' ||
+        deliveryStatus == 'WITHHELD_PERMANENTLY';
+  }
+
+  Future<void> _handleHeldAskResult({
+    required int epoch,
+    required AiAskResult askResult,
+  }) async {
+    _clearRetryState();
+    final reviewingText =
+        askResult.message?.trim().isNotEmpty == true
+            ? askResult.message!.trim()
+            : _hitlReviewingFallback;
+
+    if (!_safeSetState(epoch, () {
+      _messages.add(
+        ChatMessage(
+          text: reviewingText,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      _isLoading = false;
+      _uploadedFiles.clear();
+    })) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+    final heldItemId = askResult.heldItemId;
+    if (heldItemId == null || heldItemId.isEmpty) {
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnavailableFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_MISSING_ID',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    HitlPollResult? terminal;
+    HitlPollHttpException? permanentFailure;
+    for (var attempt = 0; attempt < _hitlMaxPollAttempts; attempt++) {
+      if (!_isCurrentEpoch(epoch)) return;
+      await Future<void>.delayed(_hitlPollInterval);
+      if (!_isCurrentEpoch(epoch)) return;
+
+      try {
+        final poll = await AIChatService.pollHitlStatus(heldItemId);
+        if (!_isCurrentEpoch(epoch)) return;
+        if (_isHitlTerminalDelivery(poll.deliveryStatus) ||
+            poll.status == 'REJECTED' ||
+            poll.status == 'EXPIRED') {
+          terminal = poll;
+          break;
+        }
+      } on HitlPollHttpException catch (error) {
+        if (error.isPermanent) {
+          permanentFailure = error;
+          break;
+        }
+        // Retry transient 5xx / unexpected HTTP until the attempt cap.
+      } catch (_) {
+        // Keep polling through transient network failures until the attempt cap.
+      }
+    }
+
+    if (!_isCurrentEpoch(epoch)) return;
+
+    if (permanentFailure != null) {
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnauthorizedFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_HTTP_${permanentFailure!.statusCode}',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (terminal == null) {
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: _hitlStillReviewingFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_CLIENT_TIMEOUT',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (terminal.deliveryStatus == 'DELIVERED') {
+      final answerText = terminal.answer?.trim().isNotEmpty == true
+          ? terminal.answer!.trim()
+          : 'Ask AI returned no answer.';
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: answerText,
+            isUser: false,
+            timestamp: DateTime.now(),
+            citations: terminal!.citations,
+            disclaimer: terminal.disclaimer,
+            confirmation: terminal.confirmation,
+          ),
+        );
+      })) {
+        return;
+      }
+    } else {
+      final fallback = terminal.message?.trim().isNotEmpty == true
+          ? terminal.message!.trim()
+          : _hitlUnavailableFallback;
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: fallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: terminal!.deliveryStatus,
+          ),
+        );
+      })) {
+        return;
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   String _guessMimeType(String fileName) {

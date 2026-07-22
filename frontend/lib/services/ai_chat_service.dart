@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'api_service.dart';
 import '../config/env_constant.dart';
 
-enum AiAskDeliveryStatus { delivered, noRecords, withheld }
+enum AiAskDeliveryStatus { delivered, noRecords, withheld, held }
 
 const Set<String> _aiAskRecordTypes = {
   'TRANSCRIPT_SEGMENT',
@@ -207,6 +207,119 @@ class AiAskError {
   }
 }
 
+/// Permanent HITL poll failure (auth / missing item). Do not keep retrying.
+class HitlPollHttpException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const HitlPollHttpException(this.statusCode, this.message);
+
+  bool get isPermanent =>
+      statusCode == 401 || statusCode == 403 || statusCode == 404;
+
+  @override
+  String toString() => message;
+}
+
+class HitlPollResult {
+  final String status;
+  final String deliveryStatus;
+  final String? message;
+  final String? answer;
+  final List<AiAskCitation> citations;
+  final AiAskDisclaimer? disclaimer;
+  final AiAskConfirmation? confirmation;
+
+  const HitlPollResult({
+    required this.status,
+    required this.deliveryStatus,
+    this.message,
+    this.answer,
+    this.citations = const [],
+    this.disclaimer,
+    this.confirmation,
+  });
+
+  factory HitlPollResult.fromJson(Map<String, dynamic> json) {
+    final status = json['status'];
+    final deliveryStatus = json['deliveryStatus'];
+    if (status is! String || status.trim().isEmpty) {
+      throw const FormatException('HITL status must be a non-empty string');
+    }
+    if (deliveryStatus is! String || deliveryStatus.trim().isEmpty) {
+      throw const FormatException(
+        'HITL deliveryStatus must be a non-empty string',
+      );
+    }
+    final message = json['message'];
+    if (message != null && message is! String) {
+      throw const FormatException('HITL message must be a string');
+    }
+    final answerRaw = json['answer'];
+    String? answer;
+    if (answerRaw == null) {
+      answer = null;
+    } else if (answerRaw is String) {
+      answer = answerRaw.trim().isEmpty ? null : answerRaw.trim();
+    } else if (answerRaw is Map<String, dynamic>) {
+      final text = answerRaw['text'];
+      if (text != null && text is! String) {
+        throw const FormatException('HITL answer.text must be a string');
+      }
+      final trimmed = (text as String?)?.trim();
+      answer = trimmed == null || trimmed.isEmpty ? null : trimmed;
+    } else {
+      throw const FormatException('HITL answer must be a string or object');
+    }
+
+    final citationsJson = json['citations'];
+    if (citationsJson != null && citationsJson is! List) {
+      throw const FormatException('HITL citations must be a list');
+    }
+    final citationListIsValid = citationsJson is List<dynamic> &&
+        citationsJson.every((item) => item is Map<String, dynamic>);
+    if (citationsJson is List && !citationListIsValid) {
+      throw const FormatException('HITL citations contain invalid entries');
+    }
+    final citations = citationListIsValid
+        ? citationsJson
+            .cast<Map<String, dynamic>>()
+            .map(AiAskCitation.fromJson)
+            .toList(growable: false)
+        : const <AiAskCitation>[];
+
+    final exposeAnswer = deliveryStatus == 'DELIVERED';
+    AiAskDisclaimer? disclaimer;
+    AiAskConfirmation? confirmation;
+    if (exposeAnswer) {
+      final disclaimerJson = json['disclaimer'];
+      if (disclaimerJson is! Map<String, dynamic>) {
+        throw const FormatException(
+          'HITL DELIVERED response requires disclaimer object',
+        );
+      }
+      disclaimer = AiAskDisclaimer.fromJson(disclaimerJson);
+      final confirmationJson = json['confirmation'];
+      if (confirmationJson is! Map<String, dynamic>) {
+        throw const FormatException(
+          'HITL DELIVERED response requires confirmation object',
+        );
+      }
+      confirmation = AiAskConfirmation.fromJson(confirmationJson);
+    }
+
+    return HitlPollResult(
+      status: status,
+      deliveryStatus: deliveryStatus,
+      message: message as String?,
+      answer: exposeAnswer ? answer : null,
+      citations: exposeAnswer ? citations : const [],
+      disclaimer: disclaimer,
+      confirmation: confirmation,
+    );
+  }
+}
+
 class AiAskResult {
   final bool success;
   final AiAskDeliveryStatus deliveryStatus;
@@ -215,6 +328,8 @@ class AiAskResult {
   final String? conversationId;
   final String? answer;
   final String? message;
+  final String? heldItemId;
+  final String? pollUrl;
   final List<AiAskCitation> citations;
   final AiAskError? error;
   final AiAskDisclaimer? disclaimer;
@@ -232,6 +347,8 @@ class AiAskResult {
     this.conversationId,
     this.answer,
     this.message,
+    this.heldItemId,
+    this.pollUrl,
     this.citations = const [],
     this.error,
     this.disclaimer,
@@ -254,6 +371,7 @@ class AiAskResult {
       'DELIVERED' => AiAskDeliveryStatus.delivered,
       'NO_RECORDS' => AiAskDeliveryStatus.noRecords,
       'WITHHELD' => AiAskDeliveryStatus.withheld,
+      'HELD' => AiAskDeliveryStatus.held,
       _ => throw FormatException(
           'Ask AI deliveryStatus is unknown: $statusRaw',
         ),
@@ -268,7 +386,15 @@ class AiAskResult {
         : _optionalUuid(json, 'sessionId');
     final conversationId = _optionalUuid(json, 'conversationId');
     _optionalUuid(json, 'auditId');
-    _optionalUuid(json, 'heldItemId');
+    final heldItemId = status == AiAskDeliveryStatus.held
+        ? _requiredUuid(json, 'heldItemId')
+        : _optionalUuid(json, 'heldItemId');
+
+    final pollUrlRaw = json['pollUrl'];
+    if (pollUrlRaw != null && pollUrlRaw is! String) {
+      throw const FormatException('Ask AI pollUrl must be a string');
+    }
+    final pollUrl = pollUrlRaw as String?;
 
     final answerJson = json['answer'];
     if (answerJson != null && answerJson is! Map<String, dynamic>) {
@@ -337,6 +463,7 @@ class AiAskResult {
               citation.excerpt.trim().isNotEmpty,
         );
 
+    // held=true is expected for HELD (Tier-2 review); only block DELIVERED.
     final deliveredContractValid = allowDelivered &&
         json['success'] == true &&
         !held &&
@@ -377,6 +504,8 @@ class AiAskResult {
       conversationId: conversationId,
       answer: exposeDeliveredContent ? answer : null,
       message: message as String?,
+      heldItemId: heldItemId,
+      pollUrl: pollUrl,
       citations: exposeDeliveredContent ? citations : const [],
       error: errorJson is Map<String, dynamic>
           ? AiAskError.fromJson(errorJson)
@@ -506,6 +635,8 @@ class AIChatService {
         conversationId: parsed.conversationId,
         answer: parsed.answer,
         message: parsed.message,
+        heldItemId: parsed.heldItemId,
+        pollUrl: parsed.pollUrl,
         citations: parsed.citations,
         error: parsed.error,
         disclaimer: parsed.disclaimer,
@@ -573,6 +704,51 @@ class AIChatService {
       );
     } finally {
       client?.close();
+    }
+  }
+
+  /// Poll Tier-2 HITL held-item status until a clinician releases or rejects it.
+  static Future<HitlPollResult> pollHitlStatus(
+    String heldItemId, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    if (!_isAiAskUuid(heldItemId)) {
+      throw const FormatException('HITL heldItemId must be a UUID');
+    }
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Accept'] = 'application/json';
+
+      final response = await http
+          .get(
+            Uri.parse(
+              '${getBackendBaseUrl()}/v1/api/ai/hitl/$heldItemId/status',
+            ),
+            headers: headers,
+          )
+          .timeout(timeout);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HitlPollHttpException(
+          response.statusCode,
+          'HITL status request failed with HTTP ${response.statusCode}',
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('HITL status response is not an object');
+      }
+      return HitlPollResult.fromJson(decoded);
+    } on HitlPollHttpException {
+      rethrow;
+    } on FormatException {
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    } on http.ClientException {
+      rethrow;
+    } catch (error) {
+      throw FormatException('HITL status request failed: $error');
     }
   }
 

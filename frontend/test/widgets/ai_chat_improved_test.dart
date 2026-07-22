@@ -2059,6 +2059,181 @@ void main() {
       }, () => mockClient);
     });
 
+    testWidgets('grounded HELD shows reviewing then delivered answer',
+        (tester) async {
+      suppressOverflow();
+      var pollCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'HELD',
+              'held': true,
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'pollUrl':
+                  '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+              'answer': {'text': 'Draft must not appear'},
+              'citations': <Object>[],
+              'message': "We're reviewing this before showing it to you.",
+            }),
+            200,
+          );
+        }
+        if (request.url.path ==
+            '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status') {
+          pollCount++;
+          if (pollCount < 2) {
+            return http.Response(
+              jsonEncode({
+                'heldItemId': '11111111-1111-1111-1111-111111111111',
+                'status': 'PENDING_REVIEW',
+                'deliveryStatus': 'HELD',
+                'message': "We're reviewing this before showing it to you.",
+                'answer': null,
+                'citations': <Object>[],
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'status': 'DELIVERED',
+              'deliveryStatus': 'DELIVERED',
+              'message': null,
+              'answer': 'Released after review.',
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Released after review.',
+                }
+              ],
+              'disclaimer': {
+                'text':
+                    'This answer is based on your stored health records and is not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message':
+                    'Please confirm important details with your care provider before acting on this information.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Needs review');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(
+          find.text("We're reviewing this before showing it to you."),
+          findsOneWidget,
+        );
+        expect(find.text('Draft must not appear'), findsNothing);
+        expect(find.text('Released after review.'), findsNothing);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(find.text('Released after review.'), findsNothing);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(find.text('Released after review.'), findsOneWidget);
+        expect(find.textContaining('C1'), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-disclaimer')), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-confirmation')), findsOneWidget);
+        expect(pollCount, greaterThanOrEqualTo(2));
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded HELD stops polling on permanent 403', (tester) async {
+      suppressOverflow();
+      var pollCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'HELD',
+              'held': true,
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'pollUrl':
+                  '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+              'answer': {'text': 'Draft must not appear'},
+              'citations': <Object>[],
+              'message': "We're reviewing this before showing it to you.",
+            }),
+            200,
+          );
+        }
+        if (request.url.path ==
+            '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status') {
+          pollCount++;
+          return http.Response(
+            jsonEncode({
+              'error': 'FORBIDDEN',
+              'message': 'Not authorized to poll this held item',
+            }),
+            403,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Needs review');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(
+          find.text("We're reviewing this before showing it to you."),
+          findsOneWidget,
+        );
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+
+        expect(
+          find.text(
+            'Unable to check review status for this answer. Please ask again or contact your care provider.',
+          ),
+          findsOneWidget,
+        );
+        expect(pollCount, 1);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(pollCount, 1);
+      }, () => mockClient);
+    });
+
     testWidgets('explicit mode is required on constructed chat widgets',
         (tester) async {
       const grounded = AIChat(

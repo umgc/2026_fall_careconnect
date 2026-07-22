@@ -194,7 +194,7 @@ public class RolePermissionService {
 
     /**
      * Defines all permissions for the ADMIN role.
-     * Admins have FULL ACCESS - all 26 permissions.
+     * Admins have FULL ACCESS - all permissions.
      *
      * @return Set containing all possible permissions
      */
@@ -207,15 +207,13 @@ public class RolePermissionService {
      * Defines all permissions for the CAREGIVER role.
      * Caregivers can manage assigned patients but not system settings.
      *
-     * Total: 18 permissions (FINAL - correct count)
-     *
      * Can do:
      * - Create, view, and update assigned patients
      * - Create and manage tasks
      * - View and record health data
      * - View billing (but not manage subscriptions)
      * - View and export analytics/reports
-     * - Use AI features
+     * - Use AI features and review held Ask AI answers
      * - Manage devices
      *
      * Cannot do:
@@ -263,6 +261,7 @@ public class RolePermissionService {
 
             // AI and Devices
             Permission.USE_AI_FEATURES,
+            Permission.REVIEW_AI_HOLDS,
             Permission.MANAGE_DEVICES
         ));
     }
