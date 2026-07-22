@@ -458,7 +458,7 @@ aws_cli ecr get-login-password --region "$REGION" \
 
 step "Building Docker image"
 CURRENT_OPERATION="Building Docker image"
-docker build -t "$LOCAL_IMAGE_NAME" .
+docker build --platform linux/amd64 -t "$LOCAL_IMAGE_NAME" .
 
 step "Tagging and pushing Docker image to ECR"
 CURRENT_OPERATION="Pushing Docker image to ECR"

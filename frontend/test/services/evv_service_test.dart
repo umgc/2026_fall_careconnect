@@ -61,7 +61,12 @@ T _runWithMockHandler<T>(
 ) {
   final client = clientFactory();
   _httpHandler = (http.Request request) async {
-    final streamed = await client.send(request);
+    // Clone the request: the delegating client has already finalized the
+    // original, and MockClient.send finalizes whatever it receives.
+    final copy = http.Request(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..bodyBytes = request.bodyBytes;
+    final streamed = await client.send(copy);
     return http.Response.fromStream(streamed);
   };
   return callback();
@@ -211,11 +216,16 @@ void main() {
 
   setUpAll(() {
     _httpHandler = _defaultHandler;
-    final delegatingClient =
-        MockClient((request) => _httpHandler(request));
-    _runWithMockHandler(() {
-      ApiServiceOffline.httpClient;
-    }, () => delegatingClient);
+    // Route the service's HTTP traffic to the module-level handler, bypassing
+    // the offline-queue + telemetry wrappers that would otherwise intercept
+    // requests and return synthetic responses before the mock is reached.
+    ApiServiceOffline.debugOverrideHttpClient(
+      MockClient((request) => _httpHandler(request)),
+    );
+  });
+
+  tearDownAll(() {
+    ApiServiceOffline.debugOverrideHttpClient(null);
   });
 
   setUp(() {
