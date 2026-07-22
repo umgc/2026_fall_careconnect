@@ -2,12 +2,14 @@ package com.careconnect.repository.ai.hitl;
 
 import com.careconnect.model.ai.hitl.AiHeldItem;
 import com.careconnect.model.ai.hitl.AiHeldItemStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +19,12 @@ public interface AiHeldItemRepository extends JpaRepository<AiHeldItem, UUID> {
 
     List<AiHeldItem> findByPatientIdAndStatusOrderByCreatedAtAsc(
             Long patientId, AiHeldItemStatus status);
+
+    List<AiHeldItem> findByPatientIdInAndStatusOrderByCreatedAtAsc(
+            Collection<Long> patientIds, AiHeldItemStatus status);
+
+    List<AiHeldItem> findByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+            AiHeldItemStatus status, Instant expiresAt, Pageable pageable);
 
     /**
      * Conditional status transition for release/reject races.
@@ -29,6 +37,7 @@ public interface AiHeldItemRepository extends JpaRepository<AiHeldItem, UUID> {
             SET h.status = :newStatus,
                 h.deliveryStatus = :deliveryStatus,
                 h.finalAnswer = :finalAnswer,
+                h.citationsJson = :citationsJson,
                 h.reviewerUserId = :reviewerUserId,
                 h.reviewedAt = :reviewedAt,
                 h.reviewNotes = :reviewNotes,
@@ -41,6 +50,7 @@ public interface AiHeldItemRepository extends JpaRepository<AiHeldItem, UUID> {
             @Param("newStatus") AiHeldItemStatus newStatus,
             @Param("deliveryStatus") String deliveryStatus,
             @Param("finalAnswer") String finalAnswer,
+            @Param("citationsJson") String citationsJson,
             @Param("reviewerUserId") Long reviewerUserId,
             @Param("reviewedAt") Instant reviewedAt,
             @Param("reviewNotes") String reviewNotes,

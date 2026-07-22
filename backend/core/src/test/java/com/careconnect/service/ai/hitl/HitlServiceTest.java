@@ -17,6 +17,7 @@ import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.FamilyMemberService;
 import com.careconnect.service.ai.safety.SafetyInput;
 import com.careconnect.service.ai.safety.SafetyOutcome;
+import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.careconnect.service.ai.safety.ValidationFinding;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,8 @@ class HitlServiceTest {
     private CaregiverPatientLinkService caregiverPatientLinkService;
     @Mock
     private FamilyMemberService familyMemberService;
+    @Mock
+    private SafetyPipeline safetyPipeline;
 
     private HitlService service;
 
@@ -67,6 +70,7 @@ class HitlServiceTest {
                 patientRepository,
                 caregiverPatientLinkService,
                 familyMemberService,
+                safetyPipeline,
                 new ObjectMapper(),
                 72L);
         org.mockito.Mockito.lenient().when(heldItemRepository.save(any(AiHeldItem.class)))
@@ -79,11 +83,14 @@ class HitlServiceTest {
                 .thenReturn(true);
         org.mockito.Mockito.lenient()
                 .when(heldItemRepository.updateOutcomeIfStatus(
-                        any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
                 .thenReturn(1);
         org.mockito.Mockito.lenient()
                 .when(heldItemRepository.expireIfPending(any(), any()))
                 .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(safetyPipeline.process(any(SafetyInput.class)))
+                .thenReturn(SafetyOutcome.deliverTier1(List.of(), List.of(), "none"));
     }
 
     @Test
@@ -187,7 +194,10 @@ class HitlServiceTest {
     @DisplayName("listQueue includes query preview for linked patients")
     void listQueue_includesQueryPreview() throws Exception {
         final AiHeldItem linked = pendingItem();
-        when(heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW))
+        when(patientRepository.findIdsLinkedToCaregiver(eq(99L), any()))
+                .thenReturn(List.of(42L));
+        when(heldItemRepository.findByPatientIdInAndStatusOrderByCreatedAtAsc(
+                eq(List.of(42L)), eq(AiHeldItemStatus.PENDING_REVIEW)))
                 .thenReturn(List.of(linked));
 
         final List<HitlQueueItem> queue = service.listQueue(reviewer());
@@ -305,11 +315,63 @@ class HitlServiceTest {
                 eq(AiHeldItemStatus.PENDING_REVIEW),
                 eq(AiHeldItemStatus.DELIVERED),
                 eq("DELIVERED"),
-                eq(item.getDraftAnswer()),
+                eq("Draft answer text for review"),
+                eq("[]"),
                 eq(99L),
                 any(),
                 eq("looks good"),
                 any());
+    }
+
+    @Test
+    @DisplayName("release with edited answer clears stored citations")
+    void release_editedAnswer_clearsCitations() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setCitationsJson("[{\"citationId\":\"C1\"}]");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlDetailResponse detail = service.release(
+                item.getId(), reviewer(), "Clinician rewritten answer", "edited");
+
+        assertThat(detail.finalAnswer()).isEqualTo("Clinician rewritten answer");
+        assertThat(detail.citationsJson()).isEqualTo("[]");
+        assertThat(item.getCitationsJson()).isEqualTo("[]");
+        verify(heldItemRepository).updateOutcomeIfStatus(
+                eq(item.getId()),
+                eq(AiHeldItemStatus.PENDING_REVIEW),
+                eq(AiHeldItemStatus.DELIVERED),
+                eq("DELIVERED"),
+                eq("Clinician rewritten answer"),
+                eq("[]"),
+                eq(99L),
+                any(),
+                eq("edited"),
+                any());
+        verify(safetyPipeline).process(any(SafetyInput.class));
+    }
+
+    @Test
+    @DisplayName("release rejects edited answers that still match emergency patterns")
+    void release_editedAnswer_emergency_conflicts() {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(safetyPipeline.process(any(SafetyInput.class)))
+                .thenReturn(SafetyOutcome.holdTier2(
+                        List.of("EMERGENCY_SYMPTOM"),
+                        List.of(new ValidationFinding(
+                                ValidationFinding.Severity.CRITICAL,
+                                "EMERGENCY_SYMPTOM",
+                                "Emergency language"))));
+
+        assertThatThrownBy(() -> service.release(
+                        item.getId(),
+                        reviewer(),
+                        "Call 911 for chest pain immediately",
+                        "note"))
+                .isInstanceOf(HitlConflictException.class)
+                .hasMessageContaining("emergency");
+        verify(heldItemRepository, never()).updateOutcomeIfStatus(
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
     }
 
     @Test
@@ -328,7 +390,7 @@ class HitlServiceTest {
                 .isInstanceOf(HitlConflictException.class)
                 .hasMessageContaining("edited answer");
         verify(heldItemRepository, never()).updateOutcomeIfStatus(
-                any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
     }
 
     @Test
@@ -337,6 +399,7 @@ class HitlServiceTest {
         final AiHeldItem item = pendingItem();
         item.setTriggerCodesJson("[\"UNSUPPORTED_CLAIM\"]");
         item.setDraftAnswer("Partial verified draft");
+        item.setCitationsJson("[{\"citationId\":\"C1\"}]");
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
 
         final HitlDetailResponse detail = service.release(
@@ -344,6 +407,7 @@ class HitlServiceTest {
 
         assertThat(detail.deliveryStatus()).isEqualTo("DELIVERED");
         assertThat(detail.finalAnswer()).isEqualTo("Clinician-approved rewritten answer");
+        assertThat(detail.citationsJson()).isEqualTo("[]");
     }
 
     @Test
@@ -365,6 +429,7 @@ class HitlServiceTest {
                 eq(AiHeldItemStatus.REJECTED),
                 eq("WITHHELD_PERMANENTLY"),
                 isNull(),
+                eq("[]"),
                 eq(99L),
                 any(),
                 eq("unsafe claim"),
@@ -385,7 +450,7 @@ class HitlServiceTest {
                 .hasMessageContaining("not pending");
         verify(auditEventRepository, never()).save(any());
         verify(heldItemRepository, never()).updateOutcomeIfStatus(
-                any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
     }
 
     @Test
@@ -394,7 +459,7 @@ class HitlServiceTest {
         final AiHeldItem item = pendingItem();
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
         when(heldItemRepository.updateOutcomeIfStatus(
-                any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
                 .thenReturn(0);
 
         assertThatThrownBy(() -> service.release(item.getId(), reviewer(), null, null))
@@ -404,36 +469,59 @@ class HitlServiceTest {
     }
 
     @Test
-    @DisplayName("release denies caregiver without patient link")
+    @DisplayName("release denies caregiver without patient link with uniform not-found")
     void release_unlinkedCaregiver_forbidden() {
         final AiHeldItem item = pendingItem();
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
         when(caregiverPatientLinkService.hasAccessToPatient(eq(99L), eq(7L))).thenReturn(false);
 
         assertThatThrownBy(() -> service.release(item.getId(), reviewer(), null, null))
-                .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("patient");
+                .isInstanceOf(HitlNotFoundException.class)
+                .hasMessageContaining("not found");
         verify(heldItemRepository, never()).updateOutcomeIfStatus(
-                any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
     }
 
     @Test
     @DisplayName("listQueue filters to patients linked to the caregiver")
     void listQueue_filtersByPatientAccess() throws Exception {
         final AiHeldItem linked = pendingItem();
-        final AiHeldItem unlinked = pendingItem();
-        unlinked.setId(UUID.randomUUID());
-        unlinked.setPatientId(99L);
+        final AiHeldItem otherLinked = pendingItem();
+        otherLinked.setId(UUID.randomUUID());
+        otherLinked.setPatientId(99L);
         stubLinkedPatient(99L, 88L);
-        when(heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW))
-                .thenReturn(List.of(linked, unlinked));
-        when(caregiverPatientLinkService.hasAccessToPatient(eq(99L), eq(7L))).thenReturn(true);
-        when(caregiverPatientLinkService.hasAccessToPatient(eq(99L), eq(88L))).thenReturn(false);
+        when(patientRepository.findIdsLinkedToCaregiver(eq(99L), any()))
+                .thenReturn(List.of(42L));
+        when(heldItemRepository.findByPatientIdInAndStatusOrderByCreatedAtAsc(
+                eq(List.of(42L)), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .thenReturn(List.of(linked));
 
         final List<HitlQueueItem> queue = service.listQueue(reviewer());
 
         assertThat(queue).hasSize(1);
         assertThat(queue.get(0).heldItemId()).isEqualTo(linked.getId());
+        verify(heldItemRepository, never())
+                .findByStatusOrderByCreatedAtAsc(any());
+    }
+
+    @Test
+    @DisplayName("expireDueHolds transitions past-due pending rows")
+    void expireDueHolds_expiresBatch() {
+        final AiHeldItem item = pendingItem();
+        item.setExpiresAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        when(heldItemRepository.findByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+                eq(AiHeldItemStatus.PENDING_REVIEW), any(), any()))
+                .thenReturn(List.of(item));
+        when(heldItemRepository.expireIfPending(eq(item.getId()), any())).thenReturn(1);
+
+        final int expired = service.expireDueHolds(50);
+
+        assertThat(expired).isEqualTo(1);
+        assertThat(item.getStatus()).isEqualTo(AiHeldItemStatus.EXPIRED);
+        final ArgumentCaptor<AiSafetyAuditEvent> auditCaptor =
+                ArgumentCaptor.forClass(AiSafetyAuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().getEventType()).isEqualTo("HITL_EXPIRED");
     }
 
     private void stubLinkedPatient(final long patientId, final long patientUserId) {
