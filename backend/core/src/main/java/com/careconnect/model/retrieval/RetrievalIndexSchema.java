@@ -7,7 +7,11 @@ public final class RetrievalIndexSchema {
 
     public static final String TABLE_NAME = "retrieval_index_chunk";
 
-    /** Embedding dimension for pgvector column (Bedrock Titan / Team E backlog). */
+    /**
+     * Embedding dimension for pgvector column. Locked to Bedrock
+     * {@code amazon.titan-embed-text-v1} (1536-d). Titan Embed Text v2 tops out at
+     * 1024-d and requires a column migration before it can be used.
+     */
     public static final int EMBEDDING_DIMENSION = 1536;
 
     /**
