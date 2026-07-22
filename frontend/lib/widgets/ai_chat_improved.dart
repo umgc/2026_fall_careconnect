@@ -751,6 +751,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
   void _sendMessage() {
     // Allow sending if there's a message OR (legacy) uploaded files
+    if (_isLoading) {
+      return;
+    }
     if (_controller.text.trim().isEmpty &&
         (_isGrounded || _uploadedFiles.isEmpty)) {
       return;
@@ -785,6 +788,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     // Reset inactivity timer on user activity
     _resetInactivityTimer();
 
+    // Retire any in-flight Ask HTTP or HITL poll from a prior turn so a released
+    // answer cannot land under a different follow-up question.
+    _requestEpoch++;
     final epoch = _requestEpoch;
     final abortCompleter = Completer<void>();
     final previousAbort = _activeAbort;
@@ -1145,7 +1151,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           timestamp: DateTime.now(),
         ),
       );
-      _isLoading = false;
+      // Keep sends blocked while the HITL poll may still deliver an answer.
+      _isLoading = true;
       _uploadedFiles.clear();
     })) {
       return;
@@ -1155,6 +1162,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     final heldItemId = askResult.heldItemId;
     if (heldItemId == null || heldItemId.isEmpty) {
       if (!_safeSetState(epoch, () {
+        _isLoading = false;
         _messages.add(
           ChatMessage(
             text: _hitlUnavailableFallback,

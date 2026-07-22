@@ -2153,6 +2153,9 @@ void main() {
         );
         expect(find.text('Draft must not appear'), findsNothing);
         expect(find.text('Released after review.'), findsNothing);
+        // Sends stay blocked while the HITL poll is in flight (spinner replaces send).
+        expect(find.byIcon(Icons.send), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsWidgets);
 
         await tester.pump(const Duration(seconds: 5));
         await tester.pump();
@@ -2165,6 +2168,7 @@ void main() {
         expect(find.byKey(const Key('ask-ai-disclaimer')), findsOneWidget);
         expect(find.byKey(const Key('ask-ai-confirmation')), findsOneWidget);
         expect(pollCount, greaterThanOrEqualTo(2));
+        expect(find.byIcon(Icons.send), findsOneWidget);
       }, () => mockClient);
     });
 
