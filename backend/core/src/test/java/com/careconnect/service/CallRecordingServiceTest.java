@@ -44,11 +44,15 @@ import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -264,6 +268,54 @@ class CallRecordingServiceTest {
         }
 
         @Test
+        @DisplayName(
+                "SENT-CLIP-R1: startedAt is UTC wall-clock even when JVM default zone is not UTC")
+        void startRecording_persistsStartedAtAsUtcWallClock_independentOfDefaultZone() {
+            final TimeZone previous = TimeZone.getDefault();
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+            try {
+                when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+                MediaCapturePipeline pipeline =
+                        MediaCapturePipeline.builder().mediaPipelineId(PIPELINE_ID).build();
+                when(pipelinesClient.createMediaCapturePipeline(
+                                any(CreateMediaCapturePipelineRequest.class)))
+                        .thenReturn(
+                                CreateMediaCapturePipelineResponse.builder()
+                                        .mediaCapturePipeline(pipeline)
+                                        .build());
+                when(s3Client.putBucketPolicy(
+                                any(
+                                        software.amazon.awssdk.services.s3.model
+                                                .PutBucketPolicyRequest.class)))
+                        .thenReturn(
+                                software.amazon.awssdk.services.s3.model.PutBucketPolicyResponse
+                                        .builder()
+                                        .build());
+
+                final Instant before = Instant.now().minusSeconds(2);
+                Map<String, Object> result = service.startRecording(CALL_ID, USER_ID);
+                final Instant after = Instant.now().plusSeconds(2);
+
+                assertThat(result).containsEntry("status", "STARTED");
+
+                ArgumentCaptor<CallRecording> captor = ArgumentCaptor.forClass(CallRecording.class);
+                verify(recordingRepository).save(captor.capture());
+                LocalDateTime startedAt = captor.getValue().getStartedAt();
+                assertThat(startedAt).isNotNull();
+
+                // Contract: LocalDateTime is UTC wall-clock. Interpreting it as UTC must land
+                // near Instant.now() even when the JVM default zone is America/New_York.
+                Instant asUtc = startedAt.atZone(ZoneOffset.UTC).toInstant();
+                assertThat(asUtc).isBetween(before, after);
+                assertThat(Duration.between(asUtc, Instant.now()).abs().toMinutes())
+                        .isLessThan(5);
+            } finally {
+                TimeZone.setDefault(previous);
+            }
+        }
+
+        @Test
         @DisplayName("returns ERROR and saves FAILED recording when pipeline creation throws")
         void startRecording_pipelineCreationThrows_returnsError() {
             when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
@@ -411,6 +463,27 @@ class CallRecordingServiceTest {
             assertThat(result).containsEntry("status", "STOPPED");
             assertThat(result).containsKey("pipelineId");
         }
+
+        @Test
+        @DisplayName("READY recordings skip S3 refresh and still report playbackReady")
+        void getRecordingStatus_readyRecording_skipsS3AndIsPlaybackReady() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setPipelineId(PIPELINE_ID);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            rec.setConcatenationPipelineId("concat-pipe-001");
+            rec.setConcatenationStatus("READY");
+            rec.setTranscriptionStatus("COMPLETE");
+
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.getRecordingStatus(CALL_ID);
+
+            assertThat(result).containsEntry("concatenationStatus", "READY");
+            assertThat(result).containsEntry("playbackReady", true);
+            verify(s3Client, never()).listObjectsV2(any(ListObjectsV2Request.class));
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -513,6 +586,8 @@ class CallRecordingServiceTest {
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationPipelineId("concat-pipe-001");
             rec.setConcatenationStatus("READY");
+            // R1: UTC wall-clock stored in LocalDateTime; emit as Instant ...Z
+            rec.setStartedAt(LocalDateTime.of(2026, 7, 7, 22, 7, 12));
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -555,15 +630,14 @@ class CallRecordingServiceTest {
 
             assertThat(result).containsKey("playbackUrl");
             assertThat(result.get("playbackUrl").toString()).contains("presigned-url");
+            // R5: success path has a resolved video key → playbackReady is always true.
             assertThat(result).containsEntry("playbackReady", true);
             assertThat(result).containsKey("recordingStartedAt");
+            // R1: UTC Instant with Z — matches Flutter DateTime.parse(...).toUtc().
+            assertThat(result.get("recordingStartedAt")).isEqualTo("2026-07-07T22:07:12Z");
             assertThat(result.get("recordingStartedAt").toString()).endsWith("Z");
-            assertThat(result.get("recordingStartedAt"))
-                    .isEqualTo(
-                            rec.getStartedAt()
-                                    .atZone(java.time.ZoneOffset.UTC)
-                                    .toInstant()
-                                    .toString());
+            assertThat(Instant.parse(result.get("recordingStartedAt").toString()))
+                    .isEqualTo(Instant.parse("2026-07-07T22:07:12Z"));
         }
     }
 
@@ -1501,7 +1575,7 @@ class CallRecordingServiceTest {
         rec.setPipelineId(PIPELINE_ID);
         rec.setStatus(status);
         rec.setInitiatedByUserId(USER_ID);
-        rec.setStartedAt(LocalDateTime.now().minusMinutes(10));
+        rec.setStartedAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10));
         return rec;
     }
 }
