@@ -10,6 +10,7 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
+import com.careconnect.service.CallAttendeeService;
 import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
@@ -91,6 +92,7 @@ class CallControllerTest {
     @MockitoBean private CallTranscriptService callTranscriptService;
     @MockitoBean private CallSummaryService callSummaryService;
     @MockitoBean private CallRecordingService callRecordingService;
+    @MockitoBean private CallAttendeeService callAttendeeService;
     @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
     @MockitoBean private FamilyMemberService familyMemberService;
     @MockitoBean private UserRepository userRepository;
@@ -450,6 +452,37 @@ class CallControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("SPEAKER-001: POST /join upserts call_attendees via CallAttendeeService")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker001_joinUpsertsCallAttendee() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callAttendeeService)
+                    .recordJoin(eq(CALL_ID), eq("att-456"), eq(2L), eq("CAREGIVER"));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-002: POST /end records attendee leave for current user")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker002_endCallRecordsAttendeeLeave() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callAttendeeService).recordLeave(eq(CALL_ID), eq(2L));
         }
 
         @Test
