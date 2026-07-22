@@ -22,11 +22,11 @@ public class PermissionTest {
     }
 
     @Test
-    @DisplayName("Should have exactly 28 permissions defined")
+    @DisplayName("Should have exactly 29 permissions defined")
     public void testPermissionCount() throws Exception {
         Permission[] permissions = Permission.values();
-        assertEquals(28, permissions.length, 
-            "Should have exactly 28 permissions defined");
+        assertEquals(29, permissions.length, 
+            "Should have exactly 29 permissions defined");
     }
 
     @Test
@@ -102,6 +102,7 @@ public class PermissionTest {
     @DisplayName("AI and device permissions should exist")
     public void testAIAndDevicePermissionsExist() throws Exception {
         assertDoesNotThrow(() -> Permission.valueOf("USE_AI_FEATURES"));
+        assertDoesNotThrow(() -> Permission.valueOf("REVIEW_AI_HOLDS"));
         assertDoesNotThrow(() -> Permission.valueOf("MANAGE_DEVICES"));
     }
 
@@ -156,7 +157,7 @@ public class PermissionTest {
         Permission[] permissions = Permission.values();
         assertNotNull(permissions, "values() should not return null");
         assertTrue(permissions.length > 0, "values() should return at least one permission");
-        assertEquals(28, permissions.length, "Should return all 28 permissions");
+        assertEquals(29, permissions.length, "Should return all 29 permissions");
     }
 
     @Test
