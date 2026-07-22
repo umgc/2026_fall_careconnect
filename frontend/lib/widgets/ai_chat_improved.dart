@@ -23,6 +23,8 @@ class ChatMessage {
   final bool showRetry;
   final String? retryQuery;
   final String? requestIdentity;
+  final String? heldItemId;
+  final bool showHitlResume;
 
   ChatMessage({
     required this.text,
@@ -36,6 +38,8 @@ class ChatMessage {
     this.showRetry = false,
     this.retryQuery,
     this.requestIdentity,
+    this.heldItemId,
+    this.showHitlResume = false,
   });
 }
 
@@ -70,6 +74,9 @@ class AIChat extends StatefulWidget {
   final int? patientId;
   final int? userId;
   final AiChatMode mode;
+  /// Max status polls while waiting for clinician release (default ~5 minutes).
+  final int hitlMaxPollAttempts;
+  final Duration hitlPollInterval;
 
   const AIChat({
     super.key,
@@ -79,6 +86,8 @@ class AIChat extends StatefulWidget {
     this.isModal = false,
     this.patientId,
     this.userId,
+    this.hitlMaxPollAttempts = 60,
+    this.hitlPollInterval = const Duration(seconds: 5),
   });
 
   @override
@@ -1102,8 +1111,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     }
   }
 
-  static const int _hitlMaxPollAttempts = 60;
-  static const Duration _hitlPollInterval = Duration(seconds: 5);
   static const String _hitlReviewingFallback =
       "We're reviewing this before showing it to you.";
   static const String _hitlUnavailableFallback =
@@ -1163,11 +1170,50 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       return;
     }
 
+    await _pollAndApplyHitlStatus(epoch: epoch, heldItemId: heldItemId);
+  }
+
+  Future<void> _resumeHitlPoll(String heldItemId) async {
+    if (_isLoading || heldItemId.isEmpty) return;
+    final epoch = _requestEpoch;
+    if (!_safeSetState(epoch, () {
+      _isLoading = true;
+      for (var i = _messages.length - 1; i >= 0; i--) {
+        final msg = _messages[i];
+        if (msg.showHitlResume && msg.heldItemId == heldItemId) {
+          _messages[i] = ChatMessage(
+            text: _hitlReviewingFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            heldItemId: heldItemId,
+          );
+          break;
+        }
+      }
+    })) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    await _pollAndApplyHitlStatus(epoch: epoch, heldItemId: heldItemId);
+    if (_isCurrentEpoch(epoch)) {
+      _safeSetState(epoch, () => _isLoading = false);
+    }
+  }
+
+  Future<void> _pollAndApplyHitlStatus({
+    required int epoch,
+    required String heldItemId,
+  }) async {
     HitlPollResult? terminal;
     HitlPollHttpException? permanentFailure;
-    for (var attempt = 0; attempt < _hitlMaxPollAttempts; attempt++) {
+    var parseFailed = false;
+    final maxAttempts = widget.hitlMaxPollAttempts < 1
+        ? 1
+        : widget.hitlMaxPollAttempts;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
       if (!_isCurrentEpoch(epoch)) return;
-      await Future<void>.delayed(_hitlPollInterval);
+      await Future<void>.delayed(widget.hitlPollInterval);
       if (!_isCurrentEpoch(epoch)) return;
 
       try {
@@ -1185,6 +1231,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           break;
         }
         // Retry transient 5xx / unexpected HTTP until the attempt cap.
+      } on FormatException {
+        parseFailed = true;
+        break;
       } catch (_) {
         // Keep polling through transient network failures until the attempt cap.
       }
@@ -1192,8 +1241,27 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
     if (!_isCurrentEpoch(epoch)) return;
 
+    if (parseFailed) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnavailableFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_PARSE_ERROR',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
     if (permanentFailure != null) {
       if (!_safeSetState(epoch, () {
+        _isLoading = false;
         _messages.add(
           ChatMessage(
             text: _hitlUnauthorizedFallback,
@@ -1211,18 +1279,25 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
     if (terminal == null) {
       if (!_safeSetState(epoch, () {
+        _isLoading = false;
         _messages.add(
           ChatMessage(
             text: _hitlStillReviewingFallback,
             isUser: false,
             timestamp: DateTime.now(),
             errorMessage: 'HELD_POLL_CLIENT_TIMEOUT',
+            heldItemId: heldItemId,
+            showHitlResume: true,
           ),
         );
       })) {
         return;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (!_safeSetState(epoch, () => _isLoading = false)) {
       return;
     }
 
@@ -1467,7 +1542,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                   )
                                 : theme.textTheme.bodyMedium,
                           ),
-                          if (msg.errorMessage != null)
+                          if (msg.errorMessage != null &&
+                              !msg.errorMessage!.startsWith('HELD_'))
                             Text(
                               msg.errorMessage!,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -1539,6 +1615,19 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                               onPressed: _isLoading ? null : _retryGroundedAsk,
                               icon: const Icon(Icons.refresh, size: 16),
                               label: const Text('Retry'),
+                            ),
+                          ],
+                          if (msg.showHitlResume &&
+                              msg.heldItemId != null &&
+                              msg.heldItemId!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              key: const Key('ask-ai-hitl-resume'),
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => _resumeHitlPoll(msg.heldItemId!),
+                              icon: const Icon(Icons.hourglass_top, size: 16),
+                              label: const Text('Check review status'),
                             ),
                           ],
                           Text(

@@ -19,12 +19,15 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.FamilyMemberService;
 import com.careconnect.service.ai.AskAiSafetyCopy;
+import com.careconnect.service.ai.safety.SafetyDecision;
 import com.careconnect.service.ai.safety.SafetyInput;
 import com.careconnect.service.ai.safety.SafetyOutcome;
+import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
@@ -56,6 +60,7 @@ public class HitlService {
     private final PatientRepository patientRepository;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final FamilyMemberService familyMemberService;
+    private final SafetyPipeline safetyPipeline;
     private final ObjectMapper objectMapper;
     private final long ttlHours;
 
@@ -65,6 +70,7 @@ public class HitlService {
             final PatientRepository patientRepository,
             final CaregiverPatientLinkService caregiverPatientLinkService,
             final FamilyMemberService familyMemberService,
+            final SafetyPipeline safetyPipeline,
             final ObjectMapper objectMapper,
             @Value("${careconnect.ai.hitl.ttl-hours:72}") final long ttlHours) {
         this.heldItemRepository = heldItemRepository;
@@ -72,6 +78,7 @@ public class HitlService {
         this.patientRepository = patientRepository;
         this.caregiverPatientLinkService = caregiverPatientLinkService;
         this.familyMemberService = familyMemberService;
+        this.safetyPipeline = safetyPipeline;
         this.objectMapper = objectMapper;
         this.ttlHours = ttlHours <= 0 ? 72 : ttlHours;
     }
@@ -125,13 +132,36 @@ public class HitlService {
     @Transactional
     public List<HitlQueueItem> listQueue(final User reviewer) throws UnauthorizedException {
         assertReviewerRole(reviewer);
-        return heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW)
-                .stream()
-                .filter(item -> hasReviewerPatientAccess(reviewer, item))
+        final List<AiHeldItem> pending = loadPendingForReviewer(reviewer);
+        return pending.stream()
                 .peek(this::expireIfNeeded)
                 .filter(item -> item.getStatus() == AiHeldItemStatus.PENDING_REVIEW)
                 .map(this::toQueueItem)
                 .toList();
+    }
+
+    /**
+     * Expire past-due PENDING holds in batches (background scanner).
+     *
+     * @return number of rows this scan transitioned to EXPIRED
+     */
+    @Transactional
+    public int expireDueHolds(final int batchSize) {
+        final int limit = Math.max(1, batchSize);
+        final Instant now = Instant.now();
+        final List<AiHeldItem> due = heldItemRepository
+                .findByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+                        AiHeldItemStatus.PENDING_REVIEW,
+                        now,
+                        PageRequest.of(0, limit));
+        int expired = 0;
+        for (final AiHeldItem item : due) {
+            expireIfNeeded(item);
+            if (item.getStatus() == AiHeldItemStatus.EXPIRED) {
+                expired++;
+            }
+        }
+        return expired;
     }
 
     @Transactional
@@ -170,6 +200,11 @@ public class HitlService {
                     "Unsupported-claim holds require an edited answer before release");
         }
         final String finalAnswer = edited ? editedAnswer.trim() : item.getDraftAnswer();
+        if (edited) {
+            assertEditedReleaseSafe(item, reviewer, finalAnswer);
+        }
+        // Edited text is clinician-authored; do not ship stale model citations with it.
+        final String citationsJson = edited ? "[]" : item.getCitationsJson();
         final String reviewNotes = truncateNotes(notes);
         final int updated = heldItemRepository.updateOutcomeIfStatus(
                 item.getId(),
@@ -177,6 +212,7 @@ public class HitlService {
                 AiHeldItemStatus.DELIVERED,
                 "DELIVERED",
                 finalAnswer,
+                citationsJson,
                 reviewer.getId(),
                 now,
                 reviewNotes,
@@ -185,6 +221,7 @@ public class HitlService {
             throw new HitlConflictException("Held item is not pending review");
         }
         item.setFinalAnswer(finalAnswer);
+        item.setCitationsJson(citationsJson);
         item.setReviewerUserId(reviewer.getId());
         item.setReviewedAt(now);
         item.setReviewNotes(reviewNotes);
@@ -220,6 +257,7 @@ public class HitlService {
                 AiHeldItemStatus.REJECTED,
                 "WITHHELD_PERMANENTLY",
                 null,
+                item.getCitationsJson(),
                 reviewer.getId(),
                 now,
                 reviewNotes,
@@ -332,10 +370,10 @@ public class HitlService {
         }
     }
 
-    private void assertReviewerPatientAccess(final User reviewer, final AiHeldItem item)
-            throws UnauthorizedException {
+    private void assertReviewerPatientAccess(final User reviewer, final AiHeldItem item) {
         if (!hasReviewerPatientAccess(reviewer, item)) {
-            throw new UnauthorizedException("Not authorized for this patient's held items");
+            // Uniform NOT_FOUND so unscoped reviewers cannot distinguish missing vs forbidden IDs.
+            throw new HitlNotFoundException("Held item not found");
         }
     }
 
@@ -357,6 +395,45 @@ public class HitlService {
             return false;
         }
         return caregiverPatientLinkService.hasAccessToPatient(reviewer.getId(), patientUserId);
+    }
+
+    private List<AiHeldItem> loadPendingForReviewer(final User reviewer) {
+        if (reviewer.getRole() == Role.ADMIN) {
+            return heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW);
+        }
+        final List<Long> linkedPatientIds = patientRepository.findIdsLinkedToCaregiver(
+                reviewer.getId(), LocalDateTime.now());
+        if (linkedPatientIds.isEmpty()) {
+            return List.of();
+        }
+        return heldItemRepository.findByPatientIdInAndStatusOrderByCreatedAtAsc(
+                linkedPatientIds, AiHeldItemStatus.PENDING_REVIEW);
+    }
+
+    private void assertEditedReleaseSafe(
+            final AiHeldItem item,
+            final User reviewer,
+            final String finalAnswer) {
+        final SafetyOutcome recheck = safetyPipeline.process(new SafetyInput(
+                item.getQueryText(),
+                finalAnswer,
+                List.of(),
+                item.getPatientId(),
+                reviewer.getId(),
+                item.getSessionId(),
+                item.getAuditId(),
+                item.getRequestId(),
+                item.getSourceSurface(),
+                "en-US",
+                false,
+                List.of()));
+        final boolean emergency = recheck.triggerCodes().stream()
+                .anyMatch(code -> "EMERGENCY_SYMPTOM".equals(code));
+        if (recheck.decision() == SafetyDecision.BLOCK || emergency) {
+            throw new HitlConflictException(
+                    "Edited answer still matches emergency or blocked safety patterns; "
+                            + "revise before release");
+        }
     }
 
     private boolean hasUnsupportedClaimTrigger(final AiHeldItem item) {
