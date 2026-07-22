@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -553,9 +554,11 @@ class AiAskServiceTest {
     }
 
     @Test
-    @DisplayName("med-change query with grounded answer holds at Tier 2 when safety returns HOLD_TIER2")
+    @DisplayName("grounded answer holds at Tier 2 when safety returns HOLD_TIER2")
     void ask_medChange_holdTier2() throws Exception {
-        final String query = "Should I stop taking metformin?";
+        // Use a query that passes extractive grounding so HOLD comes from SafetyPipeline,
+        // not from the unsupported-claim path.
+        final String query = "metformin";
         stubHappyPathPreRetrieval(query);
         final String evidence = "Started metformin 500mg twice daily";
         final RankedChunk chunk = new RankedChunk(
@@ -564,7 +567,7 @@ class AiAskServiceTest {
                 RetrievalRecordType.CALL_SUMMARY,
                 "99",
                 evidence,
-                null,
+                "{\"contentHash\":\"abc\"}",
                 "auto",
                 0.03d,
                 1,
@@ -613,15 +616,16 @@ class AiAskServiceTest {
     }
 
     @Test
-    @DisplayName("grounding failure with draft holds when HITL enabled and pipeline returns HOLD")
+    @DisplayName("partial grounding failure holds only verified claims (never the failing ones)")
     void ask_groundingFailureWithDraft_holdsWhenHitlEnabled() throws Exception {
         stubHappyPathPreRetrieval("metformin");
+        final String verified = "Started metformin 500mg twice daily";
         final RankedChunk chunk = new RankedChunk(
                 UUID.randomUUID(),
                 42L,
                 RetrievalRecordType.CALL_SUMMARY,
                 "99",
-                "Started metformin 500mg twice daily",
+                verified,
                 null,
                 "auto",
                 0.03d,
@@ -632,12 +636,17 @@ class AiAskServiceTest {
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
-                        "Symptoms improved.",
+                        verified + " Symptoms improved.",
                         List.of("C1"),
-                        List.of(new GroundedAskLlmService.GroundedClaim(
-                                "Symptoms improved.",
-                                List.of("C1"),
-                                java.util.Map.of("C1", "Symptoms improved"))),
+                        List.of(
+                                new GroundedAskLlmService.GroundedClaim(
+                                        verified,
+                                        List.of("C1"),
+                                        java.util.Map.of("C1", verified)),
+                                new GroundedAskLlmService.GroundedClaim(
+                                        "Symptoms improved.",
+                                        List.of("C1"),
+                                        java.util.Map.of("C1", "Symptoms improved"))),
                         "amazon.nova-lite-v1:0")));
         when(safetyPipeline.process(any())).thenReturn(SafetyOutcome.holdTier2(
                 List.of("UNSUPPORTED_CLAIM"), List.of()));
@@ -650,7 +659,7 @@ class AiAskServiceTest {
                 .status(AiHeldItemStatus.PENDING_REVIEW)
                 .tier(2)
                 .triggerCodesJson("[\"UNSUPPORTED_CLAIM\"]")
-                .draftAnswer("Symptoms improved.")
+                .draftAnswer(verified)
                 .citationsJson("[]")
                 .deliveryStatus("HELD")
                 .expiresAt(Instant.now().plusSeconds(3600))
@@ -664,7 +673,12 @@ class AiAskServiceTest {
         assertThat(response.held()).isTrue();
         assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.HELD);
         assertThat(response.heldItemId()).isEqualTo(heldItemId);
-        verify(hitlService).createHold(any(), any(), anyList());
+
+        final ArgumentCaptor<com.careconnect.service.ai.safety.SafetyInput> inputCaptor =
+                ArgumentCaptor.forClass(com.careconnect.service.ai.safety.SafetyInput.class);
+        verify(hitlService).createHold(inputCaptor.capture(), any(), anyList());
+        assertThat(inputCaptor.getValue().draftAnswerText()).isEqualTo(verified);
+        assertThat(inputCaptor.getValue().draftAnswerText()).doesNotContain("Symptoms improved");
     }
 
     @Test

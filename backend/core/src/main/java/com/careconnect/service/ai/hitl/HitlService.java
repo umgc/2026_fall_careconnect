@@ -93,6 +93,7 @@ public class HitlService {
                 .status(AiHeldItemStatus.PENDING_REVIEW)
                 .tier(2)
                 .triggerCodesJson(writeJson(outcome.triggerCodes()))
+                .queryText(truncateQueryText(input.query()))
                 .queryTextHash(sha256(input.query()))
                 .draftAnswer(input.draftAnswerText() == null ? "" : input.draftAnswerText())
                 .citationsJson(writeJson(citations == null ? List.of() : citations))
@@ -156,9 +157,18 @@ public class HitlService {
         if (item.getStatus() != AiHeldItemStatus.PENDING_REVIEW) {
             throw new HitlConflictException("Held item is not pending review");
         }
+        final boolean requiresEditedAnswer = hasUnsupportedClaimTrigger(item);
+        if (requiresEditedAnswer && (editedAnswer == null || editedAnswer.isBlank())) {
+            throw new HitlConflictException(
+                    "Unsupported-claim holds require an edited answer before release");
+        }
         final Instant now = Instant.now();
         final boolean edited = editedAnswer != null && !editedAnswer.isBlank()
                 && !editedAnswer.trim().equals(item.getDraftAnswer());
+        if (requiresEditedAnswer && !edited) {
+            throw new HitlConflictException(
+                    "Unsupported-claim holds require an edited answer before release");
+        }
         final String finalAnswer = edited ? editedAnswer.trim() : item.getDraftAnswer();
         final String reviewNotes = truncateNotes(notes);
         final int updated = heldItemRepository.updateOutcomeIfStatus(
@@ -281,13 +291,11 @@ public class HitlService {
         if (caller == null || caller.getId() == null) {
             throw new UnauthorizedException("Authenticated user required");
         }
-        if (caller.getId().equals(item.getRequesterUserId())) {
-            return;
-        }
         if (caller.getRole() == Role.ADMIN) {
             return;
         }
-        // Same patient-scope rules as RetrievalScopeService. Draft stays redacted while PENDING.
+        // Always re-check live Ask patient scope. Requester identity alone is not enough:
+        // a caregiver may lose the patient link after creating the hold.
         if (!hasAskPatientAccess(caller, item.getPatientId())) {
             throw new UnauthorizedException("Not authorized to poll this held item");
         }
@@ -350,6 +358,11 @@ public class HitlService {
         return caregiverPatientLinkService.hasAccessToPatient(reviewer.getId(), patientUserId);
     }
 
+    private boolean hasUnsupportedClaimTrigger(final AiHeldItem item) {
+        return readStringList(item.getTriggerCodesJson()).stream()
+                .anyMatch(code -> "UNSUPPORTED_CLAIM".equals(code));
+    }
+
     private HitlStatusResponse toStatus(final AiHeldItem item) {
         return switch (item.getStatus()) {
             case PENDING_REVIEW -> new HitlStatusResponse(
@@ -408,6 +421,7 @@ public class HitlService {
                 item.getId(),
                 item.getPatientId(),
                 readStringList(item.getTriggerCodesJson()),
+                previewQueryText(item.getQueryText()),
                 item.getSourceSurface(),
                 item.getCreatedAt(),
                 item.getExpiresAt());
@@ -421,6 +435,7 @@ public class HitlService {
                 item.getStatus().name(),
                 item.getDeliveryStatus(),
                 readStringList(item.getTriggerCodesJson()),
+                item.getQueryText(),
                 item.getDraftAnswer(),
                 item.getFinalAnswer(),
                 item.getCitationsJson(),
@@ -485,6 +500,32 @@ public class HitlService {
         }
         final String trimmed = notes.trim();
         return trimmed.length() <= 500 ? trimmed : trimmed.substring(0, 500);
+    }
+
+    private static final int QUERY_TEXT_MAX_CHARS = 2000;
+    private static final int QUERY_PREVIEW_MAX_CHARS = 120;
+
+    private static String truncateQueryText(final String query) {
+        if (query == null) {
+            return null;
+        }
+        final String trimmed = query.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() <= QUERY_TEXT_MAX_CHARS
+                ? trimmed
+                : trimmed.substring(0, QUERY_TEXT_MAX_CHARS);
+    }
+
+    private static String previewQueryText(final String queryText) {
+        if (queryText == null || queryText.isBlank()) {
+            return null;
+        }
+        final String trimmed = queryText.trim();
+        return trimmed.length() <= QUERY_PREVIEW_MAX_CHARS
+                ? trimmed
+                : trimmed.substring(0, QUERY_PREVIEW_MAX_CHARS);
     }
 
     private static String sha256(final String value) {

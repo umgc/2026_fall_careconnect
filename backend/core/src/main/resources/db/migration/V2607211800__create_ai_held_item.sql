@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS ai_held_item (
     status VARCHAR(24) NOT NULL,
     tier SMALLINT NOT NULL DEFAULT 2,
     trigger_codes TEXT NOT NULL,
+    query_text TEXT,
     query_text_hash VARCHAR(64),
     draft_answer TEXT NOT NULL,
     final_answer TEXT,

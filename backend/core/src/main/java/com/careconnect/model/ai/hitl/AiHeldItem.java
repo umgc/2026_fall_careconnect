@@ -65,6 +65,10 @@ public class AiHeldItem {
     @Column(name = "trigger_codes", nullable = false, columnDefinition = "TEXT")
     private String triggerCodesJson;
 
+    /** Truncated Ask prompt for reviewer context; never returned on patient status poll. */
+    @Column(name = "query_text", columnDefinition = "TEXT")
+    private String queryText;
+
     @Column(name = "query_text_hash", length = 64)
     private String queryTextHash;
 
