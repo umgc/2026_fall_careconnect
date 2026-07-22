@@ -102,6 +102,8 @@ class HitlServiceTest {
         assertThat(saved.getStatus()).isEqualTo(AiHeldItemStatus.PENDING_REVIEW);
         assertThat(saved.getDeliveryStatus()).isEqualTo("HELD");
         assertThat(saved.getDraftAnswer()).isEqualTo("Draft answer");
+        assertThat(saved.getQueryText()).isEqualTo("Should I stop taking metformin?");
+        assertThat(saved.getQueryTextHash()).isNotBlank();
         assertThat(saved.getTier()).isEqualTo(2);
         assertThat(saved.getExpiresAt()).isAfter(Instant.now());
 
@@ -153,6 +155,44 @@ class HitlServiceTest {
 
         assertThat(status.deliveryStatus()).isEqualTo("HELD");
         assertThat(status.answer()).isNull();
+    }
+
+    @Test
+    @DisplayName("getStatus denies former requester caregiver after patient link is revoked")
+    void getStatus_revokedRequesterCaregiver_forbidden() {
+        final AiHeldItem item = pendingItem();
+        item.setRequesterUserId(99L);
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(caregiverPatientLinkService.hasAccessToPatient(eq(99L), eq(7L))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getStatus(item.getId(), reviewer()))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("poll");
+    }
+
+    @Test
+    @DisplayName("getDetail exposes original query text to linked reviewer")
+    void getDetail_includesQueryText() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlDetailResponse detail = service.getDetail(item.getId(), reviewer());
+
+        assertThat(detail.queryText()).isEqualTo("Should I stop taking metformin?");
+        assertThat(detail.draftAnswer()).isEqualTo(item.getDraftAnswer());
+    }
+
+    @Test
+    @DisplayName("listQueue includes query preview for linked patients")
+    void listQueue_includesQueryPreview() throws Exception {
+        final AiHeldItem linked = pendingItem();
+        when(heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW))
+                .thenReturn(List.of(linked));
+
+        final List<HitlQueueItem> queue = service.listQueue(reviewer());
+
+        assertThat(queue).hasSize(1);
+        assertThat(queue.get(0).queryPreview()).isEqualTo("Should I stop taking metformin?");
     }
 
     @Test
@@ -250,6 +290,40 @@ class HitlServiceTest {
                 any(),
                 eq("looks good"),
                 any());
+    }
+
+    @Test
+    @DisplayName("UNSUPPORTED_CLAIM holds require a non-blank edited answer before release")
+    void release_unsupportedClaim_requiresEditedAnswer() {
+        final AiHeldItem item = pendingItem();
+        item.setTriggerCodesJson("[\"UNSUPPORTED_CLAIM\"]");
+        item.setDraftAnswer("Partial verified draft");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.release(item.getId(), reviewer(), null, null))
+                .isInstanceOf(HitlConflictException.class)
+                .hasMessageContaining("edited answer");
+        assertThatThrownBy(() -> service.release(
+                        item.getId(), reviewer(), "Partial verified draft", null))
+                .isInstanceOf(HitlConflictException.class)
+                .hasMessageContaining("edited answer");
+        verify(heldItemRepository, never()).updateOutcomeIfStatus(
+                any(), any(), any(), any(), any(), anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("UNSUPPORTED_CLAIM hold releases when reviewer provides an edited answer")
+    void release_unsupportedClaim_withEdit_succeeds() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setTriggerCodesJson("[\"UNSUPPORTED_CLAIM\"]");
+        item.setDraftAnswer("Partial verified draft");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlDetailResponse detail = service.release(
+                item.getId(), reviewer(), "Clinician-approved rewritten answer", "fixed");
+
+        assertThat(detail.deliveryStatus()).isEqualTo("DELIVERED");
+        assertThat(detail.finalAnswer()).isEqualTo("Clinician-approved rewritten answer");
     }
 
     @Test
@@ -382,6 +456,7 @@ class HitlServiceTest {
                 .status(AiHeldItemStatus.PENDING_REVIEW)
                 .tier(2)
                 .triggerCodesJson("[\"MEDICATION_CHANGE\"]")
+                .queryText("Should I stop taking metformin?")
                 .queryTextHash("abc")
                 .draftAnswer("Draft answer text for review")
                 .citationsJson("[]")

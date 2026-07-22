@@ -11,6 +11,7 @@ public record HitlQueueItem(
         UUID heldItemId,
         Long patientId,
         List<String> triggerCodes,
+        String queryPreview,
         String sourceSurface,
         Instant createdAt,
         Instant expiresAt

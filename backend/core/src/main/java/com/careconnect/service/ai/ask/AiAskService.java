@@ -240,12 +240,7 @@ public class AiAskService {
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
-        final String draftAnswer = llm.claims().stream()
-                .map(GroundedAskLlmService.GroundedClaim::text)
-                .filter(text -> text != null && !text.isBlank())
-                .reduce((left, right) -> left + " " + right)
-                .orElse("");
-
+        final List<String> verifiedClaimTexts = new ArrayList<>();
         final Map<String, List<String>> verifiedEvidenceByRef = new LinkedHashMap<>();
         for (final GroundedAskLlmService.GroundedClaim claim : llm.claims()) {
             final CitationAssembler.CitationResult claimCitations =
@@ -259,6 +254,8 @@ public class AiAskService {
                             context.promptExcerptMap(),
                             context.citationRefMap())
                     || !claimCitations.grounded()) {
+                // Persist only claims that already passed verification — never the failing ones.
+                final String safeDraft = String.join(" ", verifiedClaimTexts);
                 return holdOrGroundingFailure(
                         caller,
                         request,
@@ -267,7 +264,7 @@ public class AiAskService {
                         sessionId,
                         locale,
                         sanitizedQuery,
-                        draftAnswer,
+                        safeDraft,
                         List.of(),
                         List.of("UNSUPPORTED_CLAIM"),
                         "Generated answer contains an unsupported factual claim",
@@ -277,12 +274,14 @@ public class AiAskService {
                         inferenceLatencyMs,
                         llm.modelId());
             }
+            verifiedClaimTexts.add(claim.text().trim());
             final String ref = claim.citationRefs().get(0);
             verifiedEvidenceByRef.computeIfAbsent(ref, ignored -> new ArrayList<>())
                     .add(surroundingCitationContext(
                             context.promptExcerptMap().get(ref).text(),
                             claim.evidenceByRef().get(ref)));
         }
+        final String draftAnswer = String.join(" ", verifiedClaimTexts);
         final CitationAssembler.CitationResult citationResult =
                 citationAssembler.assembleWithEvidence(
                         llm.citationRefs(),
@@ -312,12 +311,7 @@ public class AiAskService {
                     llm.modelId());
         }
         final List<AiCitation> citations = citationResult.citations();
-        final String verifiedAnswer = draftAnswer.isBlank()
-                ? llm.claims().stream()
-                        .map(GroundedAskLlmService.GroundedClaim::text)
-                        .reduce((left, right) -> left + " " + right)
-                        .orElse("")
-                : draftAnswer;
+        final String verifiedAnswer = draftAnswer;
         if (verifiedAnswer.isBlank()) {
             throw groundingFailure(
                     requestId,

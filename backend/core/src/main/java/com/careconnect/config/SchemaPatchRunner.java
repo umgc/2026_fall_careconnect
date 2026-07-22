@@ -197,6 +197,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 + "  status VARCHAR(24) NOT NULL,"
                 + "  tier SMALLINT NOT NULL DEFAULT 2,"
                 + "  trigger_codes CLOB NOT NULL,"
+                + "  query_text CLOB,"
                 + "  query_text_hash VARCHAR(64),"
                 + "  draft_answer CLOB NOT NULL,"
                 + "  final_answer CLOB,"

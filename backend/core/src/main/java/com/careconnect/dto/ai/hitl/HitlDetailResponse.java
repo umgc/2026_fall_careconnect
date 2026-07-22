@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Reviewer detail view (includes draft).
+ * Reviewer detail view (includes draft and original query).
  */
 public record HitlDetailResponse(
         UUID heldItemId,
@@ -14,6 +14,7 @@ public record HitlDetailResponse(
         String status,
         String deliveryStatus,
         List<String> triggerCodes,
+        String queryText,
         String draftAnswer,
         String finalAnswer,
         String citationsJson,

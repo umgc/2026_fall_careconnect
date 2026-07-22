@@ -112,6 +112,7 @@ class HitlControllerTest {
                 heldItemId,
                 42L,
                 List.of("MEDICATION_CHANGE"),
+                "Should I stop taking metformin?",
                 "ASK_AI",
                 Instant.now(),
                 Instant.now().plusSeconds(3600))));
@@ -119,7 +120,8 @@ class HitlControllerTest {
         mockMvc.perform(get("/api/ai/hitl/queue"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].heldItemId").value(heldItemId.toString()))
-                .andExpect(jsonPath("$[0].triggerCodes[0]").value("MEDICATION_CHANGE"));
+                .andExpect(jsonPath("$[0].triggerCodes[0]").value("MEDICATION_CHANGE"))
+                .andExpect(jsonPath("$[0].queryPreview").value("Should I stop taking metformin?"));
     }
 
     @Test
@@ -230,6 +232,7 @@ class HitlControllerTest {
                 status,
                 deliveryStatus,
                 List.of("MEDICATION_CHANGE"),
+                "Should I stop taking metformin?",
                 "draft",
                 "DELIVERED".equals(deliveryStatus) ? "draft" : null,
                 "[]",
