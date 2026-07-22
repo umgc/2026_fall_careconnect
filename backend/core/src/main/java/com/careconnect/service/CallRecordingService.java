@@ -306,7 +306,7 @@ public class CallRecordingService {
           "Could not resolve or create the recording bucket");
     }
 
-    final String timestamp = LocalDateTime.now().format(S3_TS_FORMAT);
+    final String timestamp = utcNow().format(S3_TS_FORMAT);
     final String s3Prefix = "recordings/" + callId + "/" + timestamp + "/";
     final String accountId = getAwsAccountId();
     if (accountId == null) {
@@ -374,7 +374,7 @@ public class CallRecordingService {
       recording.setInitiatedByUserId(initiatedByUserId);
       recording.setOwnerUserId(initiatedByUserId);
       if (recording.getStartedAt() == null) {
-        recording.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
+        recording.setStartedAt(utcNow());
       }
       try {
         recordingRepository.saveAndFlush(recording);
@@ -547,7 +547,21 @@ public class CallRecordingService {
     }
 
     final CallRecording rec = opt.get();
-    refreshConcatenationStatus(rec);
+    // READY rows are already reconciled by the background cleaner. Re-listing S3 + raw cleanup
+    // on every status poll made this endpoint ~15–20s and Flutter's 15s client timed out to null
+    // (no Call Recording card / no sentiment clips). Only refresh while still stitching.
+    if (!CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())) {
+      try {
+        refreshConcatenationStatus(rec);
+      } catch (Exception e) {
+        if (log.isWarnEnabled()) {
+          log.warn(
+              "Concatenation refresh failed for callId={}; returning DB recording metadata: {}",
+              callId,
+              e.getMessage());
+        }
+      }
+    }
     final Map<String, Object> result = buildRecordingMap(rec);
 
     // Enrich with live pipeline status if still active and AWS available
@@ -660,14 +674,13 @@ public class CallRecordingService {
       playbackResult.put("recordingStatus", rec.getStatus());
       playbackResult.put("concatenationStatus", rec.getConcatenationStatus());
       playbackResult.put("transcriptionStatus", rec.getTranscriptionStatus());
-      // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
-      // User-initiated recordings with a resolved video key are ready to play.
-      playbackResult.put("playbackReady", rec.getInitiatedByUserId() != null);
+      // System recordings (initiatedByUserId == null) are transcription-only and should not
+      // reach this success branch without a resolved composited key. Once the video key is
+      // resolved, the clip is ready to play (R5).
+      playbackResult.put("playbackReady", true);
       playbackResult.put(
           "recordingStartedAt",
-          rec.getStartedAt() != null
-              ? rec.getStartedAt().atZone(ZoneOffset.UTC).toInstant().toString()
-              : null);
+          rec.getStartedAt() != null ? toUtcInstantString(rec.getStartedAt()) : null);
       return playbackResult;
 
     } catch (Exception e) {
@@ -682,6 +695,19 @@ public class CallRecordingService {
   // PRIVATE HELPERS
   // ================================================================
 
+  /**
+   * Recording timestamps are stored as {@link LocalDateTime} but always represent UTC wall-clock.
+   * Emitting {@code atZone(UTC).toInstant()} is only correct when writers use this helper.
+   */
+  private static LocalDateTime utcNow() {
+    return LocalDateTime.now(ZoneOffset.UTC);
+  }
+
+  /** ISO-8601 UTC Instant ({@code ...Z}) for Flutter {@code DateTime.parse(...).toUtc()}. */
+  private static String toUtcInstantString(final LocalDateTime utcWallClock) {
+    return utcWallClock.atZone(ZoneOffset.UTC).toInstant().toString();
+  }
+
   private void finalizeRecordingInDb(final CallRecording rec) {
     if (rec == null) {
       return;
@@ -690,7 +716,7 @@ public class CallRecordingService {
       return;
     }
 
-    final LocalDateTime endedAt = LocalDateTime.now();
+    final LocalDateTime endedAt = utcNow();
     rec.setStatus(STATUS_STOPPED);
     rec.setLifecycleStatus(RecordingLifecycleStatus.COMPLETE);
     rec.setClaimToken(null);
@@ -750,9 +776,9 @@ public class CallRecordingService {
     m.put("concatenationPipelineId", rec.getConcatenationPipelineId());
     m.put("concatenationStatus", rec.getConcatenationStatus());
     m.put("transcriptionStatus", rec.getTranscriptionStatus());
-    // System recordings (initiatedByUserId == null) are transcription-only; never allow playback
-    m.put("playbackReady",
-        rec.getInitiatedByUserId() != null && resolvePlayableVideoKey(rec) != null);
+    // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
+    // Do not hit S3 here — metadata reads must stay fast (see getRecordingStatus).
+    m.put("playbackReady", isPlaybackReadyFromMetadata(rec));
     m.put("initiatedByUserId", rec.getInitiatedByUserId());
     m.put("ownerUserId", rec.getOwnerUserId());
     m.put("consentedAt", rec.getConsentedAt());
@@ -1017,6 +1043,24 @@ public class CallRecordingService {
       }
       return fallbackStatus == null ? CONCATENATION_STATUS_PROCESSING : fallbackStatus;
     }
+  }
+
+  /**
+   * Fast playback-ready flag for status/list responses. Trusts DB {@code READY} so callers do not
+   * block on S3. Presigned playback still resolves the object key on demand.
+   */
+  private boolean isPlaybackReadyFromMetadata(final CallRecording rec) {
+    if (rec == null || rec.getInitiatedByUserId() == null) {
+      return false;
+    }
+    if (CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())) {
+      return true;
+    }
+    // Legacy recordings (no concatenation pipeline) may still have chunk video in S3.
+    if (rec.getConcatenationPipelineId() == null || rec.getConcatenationPipelineId().isBlank()) {
+      return resolvePlayableVideoKeyWithoutRefresh(rec) != null;
+    }
+    return false;
   }
 
   private String resolvePlayableVideoKey(final CallRecording rec) {
