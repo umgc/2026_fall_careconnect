@@ -166,8 +166,9 @@ class HitlServiceTest {
         when(caregiverPatientLinkService.hasAccessToPatient(eq(99L), eq(7L))).thenReturn(false);
 
         assertThatThrownBy(() -> service.getStatus(item.getId(), reviewer()))
-                .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("poll");
+                .isInstanceOf(HitlNotFoundException.class)
+                .hasMessageContaining("not found");
+        verify(heldItemRepository, never()).expireIfPending(any(), any());
     }
 
     @Test
@@ -196,7 +197,7 @@ class HitlServiceTest {
     }
 
     @Test
-    @DisplayName("getStatus denies caller outside patient scope")
+    @DisplayName("getStatus denies caller outside patient scope with uniform not-found")
     void getStatus_unlinkedCaller_forbidden() {
         final AiHeldItem item = pendingItem();
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
@@ -206,8 +207,27 @@ class HitlServiceTest {
         when(caregiverPatientLinkService.hasAccessToPatient(eq(55L), eq(7L))).thenReturn(false);
 
         assertThatThrownBy(() -> service.getStatus(item.getId(), stranger))
-                .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("poll");
+                .isInstanceOf(HitlNotFoundException.class)
+                .hasMessageContaining("not found");
+        verify(heldItemRepository, never()).expireIfPending(any(), any());
+    }
+
+    @Test
+    @DisplayName("getStatus does not expire before access is authorized")
+    void getStatus_unlinkedCaller_doesNotExpire() {
+        final AiHeldItem item = pendingItem();
+        item.setExpiresAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        final User stranger = new User();
+        stranger.setId(55L);
+        stranger.setRole(Role.CAREGIVER);
+        when(caregiverPatientLinkService.hasAccessToPatient(eq(55L), eq(7L))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getStatus(item.getId(), stranger))
+                .isInstanceOf(HitlNotFoundException.class);
+        assertThat(item.getStatus()).isEqualTo(AiHeldItemStatus.PENDING_REVIEW);
+        verify(heldItemRepository, never()).expireIfPending(any(), any());
+        verify(auditEventRepository, never()).save(any());
     }
 
     @Test

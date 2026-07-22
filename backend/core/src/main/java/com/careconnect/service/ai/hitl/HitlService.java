@@ -117,8 +117,8 @@ public class HitlService {
     public HitlStatusResponse getStatus(final UUID heldItemId, final User caller)
             throws UnauthorizedException {
         final AiHeldItem item = requireItem(heldItemId);
-        expireIfNeeded(item);
         assertStatusPollAccess(caller, item);
+        expireIfNeeded(item);
         return toStatus(item);
     }
 
@@ -127,9 +127,9 @@ public class HitlService {
         assertReviewerRole(reviewer);
         return heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW)
                 .stream()
+                .filter(item -> hasReviewerPatientAccess(reviewer, item))
                 .peek(this::expireIfNeeded)
                 .filter(item -> item.getStatus() == AiHeldItemStatus.PENDING_REVIEW)
-                .filter(item -> hasReviewerPatientAccess(reviewer, item))
                 .map(this::toQueueItem)
                 .toList();
     }
@@ -139,8 +139,8 @@ public class HitlService {
             throws UnauthorizedException {
         assertReviewerRole(reviewer);
         final AiHeldItem item = requireItem(heldItemId);
-        expireIfNeeded(item);
         assertReviewerPatientAccess(reviewer, item);
+        expireIfNeeded(item);
         return toDetail(item);
     }
 
@@ -152,8 +152,8 @@ public class HitlService {
             final String notes) throws UnauthorizedException {
         assertReviewerRole(reviewer);
         final AiHeldItem item = requireItem(heldItemId);
-        expireIfNeeded(item);
         assertReviewerPatientAccess(reviewer, item);
+        expireIfNeeded(item);
         if (item.getStatus() != AiHeldItemStatus.PENDING_REVIEW) {
             throw new HitlConflictException("Held item is not pending review");
         }
@@ -207,8 +207,8 @@ public class HitlService {
             final String reason) throws UnauthorizedException {
         assertReviewerRole(reviewer);
         final AiHeldItem item = requireItem(heldItemId);
-        expireIfNeeded(item);
         assertReviewerPatientAccess(reviewer, item);
+        expireIfNeeded(item);
         if (item.getStatus() != AiHeldItemStatus.PENDING_REVIEW) {
             throw new HitlConflictException("Held item is not pending review");
         }
@@ -296,8 +296,9 @@ public class HitlService {
         }
         // Always re-check live Ask patient scope. Requester identity alone is not enough:
         // a caregiver may lose the patient link after creating the hold.
+        // Deny with NOT_FOUND so unscoped callers cannot distinguish missing vs forbidden IDs.
         if (!hasAskPatientAccess(caller, item.getPatientId())) {
-            throw new UnauthorizedException("Not authorized to poll this held item");
+            throw new HitlNotFoundException("Held item not found");
         }
     }
 
