@@ -676,9 +676,14 @@ class AiAskServiceTest {
 
         final ArgumentCaptor<com.careconnect.service.ai.safety.SafetyInput> inputCaptor =
                 ArgumentCaptor.forClass(com.careconnect.service.ai.safety.SafetyInput.class);
-        verify(hitlService).createHold(inputCaptor.capture(), any(), anyList());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<com.careconnect.dto.ai.AiCitation>> citationsCaptor =
+                ArgumentCaptor.forClass(List.class);
+        verify(hitlService).createHold(inputCaptor.capture(), any(), citationsCaptor.capture());
         assertThat(inputCaptor.getValue().draftAnswerText()).isEqualTo(verified);
         assertThat(inputCaptor.getValue().draftAnswerText()).doesNotContain("Symptoms improved");
+        assertThat(citationsCaptor.getValue()).isNotEmpty();
+        assertThat(citationsCaptor.getValue().get(0).citationId()).isEqualTo("C1");
     }
 
     @Test

@@ -256,6 +256,12 @@ public class AiAskService {
                     || !claimCitations.grounded()) {
                 // Persist only claims that already passed verification — never the failing ones.
                 final String safeDraft = String.join(" ", verifiedClaimTexts);
+                final List<AiCitation> safeCitations = verifiedEvidenceByRef.isEmpty()
+                        ? List.of()
+                        : citationAssembler.assembleWithEvidence(
+                                List.copyOf(verifiedEvidenceByRef.keySet()),
+                                context.citationRefMap(),
+                                verifiedEvidenceByRef).citations();
                 return holdOrGroundingFailure(
                         caller,
                         request,
@@ -265,7 +271,7 @@ public class AiAskService {
                         locale,
                         sanitizedQuery,
                         safeDraft,
-                        List.of(),
+                        safeCitations,
                         List.of("UNSUPPORTED_CLAIM"),
                         "Generated answer contains an unsupported factual claim",
                         retrieval,
