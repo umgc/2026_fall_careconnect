@@ -174,6 +174,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "WHERE session_id IS NOT NULL"
         );
         applyEmailCredentialPatches();
+        applyPatch(
+            "V2607032300 - add include_documents_by_default to user_ai_config",
+            "ALTER TABLE user_ai_config " +
+            "ADD COLUMN IF NOT EXISTS include_documents_by_default BOOLEAN DEFAULT TRUE"
+        );
         if (isPostgreSql()) {
             withProductionSchemaMigrationLock(() -> {
                 patchLedger.initialize();
