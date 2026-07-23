@@ -26,9 +26,12 @@ class CallLifecycleMigrationSqlTest {
                 .contains("termination_attempt_count INTEGER NOT NULL DEFAULT 0")
                 .contains("termination_next_retry_at TIMESTAMP")
                 .contains("termination_notify_user_ids TEXT")
-                .contains("c.conrelid = 'call_sessions'::regclass")
-                .contains("c.confrelid = 'users'::regclass")
-                .contains("termination_attempt_count >= 0")
+                .doesNotContain("DO $$")
+                .contains("DROP CONSTRAINT IF EXISTS fk_call_sessions_termination_claimed_by")
+                .contains("ADD CONSTRAINT fk_call_sessions_termination_claimed_by")
+                .contains("FOREIGN KEY (termination_claimed_by_user_id) REFERENCES users(id)")
+                .contains("DROP CONSTRAINT IF EXISTS ck_call_sessions_termination_attempt_count")
+                .contains("CHECK (termination_attempt_count >= 0)")
                 .contains("idx_call_sessions_termination_retry")
                 .contains("WHERE status = 'TERMINATING'");
     }
