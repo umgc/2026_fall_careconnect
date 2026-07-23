@@ -23,6 +23,8 @@ public enum RetrievalRecordType {
     SUMMARY_CONDITION,
     SUMMARY_SOAP,
     SUMMARY_CLINICAL_OBSERVATION,
+    /** Derived from careInstructions type=medication (FR-AI-11 / Task 4.5). */
+    MEDICATION_TIMELINE_EVENT,
     MEDICATION,
     TASK,
     EVV_RECORD,
@@ -44,7 +46,8 @@ public enum RetrievalRecordType {
                     SUMMARY_CARE_INSTRUCTION,
                     SUMMARY_CONDITION,
                     SUMMARY_SOAP,
-                    SUMMARY_CLINICAL_OBSERVATION));
+                    SUMMARY_CLINICAL_OBSERVATION,
+                    MEDICATION_TIMELINE_EVENT));
     private static final Set<String> SUMMARY_TYPE_NAMES = SUMMARY_TYPES.stream()
             .map(Enum::name)
             .collect(Collectors.toUnmodifiableSet());
@@ -66,6 +69,7 @@ public enum RetrievalRecordType {
                 SUMMARY_CONDITION,
                 SUMMARY_SOAP,
                 SUMMARY_CLINICAL_OBSERVATION,
+                MEDICATION_TIMELINE_EVENT,
                 MEDICATION,
                 TASK,
                 VITAL_SIGN

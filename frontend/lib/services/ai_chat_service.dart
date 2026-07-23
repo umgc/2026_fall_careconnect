@@ -20,6 +20,7 @@ const Set<String> _aiAskRecordTypes = {
   'SUMMARY_CONDITION',
   'SUMMARY_SOAP',
   'SUMMARY_CLINICAL_OBSERVATION',
+  'MEDICATION_TIMELINE_EVENT',
   'MEDICATION',
   'TASK',
   'EVV_RECORD',
@@ -324,6 +325,7 @@ class AiAskResult {
   final bool success;
   final AiAskDeliveryStatus deliveryStatus;
   final String? requestId;
+  final String? auditId;
   final String? sessionId;
   final String? conversationId;
   final String? answer;
@@ -343,6 +345,7 @@ class AiAskResult {
     required this.success,
     required this.deliveryStatus,
     this.requestId,
+    this.auditId,
     this.sessionId,
     this.conversationId,
     this.answer,
@@ -385,7 +388,7 @@ class AiAskResult {
         ? _requiredUuid(json, 'sessionId')
         : _optionalUuid(json, 'sessionId');
     final conversationId = _optionalUuid(json, 'conversationId');
-    _optionalUuid(json, 'auditId');
+    final auditId = _optionalUuid(json, 'auditId');
     final heldItemId = status == AiAskDeliveryStatus.held
         ? _requiredUuid(json, 'heldItemId')
         : _optionalUuid(json, 'heldItemId');
@@ -500,6 +503,7 @@ class AiAskResult {
       success: json['success'] == true,
       deliveryStatus: status,
       requestId: requestId,
+      auditId: auditId,
       sessionId: sessionId,
       conversationId: conversationId,
       answer: exposeDeliveredContent ? answer : null,
@@ -530,6 +534,7 @@ class AIChatService {
     required int patientId,
     String? sessionId,
     String? conversationId,
+    String inputModality = 'TEXT',
     String locale = 'en-US',
     List<String>? sourceTypes,
     Duration timeout = const Duration(seconds: 20),
@@ -543,6 +548,9 @@ class AIChatService {
               sourceTypes.any((type) => type.trim().isEmpty))) {
         throw const FormatException('Invalid sourceTypes');
       }
+      final modality = inputModality.trim().toUpperCase() == 'VOICE'
+          ? 'VOICE'
+          : 'TEXT';
       final headers = await ApiService.getAuthHeaders();
       headers['Content-Type'] = 'application/json';
       headers['Accept'] = 'application/json';
@@ -556,7 +564,7 @@ class AIChatService {
       request.body = jsonEncode({
         'query': query,
         'patientId': patientId,
-        'inputModality': 'TEXT',
+        'inputModality': modality,
         'locale': locale,
         if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
         if (conversationId != null && conversationId.isNotEmpty)
@@ -613,6 +621,7 @@ class AIChatService {
           success: false,
           deliveryStatus: AiAskDeliveryStatus.withheld,
           requestId: parsed.requestId,
+          auditId: parsed.auditId,
           sessionId: parsed.sessionId,
           conversationId: parsed.conversationId,
           error: parsed.error ??
@@ -631,6 +640,7 @@ class AIChatService {
         success: parsed.success,
         deliveryStatus: parsed.deliveryStatus,
         requestId: parsed.requestId,
+        auditId: parsed.auditId,
         sessionId: parsed.sessionId,
         conversationId: parsed.conversationId,
         answer: parsed.answer,
@@ -704,6 +714,40 @@ class AIChatService {
       );
     } finally {
       client?.close();
+    }
+  }
+
+  /// Persist an Ask AI confirm-with-provider decision (Task 6.6).
+  static Future<bool> submitConfirmation({
+    required String sessionId,
+    required int patientId,
+    String? requestId,
+    String? auditId,
+    required String decision,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .post(
+            Uri.parse('${getBackendBaseUrl()}/api/ai/ask/confirmation'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'patientId': patientId,
+              'decision': decision,
+              if (requestId != null && requestId.isNotEmpty)
+                'requestId': requestId,
+              if (auditId != null && auditId.isNotEmpty) 'auditId': auditId,
+            }),
+          )
+          .timeout(timeout);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      debugPrint('Ask AI confirmation submit failed: $e');
+      return false;
     }
   }
 

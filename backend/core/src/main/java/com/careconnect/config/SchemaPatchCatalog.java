@@ -52,7 +52,10 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607211800_create_ai_held_item.sql"),
             new SchemaPatchLedger.Patch(
                     "2607231600-ai-ask-audit",
-                    "db/schema-patches/2607231600_create_ai_ask_audit.sql"));
+                    "db/schema-patches/2607231600_create_ai_ask_audit.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607232100-visit-summaries-ask-confirmation",
+                    "db/schema-patches/2607232100_visit_summaries_and_ask_confirmation.sql"));
 
     private SchemaPatchCatalog() {
     }

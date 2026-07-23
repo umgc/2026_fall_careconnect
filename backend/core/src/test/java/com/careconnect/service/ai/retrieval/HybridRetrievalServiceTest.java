@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.retrieval;
 
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
+import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +21,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,15 +37,20 @@ class HybridRetrievalServiceTest {
     private VectorSimilaritySearchService vectorSimilaritySearchService;
     @Mock
     private ChunkEmbeddingService chunkEmbeddingService;
+    @Mock
+    private RetrievalIndexChunkRepository chunkRepository;
 
     private HybridRetrievalService service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(chunkRepository.findByPatientIdAndRecordType(anyLong(), anyString()))
+                .thenReturn(List.of());
         service = new HybridRetrievalService(
                 fullTextSearchService,
                 vectorSimilaritySearchService,
                 chunkEmbeddingService,
+                chunkRepository,
                 20,
                 20,
                 10,
@@ -136,6 +144,33 @@ class HybridRetrievalServiceTest {
         assertThat(result.chunks().get(0).chunkId()).isEqualTo(allowed);
         assertThat(result.ftsHitCount()).isEqualTo(1);
         verify(fullTextSearchService).search(eq(42L), eq("note"), anySet(), eq(60));
+    }
+
+    @Test
+    @DisplayName("search filters on_consent chunks when caregiver lacks consent")
+    void search_filtersOnConsentWithoutConsent() {
+        final UUID allowed = UUID.randomUUID();
+        final UUID gated = UUID.randomUUID();
+        when(fullTextSearchService.search(eq(42L), eq("note"), anySet(), eq(60)))
+                .thenReturn(List.of(
+                        chunk(allowed, "CALL_SUMMARY", "auto"),
+                        chunk(gated, "CALL_SUMMARY", "on_consent")));
+        when(chunkEmbeddingService.embedQuery("note")).thenReturn(Optional.empty());
+
+        final RetrievalScope caregiverScope = new RetrievalScope(
+                7L,
+                Role.CAREGIVER,
+                Set.of(42L),
+                Set.of(RetrievalRecordType.CALL_SUMMARY),
+                Set.of(),
+                new CaregiverVisibilityFilter(Role.CAREGIVER, false),
+                false);
+
+        final HybridRetrievalResult result = service.search(caregiverScope, 42L, "note");
+
+        assertThat(result.chunks()).hasSize(1);
+        assertThat(result.chunks().get(0).chunkId()).isEqualTo(allowed);
+        assertThat(result.chunks()).noneMatch(c -> c.chunkId().equals(gated));
     }
 
     private static RetrievalScope scope(final Long patientId) {

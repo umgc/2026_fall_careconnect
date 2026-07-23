@@ -7,11 +7,13 @@ import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.model.UspsMailpiece;
+import com.careconnect.model.VisitSummary;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
+import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.CallTranscriptService;
@@ -55,6 +57,8 @@ class RetrievalIndexServiceTest {
     @Mock
     private CallSummaryRepository callSummaryRepository;
     @Mock
+    private VisitSummaryRepository visitSummaryRepository;
+    @Mock
     private CallSessionRepository callSessionRepository;
     @Mock
     private CallTranscriptSegmentRepository transcriptSegmentRepository;
@@ -74,6 +78,7 @@ class RetrievalIndexServiceTest {
         final ObjectMapper mapper = new ObjectMapper();
         service = new RetrievalIndexService(
                 callSummaryRepository,
+                visitSummaryRepository,
                 callSessionRepository,
                 callTranscriptService,
                 uspsMailpieceRepository,
@@ -152,6 +157,7 @@ class RetrievalIndexServiceTest {
                                 + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"old\","
+                                + "\"caregiverVisibility\":\"on_consent\","
                                 + "\"episodeType\":\"call\",\"callId\":\"call-9\"}")
                 .build();
         final CallSummary summary = new CallSummary();
@@ -216,6 +222,7 @@ class RetrievalIndexServiceTest {
                                 + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"old\","
+                                + "\"caregiverVisibility\":\"on_consent\","
                                 + "\"episodeType\":\"call\",\"callId\":\"call-9\"}")
                 .build();
         when(chunkRepository.findCallSummaryChunksForReplacement(
@@ -450,6 +457,7 @@ class RetrievalIndexServiceTest {
                                 + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
                                 + "\"summarizationEngine\":\"engine\","
                                 + "\"section\":\"overview\",\"title\":\"old\","
+                                + "\"caregiverVisibility\":\"on_consent\","
                                 + "\"episodeType\":\"call\",\"callId\":\"call-9\"}")
                 .build();
         final CallSummary summary = new CallSummary();
@@ -636,8 +644,61 @@ class RetrievalIndexServiceTest {
     }
 
     @Test
-    @DisplayName("ingestSummaryCreated defers visit summaries until Task 1.4")
-    void ingestSummaryCreated_defersVisit() {
+    @DisplayName("ingestSummaryCreated indexes visit summaries when VisitSummary is present")
+    void ingestSummaryCreated_indexesVisitWhenPresent() {
+        final VisitSummary summary = new VisitSummary();
+        summary.setId(50L);
+        summary.setVisitId("visit-50");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        summary.setGeneratedAt(LocalDateTime.now());
+        summary.setSummaryJson("""
+                {"headline":"Clinic visit","careInstructions":[
+                  {"type":"medication","text":"Take metformin with food","status":"started"}
+                ]}
+                """);
+        when(visitSummaryRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("visit-summary:50"), eq("visit-summary:50"),
+                eq(SummarySourceKey.VISIT_KIND), anyCollection()))
+                .thenReturn(List.of());
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "visit",
+                "visit_summaries",
+                50L,
+                null,
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                0,
+                "on_consent",
+                null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        final int written = service.ingestSummaryCreated(payload);
+
+        assertThat(written).isGreaterThanOrEqualTo(2);
+        verify(visitSummaryRepository).findByIdForUpdate(50L);
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L), eq("visit-summary:50"), eq("visit-summary:50"),
+                eq(SummarySourceKey.VISIT_KIND), anyCollection());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(RetrievalIndexChunk::getRecordType)
+                .contains(
+                        RetrievalRecordType.VISIT_SUMMARY.name(),
+                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated defers when VisitSummary is missing without burning attempts")
+    void ingestSummaryCreated_defersVisitWhenMissing() {
+        when(visitSummaryRepository.findByIdForUpdate(50L)).thenReturn(Optional.empty());
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "visit",
                 "visit_summaries",
@@ -653,7 +714,7 @@ class RetrievalIndexServiceTest {
 
         assertThatThrownBy(() -> service.ingestSummaryCreated(payload))
                 .isInstanceOf(IndexingDeferredException.class)
-                .hasMessageContaining("Task 1.4")
+                .hasMessageContaining("VisitSummary not found")
                 .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt()).isFalse());
         verify(callSummaryRepository, never()).findByIdForUpdate(any());
         verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(

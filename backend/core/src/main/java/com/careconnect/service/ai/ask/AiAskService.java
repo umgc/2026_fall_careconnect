@@ -21,6 +21,8 @@ import com.careconnect.service.ai.hitl.HitlService;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.HybridRetrievalResult;
 import com.careconnect.service.ai.retrieval.HybridRetrievalService;
+import com.careconnect.service.ai.retrieval.RetrievalPlan;
+import com.careconnect.service.ai.retrieval.RetrievalQueryPlanner;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
@@ -67,6 +69,7 @@ public class AiAskService {
 
     private final RetrievalScopeService retrievalScopeService;
     private final HybridRetrievalService hybridRetrievalService;
+    private final RetrievalQueryPlanner retrievalQueryPlanner;
     private final GroundedAskLlmService groundedAskLlmService;
     private final CitationAssembler citationAssembler;
     private final InputSanitizationService inputSanitizationService;
@@ -74,11 +77,13 @@ public class AiAskService {
     private final SafetyPipeline safetyPipeline;
     private final HitlService hitlService;
     private final AiAskAuditService askAuditService;
+    private final AiAskConfirmationService askConfirmationService;
     private final boolean hitlEnabled;
 
     public AiAskService(
             final RetrievalScopeService retrievalScopeService,
             final HybridRetrievalService hybridRetrievalService,
+            final RetrievalQueryPlanner retrievalQueryPlanner,
             final GroundedAskLlmService groundedAskLlmService,
             final CitationAssembler citationAssembler,
             final InputSanitizationService inputSanitizationService,
@@ -86,9 +91,11 @@ public class AiAskService {
             final SafetyPipeline safetyPipeline,
             final HitlService hitlService,
             final AiAskAuditService askAuditService,
+            final AiAskConfirmationService askConfirmationService,
             @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
+        this.retrievalQueryPlanner = retrievalQueryPlanner;
         this.groundedAskLlmService = groundedAskLlmService;
         this.citationAssembler = citationAssembler;
         this.inputSanitizationService = inputSanitizationService;
@@ -96,6 +103,7 @@ public class AiAskService {
         this.safetyPipeline = safetyPipeline;
         this.hitlService = hitlService;
         this.askAuditService = askAuditService;
+        this.askConfirmationService = askConfirmationService;
         this.hitlEnabled = hitlEnabled;
     }
 
@@ -266,9 +274,11 @@ public class AiAskService {
 
         final long retrievalStarted = System.nanoTime();
         final HybridRetrievalResult retrieval;
+        final RetrievalPlan plan;
         try {
+            plan = retrievalQueryPlanner.plan(sanitizedQuery);
             retrieval = hybridRetrievalService.search(
-                    scope, request.patientId(), sanitizedQuery);
+                    scope, request.patientId(), sanitizedQuery, plan);
         } catch (final RuntimeException ex) {
             throw new AskAiUnavailableException(
                     requestId,
@@ -314,7 +324,11 @@ public class AiAskService {
                 Map.of(
                         "chunksRetrieved", retrieval.chunks().size(),
                         "latencyMs", retrievalLatencyMs,
-                        "vectorDegraded", retrieval.vectorDegraded()));
+                        "vectorDegraded", retrieval.vectorDegraded(),
+                        "intent", plan.intent().name(),
+                        "medicationHint", plan.medicationNameHint() == null
+                                ? ""
+                                : plan.medicationNameHint()));
 
         final long inferenceStarted = System.nanoTime();
         final Optional<GroundedAskLlmService.GroundedLlmResult> llmOpt;
@@ -557,7 +571,7 @@ public class AiAskService {
                 citations,
                 disclaimer(locale),
                 new AiEscalation(1, escalationLevel, false),
-                new AiConfirmationHint(true, AskAiSafetyCopy.CONFIRM_EN),
+                confirmationHint(caller, request, sessionId),
                 new AiRetrievalMeta(
                         retrieval.chunks().size(),
                         context.usedChunks().size(),
@@ -568,6 +582,15 @@ public class AiAskService {
                 null,
                 null,
                 null);
+    }
+
+    private AiConfirmationHint confirmationHint(
+            final User caller, final AiAskRequest request, final UUID sessionId) {
+        if (askConfirmationService.hasActiveSessionApproval(
+                sessionId, request.patientId(), caller.getId())) {
+            return new AiConfirmationHint(false, null);
+        }
+        return new AiConfirmationHint(true, AskAiSafetyCopy.CONFIRM_EN);
     }
 
     private AiAskResponse holdOrGroundingFailure(

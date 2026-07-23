@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 
 // Message model for chat
@@ -25,6 +26,9 @@ class ChatMessage {
   final String? requestIdentity;
   final String? heldItemId;
   final bool showHitlResume;
+  final String? requestId;
+  final String? auditId;
+  final String? sessionId;
 
   ChatMessage({
     required this.text,
@@ -40,6 +44,9 @@ class ChatMessage {
     this.requestIdentity,
     this.heldItemId,
     this.showHitlResume = false,
+    this.requestId,
+    this.auditId,
+    this.sessionId,
   });
 }
 
@@ -124,6 +131,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   String? _retryQuery;
   String? _retryRequestIdentity;
   bool _retryEnabled = false;
+  String _lastInputModality = 'TEXT';
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechReady = false;
+  bool _isListening = false;
 
   bool get _isGrounded => widget.mode == AiChatMode.groundedRecords;
 
@@ -139,6 +150,29 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     _checkAndLoadHistory();
 
     _startInactivityTimer(); // Start 15-minute inactivity timer
+    if (_isGrounded) {
+      unawaited(_initSpeech());
+    }
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      _speechReady = await _speech.initialize(
+        onError: (_) {
+          if (mounted) {
+            setState(() => _isListening = false);
+          }
+        },
+        onStatus: (status) {
+          if (!mounted) return;
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isListening = false);
+          }
+        },
+      );
+    } catch (_) {
+      _speechReady = false;
+    }
   }
 
   @override
@@ -226,6 +260,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _invalidatePendingRequests();
+    if (_isListening) {
+      unawaited(_speech.stop());
+    }
     _controller.dispose();
     _animationController.dispose();
     _inactivityTimer?.cancel();
@@ -758,12 +795,97 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         (_isGrounded || _uploadedFiles.isEmpty)) {
       return;
     }
+    _lastInputModality = 'TEXT';
     final userMessage = _controller.text.trim();
     _controller.clear();
     unawaited(_dispatchMessage(
       userMessage: userMessage,
       isRetry: false,
     ));
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    if (!_isGrounded || _isLoading) return;
+    _resetInactivityTimer();
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    if (!_speechReady) {
+      await _initSpeech();
+    }
+    if (!_speechReady) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Speech recognition is unavailable.')),
+      );
+      return;
+    }
+    setState(() => _isListening = true);
+    try {
+      await _speech.listen(
+        listenFor: const Duration(seconds: 12),
+        pauseFor: const Duration(seconds: 2),
+        onResult: (result) {
+          if (!mounted) return;
+          if (result.recognizedWords.isNotEmpty) {
+            _controller.text = result.recognizedWords;
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _controller.text.length),
+            );
+          }
+          if (result.finalResult) {
+            setState(() => _isListening = false);
+            final spoken = _controller.text.trim();
+            if (spoken.isNotEmpty && !_isLoading) {
+              _lastInputModality = 'VOICE';
+              _controller.clear();
+              unawaited(_dispatchMessage(
+                userMessage: spoken,
+                isRetry: false,
+              ));
+            }
+          }
+        },
+        listenOptions: stt.SpeechListenOptions(
+          cancelOnError: true,
+          partialResults: true,
+          listenMode: stt.ListenMode.dictation,
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isListening = false);
+    }
+  }
+
+  Future<void> _submitConfirmationDecision({
+    required ChatMessage message,
+    required String decision,
+  }) async {
+    final sessionId = message.sessionId ?? _askSessionId;
+    final patientId = widget.patientId;
+    if (sessionId == null ||
+        sessionId.isEmpty ||
+        patientId == null ||
+        patientId <= 0) {
+      return;
+    }
+    final ok = await AIChatService.submitConfirmation(
+      sessionId: sessionId,
+      patientId: patientId,
+      requestId: message.requestId,
+      auditId: message.auditId,
+      decision: decision,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Confirmation recorded.'
+            : 'Could not record confirmation. Please try again.'),
+      ),
+    );
   }
 
   void _retryGroundedAsk() {
@@ -853,6 +975,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               disclaimer: msg.disclaimer,
               escalation: msg.escalation,
               confirmation: msg.confirmation,
+              requestId: msg.requestId,
+              auditId: msg.auditId,
+              sessionId: msg.sessionId,
             );
             break;
           }
@@ -957,6 +1082,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               patientId: currentPatientId!,
               sessionId: _askSessionId,
               conversationId: _conversationId,
+              inputModality: _lastInputModality,
               abortTrigger: abortCompleter.future,
             )
           : null;
@@ -1084,11 +1210,15 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             showRetry: showRetry,
             retryQuery: showRetry ? _retryQuery : null,
             requestIdentity: showRetry ? stableRequestIdentity : null,
+            requestId: askResult?.requestId,
+            auditId: askResult?.auditId,
+            sessionId: askResult?.sessionId ?? _askSessionId,
           ),
         );
         _isLoading = false;
         // Clear uploaded files after successful processing
         _uploadedFiles.clear();
+        _lastInputModality = 'TEXT';
       })) {
         return;
       }
@@ -1612,6 +1742,48 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 4,
+                              children: [
+                                TextButton(
+                                  key: const Key('ask-ai-confirm-once'),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => unawaited(
+                                            _submitConfirmationDecision(
+                                              message: msg,
+                                              decision: 'APPROVE_ONCE',
+                                            ),
+                                          ),
+                                  child: const Text('Approve once'),
+                                ),
+                                TextButton(
+                                  key: const Key('ask-ai-confirm-session'),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => unawaited(
+                                            _submitConfirmationDecision(
+                                              message: msg,
+                                              decision: 'APPROVE_SESSION',
+                                            ),
+                                          ),
+                                  child: const Text('Approve for session'),
+                                ),
+                                TextButton(
+                                  key: const Key('ask-ai-confirm-decline'),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => unawaited(
+                                            _submitConfirmationDecision(
+                                              message: msg,
+                                              decision: 'DECLINE',
+                                            ),
+                                          ),
+                                  child: const Text('Decline'),
+                                ),
+                              ],
+                            ),
                           ],
                           if (msg.showRetry &&
                               msg.retryQuery != null &&
@@ -1740,6 +1912,18 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                     onPressed: _isFilePickerOpen ? null : _pickFiles,
                     tooltip: 'Attach file',
                   ),
+                if (_isGrounded)
+                  IconButton(
+                    key: const Key('ask-ai-mic'),
+                    icon: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      color: _isListening
+                          ? colorScheme.error
+                          : colorScheme.primary,
+                    ),
+                    onPressed: _isLoading ? null : () => unawaited(_toggleVoiceInput()),
+                    tooltip: _isListening ? 'Stop listening' : 'Voice input',
+                  ),
                 Expanded(
                   child: TextField(
                     controller: _controller,
@@ -1747,7 +1931,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                     maxLines: 4,
                     decoration: InputDecoration(
                       hintText: _isGrounded
-                          ? 'Ask about this patient\'s records...'
+                          ? (_isListening
+                              ? 'Listening...'
+                              : 'Ask about this patient\'s records...')
                           : 'Type your message...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),

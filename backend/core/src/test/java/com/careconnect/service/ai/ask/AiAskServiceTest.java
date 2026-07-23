@@ -15,6 +15,8 @@ import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.HybridRetrievalResult;
 import com.careconnect.service.ai.retrieval.HybridRetrievalService;
 import com.careconnect.service.ai.retrieval.RankedChunk;
+import com.careconnect.service.ai.retrieval.RetrievalPlan;
+import com.careconnect.service.ai.retrieval.RetrievalQueryPlanner;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
@@ -59,6 +61,8 @@ class AiAskServiceTest {
     @Mock
     private HybridRetrievalService hybridRetrievalService;
     @Mock
+    private RetrievalQueryPlanner retrievalQueryPlanner;
+    @Mock
     private GroundedAskLlmService groundedAskLlmService;
     @Mock
     private InputSanitizationService inputSanitizationService;
@@ -70,6 +74,8 @@ class AiAskServiceTest {
     private HitlService hitlService;
     @Mock
     private AiAskAuditService askAuditService;
+    @Mock
+    private AiAskConfirmationService askConfirmationService;
 
     private AiAskService service;
 
@@ -94,6 +100,9 @@ class AiAskServiceTest {
                     command.clientRequestId(),
                     new AtomicInteger(0));
         });
+        lenient().when(retrievalQueryPlanner.plan(any())).thenReturn(RetrievalPlan.general());
+        lenient().when(askConfirmationService.hasActiveSessionApproval(any(), anyLong(), anyLong()))
+                .thenReturn(false);
         service = buildService(true);
         lenient().when(safetyPipeline.process(any()))
                 .thenReturn(SafetyOutcome.deliverTier1(List.of(), List.of(), "none"));
@@ -103,6 +112,7 @@ class AiAskServiceTest {
         return new AiAskService(
                 retrievalScopeService,
                 hybridRetrievalService,
+                retrievalQueryPlanner,
                 groundedAskLlmService,
                 new CitationAssembler(
                         new CitationDeepLinkBuilder(),
@@ -112,6 +122,7 @@ class AiAskServiceTest {
                 safetyPipeline,
                 hitlService,
                 askAuditService,
+                askConfirmationService,
                 hitlEnabled);
     }
 
@@ -119,7 +130,7 @@ class AiAskServiceTest {
     @DisplayName("ask returns NO_RECORDS without calling LLM when retrieval is empty")
     void ask_noRecords() throws Exception {
         stubHappyPathPreRetrieval("metformin");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(HybridRetrievalResult.empty("metformin"));
 
         final AiAskResponse response = service.ask(caller(), request("metformin"));
@@ -150,7 +161,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -196,7 +207,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -295,7 +306,7 @@ class AiAskServiceTest {
         final RankedChunk chunk = new RankedChunk(
                 UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
                 evidence, null, "auto", 0.001d, null, 9, "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(
                         List.of(chunk), "metformin", false, 0, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
@@ -319,7 +330,7 @@ class AiAskServiceTest {
                 UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
                 first + " A follow-up occurred between changes. " + second,
                 null, "auto", 0.03d, 1, 1, "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(
                         List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
@@ -366,7 +377,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -396,7 +407,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -432,7 +443,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -467,7 +478,7 @@ class AiAskServiceTest {
                 1,
                 null,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("pain")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("pain"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "pain", true, 1, 0));
         when(groundedAskLlmService.generate(anyString(), anyString())).thenReturn(Optional.empty());
 
@@ -491,7 +502,7 @@ class AiAskServiceTest {
                 1,
                 null,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("pain")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("pain"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "pain", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenThrow(new GroundedOutputValidationException("missing claims"));
@@ -520,7 +531,7 @@ class AiAskServiceTest {
                     assertThat(rejected.getAuditId()).isNotNull();
                     assertThat(rejected.getSessionId()).isNotNull();
                 });
-        verify(hybridRetrievalService, never()).search(any(), anyLong(), anyString());
+        verify(hybridRetrievalService, never()).search(any(), anyLong(), anyString(), any());
     }
 
     @Test
@@ -541,7 +552,7 @@ class AiAskServiceTest {
                         Set.of(),
                         new CaregiverVisibilityFilter(Role.PATIENT, true),
                         true));
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(HybridRetrievalResult.empty("metformin"));
 
         final AiAskResponse response = service.ask(caller(), request("met\u202Eformin"));
@@ -597,7 +608,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq(query)))
+        when(hybridRetrievalService.search(any(), eq(42L), eq(query), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), query, false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -658,7 +669,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -729,7 +740,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -764,7 +775,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
                 .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
@@ -817,7 +828,7 @@ class AiAskServiceTest {
                 1,
                 1,
                 "C1");
-        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin")))
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
                 .thenReturn(new HybridRetrievalResult(
                         List.of(chunk), "metformin", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
