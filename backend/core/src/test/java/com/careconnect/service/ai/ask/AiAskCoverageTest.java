@@ -43,7 +43,9 @@ class AiAskCoverageTest {
         assertThat(source).contains("HitlService");
         assertThat(source).contains("HOLD_TIER2");
         assertThat(source).contains("HITL is disabled");
-        assertThat(source).contains("TODO(Task 6.x)");
+        assertThat(source).contains("AiAskAuditService");
+        assertThat(source).contains("finalizeRecord");
+        assertThat(source).doesNotContain("TODO(Task 6.x)");
         assertThat(source).doesNotContain("patientId={}", "caller={}");
         assertThat(source).doesNotContain("MedicalContextService");
     }

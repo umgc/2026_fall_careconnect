@@ -8,6 +8,7 @@ import com.careconnect.model.User;
 import com.careconnect.model.ai.hitl.AiHeldItem;
 import com.careconnect.model.ai.hitl.AiHeldItemStatus;
 import com.careconnect.security.Role;
+import com.careconnect.service.ai.audit.AiAskAuditService;
 import com.careconnect.service.ai.hitl.HitlService;
 import com.careconnect.service.ai.retrieval.CaregiverVisibilityFilter;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,11 +68,32 @@ class AiAskServiceTest {
     private SafetyPipeline safetyPipeline;
     @Mock
     private HitlService hitlService;
+    @Mock
+    private AiAskAuditService askAuditService;
 
     private AiAskService service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(askAuditService.startRequest(any())).thenAnswer(invocation -> {
+            final AiAskAuditService.StartRequestCommand command = invocation.getArgument(0);
+            final UUID auditId = command.auditId() == null ? UUID.randomUUID() : command.auditId();
+            final UUID requestId =
+                    command.requestId() == null ? UUID.randomUUID() : command.requestId();
+            return new AiAskAuditService.AuditSession(
+                    auditId,
+                    requestId,
+                    command.sessionId(),
+                    command.patientId(),
+                    command.callerUserId(),
+                    command.callerRole(),
+                    command.inputModality() == null ? "TEXT" : command.inputModality(),
+                    command.locale() == null ? "en-US" : command.locale(),
+                    "testhash",
+                    command.queryText() == null ? 0 : command.queryText().length(),
+                    command.clientRequestId(),
+                    new AtomicInteger(0));
+        });
         service = buildService(true);
         lenient().when(safetyPipeline.process(any()))
                 .thenReturn(SafetyOutcome.deliverTier1(List.of(), List.of(), "none"));
@@ -88,6 +111,7 @@ class AiAskServiceTest {
                 governanceService,
                 safetyPipeline,
                 hitlService,
+                askAuditService,
                 hitlEnabled);
     }
 
@@ -587,7 +611,7 @@ class AiAskServiceTest {
         when(safetyPipeline.process(any())).thenReturn(SafetyOutcome.holdTier2(
                 List.of("MEDICATION_CHANGE"), List.of()));
         final UUID heldItemId = UUID.randomUUID();
-        when(hitlService.createHold(any(), any(), anyList())).thenReturn(AiHeldItem.builder()
+        when(hitlService.createHold(any(), any(), anyList(), any())).thenReturn(AiHeldItem.builder()
                 .id(heldItemId)
                 .patientId(42L)
                 .requesterUserId(7L)
@@ -612,7 +636,9 @@ class AiAskServiceTest {
         assertThat(response.heldItemId()).isEqualTo(heldItemId);
         assertThat(response.answer()).isNull();
         assertThat(response.citations()).isEmpty();
-        verify(hitlService).createHold(any(), any(), anyList());
+        final org.mockito.InOrder order = org.mockito.Mockito.inOrder(hitlService, askAuditService);
+        order.verify(hitlService).createHold(any(), any(), anyList(), any());
+        order.verify(askAuditService).finalizeRecord(any(), any());
     }
 
     @Test
@@ -651,7 +677,7 @@ class AiAskServiceTest {
         when(safetyPipeline.process(any())).thenReturn(SafetyOutcome.holdTier2(
                 List.of("UNSUPPORTED_CLAIM"), List.of()));
         final UUID heldItemId = UUID.randomUUID();
-        when(hitlService.createHold(any(), any(), anyList())).thenReturn(AiHeldItem.builder()
+        when(hitlService.createHold(any(), any(), anyList(), any())).thenReturn(AiHeldItem.builder()
                 .id(heldItemId)
                 .patientId(42L)
                 .requesterUserId(7L)
@@ -679,7 +705,7 @@ class AiAskServiceTest {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<List<com.careconnect.dto.ai.AiCitation>> citationsCaptor =
                 ArgumentCaptor.forClass(List.class);
-        verify(hitlService).createHold(inputCaptor.capture(), any(), citationsCaptor.capture());
+        verify(hitlService).createHold(inputCaptor.capture(), any(), citationsCaptor.capture(), any());
         assertThat(inputCaptor.getValue().draftAnswerText()).isEqualTo(verified);
         assertThat(inputCaptor.getValue().draftAnswerText()).doesNotContain("Symptoms improved");
         assertThat(citationsCaptor.getValue()).isNotEmpty();
@@ -717,7 +743,7 @@ class AiAskServiceTest {
 
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
                 .isInstanceOf(AskAiGroundingException.class);
-        verify(hitlService, never()).createHold(any(), any(), anyList());
+        verify(hitlService, never()).createHold(any(), any(), anyList(), any());
     }
 
     @Test
@@ -755,7 +781,7 @@ class AiAskServiceTest {
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
                 .isInstanceOf(AskAiGroundingException.class)
                 .hasMessageContaining("HITL is disabled");
-        verify(hitlService, never()).createHold(any(), any(), anyList());
+        verify(hitlService, never()).createHold(any(), any(), anyList(), any());
     }
 
     private void stubHappyPathPreRetrieval(final String query) throws Exception {

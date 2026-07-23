@@ -49,7 +49,10 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607192000_summary_replay_quarantine_reason.sql"),
             new SchemaPatchLedger.Patch(
                     "2607211800-ai-held-item",
-                    "db/schema-patches/2607211800_create_ai_held_item.sql"));
+                    "db/schema-patches/2607211800_create_ai_held_item.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607231600-ai-ask-audit",
+                    "db/schema-patches/2607231600_create_ai_ask_audit.sql"));
 
     private SchemaPatchCatalog() {
     }

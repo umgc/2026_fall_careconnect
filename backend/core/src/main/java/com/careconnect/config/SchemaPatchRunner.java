@@ -170,6 +170,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             applyRetrievalIndexChunkPatches();
             applyH2TranscriptArchiveLifecycleTables();
             applyH2AiHeldItemTables();
+            applyH2AiAskAuditTables();
         }
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
@@ -224,6 +225,68 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 + "  event_type VARCHAR(40) NOT NULL,"
                 + "  actor_user_id BIGINT,"
                 + "  payload_json CLOB,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+    }
+
+    /**
+     * H2/integration-test parity for Ask AI audit ledger (production applies via catalog).
+     */
+    private void applyH2AiAskAuditTables() {
+        applyRequiredPatch(
+            "H2 – ai_ask_audit_record",
+            "CREATE TABLE IF NOT EXISTS ai_ask_audit_record ("
+                + "  audit_id UUID PRIMARY KEY,"
+                + "  request_id UUID NOT NULL UNIQUE,"
+                + "  session_id UUID,"
+                + "  client_request_id VARCHAR(64),"
+                + "  patient_id BIGINT NOT NULL,"
+                + "  caller_user_id BIGINT NOT NULL,"
+                + "  caller_role VARCHAR(32) NOT NULL,"
+                + "  input_modality VARCHAR(8) NOT NULL DEFAULT 'TEXT',"
+                + "  locale VARCHAR(10) NOT NULL DEFAULT 'en-US',"
+                + "  query_text_hash VARCHAR(64) NOT NULL,"
+                + "  query_length INT NOT NULL,"
+                + "  delivery_status VARCHAR(24) NOT NULL,"
+                + "  tier SMALLINT NOT NULL DEFAULT 0,"
+                + "  held BOOLEAN NOT NULL DEFAULT FALSE,"
+                + "  held_item_id UUID,"
+                + "  error_code VARCHAR(40),"
+                + "  answer_text_hash VARCHAR(64),"
+                + "  answer_length INT,"
+                + "  citations_json CLOB NOT NULL,"
+                + "  escalation_json CLOB NOT NULL,"
+                + "  trigger_codes CLOB NOT NULL,"
+                + "  validation_findings_json CLOB,"
+                + "  retrieval_meta_json CLOB NOT NULL,"
+                + "  scope_json CLOB NOT NULL,"
+                + "  model_provider VARCHAR(32),"
+                + "  model_id VARCHAR(128),"
+                + "  total_latency_ms INT,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_audit_event",
+            "CREATE TABLE IF NOT EXISTS ai_ask_audit_event ("
+                + "  id UUID PRIMARY KEY,"
+                + "  audit_id UUID NOT NULL,"
+                + "  event_type VARCHAR(48) NOT NULL,"
+                + "  event_sequence INT NOT NULL,"
+                + "  actor_user_id BIGINT,"
+                + "  payload_json CLOB NOT NULL,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  CONSTRAINT uq_ai_ask_audit_event_seq UNIQUE (audit_id, event_sequence)"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_audit_delivery_supplement",
+            "CREATE TABLE IF NOT EXISTS ai_ask_audit_delivery_supplement ("
+                + "  id UUID PRIMARY KEY,"
+                + "  audit_id UUID NOT NULL,"
+                + "  delivery_status VARCHAR(24) NOT NULL,"
+                + "  final_answer_hash VARCHAR(64),"
+                + "  citations_json CLOB NOT NULL,"
+                + "  reviewer_user_id BIGINT,"
+                + "  reviewed_at TIMESTAMP NOT NULL,"
                 + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
                 + ")");
     }

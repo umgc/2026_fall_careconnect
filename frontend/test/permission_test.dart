@@ -71,14 +71,15 @@ void main() {
       expect(Permission.useAiFeatures.toBackendString(), 'USE_AI_FEATURES');
     });
 
-    test('all 28 permissions exist', () {
-      expect(Permission.values.length, 28,
-          reason: 'Should have exactly 28 permissions matching backend');
+    test('all 29 permissions exist', () {
+      expect(Permission.values.length, 29,
+          reason: 'Should have exactly 29 permissions matching backend');
     });
 
     test('permission categories are correct', () {
       expect(Permission.values.contains(Permission.viewAllPatients), true);
       expect(Permission.values.contains(Permission.useAiFeatures), true);
+      expect(Permission.values.contains(Permission.reviewAiHolds), true);
       expect(Permission.values.contains(Permission.manageDevices), true);
       expect(Permission.values.contains(Permission.manageNotifications), true);
       expect(Permission.values.contains(Permission.viewAuditLogs), true);
@@ -90,6 +91,7 @@ void main() {
         Permission.createPatients: 'CREATE_PATIENTS',
         Permission.recordHealthData: 'RECORD_HEALTH_DATA',
         Permission.useAiFeatures: 'USE_AI_FEATURES',
+        Permission.reviewAiHolds: 'REVIEW_AI_HOLDS',
         Permission.manageNotifications: 'MANAGE_NOTIFICATIONS',
         Permission.viewAuditLogs: 'VIEW_AUDIT_LOGS',
       };
