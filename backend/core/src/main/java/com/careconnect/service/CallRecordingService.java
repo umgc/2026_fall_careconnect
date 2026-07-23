@@ -1,6 +1,5 @@
 package com.careconnect.service;
 
-import com.careconnect.config.MediaInsightsConfig;
 import com.careconnect.model.CallAttendee;
 import com.careconnect.model.CallRecording;
 import com.careconnect.model.RecordingLifecycleStatus;
@@ -185,8 +184,6 @@ public class CallRecordingService {
 
   @Autowired(required = false)
   private PostCallTranscriptionJobRepository transcriptionJobRepository;
-
-  @Autowired private MediaInsightsConfig mediaInsightsConfig;
 
   @Autowired private KvsStreamPoolService kvsStreamPoolService;
 
