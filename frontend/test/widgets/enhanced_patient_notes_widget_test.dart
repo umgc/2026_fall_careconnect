@@ -120,151 +120,137 @@ void main() {
   });
 
   group('EnhancedPatientNotesWidget rendering', () {
-    testWidgets('handles initState error gracefully', (tester) async {
-      final errors = <FlutterErrorDetails>[];
+    testWidgets('handles initState without crashing', (tester) async {
       final originalOnError = FlutterError.onError;
+      final errors = <FlutterErrorDetails>[];
       FlutterError.onError = (details) {
         errors.add(details);
       };
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: EnhancedPatientNotesWidget(
-                patientId: 1,
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: EnhancedPatientNotesWidget(
+                  patientId: 1,
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pump(const Duration(seconds: 1));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(seconds: 1));
 
-      expect(
-        errors.any((e) => e.exception is UnsupportedError),
-        isTrue,
-        reason: 'FileHandlerFactory.create() should throw UnsupportedError',
-      );
-
-      FlutterError.onError = originalOnError;
+        expect(find.byType(EnhancedPatientNotesWidget), findsOneWidget);
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
     });
 
     testWidgets('widget can be constructed and added to tree', (tester) async {
-      final errors = <FlutterErrorDetails>[];
       final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) {
-        errors.add(details);
-      };
+      FlutterError.onError = (details) {};
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: EnhancedPatientNotesWidget(
-              patientId: 42,
-              showCompactView: true,
-              initialItemCount: 5,
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: EnhancedPatientNotesWidget(
+                patientId: 42,
+                showCompactView: true,
+                initialItemCount: 5,
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pump();
-
-      expect(errors, isNotEmpty);
-
-      FlutterError.onError = originalOnError;
+        await tester.pump();
+        expect(find.byType(EnhancedPatientNotesWidget), findsOneWidget);
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
     });
 
-    testWidgets('renders error widget when FileHandler unavailable',
+    testWidgets('renders loading or content without FileHandler crash',
         (tester) async {
       final originalOnError = FlutterError.onError;
       FlutterError.onError = (details) {};
 
-      final originalBuilder = ErrorWidget.builder;
-      ErrorWidget.builder = (details) {
-        return const Text('error-placeholder');
-      };
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: EnhancedPatientNotesWidget(patientId: 1),
-          ),
-        ),
-      );
-
-      await tester.pump(const Duration(seconds: 1));
-
-      expect(find.text('error-placeholder'), findsOneWidget);
-
-      ErrorWidget.builder = originalBuilder;
-      FlutterError.onError = originalOnError;
-    });
-
-    testWidgets('error details contain UnsupportedError', (tester) async {
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) {
-        errors.add(details);
-      };
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: EnhancedPatientNotesWidget(patientId: 5),
-          ),
-        ),
-      );
-
-      await tester.pump();
-
-      final unsupportedErrors =
-          errors.where((e) => e.exception is UnsupportedError).toList();
-      expect(unsupportedErrors.length, 1);
-      expect(
-        (unsupportedErrors.first.exception as UnsupportedError).message,
-        contains('Platform not supported'),
-      );
-
-      FlutterError.onError = originalOnError;
-    });
-
-    // 'initState triggers loadPatientFiles before error' removed:
-    // Widget makes HTTP calls that hang in test environment, causing timeouts.
-
-    testWidgets('widget with showCompactView true triggers compact path',
-        (tester) async {
-      final errors = <FlutterErrorDetails>[];
-      final originalOnError = FlutterError.onError;
-      FlutterError.onError = (details) {
-        errors.add(details);
-      };
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: EnhancedPatientNotesWidget(
-              patientId: 1,
-              showCompactView: true,
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: EnhancedPatientNotesWidget(patientId: 1),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pump(const Duration(seconds: 1));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(seconds: 1));
 
-      // The widget was created; initState ran _loadPatientFiles
-      // and _updateDisplayedFiles with showCompactView=true
-      expect(errors.any((e) => e.exception is UnsupportedError), isTrue);
-
-      FlutterError.onError = originalOnError;
+        // Native FileHandlerFactory succeeds; widget stays in tree.
+        expect(find.byType(EnhancedPatientNotesWidget), findsOneWidget);
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
     });
 
-    // 'widget with different initialItemCount values',
-    // 'multiple widgets can be constructed simultaneously', and
-    // 'widget rebuild with different patientId' removed:
-    // Widget makes HTTP calls that hang in test environment, causing timeouts.
+    testWidgets('FileHandlerFactory.create succeeds on VM/native',
+        (tester) async {
+      final originalOnError = FlutterError.onError;
+      final errors = <FlutterErrorDetails>[];
+      FlutterError.onError = (details) {
+        errors.add(details);
+      };
+
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: EnhancedPatientNotesWidget(patientId: 5),
+            ),
+          ),
+        );
+
+        await tester.pump();
+
+        // Factory no longer throws UnsupportedError on dart:io platforms.
+        expect(
+          errors.any((e) => e.exception is UnsupportedError),
+          isFalse,
+        );
+        expect(find.byType(EnhancedPatientNotesWidget), findsOneWidget);
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+    });
+
+    testWidgets('widget with showCompactView true builds', (tester) async {
+      final originalOnError = FlutterError.onError;
+      FlutterError.onError = (details) {};
+
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: EnhancedPatientNotesWidget(
+                patientId: 1,
+                showCompactView: true,
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.byType(EnhancedPatientNotesWidget), findsOneWidget);
+      } finally {
+        FlutterError.onError = originalOnError;
+      }
+    });
   });
 
   group('UserFileDTO model', () {

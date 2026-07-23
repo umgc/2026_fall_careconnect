@@ -1,20 +1,109 @@
 // Tests for PatientDetailsPage
 // (lib/features/health/caregiver-patient-list/page/patient_details_page.dart).
-//
-// The source has a bug: DefaultTabController(length: 5) but only 4 tabs and
-// 4 TabBarView children. We cannot modify source code.
-// The widget tree IS built by pumpWidget even though scheduler assertions fire.
-// We use tester.takeException() to consume them.
+
+import 'dart:convert';
 
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../mock_user_provider.dart';
+
+late Future<http.Response> Function(http.Request) _httpHandler;
+
+final MockClient _globalMockClient =
+    MockClient((request) => _httpHandler(request));
+
+Map<String, dynamic> _sarahProfilePayload() => {
+      'id': 42,
+      'firstName': 'Sarah',
+      'lastName': 'Johnson',
+      'email': 'sarah.johnson@email.com',
+      'phone': '(555) 123-4567',
+      'dob': '1980-05-15',
+      'gender': 'Female',
+      'mrn': 'MRN-2024-0156',
+      'diagnoses': [
+        'Type 2 Diabetes',
+        'Hypertension',
+        'Chronic Fatigue Syndrome',
+      ],
+      'allergies': [
+        {'allergen': 'Penicillin', 'severity': 'Severe'},
+        {'allergen': 'Shellfish', 'severity': 'Moderate'},
+      ],
+      'address': {
+        'line1': '123 Main St',
+        'city': 'Springfield',
+        'state': 'IL',
+        'zip': '62701',
+      },
+    };
+
+List<Map<String, dynamic>> _sarahFamilyMembers() => [
+      {
+        'familyMemberName': 'Michael Johnson',
+        'relationship': 'Spouse',
+        'familyMemberPhone': '(555) 987-6543',
+      },
+    ];
+
+void _setSarahHttpMocks() {
+  _httpHandler = (request) async {
+    final path = request.url.path;
+
+    if (path.contains('/profile')) {
+      return http.Response(jsonEncode(_sarahProfilePayload()), 200);
+    }
+    if (path.contains('/family-members')) {
+      return http.Response(jsonEncode(_sarahFamilyMembers()), 200);
+    }
+    if (path.contains('/medications') || path.contains('/medication')) {
+      return http.Response(jsonEncode([]), 200);
+    }
+    if (path.contains('/risk-types') || path.contains('/riskTypes')) {
+      return http.Response(jsonEncode([]), 200);
+    }
+    if (path.contains('/risks')) {
+      return http.Response(jsonEncode([]), 200);
+    }
+    if (path.contains('/mood') || path.contains('/mood-history')) {
+      return http.Response(jsonEncode([]), 200);
+    }
+    if (path.contains('/symptom')) {
+      return http.Response(jsonEncode([]), 200);
+    }
+    if (path.contains('/telemetry') || path.contains('/call')) {
+      return http.Response(jsonEncode([]), 200);
+    }
+    if (path.contains('/search') || path.contains('/check-in') ||
+        path.contains('/checkin')) {
+      return http.Response(
+        jsonEncode({
+          'items': [],
+          'page': 0,
+          'size': 5,
+          'totalElements': 0,
+          'totalPages': 0,
+        }),
+        200,
+      );
+    }
+    if (RegExp(r'/patients/\d+$').hasMatch(path) ||
+        RegExp(r'/patients/\d+/').hasMatch(path)) {
+      return http.Response(jsonEncode(_sarahProfilePayload()), 200);
+    }
+    return http.Response(jsonEncode({}), 200);
+  };
+  ApiService.debugSetHttpClient(_globalMockClient);
+}
 
 void main() {
   // ───────────────────── setup / teardown ─────────────────────
@@ -24,8 +113,21 @@ void main() {
         .setMockMethodCallHandler(
       const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
       (call) async {
-        if (call.method == 'readAll') return <String, String>{};
-        if (call.method == 'containsKey') return false;
+        if (call.method == 'readAll') {
+          return <String, String>{
+            'jwt_token': 'mock-token',
+            'user_session': jsonEncode({'id': 1, 'token': 'mock-token'}),
+          };
+        }
+        if (call.method == 'read') {
+          final key = (call.arguments as Map?)?['key'] as String?;
+          if (key == 'jwt_token') return 'mock-token';
+          if (key == 'user_session') {
+            return jsonEncode({'id': 1, 'token': 'mock-token'});
+          }
+          return null;
+        }
+        if (call.method == 'containsKey') return true;
         return null;
       },
     );
@@ -37,9 +139,11 @@ void main() {
         return null;
       },
     );
+    _setSarahHttpMocks();
   });
 
   tearDown(() {
+    ApiService.debugResetHttpClient();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
@@ -112,7 +216,7 @@ void main() {
 
   // ───────────────────── Helper ─────────────────────
   Widget buildTestWidget({
-    String patientId = 'invalid_id',
+    String patientId = '42',
     bool isCaregiver = false,
     MockUserProvider? provider,
   }) {
@@ -135,10 +239,7 @@ void main() {
     );
   }
 
-  /// Pump the widget and drain all known exceptions.
-  /// The source bug (length:5 vs 4 tabs) causes 2 scheduler assertions.
-  /// tester.takeException() drains them one by one.
-  Future<void> pumpSafe(WidgetTester tester, Widget widget) async {
+  Future<void> pumpReady(WidgetTester tester, Widget widget) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -146,11 +247,13 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(widget);
-    // Drain scheduler assertion exceptions (tab count mismatch).
-    // pumpWidget's internal pump() triggers 2 assertions but
-    // takeException() can only drain one per pump cycle.
-    tester.takeException();
+    await http.runWithClient(() async {
+      await tester.pumpWidget(widget);
+      // Allow async patient load to settle.
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }, () => _globalMockClient);
   }
 
   // ───────────────────── widget rendering tests ─────────────────────
@@ -158,125 +261,134 @@ void main() {
   group('PatientDetailsPage – widget rendering', () {
     testWidgets('renders PatientDetailsPage widget',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.byType(PatientDetailsPage), findsOneWidget);
     });
 
     testWidgets('renders Scaffold', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.byType(Scaffold), findsWidgets);
     });
 
     testWidgets('renders DefaultTabController',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.byType(DefaultTabController), findsOneWidget);
     });
 
     testWidgets('renders AppBar', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.byType(AppBar), findsOneWidget);
     });
 
     testWidgets('AppBar shows patient name Sarah Johnson',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.text('Sarah Johnson'), findsWidgets);
     });
 
     testWidgets('AppBar shows MRN in subtitle', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.textContaining('MRN-2024-0156'), findsWidgets);
     });
 
     testWidgets('AppBar subtitle contains Patient Details',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.textContaining('Patient Details'), findsOneWidget);
     });
 
-    testWidgets('renders all four tab labels', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+    testWidgets('renders all five tab labels', (WidgetTester tester) async {
+      await pumpReady(tester, buildTestWidget());
       expect(find.text('Info'), findsOneWidget);
       expect(find.text('Mood'), findsOneWidget);
       expect(find.text('Health'), findsOneWidget);
+      expect(find.text('In-home'), findsOneWidget);
       expect(find.text('Virtual Check-In'), findsOneWidget);
     });
 
     testWidgets('renders tab icons', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.byIcon(Icons.info_outline), findsAtLeastNWidgets(1));
       expect(find.byIcon(Icons.favorite_border), findsAtLeastNWidgets(1));
-      expect(find.byIcon(Icons.health_and_safety_outlined), findsAtLeastNWidgets(1));
-      expect(find.byIcon(Icons.video_call_outlined), findsAtLeastNWidgets(1));
+      expect(
+        find.byIcon(Icons.health_and_safety_outlined),
+        findsAtLeastNWidgets(1),
+      );
+      expect(find.byIcon(Icons.home_outlined), findsAtLeastNWidgets(1));
+      expect(
+        find.byIcon(Icons.video_call_outlined),
+        findsAtLeastNWidgets(1),
+      );
     });
 
     testWidgets('renders TabBar', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.byType(TabBar), findsOneWidget);
     });
 
     testWidgets('renders diagnoses in header', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.text('Type 2 Diabetes'), findsOneWidget);
       expect(find.text('Hypertension'), findsOneWidget);
       expect(find.text('Chronic Fatigue Syndrome'), findsOneWidget);
     });
 
     testWidgets('renders allergies in header', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
-      expect(find.text('Penicillin'), findsOneWidget);
-      expect(find.text('Shellfish'), findsOneWidget);
+      await pumpReady(tester, buildTestWidget());
+      // Allergies are rendered as "allergen (severity)" when severity is present.
+      expect(find.textContaining('Penicillin'), findsOneWidget);
+      expect(find.textContaining('Shellfish'), findsOneWidget);
     });
 
     testWidgets('Info tab shows contact phone by default',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
-      expect(find.text('(555) 123-4567'), findsOneWidget);
+      await pumpReady(tester, buildTestWidget());
+      expect(find.text('(555) 123-4567'), findsWidgets);
     });
 
     testWidgets('Info tab shows email', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.text('sarah.johnson@email.com'), findsOneWidget);
     });
 
     testWidgets('Info tab shows emergency contact name',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.text('Michael Johnson'), findsOneWidget);
     });
 
     testWidgets('Info tab shows emergency contact relationship',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
+      await pumpReady(tester, buildTestWidget());
       expect(find.text('Spouse'), findsOneWidget);
     });
 
     testWidgets('Info tab shows emergency contact phone',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget());
-      expect(find.text('(555) 987-6543'), findsOneWidget);
+      await pumpReady(tester, buildTestWidget());
+      expect(find.text('(555) 987-6543'), findsWidgets);
     });
 
     testWidgets('builds with isCaregiver true', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget(isCaregiver: true));
+      await pumpReady(tester, buildTestWidget(isCaregiver: true));
       expect(find.text('Sarah Johnson'), findsWidgets);
     });
 
     testWidgets('builds with isCaregiver false', (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget(isCaregiver: false));
+      await pumpReady(tester, buildTestWidget(isCaregiver: false));
       expect(find.text('Sarah Johnson'), findsWidgets);
     });
 
     testWidgets('valid numeric patientId renders page',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget(patientId: '42'));
+      await pumpReady(tester, buildTestWidget(patientId: '42'));
       expect(find.byType(PatientDetailsPage), findsOneWidget);
     });
 
     testWidgets('builds with patient role UserProvider',
         (WidgetTester tester) async {
-      await pumpSafe(
+      await pumpReady(
         tester,
         buildTestWidget(
           provider: MockUserProvider(
@@ -287,10 +399,18 @@ void main() {
       expect(find.byType(PatientDetailsPage), findsOneWidget);
     });
 
-    testWidgets('builds with empty patientId',
+    testWidgets('invalid patientId shows error state',
         (WidgetTester tester) async {
-      await pumpSafe(tester, buildTestWidget(patientId: ''));
+      await pumpReady(tester, buildTestWidget(patientId: 'invalid_id'));
       expect(find.byType(PatientDetailsPage), findsOneWidget);
+      expect(find.textContaining('Invalid patient ID'), findsWidgets);
+    });
+
+    testWidgets('builds with empty patientId shows error',
+        (WidgetTester tester) async {
+      await pumpReady(tester, buildTestWidget(patientId: ''));
+      expect(find.byType(PatientDetailsPage), findsOneWidget);
+      expect(find.textContaining('Invalid patient ID'), findsWidgets);
     });
   });
 }

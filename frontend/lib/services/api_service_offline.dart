@@ -46,6 +46,22 @@ class ApiServiceOffline {
   @visibleForTesting
   static void debugOverrideHttpClient(http.Client? client) {
     _testHttpClient = client;
+  /// Swap the underlying transport on [httpClient] (tests only).
+  @visibleForTesting
+  static void debugSetHttpClient(http.Client client) {
+    final current = httpClient;
+    if (current is OfflineQueueHttpClient) {
+      current.debugSetInnerClient(client);
+    }
+  }
+
+  /// Restore the default underlying transport (tests only).
+  @visibleForTesting
+  static void debugResetHttpClient() {
+    final current = httpClient;
+    if (current is OfflineQueueHttpClient) {
+      current.debugResetInnerClient();
+    }
   }
 
   /// Configures whether offline writes are allowed.

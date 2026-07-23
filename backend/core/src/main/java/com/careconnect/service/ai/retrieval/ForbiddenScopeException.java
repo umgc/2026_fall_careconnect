@@ -15,19 +15,25 @@ public class ForbiddenScopeException extends Exception {
     private final ScopeDenialReason denialReason;
     private final Long patientId;
     private final Long callerUserId;
+    private final UUID requestId;
     private final UUID auditId;
+    private final UUID sessionId;
 
     private ForbiddenScopeException(
             ScopeDenialReason denialReason,
             Long patientId,
             Long callerUserId,
             String message,
-            UUID auditId) {
+            UUID requestId,
+            UUID auditId,
+            UUID sessionId) {
         super(message);
         this.denialReason = denialReason;
         this.patientId = patientId;
         this.callerUserId = callerUserId;
+        this.requestId = requestId;
         this.auditId = auditId;
+        this.sessionId = sessionId;
     }
 
     public static ForbiddenScopeException of(
@@ -36,7 +42,8 @@ public class ForbiddenScopeException extends Exception {
             Long callerUserId,
             String detail,
             UUID auditId) {
-        return new ForbiddenScopeException(denialReason, patientId, callerUserId, detail, auditId);
+        return new ForbiddenScopeException(
+                denialReason, patientId, callerUserId, detail, null, auditId, null);
     }
 
     public static ForbiddenScopeException unsupportedRole(Role callerRole, Long callerUserId, String detail, UUID auditId) {
@@ -61,5 +68,27 @@ public class ForbiddenScopeException extends Exception {
 
     public UUID getAuditId() {
         return auditId;
+    }
+
+    public UUID getRequestId() {
+        return requestId;
+    }
+
+    public UUID getSessionId() {
+        return sessionId;
+    }
+
+    public ForbiddenScopeException withCorrelation(
+            final UUID correlatedRequestId,
+            final UUID correlatedAuditId,
+            final UUID correlatedSessionId) {
+        return new ForbiddenScopeException(
+                denialReason,
+                patientId,
+                callerUserId,
+                getMessage(),
+                correlatedRequestId,
+                correlatedAuditId,
+                correlatedSessionId);
     }
 }

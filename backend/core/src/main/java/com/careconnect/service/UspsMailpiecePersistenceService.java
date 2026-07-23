@@ -1,7 +1,5 @@
 package com.careconnect.service;
 
-import com.careconnect.indexing.IndexingEventEmitter;
-import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.model.MailPiece;
 import com.careconnect.model.Patient;
 import com.careconnect.model.USPSDigest;
@@ -13,7 +11,6 @@ import com.careconnect.service.mail.MailpieceImportanceResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Normalizes, upserts, classifies importance, and queues indexing for USPS
@@ -29,19 +26,19 @@ public class UspsMailpiecePersistenceService {
     private final UspsMailpieceRepository mailpieceRepository;
     private final MailpieceNormalizer normalizer;
     private final MailpieceImportanceClassifier importanceClassifier;
-    private final IndexingEventEmitter indexingEventEmitter;
+    private final UspsMailpieceAtomicPersistenceService atomicPersistenceService;
 
     public UspsMailpiecePersistenceService(
             final PatientRepository patientRepository,
             final UspsMailpieceRepository mailpieceRepository,
             final MailpieceNormalizer normalizer,
             final MailpieceImportanceClassifier importanceClassifier,
-            final IndexingEventEmitter indexingEventEmitter) {
+            final UspsMailpieceAtomicPersistenceService atomicPersistenceService) {
         this.patientRepository = patientRepository;
         this.mailpieceRepository = mailpieceRepository;
         this.normalizer = normalizer;
         this.importanceClassifier = importanceClassifier;
-        this.indexingEventEmitter = indexingEventEmitter;
+        this.atomicPersistenceService = atomicPersistenceService;
     }
 
     /**
@@ -50,7 +47,6 @@ public class UspsMailpiecePersistenceService {
      *
      * @return number of mailpieces upserted (including no-op hash matches)
      */
-    @Transactional
     public int persistAndIndex(final String userId, final USPSDigest digest) {
         if (digest == null || digest.mailpieces() == null || digest.mailpieces().isEmpty()) {
             return 0;
@@ -68,37 +64,18 @@ public class UspsMailpiecePersistenceService {
             }
             final MailpieceNormalizer.NormalizedMailpiece normalized =
                     normalizer.normalize(piece, digest.digestDate());
-            final UspsMailpiece entity = mailpieceRepository
+            final String persistedOcrText = mailpieceRepository
                     .findByPatientIdAndSourceKey(patientId, normalized.sourceKey())
-                    .orElseGet(UspsMailpiece::new);
-
-            final boolean isNew = entity.getId() == null;
-            final boolean hashChanged = isNew
-                    || entity.getContentHash() == null
-                    || !entity.getContentHash().equals(normalized.contentHash());
-            final boolean needsClassification = hashChanged
-                    || entity.getImportanceLevel() == null
-                    || entity.getImportanceLevel().isBlank();
-
-            applyNormalized(entity, patientId, userId, normalized);
-            if (needsClassification && importanceClassifier != null) {
-                applyImportance(entity, importanceClassifier.classify(
-                        entity.getSender(), entity.getSummary(), entity.getOcrText()));
-            }
-            final UspsMailpiece saved = mailpieceRepository.save(entity);
+                    .map(UspsMailpiece::getOcrText)
+                    .orElse(null);
+            final MailpieceImportanceResult classification =
+                    importanceClassifier == null
+                            ? null
+                            : importanceClassifier.classify(
+                                    normalized.sender(), normalized.summary(), persistedOcrText);
+            atomicPersistenceService.persist(
+                    patientId, userId, normalized, classification);
             upserted++;
-
-            if (hashChanged || needsClassification) {
-                indexingEventEmitter.emitMailpieceIndexed(new MailpieceIndexedPayload(
-                        saved.getId(),
-                        patientId,
-                        saved.getSourceKey(),
-                        saved.getContentHash(),
-                        saved.getSender(),
-                        saved.getSummary(),
-                        saved.getDigestDate(),
-                        saved.getConsentScope()));
-            }
         }
         log.info("USPS mailpiece persistence upserted={} patientId={} userId={}",
                 upserted, patientId, userId);
@@ -118,7 +95,7 @@ public class UspsMailpiecePersistenceService {
         }
     }
 
-    private static void applyNormalized(
+    static void applyNormalized(
             final UspsMailpiece entity,
             final Long patientId,
             final String userId,
@@ -136,7 +113,7 @@ public class UspsMailpiecePersistenceService {
         entity.setConsentScope(normalized.consentScope());
     }
 
-    private static void applyImportance(
+    static void applyImportance(
             final UspsMailpiece entity,
             final MailpieceImportanceResult result) {
         if (result == null) {
