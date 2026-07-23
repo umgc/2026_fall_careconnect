@@ -85,6 +85,26 @@ class SchemaPatchLedgerTest {
                 .isEqualTo(1);
     }
 
+    @Test
+    void splitPostgresStatements_keepsDollarQuotedBlocksIntact() {
+        final String script = """
+                ALTER TABLE t ADD COLUMN IF NOT EXISTS x INT;
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1) THEN
+                        ALTER TABLE t ADD CONSTRAINT c CHECK (x >= 0);
+                    END IF;
+                END $$;
+                CREATE INDEX IF NOT EXISTS idx ON t (x);
+                """;
+
+        assertThat(SchemaPatchLedger.splitPostgresStatements(script))
+                .hasSize(3)
+                .anySatisfy(sql -> assertThat(sql)
+                        .startsWith("DO $$")
+                        .contains("ALTER TABLE t ADD CONSTRAINT")
+                        .endsWith("END $$"));
+    }
+
     private static DataSource dataSource(final String name) {
         final JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1");
