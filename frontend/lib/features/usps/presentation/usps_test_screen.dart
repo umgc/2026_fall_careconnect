@@ -6,6 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
+import 'package:care_connect_app/features/usps/domain/models/mail_image_availability.dart';
+import 'package:care_connect_app/features/usps/presentation/widgets/mail_envelope_read_aloud_button.dart';
+import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_image.dart';
 
 class UspsTestScreen extends StatefulWidget {
   const UspsTestScreen({super.key});
@@ -18,6 +21,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   bool loading = false;
   String? error;
   bool isGoogleConnected = false;
+  bool needsGoogleReconnect = false;
+  String? reconnectMessage;
   DateTime selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> searchResults = [];
@@ -59,6 +64,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
               : json.decode(json.encode(resp.data)) as Map<String, dynamic>;
           searchResults = [];
           searchError = null;
+          needsGoogleReconnect = false;
+          reconnectMessage = null;
           _searchController.clear();
         });
       } else if (resp.statusCode == 204) {
@@ -66,14 +73,39 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
           digest = null;
           error = 'No USPS digest found for $dateString.';
         });
+      } else if (resp.statusCode == 409) {
+        _handleNeedsReauth(resp.data);
       } else {
         setState(() => error = 'HTTP ${resp.statusCode}');
       }
     } catch (e) {
-      setState(() => error = e.toString());
+      if (e is DioException && e.response?.statusCode == 409) {
+        _handleNeedsReauth(e.response?.data);
+      } else {
+        setState(() => error = e.toString());
+      }
     } finally {
       setState(() => loading = false);
     }
+  }
+
+  void _handleNeedsReauth(dynamic data) {
+    String message =
+        'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.';
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final apiMessage = map['message']?.toString();
+      if (apiMessage != null && apiMessage.isNotEmpty) {
+        message = apiMessage;
+      }
+    }
+    setState(() {
+      needsGoogleReconnect = true;
+      isGoogleConnected = false;
+      reconnectMessage = message;
+      error = message;
+      digest = null;
+    });
   }
 
   Future<void> _selectDate() async {
@@ -172,14 +204,47 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final base = getBackendBaseUrl();
     try {
       final dio = Dio();
+      // Prefer rich connection status so revoked tokens surface as reconnect.
+      try {
+        final details = await dio.get(
+            '$base/api/email-credentials/connection?userId=$encodedUser');
+        if (details.statusCode == 200 && details.data is Map) {
+          final map = Map<String, dynamic>.from(details.data as Map);
+          final connected = map['connected'] == true;
+          final needsReconnect = map['needsReconnect'] == true;
+          setState(() {
+            isGoogleConnected = connected;
+            needsGoogleReconnect = needsReconnect;
+            reconnectMessage = needsReconnect
+                ? ((map['lastError'] as String?)?.trim().isNotEmpty == true
+                    ? map['lastError'] as String
+                    : 'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
+                : null;
+          });
+          return;
+        }
+      } catch (_) {
+        // Fall back to legacy boolean status endpoint.
+      }
+
       final resp = await dio
           .get('$base/api/email-credentials/status?userId=$encodedUser');
       if (resp.statusCode == 200 && resp.data == true) {
-        setState(() => isGoogleConnected = true);
+        setState(() {
+          isGoogleConnected = true;
+          needsGoogleReconnect = false;
+          reconnectMessage = null;
+        });
+      } else {
+        setState(() {
+          isGoogleConnected = false;
+        });
       }
     } catch (e) {
       // Connection check failed, assume not connected
-      setState(() => isGoogleConnected = false);
+      setState(() {
+        isGoogleConnected = false;
+      });
     }
   }
 
@@ -271,88 +336,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     double width = 48,
     double height = 32,
     BoxFit fit = BoxFit.cover,
+    bool expanded = false,
+    String? sender,
+    String? summary,
   }) {
-    final iconSize = height.clamp(16, 48).toDouble();
-    Widget placeholder(IconData icon) => SizedBox(
-          width: width,
-          height: height,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: Icon(
-                icon,
-                color: Colors.grey.shade600,
-                size: iconSize,
-              ),
-            ),
-          ),
-        );
-
-    if (imageDataUrl == null || imageDataUrl.isEmpty) {
-      return placeholder(Icons.mail_outline);
-    }
-
-    if (imageDataUrl.startsWith('cid:')) {
-      return placeholder(Icons.mail_outline);
-    }
-
-    if (imageDataUrl.startsWith('data:')) {
-      try {
-        final uri = Uri.parse(imageDataUrl);
-        final data = uri.data;
-        if (data != null) {
-          final bytes = data.contentAsBytes();
-          return Image.memory(
-            bytes,
-            width: width,
-            height: height,
-            fit: fit,
-            errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
-          );
-        }
-      } catch (_) {
-        // fall through to manual base64 decode
-      }
-
-      try {
-        final base64Data = imageDataUrl.split(',').last;
-        final bytes = const Base64Decoder().convert(base64Data);
-        return Image.memory(
-          bytes,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
-        );
-      } catch (_) {
-        return placeholder(Icons.mail_outline);
-      }
-    }
-
-    if (imageDataUrl.startsWith('http')) {
-      return Image.network(
-        imageDataUrl,
-        width: width,
-        height: height,
-        fit: fit,
-        errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
-      );
-    }
-
-    return placeholder(Icons.mail_outline);
+    return MailPieceImage(
+      imageRef: imageDataUrl,
+      sender: sender,
+      summary: summary,
+      width: width,
+      height: height,
+      fit: fit,
+      expanded: expanded,
+    );
   }
 
-  bool _hasAttachment(String? imageDataUrl) {
-    if (imageDataUrl == null || imageDataUrl.isEmpty) {
-      return false;
-    }
-    if (imageDataUrl.startsWith('cid:')) {
-      return false;
-    }
-    return true;
+  bool _hasAttachment(String? imageDataUrl, {String? summary}) {
+    return MailImageClassifier.hasDisplayableImage(
+      imageDataUrl,
+      summary: summary,
+    );
   }
 
   void _showMailItemDetails(Map<String, dynamic> item) {
@@ -361,7 +364,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
 
     final imageSource =
         (item['imageDataUrl'] as String?) ?? (item['thumbnailUrl'] as String?);
-    final hasAttachment = !isPackage && _hasAttachment(imageSource);
     final actions = item['actions'];
     final Map<String, dynamic> actionsMap = actions is Map<String, dynamic>
         ? Map<String, dynamic>.from(actions as Map)
@@ -372,11 +374,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final sender = (rawSender != null && rawSender.isNotEmpty)
         ? rawSender
         : (isPackage ? 'USPS Package' : 'Unknown sender');
-    final subject = (item['summary'] as String?) ??
-        (item['subject'] as String?) ??
+    final rawSubject = (item['summary'] as String?) ??
+        (item['subject'] as String?);
+    final subject = rawSubject ??
         (isPackage && item['trackingNumber'] != null
             ? 'Tracking ${item['trackingNumber']}'
             : 'No subject available');
+    final hasAttachment =
+        !isPackage && _hasAttachment(imageSource, summary: rawSubject);
+    final missingImageNormal = !isPackage &&
+        MailImageClassifier.classify(imageSource, summary: rawSubject)
+            .isMissingNormalState;
+    final displaySubject =
+        missingImageNormal &&
+                (rawSubject == null ||
+                    rawSubject.trim().isEmpty ||
+                    rawSubject.trim().toLowerCase() == 'image not available')
+            ? 'Details from mail metadata'
+            : subject;
     final trackingNumber = item['trackingNumber'] as String?;
     final delivered =
         (item['deliveryDate'] as String?) ?? (item['receivedAt'] as String?);
@@ -412,6 +427,12 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (!isPackage)
+                        MailEnvelopeReadAloudButton(
+                          sender: rawSender,
+                          summary: rawSubject,
+                          includeMissingImageNote: missingImageNormal,
+                        ),
                       const SizedBox(width: 8),
                       Chip(
                         label: Text(typeLabel),
@@ -438,11 +459,21 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                       child: _buildMailImage(
                         imageSource,
                         width: 260,
-                        height: 180,
+                        height: missingImageNormal ? 168 : 180,
                         fit: BoxFit.contain,
+                        expanded: missingImageNormal,
+                        sender: rawSender,
+                        summary: rawSubject,
                       ),
                     ),
                   ),
+                  if (missingImageNormal) ...[
+                    const SizedBox(height: 12),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: MailMetadataOnlyBadge(),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     isPackage ? 'Details' : 'Subject',
@@ -457,7 +488,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          subject,
+                          displaySubject,
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       ),
@@ -605,15 +636,66 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isGoogleConnected
-                          ? '✅ Google account connected! You can now fetch USPS digests automatically.'
-                          : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
+                      needsGoogleReconnect
+                          ? (reconnectMessage ??
+                              'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
+                          : isGoogleConnected
+                              ? '✅ Google account connected! You can now fetch USPS digests automatically.'
+                              : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
                       style: TextStyle(
-                        color: isGoogleConnected ? Colors.green : Colors.grey,
+                        color: needsGoogleReconnect
+                            ? Colors.orange.shade800
+                            : isGoogleConnected
+                                ? Colors.green
+                                : Colors.grey,
                       ),
                     ),
+                    if (needsGoogleReconnect) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        key: const Key('gmailReauthBanner'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mail sync paused',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Reconnect Gmail to restore Informed Delivery sync.',
+                              style: TextStyle(color: Colors.orange.shade900),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                key: const Key('gmailReconnectButton'),
+                                onPressed: _connectGoogleAccount,
+                                icon: const Icon(Icons.link),
+                                label: const Text('Reconnect Gmail'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade800,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
-                    if (!isGoogleConnected)
+                    if (!isGoogleConnected && !needsGoogleReconnect)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -626,12 +708,15 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           ),
                         ),
                       )
-                    else
+                    else if (isGoogleConnected)
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: () {
-                            setState(() => isGoogleConnected = false);
+                            setState(() {
+                              isGoogleConnected = false;
+                              needsGoogleReconnect = false;
+                            });
                             _connectGoogleAccount();
                           },
                           icon: const Icon(Icons.refresh),
@@ -892,15 +977,20 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           final trailingIcon = isPackage
                               ? Icons.local_shipping
                               : Icons.open_in_new;
-                          final summary = result['summary'] ??
-                              result['subject'] ??
-                              'No summary';
+                          final summaryText = (result['summary'] as String?) ??
+                              (result['subject'] as String?);
+                          final summary = summaryText ?? 'No summary';
                           final from = result['sender'] as String?;
                           final attachmentSource =
                               (result['imageDataUrl'] as String?) ??
                                   (result['thumbnailUrl'] as String?);
-                          final hasAttachment =
-                              !isPackage && _hasAttachment(attachmentSource);
+                          final hasAttachment = !isPackage &&
+                              _hasAttachment(attachmentSource,
+                                  summary: summaryText);
+                          final missingImageNormal = !isPackage &&
+                              MailImageClassifier.classify(attachmentSource,
+                                      summary: summaryText)
+                                  .isMissingNormalState;
                           final deliveryLabel = isPackage
                               ? (result['expectedDate'] as String?) ??
                                   (result['deliveryDate'] as String?)
@@ -913,8 +1003,9 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               onTap: () => _showMailItemDetails(
                                   Map<String, dynamic>.from(result)),
                               leading: _buildMailImage(
-                                (result['imageDataUrl'] as String?) ??
-                                    (result['thumbnailUrl'] as String?),
+                                attachmentSource,
+                                sender: from,
+                                summary: summaryText,
                               ),
                               title: Row(
                                 children: [
@@ -925,6 +1016,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.attachment, size: 16),
+                                  ],
+                                  if (missingImageNormal) ...[
+                                    const SizedBox(width: 6),
+                                    const MailMetadataOnlyBadge(),
                                   ],
                                   const SizedBox(width: 8),
                                   Container(
@@ -979,12 +1074,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   ],
                                 ],
                               ),
-                              trailing: IconButton(
-                                icon: Icon(trailingIcon),
-                                onPressed:
-                                    trailingUrl == null || trailingUrl.isEmpty
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!isPackage)
+                                    MailEnvelopeReadAloudButton(
+                                      sender: from,
+                                      summary: summaryText,
+                                      includeMissingImageNote:
+                                          missingImageNormal,
+                                    ),
+                                  IconButton(
+                                    icon: Icon(trailingIcon),
+                                    onPressed: trailingUrl == null ||
+                                            trailingUrl.isEmpty
                                         ? null
                                         : () => _openUri(trailingUrl),
+                                  ),
+                                ],
                               ),
                             ),
                           );
@@ -1212,17 +1319,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           final imageSource =
                               (mailPiece['imageDataUrl'] as String?) ??
                                   (mailPiece['thumbnailUrl'] as String?);
-                          final hasAttachment = _hasAttachment(imageSource);
                           final summary = ((mailPiece['summary'] as String?) ??
                                   (mailPiece['subject'] as String?) ??
                                   '')
                               .trim();
+                          final hasAttachment =
+                              _hasAttachment(imageSource, summary: summary);
+                          final missingImageNormal =
+                              MailImageClassifier.classify(imageSource,
+                                      summary: summary)
+                                  .isMissingNormalState;
                           final senderName =
                               (mailPiece['sender'] as String?)?.trim();
                           final displayTitle =
                               (senderName != null && senderName.isNotEmpty)
                                   ? senderName
-                                  : (summary.isNotEmpty ? summary : 'Mail');
+                                  : (summary.isNotEmpty &&
+                                          summary.toLowerCase() !=
+                                              'image not available'
+                                      ? summary
+                                      : 'Mail');
                           mailPiece['type'] ??= 'mail';
                           final actions = mailPiece['actions'];
                           final actionsMap = actions is Map<String, dynamic>
@@ -1232,12 +1348,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               actionsMap['dashboard'] as String?;
                           final trackUrl = actionsMap['track'] as String?;
                           final trailingUrl = dashboardUrl ?? trackUrl;
+                          final subtitleText = summary.isNotEmpty &&
+                                  summary != displayTitle &&
+                                  summary.toLowerCase() !=
+                                      'image not available'
+                              ? summary
+                              : (missingImageNormal
+                                  ? 'Details from mail metadata'
+                                  : null);
 
                           return Card(
                             child: ListTile(
                               onTap: () => _showMailItemDetails(
                                   Map<String, dynamic>.from(mailPiece)),
-                              leading: _buildMailImage(imageSource),
+                              leading: _buildMailImage(
+                                imageSource,
+                                sender: senderName,
+                                summary: summary,
+                              ),
                               title: Row(
                                 children: [
                                   Expanded(
@@ -1246,6 +1374,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.attachment, size: 16),
+                                  ],
+                                  if (missingImageNormal) ...[
+                                    const SizedBox(width: 6),
+                                    const MailMetadataOnlyBadge(),
                                   ],
                                   const SizedBox(width: 8),
                                   Container(
@@ -1266,16 +1398,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   ),
                                 ],
                               ),
-                              subtitle:
-                                  summary.isNotEmpty && summary != displayTitle
-                                      ? Text(summary)
-                                      : const SizedBox.shrink(),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.open_in_new),
-                                onPressed:
-                                    trailingUrl == null || trailingUrl.isEmpty
+                              subtitle: subtitleText != null
+                                  ? Text(subtitleText)
+                                  : const SizedBox.shrink(),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  MailEnvelopeReadAloudButton(
+                                    sender: senderName,
+                                    summary: summary,
+                                    includeMissingImageNote:
+                                        missingImageNormal,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.open_in_new),
+                                    onPressed: trailingUrl == null ||
+                                            trailingUrl.isEmpty
                                         ? null
                                         : () => _openUri(trailingUrl),
+                                  ),
+                                ],
                               ),
                             ),
                           );

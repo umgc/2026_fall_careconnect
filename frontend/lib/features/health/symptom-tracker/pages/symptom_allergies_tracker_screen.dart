@@ -159,12 +159,16 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
                 ),
                 const SizedBox(width: 8),
               ],
-              Text(
-                'Symptoms & Allergies',
-                style: TextStyle(
-                  fontSize: isLandscape? 18 : 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+              Flexible(
+                child: Text(
+                  'Symptoms & Allergies',
+                  style: TextStyle(
+                    fontSize: isLandscape ? 18 : 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                  textAlign: TextAlign.center,
+                  softWrap: true,
                 ),
               ),
             ],

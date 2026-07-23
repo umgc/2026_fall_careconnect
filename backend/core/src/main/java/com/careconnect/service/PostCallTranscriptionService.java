@@ -1,32 +1,32 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallRecording;
+import com.careconnect.model.PostCallTranscriptionJob;
 import com.careconnect.repository.CallRecordingRepository;
+import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import com.careconnect.service.CallTranscriptService.TranscriptSegmentInput;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Instant;
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.Delete;
-import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
-import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.transcribe.TranscribeClient;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobRequest;
 import software.amazon.awssdk.services.transcribe.model.GetTranscriptionJobResponse;
@@ -71,9 +71,6 @@ public class PostCallTranscriptionService {
   /** Transcription status set when the job fails. */
   public static final String TRANSCRIPTION_STATUS_FAILED = "FAILED";
 
-  /** Maximum objects to delete in a single S3 DeleteObjects call. */
-  private static final int S3_DELETE_BATCH = 1000;
-
   @Autowired(required = false)
   private TranscribeClient transcribeClient;
 
@@ -89,6 +86,9 @@ public class PostCallTranscriptionService {
   @Autowired
   private CallRecordingRepository recordingRepository;
 
+  @Autowired
+  private PostCallTranscriptionJobRepository jobRepository;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
@@ -99,8 +99,77 @@ public class PostCallTranscriptionService {
    * @param rec the completed {@link CallRecording}
    * @param playableKey S3 key of the concatenated MP4
    */
-  @Async
   public void transcribeAndCleanup(
+      final String callId, final CallRecording rec, final String playableKey) {
+    if (callId == null || rec == null || rec.getId() == null
+        || playableKey == null || playableKey.isBlank() || rec.getS3Bucket() == null) {
+      return;
+    }
+    if (jobRepository.findByRecordingId(rec.getId()).isPresent()) {
+      return;
+    }
+    final String safeCallId = callId.replaceAll("[^A-Za-z0-9_-]", "-");
+    final String jobName = "cc-" + safeCallId + "-" + rec.getId();
+    final PostCallTranscriptionJob job = new PostCallTranscriptionJob();
+    job.setRecordingId(rec.getId());
+    job.setCallId(callId);
+    job.setRecordingGeneration(rec.getGeneration());
+    job.setState("READY");
+    job.setNextAttemptAt(LocalDateTime.now(java.time.ZoneOffset.UTC));
+    job.setAwsJobName(jobName);
+    job.setMediaBucket(rec.getS3Bucket());
+    job.setMediaKey(playableKey);
+    job.setOutputBucket(rec.getS3Bucket());
+    job.setOutputKey(
+        "transcription-jobs/" + safeCallId + "/" + rec.getId() + "/" + jobName + ".json");
+    jobRepository.save(job);
+    rec.setTranscriptionStatus("READY");
+    recordingRepository.save(rec);
+  }
+
+  /** Claims expired work after restart and advances one durable job at a time. */
+  @Scheduled(fixedDelayString = "${careconnect.transcription.worker.interval-ms:20000}")
+  public void runDueJobs() {
+    for (final Long id : jobRepository.findDueIds(10)) {
+      processJob(id);
+    }
+  }
+
+  @Transactional
+  public void processJob(final Long id) {
+    final UUID token = UUID.randomUUID();
+    if (jobRepository.claim(id, token, 1200L) != 1) {
+      return;
+    }
+    final PostCallTranscriptionJob job =
+        jobRepository.findByIdAndClaimToken(id, token).orElse(null);
+    if (job == null) {
+      return;
+    }
+    final CallRecording recording = recordingRepository.findById(job.getRecordingId()).orElse(null);
+    if (recording == null) {
+      jobRepository.release(id, token, "TERMINAL", 0L, "Recording metadata no longer exists");
+      return;
+    }
+    job.setState("RUNNING");
+    jobRepository.save(job);
+    executeTranscription(job.getCallId(), recording, job.getMediaKey());
+    if (TRANSCRIPTION_STATUS_COMPLETE.equals(recording.getTranscriptionStatus())) {
+      job.setState("COMPLETE");
+      job.setCompletedAt(LocalDateTime.now(java.time.ZoneOffset.UTC));
+      job.setClaimToken(null);
+      job.setClaimedUntil(null);
+      job.setLastError(null);
+      jobRepository.save(job);
+    } else {
+      final String error = recording.getErrorMessage() == null
+          ? "Transcription has not completed" : recording.getErrorMessage();
+      final String state = job.getAttemptCount() >= 8 ? "TERMINAL" : "RETRYABLE";
+      jobRepository.release(id, token, state, state.equals("TERMINAL") ? 0L : 60L, error);
+    }
+  }
+
+  private void executeTranscription(
       final String callId, final CallRecording rec, final String playableKey) {
     if (transcribeClient == null || s3Client == null) {
       if (log.isWarnEnabled()) {
@@ -113,9 +182,10 @@ public class PostCallTranscriptionService {
     }
 
     final String mediaUri = "s3://" + rec.getS3Bucket() + "/" + playableKey;
-    final String jobName = "cc-" + callId.replaceAll("[^A-Za-z0-9_-]", "-")
-        + "-" + Instant.now().getEpochSecond();
-    final String outputKey = rec.getS3Prefix() + "transcripts/" + jobName + ".json";
+    final String safeCallId = callId.replaceAll("[^A-Za-z0-9_-]", "-");
+    final String jobName = "cc-" + safeCallId + "-" + rec.getId();
+    final String outputKey =
+        "transcription-jobs/" + safeCallId + "/" + rec.getId() + "/" + jobName + ".json";
 
     setTranscriptionStatus(rec, TRANSCRIPTION_STATUS_PROCESSING);
 
@@ -123,7 +193,13 @@ public class PostCallTranscriptionService {
       if (log.isInfoEnabled()) {
         log.info("Starting Transcribe job {} for call {} media {}", jobName, callId, mediaUri);
       }
-      startTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), rec.getS3Prefix());
+      try {
+        startTranscribeJob(jobName, mediaUri, rec.getS3Bucket(), outputKey);
+      } catch (software.amazon.awssdk.services.transcribe.model.ConflictException conflict) {
+        // Deterministic job names make restart recovery idempotent: continue polling the
+        // already-created AWS job instead of creating a second pipeline.
+        log.info("Resuming existing Transcribe job {} for call {}", jobName, callId);
+      }
 
       final boolean completed = pollForCompletion(jobName);
       if (!completed) {
@@ -136,8 +212,17 @@ public class PostCallTranscriptionService {
 
       // Build speaker label map using participant count from telemetry JOIN events
       final Map<String, String> speakerMap = buildSpeakerRoleMap(callId);
-      final List<TranscriptSegmentInput> segments =
+      final List<TranscriptSegmentInput> parsed =
           downloadAndParse(rec.getS3Bucket(), outputKey, rec.getStartedAt(), speakerMap);
+      final List<TranscriptSegmentInput> segments = new ArrayList<>(parsed.size());
+      for (int index = 0; index < parsed.size(); index++) {
+        final TranscriptSegmentInput item = parsed.get(index);
+        final UUID stableId = UUID.nameUUIDFromBytes(
+            (callId + ":" + rec.getId() + ":" + index).getBytes(StandardCharsets.UTF_8));
+        segments.add(new TranscriptSegmentInput(
+            stableId, item.speakerLabel(), item.text(), item.startMs(), item.endMs(),
+            item.source(), item.occurredAt()));
+      }
       if (!segments.isEmpty()) {
         final int stored = callTranscriptService.recordSegments(callId, null, segments);
         if (log.isInfoEnabled()) {
@@ -157,7 +242,7 @@ public class PostCallTranscriptionService {
     // Re-fetch from DB so we see any claim that happened during the call.
     final CallRecording fresh = recordingRepository.findById(rec.getId()).orElse(rec);
     if (fresh.getInitiatedByUserId() == null) {
-      deleteRecordingFromS3(rec);
+      deleteRecordingFromS3(rec, playableKey, outputKey);
     } else {
       if (log.isInfoEnabled()) {
         log.info(
@@ -175,8 +260,7 @@ public class PostCallTranscriptionService {
       final String jobName,
       final String mediaUri,
       final String outputBucket,
-      final String s3Prefix) {
-    final String outputKey = s3Prefix + "transcripts/" + jobName + ".json";
+      final String outputKey) {
     transcribeClient.startTranscriptionJob(
         StartTranscriptionJobRequest.builder()
             .transcriptionJobName(jobName)
@@ -394,18 +478,14 @@ public class PostCallTranscriptionService {
     }
   }
 
-  private void deleteRecordingFromS3(final CallRecording rec) {
+  private void deleteRecordingFromS3(
+      final CallRecording rec, final String playableKey, final String outputKey) {
     if (rec.getS3Bucket() == null) {
       return;
     }
     try {
-      // Delete the concatenated recording prefix (everything under concatenated/)
-      final String concatenatedPrefix = rec.getS3Prefix() + "concatenated/";
-      deletePrefix(rec.getS3Bucket(), concatenatedPrefix);
-
-      // Delete the transcript output JSON
-      final String transcriptPrefix = rec.getS3Prefix() + "transcripts/";
-      deletePrefix(rec.getS3Bucket(), transcriptPrefix);
+      deleteExactKey(rec.getS3Bucket(), playableKey);
+      deleteExactKey(rec.getS3Bucket(), outputKey);
 
       if (log.isInfoEnabled()) {
         log.info(
@@ -421,30 +501,9 @@ public class PostCallTranscriptionService {
     }
   }
 
-  private void deletePrefix(final String bucket, final String prefix) {
-    String continuationToken = null;
-    do {
-      final ListObjectsV2Request.Builder listBuilder =
-          ListObjectsV2Request.builder()
-              .bucket(bucket)
-              .prefix(prefix)
-              .maxKeys(S3_DELETE_BATCH);
-      if (continuationToken != null) {
-        listBuilder.continuationToken(continuationToken);
-      }
-      final ListObjectsV2Response listing = s3Client.listObjectsV2(listBuilder.build());
-      if (!listing.contents().isEmpty()) {
-        final List<ObjectIdentifier> toDelete =
-            listing.contents().stream()
-                .map(obj -> ObjectIdentifier.builder().key(obj.key()).build())
-                .toList();
-        s3Client.deleteObjects(
-            DeleteObjectsRequest.builder()
-                .bucket(bucket)
-                .delete(Delete.builder().objects(toDelete).quiet(true).build())
-                .build());
-      }
-      continuationToken = listing.isTruncated() ? listing.nextContinuationToken() : null;
-    } while (continuationToken != null);
+  private void deleteExactKey(final String bucket, final String key) {
+    if (key != null && !key.isBlank()) {
+      s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+    }
   }
 }

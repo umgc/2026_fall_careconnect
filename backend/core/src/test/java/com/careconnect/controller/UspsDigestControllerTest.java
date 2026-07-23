@@ -1,7 +1,10 @@
 package com.careconnect.controller;
 
+import com.careconnect.dto.NaturalLanguageMailSearchResponse;
 import com.careconnect.model.USPSDigest;
+import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.service.NaturalLanguageMailSearchService;
 import com.careconnect.service.USPSDigestService;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.Test;
@@ -18,6 +21,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +31,9 @@ class UspsDigestControllerTest {
 
     @Mock
     private USPSDigestService uspsDigestService;
+
+    @Mock
+    private NaturalLanguageMailSearchService naturalLanguageMailSearchService;
 
     @Mock
     private SecurityUtil securityUtil;
@@ -86,6 +95,24 @@ class UspsDigestControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(results);
         verify(uspsDigestService).search("user1", "invoice");
+    }
+
+    @Test
+    void naturalLanguageSearch_returnsOk() throws Exception {
+        final User user = new User();
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        final NaturalLanguageMailSearchResponse body =
+                new NaturalLanguageMailSearchResponse(42L, "pharmacy bills", List.of("pharmacy", "bills"),
+                        0, List.of());
+        when(naturalLanguageMailSearchService.search(eq(user), eq(42L), eq("pharmacy bills"), eq(20)))
+                .thenReturn(body);
+
+        final ResponseEntity<NaturalLanguageMailSearchResponse> response =
+                controller.naturalLanguageSearch(42L, "pharmacy bills", 20);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(body);
+        verify(naturalLanguageMailSearchService).search(user, 42L, "pharmacy bills", 20);
     }
 
     // ─── clearCache ───────────────────────────────────────────────────────────

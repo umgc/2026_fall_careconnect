@@ -53,4 +53,16 @@ class EmailCredentialTest {
         cred.setProvider(EmailCredential.Provider.OUTLOOK);
         assertThat(cred.getProvider()).isEqualTo(EmailCredential.Provider.OUTLOOK);
     }
+
+    @Test
+    void defaultsAllowSyncUntilRevoked() {
+        final EmailCredential cred = new EmailCredential();
+        assertThat(cred.getStatus()).isEqualTo(EmailCredential.Status.ACTIVE);
+        assertThat(cred.isSyncEnabled()).isTrue();
+        assertThat(cred.allowsSync()).isTrue();
+
+        cred.setStatus(EmailCredential.Status.NEEDS_REAUTH);
+        cred.setSyncEnabled(false);
+        assertThat(cred.allowsSync()).isFalse();
+    }
 }

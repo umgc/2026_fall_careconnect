@@ -9,6 +9,9 @@ import 'package:care_connect_app/features/notetaker/models/patient_note_model.da
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_detail_view.dart';
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_search.dart';
 import 'package:care_connect_app/features/informed_delivery/informed_delivery_screen.dart';
+import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
+import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
+import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
@@ -34,8 +37,6 @@ import '../../config/navigation/main_screen_config.dart';
 import '../../config/navigation/navigation_helper.dart';
 import '../../services/user_role_storage_service.dart';
 import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_page_entry.dart';
-import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_detail_page.dart';
-import 'package:care_connect_app/features/health/virtual_check_in/models/virtual_check_in_backend_question_model.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/caregiver-patient-list.dart';
 import '../../features/welcome/presentation/pages/welcome_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -53,6 +54,8 @@ import '../../features/payments/presentation/pages/native_billing_page.dart';
 import '../../features/payments/presentation/pages/web_pay_page.dart';
 import '../../features/payments/presentation/pages/subscription_tier_selection_page.dart';
 import '../../features/analytics/analytics_page.dart';
+import '../../features/admin_analytics/presentation/pages/admin_analytics_dashboard_page.dart';
+import '../../utils/role_helper.dart';
 import '../../features/payments/presentation/pages/payment_success_page.dart';
 import '../../features/payments/presentation/pages/payment_cancel_page.dart';
 import '../../features/dashboard/presentation/pages/patient_status_page.dart';
@@ -75,7 +78,6 @@ import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage
 import '../../features/usps/presentation/usps_test_screen.dart';
 import '../../features/telemetry/telemetry.dart';
 import 'dart:async';
-import 'dart:convert';
 
 GoRouter? _appRouterRef;
 
@@ -138,6 +140,17 @@ final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
 Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+  // Issue #75: if the user authenticated in the middle of accepting an invite,
+  // route them back to the invite landing screen to complete the join instead
+  // of going straight to the dashboard. The landing screen accepts the invite
+  // (now that they're signed in) and then sends them onward.
+  if (PendingInvite.hasPending) {
+    final token = PendingInvite.token!;
+    if (context.mounted) {
+      context.go('/invite/$token');
+      return;
+    }
+  }
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,
@@ -151,7 +164,8 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
-    GoRoute(path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
+    GoRoute(
+        path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
     GoRoute(
       path: '/login',
       builder: (context, state) {
@@ -193,7 +207,9 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
             }
 
             final userData = snapshot.data;
-            if (userData == null || !userData.isLoggedIn || userData.userId <= 0) {
+            if (userData == null ||
+                !userData.isLoggedIn ||
+                userData.userId <= 0) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 context.go('/login');
               });
@@ -305,12 +321,10 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         final caregiverIdStr = state.uri.queryParameters['caregiverId'];
         final patientIdStr = state.uri.queryParameters['patientId'];
 
-        final caregiverId = caregiverIdStr != null
-            ? int.tryParse(caregiverIdStr)
-            : null;
-        final patientId = patientIdStr != null
-            ? int.tryParse(patientIdStr)
-            : null;
+        final caregiverId =
+            caregiverIdStr != null ? int.tryParse(caregiverIdStr) : null;
+        final patientId =
+            patientIdStr != null ? int.tryParse(patientIdStr) : null;
 
         // Check if caregiverId is valid
         if (caregiverId == null || caregiverId <= 0) {
@@ -346,10 +360,9 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/caregiver-dashboard',
       builder: (context, state) {
         final caregiverIdStr = state.uri.queryParameters['caregiverId'];
-        final patientIdStr = state.uri.queryParameters['patientId'];
 
-        final caregiverId = caregiverIdStr != null ? int.tryParse(caregiverIdStr) : null;
-        final patientId = patientIdStr != null ? int.tryParse(patientIdStr) : null;
+        final caregiverId =
+            caregiverIdStr != null ? int.tryParse(caregiverIdStr) : null;
 
         if (caregiverId == null || caregiverId <= 0) {
           return Scaffold(
@@ -397,6 +410,37 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       builder: (_, __) => const PatientRegistrationPage(),
     ),
     GoRoute(path: '/add-patient', builder: (_, __) => const AddPatientScreen()),
+    // Issue #69: QR-based invite share for caregivers. Scoped to a care-circle
+    // link id in the path; optional invitedEmail / inviteReason via `extra`.
+    GoRoute(
+      path: '/care-circle/:linkId/invite',
+      name: 'inviteShare',
+      builder: (context, state) {
+        final linkId = int.tryParse(state.pathParameters['linkId'] ?? '');
+        if (linkId == null) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid care-circle link.')),
+          );
+        }
+        final extra = state.extra as Map<String, dynamic>?;
+        return InviteQrScreen(
+          linkId: linkId,
+          invitedEmail: extra?['invitedEmail'] as String?,
+          inviteReason: extra?['inviteReason'] as String?,
+        );
+      },
+    ),
+    // Issue #75: invite-aware entry screen. Opened by an invite link; shows the
+    // "Who Invited Me?" context and hands off into registration/login, then
+    // accepts the invite once the user is authenticated.
+    GoRoute(
+      path: '/invite/:token',
+      name: 'inviteLanding',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        return InviteLandingScreen(token: token);
+      },
+    ),
     GoRoute(
       path: '/social-feed',
       builder: (context, state) {
@@ -475,7 +519,8 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         final email = extra?['email'] as String?;
         final userState = extra?['state'] as String?;
-        return SubscriptionTierSelectionPage(email: email, userState: userState);
+        return SubscriptionTierSelectionPage(
+            email: email, userState: userState);
       },
     ),
     GoRoute(
@@ -603,6 +648,20 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       },
     ),
     GoRoute(
+      path: '/admin/analytics',
+      redirect: (context, state) async {
+        final userData = await UserRoleStorageService.instance.getUserData();
+        if (userData?.isLoggedIn != true) {
+          return '/login';
+        }
+        if (!RoleHelper.isAdmin(userData!.role)) {
+          return '/dashboard';
+        }
+        return null;
+      },
+      builder: (_, __) => const AdminAnalyticsDashboardPage(),
+    ),
+    GoRoute(
       path: '/oauth/callback',
       builder: (context, state) {
         final token = state.uri.queryParameters['token'];
@@ -624,7 +683,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/medication',
       builder: (_, __) => const MedicationManagementScreen(),
     ),
-    
+
     // EVV Routes
     GoRoute(
       path: '/evv',
@@ -637,7 +696,8 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/evv/start-visit',
       builder: (context, state) {
-        final patientId = int.tryParse(state.uri.queryParameters['patientId'] ?? '');
+        final patientId =
+            int.tryParse(state.uri.queryParameters['patientId'] ?? '');
         if (patientId == null) {
           return const Scaffold(
             body: Center(child: Text('Invalid patient ID')),
@@ -649,7 +709,8 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/evv/checkin-location',
       builder: (context, state) {
-        final patientId = int.tryParse(state.uri.queryParameters['patientId'] ?? '');
+        final patientId =
+            int.tryParse(state.uri.queryParameters['patientId'] ?? '');
         final serviceType = state.uri.queryParameters['serviceType'] ?? '';
         if (patientId == null || serviceType.isEmpty) {
           return const Scaffold(
@@ -665,20 +726,24 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/evv/visit-progress',
       builder: (context, state) {
-        final patientId = int.tryParse(state.uri.queryParameters['patientId'] ?? '');
+        final patientId =
+            int.tryParse(state.uri.queryParameters['patientId'] ?? '');
         final serviceType = state.uri.queryParameters['serviceType'] ?? '';
         final locationType = state.uri.queryParameters['locationType'] ?? '';
-        final latitude = double.tryParse(state.uri.queryParameters['latitude'] ?? '');
-        final longitude = double.tryParse(state.uri.queryParameters['longitude'] ?? '');
+        final latitude =
+            double.tryParse(state.uri.queryParameters['latitude'] ?? '');
+        final longitude =
+            double.tryParse(state.uri.queryParameters['longitude'] ?? '');
         final noGpsReason = state.uri.queryParameters['noGpsReason'];
-        final accuracyM = double.tryParse(state.uri.queryParameters['accuracyM'] ?? '');
-        
+        final accuracyM =
+            double.tryParse(state.uri.queryParameters['accuracyM'] ?? '');
+
         if (patientId == null || serviceType.isEmpty || locationType.isEmpty) {
           return const Scaffold(
             body: Center(child: Text('Invalid parameters')),
           );
         }
-        
+
         return VisitInProgressPage(
           patientId: patientId,
           serviceType: serviceType,
@@ -693,23 +758,30 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/evv/checkout-location',
       builder: (context, state) {
-        final patientId = int.tryParse(state.uri.queryParameters['patientId'] ?? '');
+        final patientId =
+            int.tryParse(state.uri.queryParameters['patientId'] ?? '');
         final serviceType = state.uri.queryParameters['serviceType'] ?? '';
         final locationType = state.uri.queryParameters['locationType'] ?? '';
-        final latitude = double.tryParse(state.uri.queryParameters['latitude'] ?? '');
-        final longitude = double.tryParse(state.uri.queryParameters['longitude'] ?? '');
+        final latitude =
+            double.tryParse(state.uri.queryParameters['latitude'] ?? '');
+        final longitude =
+            double.tryParse(state.uri.queryParameters['longitude'] ?? '');
         final notes = state.uri.queryParameters['notes'] ?? '';
-        final duration = int.tryParse(state.uri.queryParameters['duration'] ?? '0') ?? 0;
-        final checkinNoGpsReason = state.uri.queryParameters['checkinNoGpsReason'];
-        final checkinAccuracyM = double.tryParse(state.uri.queryParameters['checkinAccuracyM'] ?? '');
-        final scheduledVisitId = int.tryParse(state.uri.queryParameters['scheduledVisitId'] ?? '');
-        
+        final duration =
+            int.tryParse(state.uri.queryParameters['duration'] ?? '0') ?? 0;
+        final checkinNoGpsReason =
+            state.uri.queryParameters['checkinNoGpsReason'];
+        final checkinAccuracyM = double.tryParse(
+            state.uri.queryParameters['checkinAccuracyM'] ?? '');
+        final scheduledVisitId =
+            int.tryParse(state.uri.queryParameters['scheduledVisitId'] ?? '');
+
         if (patientId == null || serviceType.isEmpty || locationType.isEmpty) {
           return const Scaffold(
             body: Center(child: Text('Invalid parameters')),
           );
         }
-        
+
         return CheckoutLocationPage(
           patientId: patientId,
           serviceType: serviceType,
@@ -727,28 +799,44 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/evv/visit-complete',
       builder: (context, state) {
-        final patientId = int.tryParse(state.uri.queryParameters['patientId'] ?? '');
+        final patientId =
+            int.tryParse(state.uri.queryParameters['patientId'] ?? '');
         final serviceType = state.uri.queryParameters['serviceType'] ?? '';
-        final checkinLocationType = state.uri.queryParameters['checkinLocationType'] ?? '';
-        final checkoutLocationType = state.uri.queryParameters['checkoutLocationType'] ?? '';
-        final checkinLatitude = double.tryParse(state.uri.queryParameters['checkinLatitude'] ?? '');
-        final checkinLongitude = double.tryParse(state.uri.queryParameters['checkinLongitude'] ?? '');
-        final checkoutLatitude = double.tryParse(state.uri.queryParameters['checkoutLatitude'] ?? '');
-        final checkoutLongitude = double.tryParse(state.uri.queryParameters['checkoutLongitude'] ?? '');
+        final checkinLocationType =
+            state.uri.queryParameters['checkinLocationType'] ?? '';
+        final checkoutLocationType =
+            state.uri.queryParameters['checkoutLocationType'] ?? '';
+        final checkinLatitude =
+            double.tryParse(state.uri.queryParameters['checkinLatitude'] ?? '');
+        final checkinLongitude = double.tryParse(
+            state.uri.queryParameters['checkinLongitude'] ?? '');
+        final checkoutLatitude = double.tryParse(
+            state.uri.queryParameters['checkoutLatitude'] ?? '');
+        final checkoutLongitude = double.tryParse(
+            state.uri.queryParameters['checkoutLongitude'] ?? '');
         final notes = state.uri.queryParameters['notes'] ?? '';
-        final duration = int.tryParse(state.uri.queryParameters['duration'] ?? '0') ?? 0;
-        final checkinNoGpsReason = state.uri.queryParameters['checkinNoGpsReason'];
-        final checkoutNoGpsReason = state.uri.queryParameters['checkoutNoGpsReason'];
-        final checkinAccuracyM = double.tryParse(state.uri.queryParameters['checkinAccuracyM'] ?? '');
-        final checkoutAccuracyM = double.tryParse(state.uri.queryParameters['checkoutAccuracyM'] ?? '');
-        final scheduledVisitId = int.tryParse(state.uri.queryParameters['scheduledVisitId'] ?? '');
-        
-        if (patientId == null || serviceType.isEmpty || checkinLocationType.isEmpty || checkoutLocationType.isEmpty) {
+        final duration =
+            int.tryParse(state.uri.queryParameters['duration'] ?? '0') ?? 0;
+        final checkinNoGpsReason =
+            state.uri.queryParameters['checkinNoGpsReason'];
+        final checkoutNoGpsReason =
+            state.uri.queryParameters['checkoutNoGpsReason'];
+        final checkinAccuracyM = double.tryParse(
+            state.uri.queryParameters['checkinAccuracyM'] ?? '');
+        final checkoutAccuracyM = double.tryParse(
+            state.uri.queryParameters['checkoutAccuracyM'] ?? '');
+        final scheduledVisitId =
+            int.tryParse(state.uri.queryParameters['scheduledVisitId'] ?? '');
+
+        if (patientId == null ||
+            serviceType.isEmpty ||
+            checkinLocationType.isEmpty ||
+            checkoutLocationType.isEmpty) {
           return const Scaffold(
             body: Center(child: Text('Invalid parameters')),
           );
         }
-        
+
         return VisitCompletePage(
           patientId: patientId,
           serviceType: serviceType,
@@ -771,25 +859,36 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/evv/visit-completed-success',
       builder: (context, state) {
-        final patientId = int.tryParse(state.uri.queryParameters['patientId'] ?? '');
+        final patientId =
+            int.tryParse(state.uri.queryParameters['patientId'] ?? '');
         final serviceType = state.uri.queryParameters['serviceType'] ?? '';
-        final checkinLocationType = state.uri.queryParameters['checkinLocationType'] ?? '';
-        final checkoutLocationType = state.uri.queryParameters['checkoutLocationType'] ?? '';
-        final checkinLatitude = double.tryParse(state.uri.queryParameters['checkinLatitude'] ?? '');
-        final checkinLongitude = double.tryParse(state.uri.queryParameters['checkinLongitude'] ?? '');
-        final checkoutLatitude = double.tryParse(state.uri.queryParameters['checkoutLatitude'] ?? '');
-        final checkoutLongitude = double.tryParse(state.uri.queryParameters['checkoutLongitude'] ?? '');
+        final checkinLocationType =
+            state.uri.queryParameters['checkinLocationType'] ?? '';
+        final checkoutLocationType =
+            state.uri.queryParameters['checkoutLocationType'] ?? '';
+        final checkinLatitude =
+            double.tryParse(state.uri.queryParameters['checkinLatitude'] ?? '');
+        final checkinLongitude = double.tryParse(
+            state.uri.queryParameters['checkinLongitude'] ?? '');
+        final checkoutLatitude = double.tryParse(
+            state.uri.queryParameters['checkoutLatitude'] ?? '');
+        final checkoutLongitude = double.tryParse(
+            state.uri.queryParameters['checkoutLongitude'] ?? '');
         final notes = state.uri.queryParameters['notes'] ?? '';
-        final duration = int.tryParse(state.uri.queryParameters['duration'] ?? '0') ?? 0;
+        final duration =
+            int.tryParse(state.uri.queryParameters['duration'] ?? '0') ?? 0;
         final checkinTimeStr = state.uri.queryParameters['checkinTime'] ?? '';
         final checkoutTimeStr = state.uri.queryParameters['checkoutTime'] ?? '';
-        
-        if (patientId == null || serviceType.isEmpty || checkinLocationType.isEmpty || checkoutLocationType.isEmpty) {
+
+        if (patientId == null ||
+            serviceType.isEmpty ||
+            checkinLocationType.isEmpty ||
+            checkoutLocationType.isEmpty) {
           return const Scaffold(
             body: Center(child: Text('Invalid parameters')),
           );
         }
-        
+
         // Parse times - fallback to current time if parsing fails
         DateTime checkinTime;
         DateTime checkoutTime;
@@ -803,7 +902,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         } catch (e) {
           checkoutTime = DateTime.now();
         }
-        
+
         return VisitCompletedSuccessPage(
           patientId: patientId,
           serviceType: serviceType,
@@ -868,7 +967,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
             body: Center(child: Text('Invalid note ID or missing note data')),
           );
         }
-        final note = extra;
         return NotetakerDetailView();
       },
     ),
@@ -890,21 +988,34 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         final isInitiator =
             (state.uri.queryParameters['initiator'] ?? 'false').toLowerCase() ==
                 'true';
+        final contextPatientUserIds =
+            (state.uri.queryParameters['contextPatientUserIds'] ?? '')
+                .split(',')
+                .map(int.tryParse)
+                .whereType<int>()
+                .where((id) => id > 0)
+                .toSet()
+                .toList(growable: false);
 
         return HybridVideoCallWidget(
           userId: userId,
           callId: callId,
           recipientId: recipientId,
+          recipientRole: state.uri.queryParameters['recipientRole'],
           userRole: state.uri.queryParameters['userRole'],
           isVideoEnabled: isVideoEnabled,
           isAudioEnabled: isAudioEnabled,
           isInitiator: isInitiator,
           userName: state.uri.queryParameters['userName'],
           recipientName: state.uri.queryParameters['recipientName'],
+          callKind: state.uri.queryParameters['callKind'],
+          scheduledVisitId: state.uri.queryParameters['scheduledVisitId'],
+          contextPatientUserIds: contextPatientUserIds,
           returnPatientDetailsId:
               state.uri.queryParameters['returnPatientDetailsId'],
           forcePatientDetailsOnExit:
-              (state.uri.queryParameters['forcePatientDetailsOnExit'] ?? 'false')
+              (state.uri.queryParameters['forcePatientDetailsOnExit'] ??
+                          'false')
                       .toLowerCase() ==
                   'true',
           returnAsCaregiver:
@@ -924,61 +1035,22 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/virtual-checkin',
       builder: (context, state) => const PatientVirtualCheckIn(),
     ),
+    //Adding Alexa login route
     GoRoute(
-      path: '/checkin-detail/:checkInId',
-      builder: (context, state) {
-        final checkInId = int.tryParse(state.pathParameters['checkInId'] ?? '');
-
-        if (checkInId == null) {
-          return const Scaffold(
-            body: Center(child: Text('Invalid check-in ID')),
-          );
-        }
-
-        // Prefer questions passed via state.extra (in-app navigation).
-        // Fall back to query parameter for deep links / web URLs.
-        List<BackendQuestionDto> questions = [];
-        final extra = state.extra;
-        if (extra is List<BackendQuestionDto>) {
-          questions = extra;
-        } else {
-          final questionsJson = state.uri.queryParameters['questions'] ?? '[]';
-          try {
-            final decoded = jsonDecode(questionsJson);
-            if (decoded is List) {
-              questions = (decoded as List<dynamic>)
-                  .map((q) => BackendQuestionDto.fromJson(q as Map<String, dynamic>))
-                  .toList();
-            }
-          } catch (e) {
-            // Failed to parse questions; continue with empty list
-          }
-        }
-
-        return PatientCheckInDetailPage(
-          checkInId: checkInId,
-          questions: questions,
-        );
-      },
-    ),
-        //Adding Alexa login route
-     GoRoute(
       path: '/alexaLogin',
-      builder: (context, state){
+      builder: (context, state) {
         return const AlexaLoginPage();
       },
     ),
     GoRoute(
       path: '/alexaLogin/:redirectUri/:state',
       builder: (context, state) {
-    final redirectUri = state.pathParameters['redirectUri'];
-    final oauthState = state.pathParameters['state'];
-    return AlexaLoginPage(
-      key: ValueKey('alexaLoginPage'),
-      // optionally pass them into your widget if you modify its constructor
-    );
-  },
-),
+        return AlexaLoginPage(
+          key: ValueKey('alexaLoginPage'),
+          // optionally pass them into your widget if you modify its constructor
+        );
+      },
+    ),
 
     //Adding Informed Delivery route
     GoRoute(
@@ -1071,8 +1143,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         return CustomTaskScreen(patientId: patientId, patientName: patientName);
       },
     ),
-    
-    
+
     GoRoute(
       path: '/pre-defined-task',
       builder: (context, state) {
@@ -1099,21 +1170,24 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         }
         return null;
       },
-      routes: [ 
-         GoRoute(
+      routes: [
+        GoRoute(
           path: 'dashboard',
           name: 'invoiceDashboard',
-          builder: (context, state) => const InvoiceTabbedPage(initialTabIndex: 0),
+          builder: (context, state) =>
+              const InvoiceTabbedPage(initialTabIndex: 0),
         ),
         GoRoute(
           path: 'upload',
           name: 'invoiceUpload',
-          builder: (context, state) => const InvoiceTabbedPage(initialTabIndex: 1),
+          builder: (context, state) =>
+              const InvoiceTabbedPage(initialTabIndex: 1),
         ),
         GoRoute(
           path: 'list',
           name: 'invoiceList',
-          builder: (context, state) => const InvoiceTabbedPage(initialTabIndex: 2),
+          builder: (context, state) =>
+              const InvoiceTabbedPage(initialTabIndex: 2),
           routes: [
             GoRoute(
               path: ':filter',
@@ -1132,24 +1206,22 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
             final invoice = state.extra as Invoice;
             return InvoiceDetailPage(invoice: invoice);
           },
-        ),       
-        
+        ),
       ],
     ),
-        GoRoute(
-          path: 'menu',
-          name: 'menupage',
-          builder: (context, state) => const MenuPage(),
-        ),
-        GoRoute(
-          path: '/alertpage',
-          builder: (context, state) => const MockAlertLabPage(),
-        ),
-          GoRoute(
-          path: '/alertpage-patient',
-          builder: (context, state) => const PatientFallPromptPage(),
-        ),
-        GoRoute(path: '/search', builder: (_, __) => const RouteSearchPage()),
-
+    GoRoute(
+      path: 'menu',
+      name: 'menupage',
+      builder: (context, state) => const MenuPage(),
+    ),
+    GoRoute(
+      path: '/alertpage',
+      builder: (context, state) => const MockAlertLabPage(),
+    ),
+    GoRoute(
+      path: '/alertpage-patient',
+      builder: (context, state) => const PatientFallPromptPage(),
+    ),
+    GoRoute(path: '/search', builder: (_, __) => const RouteSearchPage()),
   ],
 );

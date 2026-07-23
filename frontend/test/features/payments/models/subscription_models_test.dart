@@ -16,7 +16,7 @@ void main() {
     }) =>
         sm.Subscription(
           id: 'sub-1',
-          stripeSubscriptionId: 'sub_stripe_1',
+          paymentSubscriptionId: 'sub_stripe_1',
           customerId: 'cus_123',
           status: status,
           currentPeriodStart: '2024-01-01',
@@ -79,8 +79,8 @@ void main() {
     test('fromJson with backend format', () {
       final json = {
         'id': '42',
-        'stripeSubscriptionId': 'sub_abc',
-        'stripeCustomerId': 'cus_xyz',
+        'paymentSubscriptionId': 'sub_abc',
+        'paymentCustomerId': 'cus_xyz',
         'status': 'active',
         'startedAt': '2024-01-01',
         'currentPeriodEnd': '2024-02-01',
@@ -90,7 +90,7 @@ void main() {
       };
       final sub = sm.Subscription.fromJson(json);
       expect(sub.id, '42');
-      expect(sub.stripeSubscriptionId, 'sub_abc');
+      expect(sub.paymentSubscriptionId, 'sub_abc');
       expect(sub.customerId, 'cus_xyz');
       expect(sub.status, 'active');
       expect(sub.planAmount, closeTo(19.99, 0.01));

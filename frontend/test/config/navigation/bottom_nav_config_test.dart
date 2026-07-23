@@ -127,6 +127,15 @@ void main() {
       expectNoDuplicateLabels(items);
     });
 
+    test('caregiver schedule label uses the supported fallback explicitly', () {
+      final items = BottomNavConfig.getNavItemsForRole('CAREGIVER');
+      final scheduleItem = items.singleWhere((i) => i.routeName == 'schedule');
+
+      expect(scheduleItem.label, 'Schedule');
+      expect(scheduleItem.labelKey, isNull);
+      expect(scheduleItem.localizedLabel(t), 'Schedule');
+    });
+
     test('shared role navigation entries stay aligned with caregiver config',
         () {
       final caregiverItems = BottomNavConfig.getNavItemsForRole('CAREGIVER');

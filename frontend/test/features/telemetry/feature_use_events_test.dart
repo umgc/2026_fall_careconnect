@@ -5,6 +5,7 @@
 //   - http.runWithClient + MockClient for telemetry POST bodies
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,15 +22,24 @@ import 'package:care_connect_app/features/social/presentation/pages/chat_room_sc
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/services/transcript_outbox/encrypted_transcript_outbox.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 
 import '../../mock_user_provider.dart';
 
 const _joinCredentials = <String, dynamic>{
-  'meetingId': 'meeting-1',
-  'attendeeId': 'attendee-1',
-  'joinToken': 'join-token',
-  'mediaPlacement': <String, dynamic>{},
+  // meetingId/attendeeId must be >= 8 chars — UI calls .substring(0, 8).
+  'meetingId': 'meeting-12345678',
+  'attendeeId': 'attendee-12345678',
+  'joinToken': 'join-token-12345678',
+  'mediaPlacement': <String, dynamic>{
+    'AudioHostUrl': 'https://example.com/audio',
+    'AudioFallbackUrl': 'https://example.com/audio-fallback',
+    'SignalingUrl': 'https://example.com/signaling',
+    'TurnControlUrl': 'https://example.com/turn',
+  },
+  'mediaRegion': 'us-east-1',
+  'externalUserId': 'user-12345678',
 };
 
 Future<List<Map<String, dynamic>>> _runWidgetAndCaptureEvents(
@@ -114,7 +124,27 @@ bool _hasFeatureUse(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late Directory hiveDir;
+  final secureStore = <String, String>{};
+
+  setUpAll(() async {
+    // VideoCallService.initialize opens EncryptedTranscriptOutbox, which
+    // otherwise calls Hive.initFlutter() and hangs under flutter_test.
+    hiveDir = await Directory.systemTemp.createTemp('feature-use-hive-');
+    EncryptedTranscriptOutbox.initializeHiveForTesting(hiveDir.path);
+  });
+
+  tearDownAll(() async {
+    try {
+      await EncryptedTranscriptOutbox.purgeDefault();
+    } catch (_) {}
+    if (await hiveDir.exists()) {
+      await hiveDir.delete(recursive: true);
+    }
+  });
+
   setUp(() {
+    secureStore.clear();
     SharedPreferences.setMockInitialValues(<String, Object>{
       'telemetry_opted_out': false,
     });
@@ -127,8 +157,23 @@ void main() {
           <String, dynamic>{};
       final key = args['key'] as String?;
 
+      if (call.method == 'write' && key != null) {
+        secureStore[key] = args['value']?.toString() ?? '';
+        return null;
+      }
+      if (call.method == 'delete' && key != null) {
+        secureStore.remove(key);
+        return null;
+      }
       if (call.method == 'read' && key == 'jwt_token') {
         return 'test-jwt-token';
+      }
+      // Far-future expiry so AuthTokenManager skips backend validation.
+      if (call.method == 'read' && key == 'token_expiry') {
+        return '${DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch ~/ 1000}';
+      }
+      if (call.method == 'read' && key != null) {
+        return secureStore[key];
       }
       return null;
     });
@@ -246,7 +291,10 @@ void main() {
           ),
         ),
         interact: () async {
-          await tester.pumpAndSettle(const Duration(seconds: 5));
+          // Bounded pumps — post-join UI (timers/embeds) may never settle.
+          for (var i = 0; i < 30; i++) {
+            await tester.pump(const Duration(milliseconds: 100));
+          }
         },
       );
 

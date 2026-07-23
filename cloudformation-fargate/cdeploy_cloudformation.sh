@@ -101,6 +101,13 @@ SERVICE_PARAMETERS="$PARAMETER_DIR/${ENVIRONMENT}-service.json"
 DATA_EFFECTIVE_PARAMETERS="$DATA_PARAMETERS"
 TEMP_FILES=()
 
+# Remove parameter override temp files left by interrupted previous runs.
+shopt -s nullglob
+for _stale_param_file in "${TMPDIR:-/tmp}"/careconnect-*-data-*.json; do
+  [[ -f "$_stale_param_file" ]] && rm -f "$_stale_param_file"
+done
+shopt -u nullglob
+
 step() {
   echo
   echo "==> $1"
@@ -813,7 +820,7 @@ aws_cli ecr get-login-password --profile "$PROFILE" --region "$REGION" \
 
 step "Building Docker image"
 CURRENT_OPERATION="Building Docker image"
-docker build -t "$LOCAL_IMAGE_NAME" .
+docker build --platform linux/amd64 -t "$LOCAL_IMAGE_NAME" .
 
 step "Tagging and pushing Docker image to ECR"
 CURRENT_OPERATION="Pushing Docker image to ECR"

@@ -1,0 +1,727 @@
+Total blocks: 36
+
+=== Block 0 [replace] under Heading1: Table of Contents ===
+  T (Body): Revision History2
+  T (Body): Table of Contents3
+  T (Body): List of Tables6
+  T (Body): List of Figures8
+  T (Body): 1. Introduction11
+  T (Body): 1.1 Purpose11
+  T (Body): 1.2 Scope12
+  T (Body): 1.3 Definitions and Abbreviations14
+  T (Body): 1.4 Project Documentation18
+  T (Body): 1.5 References18
+  T (Body): 1.6 Intended Audience22
+  T (Body): 2. System Architecture Overview23
+  T (Body): 2.1 Overview23
+  T (Body): 2.2 Architecture Diagram25
+  T (Body): 2.3 Component Responsibilities27
+  T (Body): 2.4 External Dependencies38
+  T (Body): 2.5 Workflows42
+  T (Body): 2.6 System Users48
+  T (Body): 3. Technology Stack49
+  T (Body): 3.1 Technology Decisions and Assumptions53
+  T (Body): 3.2 Technology Risks54
+  T (Body): 4. Database and Data Model Design54
+  T (Body): 4.1 Overview55
+  T (Body): 4.2 Entity-Relationship Diagram59
+  T (Body): 4.3 Table Definitions64
+  T (Body): 4.4 New Tables and Migrations73
+  T (Body): 4.5 Data Retention and PII Handling79
+  T (Body): 4.6 Electronic Visit Verification (EVV) Entities87
+  T (Body): 4.7 In-Home Residential Support Entities88
+  T (Body): 4.8 Administration and Audit Entities89
+  T (Body): 5. API Design91
+  T (Body): 5.1 Overview91
+  T (Body): 5.2 API Conventions92
+  T (Body): 5.3 Authentication and Authorization95
+  T (Body): 5.4 Video Call Endpoints97
+  T (Body): 5.5 Transcription and Summary Endpoints (Planned)99
+  T (Body): 5.6 Telemetry and Analytics Endpoints100
+  T (Body): 5.7 RBAC and Access Management Endpoints102
+  T (Body): 5.8 Error Handling and Graceful Degradation103
+  T (Body): 5.9 Administrative, Audit, and Reporting APIs106
+  T (Body): 5.10 API Versioning and Backward Compatibility106
+  T (Body): 6. Feature Specification106
+  T (Body): 6.1 Role-Based Access Control Design107
+  T (Body): 6.2 Video Call and Transcription Pipeline Design112
+  T (Body): 6.3 AI and Bedrock Integration Design122
+  T (Body): 6.4 Telemetry and Analytics Design146
+  T (Body): 6.5 Cross-Team Functional Dependencies147
+  T (Body): 6.6 Electronic Visit Verification (EVV) Enhancements153
+  T (Body): 6.7 AI-Assisted Invoicing (AWS Bedrock + Claude)154
+  T (Body): 6.8 QR/Invite Care Circle Onboarding155
+  T (Body): 6.9 Wearable Device Integration156
+  T (Body): 6.10 Home Care Document Digitization157
+  T (Body): 6.11 Screening and Comprehensive Assessment Workflows158
+  T (Body): 7. Infrastructure and Deployment Design159
+  T (Body): 7.1 AWS Infrastructure Overview161
+  T (Body): 7.2 ECS Fargate Backend Deployment170
+  T (Body): 7.3 Frontend Deployment via Amplify171
+  T (Body): 7.4 Mobile Deployment Readiness171
+  T (Body): 7.5 GitHub Actions CI/CD Pipeline171
+  T (Body): 7.6 Secrets and Configuration Management183
+  T (Body): 7.8 Deployment Environments191
+  T (Body): 7.9 Rollback Procedure192
+  T (Body): 8. Security Design192
+  T (Body): 8.1 Overview193
+  T (Body): 8.2 Authentication Flow195
+  T (Body): 8.3 Transport Security203
+  T (Body): 8.4 Data Encryption205
+  T (Body): 8.5 Input and Output Sanitization207
+  T (Body): 8.6 Telemetry Content Standard Policy (WBS Telemetry)209
+  T (Body): 8.7 Summary of Security Controls by Work Package211
+  T (Body): 8.8 Logging and Monitoring212
+  T (Body): 9. Performance and Scalability212
+  T (Body): 9.1 Performance and Scalability Objectives212
+  T (Body): 9.2 Scalability Strategy213
+  T (Body): 9.3 Performance Monitoring214
+  T (Body): 9.4 Bottleneck Mitigation214
+  T (Body): 10. Error Handling215
+  T (Body): 11. Testing Strategy217
+  T (Body): 11.1 Testing Objectives218
+  T (Body): 11.2 Scope of Testing218
+  T (Body): 11.3 Unit Testing220
+  T (Body): 11.4 Integration Testing222
+  T (Body): 11.5 Performance Testing224
+  T (Body): 11.6 Security and Compliance Testing226
+  T (Body): TDD-B-11.6 Security Considerations for Testing227
+  T (Body): 11.7 Accessibility Testing228
+  T (Body): TDD-B-11.7.2 Accessibility and VPAT Compliance230
+  T (Body): TDD-B-11.7.2.1 Automated Accessibility Tools230
+  T (Body): 11.8 Test Environment232
+  T (Body): 11.9 Inherited Test Inventory and Coverage Notes235
+  T (Body): 11.10 Defect Tracking240
+  T (Body): 11.11 Testing Technology Decisions and Assumptions240
+  T (Body): 11.13 Code Coverage Strategy243
+  T (Body): 11.14 Milestone 2 Prototype and Viability Results244
+  T (Body): 11.15 Error Handling in Testing Infrastructure248
+  T (Body): 12. Known Issues256
+  T (Body): 12.1 Inherited product and security posture256
+  T (Body): 12.2 Video call, recording, and transcription (WBS Video Calls)258
+  T (Body): 12.3 Telemetry and analytics (WBS Telemetry)259
+  T (Body): 12.4 Bedrock, Summaries, and AI Condition Detection (WBS AWS Bedrock / AI)260
+  T (Body): 12.5 Deployment, Environment, and Data Schema (WBS Deployment)261
+  T (Body): 12.6 RBAC and external dependencies (WBS RBAC and Project Plan Section 12)261
+  T (Body): 12.7 Testing and quality process limitations262
+  T (Body): TDD-B-12.7 Known Issues, Limitations, and Open Items (Team B)263
+  T (Body): 12.8 Known Issues and Limitations266
+  T (Body): 13. UX/UI Design Specification268
+  T (Body): 13.1 UI Design Approach and Principles268
+  T (Body): 13.2 Screens and User Workflows Affected268
+  T (Body): 13.3 Wireframes, Mockups, or Screen Notes269
+  T (Body): 14. AI Usage Statement275
+  T (Body): 15. Appendix276
+  T (Body): 14.1 Appendix A: Reference Locations from Inherited Codebase276
+  T (Body): 14.2 Appendix B: Enlarged Figures for Readability277
+  E (TOC1): Revision History1
+  E (TOC1): Table of Contents1
+  E (TOC1): List of Tables1
+  E (TOC1): List of Figures1
+  E (TOC1): 1. Introduction1
+  E (TOC2): 1.1 Purpose1
+  E (TOC2): 1.2 Scope1
+  E (TOC2): 1.3 Definitions and Abbreviations1
+  E (TOC2): 1.4 Project Documentation1
+  E (TOC2): 1.5 References1
+  E (TOC2): 1.6 Intended Audience1
+  E (TOC1): 2. System Architecture Overview1
+  E (TOC2): 2.1 Overview1
+  E (TOC2): 2.2 Architecture Diagram1
+  E (TOC2): 2.3 Component Responsibilities1
+  E (TOC2): 2.4 External Dependencies1
+  E (TOC2): 2.5 Workflows1
+  E (TOC2): 2.6 System Users1
+  E (TOC1): 3. Technology Stack1
+  E (TOC2): 3.1 Technology Decisions and Assumptions1
+  E (TOC2): 3.2 Technology Risks1
+  E (TOC1): 4. Database and Data Model Design1
+  E (TOC2): 4.1 Overview1
+  E (TOC2): 4.2 Entity-Relationship Diagram1
+  E (TOC2): 4.3 Table Definitions1
+  E (TOC2): 4.4 New Tables and Migrations1
+  E (TOC2): 4.5 Data Retention and PII Handling1
+  E (TOC2): 4.6 Electronic Visit Verification (EVV) Entities1
+  E (TOC2): 4.7 In-Home Residential Support Entities1
+  E (TOC2): 4.8 Administration and Audit Entities1
+  E (TOC2): 4.9 Mail / USPS Entities (MailPiece)1
+  E (TOC1): 5. API Design1
+  E (TOC2): 5.1 Overview1
+  E (TOC2): 5.2 API Conventions1
+  E (TOC2): 5.3 Authentication and Authorization1
+  E (TOC2): 5.4 Video Call Endpoints1
+  E (TOC2): 5.5 Transcription and Summary Endpoints (Planned)1
+  E (TOC2): 5.6 Telemetry and Analytics Endpoints1
+  E (TOC2): 5.7 RBAC and Access Management Endpoints1
+  E (TOC2): 5.8 Error Handling and Graceful Degradation1
+  E (TOC2): 5.9 Administrative, Audit, and Reporting APIs1
+  E (TOC2): 5.10 API Versioning and Backward Compatibility1
+  E (TOC1): 6. Feature Specification1
+  E (TOC2): 6.1 Role-Based Access Control Design1
+  E (TOC2): 6.2 Video Call and Transcription Pipeline Design1
+  E (TOC2): 6.3 AI and Bedrock Integration Design1
+  E (TOC2): 6.4 Telemetry and Analytics Design1
+  E (TOC2): 6.5 Cross-Team Functional Dependencies1
+  E (TOC2): 6.6 Electronic Visit Verification (EVV) Enhancements1
+  E (TOC2): 6.7 AI-Assisted Invoicing (AWS Bedrock + Claude)1
+  E (TOC2): 6.8 QR/Invite Care Circle Onboarding1
+  E (TOC2): 6.9 Wearable Device Integration1
+  E (TOC2): 6.10 Home Care Document Digitization1
+  E (TOC2): 6.11 Screening and Comprehensive Assessment Workflows1
+  E (TOC2): 6.12 AI-Assisted Retrieval (Ask AI)1
+  E (TOC2): 6.13 USPS Informed Delivery Mail Agent1
+  E (TOC2): 6.14 Short-Term Memory (STML) Support1
+  E (TOC2): 6.15 Safety, Consent & Clarity1
+  E (TOC1): 7. Infrastructure and Deployment Design1
+  E (TOC2): 7.1 AWS Infrastructure Overview1
+  E (TOC2): 7.2 ECS Fargate Backend Deployment1
+  E (TOC2): 7.3 Frontend Deployment via Amplify1
+  E (TOC2): 7.4 Mobile Deployment Readiness1
+  E (TOC2): 7.5 GitHub Actions CI/CD Pipeline1
+  E (TOC2): 7.6 Secrets and Configuration Management1
+  E (TOC2): 7.8 Deployment Environments1
+  E (TOC2): 7.9 Rollback Procedure1
+  E (TOC1): 8. Security Design1
+  E (TOC2): 8.1 Overview1
+  E (TOC2): 8.2 Authentication Flow1
+  E (TOC2): 8.3 Transport Security1
+  E (TOC2): 8.4 Data Encryption1
+  E (TOC2): 8.5 Input and Output Sanitization1
+  E (TOC2): 8.6 Telemetry Content Standard Policy (WBS Telemetry)1
+  E (TOC2): 8.7 Summary of Security Controls by Work Package1
+  E (TOC2): 8.8 Logging and Monitoring1
+  E (TOC1): 9. Performance and Scalability1
+  E (TOC2): 9.1 Performance and Scalability Objectives1
+  E (TOC2): 9.2 Scalability Strategy1
+  E (TOC2): 9.3 Performance Monitoring1
+  E (TOC2): 9.4 Bottleneck Mitigation1
+  E (TOC1): 10. Error Handling1
+  E (TOC1): 11. Testing Strategy1
+  E (TOC2): 11.1 Testing Objectives1
+  E (TOC2): 11.2 Scope of Testing1
+  E (TOC2): 11.3 Unit Testing1
+  E (TOC2): 11.4 Integration Testing1
+  E (TOC2): 11.5 Performance Testing1
+  E (TOC2): 11.6 Security and Compliance Testing1
+  E (TOC2): TDD-B-11.6 Security Considerations for Testing1
+  E (TOC2): 11.7 Accessibility Testing1
+  E (TOC2): TDD-B-11.7.2 Accessibility and VPAT Compliance1
+  E (TOC2): TDD-B-11.7.2.1 Automated Accessibility Tools1
+  E (TOC2): 11.8 Test Environment1
+  E (TOC2): 11.9 Inherited Test Inventory and Coverage Notes1
+  E (TOC2): 11.10 Defect Tracking1
+  E (TOC2): 11.11 Testing Technology Decisions and Assumptions1
+  E (TOC2): 11.13 Code Coverage Strategy1
+  E (TOC2): 11.14 Milestone 2 Prototype and Viability Results1
+  E (TOC2): 11.15 Error Handling in Testing Infrastructure1
+  E (TOC1): 12. Known Issues1
+  E (TOC2): 12.1 Inherited product and security posture1
+  E (TOC2): 12.2 Video call, recording, and transcription (WBS Video Calls)1
+  E (TOC2): 12.3 Telemetry and analytics (WBS Telemetry)1
+  E (TOC2): 12.4 Bedrock, Summaries, and AI Condition Detection (WBS AWS Bedrock / AI)1
+  E (TOC2): 12.5 Deployment, Environment, and Data Schema (WBS Deployment)1
+  E (TOC2): 12.6 RBAC and external dependencies (WBS RBAC and Project Plan Section 12)1
+  E (TOC2): 12.7 Testing and quality process limitations1
+  E (TOC2): TDD-B-12.7 Known Issues, Limitations, and Open Items (Team B)1
+  E (TOC2): 12.8 Known Issues and Limitations1
+  E (TOC2): 12.9 Team E Known Issues and Limitations1
+  E (TOC1): 13. UX/UI Design Specification1
+  E (TOC2): 13.1 UI Design Approach and Principles1
+  E (TOC2): 13.2 Screens and User Workflows Affected1
+  E (TOC2): 13.3 Wireframes, Mockups, or Screen Notes1
+  E (TOC2): 13.4 Display Language and Localization Impact1
+  E (TOC1): 14. AI Usage Statement1
+  E (TOC1): 15. Appendix1
+  E (TOC2): 14.1 Appendix A: Reference Locations from Inherited Codebase1
+  E (TOC2): 14.2 Appendix B: Enlarged Figures for Readability1
+
+=== Block 1 [insert] under Heading2: 2.3 Component Responsibilities ===
+  E (Body): AI Gateway
+  E (Body): Authentication, RBAC scope filtering, rate limiting, and Ask AI request routing.
+  E (Body): Team E (Arturo Santana / Ravichandra Vasireddy)
+  E (Body): JWT (Spring Security), feature services
+  E (Body): Retrieval Service (Ask AI)
+  E (Body): Scoped hybrid search and grounded, cited answer assembly.
+  E (Body): Team E (Ravichandra Vasireddy)
+  E (Body): Data layer, Bedrock, safety framework
+  E (Body): Summaries Service
+  E (Body): Generate structured, cited summaries from diarized transcript text.
+  E (Body): Team E (Fon Ade Asaa)
+  E (Body): Transcript source, Bedrock, data layer
+  E (Body): STML Service
+  E (Body): Daily Memory Brief and recall experiences built on summaries and retrieval.
+  E (Body): Team E (John Bui)
+  E (Body): Summaries, Retrieval
+  E (Body): USPS Mail Agent
+  E (Body): Ingest, OCR, normalize, index, and classify Informed Delivery mail.
+  E (Body): Team E (Arturo Santana)
+  E (Body): Gmail OAuth, Textract, data layer
+  E (Body): Safety/Consent Layer
+  E (Body): Disclaimers, citations, secondary validation, and HITL escalation.
+  E (Body): Team E (David Oguh)
+  E (Body): All feature services, audit ledger
+
+=== Block 2 [insert] under Heading2: 2.6 System Users ===
+  E (Body): Care recipients use Ask AI, review call and visit summaries, and monitor incoming mail with short-term-memory-first interaction patterns and accessibility constraints. Caregivers may use Ask AI and review summaries only for assigned patients under consent-scoped, default view-only access. Family members receive limited read-only visibility into selected information; RBAC continues to block restricted clinical detail.
+
+=== Block 3 [insert] under Heading2: 2.6 System Users ===
+  E (Body): Human Reviewer / Clinician
+  E (Body): Reviews high-risk (Tier 2) AI output held for HITL.
+  E (Body): Requires a review/release queue and clear escalation ownership.
+  E (Body): System Administrator
+  E (Body): Configures roles, data-source indexing, retention, and AI access settings.
+  E (Body): Requires externalized configuration and auditable admin actions.
+  E (Body): Developer / Tester
+  E (Body): Builds and validates Ask AI, summaries, USPS, STML, and safety work.
+  E (Body): Needs clear APIs, data models, and testable behavior contracts.
+
+=== Block 4 [insert] under Heading2: 3.1 Technology Decisions and Assumptions ===
+  E (Body): Ask AI and summary enrichment assume AWS Bedrock for chat, structured summary support, and Titan embeddings; Aurora PostgreSQL with the pgvector extension and full-text search for hybrid retrieval; a Spring Boot IndexWorker consuming the indexing_outbox for SUMMARY_CREATED and TRANSCRIPT_INDEXED events; and Flutter clients for patient and caregiver Ask AI surfaces.
+
+=== Block 5 [insert] under Heading2: 3.1 Technology Decisions and Assumptions ===
+  E (Body): Access the LLM through an abstraction layer.
+  E (Body): Provider choice and BAA access remain environment-dependent.
+  E (Body): Provider can change without reworking Ask AI or summary clients.
+  E (Body): Records-grounded RAG with schema-validated output.
+  E (Body): Prevents unsupported medical content and enables provenance.
+  E (Body): Every answer is cited or flagged; output stays records-bounded.
+  E (Body): Hybrid retrieval (SQL + full-text + pgvector).
+  E (Body): Supports both precise and conversational questions.
+  E (Body): Higher recall; semantic matches remain likelihood-ranked, not exact.
+  E (Body): Metadata-first USPS extraction, OCR as fallback.
+  E (Body): USPS has no public Informed Delivery API for full image capture.
+  E (Body): Mail records populate from metadata even when images are absent.
+
+=== Block 6 [insert] under Heading2: 3.2 Technology Risks ===
+  E (Body): Material risks for the AI retrieval path include Bedrock throttle and embedding latency, temporary NULL embedding vectors until backfill completes, hybrid-search cost under wide patient corpora, outbox lease parking while visit-summary indexing remains deferred, and Amplify CORS drift after app-only backend redeploys.
+
+=== Block 7 [insert] under Heading2: 3.2 Technology Risks ===
+  E (Body): Bedrock / LLM access delayed.
+  E (Body): Blocks summary generation and Ask AI answers.
+  E (Body): Build against a swappable LLM interface; confirm account access early.
+  E (Body): LLM produces inaccurate or hallucinated content.
+  E (Body): Unsafe or misleading medical-adjacent output.
+  E (Body): Require citations; flag low confidence; apply secondary validation / HITL.
+  E (Body): OCR accuracy insufficient for envelope images.
+  E (Body): Missed or wrong mail extraction.
+  E (Body): Confidence scoring; route low-confidence pieces to manual review.
+  E (Body): Index refresh lag after transcript or summary save.
+  E (Body): Stale Ask AI answers.
+  E (Body): Async IndexWorker with lease covering embedding latency.
+
+=== Block 8 [replace] under Heading2: 4.6 Electronic Visit Verification (EVV) Entities ===
+  T (Body): The EVV domain implements the 21st Century Cures Act §12006 lifecycle and underpins Section 6.3. Visits transition through a strict state machine - Scheduled → In-Progress → Completed → Submitted → Exported – and each transition is captured as an immutable visit_event row. Because caregivers routinely operate in low-connectivity environments, the model is designed for an offline-first client: events are queued locally in offline_sync_queue mirrors and reconciled server-side using deterministic UUIDs to guarantee idempotent replay within the SRS-mandated 24-hour offline window (SRS §2.4.3 / §6.4). 
+  E (Body): Status: proposed target schema for Team D’s EVV WBS scope; the entities below are not yet present in the Flyway migrations and extend rather than replace the inherited evv_participant, evv_record, evv_audit_event, and evv_outbox tables (V28__create_evv_tables.sql, V55.1__create_evv_outbox_table.sql). The EVV domain implements the 21st Century Cures Act §12006 lifecycle and underpins Section 6.3. Visits transition through a strict state machine - Scheduled → In-Progress → Completed → Submitted → Exported – and each transition is captured as an immutable visit_event row. Because caregivers routinely operate in low-connectivity environments, the model is designed for an offline-first client: events are queued locally in offline_sync_queue mirrors and reconciled server-side using deterministic UUIDs to guarantee idempotent replay within the SRS-mandated 24-hour offline window (SRS §2.4.3 / §6.4).
+
+=== Block 9 [replace] under Heading2: 4.7 In-Home Residential Support Entities ===
+  T (Body): This domain models the day-to-day caregiver workflow described in Section 6.4: per-resident care plans, task execution, shift handoffs, and incident reporting. Care plans are versioned rather than mutated — every edit produces a new effective_range-bounded row so that historical task logs can always be reconciled against the plan that was active at execution time. This pattern is essential for audit defensibility under the HIPAA Designated Record Set.
+  E (Body): Status: proposed target schema for Team D’s In-Home Residential Support WBS scope; the entities below are not yet present in the Flyway migrations. This domain models the day-to-day caregiver workflow described in Section 6.4: per-resident care plans, task execution, shift handoffs, and incident reporting. Care plans are versioned rather than mutated — every edit produces a new effective_range-bounded row so that historical task logs can always be reconciled against the plan that was active at execution time. This pattern is essential for audit defensibility under the HIPAA Designated Record Set.
+
+=== Block 10 [replace] under Heading2: 4.8 Administration and Audit Entities ===
+  T (Body): The Admin & Audit domain provides identity, authorization, and the immutable evidentiary trail required for HIPAA
+  E (Body): Status: proposed target schema; the role, permission, audit_event, and compliance_report entities below are not yet present in the Flyway migrations (the inherited schema has users and an EVV-scoped evv_audit_event only). The Admin & Audit domain provides identity, authorization, and the immutable evidentiary trail required for HIPAA
+
+=== Block 11 [replace] under Heading2: 4.8 Administration and Audit Entities ===
+  T (Body): email, mfa_enabled, password_hash (Argon2id), status, last_login_at, FK role_id
+  E (Body): email, mfa_enabled, password_hash (BCrypt), status, last_login_at, FK role_id
+
+=== Block 12 [replace] under Heading2: 4.8 Administration and Audit Entities ===
+  T (Body): Design notes: Each audit_event stores SHA-256 hashes of the before/after JSON snapshots rather than the payloads themselves, keeping the table lean while still permitting tamper detection. The role/permission join table is cached in Redis on application startup and invalidated via a Postgres NOTIFY channel, so authorization checks remain sub-millisecond even at peak load.
+  E (Body): Design notes: Each audit_event stores SHA-256 hashes of the before/after JSON snapshots rather than the payloads themselves, keeping the table lean while still permitting tamper detection. As a future optimization, the role/permission join table could be cached in Redis on application startup and invalidated via a Postgres NOTIFY channel, so authorization checks would remain sub-millisecond even at peak load; this Redis caching layer is proposed and is not part of the currently approved technology stack (Section 3).
+
+=== Block 13 [insert] under Heading2: 4.8 Administration and Audit Entities ===
+  E (Heading2): 4.9 Mail / USPS Entities (MailPiece)
+  E (Body): Mail / USPS entities (Team E)
+  E (Body): Table 4.9a
+  E (Body): Entity
+  E (Body): Primary Key
+  E (Body): Key Attributes
+  E (Body): Relationships
+  E (Body): Notes
+  E (Body): MailPiece
+  E (Body): mail_id (UUID)
+  E (Body): patient_id, sender, delivery_date, tier, ocr_confidence, visible_text, image refs
+  E (Body): Patient; optional retrieval_index_chunk linkage
+  E (Body): PHI-adjacent; caregiver visibility consent-scoped; metadata-first OCR fallback
+  E (Body): MailPiece field dictionary
+  E (Body): mail_id
+  E (Body): sender (string), delivery_date (date), tier (enum), ocr_confidence (0–1)
+  E (Body): USPS Mail Agent, Ask AI indexing
+  E (Body): Below OCR threshold → manual review; PK/scoped patient queries
+  E (Body): Design notes: Physical columns follow the Team E MailPiece data dictionary. Selected mail text may also be written to retrieval_index_chunk so hybrid search can cite mail alongside summaries and transcripts when RBAC permits.
+  E (Body): The Mail / USPS domain stores Informed Delivery artifacts and OCR-enriched text used for patient mail recall and optional Ask AI grounding. MailPiece rows link to the patient, capture delivery or scan timing, sender and subject heuristics, OCR text and status, object-storage references for images, and consent or visibility flags for caregiver access.
+
+=== Block 14 [replace] under Heading3: 5.2.5 Versioning ===
+  T (Body): API versioning is path-based (/v1/api/). Breaking changes require a new version prefix. Non-breaking additions (new optional fields, new endpoints) may be introduced within the existing version. Deprecations will be noted in OpenAPI documentation before removal.
+  E (Body): API versioning is path-based (/v1/api/). Breaking changes require a new version prefix. Non-breaking additions (new optional fields, new endpoints) may be introduced within the existing version. Deprecations will be noted in OpenAPI documentation before removal. Endpoints inherited or extended from pre-existing subsystems keep their original path prefixes rather than migrating onto /v1/api/: the video-call pipeline uses /api/v3/calls/..., summary confirmation uses /api/summaries/..., and the Ask AI retrieval endpoint uses /api/ai/ask. New Team A endpoints follow /v1/api/ going forward; Sections 5.2, 6.2, and 6.12 document the specific inherited exceptions.
+
+=== Block 15 [insert] under Heading2: 5.5 Transcription and Summary Endpoints (Planned) ===
+  E (Body): Summary item confirmation is exposed as POST /api/summaries/{id}/items/{itemId}/confirm. Authorized reviewers promote a structured summary item after human confirmation. Successful confirmation pairs with SUMMARY_CREATED indexing so confirmed content becomes eligible for grounded Ask AI retrieval under the caller’s RBAC scope.
+
+=== Block 16 [insert] under Heading2: 5.5 Transcription and Summary Endpoints (Planned) ===
+  E (Body): POST
+  E (Body): /api/summaries/{id}/items/{itemId}/confirm
+  E (Body): Human Reviewer/Clinician
+  E (Body): Confirm or decline a structured summary actionable item after human review.
+
+=== Block 17 [replace] under Heading2: 5.10 API Versioning and Backward Compatibility ===
+  E (Body): 5.11 Ask AI Endpoint (POST /api/ai/ask)POST /api/ai/ask accepts an authenticated request identifying the patient scope, the natural-language query (or voice-derived text after speech-to-text), optional conversation context, and optional source-type filters (summaries, transcripts, mail, documents) that remain subject to RBAC. The response returns answer text, citations with source type and source record identifiers, safety or hold indicators when applicable, and a correlation identifier for audit. Standard outcomes include 401 or 403 for authentication and scope failures, 400 for validation errors, 429 for throttle, and 503 when Bedrock or retrieval dependencies are unavailable, with graceful client messaging.
+  E (Body): This section specifies the Ask AI gateway endpoint that orchestrates RBAC-scoped hybrid retrieval and grounded answer assembly on AWS Bedrock. Interfaces follow the conventions in §5.2 unless noted below.
+  E (Body): Ask AI endpoint summary
+  E (Body): Table 5.11
+  E (Body): Method
+  E (Body): Path
+  E (Body): Auth Required
+  E (Body): Description
+  E (Body): POST
+  E (Body): /api/ai/ask
+  E (Body): Yes
+  E (Body): Submit an Ask AI question (text or transcribed voice) and receive a grounded answer with citations.
+  E (Body): POST /api/ai/ask parameter reference
+  E (Body): Table 5.12
+  E (Body): Parameter
+  E (Body): Location
+  E (Body): Type
+  E (Body): Required?
+  E (Body): Description
+  E (Body): query
+  E (Body): body
+  E (Body): string
+  E (Body): Yes
+  E (Body): User question (text or transcribed voice).
+  E (Body): sessionId
+  E (Body): body
+  E (Body): string
+  E (Body): No
+  E (Body): Conversation session for audit correlation.
+  E (Body): patientId
+  E (Body): body
+  E (Body): UUID/long
+  E (Body): Yes*
+  E (Body): Target patient scope (*may be implied by path or token grants).
+  E (Body): Authorization
+  E (Body): header
+  E (Body): JWT
+  E (Body): Yes
+  E (Body): Spring-issued JWT bearer token (see Section 5.3).
+
+=== Block 18 [replace] under Heading3: 6.2.1 Overview ===
+  T (Body): meeting creation and attendee management via ChimeService
+  T (Body): media capture and recording via CallRecordingService using Chime SDK Media Pipelines
+  T (Body): audio concatenation into a single MP4 artifact stored in S3
+  T (Body):  post-call transcription via AWS Transcribe with speaker diarization
+  T (Body): transcript parsing, speaker labeling, and persistence via PostCallTranscriptionService and CallTranscriptService.
+  E (Body): (a)  meeting creation and attendee management via ChimeService
+  E (Body): (b)  media capture and recording via CallRecordingService using Chime SDK Media Pipelines
+  E (Body): (c)  audio concatenation into a single MP4 artifact stored in S3
+  E (Body): (d)   post-call transcription via AWS Transcribe with speaker diarization
+  E (Body): (e)  transcript parsing, speaker labeling, and persistence via PostCallTranscriptionService and CallTranscriptService.
+
+=== Block 19 [replace] under Heading3: 6.3.6 Graceful Degradation ===
+  T (Body): If BedrockRuntimeClient is available and awsEnabled=true, the service invokes the Nova Pro model with a structured prompt.
+  T (Body): If Bedrock is unavailable, the service falls back to analyzeTranscriptHeuristic(), which uses keyword matching and basic NLP patterns to produce approximate sentiment scores without AI assistance.
+  E (Body): (a)  If BedrockRuntimeClient is available and awsEnabled=true, the service invokes the Nova Pro model with a structured prompt.
+  E (Body): (b)  If Bedrock is unavailable, the service falls back to analyzeTranscriptHeuristic(), which uses keyword matching and basic NLP patterns to produce approximate sentiment scores without AI assistance.
+
+=== Block 20 [replace] under Heading3: 6.3.6 Graceful Degradation ===
+  T (Body): If the Bedrock summarization call fails, CallSummaryService stores a fallback summary entity with headline "Summary unavailable" and assessment "Automated summary could not be generated." 
+  T (Body): The call_summaries record is still created with status tracking the failure, ensuring the UI renders gracefully.
+  E (Body): (a)  If the Bedrock summarization call fails, CallSummaryService stores a fallback summary entity with headline "Summary unavailable" and assessment "Automated summary could not be generated."
+  E (Body): (b)  The call_summaries record is still created with status tracking the failure, ensuring the UI renders gracefully.
+
+=== Block 21 [insert] under Heading2: 6.5 Cross-Team Functional Dependencies ===
+  E (Body): Team E additionally depends on the shared Bedrock model allow-list and ECS task-role IAM in the platform stack, Chime or transcript upstream emitters for summary indexing, JWT (Spring Security) enforcement of USE_AI_FEATURES, Amplify frontend configuration for BACKEND_URL and CORS, and RDS pgvector enablement from the data stack parameter group.
+
+=== Block 22 [insert] under Heading3: 6.5.1 Dependency Register ===
+  E (Body): Shared retrieval / summary schema contract
+  E (Body): Team E (Ravichandra Vasireddy) + Summaries/STML
+  E (Body): Lock versioned fields for transcripts, summaries, embeddings, mail
+  E (Body): In progress
+  E (Body): Caregiver visibility policy for AI outputs
+  E (Body): Team E Safety (David Oguh) + RBAC owners
+  E (Body): Finalize visibility matrix before caregiver-facing Ask AI demo
+  E (Body): Open
+  E (Body): Gmail OAuth for USPS Informed Delivery ingest
+  E (Body): Team E (Arturo Santana) / Cloud
+  E (Body): Complete OAuth setup; replace mock mailbox data
+  E (Body): Open
+
+=== Block 23 [insert] under Heading2: 6.12 AI-Assisted Retrieval (Ask AI) ===
+  E (Heading2): 6.12 AI-Assisted Retrieval (Ask AI)
+  E (Body): Design notes: The runtime pipeline authorizes scope, retrieves and fuses candidates, builds cited context, invokes the model, applies optional safety or HITL hold rules, and returns the answer with citations. Voice queries join the same retrieval path after speech-to-text. Denied-scope asks produce 403 responses that are audit logged with the requester and patient identifiers.
+  E (Body): Ask AI provides grounded, cited answers over a patient’s stored care records. The design combines RBAC-scoped hybrid retrieval (PostgreSQL full-text search and pgvector similarity) with a Bedrock assembler that must cite retrieved sources rather than invent unsupported clinical advice.
+  E (Body): Ask AI feature specification (Team E)
+  E (Body): Table 6.12
+  E (Body): Item
+  E (Body): Team Response
+  E (Body): Requirement IDs or Names
+  E (Body): FR-AI-1 through FR-AI-10; governed by REQ-SC-1–9
+  E (Body): Feature Summary
+  E (Body): Lets authorized users ask natural-language questions over scoped care records and receive grounded, cited answers.
+  E (Body): Primary User Flow
+  E (Body): 1. User submits a question. 2. System authenticates and authorizes scope. 3. Hybrid retrieval runs. 4. Model assembles a cited answer. 5. Safety rules apply. 6. Client displays answer and sources.
+  E (Body): Main System Behaviors
+  E (Body): Answers only from authorized indexed records; never invents unsupported clinical advice; audit logs asks and 403s.
+  E (Body): Inputs
+  E (Body): Text question or voice-derived text; patient scope; optional source filters.
+  E (Body): Outputs
+  E (Body): Grounded answer; source citations; disclaimer; optional hold/escalation state.
+  E (Body): Alternate / Error Flows
+  E (Body): No relevant records → clear empty-state message. Out-of-scope patient → 403. Bedrock unavailable → graceful degradation.
+  E (Heading2): 6.13 USPS Informed Delivery Mail Agent
+  E (Body): Design notes: Caregiver visibility remains consent-aware. Selected mail text may be indexed into the shared retrieval corpus so Ask AI can cite mail when the caller’s scope allows.
+  E (Body): The USPS Informed Delivery mail agent ingests mail digests and images, applies OCR with Textract fallback where required, persists MailPiece entities described in §4.9, and exposes patient-facing mail review flows.
+  E (Body): Table 6.13
+  E (Body): Item
+  E (Body): Team Response
+  E (Body): Requirement IDs or Names
+  E (Body): FR-USPS-1 through FR-USPS-7
+  E (Body): Feature Summary
+  E (Body): Retrieves, extracts, indexes, classifies, and presents Informed Delivery mail for the patient.
+  E (Body): Primary User Flow
+  E (Body): 1. User opts in and authenticates mailbox access. 2. Agent ingests digest/metadata. 3. OCR runs when needed. 4. MailPiece is stored and listed. 5. Optional Ask AI indexing.
+  E (Body): Main System Behaviors
+  E (Body): Metadata-first extraction; OCR/Textract fallback; consent-aware caregiver visibility.
+  E (Body): Inputs
+  E (Body): USPS notification emails; optional mail images; OAuth tokens.
+  E (Body): Outputs
+  E (Body): Normalized MailPiece (sender, delivery date, visible text, tier, OCR status).
+  E (Body): Alternate / Error Flows
+  E (Body): No mail image → recorded empty-image state. Low OCR confidence → manual review.
+  E (Heading2): 6.14 Short-Term Memory (STML) Support
+  E (Body): Design notes: Confirmed actionable summary items feed reminder cues and remain visible in STML-oriented presentation without requiring the patient to re-read full transcripts.
+  E (Body): Short-Term Memory (STML) support shapes patient-facing summaries, reminders, and Ask AI responses toward brief, high-signal content. Workflows prefer short confirmation paths over long multi-step forms when an actionable item can be confirmed in place.
+  E (Body): USPS Informed Delivery mail agent (Team E)
+  E (Body): STML support (Team E)
+  E (Body): Table 6.14
+  E (Body): Item
+  E (Body): Team Response
+  E (Body): Requirement IDs or Names
+  E (Body): STML-1 through STML-5; builds on summary and Ask AI outputs
+  E (Body): Feature Summary
+  E (Body): Memory-recall experiences such as a Daily Memory Brief and short confirmation paths.
+  E (Body): Primary User Flow
+  E (Body): 1. On app open, user sees Daily Memory Brief. 2. User may confirm actionable items. 3. Brief updates from recent summaries/retrieval.
+  E (Body): Main System Behaviors
+  E (Body): Consumes summary and retrieval outputs; prefers short, high-signal copy.
+  E (Body): Inputs
+  E (Body): Recent summaries and indexed records; recall queries.
+  E (Body): Outputs
+  E (Body): Daily Memory Brief; plain-language recall answers; confirmation states.
+  E (Body): Alternate / Error Flows
+  E (Body): No recent activity → clear empty-state brief.
+  E (Heading2): 6.15 Safety, Consent & Clarity
+  E (Body): Design notes: Responses that are held show an explicit hold state rather than silent failure. Patient copy remains short and STML-friendly; caregiver copy may surface additional consented clinical detail.
+  E (Body): Safety, Consent & Clarity defines patient-facing guardrails for Ask AI and generative summaries. The assistant does not provide diagnosis, treatment, or dosage recommendations. Caregiver visibility stays consent-scoped, secondary validation or HITL hold-and-release applies where configured, and AI-generated text carries clear source attribution.
+  E (Body): Safety, consent, and clarity (Team E)
+  E (Body): Table 6.15
+  E (Body): Item
+  E (Body): Team Response
+  E (Body): Requirement IDs or Names
+  E (Body): REQ-SC-1 through REQ-SC-9; SAF-1+
+  E (Body): Feature Summary
+  E (Body): Cross-cutting governance for AI output: disclaimers, citations, consent, and HITL hold/release.
+  E (Body): Primary User Flow
+  E (Body): 1. AI output is generated. 2. Secondary validation runs. 3. Safe output shows with disclaimer/citations, or Tier-2 hold routes to review.
+  E (Body): Main System Behaviors
+  E (Body): Persistent non-dismissible AI notices; default-restricted caregiver visibility; audit of held releases.
+  E (Body): Inputs
+  E (Body): All AI output; user role and consent; configured safety thresholds.
+  E (Body): Outputs
+  E (Body): Validated output with disclaimers and citations; escalation tickets when held.
+  E (Body): Alternate / Error Flows
+  E (Body): Tier-2 medication/emergency cues → withhold and escalate rather than silent failure.
+
+=== Block 24 [insert] under Heading2: 7.8 Deployment Environments ===
+  E (Body): When 03-platform.yaml changes Bedrock, SSM, or KMS permissions used by Ask AI embeddings, operators must update the platform stack and force a new ECS deployment. App-only redeploys refresh the service image without refreshing IAM. After an app-only pass, CorsAllowedList must still include the Amplify origin or the hosted welcome page reports backend unhealthy even when curl health checks succeed.
+
+=== Block 25 [insert] under Heading2: 7.9 Rollback Procedure ===
+  E (Body): Backend rollback returns ECS to a prior ECR image tag with a forced service deployment. Platform IAM rollbacks redeploy the previous 03-platform.yaml changeset. Retrieval index rows already written for a source_record_id are replaced on re-ingest rather than automatically undone when an image rolls back.
+
+=== Block 26 [insert] under Heading2: 8.8 Logging and Monitoring ===
+  E (Body): Ask AI audit events record requester identity, patient scope, denied-scope 403 outcomes, citation source identifiers, and model identifier without persisting full PHI prompts in clear text. IndexWorker logs warnings or errors when rows dead-letter or when the Bedrock runtime client is unavailable so embedding gaps remain operable.
+
+=== Block 27 [insert] under Heading2: 9.4 Bottleneck Mitigation ===
+  E (Body): Indexing claim leases (default ten minutes) cover Titan embedding work that runs after the ingest transaction commits. Unimplemented visit-summary work uses a multi-hour no-burn park so polls do not reclaim the same outbox row every fifteen seconds. Embedding batches retry on throttle, and hybrid retrieval remains bounded by RBAC scope and top-k reciprocal-rank fusion.
+
+=== Block 28 [insert] under Heading2: 9.4 Bottleneck Mitigation ===
+  E (Body): Team E bottleneck mitigation for Ask AI indexing and retrieval
+  E (Body): Table 9.4
+  E (Body): Potential Bottleneck
+  E (Body): Impact
+  E (Body): Mitigation Strategy
+  E (Body): Implementation
+  E (Body): LLM inference latency
+  E (Body): Slow Ask AI answers
+  E (Body): Minimize context; cache embeddings; stream where practical
+  E (Body): Gateway minimization; pgvector prefilter
+  E (Body): OCR throughput
+  E (Body): Slow mail processing
+  E (Body): Metadata-first; async OCR with progress states
+  E (Body): Textract fallback only when needed
+  E (Body): Index refresh lag
+  E (Body): Stale retrieval
+  E (Body): Async indexing within the freshness target
+  E (Body): Outbox IndexWorker + claim lease covering embedding
+  E (Body): Cloud cost spikes
+  E (Body): Budget risk
+  E (Body): Weekly billing review; lifecycle rules; scale-to-zero where possible
+  E (Body): AWS budgets/alerts
+
+=== Block 29 [insert] under Heading2: 11.7 Accessibility Testing ===
+  E (Body): Ask AI, summary review, and mail surfaces are in scope for the shared VPAT plan: adequate contrast, keyboard focus order, screen-reader labels for citation lists, and short, STML-friendly language in patient-facing copy.
+
+=== Block 30 [insert] under Heading2: 11.7 Accessibility Testing ===
+  E (Body): Ask AI answer + citation list
+  E (Body): Focus order, screen-reader labels for citations, non-medical disclaimer visibility
+  E (Body): Team E Ask AI
+  E (Body): Summary card confirmation
+  E (Body): Keyboard-complete confirm/decline; contrast for AI notices
+  E (Body): Team E Summaries / STML
+  E (Body): Mail view tiers
+  E (Body): Readable importance tier labels; empty and low-OCR states
+  E (Body): Team E USPS
+
+=== Block 31 [replace] under Heading3: 11.19.7 Ask AI and Team E Feature Test Coverage ===
+  E (Heading3): 11.19.7 Ask AI and Team E Feature Test Coverage
+  E (Body): SAFE-002: Held answer exposes hold state to client → SUCCESS
+  E (Body): SAFE-001: Ask AI refuses diagnosis or dosing advice → BLOCKED
+  E (Body): STML-001: Patient sees short confirmation path for actionable summary item → SUCCESS
+  E (Body): MAIL-002: OCR fallback to Textract when primary path fails → SUCCESS
+  E (Body): MAIL-001: USPS digest ingest creates MailPiece with OCR text → SUCCESS
+  E (Body): IDX-003: Missing Bedrock client leaves embedding NULL and logs warning → SUCCESS
+  E (Body): IDX-002: Deferred visit summary parks without burning attempts → SUCCESS
+  E (Body): IDX-001: IndexWorker claims outbox row with lease and processes SUMMARY_CREATED → SUCCESS
+  E (Body): SUM-002: SUMMARY_CREATED indexing writes retrieval chunks for confirmed content → SUCCESS
+  E (Body): SUM-001: Reviewer confirms summary item via confirm endpoint → SUCCESS
+  E (Body): ASK-005: Bedrock unavailable during ask → GRACEFUL DEGRADATION
+  E (Body): ASK-004: Ask AI response includes source citations for grounded claims → SUCCESS
+  E (Body): ASK-003: User asks for patient outside RBAC scope → BLOCKED
+  E (Body): ASK-002: Caregiver asks for assigned patient under consent scope → SUCCESS
+  E (Body): ASK-001: Authorized patient asks in-scope question via POST /api/ai/ask → SUCCESS
+
+=== Block 32 [insert] under Heading3: 11.19.7 Ask AI and Team E Feature Test Coverage ===
+  E (Body): Team E automation covers JUnit and Mockito suites for retrieval, indexing, and embedding services; Flutter widget tests for Ask AI screens where present; and CI gates on Team AE develop branches. Shared pipelines use non-PHI fixtures only.
+
+=== Block 33 [insert] under Heading2: 12.9 Team E Known Issues and Limitations ===
+  E (Heading2): 12.9 Team E Known Issues and Limitations
+  E (Body): ●     The following items capture Team E-specific limitations and open work for Ask AI, summaries, USPS mail, STML, and safety. They complement the shared issues in §12.8.
+  E (Body): ●     Visit-summary indexing may remain parked until the visit_summaries ingest path lands. Embedding columns can stay NULL when Bedrock is unavailable until backfill runs. Ask AI answer quality tracks retrieval-index freshness after transcript and summary emit.
+  E (Heading3): 12.9.1 Technical Limitations
+  E (Body): ●     App-only redeploys can reset CorsAllowedList to localhost defaults and break Amplify browser checks. Content-hash short-circuit skips re-chunking when the publisher hash is unchanged, even if chunker metadata alone would differ.
+  E (Body): ●     Team E technical limitations
+  E (Body): ●     Table 12.9.1
+  E (Body): ID
+  E (Body): Limitation
+  E (Body): Impact
+  E (Body): Mitigation or Next Step
+  E (Body): TE-L1
+  E (Body): Output quality depends on transcript quality
+  E (Body): Degraded summaries and Ask AI recall
+  E (Body): Show confidence; allow correction; synthetic fixtures in test
+  E (Body): TE-L2
+  E (Body): LLMs can produce unsupported content
+  E (Body): Hallucinated medical-adjacent output risk
+  E (Body): Citations, uncertainty flags, secondary validation / HITL
+  E (Body): TE-L3
+  E (Body): Semantic search returns likely, not exact, matches
+  E (Body): Some relevant items ranked low or missed
+  E (Body): Hybrid FTS + vector retrieval; records-based framing
+  E (Body): TE-L4
+  E (Body): No public USPS Informed Delivery full-image API
+  E (Body): Incomplete mail capture
+  E (Body): Metadata-first extraction; treat missing image as known state
+  E (Heading3): 12.9.2 Known Issues
+  E (Body):  Clinical decision-making, diagnosis, treatment selection, and dosage recommendations remain outside Ask AI scope.
+  E (Body): Team E known issues
+  E (Body):  Table 12.9.2
+  E (Body): ID
+  E (Body): Issue
+  E (Body): Impact
+  E (Body): Owner
+  E (Body): Resolution Plan
+  E (Body): TE-K1
+  E (Body): Bedrock/OAuth not fully provisioned in all envs
+  E (Body): Pipelines may run on mocks
+  E (Body): Team A / Team E
+  E (Body): Confirm access; swap real providers in target env
+  E (Body): TE-K2
+  E (Body): Caregiver visibility policy not finalized
+  E (Body): Blocks caregiver-facing demo
+  E (Body): Team E Safety
+  E (Body): Lock visibility matrix before caregiver release
+  E (Body): TE-K3
+  E (Body): App-only redeploy can reset CORS allow-list
+  E (Body): Amplify reports backend unhealthy
+  E (Body): Platform / Team E
+  E (Body): Re-apply Amplify origin after app-only deploys
+  E (Heading3): 12.9.3 Exclusions
+  E (Body):  Planned follow-ons include medication-timeline aggregation in retrieval responses, richer tier-two HITL workflows, speech-to-text hardening for voice asks, and broader mail classification.
+  E (Heading3): 12.9.4 Future Enhancements
+  E (Body): ●     Bedrock IAM must keep named foundation-model entries that include Titan embed text v1 rather than only a wildcard foundation-model resource. Transcript and summary emit ownership stays with the teams that persist Chime and call-summary records.
+  E (Body): ●     Team E future enhancements
+  E (Body): ●     Table 12.9.4
+  E (Body): Enhancement
+  E (Body): Description
+  E (Body): Priority
+  E (Body): Voice-Accessible Recall
+  E (Body): Ask follow-up questions by voice and receive spoken/short answers
+  E (Body): High
+  E (Body): Cross-Session Memory
+  E (Body): Link related items across summaries
+  E (Body): High
+  E (Body): Full OCR Pipeline
+  E (Body): Complete mail-image extraction beyond metadata-first path
+  E (Body): High
+  E (Body): Medication Timeline in Retrieval
+  E (Body): Aggregate medication events into Ask AI context
+  E (Body): High
+  E (Body): Caregiver Digest
+  E (Body): Periodic consent-governed digest of recent sessions
+  E (Body): Medium
+  E (Heading3): 12.9.5 Cross-Team Resolution Notes
+
+=== Block 34 [insert] under Heading2: 13.2 Screens and User Workflows Affected ===
+  E (Body): Ask AI
+  E (Body): Records-grounded answer with persistent non-medical disclaimer and citations
+  E (Body): Care recipient, caregiver
+  E (Body): Retrieval Service, Safety layer
+  E (Body): Summary card
+  E (Body): AI-generated notice, headline + recap, per-item confirm path
+  E (Body): Care recipient, caregiver
+  E (Body): Summaries Service, Safety layer
+  E (Body): Mail view
+  E (Body): List pieces with sender, date, importance tier, and OCR/empty states
+  E (Body): Care recipient, caregiver
+  E (Body): USPS Mail Agent
+  E (Body): Daily Memory Brief
+  E (Body): Recent prioritized information on app open (STML-first)
+  E (Body): Care recipient
+  E (Body): STML Service
+
+=== Block 35 [insert] under Heading2: 13.4 Display Language and Localization Impact ===
+  E (Heading2): 13.4 Display Language and Localization Impact
+  E (Body): Patient and caregiver UI copy defaults to en-US. Patient-mode Ask AI and STML text avoids dense medical jargon; caregiver mode may present additional clinical detail when consent allows. Localization follows existing Flutter l10n patterns when those packs are enabled.
+  E (Body): Team E display text and localization notes
+  E (Body): Table 13.4
+  E (Body): Screen / Area
+  E (Body): UI Text or Text Key
+  E (Body): Needs Translation?
+  E (Body): Notes
+  E (Body): Ask AI / Summary
+  E (Body): ai.disclaimer.notMedicalAdvice
+  E (Body): No (English at launch)
+  E (Body): Persistent, non-dismissible notice
+  E (Body): Summary care item
+  E (Body): ai.disclaimer.medical
+  E (Body): No
+  E (Body): Shown before care-item confirm
+  E (Body): Mail view
+  E (Body): mail.tier.critical/high/medium/low
+  E (Body): No
+  E (Body): Importance tier labels
+  E (Body): Confirmation flow
+  E (Body): action.confirm.once/session/decline
+  E (Body): No
+  E (Body): Multilingual summaries are a future enhancement
+

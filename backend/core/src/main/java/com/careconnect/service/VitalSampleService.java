@@ -1,27 +1,41 @@
 package com.careconnect.service;
 
 import com.careconnect.dto.VitalSampleDTO;
+import com.careconnect.dto.WearableReadingIngestionRequest;
+import com.careconnect.dto.WearableReadingIngestionResponse;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.Patient;
+import com.careconnect.model.User;
 import com.careconnect.model.VitalSample;
+import com.careconnect.model.WearableMetric;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.VitalSampleRepository;
+import com.careconnect.repository.WearableMetricRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.Period;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class VitalSampleService {
-    
+
+    private static final Logger LOG = LoggerFactory.getLogger(VitalSampleService.class);
+
     private final VitalSampleRepository vitalSampleRepository;
     private final PatientRepository patientRepository;
-    
+    private final WearableMetricRepository wearableMetricRepository;
+    private final CaregiverService caregiverService;
+
     /**
      * Create a new vital sample
      */
@@ -48,6 +62,113 @@ public class VitalSampleService {
         checkAndSendVitalAlerts(saved);
         
         return mapToDTO(saved);
+    }
+
+    @Transactional
+    public WearableReadingIngestionResponse ingestWearableReadings(User currentUser, WearableReadingIngestionRequest request) {
+        Patient patient = resolveTargetPatient(currentUser, request.patientId());
+        Long patientId = patient.getId();
+        Long patientUserId = patient.getUser().getId();
+        String batchSource = normalizeSource(request.source(), "wearable");
+
+        LOG.info("Starting wearable ingestion: actorUserId={}, patientId={}, patientUserId={}, source={}, batchSize={}",
+                currentUser.getId(), patientId, patientUserId, batchSource, request.readings().size());
+
+        List<WearableMetric> wearableMetricsToPersist = new ArrayList<>();
+        List<WearableReadingIngestionResponse.IngestedReading> accepted = new ArrayList<>();
+        List<WearableReadingIngestionResponse.RejectedReading> rejected = new ArrayList<>();
+
+        for (int i = 0; i < request.readings().size(); i++) {
+            WearableReadingIngestionRequest.WearableReadingPayload reading = request.readings().get(i);
+            String readingSource = normalizeSource(reading.source(), batchSource);
+            try {
+                validateRecordedAt(reading.recordedAt());
+                validateMetricValue(reading.metricValue());
+                WearableMetric.MetricType metricType = parseMetricType(reading.metric());
+
+                WearableMetric wearableMetric = WearableMetric.builder()
+                        .patient(patient.getUser())
+                        .metric(metricType)
+                        .metricValue(reading.metricValue())
+                        .recordedAt(reading.recordedAt())
+                        .source(readingSource)
+                        .build();
+                wearableMetricsToPersist.add(wearableMetric);
+
+                accepted.add(new WearableReadingIngestionResponse.IngestedReading(
+                        metricType,
+                        reading.metricValue(),
+                        reading.recordedAt(),
+                        readingSource
+                ));
+            } catch (IllegalArgumentException ex) {
+                rejected.add(new WearableReadingIngestionResponse.RejectedReading(
+                        i,
+                        reading.metric(),
+                        reading.metricValue(),
+                        reading.recordedAt(),
+                        readingSource,
+                        ex.getMessage()
+                ));
+            }
+        }
+
+        List<WearableReadingIngestionResponse.IngestedReading> persistedAccepted = new ArrayList<>();
+        for (int i = 0; i < wearableMetricsToPersist.size(); i++) {
+            WearableMetric metricEntity = wearableMetricsToPersist.get(i);
+            WearableReadingIngestionResponse.IngestedReading acceptedReading = accepted.get(i);
+            try {
+                wearableMetricRepository.save(metricEntity);
+                persistedAccepted.add(acceptedReading);
+            } catch (DataIntegrityViolationException ex) {
+                String reason = rootCauseMessage(ex);
+                rejected.add(new WearableReadingIngestionResponse.RejectedReading(
+                        -1,
+                        acceptedReading.metric().name(),
+                        acceptedReading.metricValue(),
+                        acceptedReading.recordedAt(),
+                        acceptedReading.source(),
+                        "Database rejected reading: " + reason
+                ));
+            } catch (Exception ex) {
+                String reason = rootCauseMessage(ex);
+                rejected.add(new WearableReadingIngestionResponse.RejectedReading(
+                        -1,
+                        acceptedReading.metric().name(),
+                        acceptedReading.metricValue(),
+                        acceptedReading.recordedAt(),
+                        acceptedReading.source(),
+                        "Failed to persist reading: " + reason
+                ));
+            }
+        }
+
+        List<VitalSample> vitalSamplesToPersist = buildVitalSamplesFromAccepted(patient, persistedAccepted);
+        List<VitalSample> savedVitalSamples = new ArrayList<>();
+        if (!vitalSamplesToPersist.isEmpty()) {
+            try {
+                savedVitalSamples = vitalSampleRepository.saveAll(vitalSamplesToPersist);
+            } catch (Exception ex) {
+                LOG.warn("Skipping vital_sample persistence for wearable ingestion due to error: actorUserId={}, patientId={}, reason={}",
+                        currentUser.getId(), patientId, rootCauseMessage(ex));
+            }
+        }
+
+        for (VitalSample savedVitalSample : savedVitalSamples) {
+            checkAndSendVitalAlerts(savedVitalSample);
+        }
+
+        LOG.info("Completed wearable ingestion: actorUserId={}, patientId={}, patientUserId={}, accepted={}, rejected={}",
+                currentUser.getId(), patientId, patientUserId, persistedAccepted.size(), rejected.size());
+
+        return WearableReadingIngestionResponse.builder()
+                .patientId(patientId)
+                .source(batchSource)
+                .acceptedCount(persistedAccepted.size())
+                .rejectedCount(rejected.size())
+                .acceptedReadings(persistedAccepted)
+                .rejectedReadings(rejected)
+                .build();
     }
     
     /**
@@ -226,12 +347,133 @@ public class VitalSampleService {
             System.err.println("Error sending vital alerts: " + e.getMessage());
         }
     }
+
+    private Patient resolveTargetPatient(User currentUser, Long requestedPatientId) {
+        if (currentUser.getRole() == com.careconnect.security.Role.PATIENT) {
+            Patient ownPatient = patientRepository.findByUser(currentUser)
+                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient profile not found"));
+            if (requestedPatientId != null && !requestedPatientId.equals(ownPatient.getId())) {
+                throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to ingest readings for this patient");
+            }
+            return ownPatient;
+        }
+
+        if (requestedPatientId == null) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "patientId is required for this role");
+        }
+
+        Patient patient = patientRepository.findById(requestedPatientId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient not found"));
+
+        switch (currentUser.getRole()) {
+            case CAREGIVER, FAMILY_MEMBER -> {
+                boolean hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), requestedPatientId);
+                if (!hasAccess) {
+                    throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to ingest readings for this patient");
+                }
+            }
+            case ADMIN -> {
+                // Admin can ingest for any patient.
+            }
+            default -> throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to ingest readings for this patient");
+        }
+
+        return patient;
+    }
+
+    private WearableMetric.MetricType parseMetricType(String rawMetric) {
+        if (rawMetric == null || rawMetric.isBlank()) {
+            throw new IllegalArgumentException("metric is required");
+        }
+        try {
+            return WearableMetric.MetricType.valueOf(rawMetric.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unsupported metric: " + rawMetric);
+        }
+    }
+
+    private void validateRecordedAt(Instant recordedAt) {
+        if (recordedAt == null) {
+            throw new IllegalArgumentException("recordedAt is required");
+        }
+        if (recordedAt.isAfter(Instant.now())) {
+            throw new IllegalArgumentException("recordedAt cannot be in the future");
+        }
+    }
+
+    private void validateMetricValue(Double metricValue) {
+        if (metricValue == null) {
+            throw new IllegalArgumentException("metricValue is required");
+        }
+        if (!Double.isFinite(metricValue)) {
+            throw new IllegalArgumentException("metricValue must be a finite number");
+        }
+    }
+
+    private String normalizeSource(String source, String fallback) {
+        String normalized = (source == null || source.isBlank()) ? fallback : source.trim();
+        return normalized.length() > 64 ? normalized.substring(0, 64) : normalized;
+    }
+
+    private void applyMetricToVitalSample(VitalSample vitalSample, WearableMetric.MetricType metricType, Double metricValue) {
+        switch (metricType) {
+            case HEART_RATE -> vitalSample.setHeartRate(metricValue);
+            case SPO2 -> vitalSample.setSpo2(metricValue);
+            case BLOOD_PRESSURE_SYS -> vitalSample.setSystolic(metricValue.intValue());
+            case BLOOD_PRESSURE_DIA -> vitalSample.setDiastolic(metricValue.intValue());
+            case WEIGHT -> vitalSample.setWeight(metricValue);
+            case TEMPERATURE, STEPS -> {
+                // Stored in wearable_metric only for now.
+            }
+        }
+    }
+    private boolean supportsVitalSampleMetric(WearableMetric.MetricType metricType) {
+        return switch (metricType) {
+            case HEART_RATE, SPO2, BLOOD_PRESSURE_SYS, BLOOD_PRESSURE_DIA, WEIGHT -> true;
+            case TEMPERATURE, STEPS -> false;
+        };
+    }
+
+    private List<VitalSample> buildVitalSamplesFromAccepted(
+            Patient patient,
+            List<WearableReadingIngestionResponse.IngestedReading> acceptedReadings
+    ) {
+        java.util.Map<Instant, VitalSample> byTimestamp = new java.util.HashMap<>();
+        for (WearableReadingIngestionResponse.IngestedReading reading : acceptedReadings) {
+            if (!supportsVitalSampleMetric(reading.metric())) {
+                continue;
+            }
+            VitalSample vitalSample = byTimestamp.computeIfAbsent(reading.recordedAt(), timestamp ->
+                    VitalSample.builder()
+                            .patient(patient)
+                            .timestamp(timestamp)
+                            .source(reading.source())
+                            .build());
+            applyMetricToVitalSample(vitalSample, reading.metric(), reading.metricValue());
+        }
+        return new ArrayList<>(byTimestamp.values());
+    }
+
+    private String rootCauseMessage(Throwable throwable) {
+        Throwable root = throwable;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String message = root.getMessage();
+        if (message == null || message.isBlank()) {
+            message = throwable.getMessage();
+        }
+        if (message == null || message.isBlank()) {
+            return "Unknown persistence error";
+        }
+        return message.length() > 180 ? message.substring(0, 180) + "..." : message;
+    }
     
     private String determineHeartRateAlert(Double heartRate) {
         if (heartRate == null) return "NORMAL";
         if (heartRate < 60) return "LOW";
-        if (heartRate > 100) return "HIGH"; 
         if (heartRate > 120) return "CRITICAL";
+        if (heartRate > 100) return "HIGH";
         return "NORMAL";
     }
     

@@ -4,37 +4,43 @@ import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
+@DisplayName("PermissionAspect")
 class PermissionAspectTest {
 
+    @Mock
+    private AuthorizationService authorizationService;
+    @Mock
     private UserRepository userRepository;
-    private RecordingUserRepository userRepositoryHandler;
 
-    private PermissionAspect permissionAspect;
-
-    private final RecordingAuthorizationService recordingAuthorizationService = new RecordingAuthorizationService();
+    private PermissionAspect aspect;
+    private RequirePermission requirePermission;
 
     @BeforeEach
-    void setUp() throws Exception {
-        permissionAspect = new PermissionAspect();
-        setField(permissionAspect, "authorizationService", recordingAuthorizationService);
-        userRepositoryHandler = new RecordingUserRepository("patient@test.com");
-        userRepository = userRepositoryForHandler(userRepositoryHandler);
-        setField(permissionAspect, "userRepository", userRepository);
+    void setUp() {
+        aspect = new PermissionAspect();
+        ReflectionTestUtils.setField(aspect, "authorizationService", authorizationService);
+        ReflectionTestUtils.setField(aspect, "userRepository", userRepository);
+
+        requirePermission = mock(RequirePermission.class);
+        lenient().when(requirePermission.value()).thenReturn(Permission.CREATE_TASKS);
     }
 
     @AfterEach
@@ -42,86 +48,69 @@ class PermissionAspectTest {
         SecurityContextHolder.clearContext();
     }
 
+    private void setAuthenticatedUser(String email) {
+        Authentication auth = mock(Authentication.class);
+        when(auth.isAuthenticated()).thenReturn(true);
+        when(auth.getName()).thenReturn(email);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
     @Test
-    void checkPermission_resolvesCurrentUserAndDelegatesPermissionCheck() throws UnauthorizedException {
-        User user = new User();
-        user.setId(7L);
-        user.setEmail("patient@test.com");
-        user.setRole(Role.PATIENT);
+    @DisplayName("throws when there is no authentication in the context")
+    void throwsWhenNoAuthentication() {
+        SecurityContextHolder.clearContext();
 
-        Authentication authentication = new UsernamePasswordAuthenticationToken("patient@test.com", "token", List.of());
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        userRepositoryHandler.user = user;
-
-        permissionAspect.checkPermission(permission(Permission.VIEW_HEALTH_DATA));
-
-        assertThat(userRepositoryHandler.lastEmail).isEqualTo("patient@test.com");
-        assertThat(recordingAuthorizationService.lastUser).isSameAs(user);
-        assertThat(recordingAuthorizationService.lastPermission).isEqualTo(Permission.VIEW_HEALTH_DATA);
+        UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                () -> aspect.checkPermission(requirePermission));
+        assertEquals("User not authenticated", ex.getMessage());
+        verifyNoInteractions(authorizationService);
     }
 
-    private RequirePermission permission(Permission value) {
-        return new RequirePermission() {
-            @Override
-            public Permission value() {
-                return value;
-            }
+    @Test
+    @DisplayName("throws when the authentication is not authenticated")
+    void throwsWhenNotAuthenticated() {
+        Authentication auth = mock(Authentication.class);
+        when(auth.isAuthenticated()).thenReturn(false);
+        SecurityContextHolder.getContext().setAuthentication(auth);
 
-            @Override
-            public Class<? extends Annotation> annotationType() {
-                return RequirePermission.class;
-            }
-        };
+        assertThrows(UnauthorizedException.class,
+                () -> aspect.checkPermission(requirePermission));
+        verifyNoInteractions(authorizationService);
     }
 
-    private static void setField(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
+    @Test
+    @DisplayName("throws when the authenticated user is not found")
+    void throwsWhenUserNotFound() {
+        setAuthenticatedUser("missing@example.com");
+        when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+
+        UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                () -> aspect.checkPermission(requirePermission));
+        assertFalse(ex.getMessage().contains("missing@example.com"));
     }
 
-    private static UserRepository userRepositoryForHandler(RecordingUserRepository handler) {
-        return (UserRepository) Proxy.newProxyInstance(
-                UserRepository.class.getClassLoader(),
-                new Class<?>[]{UserRepository.class},
-                handler
-        );
+    @Test
+    @DisplayName("delegates to AuthorizationService and passes when permission is granted")
+    void passesWhenPermissionGranted() throws Exception {
+        User user = mock(User.class);
+        setAuthenticatedUser("user@example.com");
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(authorizationService.hasPermission(user, Permission.CREATE_TASKS)).thenReturn(true);
+
+        assertDoesNotThrow(() -> aspect.checkPermission(requirePermission));
+        verify(authorizationService).hasPermission(user, Permission.CREATE_TASKS);
     }
 
-    private static final class RecordingUserRepository implements InvocationHandler {
-        private final String expectedEmail;
-        private User user;
-        private String lastEmail;
+    @Test
+    @DisplayName("uses AccessDeniedException when an authenticated user lacks permission")
+    void propagatesWhenPermissionDenied() throws Exception {
+        User user = mock(User.class);
+        setAuthenticatedUser("user@example.com");
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(authorizationService.hasPermission(user, Permission.CREATE_TASKS)).thenReturn(false);
 
-        private RecordingUserRepository(String expectedEmail) {
-            this.expectedEmail = expectedEmail;
-        }
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            if ("findByEmail".equals(method.getName())) {
-                lastEmail = (String) args[0];
-                if (expectedEmail.equals(lastEmail) && user != null) {
-                    return Optional.of(user);
-                }
-                return Optional.empty();
-            }
-            if ("toString".equals(method.getName())) {
-                return "RecordingUserRepository";
-            }
-            throw new UnsupportedOperationException("Unhandled method: " + method.getName());
-        }
-    }
-
-    private static final class RecordingAuthorizationService extends AuthorizationService {
-        private User lastUser;
-        private Permission lastPermission;
-
-        @Override
-        public void requirePermission(User user, Permission permission) throws UnauthorizedException {
-            lastUser = user;
-            lastPermission = permission;
-            super.requirePermission(user, permission);
-        }
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> aspect.checkPermission(requirePermission));
+        assertEquals("Required permission is not granted", ex.getMessage());
     }
 }

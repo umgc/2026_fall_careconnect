@@ -51,11 +51,20 @@ class ApiConstants {
   // Invoices endpoints
   static final String invoices = '$_host/v1/api/invoices';
 
+  // Home Care Document Digitization endpoints
+  static final String homeCareDocuments = '$_host/v1/api/homecare-documents';
+
+  // Document Completion & Compliance Tracking endpoints
+  static final String documentCompliance = '$_host/v1/api/document-compliance';
+
   // EVV endpoints
   static final String evv = '$_host/v1/api/evv';
 
   // Telemetry endpoints
   static final String telemetryV3 = '$_host/v1/api/dev/telemetry';
+
+  // Admin analytics endpoints
+  static final String adminAnalytics = '$_host/v1/api/admin/analytics';
 }
 
 class ApiService {
@@ -2588,7 +2597,10 @@ class ApiService {
             Uri.parse('${ApiConstants.callsV3}/$callId/recording'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 15));
+          // Status used to block on S3 refresh (~15–20s) and this timeout wiped the
+          // Call Recording card. Backend now returns READY metadata without S3; keep
+          // headroom for processing calls that still refresh.
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -2606,7 +2618,7 @@ class ApiService {
             Uri.parse('${ApiConstants.callsV3}/$callId/recording/playback-url'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
