@@ -46,6 +46,8 @@ class ApiServiceOffline {
   @visibleForTesting
   static void debugOverrideHttpClient(http.Client? client) {
     _testHttpClient = client;
+  }
+
   /// Swap the underlying transport on [httpClient] (tests only).
   @visibleForTesting
   static void debugSetHttpClient(http.Client client) {
