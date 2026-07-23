@@ -3,6 +3,15 @@
 _local
 .cursor
 
+# React UI Integration prototype
+node_modules/
+ui-integration/**/node_modules/
+ui-integration/**/dist/
+ui-integration/**/coverage/
+ui-integration/**/playwright-report/
+ui-integration/**/test-results/
+ui-integration/**/.vite/
+
 # macOS system files
 .DS_Store
 **/.DS_Store
