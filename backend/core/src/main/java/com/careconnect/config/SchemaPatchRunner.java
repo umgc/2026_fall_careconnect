@@ -18,8 +18,10 @@ import java.util.regex.Pattern;
 
 /**
  * Applies one-time schema patches via plain JDBC after the application context starts.
- * Production keeps Hibernate DDL and Flyway disabled, so this runner is the sole DDL
- * owner; required production changes additionally use a bounded PostgreSQL advisory lock.
+ * Production keeps Flyway disabled and uses Hibernate {@code ddl-auto=update} for entity
+ * tables, with this runner supplying idempotent patches (indexes, extensions, FKs, and
+ * other DDL Hibernate will not create). Required production changes additionally use a
+ * bounded PostgreSQL advisory lock.
  *
  * Each patch is idempotent: safe to execute on every restart.
  */
