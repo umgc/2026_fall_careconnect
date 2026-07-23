@@ -164,24 +164,27 @@ void main() {
         MailEnvelopeTtsService.debugSetInstance(fake);
 
         final handle = tester.ensureSemantics();
-        addTearDown(handle.dispose);
-
-        await tester.pumpWidget(
-          const MaterialApp(
-            home: _EnvelopeMailTileHarness(
-              sender: 'Hospital Billing',
-              summary: 'Statement available',
+        try {
+          await tester.pumpWidget(
+            const MaterialApp(
+              home: _EnvelopeMailTileHarness(
+                sender: 'Hospital Billing',
+                summary: 'Statement available',
+              ),
             ),
-          ),
-        );
-        await tester.pumpAndSettle();
+          );
+          await tester.pumpAndSettle();
 
-        expect(
-          find.bySemanticsLabel('Read mail details aloud'),
-          findsOneWidget,
-        );
-        expect(find.byTooltip('Read mail details aloud'), findsOneWidget);
-        expect(find.byIcon(Icons.volume_up), findsOneWidget);
+          // ListTile merges trailing control label into the tile node.
+          expect(
+            find.bySemanticsLabel(RegExp(r'Read mail details aloud')),
+            findsOneWidget,
+          );
+          expect(find.byTooltip('Read mail details aloud'), findsOneWidget);
+          expect(find.byIcon(Icons.volume_up), findsOneWidget);
+        } finally {
+          handle.dispose();
+        }
       },
     );
   });

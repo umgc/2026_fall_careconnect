@@ -19,6 +19,7 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.FamilyMemberService;
 import com.careconnect.service.ai.AskAiSafetyCopy;
+import com.careconnect.service.ai.audit.AiAskAuditService;
 import com.careconnect.service.ai.safety.SafetyDecision;
 import com.careconnect.service.ai.safety.SafetyInput;
 import com.careconnect.service.ai.safety.SafetyOutcome;
@@ -38,7 +39,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -57,6 +60,7 @@ public class HitlService {
 
     private final AiHeldItemRepository heldItemRepository;
     private final AiSafetyAuditEventRepository auditEventRepository;
+    private final AiAskAuditService askAuditService;
     private final PatientRepository patientRepository;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final FamilyMemberService familyMemberService;
@@ -67,6 +71,7 @@ public class HitlService {
     public HitlService(
             final AiHeldItemRepository heldItemRepository,
             final AiSafetyAuditEventRepository auditEventRepository,
+            final AiAskAuditService askAuditService,
             final PatientRepository patientRepository,
             final CaregiverPatientLinkService caregiverPatientLinkService,
             final FamilyMemberService familyMemberService,
@@ -75,6 +80,7 @@ public class HitlService {
             @Value("${careconnect.ai.hitl.ttl-hours:72}") final long ttlHours) {
         this.heldItemRepository = heldItemRepository;
         this.auditEventRepository = auditEventRepository;
+        this.askAuditService = askAuditService;
         this.patientRepository = patientRepository;
         this.caregiverPatientLinkService = caregiverPatientLinkService;
         this.familyMemberService = familyMemberService;
@@ -88,9 +94,21 @@ public class HitlService {
             final SafetyInput input,
             final SafetyOutcome outcome,
             final List<AiCitation> citations) {
+        return createHold(input, outcome, citations, null);
+    }
+
+    /**
+     * @param heldItemId optional preallocated id so Ask AI audit can finalize HELD before insert
+     */
+    @Transactional
+    public AiHeldItem createHold(
+            final SafetyInput input,
+            final SafetyOutcome outcome,
+            final List<AiCitation> citations,
+            final UUID heldItemId) {
         final Instant now = Instant.now();
         final AiHeldItem item = AiHeldItem.builder()
-                .id(UUID.randomUUID())
+                .id(heldItemId == null ? UUID.randomUUID() : heldItemId)
                 .patientId(input.patientId())
                 .requesterUserId(input.callerUserId())
                 .sessionId(input.sessionId())
@@ -234,6 +252,15 @@ public class HitlService {
                 "HITL_RELEASED",
                 reviewer.getId(),
                 "{\"edited\":" + edited + "}");
+        appendAskAiLedger(
+                item,
+                AiAskAuditService.HITL_RELEASED,
+                reviewer.getId(),
+                Map.of(
+                        "heldItemId", item.getId().toString(),
+                        "edited", edited),
+                "DELIVERED",
+                finalAnswer);
         return toDetail(item);
     }
 
@@ -278,6 +305,18 @@ public class HitlService {
                 "HITL_REJECTED",
                 reviewer.getId(),
                 "{\"reason\":" + writeJson(reason == null ? "" : reason) + "}");
+        appendAskAiLedger(
+                item,
+                AiAskAuditService.HITL_REJECTED,
+                reviewer.getId(),
+                Map.of(
+                        "heldItemId", item.getId().toString(),
+                        "reasonCode", reason == null || reason.isBlank()
+                                ? "UNSPECIFIED"
+                                : "REVIEWER_REJECTED",
+                        "reasonLength", reason == null ? 0 : reason.length()),
+                "WITHHELD_PERMANENTLY",
+                null);
         return toDetail(item);
     }
 
@@ -318,6 +357,13 @@ public class HitlService {
                 "HITL_EXPIRED",
                 null,
                 "{}");
+        appendAskAiLedger(
+                item,
+                AiAskAuditService.HITL_EXPIRED,
+                null,
+                Map.of("heldItemId", item.getId().toString()),
+                "WITHHELD_PERMANENTLY",
+                null);
     }
 
     private boolean isExpired(final AiHeldItem item) {
@@ -540,6 +586,34 @@ public class HitlService {
                 .payloadJson(payloadJson)
                 .createdAt(Instant.now())
                 .build());
+    }
+
+    /**
+     * FR-AI-10: append immutable Ask AI ledger events for HITL outcomes (fail-soft).
+     */
+    private void appendAskAiLedger(
+            final AiHeldItem item,
+            final String eventType,
+            final Long actorUserId,
+            final Map<String, ?> payload,
+            final String deliveryStatus,
+            final String finalAnswer) {
+        if (item == null || item.getAuditId() == null) {
+            return;
+        }
+        final Map<String, Object> eventPayload = new LinkedHashMap<>();
+        if (payload != null) {
+            eventPayload.putAll(payload);
+        }
+        askAuditService.appendStandaloneEvent(
+                item.getAuditId(), eventType, actorUserId, eventPayload);
+        askAuditService.recordHitlDeliverySupplement(
+                item.getAuditId(),
+                deliveryStatus,
+                finalAnswer,
+                item.getPatientId(),
+                readJsonList(item.getCitationsJson()),
+                actorUserId);
     }
 
     private String writeJson(final Object value) {

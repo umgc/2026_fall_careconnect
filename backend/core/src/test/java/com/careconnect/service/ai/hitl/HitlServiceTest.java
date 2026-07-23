@@ -15,6 +15,7 @@ import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.FamilyMemberService;
+import com.careconnect.service.ai.audit.AiAskAuditService;
 import com.careconnect.service.ai.safety.SafetyInput;
 import com.careconnect.service.ai.safety.SafetyOutcome;
 import com.careconnect.service.ai.safety.SafetyPipeline;
@@ -38,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -51,6 +53,8 @@ class HitlServiceTest {
     private AiHeldItemRepository heldItemRepository;
     @Mock
     private AiSafetyAuditEventRepository auditEventRepository;
+    @Mock
+    private AiAskAuditService askAuditService;
     @Mock
     private PatientRepository patientRepository;
     @Mock
@@ -67,6 +71,7 @@ class HitlServiceTest {
         service = new HitlService(
                 heldItemRepository,
                 auditEventRepository,
+                askAuditService,
                 patientRepository,
                 caregiverPatientLinkService,
                 familyMemberService,
@@ -262,6 +267,18 @@ class HitlServiceTest {
                 ArgumentCaptor.forClass(AiSafetyAuditEvent.class);
         verify(auditEventRepository).save(auditCaptor.capture());
         assertThat(auditCaptor.getValue().getEventType()).isEqualTo("HITL_EXPIRED");
+        verify(askAuditService).appendStandaloneEvent(
+                eq(item.getAuditId()),
+                eq(AiAskAuditService.HITL_EXPIRED),
+                isNull(),
+                any());
+        verify(askAuditService).recordHitlDeliverySupplement(
+                eq(item.getAuditId()),
+                eq("WITHHELD_PERMANENTLY"),
+                isNull(),
+                eq(42L),
+                any(),
+                isNull());
     }
 
     @Test
@@ -310,6 +327,18 @@ class HitlServiceTest {
                 ArgumentCaptor.forClass(AiSafetyAuditEvent.class);
         verify(auditEventRepository).save(auditCaptor.capture());
         assertThat(auditCaptor.getValue().getEventType()).isEqualTo("HITL_RELEASED");
+        verify(askAuditService).appendStandaloneEvent(
+                eq(item.getAuditId()),
+                eq(AiAskAuditService.HITL_RELEASED),
+                eq(99L),
+                any());
+        verify(askAuditService).recordHitlDeliverySupplement(
+                eq(item.getAuditId()),
+                eq("DELIVERED"),
+                eq("Draft answer text for review"),
+                eq(42L),
+                any(),
+                eq(99L));
         verify(heldItemRepository).updateOutcomeIfStatus(
                 eq(item.getId()),
                 eq(AiHeldItemStatus.PENDING_REVIEW),
@@ -423,6 +452,21 @@ class HitlServiceTest {
         assertThat(detail.deliveryStatus()).isEqualTo("WITHHELD_PERMANENTLY");
         assertThat(detail.finalAnswer()).isNull();
         assertThat(item.getStatus()).isEqualTo(AiHeldItemStatus.REJECTED);
+        verify(askAuditService).appendStandaloneEvent(
+                eq(item.getAuditId()),
+                eq(AiAskAuditService.HITL_REJECTED),
+                eq(99L),
+                argThat(payload ->
+                        "REVIEWER_REJECTED".equals(payload.get("reasonCode"))
+                                && Integer.valueOf(12).equals(payload.get("reasonLength"))
+                                && !payload.containsKey("reason")));
+        verify(askAuditService).recordHitlDeliverySupplement(
+                eq(item.getAuditId()),
+                eq("WITHHELD_PERMANENTLY"),
+                isNull(),
+                eq(42L),
+                any(),
+                eq(99L));
         verify(heldItemRepository).updateOutcomeIfStatus(
                 eq(item.getId()),
                 eq(AiHeldItemStatus.PENDING_REVIEW),
