@@ -169,6 +169,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             applyCallSessionPatches();
             applyRetrievalIndexChunkPatches();
             applyH2TranscriptArchiveLifecycleTables();
+            applyH2AiHeldItemTables();
         }
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
@@ -177,6 +178,54 @@ public class SchemaPatchRunner implements CommandLineRunner {
     /** Durable purge fencing and post-commit object deletion for transcript archives. */
     private void applyTranscriptArchiveStoragePatch() {
         applyCatalogPatch("2607191300-transcript-archive-purge");
+    }
+
+    /**
+     * H2/integration-test parity for Tier-2 HITL hold tables (production applies via catalog).
+     */
+    private void applyH2AiHeldItemTables() {
+        applyRequiredPatch(
+            "H2 – ai_held_item",
+            "CREATE TABLE IF NOT EXISTS ai_held_item ("
+                + "  id UUID PRIMARY KEY,"
+                + "  patient_id BIGINT NOT NULL,"
+                + "  requester_user_id BIGINT NOT NULL,"
+                + "  session_id UUID,"
+                + "  audit_id UUID NOT NULL,"
+                + "  request_id UUID,"
+                + "  source_surface VARCHAR(32) NOT NULL,"
+                + "  status VARCHAR(24) NOT NULL,"
+                + "  tier SMALLINT NOT NULL DEFAULT 2,"
+                + "  trigger_codes CLOB NOT NULL,"
+                + "  query_text CLOB,"
+                + "  query_text_hash VARCHAR(64),"
+                + "  draft_answer CLOB NOT NULL,"
+                + "  final_answer CLOB,"
+                + "  citations_json CLOB NOT NULL,"
+                + "  validation_findings_json CLOB,"
+                + "  reviewer_user_id BIGINT,"
+                + "  reviewed_at TIMESTAMP,"
+                + "  review_notes VARCHAR(500),"
+                + "  delivery_status VARCHAR(32) NOT NULL,"
+                + "  expires_at TIMESTAMP,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_held_item patient status index",
+            "CREATE INDEX IF NOT EXISTS idx_held_patient_status "
+                + "ON ai_held_item (patient_id, status)");
+        applyRequiredPatch(
+            "H2 – ai_safety_audit_event",
+            "CREATE TABLE IF NOT EXISTS ai_safety_audit_event ("
+                + "  id UUID PRIMARY KEY,"
+                + "  audit_id UUID NOT NULL,"
+                + "  held_item_id UUID,"
+                + "  event_type VARCHAR(40) NOT NULL,"
+                + "  actor_user_id BIGINT,"
+                + "  payload_json CLOB,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
     }
 
     /**

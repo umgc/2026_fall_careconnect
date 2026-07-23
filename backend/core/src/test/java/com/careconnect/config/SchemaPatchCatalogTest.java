@@ -28,7 +28,8 @@ class SchemaPatchCatalogTest {
                 "2607191700-recording-state",
                 "2607191800-termination-steps",
                 "2607191900-chime-attendee-claim",
-                "2607192000-summary-replay-quarantine-reason");
+                "2607192000-summary-replay-quarantine-reason",
+                "2607211800-ai-held-item");
     }
 
     @Test

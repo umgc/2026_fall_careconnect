@@ -13,17 +13,25 @@ import com.careconnect.dto.ai.AiRetrievalMeta;
 import com.careconnect.dto.ai.DeliveryStatus;
 import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
+import com.careconnect.model.ai.hitl.AiHeldItem;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.AskAiSafetyCopy;
+import com.careconnect.service.ai.hitl.HitlService;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.HybridRetrievalResult;
 import com.careconnect.service.ai.retrieval.HybridRetrievalService;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
+import com.careconnect.service.ai.safety.SafetyDecision;
+import com.careconnect.service.ai.safety.SafetyInput;
+import com.careconnect.service.ai.safety.SafetyOutcome;
+import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.careconnect.service.security.InputSanitizationService;
 import com.careconnect.service.security.LangChainGovernanceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -40,12 +48,8 @@ import java.util.UUID;
  * Task 5.3 — Ask AI gateway orchestrator.
  *
  * <p>JWT caller → sanitize/govern → {@link RetrievalScopeService} →
- * {@link HybridRetrievalService} → min-necessary prompt → grounded Bedrock → citations.
- *
- * <p>Safety Tier-2 hold (SCC-3) is Task 6.x; this path delivers Tier 1 with mandatory disclaimer.
- * Claim-level citation output and secondary semantic grounding validation are also deferred;
- * the current contract validates model citation references and extractive evidence
- * against retrieved chunks.
+ * {@link HybridRetrievalService} → min-necessary prompt → grounded Bedrock → citations →
+ * {@link SafetyPipeline} (Tier-1 deliver or Tier-2 HITL hold).
  *
  * <p>TODO(Task 6.x): persist Ask AI audit rows (requestId/auditId, scope, retrieval meta,
  * delivery status) via the Ask AI audit pipeline. Until then {@code auditId} is a
@@ -56,10 +60,6 @@ public class AiAskService {
 
     private static final Logger log = LoggerFactory.getLogger(AiAskService.class);
 
-    private static final String DISCLAIMER_EN =
-            "This answer is based on your stored health records and is not medical advice.";
-    private static final String CONFIRM_EN =
-            "Please confirm important details with your care provider before acting on this information.";
     private static final String NO_RECORDS_EN =
             "No matching records were found for this question. "
                     + "CareConnect Ask AI only answers from your stored health records "
@@ -72,6 +72,9 @@ public class AiAskService {
     private final CitationAssembler citationAssembler;
     private final InputSanitizationService inputSanitizationService;
     private final LangChainGovernanceService governanceService;
+    private final SafetyPipeline safetyPipeline;
+    private final HitlService hitlService;
+    private final boolean hitlEnabled;
 
     public AiAskService(
             final RetrievalScopeService retrievalScopeService,
@@ -79,13 +82,19 @@ public class AiAskService {
             final GroundedAskLlmService groundedAskLlmService,
             final CitationAssembler citationAssembler,
             final InputSanitizationService inputSanitizationService,
-            final LangChainGovernanceService governanceService) {
+            final LangChainGovernanceService governanceService,
+            final SafetyPipeline safetyPipeline,
+            final HitlService hitlService,
+            @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
         this.groundedAskLlmService = groundedAskLlmService;
         this.citationAssembler = citationAssembler;
         this.inputSanitizationService = inputSanitizationService;
         this.governanceService = governanceService;
+        this.safetyPipeline = safetyPipeline;
+        this.hitlService = hitlService;
+        this.hitlEnabled = hitlEnabled;
     }
 
     /**
@@ -231,6 +240,7 @@ public class AiAskService {
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
+        final List<String> verifiedClaimTexts = new ArrayList<>();
         final Map<String, List<String>> verifiedEvidenceByRef = new LinkedHashMap<>();
         for (final GroundedAskLlmService.GroundedClaim claim : llm.claims()) {
             final CitationAssembler.CitationResult claimCitations =
@@ -244,16 +254,40 @@ public class AiAskService {
                             context.promptExcerptMap(),
                             context.citationRefMap())
                     || !claimCitations.grounded()) {
-                throw groundingFailure(
-                        requestId, auditId, sessionId,
-                        "Generated answer contains an unsupported factual claim");
+                // Persist only claims that already passed verification — never the failing ones.
+                final String safeDraft = String.join(" ", verifiedClaimTexts);
+                final List<AiCitation> safeCitations = verifiedEvidenceByRef.isEmpty()
+                        ? List.of()
+                        : citationAssembler.assembleWithEvidence(
+                                List.copyOf(verifiedEvidenceByRef.keySet()),
+                                context.citationRefMap(),
+                                verifiedEvidenceByRef).citations();
+                return holdOrGroundingFailure(
+                        caller,
+                        request,
+                        requestId,
+                        auditId,
+                        sessionId,
+                        locale,
+                        sanitizedQuery,
+                        safeDraft,
+                        safeCitations,
+                        List.of("UNSUPPORTED_CLAIM"),
+                        "Generated answer contains an unsupported factual claim",
+                        retrieval,
+                        context,
+                        retrievalLatencyMs,
+                        inferenceLatencyMs,
+                        llm.modelId());
             }
+            verifiedClaimTexts.add(claim.text().trim());
             final String ref = claim.citationRefs().get(0);
             verifiedEvidenceByRef.computeIfAbsent(ref, ignored -> new ArrayList<>())
                     .add(surroundingCitationContext(
                             context.promptExcerptMap().get(ref).text(),
                             claim.evidenceByRef().get(ref)));
         }
+        final String draftAnswer = String.join(" ", verifiedClaimTexts);
         final CitationAssembler.CitationResult citationResult =
                 citationAssembler.assembleWithEvidence(
                         llm.citationRefs(),
@@ -261,27 +295,90 @@ public class AiAskService {
                         verifiedEvidenceByRef);
         if (!citationResult.grounded()) {
             log.warn(
-                    "Ask AI WITHHELD ungrounded response requestId={} invalidRefCount={}",
+                    "Ask AI ungrounded citations requestId={} invalidRefCount={}",
                     requestId,
                     citationResult.invalidRefs().size());
-            // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
-            // never deliver an answer whose model citations are missing or invalid.
-            throw groundingFailure(
-                    requestId, auditId, sessionId,
-                    "Generated answer could not be verified against retrieved records");
+            return holdOrGroundingFailure(
+                    caller,
+                    request,
+                    requestId,
+                    auditId,
+                    sessionId,
+                    locale,
+                    sanitizedQuery,
+                    draftAnswer,
+                    citationResult.citations(),
+                    List.of("UNSUPPORTED_CLAIM"),
+                    "Generated answer could not be verified against retrieved records",
+                    retrieval,
+                    context,
+                    retrievalLatencyMs,
+                    inferenceLatencyMs,
+                    llm.modelId());
         }
         final List<AiCitation> citations = citationResult.citations();
-        final String verifiedAnswer = llm.claims().stream()
-                .map(GroundedAskLlmService.GroundedClaim::text)
-                .reduce((left, right) -> left + " " + right)
-                .orElseThrow(() -> groundingFailure(
+        final String verifiedAnswer = draftAnswer;
+        if (verifiedAnswer.isBlank()) {
+            throw groundingFailure(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "Generated answer did not contain verified claims");
+        }
+
+        final SafetyOutcome safety = safetyPipeline.process(new SafetyInput(
+                sanitizedQuery,
+                verifiedAnswer,
+                citations,
+                request.patientId(),
+                caller.getId(),
+                sessionId,
+                auditId,
+                requestId,
+                "ASK_AI",
+                locale,
+                false,
+                List.of()));
+
+        if (safety.decision() == SafetyDecision.HOLD_TIER2) {
+            if (!hitlEnabled) {
+                throw groundingFailure(
                         requestId,
                         auditId,
                         sessionId,
-                        "Generated answer did not contain verified claims"));
+                        "Answer requires clinician review but HITL is disabled");
+            }
+            return heldResponse(
+                    caller,
+                    request,
+                    requestId,
+                    auditId,
+                    sessionId,
+                    locale,
+                    sanitizedQuery,
+                    verifiedAnswer,
+                    citations,
+                    safety,
+                    retrieval,
+                    context,
+                    retrievalLatencyMs,
+                    inferenceLatencyMs,
+                    llm.modelId());
+        }
+        if (safety.decision() == SafetyDecision.BLOCK) {
+            throw groundingFailure(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "Generated answer failed safety validation");
+        }
 
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
+        final String escalationLevel = safety.escalationLevel() == null
+                || "none".equals(safety.escalationLevel())
+                ? "tier1_auto_deliver"
+                : safety.escalationLevel();
         log.debug(
                 "Ask AI DELIVERED requestId={} chunks={} citations={} modality={} degraded={}",
                 requestId,
@@ -303,8 +400,8 @@ public class AiAskService {
                 new AiAnswerBlock(verifiedAnswer, locale),
                 citations,
                 disclaimer(locale),
-                new AiEscalation(1, "Tier1_auto_deliver", false),
-                new AiConfirmationHint(true, CONFIRM_EN),
+                new AiEscalation(1, escalationLevel, false),
+                new AiConfirmationHint(true, AskAiSafetyCopy.CONFIRM_EN),
                 new AiRetrievalMeta(
                         retrieval.chunks().size(),
                         context.usedChunks().size(),
@@ -314,6 +411,124 @@ public class AiAskService {
                         new AiModelMeta("bedrock", llm.modelId())),
                 null,
                 null,
+                null);
+    }
+
+    private AiAskResponse holdOrGroundingFailure(
+            final User caller,
+            final AiAskRequest request,
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String locale,
+            final String query,
+            final String draftAnswer,
+            final List<AiCitation> citations,
+            final List<String> groundingCodes,
+            final String message,
+            final HybridRetrievalResult retrieval,
+            final RetrievalContextAssembler.GroundedContext context,
+            final long retrievalLatencyMs,
+            final long inferenceLatencyMs,
+            final String modelId) {
+        if (!hitlEnabled || draftAnswer == null || draftAnswer.isBlank()) {
+            throw groundingFailure(requestId, auditId, sessionId, message);
+        }
+        final SafetyOutcome safety = safetyPipeline.process(new SafetyInput(
+                query,
+                draftAnswer,
+                citations,
+                request.patientId(),
+                caller.getId(),
+                sessionId,
+                auditId,
+                requestId,
+                "ASK_AI",
+                locale,
+                true,
+                groundingCodes));
+        if (safety.decision() != SafetyDecision.HOLD_TIER2) {
+            throw groundingFailure(requestId, auditId, sessionId, message);
+        }
+        return heldResponse(
+                caller,
+                request,
+                requestId,
+                auditId,
+                sessionId,
+                locale,
+                query,
+                draftAnswer,
+                citations,
+                safety,
+                retrieval,
+                context,
+                retrievalLatencyMs,
+                inferenceLatencyMs,
+                modelId);
+    }
+
+    private AiAskResponse heldResponse(
+            final User caller,
+            final AiAskRequest request,
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String locale,
+            final String query,
+            final String draftAnswer,
+            final List<AiCitation> citations,
+            final SafetyOutcome safety,
+            final HybridRetrievalResult retrieval,
+            final RetrievalContextAssembler.GroundedContext context,
+            final long retrievalLatencyMs,
+            final long inferenceLatencyMs,
+            final String modelId) {
+        final AiHeldItem held = hitlService.createHold(
+                new SafetyInput(
+                        query,
+                        draftAnswer,
+                        citations,
+                        request.patientId(),
+                        caller.getId(),
+                        sessionId,
+                        auditId,
+                        requestId,
+                        "ASK_AI",
+                        locale,
+                        false,
+                        List.of()),
+                safety,
+                citations);
+        log.info(
+                "Ask AI HELD requestId={} heldItemId={} triggers={}",
+                requestId,
+                held.getId(),
+                safety.triggerCodes());
+        return new AiAskResponse(
+                true,
+                requestId,
+                auditId,
+                sessionId,
+                Instant.now(),
+                DeliveryStatus.HELD,
+                2,
+                true,
+                held.getId(),
+                null,
+                List.of(),
+                disclaimer(locale),
+                new AiEscalation(2, "hitl_hold", true),
+                new AiConfirmationHint(false, null),
+                new AiRetrievalMeta(
+                        retrieval == null ? 0 : retrieval.chunks().size(),
+                        context == null ? 0 : context.usedChunks().size(),
+                        retrievalLatencyMs,
+                        inferenceLatencyMs,
+                        retrieval != null && retrieval.vectorDegraded(),
+                        new AiModelMeta("bedrock", modelId)),
+                HitlService.REVIEWING_MESSAGE,
+                HitlService.pollUrl(held.getId()),
                 null);
     }
 
@@ -473,7 +688,7 @@ public class AiAskService {
     }
 
     private static AiDisclaimer disclaimer(final String locale) {
-        return new AiDisclaimer(DISCLAIMER_EN, true, true, locale);
+        return new AiDisclaimer(AskAiSafetyCopy.DISCLAIMER_EN, true, true, locale);
     }
 
     private static String normalizeLocale(final String locale) {

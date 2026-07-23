@@ -300,7 +300,7 @@ class CallRecordingServiceTest {
                 assertThat(result).containsEntry("status", "STARTED");
 
                 ArgumentCaptor<CallRecording> captor = ArgumentCaptor.forClass(CallRecording.class);
-                verify(recordingRepository).save(captor.capture());
+                verify(recordingRepository).saveAndFlush(captor.capture());
                 LocalDateTime startedAt = captor.getValue().getStartedAt();
                 assertThat(startedAt).isNotNull();
 

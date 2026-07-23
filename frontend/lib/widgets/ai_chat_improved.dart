@@ -23,6 +23,8 @@ class ChatMessage {
   final bool showRetry;
   final String? retryQuery;
   final String? requestIdentity;
+  final String? heldItemId;
+  final bool showHitlResume;
 
   ChatMessage({
     required this.text,
@@ -36,6 +38,8 @@ class ChatMessage {
     this.showRetry = false,
     this.retryQuery,
     this.requestIdentity,
+    this.heldItemId,
+    this.showHitlResume = false,
   });
 }
 
@@ -70,6 +74,9 @@ class AIChat extends StatefulWidget {
   final int? patientId;
   final int? userId;
   final AiChatMode mode;
+  /// Max status polls while waiting for clinician release (default ~5 minutes).
+  final int hitlMaxPollAttempts;
+  final Duration hitlPollInterval;
 
   const AIChat({
     super.key,
@@ -79,6 +86,8 @@ class AIChat extends StatefulWidget {
     this.isModal = false,
     this.patientId,
     this.userId,
+    this.hitlMaxPollAttempts = 60,
+    this.hitlPollInterval = const Duration(seconds: 5),
   });
 
   @override
@@ -742,6 +751,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
   void _sendMessage() {
     // Allow sending if there's a message OR (legacy) uploaded files
+    if (_isLoading) {
+      return;
+    }
     if (_controller.text.trim().isEmpty &&
         (_isGrounded || _uploadedFiles.isEmpty)) {
       return;
@@ -776,6 +788,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     // Reset inactivity timer on user activity
     _resetInactivityTimer();
 
+    // Retire any in-flight Ask HTTP or HITL poll from a prior turn so a released
+    // answer cannot land under a different follow-up question.
+    _requestEpoch++;
     final epoch = _requestEpoch;
     final abortCompleter = Completer<void>();
     final previousAbort = _activeAbort;
@@ -985,6 +1000,13 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         if (askResult.sessionId != null) {
           _askSessionId = askResult.sessionId;
         }
+        if (askResult.deliveryStatus == AiAskDeliveryStatus.held) {
+          await _handleHeldAskResult(
+            epoch: epoch,
+            askResult: askResult,
+          );
+          return;
+        }
         citations = askResult.citations;
         disclaimer = askResult.disclaimer;
         escalation = askResult.escalation;
@@ -1014,6 +1036,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             } else {
               _clearRetryState();
             }
+          case AiAskDeliveryStatus.held:
+            // Handled above; keep switch exhaustive.
+            aiText = askResult.message ??
+                "We're reviewing this before showing it to you.";
+            _clearRetryState();
         }
       } else if (response!['success'] == false) {
         // If backend explicitly failed, show the error message
@@ -1088,6 +1115,236 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
+  }
+
+  static const String _hitlReviewingFallback =
+      "We're reviewing this before showing it to you.";
+  static const String _hitlUnavailableFallback =
+      'This answer is no longer available. Please ask again or contact your care provider.';
+  static const String _hitlStillReviewingFallback =
+      'Still under review. Check back later or contact your care provider.';
+  static const String _hitlUnauthorizedFallback =
+      'Unable to check review status for this answer. Please ask again or contact your care provider.';
+
+  static bool _isHitlTerminalDelivery(String deliveryStatus) {
+    return deliveryStatus == 'DELIVERED' ||
+        deliveryStatus == 'REJECTED' ||
+        deliveryStatus == 'EXPIRED' ||
+        deliveryStatus == 'WITHHELD_PERMANENTLY';
+  }
+
+  Future<void> _handleHeldAskResult({
+    required int epoch,
+    required AiAskResult askResult,
+  }) async {
+    _clearRetryState();
+    final reviewingText =
+        askResult.message?.trim().isNotEmpty == true
+            ? askResult.message!.trim()
+            : _hitlReviewingFallback;
+
+    if (!_safeSetState(epoch, () {
+      _messages.add(
+        ChatMessage(
+          text: reviewingText,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      // Keep sends blocked while the HITL poll may still deliver an answer.
+      _isLoading = true;
+      _uploadedFiles.clear();
+    })) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+    final heldItemId = askResult.heldItemId;
+    if (heldItemId == null || heldItemId.isEmpty) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnavailableFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_MISSING_ID',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    await _pollAndApplyHitlStatus(epoch: epoch, heldItemId: heldItemId);
+  }
+
+  Future<void> _resumeHitlPoll(String heldItemId) async {
+    if (_isLoading || heldItemId.isEmpty) return;
+    final epoch = _requestEpoch;
+    if (!_safeSetState(epoch, () {
+      _isLoading = true;
+      for (var i = _messages.length - 1; i >= 0; i--) {
+        final msg = _messages[i];
+        if (msg.showHitlResume && msg.heldItemId == heldItemId) {
+          _messages[i] = ChatMessage(
+            text: _hitlReviewingFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            heldItemId: heldItemId,
+          );
+          break;
+        }
+      }
+    })) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    await _pollAndApplyHitlStatus(epoch: epoch, heldItemId: heldItemId);
+    if (_isCurrentEpoch(epoch)) {
+      _safeSetState(epoch, () => _isLoading = false);
+    }
+  }
+
+  Future<void> _pollAndApplyHitlStatus({
+    required int epoch,
+    required String heldItemId,
+  }) async {
+    HitlPollResult? terminal;
+    HitlPollHttpException? permanentFailure;
+    var parseFailed = false;
+    final maxAttempts = widget.hitlMaxPollAttempts < 1
+        ? 1
+        : widget.hitlMaxPollAttempts;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      if (!_isCurrentEpoch(epoch)) return;
+      await Future<void>.delayed(widget.hitlPollInterval);
+      if (!_isCurrentEpoch(epoch)) return;
+
+      try {
+        final poll = await AIChatService.pollHitlStatus(heldItemId);
+        if (!_isCurrentEpoch(epoch)) return;
+        if (_isHitlTerminalDelivery(poll.deliveryStatus) ||
+            poll.status == 'REJECTED' ||
+            poll.status == 'EXPIRED') {
+          terminal = poll;
+          break;
+        }
+      } on HitlPollHttpException catch (error) {
+        if (error.isPermanent) {
+          permanentFailure = error;
+          break;
+        }
+        // Retry transient 5xx / unexpected HTTP until the attempt cap.
+      } on FormatException {
+        parseFailed = true;
+        break;
+      } catch (_) {
+        // Keep polling through transient network failures until the attempt cap.
+      }
+    }
+
+    if (!_isCurrentEpoch(epoch)) return;
+
+    if (parseFailed) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnavailableFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_PARSE_ERROR',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (permanentFailure != null) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnauthorizedFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_HTTP_${permanentFailure!.statusCode}',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (terminal == null) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlStillReviewingFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_CLIENT_TIMEOUT',
+            heldItemId: heldItemId,
+            showHitlResume: true,
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (!_safeSetState(epoch, () => _isLoading = false)) {
+      return;
+    }
+
+    if (terminal.deliveryStatus == 'DELIVERED') {
+      final answerText = terminal.answer?.trim().isNotEmpty == true
+          ? terminal.answer!.trim()
+          : 'Ask AI returned no answer.';
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: answerText,
+            isUser: false,
+            timestamp: DateTime.now(),
+            citations: terminal!.citations,
+            disclaimer: terminal.disclaimer,
+            confirmation: terminal.confirmation,
+          ),
+        );
+      })) {
+        return;
+      }
+    } else {
+      final fallback = terminal.message?.trim().isNotEmpty == true
+          ? terminal.message!.trim()
+          : _hitlUnavailableFallback;
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: fallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: terminal!.deliveryStatus,
+          ),
+        );
+      })) {
+        return;
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   String _guessMimeType(String fileName) {
@@ -1293,7 +1550,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                   )
                                 : theme.textTheme.bodyMedium,
                           ),
-                          if (msg.errorMessage != null)
+                          if (msg.errorMessage != null &&
+                              !msg.errorMessage!.startsWith('HELD_'))
                             Text(
                               msg.errorMessage!,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -1365,6 +1623,19 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                               onPressed: _isLoading ? null : _retryGroundedAsk,
                               icon: const Icon(Icons.refresh, size: 16),
                               label: const Text('Retry'),
+                            ),
+                          ],
+                          if (msg.showHitlResume &&
+                              msg.heldItemId != null &&
+                              msg.heldItemId!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              key: const Key('ask-ai-hitl-resume'),
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => _resumeHitlPoll(msg.heldItemId!),
+                              icon: const Icon(Icons.hourglass_top, size: 16),
+                              label: const Text('Check review status'),
                             ),
                           ],
                           Text(
