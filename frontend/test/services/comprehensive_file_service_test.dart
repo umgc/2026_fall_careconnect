@@ -108,8 +108,8 @@ void main() {
       }
     });
 
-    test('profilePicture has value PROFILE_PICTURE', () {
-      expect(FileCategory.profilePicture.value, 'PROFILE_PICTURE');
+    test('profilePicture has value PROFILE_IMAGE', () {
+      expect(FileCategory.profilePicture.value, 'PROFILE_IMAGE');
     });
 
     test('medicalReport has display name Medical Report', () {
@@ -417,12 +417,14 @@ void main() {
   // ─── FileCategory enum – exhaustive member checks ─────────────────────
 
   group('FileCategory exhaustive values', () {
-    test('has exactly 11 members', () {
-      expect(FileCategory.values.length, 11);
+    test('has all expected members including employment intake', () {
+      // Core healthcare (4) + personal (3) + employment (8) + AI/data (4) = 19
+      expect(FileCategory.values.length, 19);
+      expect(FileCategory.employmentIntake.length, 8);
     });
 
     test('medicalReport value and icon', () {
-      expect(FileCategory.medicalReport.value, 'MEDICAL_REPORT');
+      expect(FileCategory.medicalReport.value, 'MEDICAL_RECORD');
       expect(FileCategory.medicalReport.icon, '🏥');
     });
 
@@ -438,7 +440,7 @@ void main() {
     });
 
     test('clinicalNotes value, displayName, icon', () {
-      expect(FileCategory.clinicalNotes.value, 'CLINICAL_NOTES');
+      expect(FileCategory.clinicalNotes.value, 'CLINICAL_NOTE');
       expect(FileCategory.clinicalNotes.displayName, 'Clinical Notes');
       expect(FileCategory.clinicalNotes.icon, '📋');
     });
@@ -450,7 +452,7 @@ void main() {
     });
 
     test('insuranceDoc value, displayName, icon', () {
-      expect(FileCategory.insuranceDoc.value, 'INSURANCE');
+      expect(FileCategory.insuranceDoc.value, 'INSURANCE_DOCUMENT');
       expect(FileCategory.insuranceDoc.displayName, 'Insurance Document');
       expect(FileCategory.insuranceDoc.icon, '🛡️');
     });
@@ -462,7 +464,7 @@ void main() {
     });
 
     test('generalDocument value, displayName, icon', () {
-      expect(FileCategory.generalDocument.value, 'documents');
+      expect(FileCategory.generalDocument.value, 'OTHER_DOCUMENT');
       expect(FileCategory.generalDocument.displayName, 'General Document');
       expect(FileCategory.generalDocument.icon, '📄');
     });
@@ -479,7 +481,8 @@ void main() {
       expect(FileCategory.backupFile.icon, '💾');
     });
 
-    test('profilePicture displayName and icon', () {
+    test('profilePicture value, displayName and icon', () {
+      expect(FileCategory.profilePicture.value, 'PROFILE_IMAGE');
       expect(FileCategory.profilePicture.displayName, 'Profile Picture');
       expect(FileCategory.profilePicture.icon, '👤');
     });

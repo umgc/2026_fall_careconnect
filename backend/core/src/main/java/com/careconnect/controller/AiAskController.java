@@ -6,9 +6,9 @@ import com.careconnect.model.User;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.ask.AskAiException;
 import com.careconnect.service.ai.ask.AiAskService;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
-import com.careconnect.service.ai.ask.AskAiUnavailableException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -49,33 +49,58 @@ public class AiAskController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AiAskResponse> ask(@Valid @RequestBody final AiAskRequest request)
             throws UnauthorizedException {
-        final User caller = securityUtil.resolveCurrentUser();
         final java.util.UUID sessionId = request == null ? null : request.sessionId();
         try {
+            final User caller = securityUtil.resolveCurrentUser();
             final AiAskResponse response = aiAskService.ask(caller, request);
             return ResponseEntity.ok(response);
         } catch (final ForbiddenScopeException ex) {
-            log.warn("Ask AI forbidden scope code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            log.warn(
+                    "Ask AI forbidden scope reason={} auditId={} requestId={}",
+                    ex.getDenialReason(),
+                    ex.getAuditId(),
+                    ex.getRequestId());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(AiAskService.withheld(
-                            null,
+                            ex.getRequestId(),
                             ex.getAuditId(),
-                            sessionId,
+                            ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ForbiddenScopeException.ERROR_CODE,
-                            ex.getMessage(),
+                            "Requested records are not available for Ask AI",
                             null));
         } catch (final AskAiRejectedException ex) {
-            log.warn("Ask AI rejected code={} msg={}", ex.getErrorCode(), ex.getMessage());
+            log.warn("Ask AI rejected code={}", ex.getErrorCode());
             return ResponseEntity.status(ex.getHttpStatus())
                     .body(AiAskService.withheld(
-                            null, null, sessionId,
+                            ex.getRequestId(),
+                            ex.getAuditId(),
+                            ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ex.getErrorCode(), ex.getMessage(), null));
-        } catch (final AskAiUnavailableException ex) {
-            log.warn("Ask AI unavailable: {}", ex.getMessage());
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        } catch (final AskAiException ex) {
+            log.warn("Ask AI failed code={} requestId={}", ex.getErrorCode(), ex.getRequestId());
+            return ResponseEntity.status(ex.getStatus())
                     .body(AiAskService.withheld(
-                            null, null, sessionId,
+                            ex.getRequestId(),
+                            ex.getAuditId(),
+                            ex.getSessionId() == null ? sessionId : ex.getSessionId(),
                             ex.getErrorCode(), ex.getMessage(), null));
+        } catch (final RuntimeException ex) {
+            final java.util.UUID requestId = java.util.UUID.randomUUID();
+            final java.util.UUID auditId = java.util.UUID.randomUUID();
+            // Never log exception messages or request data: either may contain PHI.
+            log.error(
+                    "Ask AI unexpected pipeline failure requestId={} auditId={} type={}",
+                    requestId,
+                    auditId,
+                    ex.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(AiAskService.withheld(
+                            requestId,
+                            auditId,
+                            sessionId,
+                            "INTERNAL_ERROR",
+                            "Ask AI could not complete the request",
+                            null));
         }
     }
 }

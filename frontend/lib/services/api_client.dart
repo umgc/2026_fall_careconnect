@@ -103,13 +103,30 @@ class ApiClient {
   /// responses without touching the network. Also clears the connect/send/
   /// receive timeouts so Dio does not schedule timeout timers, which would
   /// otherwise remain pending under flutter_test's fake-async clock and fail
-  /// the "no pending timers" invariant. Intended for widget/unit tests only.
+  /// the "no pending timers" invariant. Tests that need a timeout to fire can
+  /// re-arm one via [debugSetTimeouts] afterward. Intended for tests only.
   @visibleForTesting
   void debugSetHttpClientAdapter(HttpClientAdapter adapter) {
     _dio.httpClientAdapter = adapter;
     _dio.options.connectTimeout = null;
     _dio.options.receiveTimeout = null;
     _dio.options.sendTimeout = null;
+  }
+
+  /// Current Dio HTTP adapter (tests only — for restore after overrides).
+  @visibleForTesting
+  HttpClientAdapter get debugHttpClientAdapter => _dio.httpClientAdapter;
+
+  /// Apply very short Dio timeouts (tests only).
+  @visibleForTesting
+  void debugSetTimeouts({
+    Duration connect = const Duration(milliseconds: 50),
+    Duration receive = const Duration(milliseconds: 50),
+    Duration send = const Duration(milliseconds: 50),
+  }) {
+    _dio.options.connectTimeout = connect;
+    _dio.options.receiveTimeout = receive;
+    _dio.options.sendTimeout = send;
   }
 
   // --------------- Public generic methods ---------------

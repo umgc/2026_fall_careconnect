@@ -19,8 +19,8 @@ package com.careconnect.service.consent;
  *
  * <p>Real implementation ships in David's WBS 3.15.5 PR; until then a
  * permissive {@link NoOpCaregiverVisibilityService} default bean
- * allows access. When David's PR lands, his implementation replaces
- * the no-op via {@code @ConditionalOnMissingBean}.
+ * allows access. When David's PR lands, replace the no-op to avoid a
+ * duplicate-bean conflict.
  *
  * <p>Lookup key across both methods is the {@code (caregiverUserId,
  * patientUserId)} pair.

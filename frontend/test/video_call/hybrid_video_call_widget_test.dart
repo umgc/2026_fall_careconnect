@@ -202,19 +202,23 @@ void main() {
       'shows an error message when call initialisation fails',
       (tester) async {
         await tester.pumpWidget(_buildWidget());
-        await tester.pumpAndSettle(const Duration(seconds: 5));
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
 
-        // The widget wraps the error string in a Text widget.
-        // We look for any Text that is not a known-good label.
+        // Production error UI uses a fixed title plus a sanitized detail
+        // (e.g. "Your session expired…") via safeCallSessionError.
+        expect(find.text('Could not connect to call'), findsOneWidget);
+        expect(find.byIcon(Icons.error_outline), findsOneWidget);
         final textWidgets = tester.widgetList<Text>(find.byType(Text));
         final hasErrorText = textWidgets.any(
-          (t) =>
-              (t.data ?? '').isNotEmpty &&
-              (t.data!.toLowerCase().contains('error') ||
-                  t.data!.toLowerCase().contains('failed') ||
-                  t.data!.toLowerCase().contains('token') ||
-                  t.data!.toLowerCase().contains('unable') ||
-                  t.data!.toLowerCase().contains('exception')),
+          (t) {
+            final data = (t.data ?? '').toLowerCase();
+            return data.contains('session expired') ||
+                data.contains('unable to start') ||
+                data.contains('could not connect') ||
+                data.contains('permission');
+          },
         );
         expect(hasErrorText, isTrue,
             reason: 'An error Text must be rendered when the call fails to join');

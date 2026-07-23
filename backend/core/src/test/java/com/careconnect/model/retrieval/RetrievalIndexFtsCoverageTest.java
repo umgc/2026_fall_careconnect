@@ -48,7 +48,11 @@ class RetrievalIndexFtsCoverageTest {
                 "src/main/java/com/careconnect/config/SchemaPatchRunner.java"));
 
         assertThat(source).contains("V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)");
+        assertThat(source).contains("V2607032257 – create indexing_outbox");
+        assertThat(source).contains("CREATE TABLE IF NOT EXISTS indexing_outbox");
         assertThat(source).contains("V2607122000 – indexing_outbox claimed_at lease column");
+        assertThat(source.indexOf("V2607032257 – create indexing_outbox"))
+                .isLessThan(source.indexOf("V2607122000 – indexing_outbox claimed_at lease column"));
         assertThat(source).contains("V2607161317 – partial index for embedding backfill scans (Task 4.4");
         assertThat(source).contains("idx_retrieval_chunk_embedding_null_backfill");
         assertThat(source).contains("WHERE search_vector IS NULL");
