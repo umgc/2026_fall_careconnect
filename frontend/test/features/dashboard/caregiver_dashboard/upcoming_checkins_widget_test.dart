@@ -4,8 +4,13 @@
 // Covers: rendering, patient names, dates, View buttons, "View All Patients"
 // button, "Start EV Session" button, icon, button taps with GoRouter, and
 // structural properties (ElevatedButton styling, access_time icon).
+//
+// The widget is API-driven: it reads caregiverId from UserProvider, auth
+// headers from AuthTokenManager, and GETs upcoming visits via
+// ApiServiceOffline.httpClient. Mocks follow schedule_page_test.dart.
 
-import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -152,12 +157,19 @@ Widget _wrapWithRouter(Widget child, {List<String> pushedRoutes = const []}) {
       ),
     ],
   );
-  return MaterialApp.router(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, routerConfig: router);
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: _caregiverProvider(),
+    child: MaterialApp.router(routerConfig: router),
+  );
 }
 
-/// Simple wrapper without GoRouter for pure rendering tests.
-Widget _wrap(Widget child) =>
-    MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SingleChildScrollView(child: child)));
+/// Advance frames so async _fetchVisits can complete (avoid pumpAndSettle
+/// while CircularProgressIndicator is animating).
+Future<void> _pumpPastLoading(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+  await tester.pump();
+}
 
 void main() {
   setUpAll(() {
