@@ -92,7 +92,11 @@ class StmlCheckInConsentTest {
         @Test
         @DisplayName("Returns 403 when scope is denied for PATIENT role accessing another patient")
         void patient_accessingOtherPatient_returns403() throws Exception {
-            User otherPatient = makeUser(99L, Role.PATIENT);
+            // caller id must equal CAREGIVER_ID so the request clears the
+            // caller-owns-caregiverId check and actually reaches
+            // RetrievalScopeService — otherwise that check 403s first and
+            // this stub is never invoked (UnnecessaryStubbingException).
+            User otherPatient = makeUser(CAREGIVER_ID, Role.PATIENT);
             setSecurityContext(otherPatient);
             when(retrievalScopeService.resolveRetrievalScope(otherPatient, PATIENT_ID))
                 .thenThrow(ForbiddenScopeException.of(
@@ -110,7 +114,8 @@ class StmlCheckInConsentTest {
         @Test
         @DisplayName("Returns 403 when scope is denied for FAMILY_MEMBER with no access")
         void familyMember_noAccess_returns403() throws Exception {
-            User fm = makeUser(5L, Role.FAMILY_MEMBER);
+            // Same reasoning as above — caller id must equal CAREGIVER_ID.
+            User fm = makeUser(CAREGIVER_ID, Role.FAMILY_MEMBER);
             setSecurityContext(fm);
             when(retrievalScopeService.resolveRetrievalScope(fm, PATIENT_ID))
                 .thenThrow(ForbiddenScopeException.of(
