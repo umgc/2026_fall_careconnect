@@ -9,6 +9,7 @@ import com.careconnect.dto.StmlSearchResponse;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.StmlCheckInService;
 import com.careconnect.service.StmlRecallService;
@@ -103,9 +104,10 @@ public class StmlController {
       @RequestParam final Long caregiverId) {
     User caller = getCurrentUser();
     // caregiverId is client-supplied — without this check, any authenticated
-    // user could pass a different caregiver's id and read their consent-gated
-    // check-in view. Consent is only meaningful if caregiverId is the caller.
-    if (!caller.getId().equals(caregiverId)) {
+    // caregiver could pass a different caregiver's id and read their
+    // consent-gated check-in view. Consent is only meaningful if caregiverId
+    // is the caller, unless the caller is an admin (support/audit access).
+    if (caller.getRole() != Role.ADMIN && !caller.getId().equals(caregiverId)) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
     try {
