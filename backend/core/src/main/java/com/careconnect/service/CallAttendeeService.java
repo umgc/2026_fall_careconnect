@@ -3,6 +3,7 @@ package com.careconnect.service;
 import com.careconnect.model.CallAttendee;
 import com.careconnect.repository.CallAttendeeRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -37,7 +38,7 @@ public class CallAttendeeService {
             final Long userId,
             final String role) {
         markSupersededAttendeeRows(callId, userId, chimeAttendeeId);
-        final LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         return callAttendeeRepository
                 .findByCallIdAndChimeAttendeeId(callId, chimeAttendeeId)
                 .map(
@@ -125,7 +126,7 @@ public class CallAttendeeService {
             return;
         }
 
-        final LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         final List<CallAttendee> activeRows =
                 callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId);
         for (final CallAttendee row : activeRows) {
@@ -177,7 +178,7 @@ public class CallAttendeeService {
     /** Marks active attendee rows for the user as left on call end/leave. */
     @Transactional
     public void recordLeave(final String callId, final Long userId) {
-        final LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         final List<CallAttendee> activeRows =
                 callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(callId, userId);
         for (final CallAttendee row : activeRows) {
@@ -194,7 +195,7 @@ public class CallAttendeeService {
         if (callId == null || callId.isBlank()) {
             return;
         }
-        final LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         final List<CallAttendee> activeRows =
                 callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId);
         for (final CallAttendee row : activeRows) {
@@ -207,7 +208,7 @@ public class CallAttendeeService {
 
     private void markSupersededAttendeeRows(
             final String callId, final Long userId, final String chimeAttendeeId) {
-        final LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         final List<CallAttendee> activeRows =
                 callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(callId, userId);
         boolean changed = false;

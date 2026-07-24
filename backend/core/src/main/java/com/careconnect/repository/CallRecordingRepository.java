@@ -55,9 +55,12 @@ public interface CallRecordingRepository
                  consented_by_user_id, purge_state, started_at, created_at, updated_at)
             SELECT :callId, value, :purpose, 'RESERVED', 'STARTED',
                    :ownerUserId, :ownerUserId,
-                   CASE WHEN :consented THEN CURRENT_TIMESTAMP ELSE NULL END,
+                   CASE WHEN :consented THEN (now() AT TIME ZONE 'UTC') ELSE NULL END,
                    CASE WHEN :consented THEN :ownerUserId ELSE NULL END,
-                   'NONE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                   'NONE',
+                   (now() AT TIME ZONE 'UTC'),
+                   (now() AT TIME ZONE 'UTC'),
+                   (now() AT TIME ZONE 'UTC')
               FROM next_generation
             ON CONFLICT DO NOTHING
             """, nativeQuery = true)

@@ -14,7 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -197,26 +197,78 @@ public class PostCallTranscriptionService {
     runDueJobs();
   }
 
-  @Transactional
+  /**
+   * Claims a job, runs AWS work outside any DB transaction, then finishes in a short transaction.
+   *
+   * <p>Holding {@code @Transactional} across Transcribe/S3 (minutes) pinches a Hikari connection
+   * until max-lifetime/restart closes it — causing the pool-shutdown / Session closed cascade.
+   */
   public void processJob(final Long id) {
     final UUID token = UUID.randomUUID();
-    if (jobRepository.claim(id, token, 1200L) != 1) {
+    final PostCallTranscriptionService worker = self == null ? this : self;
+    final ClaimedTranscriptionWork claimed = worker.claimTranscriptionWork(id, token);
+    if (claimed == null) {
       return;
+    }
+    try {
+      executeTranscription(claimed.callId(), claimed.recording(), claimed.mediaKey());
+    } catch (RuntimeException failure) {
+      if (log.isWarnEnabled()) {
+        log.warn(
+            "Post-call transcription crashed for call {}: {}",
+            claimed.callId(),
+            failure.getMessage(),
+            failure);
+      }
+      worker.failTranscriptionWork(
+          id,
+          token,
+          claimed.attemptCount(),
+          failure.getMessage() == null ? "Transcription crashed" : failure.getMessage());
+      return;
+    }
+    worker.completeTranscriptionWork(id, token, claimed.recordingId(), claimed.attemptCount());
+  }
+
+  @Transactional
+  public ClaimedTranscriptionWork claimTranscriptionWork(final Long id, final UUID token) {
+    if (jobRepository.claim(id, token, 1200L) != 1) {
+      return null;
     }
     final PostCallTranscriptionJob job =
         jobRepository.findByIdAndClaimToken(id, token).orElse(null);
     if (job == null) {
-      return;
+      return null;
     }
     final CallRecording recording = recordingRepository.findById(job.getRecordingId()).orElse(null);
     if (recording == null) {
       jobRepository.release(id, token, "TERMINAL", 0L, "Recording metadata no longer exists");
-      return;
+      return null;
     }
     job.setState("RUNNING");
     jobRepository.save(job);
-    executeTranscription(job.getCallId(), recording, job.getMediaKey());
-    if (TRANSCRIPTION_STATUS_COMPLETE.equals(recording.getTranscriptionStatus())) {
+    return new ClaimedTranscriptionWork(
+        job.getCallId(),
+        job.getRecordingId(),
+        job.getMediaKey(),
+        job.getAttemptCount(),
+        recording);
+  }
+
+  @Transactional
+  public void completeTranscriptionWork(
+      final Long id,
+      final UUID token,
+      final Long recordingId,
+      final int attemptCount) {
+    final CallRecording recording = recordingRepository.findById(recordingId).orElse(null);
+    final String status = recording == null ? null : recording.getTranscriptionStatus();
+    if (TRANSCRIPTION_STATUS_COMPLETE.equals(status)) {
+      final PostCallTranscriptionJob job =
+          jobRepository.findByIdAndClaimToken(id, token).orElse(null);
+      if (job == null) {
+        return;
+      }
       job.setState("COMPLETE");
       job.setCompletedAt(LocalDateTime.now(java.time.ZoneOffset.UTC));
       job.setClaimToken(null);
@@ -236,13 +288,28 @@ public class PostCallTranscriptionService {
               job.getCallId(), e.getMessage(), e);
         }
       }
-    } else {
-      final String error = recording.getErrorMessage() == null
-          ? "Transcription has not completed" : recording.getErrorMessage();
-      final String state = job.getAttemptCount() >= 8 ? "TERMINAL" : "RETRYABLE";
-      jobRepository.release(id, token, state, state.equals("TERMINAL") ? 0L : 60L, error);
+      return;
     }
+    final String error = recording == null || recording.getErrorMessage() == null
+        ? "Transcription has not completed"
+        : recording.getErrorMessage();
+    failTranscriptionWork(id, token, attemptCount, error);
   }
+
+  @Transactional
+  public void failTranscriptionWork(
+      final Long id, final UUID token, final int attemptCount, final String error) {
+    final String state = attemptCount >= 8 ? "TERMINAL" : "RETRYABLE";
+    jobRepository.release(id, token, state, state.equals("TERMINAL") ? 0L : 60L, error);
+  }
+
+  /** Snapshot of claim state used after the short claim transaction commits. */
+  public record ClaimedTranscriptionWork(
+      String callId,
+      Long recordingId,
+      String mediaKey,
+      int attemptCount,
+      CallRecording recording) {}
 
   private void executeTranscription(
       final String callId, final CallRecording rec, final String playableKey) {
@@ -848,7 +915,7 @@ public class PostCallTranscriptionService {
   }
 
   private static Instant toInstant(final LocalDateTime value) {
-    return value == null ? null : value.atZone(ZoneId.systemDefault()).toInstant();
+    return value == null ? null : value.atZone(ZoneOffset.UTC).toInstant();
   }
 
   private static void deleteTempFile(final Path path) {
@@ -1124,6 +1191,14 @@ public class PostCallTranscriptionService {
             "Deleted speaker-id S3 artifacts for call {} under prefix {}",
             rec.getCallId(),
             speakerIdPrefix);
+      }
+    } catch (IllegalStateException e) {
+      // App restart / AWS client teardown mid-cleanup — not a transcription failure.
+      if (log.isDebugEnabled()) {
+        log.debug(
+            "Skipped speaker-id S3 cleanup for call {} (client unavailable): {}",
+            rec.getCallId(),
+            e.getMessage());
       }
     } catch (Exception e) {
       if (log.isWarnEnabled()) {

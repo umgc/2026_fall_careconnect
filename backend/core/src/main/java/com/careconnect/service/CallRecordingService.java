@@ -423,8 +423,11 @@ public class CallRecordingService {
       recording.setConcatenationStatus(CONCATENATION_STATUS_NOT_REQUESTED);
       recording.setInitiatedByUserId(initiatedByUserId);
       recording.setOwnerUserId(initiatedByUserId);
-      if (recording.getStartedAt() == null) {
-        recording.setStartedAt(utcNow());
+      // Always stamp UTC wall-clock so native reservation CURRENT_TIMESTAMP cannot skew clips.
+      recording.setStartedAt(utcNow());
+      if (consented && initiatedByUserId != null && recording.getConsentedAt() == null) {
+        recording.setConsentedAt(utcNow());
+        recording.setConsentedByUserId(initiatedByUserId);
       }
       try {
         recordingRepository.saveAndFlush(recording);
@@ -1251,8 +1254,8 @@ public class CallRecordingService {
     m.put("ownerUserId", rec.getOwnerUserId());
     m.put("consentedAt", rec.getConsentedAt());
     m.put("purgeState", rec.getPurgeState() == null ? null : rec.getPurgeState().name());
-    m.put("startedAt", rec.getStartedAt() != null ? rec.getStartedAt().toString() : null);
-    m.put("endedAt", rec.getEndedAt() != null ? rec.getEndedAt().toString() : null);
+    m.put("startedAt", rec.getStartedAt() != null ? toUtcInstantString(rec.getStartedAt()) : null);
+    m.put("endedAt", rec.getEndedAt() != null ? toUtcInstantString(rec.getEndedAt()) : null);
     m.put("durationSeconds", rec.getDurationSeconds());
     m.put("errorMessage", rec.getErrorMessage());
     return m;
@@ -1434,7 +1437,7 @@ public class CallRecordingService {
       return false;
     }
     final LocalDateTime retryCutoff =
-        LocalDateTime.now().minus(POST_CALL_TRANSCRIPTION_LATE_TRIGGER_WINDOW);
+        utcNow().minus(POST_CALL_TRANSCRIPTION_LATE_TRIGGER_WINDOW);
     return referenceTime.isAfter(retryCutoff);
   }
 

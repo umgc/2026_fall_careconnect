@@ -58,3 +58,23 @@ double effectiveSentimentClipEndSec({
   }
   return math.min(clipEndSec, durationSec);
 }
+
+/// When transcript/recording anchors diverge from call-join by ~timezone offset,
+/// prefer join time so sentiment dots still align with transcript lines.
+DateTime? resolveTranscriptHighlightCallStart({
+  required DateTime? fromTranscriptSegments,
+  required DateTime? callJoinStart,
+  Duration skewThreshold = const Duration(minutes: 50),
+}) {
+  if (fromTranscriptSegments == null) {
+    return callJoinStart;
+  }
+  if (callJoinStart == null) {
+    return fromTranscriptSegments;
+  }
+  final skew = fromTranscriptSegments.difference(callJoinStart).abs();
+  if (skew >= skewThreshold) {
+    return callJoinStart;
+  }
+  return fromTranscriptSegments;
+}

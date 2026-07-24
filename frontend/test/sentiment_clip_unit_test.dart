@@ -113,6 +113,32 @@ void main() {
     });
   });
 
+  group('transcript highlight call-start skew', () {
+    test('prefers call-join when transcript anchor is ~4h skewed', () {
+      final join = DateTime.utc(2026, 7, 24, 20, 47, 37);
+      final skewedRecordingAnchor = DateTime.utc(2026, 7, 24, 16, 48, 14);
+      expect(
+        resolveTranscriptHighlightCallStart(
+          fromTranscriptSegments: skewedRecordingAnchor,
+          callJoinStart: join,
+        ),
+        join,
+      );
+    });
+
+    test('keeps transcript anchor when clocks agree', () {
+      final join = DateTime.utc(2026, 7, 24, 20, 47, 37);
+      final recordingAnchor = DateTime.utc(2026, 7, 24, 20, 48, 14);
+      expect(
+        resolveTranscriptHighlightCallStart(
+          fromTranscriptSegments: recordingAnchor,
+          callJoinStart: join,
+        ),
+        recordingAnchor,
+      );
+    });
+  });
+
   group('SENT-CLIP-001 playback helpers', () {
     test('sentimentClipSeekPosition rounds to milliseconds', () {
       expect(

@@ -1970,18 +1970,21 @@ class _PostCallTelemetrySummaryScreenState
     required DateTime anchorOccurredAt,
     required DateTime? fallbackCallStart,
   }) {
+    DateTime? fromSegments;
     for (final segment in segments) {
       final startMs = _asInt(segment['startMs']);
       final occurredAt = _safeDate(segment['occurredAt']);
       if (startMs == null) continue;
       if (occurredAt.millisecondsSinceEpoch <= 0) continue;
       final offsetMs = startMs < 0 ? 0 : startMs;
-      return occurredAt.subtract(Duration(milliseconds: offsetMs));
+      fromSegments = occurredAt.subtract(Duration(milliseconds: offsetMs));
+      break;
     }
-    if (anchorOccurredAt.millisecondsSinceEpoch > 0) {
-      return anchorOccurredAt;
-    }
-    return fallbackCallStart;
+    return resolveTranscriptHighlightCallStart(
+      fromTranscriptSegments: fromSegments ??
+          (anchorOccurredAt.millisecondsSinceEpoch > 0 ? anchorOccurredAt : null),
+      callJoinStart: fallbackCallStart,
+    );
   }
 
   int? _resolveSelectedSegmentIndex({
