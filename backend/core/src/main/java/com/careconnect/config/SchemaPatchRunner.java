@@ -469,6 +469,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
             ")"
         );
         applyRequiredPatch(
+            "V2607191700 – call_sessions recording_start_elected column",
+            "ALTER TABLE call_sessions "
+                    + "ADD COLUMN IF NOT EXISTS recording_start_elected "
+                    + "BOOLEAN NOT NULL DEFAULT FALSE"
+        );
+        applyRequiredPatch(
+            "V2607191700 – call_sessions recording_start_elected default",
+            "ALTER TABLE call_sessions "
+                    + "ALTER COLUMN recording_start_elected SET DEFAULT FALSE"
+        );
+        applyRequiredPatch(
             "V2607182230b – create call_participants",
             "CREATE TABLE IF NOT EXISTS call_participants (" +
             "  id BIGSERIAL PRIMARY KEY," +

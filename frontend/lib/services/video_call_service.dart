@@ -1050,19 +1050,28 @@ class VideoCallService {
 
   /// Starts server-side recording of [callId] via AWS Chime Media Capture
   /// Pipeline. Returns the full response body or throws on error.
+  ///
+  /// Passes [consent]=true because caregiver Record is an explicit capture
+  /// action required by the backend for USER_PLAYBACK.
   Future<Map<String, dynamic>> startRecording(String callId) async {
     _requireActiveCall(callId);
     final response = await http.post(
       Uri.parse(
         '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/recording/start',
-      ),
+      ).replace(queryParameters: const {'consent': 'true'}),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $_jwtToken',
       },
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final status = (body['status'] ?? '').toString().toUpperCase();
+      if (status == 'STARTED' || status == 'ALREADY_RECORDING') {
+        return body;
+      }
+      final message = (body['message'] ?? status).toString();
+      throw Exception('Unable to start recording: $message');
     }
     throw Exception(_safeCallFailure(
       operation: 'start recording',

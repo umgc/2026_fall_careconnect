@@ -159,6 +159,8 @@ public class PostCallTranscriptionService {
     job.setCallId(callId);
     job.setRecordingGeneration(rec.getGeneration());
     job.setState("READY");
+    // Placeholder required by NOT NULL; markDueNow aligns next_attempt_at to DB CURRENT_TIMESTAMP
+    // so hibernate.jdbc.time_zone=UTC cannot push the job hours into the future on non-UTC hosts.
     job.setNextAttemptAt(LocalDateTime.now(java.time.ZoneOffset.UTC));
     job.setAwsJobName(jobName);
     job.setMediaBucket(rec.getS3Bucket());
@@ -167,6 +169,7 @@ public class PostCallTranscriptionService {
     job.setOutputKey(
         "transcription-jobs/" + safeCallId + "/" + rec.getId() + "/" + jobName + ".json");
     jobRepository.save(job);
+    jobRepository.markDueNow(job.getId());
     rec.setTranscriptionStatus("READY");
     recordingRepository.save(rec);
   }

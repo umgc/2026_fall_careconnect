@@ -4,6 +4,7 @@ import com.careconnect.model.CallAttendee;
 import com.careconnect.model.CallRecording;
 import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
+import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import com.careconnect.service.CallTranscriptService.TranscriptSegmentInput;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +70,7 @@ class PostCallTranscriptionServiceTest {
     @Mock private CallTelemetryService callTelemetryService;
     @Mock private CallRecordingRepository recordingRepository;
     @Mock private CallAttendeeRepository callAttendeeRepository;
+    @Mock private PostCallTranscriptionJobRepository jobRepository;
     @Mock private KvsArchivedMediaExportService kvsArchivedMediaExportService;
     @Mock private KvsAudioTranscodeService kvsAudioTranscodeService;
 
@@ -83,8 +85,15 @@ class PostCallTranscriptionServiceTest {
         ReflectionTestUtils.setField(service, "callTelemetryService", callTelemetryService);
         ReflectionTestUtils.setField(service, "recordingRepository", recordingRepository);
         ReflectionTestUtils.setField(service, "callAttendeeRepository", callAttendeeRepository);
+        ReflectionTestUtils.setField(service, "jobRepository", jobRepository);
         ReflectionTestUtils.setField(service, "kvsArchivedMediaExportService", kvsArchivedMediaExportService);
         ReflectionTestUtils.setField(service, "kvsAudioTranscodeService", kvsAudioTranscodeService);
+    }
+
+    /** Runs the worker transcription path (enqueue is covered by durability tests). */
+    private void runExecuteTranscription(final CallRecording recording) {
+        ReflectionTestUtils.invokeMethod(
+                service, "executeTranscription", CALL_ID, recording, PLAYABLE_KEY);
     }
 
     @Test
@@ -113,7 +122,7 @@ class PostCallTranscriptionServiceTest {
                 .thenReturn(1);
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
 
-        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+        runExecuteTranscription(recording);
 
         final ArgumentCaptor<StartTranscriptionJobRequest> captor =
                 ArgumentCaptor.forClass(StartTranscriptionJobRequest.class);
@@ -144,7 +153,7 @@ class PostCallTranscriptionServiceTest {
         when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
 
-        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+        runExecuteTranscription(recording);
 
         final ArgumentCaptor<StartTranscriptionJobRequest> captor =
                 ArgumentCaptor.forClass(StartTranscriptionJobRequest.class);
@@ -198,7 +207,7 @@ class PostCallTranscriptionServiceTest {
                 .thenReturn(1);
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
 
-        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+        runExecuteTranscription(recording);
 
         final ArgumentCaptor<StartTranscriptionJobRequest> captor =
                 ArgumentCaptor.forClass(StartTranscriptionJobRequest.class);
@@ -346,7 +355,7 @@ class PostCallTranscriptionServiceTest {
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
         stubSpeakerIdListing(wavKey, transcriptKey);
 
-        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+        runExecuteTranscription(recording);
 
         final ArgumentCaptor<ListObjectsV2Request> listCaptor =
                 ArgumentCaptor.forClass(ListObjectsV2Request.class);
@@ -400,7 +409,7 @@ class PostCallTranscriptionServiceTest {
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
         stubSpeakerIdListing(wavKey);
 
-        service.transcribeAndCleanup(CALL_ID, recording, PLAYABLE_KEY);
+        runExecuteTranscription(recording);
 
         final ArgumentCaptor<ListObjectsV2Request> listCaptor =
                 ArgumentCaptor.forClass(ListObjectsV2Request.class);

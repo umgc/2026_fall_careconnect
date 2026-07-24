@@ -1718,7 +1718,9 @@ class _PostCallTelemetrySummaryScreenState
       final transcriptionStatus =
           ((_recording ?? const {})['transcriptionStatus'] as String? ?? '')
               .toUpperCase();
-      if (transcriptionStatus == 'PROCESSING') {
+      // READY = queued; PROCESSING = AWS job in flight. Both should show the loader.
+      if (transcriptionStatus == 'PROCESSING' ||
+          transcriptionStatus == 'READY') {
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
