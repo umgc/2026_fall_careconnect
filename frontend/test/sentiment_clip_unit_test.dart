@@ -78,6 +78,39 @@ void main() {
       expect(window.clipStartSec, 5);
       expect(window.clipEndSec, 35);
     });
+
+    test('Instant Z recordingStartedAt aligns clip window with UTC sentiment', () {
+      // Mirrors backend R1 emit: LocalDateTime UTC wall-clock → Instant ...Z
+      final recordingStartedAt =
+          DateTime.parse('2026-07-07T22:07:12Z').toUtc();
+      final sentimentOccurredAt =
+          DateTime.parse('2026-07-07T22:08:12.000Z').toUtc();
+
+      final window = computeSentimentClipWindow(
+        sentimentOccurredAt: sentimentOccurredAt,
+        recordingStartedAt: recordingStartedAt,
+      );
+
+      expect(window.offsetSec, 60);
+      expect(window.clipStartSec, 45);
+      expect(window.clipEndSec, 75);
+    });
+
+    test('mis-tagged local wall-clock as Z shifts clip by hours (regression guard)',
+        () {
+      // What broke after labeling LocalDateTime.now() (Eastern) as UTC Instant.
+      final falselyUtcLabeledEasternWall =
+          DateTime.parse('2026-07-07T18:07:12Z').toUtc();
+      final trueUtcSentiment =
+          DateTime.parse('2026-07-07T22:08:12Z').toUtc();
+
+      final window = computeSentimentClipWindow(
+        sentimentOccurredAt: trueUtcSentiment,
+        recordingStartedAt: falselyUtcLabeledEasternWall,
+      );
+
+      expect(window.offsetSec, greaterThan(3 * 3600));
+    });
   });
 
   group('SENT-CLIP-001 playback helpers', () {

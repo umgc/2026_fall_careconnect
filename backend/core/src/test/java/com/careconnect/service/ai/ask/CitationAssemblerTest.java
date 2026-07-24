@@ -3,6 +3,7 @@ package com.careconnect.service.ai.ask;
 import com.careconnect.dto.ai.AiCitation;
 import com.careconnect.service.ai.retrieval.RankedChunk;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,20 +16,54 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CitationAssemblerTest {
 
+    private final CitationAssembler assembler =
+            new CitationAssembler(
+                    new CitationDeepLinkBuilder(),
+                    new CitationMetadataMapper(new ObjectMapper()));
+
     @Test
-    @DisplayName("assemble keeps only valid citation refs in order")
-    void assemble_filtersAndOrders() {
+    @DisplayName("assemble validates metadata and keeps retrieval relevance order")
+    void assemble_validatesMetadataAndOrdersByRetrievalRank() {
         final Map<String, RankedChunk> map = new LinkedHashMap<>();
-        map.put("C1", chunk("C1", "src-1"));
-        map.put("C2", chunk("C2", "src-2"));
+        map.put("C1", chunk(
+                "C1",
+                "summary-1",
+                RetrievalRecordType.CALL_SUMMARY,
+                "First source",
+                """
+                        {
+                          "callId":"call/42",
+                          "title":"Medication check",
+                          "occurredAt":"2026-07-17T14:30:00Z",
+                          "summaryConfidence":0.82,
+                          "contentHash":"must-not-leak"
+                        }
+                        """,
+                0.03d));
+        map.put("C2", chunk(
+                "C2",
+                "summary-2",
+                RetrievalRecordType.CALL_SUMMARY,
+                "Second source",
+                "{\"callId\":\"call-2\"}",
+                0.02d));
 
         final CitationAssembler.CitationResult result =
-                CitationAssembler.assemble(List.of("C2", "CX", "C1"), map);
+                assembler.assemble(List.of("C2", "C1"), map);
 
-        assertThat(result.modelCited()).isTrue();
-        assertThat(result.citations()).extracting(AiCitation::citationId).containsExactly("C2", "C1");
-        assertThat(result.citations().get(0).deepLink()).contains("CALL_SUMMARY");
-        assertThat(result.citations().get(0).sourceRecordId()).isEqualTo("src-2");
+        assertThat(result.grounded()).isTrue();
+        assertThat(result.invalidRefs()).isEmpty();
+        assertThat(result.citations())
+                .extracting(AiCitation::citationId)
+                .containsExactly("C1", "C2");
+        final AiCitation first = result.citations().get(0);
+        assertThat(first.deepLink()).isNull();
+        assertThat(first.title()).isEqualTo("Medication check");
+        assertThat(first.occurredAt()).hasToString("2026-07-17T14:30:00Z");
+        assertThat(first.confidence()).isEqualTo(0.82d);
+        assertThat(first.metadata())
+                .containsEntry("callId", "call/42")
+                .doesNotContainKey("contentHash");
     }
 
     @Test
@@ -39,35 +74,166 @@ class CitationAssemblerTest {
         map.put("C2", chunk("C2", "b"));
 
         final CitationAssembler.CitationResult result =
-                CitationAssembler.assemble(List.of(), map);
+                assembler.assemble(List.of(), map);
 
-        assertThat(result.modelCited()).isFalse();
+        assertThat(result.grounded()).isFalse();
         assertThat(result.citations()).isEmpty();
     }
 
     @Test
-    @DisplayName("assemble ignores unknown refs and stays uncited when none match")
-    void assemble_unknownRefsOnly() {
+    @DisplayName("assemble fails validation when any model ref is unknown")
+    void assemble_mixedUnknownRef_notGrounded() {
         final Map<String, RankedChunk> map = new LinkedHashMap<>();
         map.put("C1", chunk("C1", "a"));
 
         final CitationAssembler.CitationResult result =
-                CitationAssembler.assemble(List.of("CX", "CY"), map);
+                assembler.assemble(List.of("C1", "CX"), map);
 
-        assertThat(result.modelCited()).isFalse();
+        assertThat(result.grounded()).isFalse();
+        assertThat(result.invalidRefs()).containsExactly("CX");
+        assertThat(result.citations()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("confidence is null when metadata is invalid and never uses RRF score")
+    void assemble_invalidConfidence_doesNotUseRrfScore() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "doc/1",
+                RetrievalRecordType.UPLOADED_DOCUMENT,
+                "  First line\nsecond\tline  ",
+                "{\"confidence\":1.2,\"private\":\"hidden\"}",
+                0.99d);
+
+        final CitationAssembler.CitationResult result =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk));
+
+        assertThat(result.grounded()).isTrue();
+        assertThat(result.citations().get(0).confidence()).isNull();
+        assertThat(result.citations().get(0).excerpt()).isEqualTo("First line second line");
+        assertThat(result.citations().get(0).deepLink()).isNull();
+        assertThat(result.citations().get(0).metadata()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("numeric transcript segment ID survives citation metadata mapping")
+    void assemble_numericTranscriptSegmentId_preserved() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "transcript-1",
+                RetrievalRecordType.TRANSCRIPT_SEGMENT,
+                "Patient reported feeling better.",
+                "{\"callId\":\"call-1\",\"segmentId\":11,\"startMs\":1000}",
+                0.1d);
+
+        final AiCitation citation =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk)).citations().get(0);
+
+        assertThat(citation.metadata())
+                .containsEntry("segmentId", 11L)
+                .containsEntry("startMs", 1000L);
+    }
+
+    @Test
+    @DisplayName("namespaced summary identity is separated from public source ID")
+    void assemble_namespacedSummary_exposesRawIdAndSourceKind() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "call-summary:99",
+                RetrievalRecordType.CALL_SUMMARY,
+                "Patient summary",
+                "{\"callId\":\"call-1\"}",
+                0.1d);
+
+        final AiCitation citation =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk)).citations().get(0);
+
+        assertThat(citation.sourceRecordId()).isEqualTo("99");
+        assertThat(citation.sourceKind()).isEqualTo("CALL_SUMMARY");
+    }
+
+    @Test
+    @DisplayName("blank source text cannot become a grounded citation")
+    void assemble_blankExcerpt_invalidatesCitation() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "source",
+                RetrievalRecordType.CALL_SUMMARY,
+                " \n\t ",
+                "{\"callId\":\"call-1\"}",
+                0.1d);
+
+        final CitationAssembler.CitationResult result =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk));
+
+        assertThat(result.grounded()).isFalse();
+        assertThat(result.invalidRefs()).containsExactly("C1");
         assertThat(result.citations()).isEmpty();
     }
 
+    @Test
+    @DisplayName("source identifiers are validated rather than normalized")
+    void assemble_sourceIdentifierWithWhitespace_invalidatesCitation() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                " doc-1 ",
+                RetrievalRecordType.UPLOADED_DOCUMENT,
+                "Document text",
+                null,
+                0.1d);
+
+        final CitationAssembler.CitationResult result =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk));
+
+        assertThat(result.grounded()).isFalse();
+        assertThat(result.invalidRefs()).containsExactly("C1");
+    }
+
+    @Test
+    @DisplayName("excerpt truncation respects Unicode code points and the 240-character contract")
+    void assemble_longUnicodeExcerpt_truncatesSafely() {
+        final RankedChunk chunk = chunk(
+                "C1",
+                "doc-1",
+                RetrievalRecordType.UPLOADED_DOCUMENT,
+                "😀".repeat(300),
+                null,
+                0.1d);
+
+        final AiCitation citation =
+                assembler.assemble(List.of("C1"), Map.of("C1", chunk)).citations().get(0);
+
+        assertThat(citation.excerpt()).endsWith("…");
+        assertThat(citation.excerpt().codePointCount(0, citation.excerpt().length()))
+                .isEqualTo(240);
+    }
+
     private static RankedChunk chunk(final String ref, final String sourceId) {
+        return chunk(
+                ref,
+                sourceId,
+                RetrievalRecordType.CALL_SUMMARY,
+                "text for " + ref,
+                "{\"callId\":\"call-1\"}",
+                0.05d);
+    }
+
+    private static RankedChunk chunk(
+            final String ref,
+            final String sourceId,
+            final RetrievalRecordType recordType,
+            final String text,
+            final String metadata,
+            final double rrfScore) {
         return new RankedChunk(
                 UUID.randomUUID(),
                 1L,
-                RetrievalRecordType.CALL_SUMMARY,
+                recordType,
                 sourceId,
-                "text for " + ref,
-                null,
+                text,
+                metadata,
                 "auto",
-                0.05d,
+                rrfScore,
                 1,
                 null,
                 ref);

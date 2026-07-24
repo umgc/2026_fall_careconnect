@@ -37,15 +37,13 @@ public class RetrievalScopeAuditService {
             String detail) {
         UUID auditId = UUID.randomUUID();
         log.warn(
-                "AI_ASK_AUDIT eventType={} auditId={} callerUserId={} callerEmail={} patientId={} "
-                        + "denialReason={} detail={} deliveryStatus={} retrievalPerformed=false",
+                "AI_ASK_AUDIT eventType={} auditId={} callerUserId={} patientId={} "
+                        + "denialReason={} deliveryStatus={} retrievalPerformed=false",
                 EVENT_TYPE,
                 auditId,
                 caller != null ? caller.getId() : null,
-                caller != null ? caller.getEmail() : null,
                 patientId,
                 reason,
-                detail,
                 DELIVERY_STATUS);
         return auditId;
     }

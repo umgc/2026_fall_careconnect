@@ -190,6 +190,12 @@ public enum Permission {
      * Access to AI-powered health insights and recommendations.
      */
     USE_AI_FEATURES("Use AI assistant features"),
+
+    /**
+     * Review and release or reject held Ask AI answers (Tier-2 HITL).
+     * Narrower than USE_AI_FEATURES — caregivers/admins on the review queue only.
+     */
+    REVIEW_AI_HOLDS("Review and release held Ask AI answers"),
     
     
     // ========== Device Integration Permissions ==========

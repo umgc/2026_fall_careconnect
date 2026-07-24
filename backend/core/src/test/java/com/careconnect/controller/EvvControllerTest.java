@@ -11,6 +11,7 @@ import com.careconnect.repository.PatientRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.service.evv.EvvSubmissionService;
 import com.careconnect.util.SecurityUtil;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +47,17 @@ class EvvControllerTest {
     private static final Long   CORRECTION_ID   = 10L;
     private static final String DEVICE_ID       = "device-abc-123";
     private static final String COMMENT         = "looks good";
+
+    private User currentUser;
+
+    @BeforeEach
+    void setUpCurrentUser() throws Exception {
+        currentUser = mock(User.class);
+        lenient().when(currentUser.getId()).thenReturn(DEFAULT_USER_ID);
+        when(securityUtil.resolveCurrentUser()).thenReturn(currentUser);
+        lenient().doNothing().when(authorizationService).requireAdminOrCaregiver(any(User.class));
+        lenient().when(currentUser.isPatient()).thenReturn(false);
+    }
 
     // ── POST /v1/api/evv/records ──────────────────────────────────────────────
 

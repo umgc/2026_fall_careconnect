@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../features/telemetry/telemetry.dart';
@@ -33,6 +34,24 @@ class ApiServiceOffline {
     offlineSyncService: _offlineSyncService,
     canQueueWrites: () => _canQueueOfflineWrites?.call() ?? true,
   );
+
+  /// Swap the underlying transport on [httpClient] (tests only).
+  @visibleForTesting
+  static void debugSetHttpClient(http.Client client) {
+    final current = httpClient;
+    if (current is OfflineQueueHttpClient) {
+      current.debugSetInnerClient(client);
+    }
+  }
+
+  /// Restore the default underlying transport (tests only).
+  @visibleForTesting
+  static void debugResetHttpClient() {
+    final current = httpClient;
+    if (current is OfflineQueueHttpClient) {
+      current.debugResetInnerClient();
+    }
+  }
 
   /// Configures whether offline writes are allowed.
   static void configure({

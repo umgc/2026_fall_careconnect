@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -83,9 +84,9 @@ class PermissionAspectTest {
         setAuthenticatedUser("missing@example.com");
         when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
 
-        RuntimeException ex = assertThrows(RuntimeException.class,
+        UnauthorizedException ex = assertThrows(UnauthorizedException.class,
                 () -> aspect.checkPermission(requirePermission));
-        assertTrue(ex.getMessage().contains("missing@example.com"));
+        assertFalse(ex.getMessage().contains("missing@example.com"));
     }
 
     @Test
@@ -94,22 +95,22 @@ class PermissionAspectTest {
         User user = mock(User.class);
         setAuthenticatedUser("user@example.com");
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(authorizationService.hasPermission(user, Permission.CREATE_TASKS)).thenReturn(true);
 
         assertDoesNotThrow(() -> aspect.checkPermission(requirePermission));
-        verify(authorizationService).requirePermission(user, Permission.CREATE_TASKS);
+        verify(authorizationService).hasPermission(user, Permission.CREATE_TASKS);
     }
 
     @Test
-    @DisplayName("propagates the UnauthorizedException when permission is denied")
+    @DisplayName("uses AccessDeniedException when an authenticated user lacks permission")
     void propagatesWhenPermissionDenied() throws Exception {
         User user = mock(User.class);
         setAuthenticatedUser("user@example.com");
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
-        doThrow(new UnauthorizedException("denied"))
-                .when(authorizationService).requirePermission(any(User.class), eq(Permission.CREATE_TASKS));
+        when(authorizationService.hasPermission(user, Permission.CREATE_TASKS)).thenReturn(false);
 
-        UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
                 () -> aspect.checkPermission(requirePermission));
-        assertEquals("denied", ex.getMessage());
+        assertEquals("Required permission is not granted", ex.getMessage());
     }
 }
