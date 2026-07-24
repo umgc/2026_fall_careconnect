@@ -63,6 +63,7 @@ nano .env  # or use your preferred editor
 - `SECURITY_JWT_SECRET` - JWT secret key (256+ bits)
 
 Need Gmail OAuth for mail digests? Follow the programmer guide in `docs/google-oauth-setup.md`.
+Need form-template metadata for digital assessments? See `docs/assessment-schema.md`.
 
 **Firebase variables** (required for notifications):
 - `FIREBASE_PROJECT_ID=careconnectcapstone`

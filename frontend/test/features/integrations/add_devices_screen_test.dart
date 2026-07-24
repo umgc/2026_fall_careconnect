@@ -3,10 +3,9 @@
 //
 // Coverage strategy:
 //   AddDeviceScreen is a multi-step wizard for connecting health platforms.
-//   The State class field-initialises fitbitClientId / fitbitClientSecret via
-//   getFitbitClientId() / getFitbitClientSecret(), which read compile-time
-//   --dart-define values and throw if empty.  Tests must be run with:
-//     --dart-define=FITBIT_CLIENT_ID=test --dart-define=FITBIT_CLIENT_SECRET=test
+//   Fitbit env vars are optional. The screen can now connect Fitbit through
+//   Google Health / Health Connect when Fitbit OAuth client credentials are
+//   unavailable.
 //
 //   The widget also calls _loadConnectedDevices() in initState which reads
 //   SharedPreferences ('connected_devices' key).  We seed mock prefs to
@@ -46,12 +45,6 @@ Widget _wrap(Widget child) {
   );
 }
 
-/// Returns true if FITBIT_CLIENT_ID was provided via --dart-define.
-bool _hasFitbitEnv() {
-  const id = String.fromEnvironment('FITBIT_CLIENT_ID');
-  return id.isNotEmpty;
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -61,9 +54,7 @@ void main() {
 
   // ─── Step 0 — Select Platform ──────────────────────────────────────────────
 
-  group('AddDeviceScreen — step 0 (select platform)', skip: !_hasFitbitEnv()
-      ? 'Requires --dart-define=FITBIT_CLIENT_ID=... and FITBIT_CLIENT_SECRET=...'
-      : null, () {
+  group('AddDeviceScreen — step 0 (select platform)', () {
     testWidgets('renders Scaffold without crashing', (tester) async {
       await tester.pumpWidget(_wrap(const AddDeviceScreen()));
       await tester.pump();
@@ -108,7 +99,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('Connect your Fitbit device'),
+        find.textContaining('Connect Fitbit using Google Health'),
         findsOneWidget,
       );
     });
@@ -127,11 +118,11 @@ void main() {
       expect(find.text('Steps'), findsWidgets);
     });
 
-    testWidgets('shows Calories feature chip', (tester) async {
+    testWidgets('shows Heart Rate feature chip', (tester) async {
       await tester.pumpWidget(_wrap(const AddDeviceScreen()));
       await tester.pump();
 
-      expect(find.text('Calories'), findsWidgets);
+      expect(find.text('Heart Rate'), findsWidgets);
     });
 
     testWidgets('shows arrow_forward_ios icon for unconnected platform',
@@ -152,8 +143,7 @@ void main() {
 
   // ─── Step indicators ──────────────────────────────────────────────────────
 
-  group('AddDeviceScreen — step indicators', skip: !_hasFitbitEnv()
-      ? 'Requires FITBIT_CLIENT_ID' : null, () {
+  group('AddDeviceScreen — step indicators', () {
     testWidgets('shows Select step label', (tester) async {
       await tester.pumpWidget(_wrap(const AddDeviceScreen()));
       await tester.pump();
@@ -199,8 +189,7 @@ void main() {
 
   // ─── Initial state checks ─────────────────────────────────────────────────
 
-  group('AddDeviceScreen — initial state', skip: !_hasFitbitEnv()
-      ? 'Requires FITBIT_CLIENT_ID' : null, () {
+  group('AddDeviceScreen — initial state', () {
     testWidgets('does not show CircularProgressIndicator initially',
         (tester) async {
       await tester.pumpWidget(_wrap(const AddDeviceScreen()));
@@ -287,8 +276,7 @@ void main() {
 
   // ─── Pre-connected devices from SharedPreferences ─────────────────────────
 
-  group('AddDeviceScreen — with pre-connected device in prefs', skip: !_hasFitbitEnv()
-      ? 'Requires FITBIT_CLIENT_ID' : null, () {
+  group('AddDeviceScreen — with pre-connected device in prefs', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({
         'connected_devices':
