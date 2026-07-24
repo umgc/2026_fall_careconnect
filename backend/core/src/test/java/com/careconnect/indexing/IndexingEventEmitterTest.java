@@ -40,7 +40,7 @@ class IndexingEventEmitterTest {
     @Test
     void emitTranscriptIndexed_writesRowWithCorrectEventType() {
         final TranscriptIndexedPayload payload = new TranscriptIndexedPayload(
-                "call-42", 100L, 87, "POST_CALL_TRANSCRIBE");
+                "call-42", 100L, 87, "sha256:snapshot");
 
         emitter.emitTranscriptIndexed(payload);
 
@@ -53,7 +53,7 @@ class IndexingEventEmitterTest {
     @Test
     void emitTranscriptIndexed_envelope_hasAllRequiredFields() throws Exception {
         final TranscriptIndexedPayload payload = new TranscriptIndexedPayload(
-                "call-42", 100L, 87, "POST_CALL_TRANSCRIBE");
+                "call-42", 100L, 87, "sha256:snapshot");
 
         emitter.emitTranscriptIndexed(payload);
 
@@ -72,7 +72,7 @@ class IndexingEventEmitterTest {
     @Test
     void emitTranscriptIndexed_payload_carriesAllPassedFields() throws Exception {
         final TranscriptIndexedPayload payload = new TranscriptIndexedPayload(
-                "call-42", 100L, 87, "POST_CALL_TRANSCRIBE");
+                "call-42", 100L, 87, "sha256:snapshot");
 
         emitter.emitTranscriptIndexed(payload);
 
@@ -84,8 +84,8 @@ class IndexingEventEmitterTest {
                 .get("payload");
         assertThat(payloadNode.get("callId").asText()).isEqualTo("call-42");
         assertThat(payloadNode.get("patientId").asLong()).isEqualTo(100L);
-        assertThat(payloadNode.get("segmentCount").asInt()).isEqualTo(87);
-        assertThat(payloadNode.get("source").asText()).isEqualTo("POST_CALL_TRANSCRIBE");
+        assertThat(payloadNode.get("totalSegmentCount").asInt()).isEqualTo(87);
+        assertThat(payloadNode.get("snapshotVersion").asText()).isEqualTo("sha256:snapshot");
     }
 
     @Test
@@ -93,7 +93,7 @@ class IndexingEventEmitterTest {
         // patient_id may be null until Ravi's telemetry-JOIN lands or
         // callers wire it explicitly.
         final TranscriptIndexedPayload payload = new TranscriptIndexedPayload(
-                "call-42", null, 87, "POST_CALL_TRANSCRIBE");
+                "call-42", null, 87, "sha256:snapshot");
 
         emitter.emitTranscriptIndexed(payload);
 
@@ -109,7 +109,7 @@ class IndexingEventEmitterTest {
     @Test
     void twoConsecutiveEmits_haveDistinctEventIds() throws Exception {
         final TranscriptIndexedPayload payload = new TranscriptIndexedPayload(
-                "call-42", 100L, 87, "POST_CALL_TRANSCRIBE");
+                "call-42", 100L, 87, "sha256:snapshot");
 
         emitter.emitTranscriptIndexed(payload);
         emitter.emitTranscriptIndexed(payload);

@@ -23,8 +23,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/pages/patient_dashboard.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
-
-import 'package:care_connect_app/services/api_service_offline.dart';
+import 'package:care_connect_app/services/api_service.dart';
 
 import '../../mock_user_provider.dart';
 
@@ -58,18 +57,82 @@ void _setTabletViewport(WidgetTester tester) {
   tester.view.devicePixelRatio = 1.0;
 }
 
+List<Map<String, dynamic>> _sampleMoodHistory() {
+  final now = DateTime.now().toUtc();
+  return [
+    {
+      'score': 7,
+      'label': 'Good',
+      'createdAt': now.toIso8601String(),
+    },
+    {
+      'score': 6,
+      'label': 'Feeling well today',
+      'createdAt': now.subtract(const Duration(days: 1)).toIso8601String(),
+    },
+    {
+      'score': 5,
+      'label': 'Slight headache',
+      'createdAt': now.subtract(const Duration(days: 2)).toIso8601String(),
+    },
+    {
+      'score': 8,
+      'label': 'Medications taken',
+      'createdAt': now.subtract(const Duration(days: 3)).toIso8601String(),
+    },
+  ];
+}
+
+List<Map<String, dynamic>> _sampleMedications() {
+  return [
+    {
+      'id': 101,
+      'medicationName': 'Blood Pressure Medication',
+      'dosage': '10 mg',
+      'frequency': 'Once daily',
+      'isActive': true,
+      'startDate': DateTime.now()
+          .subtract(const Duration(days: 30))
+          .toIso8601String()
+          .split('T')
+          .first,
+      'lastTaken': null,
+    },
+  ];
+}
+
 /// Sets _httpHandler to respond like the patient dashboard's API.
 void _setupMockClient({int evvStatusCode = 200}) {
   _httpHandler = (request) async {
     final path = request.url.path;
+    final method = request.method.toUpperCase();
 
-    // Caregiver list for patient
-    if (path.contains('/caregivers')) {
+    // Mood history: /v1/api/patient/{userId}/mood
+    if (path.contains('/patient/') && path.endsWith('/mood')) {
+      return http.Response(jsonEncode(_sampleMoodHistory()), 200);
+    }
+
+    // Medications list: /v3/api/patients/{id}/medications
+    if (path.contains('/medications') &&
+        !path.contains('/last-taken') &&
+        method == 'GET') {
+      return http.Response(jsonEncode(_sampleMedications()), 200);
+    }
+
+    // Mark taken / clear taken
+    if (path.contains('/last-taken')) {
+      return http.Response('{}', 200);
+    }
+
+    // Caregiver list / linked caregivers for patient
+    if (path.contains('/caregivers') ||
+        path.contains('caregiver-patient-links')) {
       return http.Response(
         jsonEncode([
           {
             'id': 10,
             'caregiverId': 10,
+            'caregiverUserId': 10,
             'firstName': 'Jane',
             'lastName': 'Smith',
             'phone': '555-5678',
@@ -100,6 +163,11 @@ void _setupMockClient({int evvStatusCode = 200}) {
       );
     }
 
+    // Provider endpoint — empty so dashboard uses built-in fallback provider
+    if (path.contains('/provider')) {
+      return http.Response('{}', 404);
+    }
+
     // Family members / patient details
     if (RegExp(r'/patients/\d+$').hasMatch(path)) {
       return http.Response(jsonEncode([]), 200);
@@ -108,6 +176,9 @@ void _setupMockClient({int evvStatusCode = 200}) {
     // Default
     return http.Response('{}', 200);
   };
+
+  final client = MockClient((request) => _httpHandler(request));
+  ApiService.debugSetHttpClient(client);
 }
 
 void _setupMethodChannels() {
@@ -178,11 +249,10 @@ Future<void> _pumpUntilSettled(WidgetTester tester) async {
 void main() {
   setUpAll(() {
     _httpHandler = _defaultHandler;
-    final delegatingClient =
-        MockClient((request) => _httpHandler(request));
-    http.runWithClient(() {
-      ApiServiceOffline.httpClient;
-    }, () => delegatingClient);
+  });
+
+  tearDownAll(() {
+    ApiService.debugResetHttpClient();
   });
 
   group('PatientDashboard page - initial render', () {
@@ -190,7 +260,10 @@ void main() {
       _setupMockClient();
       _setupMethodChannels();
     });
-    tearDown(_teardownMethodChannels);
+    tearDown(() {
+      _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
+    });
 
     testWidgets('renders without crashing', (tester) async {
       _setLargeViewport(tester);
@@ -268,45 +341,45 @@ void main() {
   group('PatientDashboard page - with mocked HTTP', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('renders mood widget with score after data loads', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
+      // Mood label appears on Current Mood and/or Recent Check-Ins
       expect(find.textContaining('Good'), findsWidgets);
     });
 
     testWidgets('renders Recent Check-Ins section', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
-    testWidgets('renders check-in status text', (tester) async {
+    testWidgets('renders check-in status text from mood history', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
+      // Only the three most recent mood entries are shown as check-ins
+      expect(find.text('Good'), findsWidgets);
       expect(find.text('Feeling well today'), findsOneWidget);
       expect(find.text('Slight headache'), findsOneWidget);
-      expect(find.text('Medications taken'), findsOneWidget);
     });
 
     testWidgets('renders medication reminder widget', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.textContaining('Blood Pressure Medication'), findsOneWidget);
@@ -454,7 +527,8 @@ void main() {
       _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
-      expect(find.text('\u{1F60A}'), findsWidgets); // smiling face
+      // Score 7+ check-ins use 🙂 from dashboard mood emoji mapping
+      expect(find.text('🙂'), findsWidgets);
     });
 
     testWidgets('tapping SMS button with no caregiver phone shows snackbar', (tester) async {
@@ -478,13 +552,13 @@ void main() {
       expect(find.textContaining('Annual Checkup'), findsOneWidget);
     });
 
-    testWidgets('renders scheduled reminder status for medication', (tester) async {
+    testWidgets('renders due status for medication reminder', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
-      expect(find.textContaining('Scheduled reminder'), findsOneWidget);
+      expect(find.textContaining('Due '), findsOneWidget);
     });
 
     testWidgets('renders mood tags', (tester) async {
@@ -493,18 +567,22 @@ void main() {
       _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
-      expect(find.text('happy'), findsOneWidget);
-      expect(find.text('calm'), findsOneWidget);
+      // Tags derived from "Good" mood label
+      expect(find.text('comfortable'), findsOneWidget);
+      expect(find.text('stable'), findsOneWidget);
+      expect(find.text('positive'), findsOneWidget);
     });
   });
 
   group('PatientDashboard page - provider organization', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('renders provider organization name', (tester) async {
@@ -548,16 +626,17 @@ void main() {
   group('PatientDashboard page - tablet layout', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('renders tablet layout with two columns when width > 600', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       // In tablet layout, Row with two Expanded children
@@ -570,7 +649,6 @@ void main() {
     testWidgets('tablet layout shows medication reminder', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.textContaining('Blood Pressure Medication'), findsOneWidget);
@@ -579,7 +657,6 @@ void main() {
     testWidgets('tablet layout shows primary care provider', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.textContaining('Dr. Sarah Mitchell'), findsOneWidget);
@@ -588,7 +665,6 @@ void main() {
     testWidgets('tablet layout shows SOS Emergency button', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.text('SOS Emergency'), findsOneWidget);
@@ -597,7 +673,6 @@ void main() {
     testWidgets('tablet layout shows Send SMS button', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.text('Send SMS to Caregiver'), findsOneWidget);
@@ -606,7 +681,6 @@ void main() {
     testWidgets('tablet layout shows Recent Check-Ins', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       expect(find.text('Recent Check-Ins'), findsOneWidget);
@@ -615,40 +689,42 @@ void main() {
     testWidgets('tablet layout shows mood tags', (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
-      expect(find.text('happy'), findsOneWidget);
-      expect(find.text('calm'), findsOneWidget);
+      expect(find.text('comfortable'), findsOneWidget);
+      expect(find.text('stable'), findsOneWidget);
     });
   });
 
   group('PatientDashboard page - medication actions', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('tapping Mark Taken shows snackbar', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       // Scroll to see the medication widget
       await tester.ensureVisible(find.text('Mark Taken'));
       await tester.tap(find.text('Mark Taken'));
       await tester.pump();
-      expect(find.text('Medication marked as taken'), findsOneWidget);
+      expect(
+        find.text('Medication marked as taken until next dose'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('tapping Mark Missed shows snackbar', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.ensureVisible(find.text('Mark Missed'));
@@ -661,16 +737,17 @@ void main() {
   group('PatientDashboard page - contact provider', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('tapping Contact Provider shows bottom sheet', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.ensureVisible(find.text('Contact Provider'));
@@ -686,7 +763,6 @@ void main() {
     testWidgets('contact provider bottom sheet shows phone number', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.ensureVisible(find.text('Contact Provider'));
@@ -698,7 +774,6 @@ void main() {
     testWidgets('contact provider bottom sheet shows email', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.ensureVisible(find.text('Contact Provider'));
@@ -710,7 +785,6 @@ void main() {
     testWidgets('contact provider bottom sheet shows phone icon', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.ensureVisible(find.text('Contact Provider'));
@@ -724,29 +798,33 @@ void main() {
     testWidgets('contact provider bottom sheet shows Video Call subtitle', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.ensureVisible(find.text('Contact Provider'));
       await tester.tap(find.text('Contact Provider'));
       await tester.pump();
-      expect(find.text('Schedule a video consultation'), findsOneWidget);
+      // Default provider is not matched to linked caregiver call policy
+      expect(
+        find.textContaining('Video calling is unavailable'),
+        findsOneWidget,
+      );
     });
   });
 
   group('PatientDashboard page - FAB interaction', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('tapping FAB opens bottom sheet', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
-      _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
       await tester.tap(find.byType(FloatingActionButton));
@@ -759,10 +837,12 @@ void main() {
   group('PatientDashboard page - with userId parameter', () {
     setUp(() {
       _setupMethodChannels();
+      _setupMockClient();
     });
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('renders with explicit userId', (tester) async {
@@ -777,7 +857,6 @@ void main() {
           child: const PatientDashboard(userId: 42),
         ),
       );
-      _setupMockClient();
       await tester.pumpWidget(widget);
       await _pumpUntilSettled(tester);
       expect(find.byType(PatientDashboard), findsOneWidget);
@@ -791,6 +870,7 @@ void main() {
 
     tearDown(() {
       _teardownMethodChannels();
+      ApiService.debugResetHttpClient();
     });
 
     testWidgets('handles EVV API failure gracefully', (tester) async {

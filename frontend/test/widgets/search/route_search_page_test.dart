@@ -601,27 +601,19 @@ void main() {
   });
 
   // ------------------------------------------------------------------
-  // NavKind.widgetBuilder navigation
+  // Search results for non-launchable / routePath entries
+  // (catalog no longer ships widgetBuilder demo routes)
   // ------------------------------------------------------------------
-  group('RouteSearchPage – widgetBuilder navigation', () {
-    testWidgets('tapping Video Call Test pushes widget via Navigator',
-        (tester) async {
+  group('RouteSearchPage – video call search result', () {
+    testWidgets('searching Video Call shows a ListTile result', (tester) async {
       await tester.pumpWidget(_wrapWithRole('PATIENT'));
       await tester.pump();
 
-      // Search for the widgetBuilder entry
-      await tester.enterText(find.byType(TextField), 'Video Call Test');
+      await tester.enterText(find.byType(TextField), 'Video Call');
       await tester.pump();
 
-      // Verify it shows up
-      expect(find.text('Video Call Test'), findsAtLeastNWidgets(1));
+      expect(find.text('Video Call'), findsAtLeastNWidgets(1));
       expect(find.byType(ListTile), findsAtLeastNWidgets(1));
-
-      // Tap it - this uses Navigator.push with widgetBuilder
-      await tester.tap(find.text('Video Call Test').last);
-      await tester.pump();
-      await tester.pump();
-      // widgetBuilder navigation initiated
     });
   });
 

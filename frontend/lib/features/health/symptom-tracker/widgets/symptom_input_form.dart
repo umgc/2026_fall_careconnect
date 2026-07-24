@@ -1,9 +1,9 @@
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
+import 'package:care_connect_app/widgets/ai_chat_improved.dart';
 import 'package:care_connect_app/widgets/ai_chat_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/ai_analyze_service.dart';
-
 
 class SymptomInputForm extends StatefulWidget {
   final String patientId;
@@ -77,7 +77,8 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
 
                       final transcript = await navigator.push<String>(
                         MaterialPageRoute(
-                          builder: (_) => const VoiceCommandAI(singleShot: true),
+                          builder: (_) =>
+                              const VoiceCommandAI(singleShot: true),
                           fullscreenDialog: true,
                         ),
                       );
@@ -106,7 +107,8 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                           transcript: t,
                         );
 
-                        final sevRaw = (ai['severity'] ?? '').toString().toUpperCase();
+                        final sevRaw =
+                            (ai['severity'] ?? '').toString().toUpperCase();
                         final uiSeverity = switch (sevRaw) {
                           'SEVERE' => 'Severe',
                           'MODERATE' => 'Moderate',
@@ -115,10 +117,14 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                         };
 
                         setState(() {
-                          final key = (ai['symptomKey'] ?? '').toString().trim();
-                          final val = (ai['symptomValue'] ?? '').toString().trim();
+                          final key =
+                              (ai['symptomKey'] ?? '').toString().trim();
+                          final val =
+                              (ai['symptomValue'] ?? '').toString().trim();
 
-                          _symptomKeyField   = key.isNotEmpty ? key : t;     // fallback to transcript
+                          _symptomKeyField = key.isNotEmpty
+                              ? key
+                              : t; // fallback to transcript
                           _symptomValueField = val.isNotEmpty ? val : null;
 
                           // single visible text field = key + value
@@ -134,7 +140,8 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                           _selectedSeverity = uiSeverity;
                         });
                         messenger.showSnackBar(
-                          const SnackBar(content: Text('AI analyzed symptom ✅')),
+                          const SnackBar(
+                              content: Text('AI analyzed symptom ✅')),
                         );
                       } catch (e) {
                         messenger.showSnackBar(
@@ -142,7 +149,8 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                         );
                         setState(() {
                           final prev = _notesController.text.trim();
-                          _notesController.text = prev.isEmpty ? t : '$prev\n$t';
+                          _notesController.text =
+                              prev.isEmpty ? t : '$prev\n$t';
                           _symptomKeyField = t;
                           _symptomValueField = null;
                         });
@@ -164,7 +172,10 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                     onPressed: () {
                       showDialog(
                         context: context,
-                        builder: (context) => const AIChatModal(role: 'patient'),
+                        builder: (context) => const AIChatModal(
+                          role: 'patient',
+                          mode: AiChatMode.groundedRecords,
+                        ),
                       );
                     },
                     icon: const Icon(Icons.smart_toy, size: 16),
@@ -194,7 +205,10 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
             decoration: InputDecoration(
               hintText: 'e.g., Suicidal thoughts, Manic episode, Anxiety...',
               hintStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -227,7 +241,8 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
               ),
             ),
             items: const ['Mild', 'Moderate', 'Severe']
-                .map((value) => DropdownMenuItem<String>(value: value, child: Text(value)))
+                .map((value) =>
+                    DropdownMenuItem<String>(value: value, child: Text(value)))
                 .toList(),
             onChanged: (newValue) {
               if (newValue == null) return;
@@ -245,9 +260,12 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
             maxLines: 3,
             decoration: InputDecoration(
               hintText:
-              'Describe the symptom, onset, duration, triggers, and context for healthcare providers...',
+                  'Describe the symptom, onset, duration, triggers, and context for healthcare providers...',
               hintStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -262,75 +280,87 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _saving ? null : () async {
-                final messenger = ScaffoldMessenger.of(context);
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      final messenger = ScaffoldMessenger.of(context);
 
-                final display = _symptomController.text.trim();
-                if (display.isEmpty) return;
+                      final display = _symptomController.text.trim();
+                      if (display.isEmpty) return;
 
-                final keyToSend = (_symptomKeyField ?? '').isNotEmpty ? _symptomKeyField!.trim() : display;
-                final valToSend = (_symptomValueField ?? '').isNotEmpty ? _symptomValueField!.trim() : null;
+                      final keyToSend = (_symptomKeyField ?? '').isNotEmpty
+                          ? _symptomKeyField!.trim()
+                          : display;
+                      final valToSend = (_symptomValueField ?? '').isNotEmpty
+                          ? _symptomValueField!.trim()
+                          : null;
 
-                setState(() => _saving = true);
-                try {
-                  final int? intPidForApi = int.tryParse(widget.patientId);
-                  if (intPidForApi == null) {
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Invalid patient ID')),
-                    );
-                    setState(() => _saving = false);
-                    return;
-                  }
-                  final saved = await ApiService.createSymptom(
-                    patientId: intPidForApi,
-                    symptomKey: keyToSend,
-                    symptomValue: valToSend,
-                    severity: _severityToInt(_selectedSeverity),
-                    clinicalNotes: _notesController.text.trim(),
-                    completed: true,
-                  );
+                      setState(() => _saving = true);
+                      try {
+                        final int? intPidForApi =
+                            int.tryParse(widget.patientId);
+                        if (intPidForApi == null) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Invalid patient ID')),
+                          );
+                          setState(() => _saving = false);
+                          return;
+                        }
+                        final saved = await ApiService.createSymptom(
+                          patientId: intPidForApi,
+                          symptomKey: keyToSend,
+                          symptomValue: valToSend,
+                          severity: _severityToInt(_selectedSeverity),
+                          clinicalNotes: _notesController.text.trim(),
+                          completed: true,
+                        );
 
-                  if (!mounted) return;
+                        if (!mounted) return;
 
-                  // Transform API response to UI format for SymptomCard
-                  final String severityLabel = _selectedSeverity.toLowerCase();
-                  final uiSymptom = {
-                    'id': saved['id'], // Include id from backend for deletion
-                    'title': display,
-                    'severity': severityLabel,
-                    'time': 'Just now',
-                    'description': _notesController.text.trim().isNotEmpty
-                        ? _notesController.text.trim()
-                        : 'No additional notes',
-                    'requiresAttention': _selectedSeverity == 'Severe',
-                    'caregiverAlert': _selectedSeverity == 'Severe',
-                  };
+                        // Transform API response to UI format for SymptomCard
+                        final String severityLabel =
+                            _selectedSeverity.toLowerCase();
+                        final uiSymptom = {
+                          'id': saved[
+                              'id'], // Include id from backend for deletion
+                          'title': display,
+                          'severity': severityLabel,
+                          'time': 'Just now',
+                          'description': _notesController.text.trim().isNotEmpty
+                              ? _notesController.text.trim()
+                              : 'No additional notes',
+                          'requiresAttention': _selectedSeverity == 'Severe',
+                          'caregiverAlert': _selectedSeverity == 'Severe',
+                        };
 
-                  widget.onSymptomAdded?.call(uiSymptom);
-                  _symptomController.clear();
-                  _notesController.clear();
-                  _symptomKeyField = null;
-                  _symptomValueField = null;
-                  setState(() {
-                    _selectedSeverity = 'Mild';
-                  });
+                        widget.onSymptomAdded?.call(uiSymptom);
+                        _symptomController.clear();
+                        _notesController.clear();
+                        _symptomKeyField = null;
+                        _symptomValueField = null;
+                        setState(() {
+                          _selectedSeverity = 'Mild';
+                        });
 
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('✅ Symptom saved')),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('❌ Failed to save: $e')),
-                  );
-                } finally {
-                  if (mounted) {
-                    setState(() => _saving = false);
-                  }
-                }
-              },
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('✅ Symptom saved')),
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('❌ Failed to save: $e')),
+                        );
+                      } finally {
+                        if (mounted) {
+                          setState(() => _saving = false);
+                        }
+                      }
+                    },
               icon: _saving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.add),
               label: Text(_saving ? 'Saving…' : 'Record Symptom'),
               style: ElevatedButton.styleFrom(
