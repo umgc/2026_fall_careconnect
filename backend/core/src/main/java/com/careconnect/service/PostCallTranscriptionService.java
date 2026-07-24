@@ -25,6 +25,9 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -133,6 +136,11 @@ public class PostCallTranscriptionService {
   @Autowired(required = false)
   private KvsAudioTranscodeService kvsAudioTranscodeService;
 
+  /** Proxy self so {@link #processJob} runs through Spring's {@code @Transactional} boundary. */
+  @Autowired
+  @Lazy
+  private PostCallTranscriptionService self;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
@@ -177,9 +185,16 @@ public class PostCallTranscriptionService {
   /** Claims expired work after restart and advances one durable job at a time. */
   @Scheduled(fixedDelayString = "${careconnect.transcription.worker.interval-ms:20000}")
   public void runDueJobs() {
-    for (final Long id : jobRepository.findDueIds(10)) {
-      processJob(id);
+    final PostCallTranscriptionService worker = self == null ? this : self;
+    for (final Long id : jobRepository.findDueIds()) {
+      worker.processJob(id);
     }
+  }
+
+  /** Drain any backlog as soon as the app is up (e.g. after a local restart). */
+  @EventListener(ApplicationReadyEvent.class)
+  public void processDueJobsOnStartup() {
+    runDueJobs();
   }
 
   @Transactional

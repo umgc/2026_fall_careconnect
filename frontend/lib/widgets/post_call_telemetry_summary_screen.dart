@@ -1715,12 +1715,23 @@ class _PostCallTelemetrySummaryScreenState
   Widget _buildTranscriptCard(bool isDark) {
     final segments = _transcriptSegments;
     if (segments.isEmpty) {
+      final rec = _recording ?? const <String, dynamic>{};
       final transcriptionStatus =
-          ((_recording ?? const {})['transcriptionStatus'] as String? ?? '')
-              .toUpperCase();
-      // READY = queued; PROCESSING = AWS job in flight. Both should show the loader.
-      if (transcriptionStatus == 'PROCESSING' ||
-          transcriptionStatus == 'READY') {
+          (rec['transcriptionStatus'] as String? ?? '').toUpperCase();
+      final concatenationStatus =
+          (rec['concatenationStatus'] as String? ?? '').toUpperCase();
+      final recordingStatus = (rec['status'] as String? ?? '').toUpperCase();
+      final waitingForTranscript = transcriptionStatus == 'PROCESSING' ||
+          transcriptionStatus == 'READY' ||
+          // User recording finished but transcript job not marked yet (concat still
+          // stitching, or status not refreshed to READY/PROCESSING).
+          (isUserInitiatedCallRecording(rec) &&
+              recordingStatus != 'NO_RECORDING' &&
+              recordingStatus.isNotEmpty &&
+              transcriptionStatus != 'FAILED' &&
+              transcriptionStatus != 'COMPLETE' &&
+              concatenationStatus != 'FAILED');
+      if (waitingForTranscript) {
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
