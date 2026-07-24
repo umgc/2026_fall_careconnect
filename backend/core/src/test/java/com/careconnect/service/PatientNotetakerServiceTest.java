@@ -5,6 +5,7 @@ import com.careconnect.dto.ChatResponse;
 import com.careconnect.dto.PatientNoteDTO;
 import com.careconnect.dto.PatientNotetakerConfigDTO;
 import com.careconnect.dto.v2.TaskDtoV2;
+import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.Patient;
 import com.careconnect.model.PatientNote;
 import com.careconnect.model.PatientNotetakerConfig;
@@ -35,6 +36,7 @@ class PatientNotetakerServiceTest {
     @Mock private PatientService patientService;
     @Mock private AIChatService aiChatService;
     @Mock private TaskServiceV2 taskService;
+    @Mock private IndexingEventEmitter indexingEventEmitter;
 
     private PatientNotetakerService service;
 
@@ -51,7 +53,8 @@ class PatientNotetakerServiceTest {
                 patientNotetakerConfigRepository,
                 patientService,
                 aiChatService,
-                taskService
+                taskService,
+                indexingEventEmitter
         );
 
         patient = Patient.builder().id(10L).firstName("John").lastName("Doe").build();

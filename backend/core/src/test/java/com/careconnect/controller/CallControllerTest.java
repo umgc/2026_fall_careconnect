@@ -12,6 +12,7 @@ import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
+import com.careconnect.service.CallSummaryItemConfirmService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTerminationExecutor;
@@ -90,6 +91,7 @@ class CallControllerTest {
     @MockitoBean private CallTelemetryService callTelemetryService;
     @MockitoBean private CallTranscriptService callTranscriptService;
     @MockitoBean private CallSummaryService callSummaryService;
+    @MockitoBean private CallSummaryItemConfirmService callSummaryItemConfirmService;
     @MockitoBean private CallRecordingService callRecordingService;
     @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
     @MockitoBean private FamilyMemberService familyMemberService;

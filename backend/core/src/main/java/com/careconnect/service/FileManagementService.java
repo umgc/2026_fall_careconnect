@@ -4,6 +4,8 @@ import com.careconnect.dto.UserFileDTO;
 import com.careconnect.dto.FileUploadResponse;
 import com.careconnect.dto.StructuredDocumentEntryDTO;
 import com.careconnect.dto.StructuredEntryRequest;
+import com.careconnect.indexing.DocumentIndexedPayload;
+import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.StructuredDocumentEntry;
 import com.careconnect.model.UserFile;
 import com.careconnect.model.Patient;
@@ -12,6 +14,7 @@ import com.careconnect.repository.StructuredDocumentEntryRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +42,8 @@ public class FileManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(FileManagementService.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String DEFAULT_CONSENT_SCOPE = "on_consent";
+
     private final UserFileRepository userFileRepository;
     private final StructuredDocumentEntryRepository structuredEntryRepository;
     private final UserRepository userRepository;
@@ -46,6 +51,7 @@ public class FileManagementService {
     private final DatabaseStorageService databaseStorageService;
     private final S3StorageService s3StorageService;
     private final DocumentComplianceService documentComplianceService;
+    private final IndexingEventEmitter indexingEventEmitter;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
@@ -54,6 +60,7 @@ public class FileManagementService {
                                PatientRepository patientRepository,
                                DatabaseStorageService databaseStorageService,
                                DocumentComplianceService documentComplianceService,
+                               IndexingEventEmitter indexingEventEmitter,
                                @Autowired(required = false) S3StorageService s3StorageService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
@@ -61,6 +68,7 @@ public class FileManagementService {
         this.patientRepository = patientRepository;
         this.databaseStorageService = databaseStorageService;
         this.documentComplianceService = documentComplianceService;
+        this.indexingEventEmitter = indexingEventEmitter;
         this.s3StorageService = s3StorageService;
     }
     
@@ -128,6 +136,8 @@ public class FileManagementService {
             // checklist entry forward (MISSING -> IN_PROGRESS), audited with
             // the uploader and filename. Never fails the upload itself.
             documentComplianceService.recordDocumentUploaded(userFile, userId);
+
+            emitDocumentIndexed(userFile);
             
             return FileUploadResponse.builder()
                     .fileId(userFile.getId())
@@ -176,7 +186,38 @@ public class FileManagementService {
         UserFile saved = userFileRepository.save(userFile);
         log.info("Stored generated document {} ({} bytes) for {} {}",
                 saved.getId(), data.length, ownerType, ownerId);
+        emitDocumentIndexed(saved);
         return saved;
+    }
+
+    /**
+     * Emits {@code DOCUMENT_INDEXED} for Ask AI when a patient-scoped file has description
+     * text available (description-only MVP). Best-effort: indexing failures must not fail
+     * the upload.
+     */
+    private void emitDocumentIndexed(final UserFile file) {
+        if (file == null || file.getId() == null || file.getPatientId() == null) {
+            return;
+        }
+        final String excerpt = file.getDescription();
+        if (excerpt == null || excerpt.isBlank()) {
+            return;
+        }
+        try {
+            final String category = file.getFileCategory() == null
+                    ? null
+                    : file.getFileCategory().name();
+            indexingEventEmitter.emitDocumentIndexed(new DocumentIndexedPayload(
+                    file.getId(),
+                    file.getPatientId(),
+                    ContentHashUtil.sha256(excerpt),
+                    category,
+                    excerpt,
+                    DEFAULT_CONSENT_SCOPE));
+        } catch (Exception e) {
+            log.warn("Failed to emit DOCUMENT_INDEXED for fileId {}: {}",
+                    file.getId(), e.getMessage(), e);
+        }
     }
 
     /**

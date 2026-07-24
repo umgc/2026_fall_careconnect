@@ -11,11 +11,19 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface AiHeldItemRepository extends JpaRepository<AiHeldItem, UUID> {
 
     List<AiHeldItem> findByStatusOrderByCreatedAtAsc(AiHeldItemStatus status);
+
+    /**
+     * Locates an open hold for a stable correlation key (hashed into {@code queryTextHash}),
+     * used to dedupe summary-item HITL retries without creating duplicate holds.
+     */
+    Optional<AiHeldItem> findFirstBySourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+            String sourceSurface, String queryTextHash, AiHeldItemStatus status);
 
     List<AiHeldItem> findByPatientIdAndStatusOrderByCreatedAtAsc(
             Long patientId, AiHeldItemStatus status);

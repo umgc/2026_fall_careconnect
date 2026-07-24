@@ -35,6 +35,7 @@ class FileManagementServiceTest {
     @Mock private PatientRepository patientRepository;
     @Mock private DatabaseStorageService databaseStorageService;
     @Mock private DocumentComplianceService documentComplianceService;
+    @Mock private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
     @Mock private S3StorageService s3StorageService;
     @Mock private MultipartFile multipartFile;
 
@@ -48,7 +49,7 @@ class FileManagementServiceTest {
         MockitoAnnotations.openMocks(this);
         fileManagementService = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, s3StorageService);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, s3StorageService);
         ReflectionTestUtils.setField(fileManagementService, "defaultStorageType", "database");
         ReflectionTestUtils.setField(fileManagementService, "useS3ForNewFiles", false);
 
@@ -142,7 +143,7 @@ class FileManagementServiceTest {
     void uploadFile_s3EnabledNullService_fallsBackToDatabase() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", true);
 
@@ -369,7 +370,7 @@ class FileManagementServiceTest {
     void getFile_s3FileNullS3Service_returnsUnavailableUrl() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -413,7 +414,7 @@ class FileManagementServiceTest {
     void downloadFile_s3FileNullS3Service_throwsRuntimeException() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
