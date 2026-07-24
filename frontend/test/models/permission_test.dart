@@ -21,6 +21,13 @@ void main() {
       );
     });
 
+    test('parses REVIEW_AI_HOLDS', () {
+      expect(
+        Permission.fromString('REVIEW_AI_HOLDS'),
+        Permission.reviewAiHolds,
+      );
+    });
+
     test('parses VIEW_ALL_PATIENTS', () {
       expect(
         Permission.fromString('VIEW_ALL_PATIENTS'),
@@ -54,8 +61,8 @@ void main() {
       expect(Permission.useAiFeatures.toBackendString(), 'USE_AI_FEATURES');
     });
 
-    test('round-trips all 28 permissions', () {
-      expect(Permission.values.length, 28);
+    test('round-trips all 29 permissions', () {
+      expect(Permission.values.length, 29);
       for (final perm in Permission.values) {
         expect(Permission.fromString(perm.toBackendString()), perm);
       }

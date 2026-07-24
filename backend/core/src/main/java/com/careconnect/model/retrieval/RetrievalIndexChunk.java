@@ -65,6 +65,10 @@ public class RetrievalIndexChunk {
     @Column(name = "source_record_id", nullable = false, length = RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH)
     private String sourceRecordId;
 
+    /** First-class ownership discriminator for sources whose table-local IDs can collide. */
+    @Column(name = "source_kind", length = RetrievalIndexSchema.RECORD_TYPE_MAX_LENGTH)
+    private String sourceKind;
+
     @Column(name = "chunk_text", nullable = false, columnDefinition = "TEXT")
     private String chunkText;
 
@@ -77,6 +81,28 @@ public class RetrievalIndexChunk {
 
     @Column(name = "consent_scope", length = RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH)
     private String consentScope;
+
+    /**
+     * Compatibility-only replay state. New claims are owned by one
+     * summary_citation_replay_source row per source identity.
+     */
+    @Column(name = "citation_replay_after")
+    private OffsetDateTime citationReplayAfter;
+
+    /** Compatibility-only; source-level attempts are authoritative. */
+    @Column(name = "citation_replay_attempts", nullable = false)
+    private Integer citationReplayAttempts;
+
+    /** Compatibility-only; source-level leases are authoritative. */
+    @Column(name = "citation_replay_claimed_until")
+    private OffsetDateTime citationReplayClaimedUntil;
+
+    /** Compatibility-only; the source table's UUID token is the active fence. */
+    @Column(name = "citation_replay_claim_token")
+    private UUID citationReplayClaimToken;
+
+    @Column(name = "migration_status", nullable = false, length = 24)
+    private String migrationStatus;
 
     public RetrievalRecordType getRecordTypeEnum() {
         return recordType == null ? null : RetrievalRecordType.valueOf(recordType);
@@ -104,6 +130,12 @@ public class RetrievalIndexChunk {
     private void onCreate() {
         if (indexedAt == null) {
             indexedAt = OffsetDateTime.now();
+        }
+        if (citationReplayAttempts == null) {
+            citationReplayAttempts = 0;
+        }
+        if (migrationStatus == null) {
+            migrationStatus = "ACTIVE";
         }
     }
 }

@@ -4,19 +4,24 @@ import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.model.UspsMailpiece;
+import com.careconnect.model.VisitSummary;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
-import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
+import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,12 +32,17 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Ingests Ask AI indexing events into {@code retrieval_index_chunk} (Task 4.1).
@@ -50,7 +60,9 @@ public class RetrievalIndexService {
     private static final Logger log = LoggerFactory.getLogger(RetrievalIndexService.class);
 
     private final CallSummaryRepository callSummaryRepository;
-    private final CallTranscriptSegmentRepository transcriptSegmentRepository;
+    private final VisitSummaryRepository visitSummaryRepository;
+    private final CallSessionRepository callSessionRepository;
+    private final CallTranscriptService callTranscriptService;
     private final UspsMailpieceRepository uspsMailpieceRepository;
     private final RetrievalIndexChunkRepository chunkRepository;
     private final SummaryChunker summaryChunker;
@@ -61,7 +73,9 @@ public class RetrievalIndexService {
 
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
-            final CallTranscriptSegmentRepository transcriptSegmentRepository,
+            final VisitSummaryRepository visitSummaryRepository,
+            final CallSessionRepository callSessionRepository,
+            final CallTranscriptService callTranscriptService,
             final UspsMailpieceRepository uspsMailpieceRepository,
             final RetrievalIndexChunkRepository chunkRepository,
             final SummaryChunker summaryChunker,
@@ -70,7 +84,9 @@ public class RetrievalIndexService {
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
-        this.transcriptSegmentRepository = transcriptSegmentRepository;
+        this.visitSummaryRepository = visitSummaryRepository;
+        this.callSessionRepository = callSessionRepository;
+        this.callTranscriptService = callTranscriptService;
         this.uspsMailpieceRepository = uspsMailpieceRepository;
         this.chunkRepository = chunkRepository;
         this.summaryChunker = summaryChunker;
@@ -108,46 +124,71 @@ public class RetrievalIndexService {
             return 0;
         }
         if (isVisitSummary(payload)) {
-            // Leave outbox unprocessed until visit_summaries indexing lands (Task 1.4).
-            // Do not burn attempt budget — otherwise the row dead-letters before 1.4 ships.
-            throw new IndexingDeferredException(
-                    "Visit summary indexing not implemented yet (Task 1.4) for summaryId="
-                            + payload.summaryId(),
-                    false);
+            return ingestVisitSummaryCreated(payload);
         }
 
-        final String sourceRecordId = String.valueOf(payload.summaryId());
-        if (payload.contentHash() != null
-                && !payload.contentHash().isBlank()
-                && hasMatchingContentHash(sourceRecordId, payload.contentHash())) {
-            return retryMissingEmbeddingsOrSkip(
-                    sourceRecordId, payload.summaryId(), "contentHash unchanged");
-        }
-
-        final CallSummary summary = callSummaryRepository.findById(payload.summaryId())
+        final String sourceRecordId = SummarySourceKey.call(payload.summaryId());
+        final String legacySourceRecordId = SummarySourceKey.legacy(payload.summaryId());
+        final List<String> sourceRecordIds = List.of(sourceRecordId);
+        final CallSummary summary = callSummaryRepository.findByIdForUpdate(payload.summaryId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "CallSummary not found for summaryId=" + payload.summaryId()));
 
-        final Long patientId = firstNonNull(payload.patientId(), summary.getPatientId());
+        if (!"SUCCESS".equalsIgnoreCase(
+                java.util.Objects.toString(summary.getStatus(), "").trim())) {
+            throw new IndexingDeferredException(
+                    "Authoritative CallSummary is not successful");
+        }
+        final Long patientId = summary.getPatientId();
         if (patientId == null) {
             throw new IndexingDeferredException(
                     "Cannot index summaryId=" + payload.summaryId()
-                            + " — patientId is required on retrieval_index_chunk");
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED patient scope does not match authoritative summary row");
+        }
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED content hash does not match authoritative summary");
         }
 
-        final String episodeType = firstNonBlank(payload.episodeType(), "call");
-        final String caregiverVisibility = firstNonBlank(
-                payload.caregiverVisibility(), summary.getCaregiverVisibility());
-        final String contentHash = firstNonBlank(payload.contentHash(), null);
-        final String engine = firstNonBlank(
-                payload.summarizationEngine(), summary.getSummarizationEngine());
+        final String episodeType = "call";
+        if (summary.getSummarizationEngine() != null
+                && !summary.getSummarizationEngine().isBlank()
+                && payload.summarizationEngine() != null
+                && !payload.summarizationEngine().isBlank()
+                && !Objects.equals(payload.summarizationEngine(), summary.getSummarizationEngine())) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED engine does not match authoritative summary");
+        }
+        final String caregiverVisibility = summary.getCaregiverVisibility();
+        final String engine = summary.getSummarizationEngine();
 
         final List<IndexingChunkDraft> drafts = summaryChunker.chunk(
                 episodeType,
                 summary.getSummaryJson(),
                 contentHash,
                 caregiverVisibility,
-                engine);
+                engine,
+                summary.getCallId(),
+                summary.getGeneratedAt() == null
+                        ? null
+                        : summary.getGeneratedAt()
+                                .atZone(ZoneOffset.UTC)
+                                .toInstant()
+                                .toString());
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findCallSummaryChunksForReplacement(
+                        patientId,
+                        sourceRecordId,
+                        legacySourceRecordId,
+                        SummarySourceKey.CALL_KIND,
+                        RetrievalRecordType.summaryTypeNames());
 
         if (drafts.isEmpty()) {
             log.warn(
@@ -155,26 +196,246 @@ public class RetrievalIndexService {
                     payload.summaryId());
             // Still recover NULL embeddings from a prior Bedrock failure if chunks remain.
             return retryMissingEmbeddingsOrSkip(
-                    sourceRecordId,
+                    patientId,
+                    sourceRecordIds,
                     payload.summaryId(),
                     "no drafts; existing chunks left unchanged");
         }
 
-        chunkRepository.deleteBySourceRecordId(sourceRecordId);
-        return persistDrafts(patientId, sourceRecordId, drafts);
+        chunkRepository.quarantineLegacySummarySourceAcrossPatients(
+                legacySourceRecordId,
+                RetrievalRecordType.summaryTypeNames());
+        if (contentHash != null
+                && chunksMatchExpected(existing, drafts, contentHash, sourceRecordId)) {
+            return retryMissingEmbeddingsOrSkip(
+                    patientId,
+                    sourceRecordIds,
+                    payload.summaryId(),
+                    "contentHash and citation metadata unchanged");
+        }
+
+        chunkRepository.deleteCallSummaryChunksForReplacement(
+                patientId,
+                sourceRecordId,
+                legacySourceRecordId,
+                SummarySourceKey.CALL_KIND,
+                RetrievalRecordType.summaryTypeNames());
+        return persistDrafts(
+                patientId, sourceRecordId, drafts, SummarySourceKey.CALL_KIND);
+    }
+
+    /**
+     * Task 1.4 / 3.5 — indexes a successful visit summary using the shared SummaryChunker.
+     */
+    @Transactional
+    public int ingestVisitSummaryCreated(final SummaryCreatedPayload payload) {
+        if (payload == null || payload.summaryId() == null) {
+            throw new IllegalArgumentException("SUMMARY_CREATED payload requires summaryId");
+        }
+        final String sourceRecordId = SummarySourceKey.visit(payload.summaryId());
+        final List<String> sourceRecordIds = List.of(sourceRecordId);
+        final VisitSummary summary = visitSummaryRepository.findByIdForUpdate(payload.summaryId())
+                .orElseThrow(() -> new IndexingDeferredException(
+                        "VisitSummary not found for summaryId=" + payload.summaryId(),
+                        false));
+
+        if (!"SUCCESS".equalsIgnoreCase(
+                java.util.Objects.toString(summary.getStatus(), "").trim())) {
+            throw new IndexingDeferredException(
+                    "Authoritative VisitSummary is not successful");
+        }
+        final Long patientId = summary.getPatientId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index visit summaryId=" + payload.summaryId()
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED patient scope does not match authoritative visit summary row");
+        }
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED content hash does not match authoritative visit summary");
+        }
+        if (summary.getSummarizationEngine() != null
+                && !summary.getSummarizationEngine().isBlank()
+                && payload.summarizationEngine() != null
+                && !payload.summarizationEngine().isBlank()
+                && !Objects.equals(payload.summarizationEngine(), summary.getSummarizationEngine())) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED engine does not match authoritative visit summary");
+        }
+
+        final List<IndexingChunkDraft> drafts = summaryChunker.chunk(
+                "visit",
+                summary.getSummaryJson(),
+                contentHash,
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                summary.getVisitId(),
+                summary.getGeneratedAt() == null
+                        ? null
+                        : summary.getGeneratedAt()
+                                .atZone(ZoneOffset.UTC)
+                                .toInstant()
+                                .toString());
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findCallSummaryChunksForReplacement(
+                        patientId,
+                        sourceRecordId,
+                        sourceRecordId,
+                        SummarySourceKey.VISIT_KIND,
+                        RetrievalRecordType.summaryTypeNames());
+
+        if (drafts.isEmpty()) {
+            log.warn(
+                    "VISIT SUMMARY_CREATED produced no drafts for summaryId={}; leaving existing chunks unchanged",
+                    payload.summaryId());
+            return retryMissingEmbeddingsOrSkip(
+                    patientId,
+                    sourceRecordIds,
+                    payload.summaryId(),
+                    "no drafts; existing visit chunks left unchanged");
+        }
+
+        if (contentHash != null
+                && chunksMatchExpected(existing, drafts, contentHash, sourceRecordId)) {
+            return retryMissingEmbeddingsOrSkip(
+                    patientId,
+                    sourceRecordIds,
+                    payload.summaryId(),
+                    "visit contentHash and citation metadata unchanged");
+        }
+
+        chunkRepository.deleteCallSummaryChunksForReplacement(
+                patientId,
+                sourceRecordId,
+                sourceRecordId,
+                SummarySourceKey.VISIT_KIND,
+                RetrievalRecordType.summaryTypeNames());
+        return persistDrafts(
+                patientId, sourceRecordId, drafts, SummarySourceKey.VISIT_KIND);
+    }
+
+    /**
+     * Replays one call summary using authoritative entity data for citation metadata backfill.
+     * The row lock serializes this operation with normal outbox ingestion. Claim tokens are
+     * renewed and verified immediately before replacement so stale owners mutate nothing.
+     */
+    @Transactional
+    public SummaryCitationReplayOutcome replaySummaryCitationMetadata(
+            final Long summaryId,
+            final Long candidatePatientId,
+            final UUID claimToken,
+            final long claimLeaseMs) {
+        if (summaryId == null) {
+            throw new IllegalArgumentException("summaryId is required");
+        }
+        if (candidatePatientId == null || claimToken == null) {
+            return SummaryCitationReplayOutcome.TERMINAL_QUARANTINED;
+        }
+        final String sourceRecordId = SummarySourceKey.call(summaryId);
+        if (!renewReplayClaim(candidatePatientId, sourceRecordId, claimToken, claimLeaseMs)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
+        final String lockKey = "summary-citation:"
+                + candidatePatientId + ":" + summaryId;
+        if (!chunkRepository.tryAcquireSummaryReplayLock(lockKey)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
+        if (!renewReplayClaim(candidatePatientId, sourceRecordId, claimToken, claimLeaseMs)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
+        final CallSummary summary = callSummaryRepository.findByIdForUpdate(summaryId)
+                .orElse(null);
+        if (summary == null
+                || summary.getPatientId() == null
+                || !candidatePatientId.equals(summary.getPatientId())) {
+            return SummaryCitationReplayOutcome.TERMINAL_QUARANTINED;
+        }
+        if (summary.getStatus() == null
+                || !"SUCCESS".equalsIgnoreCase(summary.getStatus().trim())) {
+            return SummaryCitationReplayOutcome.TERMINAL_QUARANTINED;
+        }
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        final List<IndexingChunkDraft> expectedDrafts = summaryChunker.chunk(
+                "call",
+                summary.getSummaryJson(),
+                contentHash,
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                summary.getCallId(),
+                summary.getGeneratedAt() == null
+                        ? null
+                        : summary.getGeneratedAt()
+                                .atZone(ZoneOffset.UTC)
+                                .toInstant()
+                                .toString());
+        if (expectedDrafts.isEmpty()) {
+            return SummaryCitationReplayOutcome.RETRYABLE;
+        }
+        if (!renewReplayClaim(candidatePatientId, sourceRecordId, claimToken, claimLeaseMs)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
+        final SummaryCreatedPayload replay = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                summary.getId(),
+                summary.getCallId(),
+                summary.getPatientId(),
+                summary.getStatus(),
+                summary.getGeneratedAt(),
+                summary.getTranscriptSegmentCount(),
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                contentHash);
+        if (!chunkRepository.hasActiveSummaryCitationReplayClaim(
+                candidatePatientId, sourceRecordId, claimToken)) {
+            return SummaryCitationReplayOutcome.BUSY;
+        }
+        final int written = ingestSummaryCreated(replay);
+        return written > 0
+                ? SummaryCitationReplayOutcome.UPDATED
+                : SummaryCitationReplayOutcome.CURRENT;
+    }
+
+    private boolean renewReplayClaim(
+            final Long patientId,
+            final String sourceRecordId,
+            final UUID claimToken,
+            final long claimLeaseMs) {
+        final long leaseMs = Math.min(
+                Duration.ofHours(1).toMillis(),
+                Math.max(10_000L, claimLeaseMs));
+        return chunkRepository.renewSummaryCitationReplayClaim(
+                patientId,
+                sourceRecordId,
+                claimToken,
+                OffsetDateTime.now(ZoneOffset.UTC).plus(Duration.ofMillis(leaseMs))) > 0;
     }
 
     /**
      * Embed-only recovery when chunks already exist. Returns 0 (no new chunks written).
      */
     private int retryMissingEmbeddingsOrSkip(
-            final String sourceRecordId, final Long summaryId, final String skipReason) {
-        if (chunkRepository.countMissingEmbeddingForSource(sourceRecordId) > 0) {
+            final Long patientId,
+            final List<String> sourceRecordIds,
+            final Long summaryId,
+            final String skipReason) {
+        if (chunkRepository.countMissingEmbeddingForSummarySources(
+                patientId, sourceRecordIds, RetrievalRecordType.summaryTypeNames()) > 0) {
             log.info(
                     "SUMMARY_CREATED for summaryId={} — embeddings missing; retrying embed without re-chunk",
                     summaryId);
             scheduleEmbeddingAfterCommit(
-                    chunkRepository.findBySourceRecordIdAndEmbeddingIsNull(sourceRecordId));
+                    chunkRepository.findMissingEmbeddingsForSummarySources(
+                            patientId,
+                            sourceRecordIds,
+                            RetrievalRecordType.summaryTypeNames()));
         } else {
             log.info("Skipping SUMMARY_CREATED for summaryId={} — {}", summaryId, skipReason);
         }
@@ -184,9 +445,8 @@ public class RetrievalIndexService {
     /**
      * Indexes all transcript segments for a call. Uses {@code callId} as
      * {@code source_record_id} so re-delivery replaces the prior segment set.
-     * Defers when patientId cannot be resolved. {@code IndexWorker} burns attempt
-     * budget on {@link IndexingDeferredException} by default so deferred rows
-     * eventually dead-letter.
+     * Patient ownership comes only from the authoritative {@code CallSession}.
+     * A payload patient is an integrity assertion, never an ownership source.
      *
      * @return number of chunks written
      */
@@ -196,17 +456,50 @@ public class RetrievalIndexService {
             throw new IllegalArgumentException("TRANSCRIPT_INDEXED payload requires callId");
         }
         final String callId = payload.callId().trim();
-        final Long patientId = resolvePatientIdForCall(payload.patientId(), callId);
+        final CallSession session = callSessionRepository.findByCallIdForIndexing(callId)
+                .orElseThrow(() -> new IndexingDeferredException(
+                        "Cannot index transcript for callId=" + callId
+                                + " — authoritative CallSession is not available",
+                        false));
+        final Long patientId = session.getPatientId();
         if (patientId == null) {
             throw new IndexingDeferredException(
                     "Cannot index transcript for callId=" + callId
-                            + " — patientId is required on retrieval_index_chunk");
+                            + " — authoritative CallSession patientId is required",
+                    false);
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "TRANSCRIPT_INDEXED patient scope does not match authoritative CallSession");
+        }
+        if (payload.totalSegmentCount() < 0) {
+            throw new IllegalArgumentException(
+                    "TRANSCRIPT_INDEXED totalSegmentCount cannot be negative");
         }
 
-        final List<CallTranscriptSegment> segments =
-                transcriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(callId);
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name(), callId);
+        final CallTranscriptService.IndexingSnapshot snapshot =
+                callTranscriptService.captureIndexingSnapshot(callId);
+        final List<CallTranscriptSegment> segments = snapshot.segments();
+        if (segments.size() > payload.totalSegmentCount()) {
+            log.info(
+                    "TRANSCRIPT_INDEXED snapshot superseded for callId={} expectedCount={} currentCount={}",
+                    callId, payload.totalSegmentCount(), segments.size());
+            return 0;
+        }
+        if (segments.size() < payload.totalSegmentCount()
+                || payload.snapshotVersion() == null
+                || !payload.snapshotVersion().equals(snapshot.version())) {
+            throw new IndexingDeferredException(
+                    "Transcript snapshot is incomplete or not yet authoritative for callId="
+                            + callId + " (expected count/version "
+                            + payload.totalSegmentCount() + "/" + payload.snapshotVersion()
+                            + ", found " + segments.size() + "/" + snapshot.version() + ")",
+                    false);
+        }
         final List<IndexingChunkDraft> drafts =
-                transcriptSegmentChunker.chunk(callId, payload.source(), segments);
+                transcriptSegmentChunker.chunk(callId, null, segments);
 
         if (drafts.isEmpty()) {
             log.warn(
@@ -215,8 +508,8 @@ public class RetrievalIndexService {
             return 0;
         }
 
-        chunkRepository.deleteBySourceRecordIdAndRecordType(
-                callId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, callId, RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
         return persistDrafts(patientId, callId, drafts);
     }
 
@@ -232,40 +525,37 @@ public class RetrievalIndexService {
         if (payload == null || payload.mailpieceId() == null) {
             throw new IllegalArgumentException("MAILPIECE_INDEXED payload requires mailpieceId");
         }
-        if (payload.patientId() == null) {
-            throw new IndexingDeferredException(
-                    "Cannot index mailpieceId=" + payload.mailpieceId()
-                            + " — patientId is required on retrieval_index_chunk");
-        }
-
         final String sourceRecordId = String.valueOf(payload.mailpieceId());
-        final UspsMailpiece mailpiece = uspsMailpieceRepository.findById(payload.mailpieceId())
+        final UspsMailpiece mailpiece = uspsMailpieceRepository.findByIdForUpdate(payload.mailpieceId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "UspsMailpiece not found for mailpieceId=" + payload.mailpieceId()));
+        final Long patientId = mailpiece.getPatientId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index mailpieceId=" + payload.mailpieceId()
+                            + " — authoritative patientId is required");
+        }
+        assertMailpieceEventMatches(payload, mailpiece);
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.USPS_MAIL.name(), sourceRecordId);
 
-        final String contentHash = firstNonBlank(payload.contentHash(), mailpiece.getContentHash());
+        final String contentHash = mailpiece.getContentHash();
         if (contentHash != null
                 && !contentHash.isBlank()
-                && shouldSkipUspsMailReindex(sourceRecordId, contentHash, mailpiece)) {
+                && shouldSkipUspsMailReindex(patientId, sourceRecordId, contentHash, mailpiece)) {
             log.info("Skipping MAILPIECE_INDEXED for mailpieceId={} — contentHash+importance unchanged",
                     payload.mailpieceId());
             return 0;
         }
 
-        final String sender = firstNonBlank(payload.sender(), mailpiece.getSender());
-        final String summary = firstNonBlank(payload.summary(), mailpiece.getSummary());
-        final String sourceKey = firstNonBlank(payload.sourceKey(), mailpiece.getSourceKey());
-        final String consentScope = firstNonBlank(
-                payload.consentScope(), mailpiece.getConsentScope());
-
         final List<IndexingChunkDraft> drafts = mailpieceChunker.chunk(
-                sender,
-                summary,
+                mailpiece.getSender(),
+                mailpiece.getSummary(),
                 mailpiece.getOcrText(),
                 contentHash,
-                sourceKey,
-                payload.digestDate() != null ? payload.digestDate() : mailpiece.getDigestDate(),
-                consentScope,
+                mailpiece.getSourceKey(),
+                mailpiece.getDigestDate(),
+                mailpiece.getConsentScope(),
                 mailpiece.getImportanceLevel(),
                 mailpiece.getImportanceCategory(),
                 mailpiece.getClassificationMethod(),
@@ -278,15 +568,38 @@ public class RetrievalIndexService {
             return 0;
         }
 
-        chunkRepository.deleteBySourceRecordIdAndRecordType(
-                sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
-        return persistDrafts(payload.patientId(), sourceRecordId, drafts);
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+        return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    private static void assertMailpieceEventMatches(
+            final MailpieceIndexedPayload payload,
+            final UspsMailpiece mailpiece) {
+        if (!Objects.equals(payload.patientId(), mailpiece.getPatientId())
+                || !Objects.equals(payload.sourceKey(), mailpiece.getSourceKey())
+                || !Objects.equals(payload.contentHash(), mailpiece.getContentHash())
+                || !Objects.equals(payload.sender(), mailpiece.getSender())
+                || !Objects.equals(payload.summary(), mailpiece.getSummary())
+                || !Objects.equals(payload.digestDate(), mailpiece.getDigestDate())
+                || !Objects.equals(payload.consentScope(), mailpiece.getConsentScope())) {
+            throw new IndexingDeferredException(
+                    "MAILPIECE_INDEXED event does not match authoritative UspsMailpiece");
+        }
     }
 
     private int persistDrafts(
             final Long patientId,
             final String sourceRecordId,
             final List<IndexingChunkDraft> drafts) {
+        return persistDrafts(patientId, sourceRecordId, drafts, null);
+    }
+
+    private int persistDrafts(
+            final Long patientId,
+            final String sourceRecordId,
+            final List<IndexingChunkDraft> drafts,
+            final String sourceKind) {
         final OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         final List<RetrievalIndexChunk> entities = new ArrayList<>(drafts.size());
         for (final IndexingChunkDraft draft : drafts) {
@@ -297,6 +610,9 @@ public class RetrievalIndexService {
                     .patientId(patientId)
                     .recordType(draft.recordType().name())
                     .sourceRecordId(truncateSourceId(sourceRecordId))
+                    .sourceKind(sourceKind)
+                    .citationReplayAttempts(0)
+                    .migrationStatus(RetrievalMigrationStatus.ACTIVE.name())
                     .chunkText(draft.chunkText())
                     .chunkMetadata(toJson(draft.metadata()))
                     .consentScope(truncateConsent(draft.consentScope()))
@@ -307,6 +623,10 @@ public class RetrievalIndexService {
             return 0;
         }
         final List<RetrievalIndexChunk> saved = chunkRepository.saveAll(entities);
+        if (SummarySourceKey.CALL_KIND.equals(sourceKind)) {
+            chunkRepository.registerSummaryCitationReplaySource(
+                    patientId, sourceKind, truncateSourceId(sourceRecordId));
+        }
         log.info("Indexed {} chunk(s) for sourceRecordId={} patientId={}",
                 saved.size(), sourceRecordId, patientId);
         scheduleEmbeddingAfterCommit(saved);
@@ -335,21 +655,76 @@ public class RetrievalIndexService {
         }
     }
 
-    private boolean hasMatchingContentHash(final String sourceRecordId, final String contentHash) {
-        final List<RetrievalIndexChunk> existing =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.CALL_SUMMARY.name());
-        final List<RetrievalIndexChunk> visitExisting =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.VISIT_SUMMARY.name());
-        final List<RetrievalIndexChunk> all = new ArrayList<>(existing);
-        all.addAll(visitExisting);
-        for (final RetrievalIndexChunk chunk : all) {
-            if (contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
-                return true;
+    private boolean chunksMatchExpected(
+            final List<RetrievalIndexChunk> existing,
+            final List<IndexingChunkDraft> expectedDrafts,
+            final String contentHash,
+            final String expectedSourceRecordId) {
+        if (existing == null
+                || expectedDrafts == null
+                || existing.size() != expectedDrafts.size()
+                || existing.isEmpty()) {
+            return false;
+        }
+
+        final Map<String, IndexingChunkDraft> expectedBySignature = new HashMap<>();
+        for (final IndexingChunkDraft draft : expectedDrafts) {
+            final String signature =
+                    draft.recordType().name() + ":" + draft.metadata().get("chunkIndex");
+            if (expectedBySignature.put(signature, draft) != null) {
+                return false;
             }
         }
-        return false;
+
+        for (final RetrievalIndexChunk chunk : existing) {
+            final JsonNode metadata = parseChunkMetadata(chunk.getChunkMetadata());
+            if (metadata == null
+                    || !expectedSourceRecordId.equals(chunk.getSourceRecordId())
+                    || !SummarySourceKey.CALL_KIND.equals(chunk.getSourceKind())
+                    || !contentHash.equals(metadata.path("contentHash").asText(null))
+                    || metadata.path("citationMetadataVersion").asInt(-1)
+                            < SummaryChunker.CITATION_METADATA_VERSION
+                    || !metadata.path("chunkIndex").isIntegralNumber()) {
+                return false;
+            }
+            final String signature =
+                    chunk.getRecordType() + ":" + metadata.path("chunkIndex").asInt();
+            final IndexingChunkDraft expected = expectedBySignature.remove(signature);
+            if (expected == null
+                    || !Objects.equals(
+                            truncateConsent(chunk.getConsentScope()),
+                            truncateConsent(expected.consentScope()))
+                    || !containsExpectedMetadata(metadata, expected.metadata())) {
+                return false;
+            }
+        }
+        return expectedBySignature.isEmpty();
+    }
+
+    private boolean containsExpectedMetadata(
+            final JsonNode actual, final Map<String, Object> expectedMetadata) {
+        final JsonNode expected = objectMapper.valueToTree(expectedMetadata);
+        final Iterator<Map.Entry<String, JsonNode>> fields = expected.fields();
+        while (fields.hasNext()) {
+            final Map.Entry<String, JsonNode> field = fields.next();
+            if (!Objects.equals(actual.get(field.getKey()), field.getValue())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private JsonNode parseChunkMetadata(final String chunkMetadataJson) {
+        if (chunkMetadataJson == null || chunkMetadataJson.isBlank()) {
+            return null;
+        }
+        try {
+            final JsonNode metadata = objectMapper.readTree(chunkMetadataJson);
+            return metadata != null && metadata.isObject() ? metadata : null;
+        } catch (final Exception ex) {
+            log.debug("Unable to parse retrieval chunk metadata: {}", ex.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -358,12 +733,13 @@ public class RetrievalIndexService {
      * (hash unchanged, importance newly present on the entity) must rebuild chunks.
      */
     private boolean shouldSkipUspsMailReindex(
+            final Long patientId,
             final String sourceRecordId,
             final String contentHash,
             final UspsMailpiece mailpiece) {
         final List<RetrievalIndexChunk> existing =
-                chunkRepository.findBySourceRecordIdAndRecordType(
-                        sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
+                chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                        patientId, sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
         if (existing == null || existing.isEmpty()) {
             return false;
         }
@@ -425,15 +801,6 @@ public class RetrievalIndexService {
         }
     }
 
-    private Long resolvePatientIdForCall(final Long payloadPatientId, final String callId) {
-        if (payloadPatientId != null) {
-            return payloadPatientId;
-        }
-        final Optional<CallSummary> latest =
-                callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(callId);
-        return latest.map(CallSummary::getPatientId).orElse(null);
-    }
-
     private String toJson(final Object metadata) {
         if (metadata == null) {
             return null;
@@ -473,17 +840,4 @@ public class RetrievalIndexService {
         return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
     }
 
-    private static Long firstNonNull(final Long a, final Long b) {
-        return a != null ? a : b;
-    }
-
-    private static String firstNonBlank(final String a, final String b) {
-        if (a != null && !a.isBlank()) {
-            return a;
-        }
-        if (b != null && !b.isBlank()) {
-            return b;
-        }
-        return a;
-    }
 }
