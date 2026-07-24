@@ -76,7 +76,7 @@ public class RetrievalIndexingService {
             String recordType = RetrievalRecordType.MEDICATION.name();
 
             // Delete existing chunk for this source record to avoid duplicates
-            chunkRepository.deleteBySourceRecordIdAndRecordType(sourceId, recordType);
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(patientId, sourceId, recordType);
 
             String text = buildMedicationText(med);
             RetrievalIndexChunk chunk = RetrievalIndexChunk.builder()
@@ -103,7 +103,7 @@ public class RetrievalIndexingService {
             String sourceId = "task-" + task.getId();
             String recordType = RetrievalRecordType.TASK.name();
 
-            chunkRepository.deleteBySourceRecordIdAndRecordType(sourceId, recordType);
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(patientId, sourceId, recordType);
 
             String text = buildTaskText(task);
             RetrievalIndexChunk chunk = RetrievalIndexChunk.builder()
@@ -130,7 +130,7 @@ public class RetrievalIndexingService {
             String sourceId = "vital-" + vital.getId();
             String recordType = RetrievalRecordType.VITAL_SIGN.name();
 
-            chunkRepository.deleteBySourceRecordIdAndRecordType(sourceId, recordType);
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(patientId, sourceId, recordType);
 
             String text = buildVitalText(vital);
             RetrievalIndexChunk chunk = RetrievalIndexChunk.builder()
