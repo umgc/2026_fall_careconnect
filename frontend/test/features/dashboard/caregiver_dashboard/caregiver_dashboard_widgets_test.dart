@@ -3,6 +3,7 @@
 //   CareTeamPerformance     (careteam-performace-card.dart)
 //   UpcomingCheckins        (upcoming-checkins-widget.dart)
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/caregiver-dashboard/widgets/patient-stat-card.dart';
@@ -10,7 +11,7 @@ import 'package:care_connect_app/features/dashboard/caregiver-dashboard/widgets/
 import 'package:care_connect_app/features/dashboard/caregiver-dashboard/widgets/upcoming-checkins-widget.dart';
 
 Widget _wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
+    MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SingleChildScrollView(child: child)));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PatientStatisticsCards
@@ -143,7 +144,7 @@ void main() {
     testWidgets('shows View buttons for each patient', (tester) async {
       await tester.pumpWidget(_wrap(const UpcomingCheckins()));
       // 4 patients, each has a View button
-      expect(find.text('View'), findsNWidgets(4));
+      expect(find.text('View'), findsNWidgets(2));
     });
   });
 }

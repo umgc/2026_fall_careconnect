@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:care_connect_app/widgets/language/language_picker.dart';
 import 'package:care_connect_app/providers/locale_provider.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _wrap(Widget child, {LocaleProvider? localeProvider}) {
   return MultiProvider(
@@ -29,6 +30,9 @@ Widget _wrap(Widget child, {LocaleProvider? localeProvider}) {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
   // ──────────────────────────────────────────────────────────────
   // LanguagePicker.labelFor
   // ──────────────────────────────────────────────────────────────
@@ -131,32 +135,36 @@ void main() {
 
   group('LanguagePicker.show', () {
     testWidgets(
-        'Team C smoke: selecting Spanish updates locale and closes sheet',
+        'TC-S4-REG-L10N-002 selecting Spanish updates and persists locale',
         (tester) async {
       final localeProvider = LocaleProvider();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<LocaleProvider>.value(
+          value: localeProvider,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => LanguagePicker.show(context),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
 
-      await tester.pumpWidget(_wrap(
-        Builder(builder: (ctx) {
-          return ElevatedButton(
-            onPressed: () => LanguagePicker.show(ctx),
-            child: const Text('Open'),
-          );
-        }),
-        localeProvider: localeProvider,
-      ));
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
-
-      await tester.scrollUntilVisible(
-        find.text('es'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.text('es'));
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Spanish'));
       await tester.pumpAndSettle();
 
       expect(localeProvider.locale, const Locale('es'));
-      expect(find.byType(ListView), findsNothing);
+      final preferences = await SharedPreferences.getInstance();
+      expect(preferences.getString('selected_locale'), 'es');
     });
 
     testWidgets('opens a bottom sheet with a ListView', (tester) async {
@@ -234,7 +242,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('mobile-landscape: sheet renders within the viewport',
+    testWidgets('TC-S4-REG-RESP-003 mobile landscape sheet stays in viewport',
             (tester) async {
           tester.view.physicalSize = const Size(800, 360);
           tester.view.devicePixelRatio = 1.0;
@@ -243,6 +251,8 @@ void main() {
           await openPicker(tester);
 
           final listRect = tester.getRect(find.byType(ListView));
+          expect(listRect.left, greaterThanOrEqualTo(0));
+          expect(listRect.right, lessThanOrEqualTo(800));
           expect(listRect.top, greaterThanOrEqualTo(0));
           expect(listRect.bottom, lessThanOrEqualTo(360));
           expect(tester.takeException(), isNull);
@@ -259,8 +269,11 @@ void main() {
           await openPicker(tester);
 
           final lastLocale = AppLocalizations.supportedLocales.last;
-          final l10n = lookupAppLocalizations(const Locale('en'));
-          final lastLabel = LanguagePicker.labelFor(lastLocale, l10n);
+          final context = tester.element(find.byType(ListView));
+          final lastLabel = LanguagePicker.labelFor(
+            lastLocale,
+            AppLocalizations.of(context)!,
+          );
 
           // Off-screen initially on a short sheet; scroll to reveal it.
           await tester.scrollUntilVisible(
@@ -271,7 +284,7 @@ void main() {
           expect(find.text(lastLabel), findsOneWidget);
         });
 
-    testWidgets('tablet width: rows remain within the visible sheet',
+    testWidgets('tablet width: sheet remains bounded and usable',
             (tester) async {
           tester.view.physicalSize = const Size(1000, 800);
           tester.view.devicePixelRatio = 1.0;
@@ -285,7 +298,7 @@ void main() {
           expect(tester.takeException(), isNull);
         });
 
-    testWidgets('narrow width: rows remain usable without overflow',
+    testWidgets('narrow width: sheet remains bounded and usable',
             (tester) async {
           tester.view.physicalSize = const Size(400, 800);
           tester.view.devicePixelRatio = 1.0;
@@ -293,8 +306,9 @@ void main() {
 
           await openPicker(tester);
 
-          final firstTile = tester.getRect(find.byType(ListTile).first);
-          expect(firstTile.width, lessThanOrEqualTo(400));
+          final listRect = tester.getRect(find.byType(ListView));
+          expect(listRect.left, greaterThanOrEqualTo(0));
+          expect(listRect.right, lessThanOrEqualTo(400));
           expect(tester.takeException(), isNull);
         });
   });

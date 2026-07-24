@@ -3,6 +3,7 @@
 // Pure StatelessWidget with checkIns list param.
 // Provider.of<UserProvider> only used in button onPressed — not in build().
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +19,9 @@ Widget _wrap({List<CheckIn> checkIns = const []}) {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: 1),
   );
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: Scaffold(

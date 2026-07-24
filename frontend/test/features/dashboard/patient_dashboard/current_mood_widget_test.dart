@@ -2,6 +2,7 @@
 // (lib/features/dashboard/patient_dashboard/widgets/current_mood_widget.dart).
 
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/current_mood_widget.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +22,7 @@ class _OfflineMockUserProvider extends MockUserProvider {
 Widget _wrap(Widget child) {
   return ChangeNotifierProvider<UserProvider>.value(
     value: _OfflineMockUserProvider(),
-    child: MaterialApp(home: Scaffold(body: child)),
+    child: MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: child)),
   );
 }
 

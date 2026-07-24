@@ -3,6 +3,7 @@
 
 library;
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:convert';
@@ -60,7 +61,7 @@ class AuthService {
   }
 
   /// GOOGLE OAUTH2 LOGIN - Backend-first OAuth2 flow
-  static Future<UserSession> loginWithGoogle() async {
+  static Future<UserSession> loginWithGoogle(AppLocalizations t) async {
     try {
       // Initialize app links if not already done
       _appLinks = AppLinks();
@@ -86,13 +87,13 @@ class AuthService {
               final error = uri.queryParameters['error'];
 
               if (error != null) {
-                completer.completeError(Exception('OAuth error: $error'));
+                completer.completeError(Exception('${t.authservice_oauthError}: $error'));
                 return;
               }
 
               if (token == null) {
                 completer.completeError(
-                  Exception('No JWT token received from backend'),
+                  Exception(t.authservice_jwtTokenMissing),
                 );
                 return;
               }
@@ -102,7 +103,7 @@ class AuthService {
               final userDataString = uri.queryParameters['user'];
               if (userDataString == null) {
                 completer.completeError(
-                  Exception('No user data received from backend'),
+                  Exception(t.authservice_userDataMissing),
                 );
                 return;
               }
@@ -153,7 +154,7 @@ class AuthService {
           _linkSubscription?.cancel();
           _linkSubscription = null;
           OAuthService.clearSession();
-          completer.completeError(Exception('OAuth flow timed out'));
+          completer.completeError(Exception(t.authservice_oauthTimedOut));
         }
       });
 
@@ -167,7 +168,7 @@ class AuthService {
   }
 
   /// LOGIN - Updated to return UserSession and handle JWT
-  static Future<UserSession> login(String email, String password) async {
+  static Future<UserSession> login(String email, String password, AppLocalizations t) async {
     final response = await ApiService.login(email, password);
     final data = jsonDecode(response.body);
 
@@ -198,7 +199,7 @@ class AuthService {
 
       return userSession;
     } else {
-      throw Exception(data['error'] ?? 'Login failed');
+      throw Exception(data['error'] ?? t.authservice_loginFailedError);
     }
   }
 
@@ -208,6 +209,7 @@ class AuthService {
     required String password,
     String role = 'PATIENT',
     required String verificationBaseUrl,
+    required AppLocalizations t
   }) async {
     final headers = {'Content-Type': 'application/json'};
 
@@ -231,10 +233,10 @@ class AuthService {
       if (data is String) return data;
       // If backend returns JSON: extract a message
       return data['message'] ??
-          'Registration successful! Please check your email to verify your account.';
+          t.authservice_emailRegistrationSuccess;
     } else {
       print("Registration Error: $data");
-      throw Exception(data['error'] ?? 'Registration failed');
+      throw Exception(data['error'] ?? t.authservice_emailRegistrationFailed);
     }
   }
 
@@ -243,6 +245,7 @@ class AuthService {
     required String lastName,
     required String email,
     required String password,
+    required AppLocalizations t,
     String? dob,
     String? phone,
     String? gender,
@@ -305,7 +308,7 @@ class AuthService {
       print('Registering caregiver with data: $jsonString');
     } catch (jsonError) {
       print('JSON encoding failed: $jsonError');
-      throw Exception('Data serialization error: $jsonError');
+      throw Exception('${t.authservice_dataSerialError}: $jsonError');
     }
 
     try {
@@ -346,7 +349,7 @@ class AuthService {
 
         // Return both the success message and the user info
         return {
-          'message': 'Caregiver registration successful!',
+          'message': t.authservice_caregiverRegistrationSuccessMessage,
           'userId': userId, // Use the user ID from the nested user object
           'caregiverId':
               data['id']?.toString() ?? '0', // Also store the caregiver ID
@@ -357,7 +360,7 @@ class AuthService {
         print(
           "Caregiver Registration failed: ${response.statusCode} - ${response.body}",
         );
-        throw Exception(data['error'] ?? 'Caregiver registration failed');
+        throw Exception(data['error'] ?? t.authservice_caregiverRegistrationFailedMessage);
       }
     } catch (e) {
       print('Exception during caregiver registration: $e');
@@ -365,7 +368,7 @@ class AuthService {
     }
   }
 
-  static Future<String> verifyEmail(String token) async {
+  static Future<String> verifyEmail(String token, AppLocalizations t) async {
     final headers = {'Content-Type': 'application/json'};
 
     final response = await http.post(
@@ -378,14 +381,14 @@ class AuthService {
 
     if (response.statusCode == 200) {
       print("Email verification: $data");
-      return data['message'] ?? 'Email verified successfully!';
+      return data['message'] ?? t.authservice_emailVerifiedSuccess;
     } else {
       print("Email verification error: $data");
-      throw Exception(data['error'] ?? 'Email verification failed');
+      throw Exception(data['error'] ?? t.authservice_emailVerifiedFailed);
     }
   }
 
-  static Future<String> requestPasswordReset({required String email}) async {
+  static Future<String> requestPasswordReset({required String email, required AppLocalizations t}) async {
     try {
       // Fix: Use ApiConstants.auth which includes the full path
       final fullUrl = '${ApiConstants.auth}/password/forgot';
@@ -400,13 +403,13 @@ class AuthService {
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
         return responseData['message'] ??
-            'Password reset link sent to your email';
+            t.authservice_passwordResetLinkSent;
       } else {
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to send reset link');
+        throw Exception(errorData['message'] ?? t.authservice_passwordResetLinkFailed);
       }
     } catch (e) {
-      throw Exception('Network error: ${e.toString()}');
+      throw Exception('${t.authservice_networkError}: ${e.toString()}');
     }
   }
 
@@ -414,6 +417,7 @@ class AuthService {
     required String email,
     required String resetToken,
     required String newPassword,
+    required AppLocalizations t,
   }) async {
     try {
       final response = await http.post(
@@ -433,22 +437,22 @@ class AuthService {
 
       if (response.statusCode == 200) {
         print("Password reset successful: $data");
-        return data['message'] ?? 'Password reset successfully!';
+        return data['message'] ?? t.authservice_passwordResetSuccess;
       } else {
         print(
           "Password reset error: ${response.statusCode} - ${response.body}",
         );
         final errorMessage =
-            data['error'] ?? data['message'] ?? 'Password reset failed';
+            data['error'] ?? data['message'] ?? t.authservice_passwordResetFailed;
 
         // Handle specific error cases
         if (errorMessage.toLowerCase().contains('expired')) {
           throw Exception(
-            'Password reset link has expired. Please request a new one.',
+            t.authservice_passwordResetLinkExpired,
           );
         } else if (errorMessage.toLowerCase().contains('invalid')) {
           throw Exception(
-            'Invalid reset token. Please request a new password reset.',
+            t.authservice_passwordResetTokenInvalid,
           );
         }
 
@@ -485,6 +489,7 @@ class AuthService {
   static Future<UserSession> processOAuthCallback({
     required String token,
     required String userDataString,
+    required AppLocalizations t,
   }) async {
     try {
       // Parse user data (it's URL encoded)
@@ -511,7 +516,7 @@ class AuthService {
       // Create and return the user session
       return userSession;
     } catch (e) {
-      throw Exception('Failed to process OAuth callback: $e');
+      throw Exception('${t.authservice_failedToProcessOAuthCall}: $e');
     }
   }
 
@@ -644,6 +649,7 @@ class AuthService {
   /// Returns the temporary authorization code to redirect to Alexa
   static Future<Map<String, dynamic>> getAlexaAuthorizationCode({
     required String token,
+    required AppLocalizations t,
   }) async {
     try {
       final endpoint = '${ApiConstants.auth}/sso/alexa/code';
@@ -658,7 +664,7 @@ class AuthService {
           )
           .timeout(
             const Duration(seconds: 30),
-            onTimeout: () => throw SocketException('Request timeout'),
+            onTimeout: () => throw SocketException(t.authservice_socketTimeout),
           );
 
       final data = jsonDecode(response.body);
@@ -668,39 +674,39 @@ class AuthService {
         return {
           'isSuccess': true,
           'code': data['code'],
-          'message': 'Authorization code generated successfully',
+          'message': t.authservice_authCodeGeneratedSuccess,
         };
       } else if (response.statusCode == 401) {
         // Unauthorized: {"error": "missing_token"} or {"error": "invalid_token"}
         return {
           'isSuccess': false,
           'code': null,
-          'message': data['error'] ?? 'Unauthorized: Invalid or expired token',
+          'message': data['error'] ?? t.authservice_authInvalidToken,
         };
       } else {
         // Other errors
         return {
           'isSuccess': false,
           'code': null,
-          'message': data['error'] ?? 'Failed to generate authorization code',
+          'message': data['error'] ?? t.authservice_authFailedToGenCode,
         };
       }
     } on SocketException catch (e) {
       return {
         'isSuccess': false,
         'code': null,
-        'message': 'Network error: ${e.message}',
+        'message': '${t.authservice_networkError}: ${e.message}',
       };
     } catch (e) {
       return {
         'isSuccess': false,
         'code': null,
-        'message': 'Error: ${e.toString()}',
+        'message': '${t.voicecommand_phaseLabelError}: ${e.toString()}',
       };
     }
   }
 
-  static Future<Map<String, dynamic>> unlinkAlexaAccount() async {
+  static Future<Map<String, dynamic>> unlinkAlexaAccount(AppLocalizations t) async {
     final headers = await AuthTokenManager.getAuthHeaders();
     headers['Content-Type'] = 'application/json';
 
@@ -720,20 +726,20 @@ class AuthService {
       if (response.statusCode == 200) {
         return {
           'isSuccess': true,
-          'message': 'Alexa account unlinked successfully',
+          'message': t.authservice_alexaUnlinkedSuccess,
         };
       } else {
         final body = jsonDecode(response.body);
         return {
           'isSuccess': false,
-          'message': body['error'] ?? 'Failed to unlink Alexa account',
+          'message': body['error'] ?? t.authservice_alexaUnlinkedFailed,
         };
       }
     } catch (e) {
       print('❌ Exception during unlinkAlexaAccount: $e');
       return {
         'isSuccess': false,
-        'message': 'An unexpected error occurred: $e',
+        'message': '${t.authservice_unexpectedError}: $e',
       };
     }
   }

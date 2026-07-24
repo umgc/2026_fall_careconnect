@@ -1,100 +1,76 @@
+import 'package:care_connect_app/utils/responsive_utils.dart';
+import 'package:care_connect_app/widgets/responsive_page_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:care_connect_app/features/dashboard/presentation/pages/caregiver_dashboard.dart';
-import 'package:care_connect_app/providers/user_provider.dart';
-import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 
 void main() {
-  group('Responsive Layout Tests', () {
-    Widget buildTestWidget() {
-      final mockUser = UserSession(
-        id: 1,
-        email: 'test@example.com',
-        role: 'caregiver',
-        token: 'mock_token',
-        caregiverId: 1,
-      );
-
-      final router = GoRouter(
-        initialLocation: '/',
-        routes: [
-          GoRoute(
-            path: '/',
-            builder: (context, state) => const CaregiverDashboard(),
-          ),
-          GoRoute(
-            path: '/login',
-            builder: (context, state) => const Scaffold(body: Text('Login')),
-          ),
-          GoRoute(
-            path: '/analytics',
-            builder: (context, state) =>
-                const Scaffold(body: Text('Analytics')),
-          ),
-          GoRoute(
-            path: '/add-patient',
-            builder: (context, state) =>
-                const Scaffold(body: Text('Add Patient')),
-          ),
-          GoRoute(
-            path: '/evv/select-patient',
-            builder: (context, state) => const Scaffold(body: Text('EVV')),
-          ),
-          GoRoute(
-            path: '/patient/:id',
-            builder: (context, state) => const Scaffold(body: Text('Patient')),
-          ),
-        ],
-      );
-
-      return ChangeNotifierProvider(
-        create: (_) => UserProvider()..setUser(mockUser),
-        child: MaterialApp.router(
-          routerConfig: router,
+  Future<void> pumpAtSize(WidgetTester tester, Size size) async {
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ResponsivePageWrapper(
+          child: SizedBox(key: Key('responsive-content')),
         ),
+      ),
+    );
+    await tester.pump();
+  }
+
+  testWidgets(
+    'TC-S4-REG-RESP-001 applies mobile and desktop page padding',
+    (tester) async {
+      await pumpAtSize(tester, const Size(390, 844));
+      var padding = tester.widget<Padding>(
+        find
+            .ancestor(
+              of: find.byKey(const Key('responsive-content')),
+              matching: find.byType(Padding),
+            )
+            .first,
       );
-    }
+      expect(padding.padding,
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16));
 
-    testWidgets('CaregiverDashboard adapts to different screen sizes',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(buildTestWidget());
+      await pumpAtSize(tester, const Size(1200, 800));
+      padding = tester.widget<Padding>(
+        find
+            .ancestor(
+              of: find.byKey(const Key('responsive-content')),
+              matching: find.byType(Padding),
+            )
+            .first,
+      );
+      expect(padding.padding,
+          const EdgeInsets.symmetric(horizontal: 96, vertical: 24));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-      // Use pump with duration instead of pumpAndSettle to avoid timeout
-      await tester.pump(const Duration(seconds: 2));
+  testWidgets(
+    'TC-S4-REG-RESP-002 changes grid columns at every responsive breakpoint',
+    (tester) async {
+      const cases = <(Size, int)>[
+        (Size(599, 800), 1),
+        (Size(600, 800), 2),
+        (Size(900, 800), 3),
+        (Size(1200, 800), 4),
+      ];
 
-      // Check if the dashboard renders without errors
-      expect(find.byType(CaregiverDashboard), findsOneWidget);
-    });
-
-    testWidgets(
-        'Team C smoke: dashboard remains usable at responsive breakpoints',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(buildTestWidget());
-      await tester.pump(const Duration(seconds: 2));
-
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      for (final size in const [
-        Size(300, 600),
-        Size(600, 800),
-        Size(1200, 800),
-      ]) {
-        tester.view.physicalSize = size;
-        await tester.pump(const Duration(seconds: 1));
-
+      for (final (size, columnCount) in cases) {
+        await pumpAtSize(tester, size);
+        final context =
+            tester.element(find.byKey(const Key('responsive-content')));
         expect(
-          MediaQuery.sizeOf(
-            tester.element(find.byType(CaregiverDashboard)),
-          ),
-          size,
-          reason: 'App surface should match the $size smoke breakpoint',
+          ResponsiveUtils.getGridColumnCount(context),
+          columnCount,
+          reason: 'width ${size.width}',
         );
-        expect(find.byType(CaregiverDashboard), findsOneWidget);
-        expect(tester.takeException(), isNull,
-            reason: 'Dashboard should render at $size without layout errors');
       }
-    });
-  });
+    },
+  );
 }

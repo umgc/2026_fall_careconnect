@@ -5,12 +5,13 @@
 // Provider.of<UserProvider> is only accessed in onPressed callbacks, never
 // in build(), so a plain MaterialApp wrapper suffices for render tests.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/shared/widgets/dashboard_appheader_widget.dart';
 
 Widget _wrap(DashboardAppHeader header) =>
-    MaterialApp(home: Scaffold(appBar: header));
+    MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(appBar: header));
 
 void main() {
   group('DashboardAppHeader', () {

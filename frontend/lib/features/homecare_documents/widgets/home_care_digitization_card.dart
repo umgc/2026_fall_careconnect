@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -105,6 +106,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
     setState(() => _processing = true);
 
     final extractor = widget.extractor ?? HomeCareDocumentApi.extract;
+    final t = AppLocalizations.of(context)!;
     HomeCareExtractionResult result;
     try {
       result = await extractor(
@@ -117,7 +119,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
       result = HomeCareExtractionResult.manualFallback(
         type,
         message:
-            'Automatic extraction failed. Please enter the fields manually.',
+            t.homecarewidget_extractionFailed,
       );
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -129,7 +131,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.message ??
-              'Automatic extraction was unavailable — continuing with manual entry.'),
+              t.homecarewidget_extractionUnavailable),
           backgroundColor: AppTheme.warning,
         ),
       );
@@ -160,8 +162,25 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
     }
   }
 
+  String _translateDisplayName(String displayname){
+    final t = AppLocalizations.of(context)!;
+    switch(displayname){
+      case('Employment Application'):
+        return t.filemanage_empApplication;
+      case('Certification / License'):
+        return t.filemanage_cert;
+      case('Tax Form (W-4)'):
+        return t.filemanage_taxForm;
+      case('Work Authorization (I-9)'):
+        return t.filemanage_workAuth;
+      default:
+        return displayname;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final local = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final canDigitize =
         _selectedType != null && _pickedFiles.isNotEmpty && !_processing;
@@ -178,7 +197,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Home Care Document Digitization',
+                    local.homecarewidget_homeCareDigitization,
                     style: theme.textTheme.headlineSmall,
                   ),
                 ),
@@ -186,8 +205,8 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Upload a hiring document and let AI prefill its fields for your review. '
-              'You can always edit the values or enter them manually.',
+              '${local.homecarewidget_digitizationDescr1}'
+              '${local.homecarewidget_digitizationDescr2}',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -196,7 +215,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
               items: _types
                   .map((t) => DropdownMenuItem<String>(
                         value: t.type,
-                        child: Text(t.displayName),
+                        child: Text(_translateDisplayName(t.displayName)),
                       ))
                   .toList(),
               onChanged: _processing
@@ -208,7 +227,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
                             _types.firstWhere((t) => t.type == value);
                       });
                     },
-              hint: const Text('Select document type'),
+              hint: Text(local.homecarewidget_docTypeHint),
               decoration: InputDecoration(
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -222,13 +241,13 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
                 OutlinedButton.icon(
                   onPressed: _processing ? null : _pickFiles,
                   icon: const Icon(Icons.attach_file),
-                  label: const Text('Choose Files'),
+                  label: Text(local.homecarewidget_chooseFiles),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _pickedFiles.isEmpty
-                        ? 'No files selected (PDF, JPG, PNG)'
+                        ? local.homecarewidget_noFileSelected
                         : _pickedFiles.map((f) => f.name).join(', '),
                     style: theme.textTheme.bodySmall,
                     maxLines: 2,
@@ -239,7 +258,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
                   IconButton(
                     onPressed: () => setState(() => _pickedFiles.clear()),
                     icon: const Icon(Icons.clear),
-                    tooltip: 'Clear selected files',
+                    tooltip: local.homecarewidget_clearSelectFile,
                   ),
               ],
             ),
@@ -257,14 +276,14 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
                         )
                       : const Icon(Icons.auto_awesome),
                   label:
-                      Text(_processing ? 'Processing...' : 'Digitize & Review'),
+                      Text(_processing ? '${local.voicecommand_processingState}...' : local.homecarewidget_digitizeReview),
                 ),
                 const SizedBox(width: 12),
                 TextButton(
                   onPressed: _selectedType == null || _processing
                       ? null
                       : _enterManually,
-                  child: const Text('Enter manually'),
+                  child: Text(local.homecarewidget_enterManual),
                 ),
               ],
             ),
