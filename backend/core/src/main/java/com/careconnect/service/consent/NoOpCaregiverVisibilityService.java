@@ -1,14 +1,12 @@
 package com.careconnect.service.consent;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Service;
 
 /**
  * Permissive default {@link CaregiverVisibilityService} that allows all
- * summary access. Wired only when no other {@code CaregiverVisibilityService}
- * bean is available — David's real implementation from WBS 3.15.5
- * automatically wins via {@code @ConditionalOnMissingBean} when his PR
- * lands.
+ * summary access until David's real WBS 3.15.5 implementation lands.
+ * Remove or replace this class when the real service ships to avoid a
+ * duplicate-bean conflict.
  *
  * <p>Behavior:
  * <ul>
@@ -23,9 +21,14 @@ import org.springframework.stereotype.Service;
  * The gate itself in {@code CallSummaryController} short-circuits when
  * {@code status == NONE}, so returning {@code NONE} here means the
  * no-op does not accidentally block otherwise-legitimate callers.
+ *
+ * <p>NOTE: {@code @ConditionalOnMissingBean} on a component-scanned
+ * {@code @Service} is unreliable (Spring Boot evaluates it too early
+ * during scan), so it is intentionally omitted here. Prefer a
+ * {@code @Configuration @Bean} default if a conditional wire-up is
+ * needed later.
  */
 @Service
-@ConditionalOnMissingBean(CaregiverVisibilityService.class)
 public class NoOpCaregiverVisibilityService implements CaregiverVisibilityService {
 
     @Override

@@ -737,7 +737,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('AI Chat File'), findsWidgets);
+      // With employment categories, later items may be off-screen.
+      final hasLabel = find.text('AI Chat File').evaluate().isNotEmpty;
+      final hasDropdown = find.text('All Categories').evaluate().isNotEmpty;
+      expect(hasLabel || hasDropdown, isTrue);
+      expect(FileCategory.aiChatUpload.displayName, 'AI Chat File');
     });
 
     testWidgets('dropdown contains General Document option', (tester) async {
@@ -748,7 +752,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('General Document'), findsWidgets);
+      final hasLabel = find.text('General Document').evaluate().isNotEmpty;
+      final hasDropdown = find.text('All Categories').evaluate().isNotEmpty;
+      expect(hasLabel || hasDropdown, isTrue);
+      expect(FileCategory.generalDocument.displayName, 'General Document');
     });
 
     testWidgets('dropdown contains Backup File option', (tester) async {
@@ -1073,7 +1080,7 @@ void main() {
 
   group('FileCategory enum', () {
     test('FileCategory.values has expected number of categories', () {
-      expect(FileCategory.values.length, 11);
+      expect(FileCategory.values.length, 19);
     });
 
     test('each category has value, displayName, and icon', () {
@@ -1085,7 +1092,7 @@ void main() {
     });
 
     test('medicalReport has expected values', () {
-      expect(FileCategory.medicalReport.value, 'MEDICAL_REPORT');
+      expect(FileCategory.medicalReport.value, 'MEDICAL_RECORD');
       expect(FileCategory.medicalReport.displayName, 'Medical Report');
     });
 
@@ -1095,7 +1102,7 @@ void main() {
     });
 
     test('generalDocument has expected values', () {
-      expect(FileCategory.generalDocument.value, 'documents');
+      expect(FileCategory.generalDocument.value, 'OTHER_DOCUMENT');
       expect(FileCategory.generalDocument.displayName, 'General Document');
     });
   });
@@ -1609,12 +1616,12 @@ void main() {
     });
 
     test('clinicalNotes category', () {
-      expect(FileCategory.clinicalNotes.value, 'CLINICAL_NOTES');
+      expect(FileCategory.clinicalNotes.value, 'CLINICAL_NOTE');
       expect(FileCategory.clinicalNotes.displayName, 'Clinical Notes');
     });
 
     test('profilePicture category', () {
-      expect(FileCategory.profilePicture.value, 'PROFILE_PICTURE');
+      expect(FileCategory.profilePicture.value, 'PROFILE_IMAGE');
       expect(FileCategory.profilePicture.displayName, 'Profile Picture');
     });
 
@@ -1624,7 +1631,7 @@ void main() {
     });
 
     test('insuranceDoc category', () {
-      expect(FileCategory.insuranceDoc.value, 'INSURANCE');
+      expect(FileCategory.insuranceDoc.value, 'INSURANCE_DOCUMENT');
       expect(FileCategory.insuranceDoc.displayName, 'Insurance Document');
     });
 

@@ -28,7 +28,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -39,6 +43,9 @@ import java.util.UUID;
  * {@link HybridRetrievalService} → min-necessary prompt → grounded Bedrock → citations.
  *
  * <p>Safety Tier-2 hold (SCC-3) is Task 6.x; this path delivers Tier 1 with mandatory disclaimer.
+ * Claim-level citation output and secondary semantic grounding validation are also deferred;
+ * the current contract validates model citation references and extractive evidence
+ * against retrieved chunks.
  *
  * <p>TODO(Task 6.x): persist Ask AI audit rows (requestId/auditId, scope, retrieval meta,
  * delivery status) via the Ask AI audit pipeline. Until then {@code auditId} is a
@@ -53,17 +60,16 @@ public class AiAskService {
             "This answer is based on your stored health records and is not medical advice.";
     private static final String CONFIRM_EN =
             "Please confirm important details with your care provider before acting on this information.";
-    private static final String CONFIRM_LOW_CONFIDENCE_EN =
-            "This answer could not be fully cited to your records. "
-                    + "Please confirm important details with your care provider before acting on this information.";
     private static final String NO_RECORDS_EN =
             "No matching records were found for this question. "
                     + "CareConnect Ask AI only answers from your stored health records "
                     + "and cannot provide general medical advice.";
+    private static final int CITATION_CONTEXT_CODE_POINTS = 80;
 
     private final RetrievalScopeService retrievalScopeService;
     private final HybridRetrievalService hybridRetrievalService;
     private final GroundedAskLlmService groundedAskLlmService;
+    private final CitationAssembler citationAssembler;
     private final InputSanitizationService inputSanitizationService;
     private final LangChainGovernanceService governanceService;
 
@@ -71,15 +77,25 @@ public class AiAskService {
             final RetrievalScopeService retrievalScopeService,
             final HybridRetrievalService hybridRetrievalService,
             final GroundedAskLlmService groundedAskLlmService,
+            final CitationAssembler citationAssembler,
             final InputSanitizationService inputSanitizationService,
             final LangChainGovernanceService governanceService) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
         this.groundedAskLlmService = groundedAskLlmService;
+        this.citationAssembler = citationAssembler;
         this.inputSanitizationService = inputSanitizationService;
         this.governanceService = governanceService;
     }
 
+    /**
+     * Produces a records-grounded answer or fails closed before delivery.
+     *
+     * @throws ForbiddenScopeException when the caller cannot retrieve the requested patient's records
+     * @throws UnauthorizedException when no authenticated caller is available
+     * @throws AskAiUnavailableException when grounded inference is unavailable
+     * @throws AskAiGroundingException when model citations do not validate against retrieved records
+     */
     public AiAskResponse ask(final User caller, final AiAskRequest request)
             throws ForbiddenScopeException, UnauthorizedException {
         if (caller == null || caller.getId() == null) {
@@ -98,12 +114,16 @@ public class AiAskService {
         final String conversationKey = request.conversationId() == null
                 ? requestId.toString()
                 : request.conversationId().toString();
+        final String normalizedInput = AskAiTextPolicy.normalize(request.query());
 
         final LangChainGovernanceService.GovernanceResult governance =
-                governanceService.validateRequest(caller.getId(), conversationKey, request.query());
+                governanceService.validateRequest(caller.getId(), conversationKey, normalizedInput);
         if (!governance.isAllowed()) {
             final boolean rateLimited = "RATE_LIMIT".equals(governance.getAction());
             throw new AskAiRejectedException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     rateLimited ? "RATE_LIMITED" : "INVALID_REQUEST",
                     governance.getReason(),
                     rateLimited ? 429 : 400);
@@ -111,32 +131,56 @@ public class AiAskService {
 
         final InputSanitizationService.SanitizationResult sanitization =
                 inputSanitizationService.sanitizeUserInput(
-                        request.query(), caller.getId(), conversationKey);
+                        normalizedInput, caller.getId(), conversationKey);
         if (sanitization.isBlocked()) {
             throw new AskAiRejectedException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     "SAFETY_VALIDATION_FAILED",
                     "Query blocked by input safety checks",
                     422);
         }
-        final String sanitizedQuery = sanitization.getSanitizedContent();
+        final String sanitizedQuery =
+                AskAiTextPolicy.normalize(sanitization.getSanitizedContent()).trim();
         if (sanitizedQuery == null || sanitizedQuery.isBlank()) {
             throw new AskAiRejectedException(
+                    requestId,
+                    auditId,
+                    sessionId,
                     "INVALID_REQUEST", "query must not be blank", 400);
         }
 
         final Set<RetrievalRecordType> requestedTypes = toTypeSet(request.sourceTypes());
-        final RetrievalScope scope = retrievalScopeService.resolveRetrievalScope(
-                caller, request.patientId(), requestedTypes);
+        final RetrievalScope scope;
+        try {
+            scope = retrievalScopeService.resolveRetrievalScope(
+                    caller, request.patientId(), requestedTypes);
+        } catch (final ForbiddenScopeException ex) {
+            throw ex.withCorrelation(
+                    requestId,
+                    ex.getAuditId() == null ? auditId : ex.getAuditId(),
+                    sessionId);
+        }
 
         final long retrievalStarted = System.nanoTime();
-        final HybridRetrievalResult retrieval =
-                hybridRetrievalService.search(scope, request.patientId(), sanitizedQuery);
+        final HybridRetrievalResult retrieval;
+        try {
+            retrieval = hybridRetrievalService.search(
+                    scope, request.patientId(), sanitizedQuery);
+        } catch (final RuntimeException ex) {
+            throw new AskAiUnavailableException(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "RETRIEVAL_UNAVAILABLE",
+                    "Record retrieval is temporarily unavailable",
+                    ex);
+        }
         final long retrievalLatencyMs = (System.nanoTime() - retrievalStarted) / 1_000_000L;
 
         if (retrieval == null || retrieval.isEmpty()) {
-            log.info(
-                    "Ask AI NO_RECORDS requestId={} patientId={} caller={}",
-                    requestId, request.patientId(), caller.getId());
+            log.debug("Ask AI NO_RECORDS requestId={}", requestId);
             return noRecordsResponse(
                     requestId, auditId, sessionId, locale, retrieval, retrievalLatencyMs);
         }
@@ -149,40 +193,102 @@ public class AiAskService {
         }
 
         final long inferenceStarted = System.nanoTime();
-        final var llmOpt = groundedAskLlmService.generate(
-                context.systemPrompt(), context.userPrompt());
+        final Optional<GroundedAskLlmService.GroundedLlmResult> llmOpt;
+        try {
+            llmOpt = groundedAskLlmService.generate(
+                    context.systemPrompt(), context.userPrompt());
+        } catch (final GroundedOutputValidationException ex) {
+            throw groundingFailure(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "Generated answer did not satisfy the grounded response contract");
+        } catch (final GroundedProviderException ex) {
+            final boolean configuration =
+                    ex.getKind() == GroundedProviderException.Kind.CONFIGURATION;
+            throw new AskAiUnavailableException(
+                    requestId,
+                    auditId,
+                    sessionId,
+                    configuration
+                            ? "MODEL_CONFIGURATION_UNAVAILABLE"
+                            : "MODEL_PROVIDER_UNAVAILABLE",
+                    configuration
+                            ? "Grounded answer generation is not configured"
+                            : "Grounded answer generation is temporarily unavailable",
+                    ex);
+        }
         final long inferenceLatencyMs = (System.nanoTime() - inferenceStarted) / 1_000_000L;
 
         if (llmOpt.isEmpty()) {
             throw new AskAiUnavailableException(
-                    "RETRIEVAL_UNAVAILABLE",
-                    "Grounded answer generation is temporarily unavailable");
+                    requestId,
+                    auditId,
+                    sessionId,
+                    "MODEL_PROVIDER_UNAVAILABLE",
+                    "Grounded answer generation is temporarily unavailable",
+                    null);
         }
 
         final GroundedAskLlmService.GroundedLlmResult llm = llmOpt.get();
+        final Map<String, List<String>> verifiedEvidenceByRef = new LinkedHashMap<>();
+        for (final GroundedAskLlmService.GroundedClaim claim : llm.claims()) {
+            final CitationAssembler.CitationResult claimCitations =
+                    citationAssembler.assemble(
+                            claim.citationRefs(), context.citationRefMap());
+            if (claim.text() == null
+                    || claim.text().isBlank()
+                    || !hasExtractiveEvidence(
+                            claim,
+                            sanitizedQuery,
+                            context.promptExcerptMap(),
+                            context.citationRefMap())
+                    || !claimCitations.grounded()) {
+                throw groundingFailure(
+                        requestId, auditId, sessionId,
+                        "Generated answer contains an unsupported factual claim");
+            }
+            final String ref = claim.citationRefs().get(0);
+            verifiedEvidenceByRef.computeIfAbsent(ref, ignored -> new ArrayList<>())
+                    .add(surroundingCitationContext(
+                            context.promptExcerptMap().get(ref).text(),
+                            claim.evidenceByRef().get(ref)));
+        }
         final CitationAssembler.CitationResult citationResult =
-                CitationAssembler.assemble(llm.citationRefs(), context.citationRefMap());
+                citationAssembler.assembleWithEvidence(
+                        llm.citationRefs(),
+                        context.citationRefMap(),
+                        verifiedEvidenceByRef);
+        if (!citationResult.grounded()) {
+            log.warn(
+                    "Ask AI WITHHELD ungrounded response requestId={} invalidRefCount={}",
+                    requestId,
+                    citationResult.invalidRefs().size());
+            // Tier-2 review is Task 6.x. Until the hold queue exists, fail closed:
+            // never deliver an answer whose model citations are missing or invalid.
+            throw groundingFailure(
+                    requestId, auditId, sessionId,
+                    "Generated answer could not be verified against retrieved records");
+        }
         final List<AiCitation> citations = citationResult.citations();
-        final boolean modelCited = citationResult.modelCited();
+        final String verifiedAnswer = llm.claims().stream()
+                .map(GroundedAskLlmService.GroundedClaim::text)
+                .reduce((left, right) -> left + " " + right)
+                .orElseThrow(() -> groundingFailure(
+                        requestId,
+                        auditId,
+                        sessionId,
+                        "Generated answer did not contain verified claims"));
 
         final InputModality modality =
                 request.inputModality() == null ? InputModality.TEXT : request.inputModality();
-        log.info(
-                "Ask AI DELIVERED requestId={} patientId={} chunks={} citations={} modelCited={} modality={} degraded={}",
+        log.debug(
+                "Ask AI DELIVERED requestId={} chunks={} citations={} modality={} degraded={}",
                 requestId,
-                request.patientId(),
                 context.usedChunks().size(),
                 citations.size(),
-                modelCited,
                 modality,
                 retrieval.vectorDegraded());
-
-        final AiEscalation escalation = modelCited
-                ? new AiEscalation(1, "Tier1_auto_deliver", false)
-                : new AiEscalation(1, "low_confidence_uncited", false);
-        final AiConfirmationHint confirmation = modelCited
-                ? new AiConfirmationHint(true, CONFIRM_EN)
-                : new AiConfirmationHint(true, CONFIRM_LOW_CONFIDENCE_EN);
 
         return new AiAskResponse(
                 true,
@@ -194,11 +300,11 @@ public class AiAskService {
                 1,
                 false,
                 null,
-                new AiAnswerBlock(llm.answerText(), locale),
+                new AiAnswerBlock(verifiedAnswer, locale),
                 citations,
                 disclaimer(locale),
-                escalation,
-                confirmation,
+                new AiEscalation(1, "Tier1_auto_deliver", false),
+                new AiConfirmationHint(true, CONFIRM_EN),
                 new AiRetrievalMeta(
                         retrieval.chunks().size(),
                         context.usedChunks().size(),
@@ -209,6 +315,96 @@ public class AiAskService {
                 null,
                 null,
                 null);
+    }
+
+    private static boolean hasExtractiveEvidence(
+            final GroundedAskLlmService.GroundedClaim claim,
+            final String query,
+            final Map<String, RetrievalContextAssembler.PromptExcerpt> promptExcerptMap,
+            final Map<String, com.careconnect.service.ai.retrieval.RankedChunk> refMap) {
+        if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
+            return false;
+        }
+        final String ref = claim.citationRefs().get(0);
+        final RetrievalContextAssembler.PromptExcerpt excerpt = promptExcerptMap.get(ref);
+        final String evidence = claim.evidenceByRef().get(ref);
+        return excerpt != null
+                && evidence != null
+                && evidence.codePointCount(0, evidence.length()) >= 20
+                && claim.text().equals(evidence)
+                && isCompleteSpan(excerpt, evidence)
+                && GroundingRelevancePolicy.isRelevant(
+                        query, evidence, excerpt.text(), refMap.get(ref));
+    }
+
+    private static boolean isCompleteSpan(
+            final RetrievalContextAssembler.PromptExcerpt excerpt,
+            final String evidence) {
+        final int start = excerpt.text().indexOf(evidence);
+        if (start < 0 || excerpt.text().indexOf(evidence, start + 1) >= 0) {
+            return false;
+        }
+        final int end = start + evidence.length();
+        if ((start == 0 && excerpt.startTruncated())
+                || (end == excerpt.text().length() && excerpt.endTruncated())) {
+            return false;
+        }
+        return isSentenceStart(excerpt.text(), start) && isSentenceEnd(excerpt.text(), end);
+    }
+
+    private static boolean isSentenceStart(final String text, final int start) {
+        if (start == 0) {
+            return true;
+        }
+        int offset = start;
+        while (offset > 0) {
+            final int codePoint = text.codePointBefore(offset);
+            offset -= Character.charCount(codePoint);
+            if (!Character.isWhitespace(codePoint)) {
+                return codePoint == '.' || codePoint == '!' || codePoint == '?'
+                        || codePoint == '\n' || codePoint == '\r';
+            }
+        }
+        return true;
+    }
+
+    private static boolean isSentenceEnd(final String text, final int end) {
+        if (end == text.length()) {
+            return true;
+        }
+        final int lastEvidenceCodePoint = text.codePointBefore(end);
+        final int nextCodePoint = text.codePointAt(end);
+        return (lastEvidenceCodePoint == '.'
+                || lastEvidenceCodePoint == '!'
+                || lastEvidenceCodePoint == '?')
+                && Character.isWhitespace(nextCodePoint);
+    }
+
+    private static String surroundingCitationContext(
+            final String excerpt, final String evidence) {
+        if (excerpt == null || evidence == null) {
+            return evidence;
+        }
+        final int evidenceStart = excerpt.indexOf(evidence);
+        if (evidenceStart < 0) {
+            return evidence;
+        }
+        final int evidenceEnd = evidenceStart + evidence.length();
+        final int before = excerpt.codePointCount(0, evidenceStart);
+        final int after = excerpt.codePointCount(evidenceEnd, excerpt.length());
+        final int contextStart = excerpt.offsetByCodePoints(
+                evidenceStart, -Math.min(before, CITATION_CONTEXT_CODE_POINTS));
+        final int contextEnd = excerpt.offsetByCodePoints(
+                evidenceEnd, Math.min(after, CITATION_CONTEXT_CODE_POINTS));
+        return excerpt.substring(contextStart, contextEnd).trim();
+    }
+
+    private static AskAiGroundingException groundingFailure(
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String message) {
+        return new AskAiGroundingException(requestId, auditId, sessionId, message);
     }
 
     private AiAskResponse noRecordsResponse(
@@ -293,10 +489,12 @@ public class AiAskService {
         }
         final EnumSet<RetrievalRecordType> set = EnumSet.noneOf(RetrievalRecordType.class);
         for (final RetrievalRecordType type : types) {
-            if (type != null) {
-                set.add(type);
+            if (type == null) {
+                throw new AskAiRejectedException(
+                        "INVALID_REQUEST", "sourceTypes must not contain null", 400);
             }
+            set.add(type);
         }
-        return set.isEmpty() ? null : set;
+        return set;
     }
 }

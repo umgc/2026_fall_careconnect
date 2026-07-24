@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../services/comprehensive_file_service.dart';
@@ -480,6 +481,9 @@ class _FileManagementPageState extends State<FileManagementPage>
   }
 
   Widget _buildUploadTab() {
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    final isPatient = user?.role.toUpperCase() == 'PATIENT';
+
     return Container(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -512,6 +516,10 @@ class _FileManagementPageState extends State<FileManagementPage>
               ),
             ),
             const SizedBox(height: 24),
+            if (isPatient) ...[
+              _buildInviteFamilyCard(),
+              const SizedBox(height: 24),
+            ],
             // Home Care Document Digitization (OCR + LLM prefill for review)
             HomeCareDigitizationCard(
               patientId: _userId,
@@ -577,6 +585,46 @@ class _FileManagementPageState extends State<FileManagementPage>
                 ),
               ),
             )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInviteFamilyCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.group_add,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Invite family help',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Start the invite flow without manually building a URL.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: () => context.go('/care-circle/invite'),
+              style: AppTheme.primaryButtonStyle,
+              child: const Text('Start Invite'),
+            ),
           ],
         ),
       ),
