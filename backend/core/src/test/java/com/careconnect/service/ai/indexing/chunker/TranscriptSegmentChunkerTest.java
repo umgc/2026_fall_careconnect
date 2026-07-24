@@ -36,6 +36,8 @@ class TranscriptSegmentChunkerTest {
         assertThat(drafts.get(0).chunkText()).isEqualTo("Patient: I started metformin yesterday.");
         assertThat(drafts.get(0).metadata()).containsEntry("segmentId", 11L);
         assertThat(drafts.get(0).metadata()).containsEntry("chunkIndex", 0);
+        assertThat(drafts.get(0).metadata())
+                .containsEntry("occurredAt", "2026-07-10T12:00:00Z");
     }
 
     @Test

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
@@ -575,12 +576,26 @@ class OfflineQueueHttpClient extends http.BaseClient {
     required OfflineSyncService offlineSyncService,
     bool Function()? canQueueWrites,
   })  : _inner = inner,
+        _defaultInner = inner,
         _offlineSyncService = offlineSyncService,
         _canQueueWrites = canQueueWrites;
 
-  final http.Client _inner;
+  http.Client _inner;
+  final http.Client _defaultInner;
   final OfflineSyncService _offlineSyncService;
   final bool Function()? _canQueueWrites;
+
+  /// Replace the inner transport used for outbound HTTP (tests only).
+  @visibleForTesting
+  void debugSetInnerClient(http.Client client) {
+    _inner = client;
+  }
+
+  /// Restore the inner client created at construction time (tests only).
+  @visibleForTesting
+  void debugResetInnerClient() {
+    _inner = _defaultInner;
+  }
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {

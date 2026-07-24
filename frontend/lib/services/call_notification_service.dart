@@ -114,7 +114,7 @@ class CallNotificationService {
       debugPrint('📞 Received incoming video call: $data');
       _incomingCallController.add(data);
       _handleIncomingCall(data);
-    } else if (type == 'call-ended') {
+    } else if (type == 'call-ended' || type == 'call-ending') {
       debugPrint('📞 Call ended: $data');
       _incomingCallController.add(data);
       _dismissIncomingCallForCallId((data['callId'] ?? '').toString());
@@ -150,9 +150,8 @@ class CallNotificationService {
       }
     } else if (type == 'call-invitation-failed') {
       final callId = (data['callId'] ?? '').toString();
-      final reason = (data['reason'] ?? 'Recipient unavailable')
-          .toString()
-          .trim();
+      final reason =
+          (data['reason'] ?? 'Recipient unavailable').toString().trim();
       final recipientName = (data['recipientName'] ?? '').toString().trim();
       final recipientRole = (data['recipientRole'] ?? '').toString().trim();
       final recipientLabel = recipientName.isNotEmpty
@@ -172,6 +171,8 @@ class CallNotificationService {
     } else if (type == 'sentiment-update') {
       _incomingCallController.add(data);
     } else if (type == 'sentiment-channel-state') {
+      _incomingCallController.add(data);
+    } else if (type == 'recording-state') {
       _incomingCallController.add(data);
     }
   }
@@ -203,8 +204,8 @@ class CallNotificationService {
 
     // Extract call information
     final callId = (callData['callId'] ?? '').toString();
-    final callerId = (callData['senderId'] ?? callData['callerId'] ?? '')
-        .toString();
+    final callerId =
+        (callData['senderId'] ?? callData['callerId'] ?? '').toString();
     final callerRole =
         (callData['senderRole'] ?? callData['callerRole'] ?? 'PATIENT')
             .toString();
@@ -216,6 +217,13 @@ class CallNotificationService {
     );
     final isVideoCall = callData['isVideoCall'] ?? true;
     final isConferenceInvite = callData['isConferenceInvite'] == true;
+    final callKind = _normalizeCallKind(
+      callData['callKind'] ?? callData['callType'],
+    );
+    final contextPatientUserIds = _normalizePatientContextIds(
+      callData['contextPatientUserIds'] ?? callData['contextPatientUserId'],
+    );
+    final scheduledVisitId = (callData['scheduledVisitId'] ?? '').toString();
 
     if (callId.isEmpty) return;
     _pruneSuppressedIncomingCallIds();
@@ -249,6 +257,9 @@ class CallNotificationService {
       isVideoCall: isVideoCall,
       callerRole: callerRole,
       isConferenceInvite: isConferenceInvite,
+      callKind: callKind,
+      contextPatientUserIds: contextPatientUserIds,
+      scheduledVisitId: scheduledVisitId,
     );
   }
 
@@ -260,6 +271,9 @@ class CallNotificationService {
     required bool isVideoCall,
     required String callerRole,
     bool isConferenceInvite = false,
+    String callKind = 'GENERAL',
+    List<int> contextPatientUserIds = const [],
+    String scheduledVisitId = '',
   }) {
     if (_context == null) return;
 
@@ -281,7 +295,11 @@ class CallNotificationService {
           callId: callId,
           callerId: callerId,
           callerName: callerName,
+          callerRole: callerRole,
           isVideoCall: isVideoCall,
+          callKind: callKind,
+          contextPatientUserIds: contextPatientUserIds,
+          scheduledVisitId: scheduledVisitId,
           dialogContext: context,
         ),
         onDecline: () => _declineCall(
@@ -303,7 +321,11 @@ class CallNotificationService {
     required String callId,
     required String callerId,
     required String callerName,
+    required String callerRole,
     required bool isVideoCall,
+    required String callKind,
+    required List<int> contextPatientUserIds,
+    required String scheduledVisitId,
     BuildContext? dialogContext,
   }) {
     if (_context == null || _currentUserId == null) return;
@@ -325,20 +347,17 @@ class CallNotificationService {
     _dismissIncomingCallPopup(dialogContext: dialogContext);
 
     // Navigate to video call screen
-    final userName = Uri.encodeComponent(_getCurrentUserName());
-    final recipientName = Uri.encodeComponent(callerName);
-    final role = Uri.encodeComponent((_currentUserRole ?? '').toUpperCase());
     _context!.push(
-      '/video-call-chime'
-      '?userId=$_currentUserId'
-      '&callId=${Uri.encodeComponent(callId)}'
-      '&recipientId=${Uri.encodeComponent(callerId)}'
-      '&userRole=$role'
-      '&userName=$userName'
-      '&recipientName=$recipientName'
-      '&initiator=false'
-      '&video=${isVideoCall ? 'true' : 'false'}'
-      '&audio=true',
+      _acceptedCallLocation(
+        callId: callId,
+        callerId: callerId,
+        callerName: callerName,
+        callerRole: callerRole,
+        isVideoCall: isVideoCall,
+        callKind: callKind,
+        contextPatientUserIds: contextPatientUserIds,
+        scheduledVisitId: scheduledVisitId,
+      ),
     );
   }
 
@@ -482,6 +501,8 @@ class CallNotificationService {
     required String callId,
     required bool isVideoCall,
     String? callType,
+    String? callKind,
+    List<int>? contextPatientUserIds,
   }) async {
     if (!_isConnected || _channel == null) {
       debugPrint('❌ Cannot send call invitation - not connected');
@@ -503,6 +524,9 @@ class CallNotificationService {
         'recipientRole': recipientRole,
         'isVideoCall': isVideoCall,
         'callType': (callType ?? 'general'),
+        'callKind': _normalizeCallKind(callKind ?? callType),
+        if (contextPatientUserIds != null && contextPatientUserIds.isNotEmpty)
+          'contextPatientUserIds': contextPatientUserIds,
         'timestamp': DateTime.now().toIso8601String(),
       };
       _channel!.sink.add(_encode(msg));
@@ -601,7 +625,8 @@ class CallNotificationService {
         'timestamp': DateTime.now().toIso8601String(),
       };
       _channel!.sink.add(_encode(msg));
-      _suppressIncomingCallId(normalizedCallId, duration: const Duration(seconds: 45));
+      _suppressIncomingCallId(normalizedCallId,
+          duration: const Duration(seconds: 45));
       if (_activeCallId == normalizedCallId) {
         _activeCallId = null;
       }
@@ -669,6 +694,53 @@ class CallNotificationService {
     if (normalized == 'CAREGIVER') return 'Caregiver';
     if (normalized == 'PATIENT') return 'Patient';
     return null;
+  }
+
+  static String _normalizeCallKind(dynamic raw) {
+    final normalized = (raw ?? '').toString().trim().toUpperCase().replaceAll(
+          '-',
+          '_',
+        );
+    return normalized == 'CARE_TEAM' ? 'CARE_TEAM' : 'GENERAL';
+  }
+
+  static List<int> _normalizePatientContextIds(dynamic raw) {
+    final values = raw is List ? raw : [raw];
+    final ids = <int>[];
+    for (final value in values) {
+      final id = value is int ? value : int.tryParse((value ?? '').toString());
+      if (id != null && id > 0 && !ids.contains(id)) ids.add(id);
+    }
+    return ids;
+  }
+
+  static String _acceptedCallLocation({
+    required String callId,
+    required String callerId,
+    required String callerName,
+    required String callerRole,
+    required bool isVideoCall,
+    required String callKind,
+    required List<int> contextPatientUserIds,
+    String scheduledVisitId = '',
+  }) {
+    final params = <String, String>{
+      'userId': _currentUserId ?? '',
+      'callId': callId,
+      'recipientId': callerId,
+      'userRole': (_currentUserRole ?? '').toUpperCase(),
+      'userName': _getCurrentUserName(),
+      'recipientName': callerName,
+      'recipientRole': callerRole,
+      'initiator': 'false',
+      'video': isVideoCall ? 'true' : 'false',
+      'audio': 'true',
+      'callKind': _normalizeCallKind(callKind),
+      if (contextPatientUserIds.isNotEmpty)
+        'contextPatientUserIds': contextPatientUserIds.join(','),
+      if (scheduledVisitId.isNotEmpty) 'scheduledVisitId': scheduledVisitId,
+    };
+    return Uri(path: '/video-call-chime', queryParameters: params).toString();
   }
 
   /// Get current user name from context or default
@@ -739,5 +811,24 @@ class CallNotificationService {
   @visibleForTesting
   static void processNotificationMessageForTest(Map<String, dynamic> data) {
     _processNotificationMessage(data);
+  }
+
+  @visibleForTesting
+  static String acceptedCallLocationForTest({
+    required String callKind,
+    required List<int> contextPatientUserIds,
+    String callerRole = 'CAREGIVER',
+    String scheduledVisitId = '',
+  }) {
+    return _acceptedCallLocation(
+      callId: 'call-test',
+      callerId: '2',
+      callerName: 'Caller',
+      callerRole: callerRole,
+      isVideoCall: true,
+      callKind: callKind,
+      contextPatientUserIds: contextPatientUserIds,
+      scheduledVisitId: scheduledVisitId,
+    );
   }
 }
