@@ -9,6 +9,7 @@ import 'package:care_connect_app/features/notetaker/models/patient_note_model.da
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_detail_view.dart';
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_search.dart';
 import 'package:care_connect_app/features/informed_delivery/informed_delivery_screen.dart';
+import 'package:care_connect_app/features/invite_share/invite_qr_autoload_screen.dart';
 import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
 import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
@@ -410,6 +411,19 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       builder: (_, __) => const PatientRegistrationPage(),
     ),
     GoRoute(path: '/add-patient', builder: (_, __) => const AddPatientScreen()),
+    // Patient-friendly invite route: resolves the care-circle link ID
+    // automatically so users do not need manual URL construction.
+    GoRoute(
+      path: '/care-circle/invite',
+      name: 'inviteShareAuto',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return InviteQrAutoloadScreen(
+          invitedEmail: extra?['invitedEmail'] as String?,
+          inviteReason: extra?['inviteReason'] as String?,
+        );
+      },
+    ),
     // Issue #69: QR-based invite share for caregivers. Scoped to a care-circle
     // link id in the path; optional invitedEmail / inviteReason via `extra`.
     GoRoute(

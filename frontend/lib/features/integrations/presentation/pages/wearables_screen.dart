@@ -349,8 +349,70 @@ class _WearablesScreenState extends State<WearablesScreen> {
         });
         print('✓ Loaded ${connectedDevices.length} connected devices');
       }
+
+      if (kIsWeb) {
+        await _syncWebGoogleHealthConnection(prefs);
+      }
     } catch (e) {
       print('✗ Failed to load devices: $e');
+    }
+  }
+
+  Future<void> _syncWebGoogleHealthConnection(SharedPreferences prefs) async {
+    try {
+      final authHeaders = await ApiService.getAuthHeaders();
+      final response = await http.get(
+        Uri.parse(
+            '${getBackendBaseUrl()}/v1/api/wearables/google-health/status'),
+        headers: authHeaders,
+      );
+      if (response.statusCode != 200) {
+        return;
+      }
+
+      final payload = jsonDecode(response.body) as Map<String, dynamic>;
+      final connected = payload['connected'] == true;
+      const webDevicePrefix = 'google_health_web_';
+      final hasWebGoogleHealthDevice = connectedDevices.any(
+        (device) =>
+            device.platform == 'fitbit' &&
+            device.id.startsWith(webDevicePrefix),
+      );
+
+      bool changed = false;
+      if (connected && !hasWebGoogleHealthDevice) {
+        connectedDevices.add(
+          ConnectedDevice(
+            id: '${webDevicePrefix}${DateTime.now().millisecondsSinceEpoch}',
+            platform: 'fitbit',
+            name: 'Fitbit (Google Health)',
+            connectedAt: DateTime.now(),
+            permissions: const [
+              'steps',
+              'heart_rate',
+              'blood_pressure_diastolic',
+              'blood_pressure_systolic',
+            ],
+          ),
+        );
+        changed = true;
+      } else if (!connected && hasWebGoogleHealthDevice) {
+        connectedDevices.removeWhere(
+          (device) =>
+              device.platform == 'fitbit' &&
+              device.id.startsWith(webDevicePrefix),
+        );
+        changed = true;
+      }
+
+      if (changed) {
+        setState(() {});
+        final devicesJson =
+            connectedDevices.map((device) => device.toJson()).toList();
+        await prefs.setString('connected_devices', jsonEncode(devicesJson));
+      }
+    } catch (_) {
+      // Web status sync is best-effort and should not block screen rendering.
     }
   }
 
@@ -417,7 +479,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Future<int?> _resolvePatientId() async {
-    final selectedPatientId = await UserRoleStorageService.instance.getPatientId();
+    final selectedPatientId =
+        await UserRoleStorageService.instance.getPatientId();
     if (selectedPatientId != null) {
       return selectedPatientId;
     }
@@ -484,11 +547,20 @@ class _WearablesScreenState extends State<WearablesScreen> {
     if (!hasFitbitDevice) return;
 
     if (fitbitClientId == null || fitbitClientSecret == null) {
-      setState(() {
-        hasSyncError = true;
-        syncStatusMessage =
-            'Fitbit sync skipped: FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET are not configured.';
-      });
+      // Fitbit OAuth client IDs are deprecated for this app flow.
+      // If Fitbit is the only connected source, fall back to Google Health /
+      // Health Connect reads so Fitbit-originated metrics can still sync.
+      final hasOtherHealthSource = connectedDevices.any((device) =>
+          device.platform == 'google_fit' || device.platform == 'apple_health');
+      if (hasOtherHealthSource) {
+        return;
+      }
+      await _collectHealthReadingsFromPlugin(
+        readings: readings,
+        startTime: startTime,
+        endTime: endTime,
+        source: 'fitbit',
+      );
       return;
     }
 
@@ -539,6 +611,57 @@ class _WearablesScreenState extends State<WearablesScreen> {
     }
   }
 
+  Future<void> _collectHealthReadingsFromPlugin({
+    required List<_IngestReading> readings,
+    required DateTime startTime,
+    required DateTime endTime,
+    required String source,
+  }) async {
+    try {
+      final health = Health();
+      await health.configure();
+
+      final List<HealthDataType> types = [
+        HealthDataType.STEPS,
+        HealthDataType.HEART_RATE,
+        HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
+        HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
+      ];
+
+      final bool hasReadAccess = await health.requestAuthorization(
+        types,
+        permissions: types.map((type) => HealthDataAccess.READ).toList(),
+      );
+      if (!hasReadAccess) {
+        return;
+      }
+
+      final List<HealthDataPoint> allHealthData =
+          await health.getHealthDataFromTypes(
+        startTime: startTime,
+        endTime: endTime,
+        types: types,
+      );
+
+      for (final point in allHealthData) {
+        final mappedMetric = _mapHealthTypeToBackendMetric(point.type);
+        if (mappedMetric == null) continue;
+        final value = _safeHealthValue(point.value);
+        if (value == null || value <= 0) continue;
+        readings.add(
+          _IngestReading(
+            metric: mappedMetric,
+            metricValue: value,
+            recordedAt: point.dateFrom,
+            source: source,
+          ),
+        );
+      }
+    } catch (e) {
+      print('⚠ Plugin health fallback collection failed for $source: $e');
+    }
+  }
+
   Future<void> _collectGoogleAppleReadings(
     List<_IngestReading> readings,
     DateTime startTime,
@@ -553,10 +676,10 @@ class _WearablesScreenState extends State<WearablesScreen> {
       Health health = Health();
       await health.configure();
 
-      final source = connectedDevices
-              .any((device) => device.platform == 'apple_health')
-          ? 'apple_health'
-          : 'google_fit';
+      final source =
+          connectedDevices.any((device) => device.platform == 'apple_health')
+              ? 'apple_health'
+              : 'google_fit';
 
       List<HealthDataType> types = [
         HealthDataType.STEPS,
@@ -669,7 +792,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
       body: jsonEncode({
         'patientId': patientId,
         'source': 'wearables_screen',
-        'readings': readings.take(500).map((reading) => reading.toJson()).toList(),
+        'readings':
+            readings.take(500).map((reading) => reading.toJson()).toList(),
       }),
     );
 
@@ -678,10 +802,12 @@ class _WearablesScreenState extends State<WearablesScreen> {
         response.statusCode == 207) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final data = body['data'] as Map<String, dynamic>?;
-      int accepted = ((data?['acceptedCount'] ?? body['acceptedCount'] ?? 0) as num)
-          .toInt();
-      int rejected = ((data?['rejectedCount'] ?? body['rejectedCount'] ?? 0) as num)
-          .toInt();
+      int accepted =
+          ((data?['acceptedCount'] ?? body['acceptedCount'] ?? 0) as num)
+              .toInt();
+      int rejected =
+          ((data?['rejectedCount'] ?? body['rejectedCount'] ?? 0) as num)
+              .toInt();
       final acceptedReadings = _parseAcceptedIngestionReadings(data);
       if (accepted == 0 && acceptedReadings.isNotEmpty) {
         accepted = acceptedReadings.length;
@@ -747,7 +873,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load persisted vitals (${response.statusCode})');
+      throw Exception(
+          'Failed to load persisted vitals (${response.statusCode})');
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -757,16 +884,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
       setState(() {
         hasSyncError = false;
         latestHealthData = {};
-        syncStatusMessage =
-            'No synced wearable data found yet. '
+        syncStatusMessage = 'No synced wearable data found yet. '
             'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
       });
       return false;
     }
 
-    final vitals = data
-        .whereType<Map<String, dynamic>>()
-        .toList()
+    final vitals = data.whereType<Map<String, dynamic>>().toList()
       ..sort((a, b) {
         final aTs = DateTime.tryParse(a['timestamp']?.toString() ?? '');
         final bTs = DateTime.tryParse(b['timestamp']?.toString() ?? '');

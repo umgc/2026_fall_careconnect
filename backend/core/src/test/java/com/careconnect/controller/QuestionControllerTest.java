@@ -78,7 +78,7 @@ class QuestionControllerTest {
         @DisplayName("Returns all questions when active filter is missing")
         void returnsAllWhenFilterMissing() throws Exception {
             // Arrange
-            when(questionService.listQuestions(null)).thenReturn(List.of(sampleQuestion));
+            when(questionService.listQuestions(null, null, null)).thenReturn(List.of(sampleQuestion));
 
             // Act + Assert
             mockMvc.perform(get("/v1/api/questions"))
@@ -88,7 +88,7 @@ class QuestionControllerTest {
                     .andExpect(jsonPath("$[0].active").value(false));
 
             // Assert
-            verify(questionService).listQuestions(null);
+            verify(questionService).listQuestions(null, null, null);
         }
 
         @Test
@@ -96,7 +96,7 @@ class QuestionControllerTest {
         @DisplayName("Passes active=true filter to service")
         void passesActiveTrueFilter() throws Exception {
             // Arrange
-            when(questionService.listQuestions(true)).thenReturn(List.of(activeQuestion));
+            when(questionService.listQuestions(true, null, null)).thenReturn(List.of(activeQuestion));
 
             // Act + Assert
             mockMvc.perform(get("/api/questions").param("active", "true"))
@@ -104,7 +104,7 @@ class QuestionControllerTest {
                     .andExpect(jsonPath("$[0].active").value(true));
 
             // Assert
-            verify(questionService).listQuestions(true);
+            verify(questionService).listQuestions(true, null, null);
         }
     }
 
