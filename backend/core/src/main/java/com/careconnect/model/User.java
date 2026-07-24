@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.Builder;
+import lombok.Singular;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.Set;
@@ -51,7 +52,7 @@ public class User {
 
     // --- REFACTORED SECURE DB-DRIVEN RBAC INFRASTRUCTURE ---
     // Swapped direct enum column mapping for a collection table to support future multi-role architectures
-    @Builder.Default
+   @Singular("role") // <--- Replaced @Builder.Default with @Singular("role")
     @ElementCollection(targetClass = Role.class, fetch = FetchType.EAGER)
     @CollectionTable(
         name = "user_roles",
