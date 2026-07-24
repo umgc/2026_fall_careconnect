@@ -5,6 +5,7 @@ import 'package:care_connect_app/features/homecare_documents/models/home_care_do
 import 'package:care_connect_app/features/homecare_documents/pages/home_care_document_review_page.dart';
 import 'package:care_connect_app/features/homecare_documents/services/home_care_document_api.dart';
 import 'package:care_connect_app/features/homecare_documents/widgets/home_care_digitization_card.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,6 +40,9 @@ void main() {
     List<PickedHomeCareFile>? initialFiles,
   }) {
     return MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: SingleChildScrollView(
           child: HomeCareDigitizationCard(
@@ -233,6 +237,9 @@ void main() {
     testWidgets('throwing types loader falls back to local schema mirror',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: HomeCareDigitizationCard(
@@ -252,6 +259,9 @@ void main() {
     testWidgets('empty types list falls back to local schema mirror',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: HomeCareDigitizationCard(

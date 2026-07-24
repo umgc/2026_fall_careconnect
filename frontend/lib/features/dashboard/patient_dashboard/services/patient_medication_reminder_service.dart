@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:care_connect_app/features/dashboard/patient_dashboard/models/medication_reminder_item.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/services/api_service.dart';
 
 class PatientMedicationReminderService {
@@ -12,6 +13,7 @@ class PatientMedicationReminderService {
 
   Future<List<MedicationReminderItem>> loadReminders({
     required int? patientId,
+    required AppLocalizations t,
   }) async {
     if (patientId == null) {
       return const <MedicationReminderItem>[];
@@ -50,10 +52,10 @@ class PatientMedicationReminderService {
       final medicationId = _parseInt(row['id']) ?? syntheticId--;
       activeMedicationIds.add(medicationId);
 
-      final dosage = (row['dosage'] ?? 'Dose not set').toString();
-      final frequency = (row['frequency'] ?? 'Once daily').toString();
+      final dosage = (row['dosage'] ?? t.ptmedreminderservice_doseNotSet).toString();
+      final frequency = (row['frequency'] ?? t.ptmedreminderservice_frequencyNotSet).toString();
       final startDate = DateTime.tryParse((row['startDate'] ?? '').toString());
-      final frequencyInterval = _frequencyInterval(frequency);
+      final frequencyInterval = _frequencyInterval(frequency, t);
       final serverLastTaken = _parseDateTime(row['lastTaken']);
       final hasLocalOverride =
           _localLastTakenOverrideByMedicationId.containsKey(medicationId);
@@ -150,27 +152,27 @@ class PatientMedicationReminderService {
     return null;
   }
 
-  Duration _frequencyInterval(String frequency) {
+  Duration _frequencyInterval(String frequency, AppLocalizations t) {
     final text = frequency.toLowerCase();
 
-    if (text.contains('twice') || text.contains('2x') || text.contains('two')) {
+    if (text.contains('twice') || text.contains(t.ptmedreminderservice_twice) || text.contains('2x') || text.contains('two') || text.contains(t.ptmedreminderservice_two)) {
       return const Duration(hours: 12);
     }
-    if (text.contains('three') || text.contains('3x')) {
+    if (text.contains('three') || text.contains(t.ptmedreminderservice_three) || text.contains('3x')) {
       return const Duration(hours: 8);
     }
-    if (text.contains('every') && text.contains('hour')) {
+    if ((text.contains('every') && text.contains('hour')) || (text.contains(t.ptmedreminderservice_every) && text.contains(t.ptmedreminderservice_hour))) {
       final match = RegExp(r'(\d+)').firstMatch(text);
       final hours = match == null ? 1 : int.tryParse(match.group(1)!) ?? 1;
       return Duration(hours: hours.clamp(1, 24));
     }
-    if (text.contains('week')) {
+    if (text.contains('week') || text.contains(t.ptmedreminderservice_week)) {
       return const Duration(days: 7);
     }
-    if (text.contains('month')) {
+    if (text.contains('month') || text.contains(t.ptmedreminderservice_month)) {
       return const Duration(days: 30);
     }
-    if (text.contains('day') || text.contains('daily')) {
+    if (text.contains('day') || text.contains(t.ptmedreminderservice_day) || text.contains('daily') || text.contains(t.ptmedreminderservice_daily)) {
       return const Duration(days: 1);
     }
 

@@ -1,3 +1,5 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
+
 class SubscriptionPlan {
   final String id;
   final bool active;
@@ -59,19 +61,19 @@ class SubscriptionPlan {
   }
 
   // Helper method to get description based on plan type
-  String get description {
+  String description(AppLocalizations t) {
     if (customDescription != null) return customDescription!;
 
     if (nickname.toLowerCase().contains('standard')) {
-      return 'Basic features for patients and caregivers.';
+      return t.subscriptionplans_standardDescription;
     } else if (nickname.toLowerCase().contains('premium')) {
-      return 'All features including video calls, AI assistant, and device integration.';
+      return t.subscriptionplans_premiumDescription;
     }
-    return 'Subscription plan for CareConnect services.';
+    return t.subscriptionplans_basicDescription;
   }
 
   // Helper method to get formatted interval
-  String get formattedInterval {
-    return interval == 'year' ? 'yearly' : 'monthly';
+  String formattedInterval(AppLocalizations t) {
+    return interval == 'year' ? t.subscriptionplans_yearly : t.subscriptionplans_monthly;
   }
 }
