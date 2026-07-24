@@ -133,6 +133,7 @@ final class CitationMetadataMapper {
             case SUMMARY_CONDITION -> "Summary condition";
             case SUMMARY_SOAP -> "SOAP summary";
             case SUMMARY_CLINICAL_OBSERVATION -> "Clinical observation";
+            case MEDICATION_TIMELINE_EVENT -> "Medication timeline";
             case MEDICATION -> "Medication";
             case TASK -> "Task";
             case EVV_RECORD -> "Visit record";

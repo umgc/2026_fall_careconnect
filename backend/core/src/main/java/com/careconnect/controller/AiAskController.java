@@ -7,6 +7,7 @@ import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.ask.AskAiException;
+import com.careconnect.service.ai.ask.AiAskConfirmationService;
 import com.careconnect.service.ai.ask.AiAskService;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiAskController {
 
     private final AiAskService aiAskService;
+    private final AiAskConfirmationService askConfirmationService;
     private final SecurityUtil securityUtil;
 
     @RequirePermission(Permission.USE_AI_FEATURES)
@@ -101,6 +103,38 @@ public class AiAskController {
                             "INTERNAL_ERROR",
                             "Ask AI could not complete the request",
                             null));
+        }
+    }
+
+    @RequirePermission(Permission.USE_AI_FEATURES)
+    @PostMapping(
+            value = "/ask/confirmation",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> confirm(
+            @Valid @RequestBody final com.careconnect.dto.ai.AiAskConfirmationRequest request)
+            throws UnauthorizedException {
+        final User caller = securityUtil.resolveCurrentUser();
+        try {
+            final var saved = askConfirmationService.recordDecision(caller, request);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", true,
+                    "decision", saved.getDecision(),
+                    "sessionId", saved.getSessionId().toString(),
+                    "createdAt", saved.getCreatedAt().toString()));
+        } catch (final ForbiddenScopeException ex) {
+            log.warn(
+                    "Ask AI confirmation forbidden scope reason={} patientId={}",
+                    ex.getDenialReason(),
+                    request == null ? null : request.patientId());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "success", false,
+                    "error", ForbiddenScopeException.ERROR_CODE,
+                    "message", "Requested patient is not available for Ask AI confirmation"));
+        } catch (final IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "success", false,
+                    "error", ex.getMessage() == null ? "Invalid confirmation request" : ex.getMessage()));
         }
     }
 }

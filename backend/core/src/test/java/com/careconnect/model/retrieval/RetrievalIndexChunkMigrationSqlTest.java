@@ -104,6 +104,10 @@ class RetrievalIndexChunkMigrationSqlTest {
         assertThat(sql).contains("idx_summary_replay_claim_fair");
         assertThat(sql).contains("JOIN call_summaries cs");
         assertThat(sql).contains("'call-summary:' || cs.id");
+        assertThat(sql).doesNotContain("DO $$");
+        assertThat(sql).contains("DROP CONSTRAINT IF EXISTS retrieval_index_chunk_pkey");
+        assertThat(sql).contains("DROP CONSTRAINT IF EXISTS fk_summary_replay_patient");
+        assertThat(sql).contains("FOREIGN KEY (patient_id) REFERENCES patient(id) NOT VALID");
         assertThat(sql).doesNotContain(
                 "SET source_kind = 'CALL_SUMMARY',\n    migration_status = 'ACTIVE'");
     }

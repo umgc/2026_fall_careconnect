@@ -77,19 +77,12 @@ ALTER TABLE retrieval_index_chunk
     DROP CONSTRAINT ck_retrieval_attempts_nn,
     DROP CONSTRAINT ck_retrieval_status_nn;
 
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint c
-        JOIN pg_class t ON t.oid = c.conrelid
-        JOIN pg_namespace n ON n.oid = t.relnamespace
-        WHERE n.nspname = current_schema()
-          AND t.relname = 'retrieval_index_chunk'
-          AND c.contype = 'p'
-    ) THEN
-        ALTER TABLE retrieval_index_chunk
-            ADD CONSTRAINT retrieval_index_chunk_pkey PRIMARY KEY (id);
-    END IF;
-END $$;
+-- Plain statements only: SchemaPatchLedger/ScriptUtils splits on ';' and cannot
+-- execute Postgres dollar-quoted anonymous blocks.
+ALTER TABLE retrieval_index_chunk
+    DROP CONSTRAINT IF EXISTS retrieval_index_chunk_pkey;
+ALTER TABLE retrieval_index_chunk
+    ADD CONSTRAINT retrieval_index_chunk_pkey PRIMARY KEY (id);
 
 CREATE TABLE IF NOT EXISTS summary_citation_replay_source (
     patient_id       BIGINT       NOT NULL,
@@ -169,88 +162,19 @@ ALTER TABLE summary_citation_replay_source VALIDATE CONSTRAINT ck_summary_replay
 ALTER TABLE summary_citation_replay_source VALIDATE CONSTRAINT ck_summary_replay_source_kind;
 ALTER TABLE summary_citation_replay_source VALIDATE CONSTRAINT ck_summary_replay_lease_token;
 
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint c
-        JOIN pg_class t ON t.oid = c.conrelid
-        JOIN pg_namespace n ON n.oid = t.relnamespace
-        WHERE n.nspname = current_schema()
-          AND t.relname = 'summary_citation_replay_source'
-          AND c.contype = 'p'
-    ) THEN
-        ALTER TABLE summary_citation_replay_source
-            ADD CONSTRAINT pk_summary_citation_replay_source
-            PRIMARY KEY (patient_id, source_kind, source_record_id);
-    END IF;
-END $$;
+ALTER TABLE summary_citation_replay_source
+    DROP CONSTRAINT IF EXISTS pk_summary_citation_replay_source;
+ALTER TABLE summary_citation_replay_source
+    ADD CONSTRAINT pk_summary_citation_replay_source
+    PRIMARY KEY (patient_id, source_kind, source_record_id);
 
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint c
-        JOIN pg_class t ON t.oid = c.conrelid
-        JOIN pg_namespace tn ON tn.oid = t.relnamespace
-        JOIN pg_class rt ON rt.oid = c.confrelid
-        JOIN pg_namespace rn ON rn.oid = rt.relnamespace
-        WHERE tn.nspname = current_schema()
-          AND t.relname = 'summary_citation_replay_source'
-          AND rn.nspname = current_schema()
-          AND rt.relname = 'patient'
-          AND c.contype = 'f'
-          AND c.conkey = ARRAY[(
-              SELECT attnum FROM pg_attribute
-              WHERE attrelid = t.oid
-                AND attname = 'patient_id'
-          )]::smallint[]
-          AND c.confkey = ARRAY[(
-              SELECT attnum FROM pg_attribute
-              WHERE attrelid = rt.oid
-                AND attname = 'id'
-          )]::smallint[]
-          AND c.confdeltype = 'a'
-    ) THEN
-        EXECUTE format(
-            'ALTER TABLE %I.summary_citation_replay_source '
-            'ADD CONSTRAINT fk_summary_replay_patient '
-            'FOREIGN KEY (patient_id) REFERENCES %I.patient(id) NOT VALID',
-            current_schema(), current_schema());
-    END IF;
-END $$;
-
-DO $$
-DECLARE
-    relationship RECORD;
-BEGIN
-    FOR relationship IN
-        SELECT c.conname
-        FROM pg_constraint c
-        JOIN pg_class t ON t.oid = c.conrelid
-        JOIN pg_namespace tn ON tn.oid = t.relnamespace
-        JOIN pg_class rt ON rt.oid = c.confrelid
-        JOIN pg_namespace rn ON rn.oid = rt.relnamespace
-        WHERE tn.nspname = current_schema()
-          AND t.relname = 'summary_citation_replay_source'
-          AND rn.nspname = current_schema()
-          AND rt.relname = 'patient'
-          AND c.contype = 'f'
-          AND c.conkey = ARRAY[(
-              SELECT attnum FROM pg_attribute
-              WHERE attrelid = t.oid
-                AND attname = 'patient_id'
-          )]::smallint[]
-          AND c.confkey = ARRAY[(
-              SELECT attnum FROM pg_attribute
-              WHERE attrelid = rt.oid
-                AND attname = 'id'
-          )]::smallint[]
-          AND c.confdeltype = 'a'
-          AND NOT c.convalidated
-    LOOP
-        EXECUTE format(
-            'ALTER TABLE %I.summary_citation_replay_source VALIDATE CONSTRAINT %I',
-            current_schema(), relationship.conname);
-    END LOOP;
-END $$;
+ALTER TABLE summary_citation_replay_source
+    DROP CONSTRAINT IF EXISTS fk_summary_replay_patient;
+ALTER TABLE summary_citation_replay_source
+    ADD CONSTRAINT fk_summary_replay_patient
+    FOREIGN KEY (patient_id) REFERENCES patient(id) NOT VALID;
+ALTER TABLE summary_citation_replay_source
+    VALIDATE CONSTRAINT fk_summary_replay_patient;
 
 CREATE INDEX IF NOT EXISTS idx_summary_replay_claim_fair
     ON summary_citation_replay_source

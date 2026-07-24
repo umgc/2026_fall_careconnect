@@ -77,6 +77,35 @@ class SchemaPatchRunnerTest {
     }
 
     @Test
+    void verifyCallTerminationSchema_toleratesPostgresPredicateCastsAndIsNonFatal()
+            throws Exception {
+        // Postgres stores predicates as status = 'TERMINATING'::text; exact-quote
+        // POSITION checks false-negative and used to crash-loop startup.
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        final int methodStart = source.indexOf("private void verifyCallTerminationSchema()");
+        final int methodEnd = source.indexOf(
+                "private void verifyCallSummaryIdempotencySchema()", methodStart);
+        final String method = methodEnd > methodStart
+                ? source.substring(methodStart, methodEnd)
+                : source.substring(methodStart);
+        assertThat(method).doesNotContain("status = ''TERMINATING''");
+        assertThat(method).contains("POSITION(");
+        assertThat(method).contains("'TERMINATING'");
+        assertThat(method).contains("continuing startup (non-fatal)");
+        assertThat(method).contains("columns={}");
+        assertThat(method).contains("default={}");
+        assertThat(method).contains("check={}");
+        assertThat(method).contains("index={}");
+        assertThat(method).doesNotContain("throw new IllegalStateException");
+    }
+
+    @Test
     void run_abortsWhenRequiredProductionPatchFails() throws Exception {
         final DataSource dataSource = mock(DataSource.class);
         final Connection connection = mock(Connection.class);
