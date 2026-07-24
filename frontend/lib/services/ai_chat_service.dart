@@ -128,6 +128,9 @@ class AiAskConfirmation {
 
   const AiAskConfirmation(this.required, this.text);
 
+  AiAskConfirmation copyWith({bool? required, String? text}) =>
+      AiAskConfirmation(required ?? this.required, text ?? this.text);
+
   factory AiAskConfirmation.fromJson(Map<String, dynamic> json) =>
       AiAskConfirmation(
         _requiredBool(json, 'promptConfirmWithProvider'),

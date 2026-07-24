@@ -571,7 +571,7 @@ public class AiAskService {
                 citations,
                 disclaimer(locale),
                 new AiEscalation(1, escalationLevel, false),
-                confirmationHint(caller, request, sessionId),
+                confirmationHint(caller, request, sessionId, requestId),
                 new AiRetrievalMeta(
                         retrieval.chunks().size(),
                         context.usedChunks().size(),
@@ -585,9 +585,16 @@ public class AiAskService {
     }
 
     private AiConfirmationHint confirmationHint(
-            final User caller, final AiAskRequest request, final UUID sessionId) {
+            final User caller,
+            final AiAskRequest request,
+            final UUID sessionId,
+            final UUID requestId) {
         if (askConfirmationService.hasActiveSessionApproval(
                 sessionId, request.patientId(), caller.getId())) {
+            return new AiConfirmationHint(false, null);
+        }
+        // APPROVE_ONCE / DECLINE / prior decision on this requestId (e.g. retry/re-delivery).
+        if (askConfirmationService.hasTerminalDecisionForRequest(requestId, caller.getId())) {
             return new AiConfirmationHint(false, null);
         }
         return new AiConfirmationHint(true, AskAiSafetyCopy.CONFIRM_EN);

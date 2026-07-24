@@ -15,4 +15,11 @@ public interface AiAskConfirmationDecisionRepository
                     Long patientId,
                     Long callerUserId,
                     String decision);
+
+    boolean existsByRequestIdAndCallerUserIdAndDecision(
+            UUID requestId, Long callerUserId, String decision);
+
+    Optional<AiAskConfirmationDecision>
+            findFirstByRequestIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                    UUID requestId, Long callerUserId, String decision);
 }

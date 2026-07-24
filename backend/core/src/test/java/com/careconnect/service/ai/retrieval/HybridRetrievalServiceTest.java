@@ -46,6 +46,9 @@ class HybridRetrievalServiceTest {
     void setUp() {
         lenient().when(chunkRepository.findByPatientIdAndRecordType(anyLong(), anyString()))
                 .thenReturn(List.of());
+        lenient().when(chunkRepository.findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
+                        anyLong(), anyString(), anyInt()))
+                .thenReturn(List.of());
         service = new HybridRetrievalService(
                 fullTextSearchService,
                 vectorSimilaritySearchService,
@@ -171,6 +174,59 @@ class HybridRetrievalServiceTest {
         assertThat(result.chunks()).hasSize(1);
         assertThat(result.chunks().get(0).chunkId()).isEqualTo(allowed);
         assertThat(result.chunks()).noneMatch(c -> c.chunkId().equals(gated));
+    }
+
+    @Test
+    @DisplayName("medication timeline miss returns empty structured arm instead of all events")
+    void search_medicationHintMissDoesNotFallbackToAllTimelineEvents() {
+        final UUID otherMed = UUID.randomUUID();
+        when(fullTextSearchService.search(eq(42L), eq("lipitor"), anySet(), anyInt()))
+                .thenReturn(List.of());
+        when(chunkEmbeddingService.embedQuery("lipitor")).thenReturn(Optional.empty());
+        when(chunkRepository.findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
+                        eq(42L),
+                        eq(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name()),
+                        anyInt()))
+                .thenReturn(List.of(timelineChunk(
+                        otherMed, "{\"medicationNameNormalized\":\"metformin\"}")));
+
+        final HybridRetrievalResult result = service.search(
+                medScope(42L),
+                42L,
+                "lipitor",
+                new RetrievalPlan(QueryIntent.MEDICATION_TIMELINE, "atorvastatin"));
+
+        assertThat(result.chunks()).isEmpty();
+        verify(chunkRepository).findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
+                eq(42L),
+                eq(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name()),
+                anyInt());
+        verify(chunkRepository, never()).findByPatientIdAndRecordType(anyLong(), anyString());
+    }
+
+    private static RetrievalScope medScope(final Long patientId) {
+        return new RetrievalScope(
+                1L,
+                Role.PATIENT,
+                Set.of(patientId),
+                Set.of(
+                        RetrievalRecordType.CALL_SUMMARY,
+                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT),
+                Set.of(),
+                new CaregiverVisibilityFilter(Role.PATIENT, true),
+                true);
+    }
+
+    private static RetrievalIndexChunk timelineChunk(final UUID id, final String metadata) {
+        return RetrievalIndexChunk.builder()
+                .id(id)
+                .patientId(42L)
+                .recordType(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name())
+                .sourceRecordId("visit-summary:1")
+                .chunkText("Medication started: metformin")
+                .chunkMetadata(metadata)
+                .consentScope("auto")
+                .build();
     }
 
     private static RetrievalScope scope(final Long patientId) {

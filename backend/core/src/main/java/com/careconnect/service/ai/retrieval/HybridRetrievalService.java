@@ -176,8 +176,13 @@ public class HybridRetrievalService {
             final Long patientId,
             final String medicationNameHint,
             final CaregiverVisibilityFilter filter) {
-        final List<RetrievalIndexChunk> raw = chunkRepository.findByPatientIdAndRecordType(
-                patientId, RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name());
+        // Over-fetch slightly so visibility filtering still leaves enough candidates.
+        final int fetchLimit = visibilityAwareLimit(MAX_ARM_FETCH, filter);
+        final List<RetrievalIndexChunk> raw =
+                chunkRepository.findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
+                        patientId,
+                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name(),
+                        fetchLimit);
         final List<RetrievalIndexChunk> visible = applyVisibility(raw, filter);
         if (medicationNameHint == null || medicationNameHint.isBlank()) {
             return visible.size() > MAX_ARM_FETCH
@@ -185,21 +190,22 @@ public class HybridRetrievalService {
                     : visible;
         }
         final String hint = medicationNameHint.toLowerCase(Locale.ROOT);
-        final List<RetrievalIndexChunk> matched = visible.stream()
+        // Prefer empty structured arm over boosting unrelated meds at 1.5× when the
+        // named drug is absent from the index.
+        return visible.stream()
                 .filter(chunk -> metadataContainsNormalizedName(chunk, hint))
                 .limit(MAX_ARM_FETCH)
                 .toList();
-        return matched.isEmpty() ? visible.stream().limit(MAX_ARM_FETCH).toList() : matched;
     }
 
     private static boolean metadataContainsNormalizedName(
             final RetrievalIndexChunk chunk, final String hint) {
-        if (chunk == null || chunk.getChunkMetadata() == null) {
+        if (chunk == null || chunk.getChunkMetadata() == null || hint == null || hint.isBlank()) {
             return false;
         }
         final String meta = chunk.getChunkMetadata().toLowerCase(Locale.ROOT);
-        return meta.contains("\"medicationnamenormalized\":\"" + hint + "\"")
-                || meta.contains(hint);
+        // Exact JSON field match only — avoid short-token substring false positives.
+        return meta.contains("\"medicationnamenormalized\":\"" + hint + "\"");
     }
 
     private static Set<String> narrowForMedicationTimeline(final Set<String> allowedTypes) {

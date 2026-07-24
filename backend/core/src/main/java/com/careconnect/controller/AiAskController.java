@@ -122,6 +122,15 @@ public class AiAskController {
                     "decision", saved.getDecision(),
                     "sessionId", saved.getSessionId().toString(),
                     "createdAt", saved.getCreatedAt().toString()));
+        } catch (final ForbiddenScopeException ex) {
+            log.warn(
+                    "Ask AI confirmation forbidden scope reason={} patientId={}",
+                    ex.getDenialReason(),
+                    request == null ? null : request.patientId());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "success", false,
+                    "error", ForbiddenScopeException.ERROR_CODE,
+                    "message", "Requested patient is not available for Ask AI confirmation"));
         } catch (final IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(java.util.Map.of(
                     "success", false,

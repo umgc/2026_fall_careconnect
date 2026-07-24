@@ -103,6 +103,8 @@ class AiAskServiceTest {
         lenient().when(retrievalQueryPlanner.plan(any())).thenReturn(RetrievalPlan.general());
         lenient().when(askConfirmationService.hasActiveSessionApproval(any(), anyLong(), anyLong()))
                 .thenReturn(false);
+        lenient().when(askConfirmationService.hasTerminalDecisionForRequest(any(), anyLong()))
+                .thenReturn(false);
         service = buildService(true);
         lenient().when(safetyPipeline.process(any()))
                 .thenReturn(SafetyOutcome.deliverTier1(List.of(), List.of(), "none"));

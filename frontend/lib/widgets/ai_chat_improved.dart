@@ -48,6 +48,44 @@ class ChatMessage {
     this.auditId,
     this.sessionId,
   });
+
+  ChatMessage copyWith({
+    String? text,
+    bool? isUser,
+    DateTime? timestamp,
+    String? errorMessage,
+    List<AiAskCitation>? citations,
+    AiAskDisclaimer? disclaimer,
+    AiAskEscalation? escalation,
+    AiAskConfirmation? confirmation,
+    bool? showRetry,
+    String? retryQuery,
+    String? requestIdentity,
+    String? heldItemId,
+    bool? showHitlResume,
+    String? requestId,
+    String? auditId,
+    String? sessionId,
+  }) {
+    return ChatMessage(
+      text: text ?? this.text,
+      isUser: isUser ?? this.isUser,
+      timestamp: timestamp ?? this.timestamp,
+      errorMessage: errorMessage ?? this.errorMessage,
+      citations: citations ?? this.citations,
+      disclaimer: disclaimer ?? this.disclaimer,
+      escalation: escalation ?? this.escalation,
+      confirmation: confirmation ?? this.confirmation,
+      showRetry: showRetry ?? this.showRetry,
+      retryQuery: retryQuery ?? this.retryQuery,
+      requestIdentity: requestIdentity ?? this.requestIdentity,
+      heldItemId: heldItemId ?? this.heldItemId,
+      showHitlResume: showHitlResume ?? this.showHitlResume,
+      requestId: requestId ?? this.requestId,
+      auditId: auditId ?? this.auditId,
+      sessionId: sessionId ?? this.sessionId,
+    );
+  }
 }
 
 // Helper class for uploaded files
@@ -879,6 +917,16 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       decision: decision,
     );
     if (!mounted) return;
+    if (ok) {
+      setState(() {
+        final index = _messages.indexWhere((m) => identical(m, message));
+        if (index >= 0) {
+          _messages[index] = message.copyWith(
+            confirmation: const AiAskConfirmation(false, null),
+          );
+        }
+      });
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok
