@@ -1,5 +1,7 @@
 package com.careconnect.service.ai.retrieval;
 
+import com.careconnect.service.ai.indexing.SummarySourceKey;
+
 import java.util.UUID;
 
 /**
@@ -12,6 +14,7 @@ public record RankedChunk(
         UUID chunkId,
         Long patientId,
         RetrievalRecordType recordType,
+        String sourceKind,
         String sourceRecordId,
         String chunkText,
         String chunkMetadata,
@@ -21,4 +24,30 @@ public record RankedChunk(
         Integer vectorRank,
         String citationRef
 ) {
+    public RankedChunk(
+            final UUID chunkId,
+            final Long patientId,
+            final RetrievalRecordType recordType,
+            final String sourceRecordId,
+            final String chunkText,
+            final String chunkMetadata,
+            final String consentScope,
+            final double rrfScore,
+            final Integer ftsRank,
+            final Integer vectorRank,
+            final String citationRef) {
+        this(
+                chunkId,
+                patientId,
+                recordType,
+                SummarySourceKey.sourceKind(sourceRecordId),
+                sourceRecordId,
+                chunkText,
+                chunkMetadata,
+                consentScope,
+                rrfScore,
+                ftsRank,
+                vectorRank,
+                citationRef);
+    }
 }

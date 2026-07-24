@@ -6,14 +6,28 @@ import '../providers/user_provider.dart';
 /// A modal dialog wrapper for the AI chat component
 class AIChatModal extends StatelessWidget {
   final String role;
+  final AiChatMode mode;
+  final int? patientId;
 
-  const AIChatModal({super.key, required this.role});
+  const AIChatModal({
+    super.key,
+    required this.role,
+    required this.mode,
+    this.patientId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
-    
+    // Grounded patient modals may use the logged-in patient session id.
+    // Caregiver grounded chat must pass an explicit linked patientId — never
+    // infer mutable UserSession.patientId.
+    final resolvedPatientId = patientId ??
+        (mode == AiChatMode.groundedRecords && role.toLowerCase() == 'patient'
+            ? user?.patientId
+            : null);
+
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -33,10 +47,14 @@ class AIChatModal extends StatelessWidget {
           ],
         ),
         child: AIChat(
-          role: role, 
+          key: ValueKey(
+            'ai-chat-${mode.name}-${resolvedPatientId ?? 'none'}',
+          ),
+          role: role,
           isModal: true,
-          patientId: user?.patientId,
+          patientId: resolvedPatientId,
           userId: user?.id,
+          mode: mode,
         ),
       ),
     );
