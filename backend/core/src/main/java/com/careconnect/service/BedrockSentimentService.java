@@ -119,6 +119,9 @@ public class BedrockSentimentService {
   @Value("${aws.bedrock.sentiment.model-id:${careconnect.ai.model:amazon.nova-pro-v1:0}}")
   private String bedrockModelId = "amazon.nova-pro-v1:0";
 
+  /** Versioned server-side prompt/config contract used for summary idempotency. */
+  private static final String SUMMARY_CONFIG_VERSION = "call-summary-v2";
+
   /** Default temperature for Bedrock invocations. */
   private static final double DEFAULT_TEMPERATURE = 0.2;
 
@@ -580,12 +583,19 @@ Respond with ONLY a JSON object in this exact format, no other text:
       if (log.isWarnEnabled()) {
         log.warn("Bedrock transcript summary failed for callId {}: {}", callId, ex.getMessage());
       }
-      return localTranscriptSummary(
-          Map.of(
-              "voiceLabel", voice.label(),
-              "videoLabel", video.label(),
-              "overallLabel", combined.label()));
+      throw new ModelInferenceException(
+          "Bedrock transcript summary failed for callId " + callId, ex);
     }
+  }
+
+  /** Authoritative model/config version stored with generated summaries. */
+  public String summaryModelConfigVersion() {
+    return bedrockModelId + ":" + SUMMARY_CONFIG_VERSION;
+  }
+
+  /** Authoritative engine label; model responses cannot override this value. */
+  public String summaryEngine() {
+    return isBedrockAvailable() ? "aws_bedrock:" + bedrockModelId : "local:" + SUMMARY_CONFIG_VERSION;
   }
 
   /**

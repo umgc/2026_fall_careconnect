@@ -1,7 +1,9 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.UspsMailpiece;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,18 @@ import java.util.Optional;
 public interface UspsMailpieceRepository extends JpaRepository<UspsMailpiece, Long> {
 
     Optional<UspsMailpiece> findByPatientIdAndSourceKey(Long patientId, String sourceKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT mailpiece FROM UspsMailpiece mailpiece WHERE mailpiece.id = :id")
+    Optional<UspsMailpiece> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * Serializes natural-key upserts even before a mailpiece row exists.
+     */
+    @Query(
+            value = "SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))",
+            nativeQuery = true)
+    void acquirePersistenceLock(@Param("lockKey") String lockKey);
 
     List<UspsMailpiece> findByPatientIdAndDigestDate(Long patientId, LocalDate digestDate);
 

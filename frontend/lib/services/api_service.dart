@@ -2597,7 +2597,10 @@ class ApiService {
             Uri.parse('${ApiConstants.callsV3}/$callId/recording'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 15));
+          // Status used to block on S3 refresh (~15–20s) and this timeout wiped the
+          // Call Recording card. Backend now returns READY metadata without S3; keep
+          // headroom for processing calls that still refresh.
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -2615,7 +2618,7 @@ class ApiService {
             Uri.parse('${ApiConstants.callsV3}/$callId/recording/playback-url'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
