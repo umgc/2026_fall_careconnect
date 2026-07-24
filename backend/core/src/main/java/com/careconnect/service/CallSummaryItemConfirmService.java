@@ -110,6 +110,24 @@ public class CallSummaryItemConfirmService {
             }
         }
 
+        final Object needsConfirmationRaw = lookup.item().get("needsConfirmation");
+        final boolean alreadyConfirmed = Boolean.FALSE.equals(needsConfirmationRaw)
+                || "false".equalsIgnoreCase(String.valueOf(needsConfirmationRaw));
+        if (alreadyConfirmed) {
+            final Optional<CallSummaryItemDecision> prior =
+                    decisionRepository.findTopBySummaryIdAndItemIdOrderByDecidedAtDesc(
+                            summary.getId(), itemId);
+            if (prior.isPresent()) {
+                final CallSummaryItemDecision existing = prior.get();
+                return new SummaryItemConfirmResponse(
+                        itemId,
+                        existing.getDecision(),
+                        false,
+                        null,
+                        existing.getId());
+            }
+        }
+
         return recordDecision(summary, payload, lookup, itemId, decision, actor, request);
     }
 

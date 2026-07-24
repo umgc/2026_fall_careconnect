@@ -54,13 +54,22 @@ public class RetrievalQueryPlanner {
         if (!medCue && !timelineCue) {
             return RetrievalPlan.general();
         }
-        // Medication timeline when either:
-        // - medication + timeline/status cues, or
-        // - bare medication name questions that imply current regimen context.
-        if (medCue || (timelineCue && looksLikeMedicationQuestion(lower))) {
+        // Structured medication timeline only when both medication and
+        // timeline/status cues are present (or timeline cues clearly ask about meds).
+        if (medCue && timelineCue) {
             return new RetrievalPlan(
                     QueryIntent.MEDICATION_TIMELINE,
                     extractMedicationHint(query));
+        }
+        if (timelineCue && looksLikeMedicationQuestion(lower)) {
+            return new RetrievalPlan(
+                    QueryIntent.MEDICATION_TIMELINE,
+                    extractMedicationHint(query));
+        }
+        // Bare medication questions stay GENERAL (optionally with a med name hint)
+        // so hybrid retrieval is not over-narrowed to timeline event chunks.
+        if (medCue) {
+            return new RetrievalPlan(QueryIntent.GENERAL, extractMedicationHint(query));
         }
         return RetrievalPlan.general();
     }

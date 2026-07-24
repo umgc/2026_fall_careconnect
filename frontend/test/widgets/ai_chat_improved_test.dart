@@ -1066,6 +1066,84 @@ void main() {
       }, () => mockClient);
     });
 
+    testWidgets(
+        'patient Ask AI renders medication timeline events in chat bubble',
+        (tester) async {
+      suppressOverflow();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Here is the medication history.'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'MEDICATION_TIMELINE_EVENT',
+                  'title': 'Medication timeline',
+                  'excerpt': 'Metformin started.',
+                  'deepLink': null,
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+              'medicationTimeline': {
+                'events': [
+                  {
+                    'itemId': 'item-1',
+                    'medicationName': 'Metformin',
+                    'eventType': 'START',
+                    'effectiveDate': '2026-01-05',
+                    'doseTo': '500mg',
+                    'citationRef': 'C1',
+                  },
+                ],
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'What changed?');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+
+        expect(
+          find.byKey(const Key('ask-ai-medication-timeline')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Metformin'), findsWidgets);
+        expect(find.textContaining('START'), findsOneWidget);
+        expect(find.text('C1'), findsOneWidget);
+      }, () => mockClient);
+    });
+
     testWidgets('grounded mode fails closed without patientId', (tester) async {
       suppressOverflow();
       var askRequests = 0;

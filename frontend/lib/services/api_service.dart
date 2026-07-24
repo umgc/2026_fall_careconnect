@@ -2558,6 +2558,54 @@ class ApiService {
     }
   }
 
+  /// Confirms or declines a single extracted call summary item
+  /// (action item, appointment, or care instruction). Throws on non-2xx.
+  static Future<Map<String, dynamic>> confirmCallSummaryItem(
+    String callId,
+    String itemId, {
+    required String decision,
+    String? destination,
+    String? notes,
+  }) async {
+    final headers = await AuthTokenManager.getAuthHeaders();
+    final response = await _httpClient
+        .post(
+          Uri.parse(
+            '${ApiConstants.callsV3}/$callId/summary/items/$itemId/confirm',
+          ),
+          headers: headers,
+          body: jsonEncode({
+            'decision': decision,
+            if (destination != null) 'destination': destination,
+            if (notes != null) 'notes': notes,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      String details = '';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          final message =
+              (decoded['message'] ?? decoded['error'] ?? '').toString().trim();
+          if (message.isNotEmpty) {
+            details = ' - $message';
+          }
+        }
+      } catch (_) {}
+      throw Exception(
+        'Failed to confirm summary item: HTTP ${response.statusCode}$details',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const FormatException('Confirm summary item response is not an object');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
   static Future<List<Map<String, dynamic>>> getCallTranscriptSegments(
     String callId,
   ) async {

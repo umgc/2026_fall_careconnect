@@ -185,6 +185,88 @@ class AiAskCitation {
   }
 }
 
+class MedicationTimelineEvent {
+  final String? itemId;
+  final String medicationName;
+  final String? medicationNameNormalized;
+  final String? eventType;
+  final String? effectiveDate;
+  final String? doseFrom;
+  final String? doseTo;
+  final String? citationRef;
+
+  const MedicationTimelineEvent({
+    this.itemId,
+    required this.medicationName,
+    this.medicationNameNormalized,
+    this.eventType,
+    this.effectiveDate,
+    this.doseFrom,
+    this.doseTo,
+    this.citationRef,
+  });
+
+  factory MedicationTimelineEvent.fromJson(Map<String, dynamic> json) {
+    String? optionalString(String key) {
+      final value = json[key];
+      if (value == null) return null;
+      if (value is! String) {
+        throw FormatException(
+          'Medication timeline event $key must be a string',
+        );
+      }
+      return value;
+    }
+
+    final medicationName = json['medicationName'];
+    if (medicationName is! String || medicationName.trim().isEmpty) {
+      throw const FormatException(
+        'Medication timeline event medicationName must be a non-empty string',
+      );
+    }
+
+    return MedicationTimelineEvent(
+      itemId: optionalString('itemId'),
+      medicationName: medicationName,
+      medicationNameNormalized: optionalString('medicationNameNormalized'),
+      eventType: optionalString('eventType'),
+      effectiveDate: optionalString('effectiveDate'),
+      doseFrom: optionalString('doseFrom'),
+      doseTo: optionalString('doseTo'),
+      citationRef: optionalString('citationRef'),
+    );
+  }
+}
+
+class MedicationTimeline {
+  final List<MedicationTimelineEvent> events;
+
+  const MedicationTimeline({this.events = const []});
+
+  factory MedicationTimeline.fromJson(Map<String, dynamic> json) {
+    final eventsJson = json['events'];
+    if (eventsJson != null && eventsJson is! List) {
+      throw const FormatException(
+        'Medication timeline events must be a list',
+      );
+    }
+    final eventListIsValid = eventsJson is List<dynamic> &&
+        eventsJson.every((item) => item is Map<String, dynamic>);
+    if (eventsJson is List && !eventListIsValid) {
+      throw const FormatException(
+        'Medication timeline events contain invalid entries',
+      );
+    }
+    final events = eventListIsValid
+        ? eventsJson
+            .cast<Map<String, dynamic>>()
+            .map(MedicationTimelineEvent.fromJson)
+            .toList(growable: false)
+        : const <MedicationTimelineEvent>[];
+    return MedicationTimeline(events: events);
+  }
+}
+
 class AiAskError {
   final String code;
   final String message;
@@ -343,6 +425,7 @@ class AiAskResult {
   final String? retryInput;
   final bool retryable;
   final bool cancelled;
+  final MedicationTimeline? medicationTimeline;
 
   const AiAskResult({
     required this.success,
@@ -363,6 +446,7 @@ class AiAskResult {
     this.retryInput,
     this.retryable = false,
     this.cancelled = false,
+    this.medicationTimeline,
   });
 
   factory AiAskResult.fromJson(
@@ -422,6 +506,13 @@ class AiAskResult {
     if (confirmationJson != null && confirmationJson is! Map<String, dynamic>) {
       throw const FormatException('Ask AI confirmation must be an object');
     }
+    final medicationTimelineJson = json['medicationTimeline'];
+    if (medicationTimelineJson != null &&
+        medicationTimelineJson is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Ask AI medicationTimeline must be an object',
+      );
+    }
 
     final answer = answerJson is Map<String, dynamic>
         ? () {
@@ -470,6 +561,12 @@ class AiAskResult {
         );
 
     // held=true is expected for HELD (Tier-2 review); only block DELIVERED.
+    // confirmation.required may be false after APPROVE_SESSION / prior terminal
+    // decision (backend suppresses the provider-confirmation prompt).
+    final confirmationOk = confirmation != null &&
+        (!confirmation.required ||
+            confirmation.text?.trim().isNotEmpty == true);
+
     final deliveredContractValid = allowDelivered &&
         json['success'] == true &&
         !held &&
@@ -484,9 +581,7 @@ class AiAskResult {
         escalation != null &&
         escalation.tier == 1 &&
         escalation.reviewRequired == false &&
-        confirmation != null &&
-        confirmation.required &&
-        confirmation.text?.trim().isNotEmpty == true;
+        confirmationOk;
 
     if (status == AiAskDeliveryStatus.delivered && !deliveredContractValid) {
       throw const FormatException(
@@ -520,6 +615,10 @@ class AiAskResult {
       disclaimer: exposeDeliveredContent ? disclaimer : null,
       escalation: exposeDeliveredContent ? escalation : null,
       confirmation: exposeDeliveredContent ? confirmation : null,
+      medicationTimeline: exposeDeliveredContent &&
+              medicationTimelineJson is Map<String, dynamic>
+          ? MedicationTimeline.fromJson(medicationTimelineJson)
+          : null,
     );
   }
 }
@@ -609,6 +708,7 @@ class AIChatService {
         payload.remove('disclaimer');
         payload.remove('escalation');
         payload.remove('confirmation');
+        payload.remove('medicationTimeline');
       }
 
       final parsed = AiAskResult.fromJson(
@@ -657,6 +757,7 @@ class AIChatService {
         confirmation: parsed.confirmation,
         retryInput: parsed.error != null ? retryInput : null,
         retryable: false,
+        medicationTimeline: parsed.medicationTimeline,
       );
     } on http.RequestAbortedException {
       return const AiAskResult(

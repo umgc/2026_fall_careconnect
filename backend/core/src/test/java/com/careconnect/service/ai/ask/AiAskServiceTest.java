@@ -122,7 +122,7 @@ class AiAskServiceTest {
                 retrievalQueryPlanner,
                 groundedAskLlmService,
                 new CitationAssembler(
-                        new CitationDeepLinkBuilder(),
+                        new CitationDeepLinkBuilder(new ObjectMapper()),
                         new CitationMetadataMapper(new ObjectMapper())),
                 inputSanitizationService,
                 governanceService,

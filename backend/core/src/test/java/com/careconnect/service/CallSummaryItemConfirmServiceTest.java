@@ -252,6 +252,34 @@ class CallSummaryItemConfirmServiceTest {
         verify(decisionRepository).save(any(CallSummaryItemDecision.class));
     }
 
+  @Test
+    @DisplayName("returns existing decision when item already confirmed")
+    void confirm_alreadyConfirmed_returnsPriorDecisionWithoutInsert() {
+        final CallSummary summary = summaryWithItems(
+                "{\"actionItems\":[{\"itemId\":\"item-1\",\"text\":\"Schedule follow-up\","
+                        + "\"needsConfirmation\":false}],\"appointments\":[],\"careInstructions\":[]}");
+        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(CALL_ID))
+                .thenReturn(Optional.of(summary));
+        final CallSummaryItemDecision prior = CallSummaryItemDecision.builder()
+                .id(77L)
+                .summaryId(1L)
+                .itemId("item-1")
+                .decision("approve")
+                .build();
+        when(decisionRepository.findTopBySummaryIdAndItemIdOrderByDecidedAtDesc(1L, "item-1"))
+                .thenReturn(Optional.of(prior));
+
+        final SummaryItemConfirmResponse response = service.confirm(
+                CALL_ID, "item-1", actor(),
+                new SummaryItemConfirmRequest("approve", null, null));
+
+        assertThat(response.decision()).isEqualTo("approve");
+        assertThat(response.decisionId()).isEqualTo(77L);
+        assertThat(response.held()).isFalse();
+        verify(decisionRepository, never()).save(any());
+        verify(callSummaryRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("declining a medication instruction skips the safety pipeline")
     void confirm_declineMedicationInstruction_skipsSafetyPipeline() {
