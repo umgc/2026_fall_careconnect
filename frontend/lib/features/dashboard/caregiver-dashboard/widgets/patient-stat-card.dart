@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 /// Widget that displays patient statistics in responsive card layout.
@@ -22,6 +23,7 @@ class PatientStatisticsCards extends StatelessWidget {
   /// * Widget - A responsive layout containing statistics cards
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isSmallScreen = constraints.maxWidth < 600;
@@ -32,7 +34,7 @@ class PatientStatisticsCards extends StatelessWidget {
               _StatCard(
                 icon: Icons.people_outline,
                 iconColor: Colors.blue,
-                title: '# of Missed Check-Ins',
+                title: t.ptstatcard_missedCheckInHeader,
                 value: '24',
                 valueColor: Theme.of(context).primaryColor,
               ),
@@ -40,7 +42,7 @@ class PatientStatisticsCards extends StatelessWidget {
               _StatCard(
                 icon: Icons.monitor_heart_outlined,
                 iconColor: Colors.green,
-                title: 'Active Patients',
+                title: t.ptstatcard_activePtsHeader,
                 value: '32',
                 valueColor: Colors.green,
               ),
@@ -54,7 +56,7 @@ class PatientStatisticsCards extends StatelessWidget {
               child: _StatCard(
                 icon: Icons.people_outline,
                 iconColor: Colors.blue,
-                title: '# of Missed\nCheck-Ins',
+                title: t.ptstatcard_missedCheckIn,
                 value: '24',
                 valueColor: Colors.blue,
               ),
@@ -64,7 +66,7 @@ class PatientStatisticsCards extends StatelessWidget {
               child: _StatCard(
                 icon: Icons.monitor_heart_outlined,
                 iconColor: Colors.green,
-                title: 'Active\nPatients',
+                title: t.ptstatcard_activePts,
                 value: '32',
                 valueColor: Colors.green,
               ),

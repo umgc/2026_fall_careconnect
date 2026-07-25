@@ -148,6 +148,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "ON telemetry_events (session_id, event_time DESC) " +
             "WHERE session_id IS NOT NULL"
         );
+        applyEmailCredentialPatches();
         if (isPostgreSql()) {
             withProductionSchemaMigrationLock(() -> {
                 patchLedger.initialize();
@@ -533,6 +534,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     "termination_claimed_by_user_id", "users", "id", 'a', 1);
             verifyCallTerminationSchema();
         }
+    }
+
+    /**
+     * Aligns local/staging check constraints with current EmailCredential.Provider enum.
+     * Needed because Flyway is disabled in these environments and legacy databases may still
+     * enforce a stale provider allow-list that excludes GOOGLE_HEALTH.
+     */
+    private void applyEmailCredentialPatches() {
+        applyPatch(
+            "V2607221400 – email_credentials provider check allows GOOGLE_HEALTH",
+            "ALTER TABLE email_credentials " +
+            "  DROP CONSTRAINT IF EXISTS email_credentials_provider_check;" +
+            "ALTER TABLE email_credentials " +
+            "  ADD CONSTRAINT email_credentials_provider_check " +
+            "  CHECK (provider IN ('GMAIL', 'OUTLOOK', 'GOOGLE_HEALTH'))"
+        );
     }
 
     /**

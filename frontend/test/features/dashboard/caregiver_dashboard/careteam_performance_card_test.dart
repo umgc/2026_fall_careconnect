@@ -1,6 +1,7 @@
 // Tests for CareTeamPerformance widget
 // (lib/features/dashboard/caregiver-dashboard/widgets/careteam-performace-card.dart).
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/caregiver-dashboard/widgets/careteam-performace-card.dart';
@@ -8,6 +9,9 @@ import 'package:care_connect_app/features/dashboard/caregiver-dashboard/widgets/
 void main() {
   Widget buildTestWidget() {
     return const MaterialApp(
+      locale: Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: SingleChildScrollView(
           child: CareTeamPerformance(),
@@ -80,6 +84,9 @@ void main() {
     testWidgets('renders correctly with dark theme', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData.dark(),
           home: const Scaffold(
             body: SingleChildScrollView(

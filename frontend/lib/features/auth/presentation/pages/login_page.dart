@@ -45,6 +45,7 @@ class _LoginPageState extends State<LoginPage> {
       final authResult = await EnhancedAuthService.loginWithRoleValidation(
         email: _email.text.trim(),
         password: _pwd.text,
+        t: AppLocalizations.of(context)!,
       );
 
       if (authResult.isSuccess) {
@@ -72,7 +73,7 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Login failed: $e';
+        _error = '${AppLocalizations.of(context)?.login_loginFailedError ?? 'Login failed'}: $e';
       });
     } finally {
       setState(() => _busy = false);

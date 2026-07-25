@@ -19,6 +19,7 @@
 //       (month, year, custom).
 //     availablePlans global constant — has three entries with expected names.
 
+import 'package:care_connect_app/l10n/app_localizations_en.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:care_connect_app/features/payments/models/subscription_model.dart';
@@ -240,16 +241,19 @@ void main() {
 
   group('Subscription.formattedInterval', () {
     test('"month" → "Monthly"', () {
-      expect(buildSub('active', interval: 'month').formattedInterval, 'Monthly');
+      final t = AppLocalizationsEn();
+      expect(buildSub('active', interval: 'month').formattedInterval(t), 'Monthly');
     });
 
     test('"year" → "Yearly"', () {
-      expect(buildSub('active', interval: 'year').formattedInterval, 'Yearly');
+      final t = AppLocalizationsEn();
+      expect(buildSub('active', interval: 'year').formattedInterval(t), 'Yearly');
     });
 
     test('custom interval value → passthrough', () {
+      final t = AppLocalizationsEn();
       // Verifies that unrecognized intervals are returned as-is.
-      expect(buildSub('active', interval: 'week').formattedInterval, 'week');
+      expect(buildSub('active', interval: 'week').formattedInterval(t), 'week');
     });
   });
 
@@ -257,32 +261,38 @@ void main() {
 
   group('Subscription.statusDisplay', () {
     test('"active" → "Active"', () {
-      expect(buildSub('active').statusDisplay, 'Active');
+      final t = AppLocalizationsEn();
+      expect(buildSub('active').statusDisplay(t), 'Active');
     });
 
     test('"trialing" → "Trial"', () {
-      expect(buildSub('trialing').statusDisplay, 'Trial');
+      final t = AppLocalizationsEn();
+      expect(buildSub('trialing').statusDisplay(t), 'Trial');
     });
 
     test('"canceled" → "Cancelled"', () {
-      expect(buildSub('canceled').statusDisplay, 'Cancelled');
+      final t = AppLocalizationsEn();
+      expect(buildSub('canceled').statusDisplay(t), 'Cancelled');
     });
 
     test('"unpaid" → "Unpaid"', () {
-      expect(buildSub('unpaid').statusDisplay, 'Unpaid');
+      final t = AppLocalizationsEn();
+      expect(buildSub('unpaid').statusDisplay(t), 'Unpaid');
     });
 
     test('cancelAtPeriodEnd = true → "Canceling at period end"', () {
       // Verifies this branch takes priority over the status string.
+      final t = AppLocalizationsEn();
       expect(
-        buildSub('active', cancelAtPeriodEnd: true).statusDisplay,
+        buildSub('active', cancelAtPeriodEnd: true).statusDisplay(t),
         'Canceling at period end',
       );
     });
 
     test('unknown status → passthrough of original status string', () {
       // Verifies the default branch returns the raw status value.
-      expect(buildSub('pending').statusDisplay, 'pending');
+      final t = AppLocalizationsEn();
+      expect(buildSub('pending').statusDisplay(t), 'pending');
     });
   });
 
@@ -319,7 +329,8 @@ void main() {
         id: 'p', name: 'P', description: 'D',
         amount: 9.99, interval: 'month', features: [],
       );
-      expect(plan.formattedInterval, '/month');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/month');
     });
 
     test('formattedInterval for "year" → "/year"', () {
@@ -327,7 +338,8 @@ void main() {
         id: 'p', name: 'P', description: 'D',
         amount: 99.99, interval: 'year', features: [],
       );
-      expect(plan.formattedInterval, '/year');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/year');
     });
 
     test('formattedInterval for custom → "/custom"', () {
@@ -336,7 +348,8 @@ void main() {
         id: 'p', name: 'P', description: 'D',
         amount: 5.0, interval: 'week', features: [],
       );
-      expect(plan.formattedInterval, '/week');
+      final t = AppLocalizationsEn();
+      expect(plan.formattedInterval(t), '/week');
     });
 
     test('availablePlans has three entries with expected names', () {

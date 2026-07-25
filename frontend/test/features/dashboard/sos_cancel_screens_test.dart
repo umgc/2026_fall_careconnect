@@ -4,12 +4,13 @@
 //
 // Both are pure StatelessWidgets — no API calls, Provider, or platform channels.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/presentation/cancelscreen.dart';
 import 'package:care_connect_app/features/dashboard/presentation/sosscreen.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+Widget _wrap(Widget child) => MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: child);
 
 void main() {
   // ─────────────────────────────────────────────────────────────────────────

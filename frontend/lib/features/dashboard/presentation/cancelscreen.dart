@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 class CancelScreen extends StatelessWidget {
@@ -5,6 +6,7 @@ class CancelScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
         title: const Text("CareConnect"),
@@ -17,12 +19,12 @@ class CancelScreen extends StatelessWidget {
           children: [
             const Icon(Icons.cancel, color: Colors.red, size: 60),
             const SizedBox(height: 20),
-            const Text(
-              "SOS Request Cancelled",
+            Text(
+              t.cancelscreen_sosRequestCancel,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            const Text("Your caregiver has not been alerted."),
+            Text(t.cancelscreen_sosCancelConfirm),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
@@ -30,7 +32,7 @@ class CancelScreen extends StatelessWidget {
                 backgroundColor: const Color(0xFF14366E),
                 foregroundColor: Colors.white,
               ),
-              child: const Text("Back"),
+              child: Text(t.sosscreen_backButton),
             ),
           ],
         ),
