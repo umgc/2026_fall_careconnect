@@ -10,12 +10,15 @@ import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,8 +27,12 @@ import java.util.UUID;
  *
  * <p>Timeout without a decision is not treated as approval.
  *
- * <p>{@link #APPROVE_SESSION} suppresses future confirmation prompts for the session.
- * {@link #APPROVE_ONCE} / {@link #DECLINE} acknowledge a specific {@code requestId}
+ * <p>{@link #APPROVE_SESSION} suppresses future confirmation prompts for the Ask
+ * chat {@code sessionId} until {@code careconnect.ai.ask.confirmation.session-ttl-hours}
+ * elapses (default 12h). Call-summary {@code approve-for-session} reuses the same
+ * decision row shape but is call-scoped forever via a deterministic session id.
+ *
+ * <p>{@link #APPROVE_ONCE} / {@link #DECLINE} acknowledge a specific {@code requestId}
  * (retries of that request do not re-prompt).
  */
 @Service
@@ -44,31 +51,44 @@ public class AiAskConfirmationService {
     private final AiAskConfirmationDecisionRepository decisionRepository;
     private final AiAskAuditService askAuditService;
     private final RetrievalScopeService retrievalScopeService;
+    private final Duration sessionApprovalTtl;
 
     public AiAskConfirmationService(
             final AiAskConfirmationDecisionRepository decisionRepository,
             final AiAskAuditService askAuditService,
-            final RetrievalScopeService retrievalScopeService) {
+            final RetrievalScopeService retrievalScopeService,
+            @Value("${careconnect.ai.ask.confirmation.session-ttl-hours:12}")
+                    final long sessionTtlHours) {
         this.decisionRepository = decisionRepository;
         this.askAuditService = askAuditService;
         this.retrievalScopeService = retrievalScopeService;
+        this.sessionApprovalTtl =
+                sessionTtlHours <= 0 ? Duration.ZERO : Duration.ofHours(sessionTtlHours);
     }
 
+    /**
+     * True when Ask chat has a non-expired {@link #APPROVE_SESSION} for this
+     * {@code sessionId} / patient / caller. Expired approvals no longer suppress prompts.
+     */
     public boolean hasActiveSessionApproval(
             final UUID sessionId, final Long patientId, final Long callerUserId) {
         if (sessionId == null || patientId == null || callerUserId == null) {
             return false;
         }
-        return decisionRepository
+        final Optional<AiAskConfirmationDecision> latest = decisionRepository
                 .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                        sessionId, patientId, callerUserId, APPROVE_SESSION)
-                .isPresent();
+                        sessionId, patientId, callerUserId, APPROVE_SESSION);
+        if (latest.isEmpty()) {
+            return false;
+        }
+        return !isAskSessionApprovalExpired(latest.get());
     }
 
     /**
      * Deterministic Ask session id for call-summary item confirmations so
      * {@code approve-for-session} installs the same {@link #APPROVE_SESSION} suppression
-     * Ask AI uses.
+     * Ask AI uses. Call-scoped: one id per {@code callId}, no TTL (lifetime of that call's
+     * confirmation surface).
      */
     public static UUID callSummarySessionId(final String callId) {
         if (callId == null || callId.isBlank()) {
@@ -78,9 +98,19 @@ public class AiAskConfirmationService {
                 ("call-summary-session:" + callId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
+    /**
+     * Call-summary session approval is existence-only (call-scoped forever). Ask chat
+     * approvals use {@link #hasActiveSessionApproval} with TTL.
+     */
     public boolean hasCallSummarySessionApproval(
             final String callId, final Long patientId, final Long callerUserId) {
-        return hasActiveSessionApproval(callSummarySessionId(callId), patientId, callerUserId);
+        if (callId == null || callId.isBlank() || patientId == null || callerUserId == null) {
+            return false;
+        }
+        return decisionRepository
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        callSummarySessionId(callId), patientId, callerUserId, APPROVE_SESSION)
+                .isPresent();
     }
 
     /**
@@ -193,6 +223,16 @@ public class AiAskConfirmationService {
             }
         }
         return saved;
+    }
+
+    boolean isAskSessionApprovalExpired(final AiAskConfirmationDecision decision) {
+        if (decision == null || decision.getCreatedAt() == null) {
+            return true;
+        }
+        if (sessionApprovalTtl.isZero() || sessionApprovalTtl.isNegative()) {
+            return false; // ttl-hours <= 0 disables expiry
+        }
+        return decision.getCreatedAt().isBefore(Instant.now().minus(sessionApprovalTtl));
     }
 
     private static AiAskConfirmationDecision newDecision(
