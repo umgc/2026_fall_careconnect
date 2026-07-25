@@ -61,7 +61,13 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607241000_create_consent_grants.sql"),
             new SchemaPatchLedger.Patch(
                     "2607250100-consent-grants-active-unique",
-                    "db/schema-patches/2607250100_uq_consent_grants_active.sql"));
+                    "db/schema-patches/2607250100_uq_consent_grants_active.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607251300-ai-held-item-open-unique",
+                    "db/schema-patches/2607251300_uq_ai_held_item_open_surface_hash.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607251310-user-files-extracted-text",
+                    "db/schema-patches/2607251310_user_files_extracted_text.sql"));
 
     private SchemaPatchCatalog() {
     }

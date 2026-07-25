@@ -220,6 +220,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "CREATE INDEX IF NOT EXISTS idx_held_patient_status "
                 + "ON ai_held_item (patient_id, status)");
         applyRequiredPatch(
+            "H2 – drop legacy ai_held_item open unique",
+            "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
+        applyRequiredPatch(
+            "H2 – ai_held_item open unique",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
+                + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
+                + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+        applyRequiredPatch(
+            "H2 – user_files.extracted_text",
+            "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
+        applyRequiredPatch(
             "H2 – ai_safety_audit_event",
             "CREATE TABLE IF NOT EXISTS ai_safety_audit_event ("
                 + "  id UUID PRIMARY KEY,"

@@ -37,6 +37,7 @@ class FileManagementServiceTest {
     @Mock private DocumentComplianceService documentComplianceService;
     @Mock private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
     @Mock private com.careconnect.service.ai.indexing.RetrievalIndexService retrievalIndexService;
+    @Mock private DocumentProcessingService documentProcessingService;
     @Mock private S3StorageService s3StorageService;
     @Mock private MultipartFile multipartFile;
 
@@ -50,8 +51,7 @@ class FileManagementServiceTest {
         MockitoAnnotations.openMocks(this);
         fileManagementService = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter,
-                retrievalIndexService, s3StorageService);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, s3StorageService);
         ReflectionTestUtils.setField(fileManagementService, "defaultStorageType", "database");
         ReflectionTestUtils.setField(fileManagementService, "useS3ForNewFiles", false);
 
@@ -145,8 +145,7 @@ class FileManagementServiceTest {
     void uploadFile_s3EnabledNullService_fallsBackToDatabase() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter,
-                retrievalIndexService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", true);
 
@@ -373,8 +372,7 @@ class FileManagementServiceTest {
     void getFile_s3FileNullS3Service_returnsUnavailableUrl() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter,
-                retrievalIndexService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -418,8 +416,7 @@ class FileManagementServiceTest {
     void downloadFile_s3FileNullS3Service_throwsRuntimeException() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter,
-                retrievalIndexService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -1052,4 +1049,30 @@ class FileManagementServiceTest {
                 () -> fileManagementService.createStructuredEntry(20L, request, 2L));
         verify(documentComplianceService, never()).recordStructuredEntrySaved(any(), any(), any());
     }
+
+    @Test
+    @DisplayName("isExtractFailurePlaceholder - keeps citation-like text starting with [")
+    void isExtractFailurePlaceholder_keepsLegitimateBracketText() {
+        assertFalse(FileManagementService.isExtractFailurePlaceholder(
+                "[1] Patient was advised to continue metformin."));
+        assertTrue(FileManagementService.isExtractFailurePlaceholder(
+                "[Error extracting PDF content: boom]"));
+        assertTrue(FileManagementService.isExtractFailurePlaceholder(
+                "[Unable to extract text from: scan.png]"));
+        assertTrue(FileManagementService.isExtractFailurePlaceholder("   "));
+    }
+
+    @Test
+    @DisplayName("indexableDocumentText - prefers extracted body and merges description")
+    void indexableDocumentText_mergesDescriptionAndExtracted() {
+        final UserFile file = UserFile.builder()
+                .description("Discharge summary")
+                .extractedText("Continue current medications as prescribed.")
+                .build();
+        assertEquals(
+                "Discharge summary\n\nContinue current medications as prescribed.",
+                FileManagementService.indexableDocumentText(file));
+    }
 }
+
+

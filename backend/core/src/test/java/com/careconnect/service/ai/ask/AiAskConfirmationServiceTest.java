@@ -136,6 +136,25 @@ class AiAskConfirmationServiceTest {
         assertThat(service.hasActiveSessionApproval(sessionId, 42L, 9L)).isTrue();
     }
 
+    @Test
+    void installCallSummarySessionApproval_skipsAssertCanAskAndPersists() throws Exception {
+        final User caller = user(9L);
+        when(decisionRepository
+                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                                any(), eq(42L), eq(9L), eq(AiAskConfirmationService.APPROVE_SESSION)))
+                .thenReturn(Optional.empty());
+        when(decisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        final AiAskConfirmationDecision saved =
+                service.installCallSummarySessionApproval(caller, 42L, "call-42");
+
+        assertThat(saved.getDecision()).isEqualTo(AiAskConfirmationService.APPROVE_SESSION);
+        assertThat(saved.getSessionId())
+                .isEqualTo(AiAskConfirmationService.callSummarySessionId("call-42"));
+        verify(retrievalScopeService, never()).assertCanAsk(any(), any(), any());
+        verify(decisionRepository).save(any());
+    }
+
     private static User user(final Long id) {
         final User user = new User();
         user.setId(id);

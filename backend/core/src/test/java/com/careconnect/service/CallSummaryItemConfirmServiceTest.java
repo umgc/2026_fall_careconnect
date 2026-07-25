@@ -53,6 +53,9 @@ class CallSummaryItemConfirmServiceTest {
     @Mock
     private HitlService hitlService;
 
+    @Mock
+    private com.careconnect.service.ai.ask.AiAskConfirmationService askConfirmationService;
+
     private CallSummaryItemConfirmService service;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -60,7 +63,14 @@ class CallSummaryItemConfirmServiceTest {
     @BeforeEach
     void setUp() {
         service = new CallSummaryItemConfirmService(
-                callSummaryRepository, decisionRepository, objectMapper, safetyPipeline, hitlService);
+                callSummaryRepository,
+                decisionRepository,
+                objectMapper,
+                safetyPipeline,
+                hitlService,
+                askConfirmationService);
+        lenient().when(askConfirmationService.hasCallSummarySessionApproval(any(), any(), any()))
+                .thenReturn(false);
     }
 
     private User actor() {
@@ -170,7 +180,7 @@ class CallSummaryItemConfirmServiceTest {
                 medicationInstructionPayload("item-2", "Stop taking metformin"));
         when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(CALL_ID))
                 .thenReturn(Optional.of(summary));
-        when(hitlService.findOpenHold(any(), any())).thenReturn(Optional.empty());
+        when(hitlService.findOpenHold(any(), any(), any())).thenReturn(Optional.empty());
         when(safetyPipeline.process(any())).thenReturn(
                 SafetyOutcome.holdTier2(List.of("MEDICATION_CHANGE"), List.of()));
         final AiHeldItem held = AiHeldItem.builder().id(UUID.randomUUID()).build();
@@ -197,6 +207,7 @@ class CallSummaryItemConfirmServiceTest {
                 .thenReturn(Optional.of(summary));
         final AiHeldItem open = AiHeldItem.builder().id(UUID.randomUUID()).build();
         when(hitlService.findOpenHold(
+                eq(PATIENT_ID),
                 eq("CALL_SUMMARY"),
                 eq(CallSummaryItemConfirmService.summaryItemCorrelationKey(CALL_ID, "item-2"))))
                 .thenReturn(Optional.of(open));
@@ -236,7 +247,7 @@ class CallSummaryItemConfirmServiceTest {
                 medicationInstructionPayload("item-3", "Continue current medication as prescribed"));
         when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(CALL_ID))
                 .thenReturn(Optional.of(summary));
-        when(hitlService.findOpenHold(any(), any())).thenReturn(Optional.empty());
+        when(hitlService.findOpenHold(any(), any(), any())).thenReturn(Optional.empty());
         when(safetyPipeline.process(any())).thenReturn(
                 SafetyOutcome.deliverTier1(List.of(), List.of(), "none"));
         when(decisionRepository.save(any(CallSummaryItemDecision.class)))
@@ -327,6 +338,60 @@ class CallSummaryItemConfirmServiceTest {
         assertThat(response.decision()).isEqualTo("decline");
         verifyNoHitlInteraction();
         verify(decisionRepository).save(any(CallSummaryItemDecision.class));
+    }
+
+    @Test
+    @DisplayName("approve-for-session on medication skips HITL and installs APPROVE_SESSION first")
+    void confirm_approveForSession_medication_skipsHitlAndInstallsSession() {
+        final CallSummary summary = summaryWithItems(
+                "{\"actionItems\":[{\"itemId\":\"item-a\",\"text\":\"Call pharmacy\","
+                        + "\"needsConfirmation\":true}],\"appointments\":[],\"careInstructions\":["
+                        + "{\"itemId\":\"item-med\",\"type\":\"medication\","
+                        + "\"text\":\"Stop taking metformin\",\"needsConfirmation\":true}]}");
+        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(CALL_ID))
+                .thenReturn(Optional.of(summary));
+        when(decisionRepository.save(any(CallSummaryItemDecision.class)))
+                .thenAnswer(invocation -> {
+                    final CallSummaryItemDecision decision = invocation.getArgument(0);
+                    decision.setId(55L);
+                    return decision;
+                });
+
+        final SummaryItemConfirmResponse response = service.confirm(
+                CALL_ID, "item-med", actor(),
+                new SummaryItemConfirmRequest("approve-for-session", null, null));
+
+        assertThat(response.held()).isFalse();
+        assertThat(response.decision()).isEqualTo("approve-for-session");
+        verifyNoHitlInteraction();
+        verify(askConfirmationService).installCallSummarySessionApproval(
+                any(User.class), eq(PATIENT_ID), eq(CALL_ID));
+        final ArgumentCaptor<CallSummary> summaryCaptor = ArgumentCaptor.forClass(CallSummary.class);
+        verify(callSummaryRepository).save(summaryCaptor.capture());
+        assertThat(summaryCaptor.getValue().getSummaryJson())
+                .contains("\"needsConfirmation\":false")
+                .doesNotContain("\"needsConfirmation\":true");
+    }
+
+    @Test
+    @DisplayName("session approval already present skips medication HITL")
+    void confirm_medication_skipsHitlWhenSessionAlreadyApproved() {
+        final CallSummary summary = summaryWithItems(
+                medicationInstructionPayload("item-2", "Stop taking metformin"));
+        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(CALL_ID))
+                .thenReturn(Optional.of(summary));
+        when(askConfirmationService.hasCallSummarySessionApproval(CALL_ID, PATIENT_ID, 5L))
+                .thenReturn(true);
+        when(decisionRepository.save(any(CallSummaryItemDecision.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        final SummaryItemConfirmResponse response = service.confirm(
+                CALL_ID, "item-2", actor(),
+                new SummaryItemConfirmRequest("approve", null, null));
+
+        assertThat(response.held()).isFalse();
+        assertThat(response.decision()).isEqualTo("approve");
+        verifyNoHitlInteraction();
     }
 
     private void verifyNoHitlInteraction() {

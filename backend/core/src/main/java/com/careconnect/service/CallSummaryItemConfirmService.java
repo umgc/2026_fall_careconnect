@@ -37,15 +37,12 @@ import org.springframework.transaction.annotation.Transactional;
  * decision is recorded; when the pipeline escalates to Tier-2, a HITL hold is created instead
  * of clearing the item's confirmation gate, so a clinician reviews it first.
  *
- * <p><b>MVP note — {@code approve-for-session}:</b> the decision label is persisted on
- * {@link CallSummaryItemDecision} and clears {@code needsConfirmation} on the item, but it does
- * <em>not</em> install session-scoped suppression the way Ask AI
- * {@code APPROVE_SESSION} does. Treat it as an audit/label variant of approve until session
- * semantics are wired.
+ * <p>{@code approve-for-session} installs Ask-style {@code APPROVE_SESSION} suppression via
+ * {@link com.careconnect.service.ai.ask.AiAskConfirmationService} (deterministic session id
+ * per call) and clears remaining {@code needsConfirmation} flags on the summary payload.
  *
- * <p><b>MVP note — HITL hold dedupe:</b> {@link HitlService#findOpenHold} then
- * {@link HitlService#createHold} is best-effort only (no unique claim on open holds). Concurrent
- * retries can still insert duplicates; acceptable for MVP, not for multi-writer production load.
+ * <p>HITL hold creation uses {@link HitlService#createHold} with a unique open-hold claim so
+ * concurrent retries reuse the same PENDING_REVIEW row.
  */
 @Slf4j
 @Service
@@ -54,6 +51,7 @@ public class CallSummaryItemConfirmService {
 
     private static final Set<String> VALID_DECISIONS =
             Set.of("approve", "approve-for-session", "decline");
+    private static final String DECISION_APPROVE_FOR_SESSION = "approve-for-session";
     private static final String CATEGORY_ACTION_ITEMS = "actionItems";
     private static final String CATEGORY_APPOINTMENTS = "appointments";
     private static final String CATEGORY_CARE_INSTRUCTIONS = "careInstructions";
@@ -68,6 +66,7 @@ public class CallSummaryItemConfirmService {
     private final ObjectMapper objectMapper;
     private final SafetyPipeline safetyPipeline;
     private final HitlService hitlService;
+    private final com.careconnect.service.ai.ask.AiAskConfirmationService askConfirmationService;
 
     /**
      * Confirms or declines a single extracted item on the latest stored summary for a call.
@@ -132,7 +131,16 @@ public class CallSummaryItemConfirmService {
                         && CARE_INSTRUCTION_TYPE_MEDICATION.equalsIgnoreCase(
                                 String.valueOf(lookup.item().get("type")));
 
-        if (isMedicationInstruction && !DECISION_DECLINE.equals(decision)) {
+        final boolean approveForSession = DECISION_APPROVE_FOR_SESSION.equals(decision);
+        final boolean sessionApproved = askConfirmationService.hasCallSummarySessionApproval(
+                callId, summary.getPatientId(), actor.getId());
+
+        // Session-wide approve must install APPROVE_SESSION / clear gates — do not
+        // dead-end the first med item in HITL before that happens.
+        if (isMedicationInstruction
+                && !DECISION_DECLINE.equals(decision)
+                && !sessionApproved
+                && !approveForSession) {
             final SummaryItemConfirmResponse held =
                     tryHoldForMedicationSafety(summary, callId, itemId, actor, lookup.item());
             if (held != null) {
@@ -140,7 +148,7 @@ public class CallSummaryItemConfirmService {
             }
         }
 
-        return recordDecision(summary, payload, lookup, itemId, decision, actor, request);
+        return recordDecision(summary, payload, lookup, itemId, decision, actor, request, callId);
     }
 
     /**
@@ -163,7 +171,7 @@ public class CallSummaryItemConfirmService {
 
         final String correlationKey = summaryItemCorrelationKey(callId, itemId);
         final Optional<AiHeldItem> openHold =
-                hitlService.findOpenHold(SOURCE_SURFACE_CALL_SUMMARY, correlationKey);
+                hitlService.findOpenHold(patientId, SOURCE_SURFACE_CALL_SUMMARY, correlationKey);
         if (openHold.isPresent()) {
             if (log.isInfoEnabled()) {
                 log.info(
@@ -212,7 +220,8 @@ public class CallSummaryItemConfirmService {
             final String itemId,
             final String decision,
             final User actor,
-            final SummaryItemConfirmRequest request) {
+            final SummaryItemConfirmRequest request,
+            final String callId) {
         final CallSummaryItemDecision decisionRow = CallSummaryItemDecision.builder()
                 .summaryId(summary.getId())
                 .itemId(itemId)
@@ -228,11 +237,38 @@ public class CallSummaryItemConfirmService {
         final CallSummaryItemDecision savedDecision = decisionRepository.save(decisionRow);
 
         lookup.item().put("needsConfirmation", Boolean.FALSE);
+        if (DECISION_APPROVE_FOR_SESSION.equals(decision)) {
+            // Persist Ask APPROVE_SESSION first; only clear sibling gates on success
+            // so the UI cannot show "all confirmed" without session suppression.
+            if (summary.getPatientId() == null) {
+                throw new IllegalStateException(
+                        "Cannot approve-for-session without patientId on summary "
+                                + summary.getId());
+            }
+            askConfirmationService.installCallSummarySessionApproval(
+                    actor, summary.getPatientId(), callId);
+            clearAllNeedsConfirmation(payload);
+        }
         summary.setSummaryJson(toJsonSafe(payload));
         callSummaryRepository.save(summary);
 
         return new SummaryItemConfirmResponse(
                 itemId, decision, false, null, savedDecision.getId());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void clearAllNeedsConfirmation(final Map<String, Object> payload) {
+        for (final String category : ITEM_CATEGORIES) {
+            final Object rawList = payload.get(category);
+            if (!(rawList instanceof List<?> list)) {
+                continue;
+            }
+            for (final Object rawItem : list) {
+                if (rawItem instanceof Map<?, ?> rawMap) {
+                    ((Map<String, Object>) rawMap).put("needsConfirmation", Boolean.FALSE);
+                }
+            }
+        }
     }
 
     private static String normalizeDecision(final String rawDecision) {

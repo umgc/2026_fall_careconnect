@@ -53,6 +53,22 @@ public interface ConsentGrantRepository extends JpaRepository<ConsentGrant, Long
             @Param("now") Instant now);
 
     /**
+     * ACTIVE rows for the tuple regardless of expiry — used to revoke soft-expired
+     * grants before inserting a new ACTIVE row (unique index is status-only).
+     */
+    @Query(
+            "SELECT cg FROM ConsentGrant cg "
+                    + "WHERE cg.patientUserId = :patientUserId "
+                    + "AND cg.granteeUserId = :granteeUserId "
+                    + "AND cg.scope = :scope "
+                    + "AND cg.status = 'ACTIVE' "
+                    + "AND cg.revokedAt IS NULL")
+    List<ConsentGrant> findStatusActiveGrants(
+            @Param("patientUserId") Long patientUserId,
+            @Param("granteeUserId") Long granteeUserId,
+            @Param("scope") String scope);
+
+    /**
      * True when any grant row exists for the tuple (ACTIVE, REVOKED, or expired). Used to
      * stop falling back to care-circle link once explicit consent has been recorded.
      */
