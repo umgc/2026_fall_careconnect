@@ -235,6 +235,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "V300626c – index confirmation_items(requested_by)",
             "CREATE INDEX IF NOT EXISTS idx_confirmation_items_requested_by ON confirmation_items (requested_by)"
         );
+        applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
     }
@@ -907,6 +908,52 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "summary replay patient", "summary_citation_replay_source", "patient_id",
                 "patient", "id", 'a', 1);
         // Full retrieval schema verify (including concurrent indexes) runs after unlock.
+    }
+
+    /**
+     * WBS 3.15.6 — immutable AI audit ledger. Mirrors db/migration V2606290938 (Flyway off in prod).
+     * JSONB / TIMESTAMPTZ / plpgsql trigger are Postgres-only, so this self-guards on the datasource;
+     * H2 integration tests get the table from Hibernate ddl-auto rather than a hand-written mirror.
+     */
+    private void applyAiAuditLedgerPatches() {
+        if (!isPostgreSql()) {
+            log.info("Skipping ai_audit_ledger schema patches for non-PostgreSQL datasource");
+            return;
+        }
+        applyPatch(
+            "V2606290938 – reject_update_delete_immutable function (shared)",
+            "CREATE OR REPLACE FUNCTION reject_update_delete_immutable() RETURNS TRIGGER AS $$ " +
+            "BEGIN RAISE EXCEPTION 'Updates and deletes are not allowed on immutable log tables (%).', " +
+            "TG_TABLE_NAME; END; $$ LANGUAGE plpgsql"
+        );
+        applyPatch(
+            "V2606290938a – create ai_audit_ledger table",
+            "CREATE TABLE IF NOT EXISTS ai_audit_ledger (" +
+            "  id             BIGSERIAL     PRIMARY KEY," +
+            "  event_type     VARCHAR(50)   NOT NULL," +
+            "  actor_user_id  BIGINT," +
+            "  patient_id     BIGINT," +
+            "  session_id     VARCHAR(128)," +
+            "  source_feature VARCHAR(100)  NOT NULL," +
+            "  payload        JSONB," +
+            "  occurred_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW())"
+        );
+        applyPatch("V2606290938b – index ai_audit_ledger(actor_user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_actor ON ai_audit_ledger(actor_user_id)");
+        applyPatch("V2606290938c – index ai_audit_ledger(patient_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_patient ON ai_audit_ledger(patient_id)");
+        applyPatch("V2606290938d – index ai_audit_ledger(event_type)",
+            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_event_type ON ai_audit_ledger(event_type)");
+        applyPatch("V2606290938e – index ai_audit_ledger(occurred_at)",
+            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_occurred_at ON ai_audit_ledger(occurred_at)");
+        applyPatch("V2606290938f – index ai_audit_ledger(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_session ON ai_audit_ledger(session_id)");
+        applyPatch(
+            "V2606290938g – ai_audit_ledger immutability trigger",
+            "DROP TRIGGER IF EXISTS tr_ai_audit_ledger_immutable ON ai_audit_ledger;" +
+            "CREATE TRIGGER tr_ai_audit_ledger_immutable BEFORE UPDATE OR DELETE ON ai_audit_ledger " +
+            "FOR EACH ROW EXECUTE FUNCTION reject_update_delete_immutable()"
+        );
     }
 
     /**
