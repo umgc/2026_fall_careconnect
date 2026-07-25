@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
+import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/features/usps/domain/models/mail_image_availability.dart';
 import 'package:care_connect_app/features/usps/presentation/widgets/mail_envelope_read_aloud_button.dart';
 import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_image.dart';
@@ -257,12 +258,28 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   @override
   void initState() {
     super.initState();
+    _handleOAuthReturnError();
     _checkGoogleConnection().then((_) {
       // Auto-fetch today's digest after checking connection
       if (isGoogleConnected) {
         _fetchDigest();
       }
     });
+  }
+
+  /// oauthError is set by EmailOAuthController callback failures; error is legacy fallback.
+  void _handleOAuthReturnError() {
+    if (!kIsWeb) return;
+    final oauthError = Uri.base.queryParameters['oauthError'] ??
+        Uri.base.queryParameters['error'];
+    if (oauthError != null && oauthError.isNotEmpty) {
+      setState(() {
+        needsGoogleReconnect = true;
+        reconnectMessage = oauthError == 'oauth_failed'
+            ? 'Email connection failed. Please try connecting again.'
+            : Uri.decodeComponent(oauthError);
+      });
+    }
   }
 
   @override
@@ -310,6 +327,16 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _connectGoogleAccount() async {
+    await _launchOAuthViaConnectUrl();
+  }
+
+  Future<void> _connectMicrosoftAccount() async {
+    await _launchOAuthViaConnectUrl();
+  }
+
+  /// Fetches an HMAC-signed OAuth start URL from the authenticated API.
+  /// Never puts raw userId into `/oauth/*/start` query params.
+  Future<void> _launchOAuthViaConnectUrl() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
 
@@ -320,33 +347,52 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
       return;
     }
 
-    final base = getBackendBaseUrl();
-
-    // Use a platform-safe return URL; Uri.base works on web and mobile.
-    final currentUrl = kIsWeb ? Uri.base.toString() : getWebBaseUrl();
-    final authUrl =
-        '$base/oauth/google/start?userId=${Uri.encodeComponent(user.id.toString())}&returnUrl=${Uri.encodeComponent(currentUrl)}';
-
-    final uri = Uri.parse(authUrl);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Google authentication')),
-        );
-      }
+    final email = _emailController.text.trim().isNotEmpty
+        ? _emailController.text.trim()
+        : user.email;
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the mailbox email to connect')),
+      );
+      return;
     }
-  }
 
-  Future<void> _connectMicrosoftAccount() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    if (user == null) return;
     final base = getBackendBaseUrl();
     final currentUrl = kIsWeb ? Uri.base.toString() : getWebBaseUrl();
-    final authUrl =
-        '$base/oauth/microsoft/start?userId=${Uri.encodeComponent(user.id.toString())}&returnUrl=${Uri.encodeComponent(currentUrl)}';
-    final uri = Uri.parse(authUrl);
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      final dio = Dio(BaseOptions(headers: headers));
+      final res = await dio.get(
+        '$base/v1/api/email-credentials/connect-url',
+        queryParameters: {
+          'email': email,
+          'returnUrl': currentUrl,
+        },
+      );
+      final data = res.data is Map<String, dynamic>
+          ? res.data as Map<String, dynamic>
+          : <String, dynamic>{};
+      final authUrl = data['oauthStartPath']?.toString();
+      if (authUrl == null || authUrl.isEmpty) {
+        throw StateError(data['error']?.toString() ?? 'Missing OAuth start URL');
+      }
+      final uri = authUrl.startsWith('http')
+          ? Uri.parse(authUrl)
+          : Uri.parse('$base$authUrl');
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open email authentication')),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start email connect: $e')),
+      );
+    }
   }
 
   Future<void> _validateEmailAndRoute() async {

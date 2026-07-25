@@ -1,7 +1,7 @@
-// Tests for RegistrationPage
+﻿// Tests for RegistrationPage
 // (lib/features/auth/presentation/pages/sign_up_screen.dart).
 //
-// Multi-step registration form — no API calls in initState.
+// Multi-step registration form â€” no API calls in initState.
 // Tests cover all 5 steps, form validation, password visibility, and role selection.
 
 import 'dart:io';
@@ -210,7 +210,7 @@ Future<void> _goToCaregiverReview(WidgetTester tester) async {
 /// Navigate a Professional caregiver (with license fields) to the review step.
 Future<void> _goToProfessionalCaregiverReview(WidgetTester tester) async {
   await _goToStep1(tester, role: 'Caregiver');
-  await _fillCaregiverPersonalInfo(tester, caregiverType: 'Professional');
+  await _fillCaregiverPersonalInfo(tester, caregiverType: 'Primary Care Physician');
   await _tapNextButton(tester); // step 1 -> step 2 (Contact + professional fields)
 
   final contactFields = find.byType(TextFormField);
@@ -1194,10 +1194,10 @@ void main() {
     });
 
     testWidgets(
-        'Professional caregiver shows license fields on contact step',
+        'Primary Care Physician caregiver shows license fields on contact step',
         (tester) async {
       await _goToStep1(tester, role: 'Caregiver');
-      await _fillCaregiverPersonalInfo(tester, caregiverType: 'Professional');
+      await _fillCaregiverPersonalInfo(tester, caregiverType: 'Primary Care Physician');
       await _tapNextButton(tester);
 
       // Should be on step 2 (Contact Information) now
@@ -1208,16 +1208,16 @@ void main() {
           find.byType(SingleChildScrollView), const Offset(0, -500));
       await tester.pump();
 
-      expect(find.text('Professional Information'), findsOneWidget);
-      expect(find.text('License Number *'), findsOneWidget);
-      expect(find.text('Issuing State *'), findsOneWidget);
-      expect(find.text('Years of Experience *'), findsOneWidget);
+      expect(find.text('Professional Information (optional)'), findsOneWidget);
+      expect(find.text('License Number'), findsOneWidget);
+      expect(find.text('Issuing State'), findsOneWidget);
+      expect(find.text('Years of Experience'), findsOneWidget);
     });
 
-    testWidgets('Professional caregiver Next disabled without license info',
+    testWidgets('Primary Care Physician can proceed without license info',
         (tester) async {
       await _goToStep1(tester, role: 'Caregiver');
-      await _fillCaregiverPersonalInfo(tester, caregiverType: 'Professional');
+      await _fillCaregiverPersonalInfo(tester, caregiverType: 'Primary Care Physician');
       await _tapNextButton(tester);
 
       // Fill basic contact info only
@@ -1238,11 +1238,11 @@ void main() {
       await tester.enterText(fields.at(6), '21201');
       await tester.pump();
 
-      // Still disabled because professional fields are empty
+      // Company fields are optional for Primary Care Physician
       final button = tester.widget<ElevatedButton>(
         find.widgetWithText(ElevatedButton, 'Next'),
       );
-      expect(button.onPressed, isNull);
+      expect(button.onPressed, isNotNull);
     });
   });
 
@@ -1768,17 +1768,17 @@ void main() {
       await tester.pump();
 
       // Should NOT show professional fields
-      expect(find.text('Professional Information'), findsNothing);
+      expect(find.text('Professional Information (optional)'), findsNothing);
       expect(find.text('License Number *'), findsNothing);
     });
   });
 
-  group('RegistrationPage - Professional Caregiver full flow', () {
-    testWidgets('Professional caregiver can reach review with all fields',
+  group('RegistrationPage - Primary Care Physician full flow', () {
+    testWidgets('Primary Care Physician caregiver can reach review with all fields',
         (tester) async {
       // Step 0 -> Step 1
       await _goToStep1(tester, role: 'Caregiver');
-      await _fillCaregiverPersonalInfo(tester, caregiverType: 'Professional');
+      await _fillCaregiverPersonalInfo(tester, caregiverType: 'Primary Care Physician');
       await _tapNextButton(tester);
 
       // Step 2 - Contact with professional fields
@@ -1851,7 +1851,7 @@ void main() {
       expect(find.text('Review & Confirm'), findsOneWidget);
       expect(find.text('Caregiver'), findsOneWidget);
       expect(find.text('Caregiver Type'), findsOneWidget);
-      expect(find.text('Professional'), findsOneWidget);
+      expect(find.text('Primary Care Physician'), findsOneWidget);
 
       // Scroll to see professional review fields
       await tester.drag(
@@ -1887,7 +1887,7 @@ void main() {
     });
   });
 
-  group('RegistrationPage – submit (Patient)', () {
+  group('RegistrationPage â€“ submit (Patient)', () {
     testWidgets('successful registration navigates to /login', (tester) async {
       HttpOverrides.global =
           FakeHttpOverrides((method, uri) => FakeResponse(200, '{}'));
@@ -1926,7 +1926,7 @@ void main() {
     });
   });
 
-  group('RegistrationPage – submit (Caregiver)', () {
+  group('RegistrationPage â€“ submit (Caregiver)', () {
     testWidgets('successful registration navigates to subscription tier',
         (tester) async {
       HttpOverrides.global =
@@ -1944,7 +1944,7 @@ void main() {
       expect(find.text('Subscription Tier'), findsOneWidget);
     });
 
-    testWidgets('professional caregiver submit navigates to subscription tier',
+    testWidgets('Primary Care Physician caregiver submit navigates to subscription tier',
         (tester) async {
       HttpOverrides.global =
           FakeHttpOverrides((method, uri) => FakeResponse(201, '{}'));
@@ -1979,3 +1979,4 @@ void main() {
     });
   });
 }
+

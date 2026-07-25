@@ -245,13 +245,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         _cityController.text.isNotEmpty &&
         _stateController.text.isNotEmpty &&
         _zipController.text.isNotEmpty;
-    final professionalValid =
-        _selectedRole != 'Caregiver' ||
-        _selectedCaregiverType != 'Professional' ||
-        (_licenseNumberController.text.isNotEmpty &&
-            _issuingStateController.text.isNotEmpty &&
-            _yearsExperienceController.text.isNotEmpty &&
-            _organizationController.text.isNotEmpty);
+    final professionalValid = true; // Primary Care Physician company fields are optional
 
     return emailValid &&
         _phoneController.text.isNotEmpty &&
@@ -429,7 +423,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     };
 
     // Add professional info if it's a professional caregiver
-    if (_selectedCaregiverType == 'Professional') {
+    if (_selectedCaregiverType == 'Primary Care Physician') {
       caregiverData['professional'] = {
         'licenseNumber': _licenseNumberController.text,
         'issuingState': _issuingStateController.text,
@@ -688,7 +682,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               value: _selectedCaregiverType,
               label: 'Caregiver Type',
               isRequired: true,
-              items: ['Professional', 'Family Member', 'Friend', 'Other'],
+              items: ['Primary Care Physician', 'Family Member', 'Friend', 'Other'],
               onChanged: (value) {
                 setState(() {
                   _selectedCaregiverType = value;
@@ -821,12 +815,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ],
           ),
 
-          // Professional Information (only for caregivers)
+          // Company / practice fields — doctors (Primary Care Physician) only
           if (_selectedRole == 'Caregiver' &&
-              _selectedCaregiverType == 'Professional') ...[
+              _selectedCaregiverType == 'Primary Care Physician') ...[
             const SizedBox(height: 32),
             const Text(
-              'Professional Information',
+              'Professional Information (optional)',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -837,13 +831,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
             _buildTextFormField(
               controller: _organizationController,
               label: 'Practice / organization',
-              isRequired: true,
+              isRequired: false,
             ),
             const SizedBox(height: 20),
             _buildTextFormField(
               controller: _licenseNumberController,
               label: 'License Number',
-              isRequired: true,
+              isRequired: false,
             ),
             const SizedBox(height: 20),
 
@@ -853,7 +847,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   child: _buildTextFormField(
                     controller: _issuingStateController,
                     label: 'Issuing State',
-                    isRequired: true,
+                    isRequired: false,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -861,7 +855,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   child: _buildTextFormField(
                     controller: _yearsExperienceController,
                     label: 'Years of Experience',
-                    isRequired: true,
+                    isRequired: false,
                     keyboardType: TextInputType.number,
                   ),
                 ),
@@ -1231,17 +1225,21 @@ class _RegistrationPageState extends State<RegistrationPage> {
         ),
 
         if (_selectedRole == 'Caregiver' &&
-            _selectedCaregiverType == 'Professional') ...[
-          _buildReviewSection(
-            'Practice / organization',
-            _organizationController.text,
-          ),
-          _buildReviewSection('License Number', _licenseNumberController.text),
-          _buildReviewSection('Issuing State', _issuingStateController.text),
-          _buildReviewSection(
-            'Years of Experience',
-            _yearsExperienceController.text,
-          ),
+            _selectedCaregiverType == 'Primary Care Physician') ...[
+          if (_organizationController.text.trim().isNotEmpty)
+            _buildReviewSection(
+              'Practice / organization',
+              _organizationController.text,
+            ),
+          if (_licenseNumberController.text.trim().isNotEmpty)
+            _buildReviewSection('License Number', _licenseNumberController.text),
+          if (_issuingStateController.text.trim().isNotEmpty)
+            _buildReviewSection('Issuing State', _issuingStateController.text),
+          if (_yearsExperienceController.text.trim().isNotEmpty)
+            _buildReviewSection(
+              'Years of Experience',
+              _yearsExperienceController.text,
+            ),
         ],
 
         const SizedBox(height: 24),

@@ -2,7 +2,6 @@ package com.careconnect.controller;
 
 import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.email.EmailDomainDetector;
-import com.careconnect.email.EmailProviderRouter;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
@@ -39,11 +38,13 @@ class EmailCredentialControllerTest {
     @Mock
     private EmailAddressValidationService validationService;
     @Mock
-    private EmailProviderRouter providerRouter;
-    @Mock
     private EmailDomainDetector domainDetector;
     @Mock
     private ImapEmailCredentialService imapEmailCredentialService;
+    @Mock
+    private com.careconnect.security.OAuthStateSigner oauthStateSigner;
+    @Mock
+    private com.careconnect.security.OAuthRedirectValidator oauthRedirectValidator;
 
     @InjectMocks
     private EmailCredentialController controller;

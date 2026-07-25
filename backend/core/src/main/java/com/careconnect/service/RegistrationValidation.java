@@ -7,64 +7,20 @@ import com.careconnect.exception.AppException;
 import org.springframework.http.HttpStatus;
 
 /**
- * Registration-time validation for caregiver professional/company fields
- * and guardrails against patient registrations carrying org data.
+ * Registration-time validation for doctor company fields.
+ * Company / practice / license data is allowed only for Primary Care Physician
+ * caregivers; other caregivers and all patients must not send it.
  */
 public final class RegistrationValidation {
+
+    public static final String PRIMARY_CARE_PHYSICIAN = "Primary Care Physician";
 
     private RegistrationValidation() {}
 
     public static void validatePatientRegistration(PatientRegistration reg) {
+        // PatientRegistration has no professional/company fields by type.
         if (reg == null) {
             return;
-        }
-        // PatientRegistration must not carry professional/company fields.
-        try {
-            var organizationGetter = reg.getClass().getMethod("getOrganization");
-            Object value = organizationGetter.invoke(reg);
-            if (value instanceof String s && !s.isBlank()) {
-                throw new AppException(HttpStatus.BAD_REQUEST,
-                        "Patient registration must not include organization fields");
-            }
-        } catch (NoSuchMethodException ignored) {
-            // Expected — PatientRegistration has no organization getter.
-        } catch (AppException e) {
-            throw e;
-        } catch (ReflectiveOperationException e) {
-            throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Patient registration must not include organization fields");
-        }
-
-        try {
-            var practiceGetter = reg.getClass().getMethod("getPracticeName");
-            Object value = practiceGetter.invoke(reg);
-            if (value instanceof String s && !s.isBlank()) {
-                throw new AppException(HttpStatus.BAD_REQUEST,
-                        "Patient registration must not include organization fields");
-            }
-        } catch (NoSuchMethodException ignored) {
-            // Expected.
-        } catch (AppException e) {
-            throw e;
-        } catch (ReflectiveOperationException e) {
-            throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Patient registration must not include organization fields");
-        }
-
-        try {
-            var professionalGetter = reg.getClass().getMethod("getProfessional");
-            Object value = professionalGetter.invoke(reg);
-            if (value != null) {
-                throw new AppException(HttpStatus.BAD_REQUEST,
-                        "Patient registration must not include professional fields");
-            }
-        } catch (NoSuchMethodException ignored) {
-            // Expected.
-        } catch (AppException e) {
-            throw e;
-        } catch (ReflectiveOperationException e) {
-            throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Patient registration must not include professional fields");
         }
     }
 
@@ -73,26 +29,29 @@ public final class RegistrationValidation {
             return;
         }
 
-        String type = reg.getCaregiverType();
-        boolean professional = type != null && type.trim().equalsIgnoreCase("Professional");
-        ProfessionalInfoDto prof = reg.getProfessional();
-        String org = prof == null ? null : prof.resolvedOrganization();
+        final boolean doctor = isPrimaryCarePhysician(reg.getCaregiverType());
+        final ProfessionalInfoDto prof = reg.getProfessional();
 
-        if (professional) {
-            if (org == null || org.isBlank()) {
-                throw new AppException(HttpStatus.BAD_REQUEST,
-                        "Practice / organization is required for Professional caregivers");
-            }
-            if (prof == null || prof.getLicenseNumber() == null || prof.getLicenseNumber().isBlank()) {
-                throw new AppException(HttpStatus.BAD_REQUEST,
-                        "License number is required for Professional caregivers");
-            }
-            return;
-        }
-
-        if (org != null && !org.isBlank()) {
+        if (!doctor && hasCompanyFields(prof)) {
             throw new AppException(HttpStatus.BAD_REQUEST,
-                    "Company / practice fields are only allowed for Professional caregivers");
+                    "Company / practice fields are only allowed for Primary Care Physician");
         }
+        // Doctor company fields are optional — no further required checks.
+    }
+
+    public static boolean isPrimaryCarePhysician(String caregiverType) {
+        return caregiverType != null
+                && caregiverType.trim().equalsIgnoreCase(PRIMARY_CARE_PHYSICIAN);
+    }
+
+    private static boolean hasCompanyFields(ProfessionalInfoDto prof) {
+        if (prof == null) {
+            return false;
+        }
+        final String org = prof.resolvedOrganization();
+        return (org != null && !org.isBlank())
+                || (prof.getLicenseNumber() != null && !prof.getLicenseNumber().isBlank())
+                || (prof.getIssuingState() != null && !prof.getIssuingState().isBlank())
+                || prof.getYearsExperience() > 0;
     }
 }

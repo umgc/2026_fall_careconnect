@@ -5,10 +5,11 @@ import com.careconnect.dto.EmailValidateRequest;
 import com.careconnect.dto.ImapConnectRequest;
 import com.careconnect.email.EmailDomainDetector;
 import com.careconnect.email.EmailProvider;
-import com.careconnect.email.EmailProviderRouter;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.OAuthRedirectValidator;
+import com.careconnect.security.OAuthStateSigner;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
@@ -16,9 +17,11 @@ import com.careconnect.service.EmailAddressValidationService;
 import com.careconnect.service.EmailCredentialLifecycleService;
 import com.careconnect.service.ImapEmailCredentialService;
 import com.careconnect.util.SecurityUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,9 +35,10 @@ public class EmailCredentialController {
     private final AuthorizationService authorizationService;
     private final EmailCredentialLifecycleService credentialLifecycle;
     private final EmailAddressValidationService validationService;
-    private final EmailProviderRouter providerRouter;
     private final EmailDomainDetector domainDetector;
     private final ImapEmailCredentialService imapEmailCredentialService;
+    private final OAuthStateSigner oauthStateSigner;
+    private final OAuthRedirectValidator oauthRedirectValidator;
 
     @RequirePermission(Permission.VIEW_HEALTH_DATA)
     @GetMapping("/status")
@@ -75,13 +79,19 @@ public class EmailCredentialController {
         return ResponseEntity.ok(body);
     }
 
+    /**
+     * Builds a provider connect payload. OAuth providers receive a signed
+     * {@code startToken} URL — {@code userId} is taken from the authenticated
+     * principal (admins may target another user via {@code userId} after self-or-admin check).
+     */
     @RequirePermission(Permission.VIEW_HEALTH_DATA)
     @GetMapping("/connect-url")
     public ResponseEntity<Map<String, Object>> connectUrl(
-            @RequestParam String userId,
+            HttpServletRequest request,
+            @RequestParam(required = false) String userId,
             @RequestParam String email,
             @RequestParam(required = false) String returnUrl) throws UnauthorizedException {
-        requireCredentialOwnerAccess(userId);
+        final String resolvedUserId = resolveCredentialUserId(userId);
         final var result = validationService.validate(email, false);
         if (!result.valid()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -96,12 +106,16 @@ public class EmailCredentialController {
         body.put("reconnectPath", domainDetector.reconnectPathFor(provider));
         body.put("email", email.trim());
         if (authMode == EmailProvider.AuthMode.OAUTH) {
+            final String sanitizedReturn = oauthRedirectValidator.sanitizeReturnUrl(returnUrl);
+            final String startToken = oauthStateSigner.signStartToken(resolvedUserId, sanitizedReturn);
             final String path = domainDetector.reconnectPathFor(provider);
-            String url = path + "?userId=" + userId;
-            if (returnUrl != null && !returnUrl.isBlank()) {
-                url += "&returnUrl=" + java.net.URLEncoder.encode(returnUrl, java.nio.charset.StandardCharsets.UTF_8);
-            }
+            final String url = ServletUriComponentsBuilder.fromContextPath(request)
+                    .path(path.startsWith("/") ? path : "/" + path)
+                    .queryParam("startToken", startToken)
+                    .build()
+                    .toUriString();
             body.put("oauthStartPath", url);
+            body.put("startToken", startToken);
         } else {
             body.put("imapHost", domainDetector.defaultImapHost(provider, email));
             body.put("imapPort", 993);
@@ -113,9 +127,15 @@ public class EmailCredentialController {
     @PostMapping("/imap/connect")
     public ResponseEntity<EmailConnectionStatusResponse> connectImap(@RequestBody ImapConnectRequest request)
             throws UnauthorizedException {
-        requireCredentialOwnerAccess(request.userId());
-        imapEmailCredentialService.connect(request);
-        return ResponseEntity.ok(credentialLifecycle.connectionStatus(request.userId()));
+        final String resolvedUserId = resolveCredentialUserId(request.userId());
+        final ImapConnectRequest scoped = new ImapConnectRequest(
+                resolvedUserId,
+                request.email(),
+                request.appPassword(),
+                request.imapHost(),
+                request.imapPort());
+        imapEmailCredentialService.connect(scoped);
+        return ResponseEntity.ok(credentialLifecycle.connectionStatus(resolvedUserId));
     }
 
     @RequirePermission(Permission.RECORD_HEALTH_DATA)
@@ -137,7 +157,17 @@ public class EmailCredentialController {
 
     /**
      * Patient, caregiver, or admin may manage their own mailbox credentials.
+     * When {@code userId} is omitted, the authenticated principal is used.
      */
+    private String resolveCredentialUserId(final String userId) throws UnauthorizedException {
+        final User currentUser = securityUtil.resolveCurrentUser();
+        if (userId == null || userId.isBlank()) {
+            return String.valueOf(currentUser.getId());
+        }
+        requireCredentialOwnerAccess(userId);
+        return userId.trim();
+    }
+
     private void requireCredentialOwnerAccess(final String userId) throws UnauthorizedException {
         final User currentUser = securityUtil.resolveCurrentUser();
         try {
