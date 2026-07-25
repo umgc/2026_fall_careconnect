@@ -22,6 +22,12 @@ import java.util.List;
 
 /**
  * Polls {@code indexing_outbox} and drives {@link RetrievalIndexService} (Task 4.1).
+ * This is the canonical, production indexing path — covers CALL_SUMMARY /
+ * VISIT_SUMMARY, TRANSCRIPT_SEGMENT, and USPS_MAIL as their source events
+ * land in the outbox. See {@link com.careconnect.service.ai.RetrievalIndexingService}
+ * for the separate, synchronous MEDICATION/TASK/VITAL_SIGN indexer — the two
+ * cover disjoint record types and both write {@code retrieval_index_chunk};
+ * do not add a record type to both paths.
  *
  * <p>MVP transport: process outbox rows in-process (same pattern as {@code EvvOutboxProcessor}).
  * Claim and per-row work run in <em>separate</em> transactions so a deferred/failed ingest
