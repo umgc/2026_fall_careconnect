@@ -565,6 +565,16 @@
   "ptdashboard_medicationReminders": "Tienes recordatorios de medicación que no están marcados como tomados.",
   "ptdashboard_medPendingReminder": "recordatorio:medicamentos_pendientes",
 
+  "ptdashboard_twiceDaily": "Dos veces al día",
+  "ptdashboard_onceDaily": "Una vez al día",
+  "ptdashboard_threeTimesDaily": "Tres veces al día",
+  "ptdashboard_fourTimesDaily": "Cuatro veces al día",
+  "ptdashboard_asNeeded": "Según sea necesario",
+  "ptdashboard_hourly": "Cada hora",
+  "ptdashboard_weekly": "Semanalmente",
+  "ptdashboard_monthly": "Mensualmente",
+  "ptdashboard_onceAtBed": "Una vez al día a la hora de acostarse",
+
   "sosscreen_sosSent": "SOS Enviado",
   "sosscreen_caregiverNotified": "Se ha avisado a tu cuidador.",
   "sosscreen_backButton": "Atrás",
@@ -819,7 +829,6 @@
   "subselection_continueToPayment": "Continuar con el Pago",
   "subselection_confirmFree": "Confirmar el Plan Gratuito",
   "subselection_selectedFree": "Has seleccionado el Plan Gratuito. Puedes cambiar a un plan superior en cualquier momento.",
-  "subselection_continueToPayment": "Continuar con el Pago",
   "subselection_mostPopular": "Los Más Populares",
 
   "webpay_paymentFailed": "Error en el pago",
