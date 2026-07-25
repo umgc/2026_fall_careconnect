@@ -1,4 +1,5 @@
 // filepath: lib/features/payments/presentation/pages/payment_success_page.dart
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -88,6 +89,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -133,7 +135,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Redirecting in ${((1.0 - _progressValue) * 4).ceil()} seconds...',
+                        '${t.paysuccess_redirectIn} ${((1.0 - _progressValue) * 4).ceil()} ${t.paysuccess_seconds}...',
                         style: TextStyle(
                           fontSize: 13,
                           color: Theme.of(
@@ -147,8 +149,8 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                 const SizedBox(height: 16),
                 Text(
                   widget.isRegistration == true
-                      ? 'Registration Complete!'
-                      : 'Payment Successful!',
+                      ? t.paysuccess_regComplete
+                      : t.paysuccess_paymentSuccess,
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -160,7 +162,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                 widget.isRegistration == true
                     ? _buildWelcomeText(context)
                     : Text(
-                        'Thank you for your payment! Your subscription has been updated successfully.',
+                        t.paysuccess_thankForPayment,
                         style: TextStyle(
                           fontSize: 16,
                           color: Theme.of(
@@ -174,7 +176,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                     children: [
                       const SizedBox(height: 16),
                       Text(
-                        'Session ID: ${widget.sessionId}',
+                        '${t.paysuccess_sessionId}: ${widget.sessionId}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(
@@ -199,10 +201,10 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                     onPressed: _navigateToNext,
                     child: Text(
                       widget.isRegistration == true
-                          ? 'Continue to Login'
+                          ? t.paysuccess_continueLogin
                           : widget.fromPortal
-                          ? 'Return to Subscription Management'
-                          : 'Continue to Dashboard',
+                          ? t.paysuccess_returnSubManage
+                          : t.paysuccess_continueDash,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -212,7 +214,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Redirecting automatically in 4 seconds...',
+                  t.paysuccess_redirectingAuto,
                   style: TextStyle(
                     fontSize: 14,
                     color: Theme.of(
@@ -230,6 +232,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
 
   // Add the method after build
   Widget _buildWelcomeText(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final name = userProvider.user?.name ?? '';
     return RichText(
@@ -240,7 +243,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
           color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
         ),
         children: [
-          const TextSpan(text: 'Welcome to CareConnect'),
+          TextSpan(text: t.paysuccess_welcomeTo),
           if (name.isNotEmpty)
             TextSpan(
               text: ', ',
@@ -258,9 +261,9 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                 fontSize: 18,
               ),
             ),
-          const TextSpan(
+          TextSpan(
             text:
-                '! Your account has been created and your subscription is active. You can now log in to access all features.',
+                t.paysuccess_accountCreated,
           ),
         ],
       ),

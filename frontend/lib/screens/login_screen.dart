@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/role.dart';
@@ -205,6 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = await AuthService.login(
         _usernameController.text.trim(),
         _passwordController.text,
+        AppLocalizations.of(context)!
       );
 
       // Login successful - route based on role

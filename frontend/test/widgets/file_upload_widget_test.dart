@@ -2,6 +2,7 @@
 // No HTTP in initState. Provider.of<UserProvider> only used on upload action.
 // Pure UI render test — no Provider needed for initial render.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +19,9 @@ Widget _wrap({
   Function(String)? onUploadError,
 }) =>
     MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: SingleChildScrollView(
           child: FileUploadWidget(
@@ -386,6 +390,9 @@ void main() {
   group('QuickUploadButtons', () {
     testWidgets('renders all 6 quick upload buttons', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -403,6 +410,9 @@ void main() {
 
     testWidgets('renders correct icons', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -419,6 +429,9 @@ void main() {
 
     testWidgets('has 6 ElevatedButtons', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -430,6 +443,9 @@ void main() {
 
     testWidgets('uses Wrap for layout', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -441,6 +457,9 @@ void main() {
 
     testWidgets('tapping a quick button opens a dialog', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(patientId: 5),
@@ -463,6 +482,9 @@ void main() {
 
     testWidgets('dialog cancel button closes dialog', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -487,6 +509,9 @@ void main() {
     testWidgets('tapping Medical Report opens correct dialog',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -501,6 +526,9 @@ void main() {
 
     testWidgets('tapping Lab Result opens correct dialog', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -515,6 +543,9 @@ void main() {
 
     testWidgets('tapping Insurance opens correct dialog', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -529,6 +560,9 @@ void main() {
 
     testWidgets('tapping AI Chat File opens correct dialog', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -544,6 +578,9 @@ void main() {
     testWidgets('dialog FileUploadWidget has showCategorySelector false',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
@@ -644,6 +681,9 @@ void main() {
   group('QuickUploadButtons – with callbacks', () {
     testWidgets('renders with patientId parameter', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(patientId: 99),
@@ -656,6 +696,9 @@ void main() {
 
     testWidgets('renders without any optional parameters', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SingleChildScrollView(
             child: QuickUploadButtons(),
