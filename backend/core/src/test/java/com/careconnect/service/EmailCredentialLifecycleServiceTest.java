@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.email.EmailDomainDetector;
 import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.exception.EmailCredentialNeedsReauthException;
 import com.careconnect.model.EmailCredential;
@@ -46,7 +47,8 @@ class EmailCredentialLifecycleServiceTest {
 
     @BeforeEach
     void setUp() {
-        lifecycle = new EmailCredentialLifecycleService(credentialRepository, notificationService);
+        lifecycle = new EmailCredentialLifecycleService(
+                credentialRepository, notificationService, new EmailDomainDetector());
         cryptor = new TokenCryptor("unit-test-secret-32-bytes-long!!!");
     }
 
@@ -69,7 +71,7 @@ class EmailCredentialLifecycleServiceTest {
         assertThat(credential.getReauthNotifiedAt()).isNotNull();
         verify(notificationService).sendNotificationToUser(
                 eq(42L),
-                eq("Gmail reconnection required"),
+                eq("Email reconnection required"),
                 anyString(),
                 eq(EmailCredentialLifecycleService.NOTIFICATION_TYPE),
                 anyMap());
@@ -84,8 +86,7 @@ class EmailCredentialLifecycleServiceTest {
         credential.setStatus(EmailCredential.Status.NEEDS_REAUTH);
         credential.setSyncEnabled(false);
         credential.setLastError("revoked");
-        when(credentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                "42", EmailCredential.Provider.GMAIL))
+        when(credentialRepository.findFirstByUserIdOrderByIdDesc("42"))
                 .thenReturn(Optional.of(credential));
 
         final EmailConnectionStatusResponse status = lifecycle.connectionStatus("42");

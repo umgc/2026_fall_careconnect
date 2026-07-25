@@ -6,15 +6,28 @@ import java.time.Instant;
 @Entity
 @Table(name = "email_credentials")
 public class EmailCredential {
-    public enum Provider { GMAIL, OUTLOOK }
+    public enum Provider {
+        GMAIL,
+        OUTLOOK,
+        YAHOO,
+        APPLE,
+        AOL,
+        ZOHO,
+        IMAP
+    }
 
     /**
-     * Connection lifecycle for OAuth mail providers (Task 3.14.9).
+     * Connection lifecycle for OAuth / IMAP mail providers (Task 3.14.9).
      */
     public enum Status {
         ACTIVE,
         NEEDS_REAUTH,
         DISCONNECTED
+    }
+
+    public enum AuthMode {
+        OAUTH,
+        IMAP
     }
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,6 +36,22 @@ public class EmailCredential {
     @Column(nullable = false) private String userId;
     @Enumerated(EnumType.STRING) @Column(nullable = false)
     private Provider provider;
+
+    @Column(name = "email_address", length = 320)
+    private String emailAddress;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_mode", nullable = false)
+    private AuthMode authMode = AuthMode.OAUTH;
+
+    @Column(name = "imap_host")
+    private String imapHost;
+
+    @Column(name = "imap_port")
+    private Integer imapPort;
+
+    @Column(name = "imap_username", length = 320)
+    private String imapUsername;
 
     @Lob private String accessTokenEnc;
     @Lob private String refreshTokenEnc;
@@ -44,12 +73,21 @@ public class EmailCredential {
     @Column(name = "reauth_notified_at")
     private Instant reauthNotifiedAt;
 
-    // getters/setters
     public Long getId() { return id; }
     public String getUserId() { return userId; }
     public void setUserId(String u) { userId = u; }
     public Provider getProvider() { return provider; }
     public void setProvider(Provider p) { provider = p; }
+    public String getEmailAddress() { return emailAddress; }
+    public void setEmailAddress(String emailAddress) { this.emailAddress = emailAddress; }
+    public AuthMode getAuthMode() { return authMode == null ? AuthMode.OAUTH : authMode; }
+    public void setAuthMode(AuthMode authMode) { this.authMode = authMode == null ? AuthMode.OAUTH : authMode; }
+    public String getImapHost() { return imapHost; }
+    public void setImapHost(String imapHost) { this.imapHost = imapHost; }
+    public Integer getImapPort() { return imapPort; }
+    public void setImapPort(Integer imapPort) { this.imapPort = imapPort; }
+    public String getImapUsername() { return imapUsername; }
+    public void setImapUsername(String imapUsername) { this.imapUsername = imapUsername; }
     public String getAccessTokenEnc() { return accessTokenEnc; }
     public void setAccessTokenEnc(String s) { accessTokenEnc = s; }
     public String getRefreshTokenEnc() { return refreshTokenEnc; }

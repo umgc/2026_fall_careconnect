@@ -9,5 +9,16 @@ import lombok.*;
 public class ProfessionalInfo {
 	private String licenseNumber;
 	private String issuingState;
-	private Integer yearsExperience; 
+	private Integer yearsExperience;
+	private String organization;
+	private String practiceName;
+
+	public ProfessionalInfo(
+			String licenseNumber,
+			String issuingState,
+			Integer yearsExperience) {
+		this.licenseNumber = licenseNumber;
+		this.issuingState = issuingState;
+		this.yearsExperience = yearsExperience;
+	}
 }

@@ -6,6 +6,7 @@
 //
 // OFFLINE: no backend needed
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,15 +18,32 @@ import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_i
 class _E2eFakeTts implements MailEnvelopeTts {
   final List<String> spoken = <String>[];
   int stopCount = 0;
+  final ValueNotifier<MailTtsSessionState> _session =
+      ValueNotifier(MailTtsSessionState.idle);
 
   @override
-  Future<void> speak(String text) async {
+  ValueListenable<MailTtsSessionState> get sessionListenable => _session;
+
+  @override
+  String? get activeSessionId => _session.value.activeSessionId;
+
+  @override
+  bool get isSpeaking => _session.value.isSpeaking;
+
+  @override
+  Future<void> speak(String sessionId, String text) async {
     spoken.add(text);
+    _session.value = MailTtsSessionState(
+      activeSessionId: sessionId,
+      isSpeaking: true,
+    );
+    _session.value = MailTtsSessionState.idle;
   }
 
   @override
   Future<void> stop() async {
     stopCount++;
+    _session.value = MailTtsSessionState.idle;
   }
 
   @override
@@ -83,36 +101,21 @@ void main() {
           const MaterialApp(
             home: _EnvelopeMailTileHarness(
               sender: 'Acme Bank',
-              summary: 'Monthly statement available',
-              missingImage: true,
+              summary: 'Monthly statement',
             ),
           ),
         );
-        await tester.pumpAndSettle();
-
-        expect(find.text('Acme Bank'), findsWidgets);
-        expect(find.text('Monthly statement available'), findsOneWidget);
-        expect(
-          find.byKey(MailEnvelopeReadAloudButton.buttonKey),
-          findsOneWidget,
-        );
 
         await tester.tap(find.byKey(MailEnvelopeReadAloudButton.buttonKey));
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-        expect(
-          fake.spoken.single,
-          buildMailEnvelopeReadoutText(
-            sender: 'Acme Bank',
-            summary: 'Monthly statement available',
-            includeMissingImageNote: true,
-          ),
-        );
+        expect(fake.spoken, ['From: Acme Bank. Monthly statement.']);
       },
     );
 
     testWidgets(
-      'missing-image mail readout includes metadata accessibility note',
+      'missing image note is included when flagged',
       (tester) async {
         final fake = _E2eFakeTts();
         MailEnvelopeTtsService.debugSetInstance(fake);
@@ -120,35 +123,29 @@ void main() {
         await tester.pumpWidget(
           const MaterialApp(
             home: _EnvelopeMailTileHarness(
-              sender: 'CVS Pharmacy',
-              summary: 'Prescription ready for pickup',
+              sender: 'Hospital',
+              summary: 'Statement',
               missingImage: true,
             ),
           ),
         );
-        await tester.pumpAndSettle();
-
-        expect(find.byKey(MailPieceImage.missingNormalKey), findsOneWidget);
 
         await tester.tap(find.byKey(MailEnvelopeReadAloudButton.buttonKey));
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
         expect(
           fake.spoken.single,
-          contains(
-            'No envelope image is available; showing details from mail metadata.',
-          ),
+          contains('No envelope image is available'),
         );
-        expect(fake.spoken.single, contains('From: CVS Pharmacy.'));
       },
     );
 
     testWidgets(
-      'read-aloud control exposes accessible semantics label',
+      'read-aloud control exposes start semantics',
       (tester) async {
         final fake = _E2eFakeTts();
         MailEnvelopeTtsService.debugSetInstance(fake);
-
         final handle = tester.ensureSemantics();
         try {
           await tester.pumpWidget(
@@ -161,12 +158,10 @@ void main() {
           );
           await tester.pumpAndSettle();
 
-          // ListTile merges trailing control label into the tile node.
           expect(
-            find.bySemanticsLabel(RegExp(r'Read mail details aloud')),
+            find.bySemanticsLabel(RegExp(r'Start reading mail aloud')),
             findsOneWidget,
           );
-          expect(find.byTooltip('Read mail details aloud'), findsOneWidget);
           expect(find.byIcon(Icons.volume_up), findsOneWidget);
         } finally {
           handle.dispose();

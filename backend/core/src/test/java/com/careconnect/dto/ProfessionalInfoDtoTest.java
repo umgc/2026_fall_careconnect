@@ -44,6 +44,28 @@ class ProfessionalInfoDtoTest {
         assertThat(dto.getYearsExperience()).isEqualTo(10);
     }
 
+    @Test
+    void setOrganization_getOrganization_roundTrips() throws Exception {
+        final ProfessionalInfoDto dto = new ProfessionalInfoDto();
+        dto.setOrganization("Oak Clinic");
+        assertThat(dto.getOrganization()).isEqualTo("Oak Clinic");
+    }
+
+    @Test
+    void resolvedOrganization_prefersOrganizationOverPracticeName() throws Exception {
+        final ProfessionalInfoDto dto = new ProfessionalInfoDto();
+        dto.setOrganization("Org");
+        dto.setPracticeName("Practice");
+        assertThat(dto.resolvedOrganization()).isEqualTo("Org");
+    }
+
+    @Test
+    void resolvedOrganization_fallsBackToPracticeName() throws Exception {
+        final ProfessionalInfoDto dto = new ProfessionalInfoDto();
+        dto.setPracticeName("Practice Only");
+        assertThat(dto.resolvedOrganization()).isEqualTo("Practice Only");
+    }
+
     // ─── All fields set together ──────────────────────────────────────────────
 
     @Test
@@ -53,9 +75,13 @@ class ProfessionalInfoDtoTest {
         dto.setLicenseNumber("RN-99999");
         dto.setIssuingState("Virginia");
         dto.setYearsExperience(5);
+        dto.setOrganization("Care Clinic");
+        dto.setPracticeName("Care Clinic");
 
         assertThat(dto.getLicenseNumber()).isEqualTo("RN-99999");
         assertThat(dto.getIssuingState()).isEqualTo("Virginia");
         assertThat(dto.getYearsExperience()).isEqualTo(5);
+        assertThat(dto.getOrganization()).isEqualTo("Care Clinic");
+        assertThat(dto.resolvedOrganization()).isEqualTo("Care Clinic");
     }
 }

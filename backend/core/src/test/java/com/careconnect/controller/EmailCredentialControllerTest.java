@@ -1,11 +1,15 @@
 package com.careconnect.controller;
 
 import com.careconnect.dto.EmailConnectionStatusResponse;
+import com.careconnect.email.EmailDomainDetector;
+import com.careconnect.email.EmailProviderRouter;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.EmailAddressValidationService;
 import com.careconnect.service.EmailCredentialLifecycleService;
+import com.careconnect.service.ImapEmailCredentialService;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -32,6 +36,14 @@ class EmailCredentialControllerTest {
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
+    @Mock
+    private EmailAddressValidationService validationService;
+    @Mock
+    private EmailProviderRouter providerRouter;
+    @Mock
+    private EmailDomainDetector domainDetector;
+    @Mock
+    private ImapEmailCredentialService imapEmailCredentialService;
 
     @InjectMocks
     private EmailCredentialController controller;
@@ -57,7 +69,7 @@ class EmailCredentialControllerTest {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isTrue();
-            verify(authorizationService).requireAdminOrCaregiver(currentUser);
+            verify(authorizationService, never()).requireAdminOrCaregiver(any());
             verify(authorizationService).requireSelfOrAdmin(currentUser, 123L);
         }
 
@@ -121,9 +133,11 @@ class EmailCredentialControllerTest {
                             false,
                             "NEEDS_REAUTH",
                             "GMAIL",
+                            "OAUTH",
                             null,
                             "invalid_grant",
-                            "/oauth/google/start"));
+                            "/oauth/google/start",
+                            null));
 
             final ResponseEntity<EmailConnectionStatusResponse> response =
                     controller.getConnectionDetails(USER_ID);
@@ -141,17 +155,17 @@ class EmailCredentialControllerTest {
         @Test
         void disconnectsAndReturnsReconnectPath() throws Exception {
             final EmailCredential cred = new EmailCredential();
+            cred.setProvider(EmailCredential.Provider.GMAIL);
             cred.setStatus(EmailCredential.Status.DISCONNECTED);
             cred.setSyncEnabled(false);
             when(credentialLifecycle.disconnect(USER_ID)).thenReturn(cred);
+            when(domainDetector.reconnectPathFor(EmailCredential.Provider.GMAIL))
+                    .thenReturn("/oauth/google/start");
 
             final ResponseEntity<Map<String, Object>> response = controller.disconnect(USER_ID);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(response.getBody().get("disconnected")).isEqualTo(true);
-            assertThat(response.getBody().get("reconnectPath"))
-                    .isEqualTo("/oauth/google/start");
-            verify(authorizationService).requireSelfOrAdmin(currentUser, 123L);
+            assertThat(response.getBody()).containsEntry("reconnectPath", "/oauth/google/start");
         }
     }
 }

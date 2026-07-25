@@ -91,7 +91,7 @@ class USPSDigestServiceTest {
         final EmailCredentialLifecycleService lifecycle =
                 new EmailCredentialLifecycleService(
                         org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
-                        org.mockito.Mockito.mock(NotificationService.class));
+                        org.mockito.Mockito.mock(NotificationService.class), new com.careconnect.email.EmailDomainDetector());
         USPSDigestService service = new USPSDigestService(
                 emailCredentialRepository(Optional.empty()),
                 cacheStub.asRepo(),
@@ -230,7 +230,7 @@ class USPSDigestServiceTest {
         final EmailCredentialLifecycleService lifecycle =
                 new EmailCredentialLifecycleService(
                         org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
-                        org.mockito.Mockito.mock(NotificationService.class));
+                        org.mockito.Mockito.mock(NotificationService.class), new com.careconnect.email.EmailDomainDetector());
         USPSDigestService service = new USPSDigestService(
                 emailCredentialRepositoryByProvider(Optional.empty(), Optional.empty()),
                 cacheStub.asRepo(),
@@ -766,7 +766,7 @@ class USPSDigestServiceTest {
         final EmailCredentialLifecycleService lifecycle =
                 new EmailCredentialLifecycleService(
                         org.mockito.Mockito.mock(com.careconnect.repository.EmailCredentialRepository.class),
-                        org.mockito.Mockito.mock(NotificationService.class));
+                        org.mockito.Mockito.mock(NotificationService.class), new com.careconnect.email.EmailDomainDetector());
         return new USPSDigestService(
                 credRepo,
                 cacheStub.asRepo(),
@@ -1000,3 +1000,4 @@ class USPSDigestServiceTest {
         }
     }
 }
+

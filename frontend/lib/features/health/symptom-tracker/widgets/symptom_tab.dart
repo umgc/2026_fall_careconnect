@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'symptom_input_form.dart';
 import 'symptom_card.dart';
-
+import 'symptom_trend_chart.dart';
 
 class SymptomTab extends StatefulWidget {
   final String patientId;
@@ -15,6 +15,7 @@ class SymptomTab extends StatefulWidget {
 
 class _SymptomTabState extends State<SymptomTab> {
   List<Map<String, dynamic>> _symptoms = [];
+  List<SymptomTrendPoint> _trendPoints = [];
   bool _isLoading = false;
 
   @override
@@ -23,7 +24,6 @@ class _SymptomTabState extends State<SymptomTab> {
     _fetchSymptoms();
   }
 
-  // Transform backend symptom data to UI format
   Map<String, dynamic> _transformSymptomToUI(Map<String, dynamic> apiSymptom) {
     final int severity = apiSymptom['severity'] ?? 1;
     String severityLabel;
@@ -42,7 +42,8 @@ class _SymptomTabState extends State<SymptomTab> {
 
     final symptomKey = apiSymptom['symptomKey'] ?? '';
     final symptomValue = apiSymptom['symptomValue'] ?? '';
-    final title = symptomValue.isNotEmpty ? '$symptomKey $symptomValue' : symptomKey;
+    final title =
+        symptomValue.isNotEmpty ? '$symptomKey $symptomValue' : symptomKey;
 
     final takenAt = apiSymptom['takenAt'] as String?;
     String timeDisplay = 'Unknown time';
@@ -75,7 +76,30 @@ class _SymptomTabState extends State<SymptomTab> {
     };
   }
 
-  // Fetch all symptoms for this patient
+  List<SymptomTrendPoint> _toTrendPoints(List<Map<String, dynamic>> raw) {
+    final points = <SymptomTrendPoint>[];
+    for (final s in raw) {
+      final key = (s['symptomKey'] as String?)?.trim() ?? '';
+      if (key.isEmpty) continue;
+      final takenRaw = s['takenAt'] ?? s['createdAt'];
+      DateTime? takenAt;
+      if (takenRaw is String) {
+        takenAt = DateTime.tryParse(takenRaw);
+      }
+      takenAt ??= DateTime.now();
+      final severity = (s['severity'] as num?)?.toDouble() ?? 1;
+      points.add(
+        SymptomTrendPoint(
+          symptomKey: key,
+          severity: severity,
+          takenAt: takenAt,
+          label: s['symptomValue'] as String?,
+        ),
+      );
+    }
+    return points;
+  }
+
   Future<void> _fetchSymptoms() async {
     final int? patientIdInt = int.tryParse(widget.patientId);
     if (patientIdInt == null) return;
@@ -85,6 +109,7 @@ class _SymptomTabState extends State<SymptomTab> {
     try {
       final symptoms = await ApiService.getSymptomsForPatient(patientIdInt);
       setState(() {
+        _trendPoints = _toTrendPoints(symptoms);
         _symptoms = symptoms.map((s) => _transformSymptomToUI(s)).toList();
       });
     } catch (e) {
@@ -100,14 +125,13 @@ class _SymptomTabState extends State<SymptomTab> {
     }
   }
 
-  // Function to add symptoms
   Future<void> _addSymptom(Map<String, dynamic> symptomData) async {
     setState(() {
       _symptoms.insert(0, symptomData);
     });
+    _fetchSymptoms();
   }
 
-  // Function to remove a symptom at a given index
   Future<void> _removeSymptom(int index) async {
     final symptom = _symptoms[index];
     final symptomId = symptom['id'] as int?;
@@ -119,6 +143,7 @@ class _SymptomTabState extends State<SymptomTab> {
       setState(() {
         _symptoms.removeAt(index);
       });
+      await _fetchSymptoms();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -146,6 +171,8 @@ class _SymptomTabState extends State<SymptomTab> {
             onSymptomAdded: _addSymptom,
           ),
           const SizedBox(height: 24),
+          if (!_isLoading) SymptomTrendChart(points: _trendPoints),
+          const SizedBox(height: 24),
           Text(
             'Recent Mental Health Symptoms',
             style: TextStyle(
@@ -169,7 +196,10 @@ class _SymptomTabState extends State<SymptomTab> {
                 child: Text(
                   'No symptoms recorded yet',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
                   ),
                 ),
               ),
@@ -189,7 +219,6 @@ class _SymptomTabState extends State<SymptomTab> {
                   description: symptom['description'],
                   requiresAttention: symptom['requiresAttention'],
                   caregiverAlert: symptom['caregiverAlert'],
-                  // Pass the delete callback to the SymptomCard
                   onDelete: () => _removeSymptom(index),
                 );
               },

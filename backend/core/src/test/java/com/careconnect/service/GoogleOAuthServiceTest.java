@@ -45,7 +45,8 @@ class GoogleOAuthServiceTest {
         server = MockRestServiceServer.createServer(rt);
 
         final EmailCredentialRepository repo = createRepositoryStub();
-        lifecycle = new EmailCredentialLifecycleService(repo, mock(NotificationService.class));
+        lifecycle = new EmailCredentialLifecycleService(
+                repo, mock(NotificationService.class), new com.careconnect.email.EmailDomainDetector());
         service = new GoogleOAuthService(rt, repo, tokenCryptor, lifecycle);
         service.clientId = "test-client";
         service.clientSecret = "test-secret";

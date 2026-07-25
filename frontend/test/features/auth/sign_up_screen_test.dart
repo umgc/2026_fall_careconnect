@@ -228,21 +228,26 @@ Future<void> _goToProfessionalCaregiverReview(WidgetTester tester) async {
   await tester.enterText(contactFields.at(6), '20850');
   await tester.pump();
 
-  // Scroll to and fill the professional license fields (indices 7, 8, 9).
+  // Scroll to and fill the professional fields: organization (7),
+  // license (8), issuing state (9), years of experience (10).
   await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -500));
   await tester.pump();
   final allFields = find.byType(TextFormField);
   await tester.ensureVisible(allFields.at(7));
   await tester.pump();
-  await tester.enterText(allFields.at(7), 'LIC-12345');
+  await tester.enterText(allFields.at(7), 'Care Practice LLC');
   await tester.pump();
   await tester.ensureVisible(allFields.at(8));
   await tester.pump();
-  await tester.enterText(allFields.at(8), 'Maryland');
+  await tester.enterText(allFields.at(8), 'LIC-12345');
   await tester.pump();
   await tester.ensureVisible(allFields.at(9));
   await tester.pump();
-  await tester.enterText(allFields.at(9), '10');
+  await tester.enterText(allFields.at(9), 'Maryland');
+  await tester.pump();
+  await tester.ensureVisible(allFields.at(10));
+  await tester.pump();
+  await tester.enterText(allFields.at(10), '10');
   await tester.pump();
 
   await _tapNextButton(tester); // step 2 -> step 3 (Security)
@@ -666,7 +671,10 @@ void main() {
       expect(find.text('Email Address *'), findsOneWidget);
       expect(find.text('Phone Number *'), findsOneWidget);
       expect(find.text('Address'), findsOneWidget);
-      expect(find.text('Address Line 1'), findsOneWidget);
+      // The street address field intentionally has no grayed-out
+      // "Address Line 1" floating label; only the hint is shown.
+      expect(find.text('Address Line 1'), findsNothing);
+      expect(find.text('Start typing your address...'), findsOneWidget);
     });
 
     testWidgets('shows Step 3 of 5', (tester) async {
@@ -771,9 +779,94 @@ void main() {
       await _goToStep3(tester);
       expect(find.text('Security Setup'), findsOneWidget);
       expect(
-        find.text('Set up your password to secure your account'),
+        find.text('Choose how you want to sign in to your account'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('shows Password, PIN, and Color sign-in method options',
+        (tester) async {
+      await _goToStep3(tester);
+      expect(find.text('Password'), findsOneWidget);
+      expect(find.text('PIN'), findsOneWidget);
+      expect(find.text('Color'), findsOneWidget);
+    });
+
+    testWidgets('PIN method shows PIN and Confirm PIN fields',
+        (tester) async {
+      await _goToStep3(tester);
+      await tester.tap(find.text('PIN'));
+      await tester.pump();
+      expect(find.text('PIN *'), findsOneWidget);
+      expect(find.text('Confirm PIN *'), findsOneWidget);
+      expect(find.text('PIN Requirements:'), findsOneWidget);
+    });
+
+    testWidgets('valid matching PIN enables Next', (tester) async {
+      await _goToStep3(tester);
+      await tester.tap(find.text('PIN'));
+      await tester.pump();
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), '2468');
+      await tester.enterText(fields.at(1), '2468');
+      await tester.pump();
+      final button = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Next'),
+      );
+      expect(button.onPressed, isNotNull);
+    });
+
+    testWidgets('mismatched PIN keeps Next disabled', (tester) async {
+      await _goToStep3(tester);
+      await tester.tap(find.text('PIN'));
+      await tester.pump();
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), '2468');
+      await tester.enterText(fields.at(1), '1357');
+      await tester.pump();
+      final button = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Next'),
+      );
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('Color method shows the sequence picker', (tester) async {
+      await _goToStep3(tester);
+      await tester.tap(find.text('Color'));
+      await tester.pump();
+      expect(find.text('Choose your color sequence *'), findsOneWidget);
+      expect(find.text('Color Sequence:'), findsOneWidget);
+      expect(find.text('Clear'), findsOneWidget);
+    });
+
+    testWidgets('selecting four colors enables Next and Clear resets',
+        (tester) async {
+      await _goToStep3(tester);
+      await tester.tap(find.text('Color'));
+      await tester.pump();
+
+      Future<void> tapColor(String name) async {
+        await tester.tap(find.bySemanticsLabel('Add $name to sequence'));
+        await tester.pump();
+      }
+
+      await tapColor('Red');
+      await tapColor('Blue');
+      await tapColor('Green');
+      await tapColor('Yellow');
+
+      var button = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Next'),
+      );
+      expect(button.onPressed, isNotNull);
+
+      await tester.tap(find.text('Clear'));
+      await tester.pump();
+
+      button = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Next'),
+      );
+      expect(button.onPressed, isNull);
     });
 
     testWidgets('shows password and confirm password fields', (tester) async {
@@ -1712,22 +1805,27 @@ void main() {
           find.byType(SingleChildScrollView), const Offset(0, -500));
       await tester.pump();
 
-      // Find license, issuing state, years of experience fields
+      // Organization is at index 7, License Number at 8, Issuing State at 9,
+      // Years of Experience at 10.
       final allFields = find.byType(TextFormField);
-      // License Number is at index 7, Issuing State at 8, Years at 9
       await tester.ensureVisible(allFields.at(7));
       await tester.pump();
-      await tester.enterText(allFields.at(7), 'LIC-12345');
+      await tester.enterText(allFields.at(7), 'Care Practice LLC');
       await tester.pump();
 
       await tester.ensureVisible(allFields.at(8));
       await tester.pump();
-      await tester.enterText(allFields.at(8), 'Maryland');
+      await tester.enterText(allFields.at(8), 'LIC-12345');
       await tester.pump();
 
       await tester.ensureVisible(allFields.at(9));
       await tester.pump();
-      await tester.enterText(allFields.at(9), '10');
+      await tester.enterText(allFields.at(9), 'Maryland');
+      await tester.pump();
+
+      await tester.ensureVisible(allFields.at(10));
+      await tester.pump();
+      await tester.enterText(allFields.at(10), '10');
       await tester.pump();
 
       // Next should now be enabled (all professional fields filled)

@@ -32,6 +32,7 @@ import 'package:care_connect_app/features/health/virtual_check_in/presentation/w
 import 'package:care_connect_app/features/health/virtual_check_in/presentation/widgets/virtual_check_in_history_card.dart';
 
 import '../widgets/recent_symptom_card.dart' as sympt;
+import 'package:care_connect_app/features/health/symptom-tracker/widgets/symptom_trend_chart.dart';
 
 // API and models
 import '../../../../services/api_service.dart';
@@ -99,6 +100,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
   List<MoodHistoryEntry> _moodEntries = [];
   List<sympt.SymptomEntry> _symptomEntries = [];
+  List<Map<String, dynamic>> _rawSymptomEntries = [];
   List<VirtualCheckIn> _virtualCheckIns = [];
   String _checkInStatusFilter = 'all';
   DateTimeRange? _checkInDateRange;
@@ -1086,6 +1088,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   }
 
   void _applySymptomData(List<Map<String, dynamic>> symptomData) {
+    _rawSymptomEntries = List<Map<String, dynamic>>.from(symptomData);
     final mapped = symptomData.map((entry) {
       final symptomKey = _firstNonEmpty([entry['symptomKey']]);
       final symptomValue = _firstNonEmpty([entry['symptomValue']]);
@@ -2764,6 +2767,13 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                                   location: _painLocation,
                                   dizziness: _dizziness,
                                   fatigue: _fatigue,
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  child: SymptomTrendChart.fromRawEntries(
+                                    entries: _rawSymptomEntries,
+                                  ),
                                 ),
                                 // Recent Symptoms (UI-typed list)
                                 sympt.RecentSymptomsSection(

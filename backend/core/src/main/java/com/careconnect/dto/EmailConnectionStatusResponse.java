@@ -3,7 +3,7 @@ package com.careconnect.dto;
 import java.time.Instant;
 
 /**
- * Rich Gmail connection status for USPS Informed Delivery (Task 3.14.9).
+ * Rich email connection status for USPS Informed Delivery (multi-provider).
  */
 public record EmailConnectionStatusResponse(
         boolean connected,
@@ -11,9 +11,11 @@ public record EmailConnectionStatusResponse(
         boolean syncEnabled,
         String status,
         String provider,
+        String authMode,
         Instant expiresAt,
         String lastError,
-        String reconnectPath
+        String reconnectPath,
+        String emailAddress
 ) {
     public static EmailConnectionStatusResponse disconnected() {
         return new EmailConnectionStatusResponse(
@@ -22,8 +24,10 @@ public record EmailConnectionStatusResponse(
                 false,
                 "DISCONNECTED",
                 "GMAIL",
+                "OAUTH",
                 null,
                 null,
-                "/oauth/google/start");
+                "/oauth/google/start",
+                null);
     }
 }

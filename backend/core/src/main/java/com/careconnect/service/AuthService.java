@@ -161,6 +161,7 @@ public class AuthService {
         user.setVerificationToken(verificationToken);
         user.setCreatedAt(new Timestamp(System.currentTimeMillis()));
 
+        validateRegistrationFields(request);
         registerRole(request, user);
 
         final String verificationBaseUrl = request.getVerificationBaseUrl();
@@ -172,6 +173,20 @@ public class AuthService {
 
         return ResponseEntity.ok(Collections.singletonMap("message",
                 "Registration successful! Please check your email to verify your account."));
+    }
+
+    /**
+     * Professional caregivers must supply practice/organization (+ license);
+     * patients and non-professional caregivers must not send company fields.
+     */
+    void validateRegistrationFields(RegisterRequest request) {
+        if (request instanceof PatientRegistration patientReg) {
+            RegistrationValidation.validatePatientRegistration(patientReg);
+            return;
+        }
+        if (request instanceof CaregiverRegistration caregiverReg) {
+            RegistrationValidation.validateCaregiverRegistration(caregiverReg);
+        }
     }
 
     private void registerRole(RegisterRequest request, User user) {
@@ -244,6 +259,20 @@ public class AuthService {
                     caregiver.setLastName(regReq.getLastName());
                     caregiver.setGender(regReq.getGender());
                     caregiver.setUser(savedUser);
+                    if (regReq.getProfessional() != null
+                            && regReq.getCaregiverType() != null
+                            && regReq.getCaregiverType().equalsIgnoreCase("Professional")) {
+                        final com.careconnect.dto.ProfessionalInfoDto dto =
+                                regReq.getProfessional();
+                        caregiver.setProfessional(
+                                ProfessionalInfo.builder()
+                                        .licenseNumber(dto.getLicenseNumber())
+                                        .issuingState(dto.getIssuingState())
+                                        .yearsExperience(dto.getYearsExperience())
+                                        .organization(dto.resolvedOrganization())
+                                        .practiceName(dto.getPracticeName())
+                                        .build());
+                    }
                     caregivers.save(caregiver);
                 }
             }

@@ -146,6 +146,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api/admin/analytics/**").hasRole(ROLE_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/v1/api/profile-share/*").permitAll()
                         .requestMatchers("/v1/api/care-circle/**").authenticated()
 
                         /* ---------- Authenticated endpoints ------------------- */

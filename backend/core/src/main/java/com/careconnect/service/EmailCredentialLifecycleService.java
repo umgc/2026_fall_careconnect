@@ -1,6 +1,7 @@
 package com.careconnect.service;
 
 import com.careconnect.dto.EmailConnectionStatusResponse;
+import com.careconnect.email.EmailDomainDetector;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.repository.EmailCredentialRepository;
 import org.slf4j.Logger;
@@ -14,8 +15,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Halts mail sync on OAuth revocation, notifies the user once, and exposes
- * reconnect status (Task 3.14.9 / #126).
+ * Halts mail sync on OAuth/IMAP revocation, notifies the user once, and exposes
+ * reconnect status for every provider (Task 3.14.9 / #126).
  */
 @Service
 public class EmailCredentialLifecycleService {
@@ -23,16 +24,19 @@ public class EmailCredentialLifecycleService {
     private static final Logger log = LoggerFactory.getLogger(EmailCredentialLifecycleService.class);
     private static final Duration REAUTH_NOTIFY_COOLDOWN = Duration.ofHours(24);
     public static final String RECONNECT_PATH = "/oauth/google/start";
-    public static final String NOTIFICATION_TYPE = "GMAIL_REAUTH";
+    public static final String NOTIFICATION_TYPE = "EMAIL_REAUTH";
 
     private final EmailCredentialRepository credentialRepository;
     private final NotificationService notificationService;
+    private final EmailDomainDetector domainDetector;
 
     public EmailCredentialLifecycleService(
             final EmailCredentialRepository credentialRepository,
-            final NotificationService notificationService) {
+            final NotificationService notificationService,
+            final EmailDomainDetector domainDetector) {
         this.credentialRepository = credentialRepository;
         this.notificationService = notificationService;
+        this.domainDetector = domainDetector;
     }
 
     public boolean allowsSync(final EmailCredential credential) {
@@ -54,7 +58,6 @@ public class EmailCredentialLifecycleService {
         if (!alreadyHalted) {
             notifyUserOnce(saved);
         } else {
-            // still notify if cooldown elapsed
             notifyUserOnce(saved);
         }
         log.warn("Email credential sync halted for userId={} provider={} reason={}",
@@ -78,7 +81,7 @@ public class EmailCredentialLifecycleService {
     @Transactional
     public EmailCredential disconnect(final String userId) {
         final Optional<EmailCredential> existing = credentialRepository
-                .findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+                .findFirstByUserIdOrderByIdDesc(userId);
         if (existing.isEmpty()) {
             return null;
         }
@@ -96,35 +99,38 @@ public class EmailCredentialLifecycleService {
     @Transactional(readOnly = true)
     public EmailConnectionStatusResponse connectionStatus(final String userId) {
         final Optional<EmailCredential> existing = credentialRepository
-                .findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL);
+                .findFirstByUserIdOrderByIdDesc(userId);
         if (existing.isEmpty()) {
             return EmailConnectionStatusResponse.disconnected();
         }
         final EmailCredential credential = existing.get();
-        final boolean hasToken = credential.getAccessTokenEnc() != null
-                && !credential.getAccessTokenEnc().isEmpty();
+        final boolean hasSecret = (credential.getAccessTokenEnc() != null
+                && !credential.getAccessTokenEnc().isEmpty())
+                || (credential.getRefreshTokenEnc() != null
+                && !credential.getRefreshTokenEnc().isEmpty());
         final EmailCredential.Status status = credential.getStatus();
         final boolean needsReconnect = status == EmailCredential.Status.NEEDS_REAUTH
                 || status == EmailCredential.Status.DISCONNECTED
                 || !credential.isSyncEnabled()
-                || !hasToken;
-        final boolean connected = hasToken && status == EmailCredential.Status.ACTIVE
+                || !hasSecret;
+        final boolean connected = hasSecret && status == EmailCredential.Status.ACTIVE
                 && credential.isSyncEnabled();
+        final EmailCredential.Provider provider = credential.getProvider() == null
+                ? EmailCredential.Provider.GMAIL
+                : credential.getProvider();
         return new EmailConnectionStatusResponse(
                 connected,
                 needsReconnect,
                 credential.isSyncEnabled(),
                 status.name(),
-                credential.getProvider() == null ? "GMAIL" : credential.getProvider().name(),
+                provider.name(),
+                credential.getAuthMode().name(),
                 credential.getExpiresAt(),
                 credential.getLastError(),
-                RECONNECT_PATH);
+                domainDetector.reconnectPathFor(provider),
+                credential.getEmailAddress());
     }
 
-    /**
-     * Backward-compatible "is connected" used by legacy boolean status endpoint:
-     * true only when sync is allowed (ACTIVE + token present).
-     */
     @Transactional(readOnly = true)
     public boolean isActivelyConnected(final String userId) {
         return connectionStatus(userId).connected();
@@ -140,23 +146,30 @@ public class EmailCredentialLifecycleService {
         }
         try {
             final Long numericUserId = Long.parseLong(credential.getUserId().trim());
+            final String providerName = credential.getProvider() == null
+                    ? "GMAIL"
+                    : credential.getProvider().name();
+            final String reconnect = domainDetector.reconnectPathFor(
+                    credential.getProvider() == null
+                            ? EmailCredential.Provider.GMAIL
+                            : credential.getProvider());
             notificationService.sendNotificationToUser(
                     numericUserId,
-                    "Gmail reconnection required",
-                    "USPS mail sync stopped because Google access was revoked or expired. "
-                            + "Reconnect Gmail to resume Informed Delivery.",
+                    "Email reconnection required",
+                    "USPS mail sync stopped because mailbox access was revoked or expired. "
+                            + "Reconnect your email to resume Informed Delivery.",
                     NOTIFICATION_TYPE,
                     Map.of(
                             "action", "reconnect",
-                            "reconnectPath", RECONNECT_PATH,
-                            "provider", "GMAIL"));
+                            "reconnectPath", reconnect,
+                            "provider", providerName));
             credential.setReauthNotifiedAt(Instant.now());
             credentialRepository.save(credential);
         } catch (final NumberFormatException ex) {
-            log.debug("Skipping GMAIL_REAUTH notification; userId={} is not numeric",
+            log.debug("Skipping EMAIL_REAUTH notification; userId={} is not numeric",
                     credential.getUserId());
         } catch (final Exception ex) {
-            log.warn("Failed to notify user {} about Gmail reauth: {}",
+            log.warn("Failed to notify user {} about email reauth: {}",
                     credential.getUserId(), ex.getMessage());
         }
     }

@@ -12,6 +12,7 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/widgets/profile_picture_widget.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
 import 'package:care_connect_app/services/profile_service.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/profile_model.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
@@ -30,6 +31,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   dynamic _userProfile;
   bool _isPatient = false;
   bool _isCaregiver = false;
+  bool _isProfessionalCaregiver = false;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -170,6 +172,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         if (_isCaregiver) {
           // Defensive extraction of professional info fields
           final professional = rawData['professional'] ?? {};
+          final caregiverType = (rawData['caregiverType'] ?? '').toString();
+          _isProfessionalCaregiver =
+              caregiverType.toLowerCase() == 'professional';
           return {
             'id': rawData['id'] ?? 0,
             'name': '${rawData['firstName'] ?? ''} ${rawData['lastName'] ?? ''}'
@@ -188,7 +193,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 professional['yearsExperience']?.toString() ??
                 '',
             'organization':
-                rawData['caregiverType'] ?? professional['organization'] ?? '',
+                professional['organization'] ??
+                professional['practiceName'] ??
+                '',
             'license':
                 professional['licenseNumber'] ?? professional['license'] ?? '',
             'dateOfBirth': rawData['dob'] ?? '',
@@ -298,6 +305,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             'yearsExperience':
                 int.tryParse(_specializationController.text) ??
                 1, // Using specialization field for years of experience
+            if (_isProfessionalCaregiver)
+              'organization': _organizationController.text.trim(),
+            if (_isProfessionalCaregiver)
+              'practiceName': _organizationController.text.trim(),
           },
           // Address info
           'address': {
@@ -308,8 +319,11 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             'zip': _zipCodeController.text,
             'phone': _phoneController.text,
           },
-          // Organization can be included as caregiverType
-          'caregiverType': _organizationController.text,
+          'caregiverType': _isProfessionalCaregiver
+              ? 'Professional'
+              : (_specializationController.text.trim().isNotEmpty
+                  ? _specializationController.text.trim()
+                  : 'Family Member'),
           // Add credentials for update operation
           'credentials': {
             'email': _emailController.text,
@@ -627,11 +641,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                     label: 'Specialization',
                     prefixIcon: Icons.medical_services,
                   ),
-                  _buildTextField(
-                    controller: _organizationController,
-                    label: 'Organization',
-                    prefixIcon: Icons.business,
-                  ),
+                  if (_isProfessionalCaregiver)
+                    _buildTextField(
+                      controller: _organizationController,
+                      label: 'Practice / organization',
+                      prefixIcon: Icons.business,
+                    ),
                   _buildTextField(
                     controller: _licenseController,
                     label: 'License Number',
@@ -640,6 +655,22 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 ],
 
                 if (_isPatient) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionHeader('Share Profile'),
+                  Card(
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.qr_code_2,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      title: const Text('Share limited profile'),
+                      subtitle: const Text(
+                        'Create a QR code and link others can open — your patient ID stays private.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/profile/share'),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   _buildSectionHeader('Medical Information'),
                   _buildTextField(

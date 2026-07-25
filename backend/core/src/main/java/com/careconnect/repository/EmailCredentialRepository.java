@@ -11,4 +11,7 @@ public interface EmailCredentialRepository extends JpaRepository<EmailCredential
 
     // (Optional, but useful if you use it elsewhere)
     Optional<EmailCredential> findFirstByUserIdAndProviderOrderByIdDesc(String userId, EmailCredential.Provider provider);
+
+    /** Latest credential for a user across all providers. */
+    Optional<EmailCredential> findFirstByUserIdOrderByIdDesc(String userId);
 }

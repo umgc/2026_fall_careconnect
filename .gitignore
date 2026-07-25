@@ -63,3 +63,7 @@ web-deploy.zip
 frontend-build.zip
 .vscode/
 frontend/web-build.zip
+
+# UI integration mobile app
+ui-integration/mobile-app/node_modules/
+ui-integration/mobile-app/.vite/

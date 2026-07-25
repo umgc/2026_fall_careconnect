@@ -321,6 +321,8 @@ public Patient registerPatient(PatientRegistration reg) {
             prof.setLicenseNumber(profDto.getLicenseNumber());
             prof.setIssuingState(profDto.getIssuingState());
             prof.setYearsExperience(profDto.getYearsExperience());
+            prof.setOrganization(profDto.resolvedOrganization());
+            prof.setPracticeName(profDto.getPracticeName());
         }
 
         String caregiverType = reg.getCaregiverType();

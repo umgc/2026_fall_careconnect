@@ -16,6 +16,8 @@ import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
+import 'package:care_connect_app/features/profile_share/profile_share_screen.dart';
+import 'package:care_connect_app/features/profile_share/public_profile_share_screen.dart';
 import 'package:care_connect_app/features/tasks/presentation/assign_task_screen.dart';
 import 'package:care_connect_app/features/tasks/presentation/calendar_assisiant.dart';
 import 'package:care_connect_app/features/tasks/presentation/custom_task_screen.dart';
@@ -938,6 +940,22 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: '/profile-settings',
       builder: (_, __) => const ProfileSettingsPage(),
+    ),
+    GoRoute(
+      path: '/profile/share',
+      builder: (_, __) => const ProfileShareScreen(),
+    ),
+    GoRoute(
+      path: '/p/:token',
+      builder: (context, state) {
+        final token = state.pathParameters['token'] ?? '';
+        if (token.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid profile share link.')),
+          );
+        }
+        return PublicProfileShareScreen(token: token);
+      },
     ),
     GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),

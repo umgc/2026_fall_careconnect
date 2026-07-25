@@ -54,11 +54,31 @@ class _RegistrationPageState extends State<RegistrationPage> {
   final _licenseNumberController = TextEditingController();
   final _issuingStateController = TextEditingController();
   final _yearsExperienceController = TextEditingController();
+  final _organizationController = TextEditingController();
 
   String? _selectedGender;
   String? _selectedCaregiverType;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+
+  // Sign-in method selection (Password / PIN / Color), mirroring the
+  // accessible sign-in options offered elsewhere in CareConnect.
+  static const List<String> _signInMethods = ['Password', 'PIN', 'Color'];
+  String _selectedSignInMethod = 'Password';
+  final _pinController = TextEditingController();
+  final _confirmPinController = TextEditingController();
+  bool _isPinVisible = false;
+  bool _isConfirmPinVisible = false;
+  final List<String> _colorSequence = [];
+  static const int _colorSequenceLength = 4;
+  static const Map<String, Color> _colorPalette = {
+    'Red': Color(0xFFE53935),
+    'Orange': Color(0xFFFB8C00),
+    'Yellow': Color(0xFFFDD835),
+    'Green': Color(0xFF43A047),
+    'Blue': Color(0xFF1E88E5),
+    'Purple': Color(0xFF8E24AA),
+  };
 
   @override
   void initState() {
@@ -81,9 +101,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
     _zipController.addListener(_updateButtonState);
     _passwordController.addListener(_updateButtonState);
     _confirmPasswordController.addListener(_updateButtonState);
+    _pinController.addListener(_updateButtonState);
+    _confirmPinController.addListener(_updateButtonState);
     _licenseNumberController.addListener(_updateButtonState);
     _issuingStateController.addListener(_updateButtonState);
     _yearsExperienceController.addListener(_updateButtonState);
+    _organizationController.addListener(_updateButtonState);
   }
 
   void _updateButtonState() {
@@ -106,15 +129,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
     _zipController.removeListener(_updateButtonState);
     _passwordController.removeListener(_updateButtonState);
     _confirmPasswordController.removeListener(_updateButtonState);
+    _pinController.removeListener(_updateButtonState);
+    _confirmPinController.removeListener(_updateButtonState);
     _licenseNumberController.removeListener(_updateButtonState);
     _issuingStateController.removeListener(_updateButtonState);
     _yearsExperienceController.removeListener(_updateButtonState);
+    _organizationController.removeListener(_updateButtonState);
 
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _pinController.dispose();
+    _confirmPinController.dispose();
     _phoneController.dispose();
     _dobController.dispose();
     _addressLine1Controller.dispose();
@@ -126,6 +154,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     _licenseNumberController.dispose();
     _issuingStateController.dispose();
     _yearsExperienceController.dispose();
+    _organizationController.dispose();
     super.dispose();
   }
 
@@ -221,7 +250,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
         _selectedCaregiverType != 'Professional' ||
         (_licenseNumberController.text.isNotEmpty &&
             _issuingStateController.text.isNotEmpty &&
-            _yearsExperienceController.text.isNotEmpty);
+            _yearsExperienceController.text.isNotEmpty &&
+            _organizationController.text.isNotEmpty);
 
     return emailValid &&
         _phoneController.text.isNotEmpty &&
@@ -230,9 +260,35 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   bool _validateSecurity() {
-    return _passwordController.text.isNotEmpty &&
-        _passwordController.text.length >= 8 &&
-        _confirmPasswordController.text == _passwordController.text;
+    switch (_selectedSignInMethod) {
+      case 'PIN':
+        final pin = _pinController.text;
+        return RegExp(r'^\d{4,6}$').hasMatch(pin) &&
+            _confirmPinController.text == pin;
+      case 'Color':
+        return _colorSequence.length == _colorSequenceLength;
+      case 'Password':
+      default:
+        return _passwordController.text.isNotEmpty &&
+            _passwordController.text.length >= 8 &&
+            _confirmPasswordController.text == _passwordController.text;
+    }
+  }
+
+  /// The credential sent to the backend `password` field, derived from the
+  /// selected sign-in method. PIN and Color choices are encoded into a
+  /// password-compatible string so the existing registration API keeps
+  /// working unchanged.
+  String get _effectivePassword {
+    switch (_selectedSignInMethod) {
+      case 'PIN':
+        return 'PIN-${_pinController.text}-CC';
+      case 'Color':
+        return 'COLOR-${_colorSequence.join('-')}';
+      case 'Password':
+      default:
+        return _passwordController.text;
+    }
   }
 
   Future<void> _submitRegistration() async {
@@ -297,7 +353,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     final registrationData = {
       'name': '${_firstNameController.text} ${_lastNameController.text}',
       'email': _emailController.text,
-      'password': _passwordController.text,
+      'password': _effectivePassword,
       'role': 'PATIENT',
       'firstName': _firstNameController.text,
       'lastName': _lastNameController.text,
@@ -350,7 +406,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     final caregiverData = {
       'name': '${_firstNameController.text} ${_lastNameController.text}',
       'email': _emailController.text,
-      'password': _passwordController.text,
+      'password': _effectivePassword,
       'firstName': _firstNameController.text,
       'lastName': _lastNameController.text,
       'phone': _phoneController.text,
@@ -368,7 +424,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       },
       'credentials': {
         'email': _emailController.text,
-        'password': _passwordController.text,
+        'password': _effectivePassword,
       },
     };
 
@@ -378,6 +434,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
         'licenseNumber': _licenseNumberController.text,
         'issuingState': _issuingStateController.text,
         'yearsExperience': int.tryParse(_yearsExperienceController.text) ?? 0,
+        'organization': _organizationController.text.trim(),
+        'practiceName': _organizationController.text.trim(),
       };
     }
 
@@ -706,7 +764,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
           AddressAutocompleteField(
             controller: _addressLine1Controller,
-            label: 'Address Line 1',
+            // Intentionally no floating label: the "Address" section header
+            // above already identifies this field, so no grayed-out
+            // "Address Line 1" text appears while typing.
+            label: '',
             hint: 'Start typing your address...',
             isRequired: true,
             keyboardType: TextInputType.streetAddress,
@@ -773,12 +834,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Like the contact fields above, the professional-field validators
-            // (license number, issuing state, years of experience) were removed
-            // as unreachable dead code — see the note at the top of this method.
-            // Required-field enforcement is handled by _validateContactInformation()
-            // via _canProceed(); removal is behavior-neutral.
+            _buildTextFormField(
+              controller: _organizationController,
+              label: 'Practice / organization',
+              isRequired: true,
+            ),
+            const SizedBox(height: 20),
             _buildTextFormField(
               controller: _licenseNumberController,
               label: 'License Number',
@@ -827,79 +888,304 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Set up your password to secure your account',
+            'Choose how you want to sign in to your account',
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          _buildPasswordFormField(
-            controller: _passwordController,
-            label: 'Password',
-            isRequired: true,
-            isVisible: _isPasswordVisible,
-            onVisibilityToggle: () {
-              setState(() {
-                _isPasswordVisible = !_isPasswordVisible;
-              });
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Password is required';
-              }
-              if (value.length < 8) {
-                return 'Password must be at least 8 characters';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
+          _buildSignInMethodSelector(),
+          const SizedBox(height: 24),
 
-          _buildPasswordFormField(
-            controller: _confirmPasswordController,
-            label: 'Confirm Password',
-            isRequired: true,
-            isVisible: _isConfirmPasswordVisible,
-            onVisibilityToggle: () {
-              setState(() {
-                _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
-              });
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please confirm your password';
-              }
-              if (value != _passwordController.text) {
-                return 'Passwords do not match';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
-
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.backgroundSecondary,
-              borderRadius: BorderRadius.circular(8),
+          if (_selectedSignInMethod == 'Password') ...[
+            _buildPasswordFormField(
+              controller: _passwordController,
+              label: 'Password',
+              isRequired: true,
+              isVisible: _isPasswordVisible,
+              onVisibilityToggle: () {
+                setState(() {
+                  _isPasswordVisible = !_isPasswordVisible;
+                });
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Password is required';
+                }
+                if (value.length < 8) {
+                  return 'Password must be at least 8 characters';
+                }
+                return null;
+              },
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Text(
-                  'Password Requirements:',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+            const SizedBox(height: 20),
+            _buildPasswordFormField(
+              controller: _confirmPasswordController,
+              label: 'Confirm Password',
+              isRequired: true,
+              isVisible: _isConfirmPasswordVisible,
+              onVisibilityToggle: () {
+                setState(() {
+                  _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                });
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please confirm your password';
+                }
+                if (value != _passwordController.text) {
+                  return 'Passwords do not match';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            _buildSecurityHint(
+              'Password Requirements:',
+              '• At least 8 characters long\n• Use a combination of letters, numbers, and symbols\n• Avoid using personal information',
+            ),
+          ] else if (_selectedSignInMethod == 'PIN') ...[
+            _buildPasswordFormField(
+              controller: _pinController,
+              label: 'PIN',
+              isRequired: true,
+              isVisible: _isPinVisible,
+              keyboardType: TextInputType.number,
+              onVisibilityToggle: () {
+                setState(() {
+                  _isPinVisible = !_isPinVisible;
+                });
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'PIN is required';
+                }
+                if (!RegExp(r'^\d{4,6}$').hasMatch(value)) {
+                  return 'PIN must be 4 to 6 digits';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            _buildPasswordFormField(
+              controller: _confirmPinController,
+              label: 'Confirm PIN',
+              isRequired: true,
+              isVisible: _isConfirmPinVisible,
+              keyboardType: TextInputType.number,
+              onVisibilityToggle: () {
+                setState(() {
+                  _isConfirmPinVisible = !_isConfirmPinVisible;
+                });
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please confirm your PIN';
+                }
+                if (value != _pinController.text) {
+                  return 'PINs do not match';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            _buildSecurityHint(
+              'PIN Requirements:',
+              '• 4 to 6 digits\n• Avoid obvious sequences like 1234\n• Avoid your birth year',
+            ),
+          ] else ...[
+            _buildColorSequencePicker(),
+            const SizedBox(height: 20),
+            _buildSecurityHint(
+              'Color Sequence:',
+              '• Tap $_colorSequenceLength colors in an order you will remember\n• You will repeat the same sequence to sign in\n• Use Clear to start over',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignInMethodSelector() {
+    const icons = {
+      'Password': Icons.lock_outline,
+      'PIN': Icons.dialpad,
+      'Color': Icons.palette_outlined,
+    };
+    return Row(
+      children: _signInMethods.map((method) {
+        final isSelected = _selectedSignInMethod == method;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: method != _signInMethods.last ? 12 : 0,
+            ),
+            child: Semantics(
+              button: true,
+              selected: isSelected,
+              label: 'Sign in with $method',
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedSignInMethod = method;
+                  });
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primary.withValues(alpha: 0.08)
+                        : Colors.white,
+                    border: Border.all(
+                      color: isSelected ? AppTheme.primary : Colors.grey[300]!,
+                      width: isSelected ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        icons[method],
+                        color: isSelected ? AppTheme.primary : Colors.grey[500],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        method,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? AppTheme.primary
+                              : AppTheme.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '• At least 8 characters long\n• Use a combination of letters, numbers, and symbols\n• Avoid using personal information',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
+              ),
             ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildColorSequencePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose your color sequence *',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: _colorPalette.entries.map((entry) {
+            final enabled = _colorSequence.length < _colorSequenceLength;
+            return Semantics(
+              button: true,
+              enabled: enabled,
+              label: 'Add ${entry.key} to sequence',
+              child: InkWell(
+                onTap: enabled
+                    ? () {
+                        setState(() {
+                          _colorSequence.add(entry.key);
+                        });
+                      }
+                    : null,
+                borderRadius: BorderRadius.circular(32),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: entry.value,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey[400]!),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < _colorSequenceLength; i++)
+                    Container(
+                      width: 36,
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: i < _colorSequence.length
+                            ? _colorPalette[_colorSequence[i]]
+                            : Colors.grey[200],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey[400]!),
+                      ),
+                      child: i < _colorSequence.length
+                          ? null
+                          : Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                    ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _colorSequence.isEmpty
+                  ? null
+                  : () {
+                      setState(() {
+                        _colorSequence.clear();
+                      });
+                    },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Clear'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSecurityHint(String title, String body) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundSecondary,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
           ),
         ],
       ),
@@ -934,6 +1220,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         _buildReviewSection('Phone', _phoneController.text),
         _buildReviewSection('Date of Birth', _dobController.text),
         _buildReviewSection('Gender', _selectedGender ?? ''),
+        _buildReviewSection('Sign-in Method', _selectedSignInMethod),
 
         if (_selectedRole == 'Caregiver')
           _buildReviewSection('Caregiver Type', _selectedCaregiverType ?? ''),
@@ -945,6 +1232,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
         if (_selectedRole == 'Caregiver' &&
             _selectedCaregiverType == 'Professional') ...[
+          _buildReviewSection(
+            'Practice / organization',
+            _organizationController.text,
+          ),
           _buildReviewSection('License Number', _licenseNumberController.text),
           _buildReviewSection('Issuing State', _issuingStateController.text),
           _buildReviewSection(
@@ -1170,6 +1461,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     required bool isVisible,
     required VoidCallback onVisibilityToggle,
     bool isRequired = false,
+    TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -1187,6 +1479,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         TextFormField(
           controller: controller,
           obscureText: !isVisible,
+          keyboardType: keyboardType,
           validator: validator,
           decoration: InputDecoration(
             border: OutlineInputBorder(

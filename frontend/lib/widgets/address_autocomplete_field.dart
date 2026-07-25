@@ -146,7 +146,9 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
           focusNode: _focusNode,
           keyboardType: widget.keyboardType,
           decoration: InputDecoration(
-            labelText: widget.label,
+            // Only show a floating label when one is provided; an empty label
+            // means the field relies on its section header + hint text alone.
+            labelText: widget.label.isEmpty ? null : widget.label,
             hintText: widget.hint,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),

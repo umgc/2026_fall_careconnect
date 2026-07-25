@@ -5,6 +5,7 @@ import 'package:care_connect_app/features/usps/presentation/mail_envelope_tts.da
 class _RecordingEngine implements MailTtsEngine {
   final List<String> calls = <String>[];
   bool throwOnAwaitCompletion = false;
+  void Function()? completionHandler;
 
   @override
   Future<dynamic> setLanguage(String language) async {
@@ -50,6 +51,11 @@ class _RecordingEngine implements MailTtsEngine {
     calls.add('stop');
     return 1;
   }
+
+  @override
+  void setCompletionHandler(void Function() callback) {
+    completionHandler = callback;
+  }
 }
 
 void main() {
@@ -83,7 +89,8 @@ void main() {
       MailEnvelopeTtsService.debugSetInstance(tts);
 
       expect(identical(MailEnvelopeTtsService.instance, tts), isTrue);
-      await MailEnvelopeTtsService.instance.speak('From: Bank. Statement.');
+      await MailEnvelopeTtsService.instance
+          .speak('s1', 'From: Bank. Statement.');
       expect(fake.calls, contains('speak:From: Bank. Statement.'));
     });
 
@@ -98,34 +105,57 @@ void main() {
   });
 
   group('FlutterMailEnvelopeTts', () {
-    test('speak configures engine once then speaks', () async {
+    test('speak configures engine once then speaks with session', () async {
       final engine = _RecordingEngine();
       final tts = FlutterMailEnvelopeTts(engine: engine);
 
-      await tts.speak('From: Acme. Monthly statement.');
-      await tts.speak('From: Acme. Monthly statement.');
+      await tts.speak('a', 'From: Acme. Monthly statement.');
+      await tts.speak('b', 'From: Acme. Monthly statement.');
 
       expect(engine.calls.where((c) => c.startsWith('setLanguage')).length, 1);
       expect(engine.calls.where((c) => c == 'stop').length, 2);
-      expect(
-        engine.calls.where((c) => c.startsWith('speak:')).length,
-        2,
-      );
+      expect(engine.calls.where((c) => c.startsWith('speak:')).length, 2);
+      expect(tts.isSpeaking, isFalse);
+      expect(tts.activeSessionId, isNull);
     });
 
     test('speak ignores blank utterance', () async {
       final engine = _RecordingEngine();
       final tts = FlutterMailEnvelopeTts(engine: engine);
 
-      await tts.speak('   ');
+      await tts.speak('s', '   ');
       expect(engine.calls, isEmpty);
+    });
+
+    test('stop clears active session', () async {
+      final engine = _RecordingEngine();
+      final tts = FlutterMailEnvelopeTts(engine: engine);
+
+      // Don't await speak completion path — stop mid-flight via separate call
+      // after a completed speak (idle) still clears state.
+      await tts.speak('s1', 'Hello');
+      await tts.stop();
+      expect(tts.activeSessionId, isNull);
+      expect(tts.isSpeaking, isFalse);
+      expect(engine.calls.where((c) => c == 'stop').length, greaterThanOrEqualTo(2));
+    });
+
+    test('completion handler clears session', () async {
+      final engine = _RecordingEngine();
+      final tts = FlutterMailEnvelopeTts(engine: engine);
+
+      // Simulate mid-speak state then engine completion callback.
+      await tts.speak('live', 'Hello mail');
+      engine.completionHandler?.call();
+      expect(tts.isSpeaking, isFalse);
+      expect(tts.activeSessionId, isNull);
     });
 
     test('awaitSpeakCompletion failures are ignored', () async {
       final engine = _RecordingEngine()..throwOnAwaitCompletion = true;
       final tts = FlutterMailEnvelopeTts(engine: engine);
 
-      await tts.speak('Hello mail');
+      await tts.speak('s', 'Hello mail');
       expect(engine.calls, contains('speak:Hello mail'));
     });
 
@@ -135,7 +165,7 @@ void main() {
 
       await tts.stop();
       await tts.dispose();
-      expect(engine.calls, ['stop', 'stop']);
+      expect(engine.calls.where((c) => c == 'stop').length, 2);
     });
   });
 

@@ -25,6 +25,12 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   String? reconnectMessage;
   DateTime selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _imapPasswordController = TextEditingController();
+  String? _detectedProvider;
+  String? _detectedAuthMode;
+  String? _imapHostHint;
+  bool _showImapForm = false;
   List<Map<String, dynamic>> searchResults = [];
   bool searchLoading = false;
   String? searchError;
@@ -331,6 +337,95 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     }
   }
 
+  Future<void> _connectMicrosoftAccount() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final user = userProvider.user;
+    if (user == null) return;
+    final base = getBackendBaseUrl();
+    final currentUrl = kIsWeb ? Uri.base.toString() : getWebBaseUrl();
+    final authUrl =
+        '$base/oauth/microsoft/start?userId=${Uri.encodeComponent(user.id.toString())}&returnUrl=${Uri.encodeComponent(currentUrl)}';
+    final uri = Uri.parse(authUrl);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _validateEmailAndRoute() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) return;
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final user = userProvider.user;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
+      );
+      return;
+    }
+    final base = getBackendBaseUrl();
+    final dio = Dio();
+    try {
+      final res = await dio.post(
+        '$base/v1/api/email-credentials/validate',
+        data: {'email': email, 'smtpProbe': false},
+      );
+      final data = res.data as Map;
+      if (data['valid'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['error']?.toString() ?? 'Invalid email')),
+        );
+        return;
+      }
+      setState(() {
+        _detectedProvider = data['provider']?.toString();
+        _detectedAuthMode = data['authMode']?.toString();
+        _imapHostHint = data['defaultImapHost']?.toString();
+        _showImapForm = data['authMode']?.toString() == 'IMAP';
+      });
+      if (data['authMode']?.toString() == 'OAUTH') {
+        if (data['provider']?.toString() == 'OUTLOOK') {
+          await _connectMicrosoftAccount();
+        } else {
+          await _connectGoogleAccount();
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Email validation failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _submitImapConnect() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final user = userProvider.user;
+    if (user == null) return;
+    final base = getBackendBaseUrl();
+    final dio = Dio();
+    try {
+      await dio.post(
+        '$base/v1/api/email-credentials/imap/connect',
+        data: {
+          'userId': user.id.toString(),
+          'email': _emailController.text.trim(),
+          'appPassword': _imapPasswordController.text,
+          'imapHost': _imapHostHint,
+          'imapPort': 993,
+        },
+      );
+      setState(() {
+        isGoogleConnected = true;
+        needsGoogleReconnect = false;
+        _showImapForm = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email connected via IMAP')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('IMAP connect failed: $e')),
+      );
+    }
+  }
+
   Widget _buildMailImage(
     String? imageDataUrl, {
     double width = 48,
@@ -629,7 +724,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                         Icon(Icons.mail, color: Theme.of(context).primaryColor),
                         const SizedBox(width: 8),
                         Text(
-                          'Gmail Integration',
+                          'Email Integration',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ],
@@ -638,10 +733,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     Text(
                       needsGoogleReconnect
                           ? (reconnectMessage ??
-                              'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
+                              'Mailbox access was revoked or expired. Reconnect to resume USPS mail sync.')
                           : isGoogleConnected
-                              ? '✅ Google account connected! You can now fetch USPS digests automatically.'
-                              : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
+                              ? '✅ Email account connected! You can now fetch USPS digests automatically.'
+                              : 'Enter your email to connect Gmail, Outlook, or IMAP providers for Informed Delivery.',
                       style: TextStyle(
                         color: needsGoogleReconnect
                             ? Colors.orange.shade800
@@ -650,6 +745,56 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                 : Colors.grey,
                       ),
                     ),
+                    if (!isGoogleConnected && !needsGoogleReconnect) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email address',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _validateEmailAndRoute,
+                          icon: const Icon(Icons.mail_outline),
+                          label: const Text('Continue with email'),
+                        ),
+                      ),
+                      if (_detectedProvider != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Detected: $_detectedProvider ($_detectedAuthMode)',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      if (_showImapForm) ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _imapPasswordController,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: 'App password',
+                            helperText: _imapHostHint == null
+                                ? null
+                                : 'IMAP host: $_imapHostHint',
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _submitImapConnect,
+                            child: const Text('Connect with IMAP'),
+                          ),
+                        ),
+                      ],
+                    ],
                     if (needsGoogleReconnect) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -673,7 +818,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Reconnect Gmail to restore Informed Delivery sync.',
+                              'Reconnect your email to restore Informed Delivery sync.',
                               style: TextStyle(color: Colors.orange.shade900),
                             ),
                             const SizedBox(height: 8),
@@ -681,9 +826,15 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 key: const Key('gmailReconnectButton'),
-                                onPressed: _connectGoogleAccount,
+                                onPressed: () async {
+                                  if (_detectedProvider == 'OUTLOOK') {
+                                    await _connectMicrosoftAccount();
+                                  } else {
+                                    await _connectGoogleAccount();
+                                  }
+                                },
                                 icon: const Icon(Icons.link),
-                                label: const Text('Reconnect Gmail'),
+                                label: const Text('Reconnect email'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.orange.shade800,
                                   foregroundColor: Colors.white,
@@ -695,20 +846,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    if (!isGoogleConnected && !needsGoogleReconnect)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _connectGoogleAccount,
-                          icon: const Icon(Icons.link),
-                          label: const Text('Connect Google Account'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      )
-                    else if (isGoogleConnected)
+                    if (isGoogleConnected)
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
@@ -716,11 +854,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                             setState(() {
                               isGoogleConnected = false;
                               needsGoogleReconnect = false;
+                              _showImapForm = false;
                             });
-                            _connectGoogleAccount();
                           },
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Reconnect Google Account'),
+                          label: const Text('Connect a different email'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.green,
                           ),
