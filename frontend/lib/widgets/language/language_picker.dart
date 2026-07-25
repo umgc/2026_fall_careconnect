@@ -12,7 +12,6 @@ class LanguagePicker {
     final current = context.read<LocaleProvider>().locale;
     final t = AppLocalizations.of(context)!;
     final media = MediaQuery.of(context);
-    final horizontalInset = _horizontalInsetFor(media.size.width);
     // Short landscape screens need a scroll-controlled sheet so shrink-wrapped
     // content can grow and remain fully scrollable instead of capping ~56%.
     final isShortLandscape =
