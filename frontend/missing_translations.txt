@@ -59,7 +59,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -881,7 +880,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -1703,7 +1701,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -2525,7 +2522,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -3347,7 +3343,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -4169,7 +4164,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -4991,7 +4985,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -5813,7 +5806,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -6635,7 +6627,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -7457,7 +7448,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -8279,7 +8269,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
@@ -9101,7 +9090,6 @@
     "voicecommand_commandPhraseHome",
     "voicecommand_commandPhraseCalendar",
     "voicecommand_commandPhraseTracker",
-    "mainscreen_voiceCommandsTooltip"
     "voicecommand_micDeniedGuidance",
     "voicecommand_unavailableGuidance",
     "voicecommand_timeoutGuidance",
