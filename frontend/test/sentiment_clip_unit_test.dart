@@ -96,6 +96,23 @@ void main() {
       expect(window.clipEndSec, 75);
     });
 
+    test('naive telemetry occurredAt + Z recordingStartedAt stays aligned', () {
+      // Production bug: recording emits ...Z, telemetry emits naive ISO. Flutter
+      // DateTime.parse treats naive as local and shifts the clip by UTC offset.
+      final recordingStartedAt = parseCallUtcDateTime('2026-07-25T04:29:50.103811Z');
+      final sentimentOccurredAt =
+          parseCallUtcDateTime('2026-07-25T04:30:02.299377');
+
+      final window = computeSentimentClipWindow(
+        sentimentOccurredAt: sentimentOccurredAt,
+        recordingStartedAt: recordingStartedAt,
+      );
+
+      expect(window.offsetSec, closeTo(12.195566, 0.001));
+      expect(window.clipStartSec, 0);
+      expect(window.clipEndSec, closeTo(27.195566, 0.001));
+    });
+
     test('mis-tagged local wall-clock as Z shifts clip by hours (regression guard)',
         () {
       // What broke after labeling LocalDateTime.now() (Eastern) as UTC Instant.
@@ -110,6 +127,19 @@ void main() {
       );
 
       expect(window.offsetSec, greaterThan(3 * 3600));
+    });
+  });
+
+  group('parseCallUtcDateTime', () {
+    test('treats naive ISO as UTC wall-clock', () {
+      final parsed = parseCallUtcDateTime('2026-07-25T04:29:50.103811');
+      expect(parsed.isUtc, isTrue);
+      expect(parsed.toIso8601String(), startsWith('2026-07-25T04:29:50'));
+    });
+
+    test('preserves explicit offsets', () {
+      final parsed = parseCallUtcDateTime('2026-07-25T00:29:50.103811Z');
+      expect(parsed.toUtc().hour, 0);
     });
   });
 

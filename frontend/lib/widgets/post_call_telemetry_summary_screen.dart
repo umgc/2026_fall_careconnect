@@ -156,9 +156,9 @@ class _PostCallTelemetrySummaryScreenState
       return;
     }
 
-    final recordingStartedAt = DateTime.parse(recordingStartedAtRaw).toUtc();
+    final recordingStartedAt = parseCallUtcDateTime(recordingStartedAtRaw);
     final clipWindow = computeSentimentClipWindow(
-      sentimentOccurredAt: selectedAt.toUtc(),
+      sentimentOccurredAt: parseCallUtcDateTime(selectedAt),
       recordingStartedAt: recordingStartedAt,
     );
 
@@ -180,8 +180,8 @@ class _PostCallTelemetrySummaryScreenState
     }
 
     final clipWindow = computeSentimentClipWindow(
-      sentimentOccurredAt: selectedAt.toUtc(),
-      recordingStartedAt: recordingStartedAt,
+      sentimentOccurredAt: parseCallUtcDateTime(selectedAt),
+      recordingStartedAt: parseCallUtcDateTime(recordingStartedAt),
     );
 
     setState(() {
@@ -317,10 +317,7 @@ class _PostCallTelemetrySummaryScreenState
   }
 
   DateTime _safeDate(dynamic input) {
-    if (input is String) {
-      return DateTime.tryParse(input) ?? DateTime.fromMillisecondsSinceEpoch(0);
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
+    return parseCallUtcDateTime(input);
   }
 
   Map<String, dynamic>? get _summaryPayload {
@@ -1686,7 +1683,9 @@ class _PostCallTelemetrySummaryScreenState
                             ],
                           ),
                           SentimentClipPlayerWidget(
-                            key: ValueKey(_clipPlaybackUrl!),
+                            key: ValueKey(
+                              '${_clipPlaybackUrl!}|${_clipStartSec!}|${_clipEndSec!}',
+                            ),
                             playbackUrl: _clipPlaybackUrl!,
                             clipStartSec: _clipStartSec!,
                             clipEndSec: _clipEndSec!,
