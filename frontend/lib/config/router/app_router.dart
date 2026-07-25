@@ -13,6 +13,11 @@ import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
 import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_brief_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_recall_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_search_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
@@ -72,6 +77,7 @@ import '../../features/evv/presentation/pages/checkout_location_page.dart';
 import '../../features/evv/presentation/pages/visit_complete_page.dart';
 import '../../features/evv/presentation/pages/visit_completed_success_page.dart';
 import '../../providers/user_provider.dart';
+import '../../services/daily_brief_gate_service.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.dart';
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
@@ -139,7 +145,11 @@ class TelemetryGoRouterObserver extends NavigatorObserver {
 final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
-Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+Future<void> navigateToDashboard(
+  BuildContext context, {
+  int? tabIndex,
+  bool routePatientToDailyBrief = false,
+}) async {
   // Issue #75: if the user authenticated in the middle of accepting an invite,
   // route them back to the invite landing screen to complete the join instead
   // of going straight to the dashboard. The landing screen accepts the invite
@@ -151,6 +161,25 @@ Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
       return;
     }
   }
+
+  // STML-2 / WBS 3.13.2: care recipients see the Daily Memory Brief on their
+  // first login of the day, no earlier than 7am (SRS §6, "surfaces ... when
+  // the app is opened"). Caregivers, other roles, and logins after the brief
+  // has already been shown today go straight to the dashboard.
+  if (routePatientToDailyBrief) {
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    final patientId = user?.patientId;
+    if (user?.role.toUpperCase() == 'PATIENT' && patientId != null) {
+      final shouldShowBrief = await DailyBriefGateService.shouldShow(patientId);
+      if (shouldShowBrief) {
+        if (context.mounted) {
+          context.go('/stml/brief');
+        }
+        return;
+      }
+    }
+  }
+
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,
@@ -164,8 +193,26 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
+    GoRoute(path: '/stml/brief', builder: (_, __) => const StmlBriefPage()),
+    GoRoute(path: '/stml/recall', builder: (_, __) => const StmlRecallPage()),
+    GoRoute(path: '/stml/search', builder: (_, __) => const StmlSearchPage()),
     GoRoute(
-        path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
+      path: '/stml/checkin',
+      builder: (_, __) => const StmlCheckInPatientSelectionPage(),
+    ),
+    GoRoute(
+      path: '/stml/checkin/:patientId',
+      builder: (_, state) {
+        final patientId = int.tryParse(state.pathParameters['patientId'] ?? '');
+        if (patientId == null) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid patient id')),
+          );
+        }
+        return StmlCheckInPage(patientId: patientId);
+      },
+    ),
+    GoRoute(path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
     GoRoute(
       path: '/login',
       builder: (context, state) {

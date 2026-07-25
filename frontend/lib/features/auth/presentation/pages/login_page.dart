@@ -62,7 +62,7 @@ class _LoginPageState extends State<LoginPage> {
         Provider.of<UserProvider>(context, listen: false).setUser(user);
         await Provider.of<UserProvider>(context, listen: false).fetchUserDetails();
         await Future.delayed(const Duration(milliseconds: 100));
-        navigateToDashboard(context);
+        navigateToDashboard(context, routePatientToDailyBrief: true);
       } else {
         // loginWithRoleValidation only ever returns success or an authentication
         // failure (role validation is not performed here), so surface the error.
