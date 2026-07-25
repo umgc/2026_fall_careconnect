@@ -1,11 +1,16 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallAttendee;
+import com.careconnect.model.CallParticipant;
+import com.careconnect.model.User;
 import com.careconnect.repository.CallAttendeeRepository;
+import com.careconnect.repository.CallParticipantRepository;
+import com.careconnect.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,12 +24,52 @@ public class CallAttendeeService {
     private static final Logger log = LoggerFactory.getLogger(CallAttendeeService.class);
 
     private final CallAttendeeRepository callAttendeeRepository;
+    private final CallParticipantRepository callParticipantRepository;
+    private final UserRepository userRepository;
     private final ChimeService chimeService;
 
     public CallAttendeeService(
-            final CallAttendeeRepository callAttendeeRepository, final ChimeService chimeService) {
+            final CallAttendeeRepository callAttendeeRepository,
+            final CallParticipantRepository callParticipantRepository,
+            final UserRepository userRepository,
+            final ChimeService chimeService) {
         this.callAttendeeRepository = callAttendeeRepository;
+        this.callParticipantRepository = callParticipantRepository;
+        this.userRepository = userRepository;
         this.chimeService = chimeService;
+    }
+
+    private record ResolvedExternalUser(Long userId, String role) {}
+
+    /**
+     * Maps a Chime {@code externalUserId} to app user id + role. Prefers durable opaque id lookup
+     * on {@code call_participants}; falls back to legacy {@code ROLE_…_userId} parsing.
+     */
+    private Optional<ResolvedExternalUser> resolveExternalUser(final String externalUserId) {
+        if (externalUserId == null
+                || externalUserId.isBlank()
+                || ChimeExternalUserIdParser.isPipelineInternal(externalUserId)) {
+            return Optional.empty();
+        }
+        final Optional<CallParticipant> byOpaque =
+                callParticipantRepository.findFirstByChimeExternalUserId(externalUserId.trim());
+        if (byOpaque.isPresent()) {
+            final Long userId = byOpaque.get().getUserId();
+            final String role =
+                    userRepository
+                            .findById(userId)
+                            .map(User::getRole)
+                            .map(Enum::name)
+                            .orElse("UNKNOWN");
+            return Optional.of(new ResolvedExternalUser(userId, role));
+        }
+        final Long legacyUserId = ChimeExternalUserIdParser.parseUserId(externalUserId);
+        if (legacyUserId == null) {
+            return Optional.empty();
+        }
+        return Optional.of(
+                new ResolvedExternalUser(
+                        legacyUserId, ChimeExternalUserIdParser.parseRole(externalUserId)));
     }
 
     /**
@@ -68,21 +113,18 @@ public class CallAttendeeService {
     @Transactional
     public void recordJoinFromStreamEvent(
             final String callId, final String chimeAttendeeId, final String externalUserId) {
-        if (ChimeExternalUserIdParser.isPipelineInternal(externalUserId)) {
+        final Optional<ResolvedExternalUser> resolved = resolveExternalUser(externalUserId);
+        if (resolved.isEmpty()) {
             return;
         }
-        final Long userId = ChimeExternalUserIdParser.parseUserId(externalUserId);
-        if (userId == null) {
-            return;
-        }
-        final String role = ChimeExternalUserIdParser.parseRole(externalUserId);
-        recordJoin(callId, chimeAttendeeId, userId, role);
+        final ResolvedExternalUser user = resolved.get();
+        recordJoin(callId, chimeAttendeeId, user.userId(), user.role());
         if (log.isInfoEnabled()) {
             log.info(
                     "Roster upsert from EventBridge callId={} userId={} chimeAttendeeId={}"
                             + " externalUserId={}",
                     callId,
-                    userId,
+                    user.userId(),
                     chimeAttendeeId,
                     externalUserId);
         }
@@ -113,13 +155,14 @@ public class CallAttendeeService {
                     || ChimeExternalUserIdParser.isPipelineInternal(attendee.externalUserId())) {
                 continue;
             }
-            final Long userId = ChimeExternalUserIdParser.parseUserId(attendee.externalUserId());
-            if (userId == null) {
+            final Optional<ResolvedExternalUser> resolved =
+                    resolveExternalUser(attendee.externalUserId());
+            if (resolved.isEmpty()) {
                 continue;
             }
             liveAppAttendeeIds.add(attendee.attendeeId());
-            final String role = ChimeExternalUserIdParser.parseRole(attendee.externalUserId());
-            recordJoin(callId, attendee.attendeeId(), userId, role);
+            final ResolvedExternalUser user = resolved.get();
+            recordJoin(callId, attendee.attendeeId(), user.userId(), user.role());
         }
 
         if (liveAppAttendeeIds.isEmpty()) {

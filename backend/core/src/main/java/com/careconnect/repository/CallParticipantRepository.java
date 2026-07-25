@@ -16,6 +16,9 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     List<CallParticipant> findByCallSessionId(Long callSessionId);
     List<CallParticipant> findByCallSessionIdAndStatus(Long callSessionId, String status);
 
+    /** Resolves opaque Chime externalUserId → durable participant (user id). */
+    Optional<CallParticipant> findFirstByChimeExternalUserId(String chimeExternalUserId);
+
     @Modifying
     @Query(value = """
             INSERT INTO call_participants

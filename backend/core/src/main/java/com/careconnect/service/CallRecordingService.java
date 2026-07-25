@@ -822,13 +822,16 @@ public class CallRecordingService {
     kvsAttendeeStreamRegistry.clearCall(callId);
 
     String resolvedPipelineId = pipelineId;
-    if (resolvedPipelineId == null) {
+    if (resolvedPipelineId == null
+        || MEDIA_STREAM_PIPELINE_PENDING.equals(resolvedPipelineId)) {
       resolvedPipelineId =
           recordingRepository
-              .findTopByCallIdOrderByStartedAtDesc(callId)
+              .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
               .map(CallRecording::getMediaStreamPipelineId)
               .orElse(null);
     }
+
+    clearPersistedMediaStreamPipelineId(callId);
 
     if (resolvedPipelineId == null || resolvedPipelineId.isBlank()) {
       return Map.of("status", "NOT_STARTED", "callId", callId);
@@ -872,6 +875,19 @@ public class CallRecordingService {
     }
   }
 
+  /** Clears DB pipeline id so a failed/stopped ingest cannot false-positive ALREADY_STARTED. */
+  private void clearPersistedMediaStreamPipelineId(final String callId) {
+    recordingRepository
+        .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
+        .ifPresent(
+            recording -> {
+              if (recording.getMediaStreamPipelineId() != null) {
+                recording.setMediaStreamPipelineId(null);
+                recordingRepository.save(recording);
+              }
+            });
+  }
+
   /**
    * Starts KVS pool ingest on a background thread so call join is not blocked by attendee→stream
    * discovery polling (can take tens of seconds).
@@ -906,6 +922,39 @@ public class CallRecordingService {
   }
 
   /**
+   * For non-election joiners: if a media stream pipeline already exists, resolve and persist
+   * attendee→KVS stream ARNs so late joiners are not left without {@code kvs_stream_arn}.
+   */
+  @Async
+  public void refreshKvsAttendeeStreamsAsync(final String callId) {
+    if (!kvsStreamPoolService.isEnabled() || !kvsStreamPoolService.isIngestMode()) {
+      return;
+    }
+    try {
+      final String pipelineId = resolveExistingMediaStreamPipelineId(callId);
+      if (pipelineId == null) {
+        return;
+      }
+      final String meetingId = chimeService.getMeetingId(callId);
+      if (meetingId == null) {
+        return;
+      }
+      resolveAndPersistAttendeeStreams(callId, meetingId, pipelineId);
+      if (log.isInfoEnabled()) {
+        log.info(
+            "Refreshed KVS attendee streams for callId={} mediaStreamPipelineId={}",
+            callId,
+            pipelineId);
+      }
+    } catch (Exception e) {
+      if (log.isWarnEnabled()) {
+        log.warn(
+            "KVS attendee stream refresh failed for call {}: {}", callId, e.getMessage());
+      }
+    }
+  }
+
+  /**
    * Starts speaker-ID ingest: {@code CreateMediaStreamPipeline} → KVS Stream Pool → resolve and
    * persist attendee→stream ARNs. Post-call transcription assembles fragments per stream into WAV
    * and runs Transcribe (no Media Insights S3 export on this path).
@@ -920,6 +969,20 @@ public class CallRecordingService {
     final String existingMediaStreamId = resolveExistingMediaStreamPipelineId(callId);
     if (existingMediaStreamId != null) {
       activeMediaStreamPipelineIds.put(callId, existingMediaStreamId);
+      // Late joiners must still bind kvs_stream_arn even when the pipeline already exists.
+      final String meetingIdForRefresh = chimeService.getMeetingId(callId);
+      if (meetingIdForRefresh != null) {
+        try {
+          resolveAndPersistAttendeeStreams(callId, meetingIdForRefresh, existingMediaStreamId);
+        } catch (Exception e) {
+          if (log.isWarnEnabled()) {
+            log.warn(
+                "ALREADY_STARTED stream refresh failed for callId={}: {}",
+                callId,
+                e.getMessage());
+          }
+        }
+      }
       return Map.of(
           "status",
           "ALREADY_STARTED",

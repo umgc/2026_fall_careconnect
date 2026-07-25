@@ -389,8 +389,11 @@ class CallRecordingServiceTest {
         @DisplayName("P5: still tears down media stream pipeline when capture already stopped")
         void stopRecording_captureAlreadyStopped_stillStopsMediaStreamPipeline() {
             CallRecording rec = buildRecording("STOPPED");
+            rec.setInitiatedByUserId(null);
             rec.setMediaStreamPipelineId("media-stream-pipeline-001");
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
 
             Map<String, Object> result = service.stopRecording(CALL_ID);

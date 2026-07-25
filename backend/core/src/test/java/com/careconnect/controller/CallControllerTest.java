@@ -80,7 +80,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @Import(CareconnectTestConfig.class)
 @org.springframework.test.context.ActiveProfiles("test")
-@TestPropertySource(properties = "careconnect.recording.global-purge-enabled=true")
+@TestPropertySource(properties = {
+        "careconnect.recording.global-purge-enabled=true",
+        "careconnect.recording.system-transcription-enabled=true"
+})
 @DisplayName("CallController Tests")
 class CallControllerTest {
 
@@ -479,7 +482,7 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void speaker038_firstJoinDoesNotStartCapture() throws Exception {
             mockCurrentCaregiver();
-            when(chimeService.isMeetingActive(CALL_ID)).thenReturn(false);
+            when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(false);
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
                             .with(csrf())
@@ -488,15 +491,28 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(callRecordingService, never()).startRecording(eq(CALL_ID), isNull());
+            verify(callRecordingService, never()).startRecordingTyped(eq(CALL_ID), isNull(), eq(true));
             verify(callRecordingService, never()).startKvsPipelineAsync(CALL_ID);
+            verify(callRecordingService).refreshKvsAttendeeStreamsAsync(CALL_ID);
         }
 
         @Test
-        @DisplayName("SPEAKER-037: POST /join on active meeting starts recording and KVS pipeline")
+        @DisplayName("SPEAKER-037: POST /join election owner starts recording and KVS pipeline")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void speaker037_secondJoinStartsRecordingAndKvs() throws Exception {
             mockCurrentCaregiver();
-            when(chimeService.isMeetingActive(CALL_ID)).thenReturn(true);
+            when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(true);
+            when(callRecordingService.startRecordingTyped(eq(CALL_ID), isNull(), eq(true)))
+                    .thenReturn(new com.careconnect.service.RecordingStartResult(
+                            com.careconnect.service.RecordingStartResult.Status.STARTED,
+                            CALL_ID,
+                            1L,
+                            1L,
+                            "pipeline-1",
+                            "bucket",
+                            "prefix",
+                            null,
+                            "started"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
                             .with(csrf())
@@ -504,8 +520,28 @@ class CallControllerTest {
                             .content("{}"))
                     .andExpect(status().isOk());
 
-            verify(callRecordingService).startRecording(CALL_ID, null);
+            verify(callRecordingService).startRecordingTyped(CALL_ID, null, true);
             verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
+            verify(callRecordingService, never()).refreshKvsAttendeeStreamsAsync(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-002b: POST /end on already-ended session still finalizes attendee leave")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker002b_alreadyEndedLeaveStillFinalizesAttendee() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
+                    .thenReturn(new CallSessionService.LeaveResult(false, true, 0L));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(callAttendeeService).recordLeave(eq(CALL_ID), eq(2L));
+            verify(callAttendeeService, never()).recordCallEnded(eq(CALL_ID));
         }
 
         @Test

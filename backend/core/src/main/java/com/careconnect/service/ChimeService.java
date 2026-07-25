@@ -853,16 +853,24 @@ public class ChimeService {
     }
 
     /** Live Chime attendee id for a user in a meeting, or null when not present / unknown. */
-    public String findLiveAttendeeIdForUser(final String meetingId, final String userId) {
+    public String findLiveAttendeeIdForUser(
+            final String callId, final String meetingId, final String userId) {
         if (userId == null || userId.isBlank()) {
             return null;
         }
+        final String expectedOpaque = toOpaqueChimeExternalUserId(callId, userId);
         final Long numericUserId = parseNumericUserId(userId);
-        if (numericUserId == null) {
-            return null;
-        }
         for (final ChimeMeetingAttendee attendee : listMeetingAttendees(meetingId)) {
-            if (numericUserId.equals(ChimeExternalUserIdParser.parseUserId(attendee.externalUserId()))) {
+            final String externalUserId = attendee.externalUserId();
+            if (externalUserId == null || externalUserId.isBlank()) {
+                continue;
+            }
+            if (expectedOpaque.equals(externalUserId)) {
+                return attendee.attendeeId();
+            }
+            // Legacy ROLE_…_userId attendees (pre-opaque ids).
+            if (numericUserId != null
+                    && numericUserId.equals(ChimeExternalUserIdParser.parseUserId(externalUserId))) {
                 return attendee.attendeeId();
             }
         }
@@ -1044,8 +1052,10 @@ public class ChimeService {
         if (cachedAttendeeId == null || cachedAttendeeId.toString().isBlank()) {
             return false;
         }
-        final String liveAttendeeId = findLiveAttendeeIdForUser(meeting.meetingId(), userId);
-        return liveAttendeeId == null || liveAttendeeId.equals(cachedAttendeeId.toString());
+        final String liveAttendeeId =
+                findLiveAttendeeIdForUser(callId, meeting.meetingId(), userId);
+        // Null means ListAttendees did not show this user — do not treat as still live.
+        return liveAttendeeId != null && liveAttendeeId.equals(cachedAttendeeId.toString());
     }
 
     private static Long parseNumericUserId(final String userId) {

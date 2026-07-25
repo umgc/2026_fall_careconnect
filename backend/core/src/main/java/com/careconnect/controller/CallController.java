@@ -246,7 +246,13 @@ public class CallController {
             }
           }
         }
-        callRecordingService.startKvsPipelineAsync(callId);
+        // KVS ingest is gated on the same durable election as system recording. Late joiners
+        // only refresh attendee→stream bindings against an existing pipeline.
+        if (recordingStartOwner) {
+          callRecordingService.startKvsPipelineAsync(callId);
+        } else {
+          callRecordingService.refreshKvsAttendeeStreamsAsync(callId);
+        }
         return ResponseEntity.ok(response);
       } catch (Exception joinFailure) {
         if (joinedDurably) {
@@ -475,6 +481,8 @@ public class CallController {
       final CallSessionService.LeaveResult leave =
           callSessionService.leaveOrBeginTermination(callId, currentUser.getId());
       if (leave.ended()) {
+        // Session already ended/cancelled — still finalize this user's attendee row.
+        callAttendeeService.recordLeave(callId, currentUser.getId());
         return ResponseEntity.ok(
             Map.of(
                 "status", "ended",

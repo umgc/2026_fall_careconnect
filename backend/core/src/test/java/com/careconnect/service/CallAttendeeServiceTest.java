@@ -1,7 +1,12 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallAttendee;
+import com.careconnect.model.CallParticipant;
+import com.careconnect.model.User;
 import com.careconnect.repository.CallAttendeeRepository;
+import com.careconnect.repository.CallParticipantRepository;
+import com.careconnect.repository.UserRepository;
+import com.careconnect.security.Role;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -30,13 +35,16 @@ class CallAttendeeServiceTest {
     private static final String MEETING_ID = "meeting-uuid";
 
     @Mock private CallAttendeeRepository callAttendeeRepository;
+    @Mock private CallParticipantRepository callParticipantRepository;
+    @Mock private UserRepository userRepository;
     @Mock private ChimeService chimeService;
 
     private CallAttendeeService service;
 
     @BeforeEach
     void setUp() {
-        service = new CallAttendeeService(callAttendeeRepository, chimeService);
+        service = new CallAttendeeService(
+                callAttendeeRepository, callParticipantRepository, userRepository, chimeService);
     }
 
     @Test
@@ -106,7 +114,7 @@ class CallAttendeeServiceTest {
     }
 
     @Test
-    @DisplayName("recordJoinFromStreamEvent upserts roster from externalUserId")
+    @DisplayName("recordJoinFromStreamEvent upserts roster from legacy externalUserId")
     void recordJoinFromStreamEvent_upsertsFromExternalUserId() {
         when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, 2L))
                 .thenReturn(List.of());
@@ -116,6 +124,32 @@ class CallAttendeeServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         service.recordJoinFromStreamEvent(CALL_ID, CHIME_ATTENDEE_ID, "CAREGIVER_Test_2");
+
+        verify(callAttendeeRepository).save(any(CallAttendee.class));
+    }
+
+    @Test
+    @DisplayName("recordJoinFromStreamEvent resolves opaque UUID via call_participants")
+    void recordJoinFromStreamEvent_resolvesOpaqueExternalUserId() {
+        final String opaqueId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        final CallParticipant participant = new CallParticipant();
+        participant.setUserId(USER_ID);
+        participant.setChimeExternalUserId(opaqueId);
+        final User user = new User();
+        user.setId(USER_ID);
+        user.setRole(Role.CAREGIVER);
+
+        when(callParticipantRepository.findFirstByChimeExternalUserId(opaqueId))
+                .thenReturn(Optional.of(participant));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(callAttendeeRepository.findByCallIdAndUserIdAndLeftAtIsNull(CALL_ID, USER_ID))
+                .thenReturn(List.of());
+        when(callAttendeeRepository.findByCallIdAndChimeAttendeeId(CALL_ID, CHIME_ATTENDEE_ID))
+                .thenReturn(Optional.empty());
+        when(callAttendeeRepository.save(any(CallAttendee.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.recordJoinFromStreamEvent(CALL_ID, CHIME_ATTENDEE_ID, opaqueId);
 
         verify(callAttendeeRepository).save(any(CallAttendee.class));
     }
