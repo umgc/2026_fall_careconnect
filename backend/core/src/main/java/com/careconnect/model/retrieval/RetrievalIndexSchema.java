@@ -16,8 +16,8 @@ public final class RetrievalIndexSchema {
 
     /**
      * PostgreSQL text-search configuration used by the {@code search_vector} trigger
-     * and {@code plainto_tsquery} keyword leg (Task 4.2). Spanish bilingual FTS is a
-     * later follow-up.
+     * and {@code plainto_tsquery} keyword leg (Task 4.2). Spanish bilingual FTS remains a
+     * later follow-up (needs {@code search_vector_es} / dual {@code to_tsvector} migration).
      */
     public static final String FTS_TEXT_SEARCH_CONFIG = "english";
 

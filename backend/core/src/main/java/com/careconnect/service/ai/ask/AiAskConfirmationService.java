@@ -66,6 +66,55 @@ public class AiAskConfirmationService {
     }
 
     /**
+     * Deterministic Ask session id for call-summary item confirmations so
+     * {@code approve-for-session} installs the same {@link #APPROVE_SESSION} suppression
+     * Ask AI uses.
+     */
+    public static UUID callSummarySessionId(final String callId) {
+        if (callId == null || callId.isBlank()) {
+            throw new IllegalArgumentException("callId is required");
+        }
+        return UUID.nameUUIDFromBytes(
+                ("call-summary-session:" + callId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    public boolean hasCallSummarySessionApproval(
+            final String callId, final Long patientId, final Long callerUserId) {
+        return hasActiveSessionApproval(callSummarySessionId(callId), patientId, callerUserId);
+    }
+
+    /**
+     * Persists {@link #APPROVE_SESSION} for the call-summary confirmation session.
+     *
+     * <p>Call-summary auth already passed; this path does not re-enter
+     * {@link RetrievalScopeService#assertCanAsk}. Failures propagate so callers can
+     * avoid clearing {@code needsConfirmation} gates without durable session suppression.
+     */
+    @Transactional
+    public AiAskConfirmationDecision installCallSummarySessionApproval(
+            final User caller, final Long patientId, final String callId) {
+        if (caller == null || caller.getId() == null) {
+            throw new IllegalArgumentException("Caller is required");
+        }
+        if (patientId == null) {
+            throw new IllegalArgumentException("patientId is required");
+        }
+        if (callId == null || callId.isBlank()) {
+            throw new IllegalArgumentException("callId is required");
+        }
+        final UUID sessionId = callSummarySessionId(callId);
+        final var existing = decisionRepository
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        sessionId, patientId, caller.getId(), APPROVE_SESSION);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        final AiAskConfirmationRequest request = new AiAskConfirmationRequest(
+                sessionId, patientId, null, null, APPROVE_SESSION);
+        return decisionRepository.save(newDecision(caller, request, APPROVE_SESSION));
+    }
+
+    /**
      * True when this caller already recorded {@code decision} for {@code requestId}.
      */
     public boolean hasDecision(

@@ -65,9 +65,8 @@ public class CallSummaryItemDecision {
      * TDD section 6.2.2 contract: {@code approve}, {@code approve-for-session},
      * or {@code decline}.
      *
-     * <p>MVP: {@code approve-for-session} is stored as a label only (clears the
-     * item's confirmation gate) and does <em>not</em> create Ask-style
-     * session-scoped suppression.
+     * <p>{@code approve-for-session} also installs Ask-style {@code APPROVE_SESSION}
+     * suppression via {@code AiAskConfirmationService} for the call's confirmation session.
      */
     @Column(name = "decision", nullable = false, length = 24)
     private String decision;

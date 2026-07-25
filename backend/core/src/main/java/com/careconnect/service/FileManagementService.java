@@ -4,6 +4,7 @@ import com.careconnect.dto.UserFileDTO;
 import com.careconnect.dto.FileUploadResponse;
 import com.careconnect.dto.StructuredDocumentEntryDTO;
 import com.careconnect.dto.StructuredEntryRequest;
+import com.careconnect.dto.UploadedFileDTO;
 import com.careconnect.indexing.DocumentIndexedPayload;
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.StructuredDocumentEntry;
@@ -55,6 +56,7 @@ public class FileManagementService {
     private final DocumentComplianceService documentComplianceService;
     private final IndexingEventEmitter indexingEventEmitter;
     private final RetrievalIndexService retrievalIndexService;
+    private final DocumentProcessingService documentProcessingService;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
@@ -65,6 +67,7 @@ public class FileManagementService {
                                DocumentComplianceService documentComplianceService,
                                IndexingEventEmitter indexingEventEmitter,
                                RetrievalIndexService retrievalIndexService,
+                               DocumentProcessingService documentProcessingService,
                                @Autowired(required = false) S3StorageService s3StorageService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
@@ -74,6 +77,7 @@ public class FileManagementService {
         this.documentComplianceService = documentComplianceService;
         this.indexingEventEmitter = indexingEventEmitter;
         this.retrievalIndexService = retrievalIndexService;
+        this.documentProcessingService = documentProcessingService;
         this.s3StorageService = s3StorageService;
     }
     
@@ -142,6 +146,7 @@ public class FileManagementService {
             // the uploader and filename. Never fails the upload itself.
             documentComplianceService.recordDocumentUploaded(userFile, userId);
 
+            tryExtractAndPersistText(userFile, file);
             emitDocumentIndexed(userFile);
             
             return FileUploadResponse.builder()
@@ -197,14 +202,13 @@ public class FileManagementService {
 
     /**
      * Emits {@code DOCUMENT_INDEXED} for Ask AI when a patient-scoped file has description
-     * text available (description-only MVP). Best-effort: indexing failures must not fail
-     * the upload.
+     * and/or extracted plain text. Best-effort: indexing failures must not fail the upload.
      */
     private void emitDocumentIndexed(final UserFile file) {
         if (file == null || file.getId() == null || file.getPatientId() == null) {
             return;
         }
-        final String excerpt = file.getDescription();
+        final String excerpt = indexableDocumentText(file);
         if (excerpt == null || excerpt.isBlank()) {
             return;
         }
@@ -223,6 +227,75 @@ public class FileManagementService {
             log.warn("Failed to emit DOCUMENT_INDEXED for fileId {}: {}",
                     file.getId(), e.getMessage(), e);
         }
+    }
+
+    public static String indexableDocumentText(final UserFile file) {
+        if (file == null) {
+            return null;
+        }
+        final String extracted = file.getExtractedText() == null ? "" : file.getExtractedText().trim();
+        final String description = file.getDescription() == null ? "" : file.getDescription().trim();
+        if (!extracted.isBlank() && !description.isBlank()) {
+            if (extracted.contains(description)) {
+                return extracted;
+            }
+            return description + "\n\n" + extracted;
+        }
+        if (!extracted.isBlank()) {
+            return extracted;
+        }
+        return description.isBlank() ? null : description;
+    }
+
+    private void tryExtractAndPersistText(final UserFile userFile, final MultipartFile file) {
+        if (userFile == null || file == null || documentProcessingService == null) {
+            return;
+        }
+        try {
+            final byte[] bytes = file.getBytes();
+            if (bytes == null || bytes.length == 0) {
+                return;
+            }
+            final String base64 = java.util.Base64.getEncoder().encodeToString(bytes);
+            final UploadedFileDTO dto = UploadedFileDTO.builder()
+                    .filename(file.getOriginalFilename() == null
+                            ? userFile.getOriginalFilename()
+                            : file.getOriginalFilename())
+                    .contentType(file.getContentType())
+                    .content(base64)
+                    .build();
+            final String extracted = documentProcessingService.extractTextContent(dto);
+            if (isExtractFailurePlaceholder(extracted)) {
+                // Skip error/empty placeholders from DocumentProcessingService.
+                return;
+            }
+            userFile.setExtractedText(extracted);
+            userFileRepository.save(userFile);
+        } catch (Exception e) {
+            log.warn("Document text extraction skipped for fileId {}: {}",
+                    userFile.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * True when {@link DocumentProcessingService} returned a bracketed failure/empty
+     * sentinel rather than real document text. Avoids the overly broad
+     * {@code startsWith("[")} check that would drop legitimate content like citations.
+     */
+    static boolean isExtractFailurePlaceholder(final String extracted) {
+        if (extracted == null || extracted.isBlank()) {
+            return true;
+        }
+        final String text = extracted.trim();
+        if (!text.startsWith("[")) {
+            return false;
+        }
+        return text.startsWith("[Error ")
+                || text.startsWith("[Unable to extract")
+                || text.startsWith("[Empty ")
+                || text.startsWith("[Binary file:")
+                || text.startsWith("[File contains no extractable")
+                || text.contains(" contains no extractable text:");
     }
 
     /**

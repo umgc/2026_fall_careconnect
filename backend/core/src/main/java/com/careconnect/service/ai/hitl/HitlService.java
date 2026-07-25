@@ -28,6 +28,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +67,7 @@ public class HitlService {
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final FamilyMemberService familyMemberService;
     private final SafetyPipeline safetyPipeline;
+    private final HitlOpenHoldWriter openHoldWriter;
     private final ObjectMapper objectMapper;
     private final long ttlHours;
 
@@ -77,6 +79,7 @@ public class HitlService {
             final CaregiverPatientLinkService caregiverPatientLinkService,
             final FamilyMemberService familyMemberService,
             final SafetyPipeline safetyPipeline,
+            final HitlOpenHoldWriter openHoldWriter,
             final ObjectMapper objectMapper,
             @Value("${careconnect.ai.hitl.ttl-hours:72}") final long ttlHours) {
         this.heldItemRepository = heldItemRepository;
@@ -86,31 +89,40 @@ public class HitlService {
         this.caregiverPatientLinkService = caregiverPatientLinkService;
         this.familyMemberService = familyMemberService;
         this.safetyPipeline = safetyPipeline;
+        this.openHoldWriter = openHoldWriter;
         this.objectMapper = objectMapper;
         this.ttlHours = ttlHours <= 0 ? 72 : ttlHours;
     }
 
     /**
-     * Returns an open ({@code PENDING_REVIEW}) hold for {@code sourceSurface} whose
-     * {@code queryTextHash} matches {@code correlationKey}, if one exists. Used to dedupe
-     * summary-item HITL retries that would otherwise create duplicate holds.
+     * Returns an open ({@code PENDING_REVIEW}) hold for {@code patientId} +
+     * {@code sourceSurface} whose {@code queryTextHash} matches {@code correlationKey},
+     * if one exists. Used to dedupe summary-item HITL retries that would otherwise
+     * create duplicate holds.
      *
+     * @param patientId patient entity id that owns the hold
      * @param sourceSurface surface that created the hold (e.g. {@code CALL_SUMMARY})
      * @param correlationKey stable key hashed the same way as {@link #createHold} query text
      * @return the open hold, or empty when none exists
      */
     @Transactional(readOnly = true)
     public Optional<AiHeldItem> findOpenHold(
-            final String sourceSurface, final String correlationKey) {
-        if (sourceSurface == null
+            final Long patientId,
+            final String sourceSurface,
+            final String correlationKey) {
+        if (patientId == null
+                || sourceSurface == null
                 || sourceSurface.isBlank()
                 || correlationKey == null
                 || correlationKey.isBlank()) {
             return Optional.empty();
         }
         return heldItemRepository
-                .findFirstBySourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
-                        sourceSurface, sha256(correlationKey), AiHeldItemStatus.PENDING_REVIEW);
+                .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        patientId,
+                        sourceSurface,
+                        sha256(correlationKey),
+                        AiHeldItemStatus.PENDING_REVIEW);
     }
 
     @Transactional
@@ -130,6 +142,23 @@ public class HitlService {
             final SafetyOutcome outcome,
             final List<AiCitation> citations,
             final UUID heldItemId) {
+        if (input == null || input.patientId() == null) {
+            throw new IllegalArgumentException("patientId is required to create a HITL hold");
+        }
+        final String sourceSurface =
+                input.sourceSurface() == null ? "ASK_AI" : input.sourceSurface();
+        final String queryHash = sha256(input.query());
+        final Optional<AiHeldItem> existingOpen =
+                heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                input.patientId(),
+                                sourceSurface,
+                                queryHash,
+                                AiHeldItemStatus.PENDING_REVIEW);
+        if (existingOpen.isPresent()) {
+            return existingOpen.get();
+        }
+
         final Instant now = Instant.now();
         final AiHeldItem item = AiHeldItem.builder()
                 .id(heldItemId == null ? UUID.randomUUID() : heldItemId)
@@ -138,12 +167,12 @@ public class HitlService {
                 .sessionId(input.sessionId())
                 .auditId(input.auditId())
                 .requestId(input.requestId())
-                .sourceSurface(input.sourceSurface() == null ? "ASK_AI" : input.sourceSurface())
+                .sourceSurface(sourceSurface)
                 .status(AiHeldItemStatus.PENDING_REVIEW)
                 .tier(2)
                 .triggerCodesJson(writeJson(outcome.triggerCodes()))
                 .queryText(truncateQueryText(input.query()))
-                .queryTextHash(sha256(input.query()))
+                .queryTextHash(queryHash)
                 .draftAnswer(input.draftAnswerText() == null ? "" : input.draftAnswerText())
                 .citationsJson(writeJson(citations == null ? List.of() : citations))
                 .validationFindingsJson(writeJson(outcome.findings()))
@@ -152,14 +181,29 @@ public class HitlService {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
-        final AiHeldItem saved = heldItemRepository.save(item);
-        appendAudit(
-                saved.getAuditId(),
-                saved.getId(),
-                "HITL_HELD",
-                input.callerUserId(),
-                "{\"triggerCodes\":" + saved.getTriggerCodesJson() + "}");
-        return saved;
+        try {
+            // REQUIRES_NEW via HitlOpenHoldWriter so unique-index races do not poison
+            // the caller's transaction (e.g. CallSummaryItemConfirmService.confirm).
+            // Tradeoff: if the outer Ask TX later rolls back, this PENDING_REVIEW row
+            // can remain until TTL expiry / reviewer action.
+            final AiHeldItem saved = openHoldWriter.insertOpenHold(item);
+            appendAudit(
+                    saved.getAuditId(),
+                    saved.getId(),
+                    "HITL_HELD",
+                    input.callerUserId(),
+                    "{\"triggerCodes\":" + saved.getTriggerCodesJson() + "}");
+            return saved;
+        } catch (final DataIntegrityViolationException ex) {
+            // Concurrent create lost the unique open-hold race — reuse the winner.
+            return heldItemRepository
+                    .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                            input.patientId(),
+                            sourceSurface,
+                            queryHash,
+                            AiHeldItemStatus.PENDING_REVIEW)
+                    .orElseThrow(() -> ex);
+        }
     }
 
     @Transactional

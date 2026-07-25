@@ -612,16 +612,29 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _ambiguousMatches = [];
       context.go(destination);
       _reset();
+<<<<<<< HEAD
     } else if (intentDef != null && intentDef.handler != null) {
       _setStatus(
         status: _VoiceStatus.success,
         detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} \u2014 ${intentDef.displayLabel}',
+=======
+    } else if (intent == 'schedule') {
+      // Map schedule intent to the existing calendar surface (no telephony/scheduling API yet).
+      _setStatus(
+        status: _VoiceStatus.success,
+        detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onConfirmedCommandNavigate ?? 'navigating'}',
+>>>>>>> 5f108e9a (Harden Ask AI MVP follow-ups: consent gate, session approve, patient-scoped HITL.)
       );
       _pendingDestination = null;
       _pendingDetail = null;
       _pendingIntent = null;
       _ambiguousMatches = [];
+<<<<<<< HEAD
       _resetAfterDelay();
+=======
+      context.go('/calendar');
+      _reset();
+>>>>>>> 5f108e9a (Harden Ask AI MVP follow-ups: consent gate, session approve, patient-scoped HITL.)
     } else {
       _setStatus(
         status: _VoiceStatus.success,

@@ -114,6 +114,22 @@ public class ConsentService {
                     "No active caregiver relationship with this patient");
         }
         final Instant now = Instant.now();
+        // Soft-expired ACTIVE rows still occupy the unique ACTIVE index — revoke them first.
+        final List<ConsentGrant> statusActive = consentGrantRepository.findStatusActiveGrants(
+                patientUserId, granteeUserId, ConsentGrant.SCOPE_AI_RETRIEVAL);
+        if (!statusActive.isEmpty()) {
+            final List<ConsentGrant> expired = new ArrayList<>();
+            for (final ConsentGrant row : statusActive) {
+                if (row.getExpiresAt() != null && !row.getExpiresAt().isAfter(now)) {
+                    row.setStatus(ConsentGrant.STATUS_REVOKED);
+                    row.setRevokedAt(now);
+                    expired.add(row);
+                }
+            }
+            if (!expired.isEmpty()) {
+                consentGrantRepository.saveAll(expired);
+            }
+        }
         final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
                 patientUserId, granteeUserId, ConsentGrant.SCOPE_AI_RETRIEVAL, now);
         if (!active.isEmpty()) {

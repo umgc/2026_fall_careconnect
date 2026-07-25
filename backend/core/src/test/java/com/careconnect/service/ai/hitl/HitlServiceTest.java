@@ -64,6 +64,9 @@ class HitlServiceTest {
     @Mock
     private SafetyPipeline safetyPipeline;
 
+    @Mock
+    private HitlOpenHoldWriter openHoldWriter;
+
     private HitlService service;
 
     @BeforeEach
@@ -76,10 +79,18 @@ class HitlServiceTest {
                 caregiverPatientLinkService,
                 familyMemberService,
                 safetyPipeline,
+                openHoldWriter,
                 new ObjectMapper(),
                 72L);
+        org.mockito.Mockito.lenient().when(openHoldWriter.insertOpenHold(any(AiHeldItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         org.mockito.Mockito.lenient().when(heldItemRepository.save(any(AiHeldItem.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.lenient()
+                .when(heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
         org.mockito.Mockito.lenient().when(auditEventRepository.save(any(AiSafetyAuditEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         stubLinkedPatient(42L, 7L);
@@ -123,6 +134,29 @@ class HitlServiceTest {
                 ArgumentCaptor.forClass(AiSafetyAuditEvent.class);
         verify(auditEventRepository).save(auditCaptor.capture());
         assertThat(auditCaptor.getValue().getEventType()).isEqualTo("HITL_HELD");
+        verify(openHoldWriter).insertOpenHold(any(AiHeldItem.class));
+    }
+
+    @Test
+    @DisplayName("createHold reuses winner when unique open-hold insert races")
+    void createHold_uniqueRace_reusesWinner() {
+        final SafetyInput input = safetyInput("Should I stop taking metformin?", "Draft answer");
+        final SafetyOutcome outcome = SafetyOutcome.holdTier2(List.of("MEDICATION_CHANGE"), List.of());
+        final AiHeldItem winner = AiHeldItem.builder()
+                .id(UUID.randomUUID())
+                .status(AiHeldItemStatus.PENDING_REVIEW)
+                .build();
+        when(openHoldWriter.insertOpenHold(any(AiHeldItem.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq"));
+        when(heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+
+        final AiHeldItem result = service.createHold(input, outcome, List.of());
+
+        assertThat(result).isSameAs(winner);
+        verify(auditEventRepository, never()).save(any());
     }
 
     @Test

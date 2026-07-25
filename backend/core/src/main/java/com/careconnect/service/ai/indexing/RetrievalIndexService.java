@@ -22,6 +22,7 @@ import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.FileManagementService;
 import com.careconnect.service.ai.indexing.chunker.ClinicalNoteChunker;
 import com.careconnect.service.ai.indexing.chunker.DocumentChunker;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
@@ -677,9 +678,10 @@ public class RetrievalIndexService {
     }
 
     /**
-     * Indexes an uploaded document's description/caption text into
-     * {@code retrieval_index_chunk} with {@link RetrievalRecordType#UPLOADED_DOCUMENT}
-     * (Task 4.1, description-only MVP; full OCR-backed text indexing is future work).
+     * Indexes an uploaded document's description and/or extracted plain text into
+     * {@code retrieval_index_chunk} with {@link RetrievalRecordType#UPLOADED_DOCUMENT}.
+     * Long excerpts are window-chunked by {@link DocumentChunker}. Scanned images without
+     * OCR still fall back to description/caption only.
      * Mirrors {@link #ingestMailpieceIndexed} — loads the authoritative {@link UserFile},
      * chunks it, and replaces prior chunks for the same {@code source_record_id}.
      *
@@ -713,13 +715,27 @@ public class RetrievalIndexService {
             return 0;
         }
 
-        // Authoritative description only — stale outbox excerpts must not win.
-        final String textExcerpt = file.getDescription();
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.UPLOADED_DOCUMENT.name(), sourceRecordId);
+
+        // Re-load after lock to close soft-delete TOCTOU with concurrent deleteFile.
+        final UserFile locked = userFileRepository.findById(payload.fileId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "UserFile not found for fileId=" + payload.fileId()));
+        if (Boolean.FALSE.equals(locked.getIsActive())) {
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT.name());
+            log.info("De-indexed soft-deleted DOCUMENT after lock for fileId={}", payload.fileId());
+            return 0;
+        }
+
+        // Authoritative description + extracted text (not stale outbox excerpt).
+        final String textExcerpt = FileManagementService.indexableDocumentText(locked);
         if (textExcerpt == null || textExcerpt.isBlank()) {
-            removeIndexedSource(
-                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT);
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT.name());
             log.info(
-                    "DOCUMENT_INDEXED skipped blank description for fileId={}; chunks cleared",
+                    "DOCUMENT_INDEXED skipped blank text for fileId={}; chunks cleared",
                     payload.fileId());
             return 0;
         }
@@ -731,8 +747,6 @@ public class RetrievalIndexService {
             throw new IndexingDeferredException(
                     "DOCUMENT_INDEXED content hash does not match authoritative UserFile");
         }
-        chunkRepository.acquireSourceReplacementLock(
-                patientId, RetrievalRecordType.UPLOADED_DOCUMENT.name(), sourceRecordId);
 
         if (chunkContentUnchanged(
                 patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT, contentHash)) {
@@ -743,7 +757,7 @@ public class RetrievalIndexService {
 
         final String fileCategory = firstNonBlank(
                 payload.fileCategory(),
-                file.getFileCategory() == null ? null : file.getFileCategory().name());
+                locked.getFileCategory() == null ? null : locked.getFileCategory().name());
         final List<IndexingChunkDraft> drafts = documentChunker.chunk(
                 textExcerpt, fileCategory, contentHash, payload.consentScope());
 
