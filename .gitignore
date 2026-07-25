@@ -72,3 +72,7 @@ web-deploy.zip
 frontend-build.zip
 .vscode/
 frontend/web-build.zip
+ui-integration/mobile-app/dist/
+ui-integration/mobile-app/coverage/
+ui-integration/mobile-app/playwright-report/
+ui-integration/mobile-app/test-results/

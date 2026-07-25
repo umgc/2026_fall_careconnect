@@ -14,8 +14,14 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Link2, Mail, Mic, RefreshCw, Search, Volume2, X,
+  AlertTriangle, Link2, Mail, Mic, RefreshCw, Search, Volume2, X, Square,
 } from "lucide-react";
+import {
+  detectEmailProvider,
+  isValidEmailFormat,
+  type DetectedEmailProvider,
+  type EmailProviderId,
+} from "../lib/careconnect-core";
 
 export interface ModeTheme {
   color: string;
@@ -82,6 +88,9 @@ interface MailDigestStore {
   credentialStatus: CredentialStatus;
   lastSyncedAt?: string;
   aiAssistEnabled: boolean;
+  emailAddress?: string;
+  provider?: EmailProviderId;
+  authMode?: "oauth" | "imap";
 }
 
 const MAIL_STORE_KEY = "careconnect_mail_digest_v2";
@@ -676,6 +685,14 @@ function speakText(text: string, onEnd?: () => void) {
   }
 }
 
+function stopSpeaking() {
+  try {
+    window.speechSynthesis.cancel();
+  } catch {
+    /* ignore */
+  }
+}
+
 type FilterMode = "all" | MailCategory | MailPriority;
 
 export default function MailDigestContent({
@@ -692,6 +709,12 @@ export default function MailDigestContent({
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [syncFlash, setSyncFlash] = useState<string | null>(null);
   const [showLegend, setShowLegend] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [detected, setDetected] = useState<DetectedEmailProvider | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [imapPassword, setImapPassword] = useState("");
+  const [imapHost, setImapHost] = useState("");
+  const [showImapForm, setShowImapForm] = useState(false);
 
   useEffect(() => {
     saveMailStore(store);
@@ -722,15 +745,60 @@ export default function MailDigestContent({
     return counts;
   }, [store.pieces]);
 
-  const connectGmail = () => {
+  const connectProvider = (info: DetectedEmailProvider, email: string) => {
     setStore(s => ({
       ...s,
       credentialStatus: "connected",
       lastSyncedAt: new Date().toISOString(),
+      emailAddress: email.trim(),
+      provider: info.provider,
+      authMode: info.authMode,
       pieces: s.pieces.length ? s.pieces : seedDemoDigest(s.aiAssistEnabled),
     }));
-    setSyncFlash("Gmail connected · Informed Delivery digest synced");
+    setSyncFlash(`${info.label} connected · Informed Delivery digest synced`);
+    setShowImapForm(false);
+    setImapPassword("");
     window.setTimeout(() => setSyncFlash(null), 2500);
+  };
+
+  const validateEmailAndRoute = () => {
+    const email = emailInput.trim();
+    if (!isValidEmailFormat(email)) {
+      setEmailError("Enter a valid email address");
+      setDetected(null);
+      setShowImapForm(false);
+      return;
+    }
+    const info = detectEmailProvider(email);
+    if (!info) {
+      setEmailError("Could not detect email provider");
+      return;
+    }
+    setEmailError(null);
+    setDetected(info);
+    if (info.authMode === "oauth") {
+      connectProvider(info, email);
+      return;
+    }
+    setImapHost(info.imapHost || "");
+    setShowImapForm(true);
+  };
+
+  const submitImapConnect = () => {
+    if (!detected || !emailInput.trim()) return;
+    if (!imapPassword.trim()) {
+      setEmailError("App password is required for IMAP");
+      return;
+    }
+    if (!imapHost.trim()) {
+      setEmailError("IMAP host is required");
+      return;
+    }
+    setEmailError(null);
+    connectProvider(
+      { ...detected, imapHost: imapHost.trim(), imapPort: detected.imapPort || 993 },
+      emailInput.trim(),
+    );
   };
 
   const simulateRevocation = () => {
@@ -789,6 +857,11 @@ export default function MailDigestContent({
   };
 
   const readPiece = (p: MailPiece) => {
+    if (speakingId === p.id) {
+      stopSpeaking();
+      setSpeakingId(null);
+      return;
+    }
     const pri = PRIORITY_META[p.priority];
     const cat = CATEGORY_META[p.category];
     const text = `${pri.label}. ${cat.label}, ${subcategoryLabel(p.subcategory)}. From ${p.senderHint}. ${p.subjectHint}. ${p.ocrText}`;
@@ -831,7 +904,7 @@ export default function MailDigestContent({
         </div>
       )}
 
-      {/* Connect Gmail — always visible until connected */}
+      {/* Multi-provider email connect */}
       {store.credentialStatus !== "connected" && (
         <div className="rounded-2xl p-5 flex flex-col gap-3"
           style={{
@@ -843,44 +916,88 @@ export default function MailDigestContent({
               📬
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[16px] font-bold text-[#0F172A]">Connect Gmail</p>
+              <p className="text-[16px] font-bold text-[#0F172A]">Connect your email</p>
               <p className="text-[12px] text-[#0F766E] leading-snug">
-                Link your inbox to pull USPS Informed Delivery mail into CareConnect.
+                Gmail, Outlook, Yahoo, Apple, AOL, Zoho, or any IMAP inbox for USPS Informed Delivery.
               </p>
             </div>
           </div>
-          {store.credentialStatus === "disconnected" && (
-            <button type="button" onClick={connectGmail}
-              className="w-full py-3.5 rounded-xl text-[15px] font-bold text-white flex items-center justify-center gap-2 shadow-sm"
-              style={{ background: "#0D9488" }}>
-              <Link2 size={18} /> Connect Gmail for Informed Delivery
-            </button>
-          )}
-          {store.credentialStatus === "revoked" && (
-            <div className="rounded-xl px-3 py-2.5" style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}>
-              <p className="text-[12px] font-semibold text-[#991B1B] mb-2">
-                Access was revoked. Re-authorize to continue receiving digest mail.
-              </p>
-              <button type="button" onClick={completeReauth}
-                className="w-full py-3 rounded-xl text-[14px] font-bold text-white bg-[#DC2626]">
-                Re-authenticate / Connect Gmail
-              </button>
-            </div>
-          )}
-          {store.credentialStatus === "reauth_required" && (
-            <div className="rounded-xl px-3 py-2.5" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-              <p className="text-[12px] font-semibold text-[#92400E] mb-2">
-                Session expired. Sign in again to refresh your mail credentials.
-              </p>
-              <button type="button" onClick={completeReauth}
-                className="w-full py-3 rounded-xl text-[14px] font-bold text-white"
-                style={{ background: theme.color }}>
-                Complete reauth · Connect Gmail
-              </button>
+
+          {(store.credentialStatus === "disconnected"
+            || store.credentialStatus === "revoked"
+            || store.credentialStatus === "reauth_required") && (
+            <div className="flex flex-col gap-2">
+              {store.credentialStatus === "revoked" && (
+                <p className="text-[12px] font-semibold text-[#991B1B]">
+                  Access was revoked. Re-authorize with your email below.
+                </p>
+              )}
+              {store.credentialStatus === "reauth_required" && (
+                <p className="text-[12px] font-semibold text-[#92400E]">
+                  Session expired. Sign in again with your email below.
+                </p>
+              )}
+              <label className="text-[11px] font-bold text-[#0F766E] uppercase tracking-wider">
+                Email address
+              </label>
+              <input
+                type="email"
+                value={emailInput}
+                onChange={e => {
+                  setEmailInput(e.target.value);
+                  setEmailError(null);
+                }}
+                placeholder="you@gmail.com"
+                className="w-full px-3 py-3 rounded-xl border border-[#99F6E4] bg-white text-[14px] outline-none"
+                aria-label="Email address for mail digest"
+              />
+              {emailError && (
+                <p className="text-[12px] font-semibold text-[#B91C1C]">{emailError}</p>
+              )}
+              {detected && !showImapForm && (
+                <p className="text-[12px] text-[#0F766E]">
+                  Detected: <strong>{detected.label}</strong> ({detected.authMode.toUpperCase()})
+                </p>
+              )}
+              {!showImapForm && (
+                <button type="button" onClick={validateEmailAndRoute}
+                  className="w-full py-3.5 rounded-xl text-[15px] font-bold text-white flex items-center justify-center gap-2 shadow-sm"
+                  style={{ background: "#0D9488" }}>
+                  <Link2 size={18} /> Continue with this email
+                </button>
+              )}
+              {showImapForm && detected && (
+                <div className="rounded-xl p-3 flex flex-col gap-2" style={{ background: "#F0FDFA", border: "1px solid #99F6E4" }}>
+                  <p className="text-[13px] font-bold text-[#0F172A]">
+                    Connect {detected.label} via IMAP
+                  </p>
+                  <label className="text-[11px] font-bold text-[#6B7280] uppercase">IMAP host</label>
+                  <input
+                    value={imapHost}
+                    onChange={e => setImapHost(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-[14px]"
+                    aria-label="IMAP host"
+                  />
+                  <label className="text-[11px] font-bold text-[#6B7280] uppercase">App password</label>
+                  <input
+                    type="password"
+                    value={imapPassword}
+                    onChange={e => setImapPassword(e.target.value)}
+                    placeholder="Provider app password"
+                    className="w-full px-3 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-[14px]"
+                    aria-label="IMAP app password"
+                  />
+                  <button type="button" onClick={submitImapConnect}
+                    className="w-full py-3 rounded-xl text-[14px] font-bold text-white"
+                    style={{ background: "#0D9488" }}>
+                    Connect IMAP
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <p className="text-[11px] text-[#6B7280] text-center">
-            Demo mode: tapping Connect loads a sample digest (no real Google sign-in).
+            Demo mode: OAuth / IMAP complete locally (no real provider sign-in).
           </p>
         </div>
       )}
@@ -892,7 +1009,16 @@ export default function MailDigestContent({
         <p className="text-[13px] font-semibold text-[#0F172A]">
           Status:{" "}
           <span style={{ color: "#059669" }}>connected</span>
+          {store.provider && (
+            <span className="text-[#6B7280] font-medium">
+              {" "}· {store.provider.toUpperCase()}
+              {store.authMode ? ` (${store.authMode})` : ""}
+            </span>
+          )}
         </p>
+        {store.emailAddress && (
+          <p className="text-[12px] text-[#374151]">{store.emailAddress}</p>
+        )}
         {store.lastSyncedAt && (
           <p className="text-[11px] text-[#9CA3AF]">
             Last sync {new Date(store.lastSyncedAt).toLocaleString()}
@@ -1154,7 +1280,12 @@ export default function MailDigestContent({
                 </p>
               </div>
             ) : (
-              <img src={selected.imageUrl!} alt="" className="w-full rounded-2xl mb-3 border border-[#E5E7EB]" />
+              <img
+                src={selected.imageUrl!}
+                alt=""
+                className="w-full mb-3 rounded-2xl border border-[#E5E7EB] object-contain bg-[#F8FAFC]"
+                style={{ maxHeight: 220, height: 220 }}
+              />
             )}
             <p className="text-[15px] font-bold text-[#0F172A]">{selected.senderHint}</p>
             <p className="text-[13px] text-[#6B7280] mb-2">{selected.subjectHint}</p>
@@ -1165,9 +1296,10 @@ export default function MailDigestContent({
             <div className="flex flex-col gap-2">
               <button type="button" onClick={() => readPiece(selected)}
                 className="w-full py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2"
-                style={{ background: theme.color }}>
-                <Volume2 size={16} />
-                {speakingId === selected.id ? "Reading…" : "Read aloud (ADA)"}
+                style={{ background: speakingId === selected.id ? "#DC2626" : theme.color }}
+                aria-label={speakingId === selected.id ? "Stop reading aloud" : "Start reading aloud"}>
+                {speakingId === selected.id ? <Square size={16} /> : <Volume2 size={16} />}
+                {speakingId === selected.id ? "Stop reading" : "Start reading aloud"}
               </button>
               {selected.ocrSource !== "fallback" && (
                 <button type="button" onClick={() => retryOcrFallback(selected.id)}

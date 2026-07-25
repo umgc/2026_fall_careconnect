@@ -101,10 +101,10 @@ test.describe("CareConnect e2e", () => {
       );
     });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByText(/Mail Digest|Connect Gmail|USPS/i).first()).toBeVisible({
+    await expect(page.getByText(/Mail Digest|Connect your email|Connect Gmail|USPS/i).first()).toBeVisible({
       timeout: 20_000,
     });
-    const connect = page.getByRole("button", { name: /Connect Gmail/i }).first();
+    const connect = page.getByRole("button", { name: /Connect Gmail|Continue with this email/i }).first();
     await expect(connect).toBeVisible({ timeout: 15_000 });
     await connect.click();
     await expect(page.getByText(/Priority by well-being|Manage by category|Immediate|Critical/i).first()).toBeVisible({
@@ -251,5 +251,160 @@ test.describe("CareConnect e2e", () => {
       timeout: 20_000,
     });
     await expect(page.getByRole("button", { name: /Review in Care Circle/i })).toBeVisible();
+  });
+
+  test("caregiver sees their own patient after a second patient signs in", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      const jamesInEleanorsCircle = [{
+        id: "cg1",
+        name: "James Wright",
+        relationship: "Son",
+        initials: "JW",
+        grants: ["mood", "med_adherence"],
+        status: "active",
+        addedByPatient: true,
+        email: "james.wright@demo.com",
+        inviteCode: "cc-eleanor",
+      }];
+      const eleanor = {
+        profileComplete: true,
+        profileName: "Eleanor Wright",
+        profileDob: "07/17/1954",
+        profileConditions: "",
+        profileAllergies: "",
+        profileMeds: "",
+        linkedCaregivers: jamesInEleanorsCircle,
+        medications: [],
+        medsChecked: {},
+        appointments: [],
+      };
+      // Jean signed in after Eleanor and took over the single "active patient" slot.
+      const jean = {
+        profileComplete: true,
+        profileName: "Jean Carter",
+        profileDob: "03/02/1948",
+        profileConditions: "",
+        profileAllergies: "",
+        profileMeds: "",
+        linkedCaregivers: [],
+        medications: [],
+        medsChecked: {},
+        appointments: [],
+      };
+
+      localStorage.setItem("careconnect_patient_snapshot", JSON.stringify(jean));
+      localStorage.setItem(
+        "careconnect_patient_snapshots",
+        JSON.stringify({
+          "eleanor wright|07/17/1954": eleanor,
+          "eleanor wright": eleanor,
+          "jean carter|03/02/1948": jean,
+          "jean carter": jean,
+        }),
+      );
+      // James's stored account still points at the wrong patient.
+      localStorage.setItem(
+        "careconnect_caregiver_account_cg1",
+        JSON.stringify({
+          name: "James Wright",
+          email: "james.wright@demo.com",
+          agency: "",
+          credentials: "",
+          phone: "",
+          password: "",
+          pin: "",
+          colorSeq: [],
+          linkedPatientName: "Jean Carter",
+          linkedPatientDob: "03/02/1948",
+          linkedInviteCode: "cc-eleanor",
+          relationshipToPatient: "Son",
+        }),
+      );
+      localStorage.setItem(
+        "careconnect_v1",
+        JSON.stringify({
+          isSignedIn: true,
+          profileComplete: true,
+          role: "caregiver",
+          activeCaregiverId: "cg1",
+          profileName: "James Wright",
+          tab: "home",
+          navHistory: [{ phase: "app", tab: "home" }],
+          linkedCaregivers: jamesInEleanorsCircle,
+        }),
+      );
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+
+    await expect(page.getByText(/Eleanor Wright/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Jean Carter/i)).toHaveCount(0);
+    // Resolving the right patient must not downgrade her to an unauthorized card.
+    await expect(page.getByText(/Access not authorized/i)).toHaveCount(0);
+  });
+
+  test("caregiver can repair a wrong linked patient from their profile", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      const eleanor = {
+        profileComplete: true,
+        profileName: "Eleanor Wright",
+        profileDob: "07/17/1954",
+        profileConditions: "",
+        profileAllergies: "",
+        profileMeds: "",
+        linkedCaregivers: [],
+        medications: [],
+        medsChecked: {},
+        appointments: [],
+      };
+      localStorage.setItem("careconnect_patient_snapshot", JSON.stringify(eleanor));
+      localStorage.setItem(
+        "careconnect_patient_snapshots",
+        JSON.stringify({ "eleanor wright|07/17/1954": eleanor, "eleanor wright": eleanor }),
+      );
+      localStorage.setItem(
+        "careconnect_caregiver_account_cg1",
+        JSON.stringify({
+          name: "James Wright",
+          email: "james.wright@demo.com",
+          agency: "",
+          credentials: "",
+          phone: "",
+          password: "",
+          pin: "",
+          colorSeq: [],
+          linkedPatientName: "",
+          relationshipToPatient: "Son",
+        }),
+      );
+      localStorage.setItem(
+        "careconnect_v1",
+        JSON.stringify({
+          isSignedIn: true,
+          profileComplete: true,
+          role: "caregiver",
+          activeCaregiverId: "cg1",
+          profileName: "James Wright",
+          tab: "profile",
+          navHistory: [{ phase: "app", tab: "profile" }],
+          linkedCaregivers: [],
+        }),
+      );
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+
+    await page.getByRole("button", { name: /Edit info/i }).first().click();
+    const linkedField = page.getByPlaceholder(/Eleanor Wright/i).first();
+    await expect(linkedField).toBeVisible({ timeout: 15_000 });
+    await linkedField.fill("Eleanor Wright");
+    await page.getByPlaceholder(/MM\/DD\/YYYY/i).first().fill("07/17/1954");
+    await page.getByRole("button", { name: /Save changes/i }).click();
+
+    await expect(page.getByText(/Eleanor Wright/i).first()).toBeVisible({ timeout: 15_000 });
+    const stored = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("careconnect_caregiver_account_cg1") || "{}"),
+    );
+    expect(stored.linkedPatientName).toBe("Eleanor Wright");
   });
 });

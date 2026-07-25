@@ -11,29 +11,186 @@ import {
   Link2, QrCode, Copy, Plus, PhoneOff, PhoneCall, Mail,
 } from "lucide-react";
 import MailDigestContent from "./MailDigest";
+import SymptomTrendChart from "./SymptomTrendChart";
 import {
   ageFromDob,
   buildCaregiverPatientRoster as buildCaregiverPatientRosterCore,
   buildInviteUrl,
+  buildProfileShareUrl,
   caregiverPatientConfirmed,
+  createProfileShareToken,
   dobsMatch,
   formatCheckinStamp,
+  HEARING_SPEAKER_LABELS,
+  inferSpeakerFromText,
+  isDemoCaregiverName,
+  isProfessionalCaregiverPersona,
   makeInitials,
   namesMatch,
+  namesLooselyMatch,
   normalizeDob,
   parseInviteFromUrl,
+  patientSnapshotKey,
   qrImageUrl,
+  resolvePatientForCaregiver,
   activateInviteInCareCircle,
   approveCaregiverInCircle,
   canAddCaregiver,
   MAX_CAREGIVERS,
+  type CaregiverIdentity,
 } from "../lib/careconnect-core";
+
+/** Tap header to minimize / enlarge dashboard and tab sections (accessibility-style dropdown). */
+function CollapsibleSection({
+  id,
+  title,
+  subtitle = "Tap to expand or minimize",
+  icon,
+  accent = "#00A7C8",
+  defaultOpen = true,
+  children,
+  openMap,
+  setOpenMap,
+}: {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  accent?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+  openMap: Record<string, boolean>;
+  setOpenMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+}) {
+  const open = openMap[id] ?? defaultOpen;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpenMap(prev => ({ ...prev, [id]: !open }))}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 bg-white text-left transition-all duration-150"
+        style={{ borderColor: open ? accent : "#E5E7EB", minHeight: 56 }}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {icon}
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-[#0F172A] leading-tight truncate">{title}</p>
+            <p className="text-[12px] text-[#595959] leading-tight mt-0.5 truncate">{subtitle}</p>
+          </div>
+        </div>
+        <ChevronDown
+          size={16}
+          className="shrink-0 transition-transform duration-200 text-[#595959]"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", color: open ? accent : undefined }}
+        />
+      </button>
+      {open && (
+        <div
+          className="mt-1 rounded-xl border border-[#E5E7EB] bg-white overflow-hidden"
+          style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }}
+        >
+          <div className="px-3 py-3">{children}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Same interaction pattern as the accessibility ConditionDropdown. */
+function OptionDropdown<T extends string>({
+  value,
+  onChange,
+  options,
+  color = "#00A7C8",
+  lightBg = "#E0F7FA",
+  borderColor = "#B2EBF2",
+  label,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; description: string }[];
+  color?: string;
+  lightBg?: string;
+  borderColor?: string;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value) ?? options[0];
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="flex flex-col gap-1.5" ref={ref}>
+      {label && (
+        <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">{label}</label>
+      )}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(p => !p)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 bg-white text-left transition-all duration-150"
+          style={{ borderColor: open ? color : borderColor, minHeight: 56 }}
+        >
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-[#0F172A] leading-tight truncate">{selected?.label}</p>
+            <p className="text-[12px] text-[#595959] leading-tight mt-0.5 truncate">{selected?.description}</p>
+          </div>
+          <ChevronDown
+            size={16}
+            className="shrink-0 transition-transform duration-200 text-[#595959]"
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+          />
+        </button>
+        {open && (
+          <ul
+            role="listbox"
+            className="relative z-50 mt-1 rounded-xl border border-[#E5E7EB] bg-white overflow-hidden max-h-64 overflow-y-auto"
+            style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
+          >
+            {options.map(opt => {
+              const isSel = opt.value === value;
+              return (
+                <li
+                  key={opt.value}
+                  role="option"
+                  aria-selected={isSel}
+                  onClick={() => { onChange(opt.value); setOpen(false); }}
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors duration-100"
+                  style={{ background: isSel ? lightBg : "white", minHeight: 52 }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium text-[#0F172A] leading-tight">{opt.label}</p>
+                    <p className="text-[12px] text-[#595959] leading-tight mt-0.5">{opt.description}</p>
+                  </div>
+                  {isSel && <Check size={15} style={{ color }} className="shrink-0" />}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── Persistence helpers ────────────────────────────────────────────────────────
 
 const PROFILE_KEY = "careconnect_v1";
 const IMAGE_KEY   = "careconnect_v1_img";
 const PATIENT_SNAPSHOT_KEY = "careconnect_patient_snapshot";
+/** Multi-patient registry so caregivers keep seeing *their* linked patient
+ *  even if another patient later signed in on the same browser. */
+const PATIENT_SNAPSHOT_REGISTRY_KEY = "careconnect_patient_snapshots";
 
 function loadSaved<T>(field: string, fallback: T): T {
   try {
@@ -485,17 +642,6 @@ function caregiverRoleLabel(
   return CAREGIVER_PERSONAS.find(p => p.id === personaId)?.label || "Caregiver";
 }
 
-const DEMO_CAREGIVER_NAMES = new Set([
-  "maria rodriguez",
-  "dr. sarah patel",
-  "dr sarah patel",
-]);
-
-function isDemoCaregiverName(name?: string): boolean {
-  const n = (name || "").trim().toLowerCase();
-  return !n || DEMO_CAREGIVER_NAMES.has(n) || n === "your name" || n === "caregiver";
-}
-
 interface CaregiverAccountInfo {
   name: string;
   email: string;
@@ -764,7 +910,7 @@ const DISABILITY_OPTIONS: DisabilityOption[] = [
 // ── Feature catalogue ──────────────────────────────────────────────────────────
 
 const FEATURE_DEFS: FeatureDef[] = [
-  { id: "medication_tracker", label: "Medication Tracker",   icon: "💊", category: "health",    description: "Track doses, set reminders, and log adherence.",       tab: "meds"     },
+  { id: "medication_tracker", label: "Medication Tracker",   icon: "💊", category: "health",    description: "Track doses, set reminders, and log adherence.",       tab: "symptoms" },
   { id: "virtual_checkin",    label: "Virtual Check-In",     icon: "🩺", category: "health",    description: "Guided daily health check-in with your care team.",     tab: "checkin"  },
   { id: "symptoms_tracker",   label: "Symptoms & Allergies", icon: "🌡️", category: "health",    description: "Log symptoms and manage your allergy list.",            tab: "symptoms" },
   { id: "hearing_assist",     label: "Hearing Conversation Assist", icon: "👂", category: "ai", description: "Live captions, speaker ID, AI summaries, memory, and conversation coaching.", tab: "hearing" },
@@ -1117,7 +1263,7 @@ function BottomNav({ tab, onTab, color, large, onOpenProfile, profileImage }: {
   const navItems: { key: Tab; icon: React.ReactNode; label: string }[] = [
     { key: "home",     icon: <Home size={large ? 24 : 20} />,     label: "Home"     },
     { key: "schedule", icon: <Calendar size={large ? 24 : 20} />, label: "Schedule" },
-    { key: "meds",     icon: <Pill size={large ? 24 : 20} />,     label: "Meds"     },
+    { key: "symptoms", icon: <HeartPulse size={large ? 24 : 20} />, label: "Health" },
   ];
   return (
     <div className="flex bg-white px-1 py-1">
@@ -1689,7 +1835,8 @@ function HomeContent({
   apptReminder, setApptReminder, stepsDone, setStepsDone, onGoSettings,
   captions, setCaptions, visualAlerts, setVisualAlerts, vibration, setVibration,
   medications, medsChecked, setMedsChecked, onMessageProvider, providerName,
-  onOpenHearingAssist,
+  onOpenHearingAssist, appointments, setAppointments, setModal, clearModal, useLargeSchedule,
+  onOpenCheckin,
 }: {
   mode: AppMode | null; customSettings: CustomSettings;
   tint: boolean; setTint: (v: boolean) => void;
@@ -1709,6 +1856,12 @@ function HomeContent({
   onMessageProvider: () => void;
   providerName: string;
   onOpenHearingAssist?: () => void;
+  appointments: Appointment[];
+  setAppointments: (v: Appointment[]) => void;
+  setModal: (node: React.ReactNode) => void;
+  clearModal: () => void;
+  useLargeSchedule: boolean;
+  onOpenCheckin?: () => void;
 }) {
   const has = (id: string) => mode === "custom" ? !!customSettings[id] : false;
   const isStml    = mode === "stml";
@@ -1744,6 +1897,43 @@ function HomeContent({
   const takenCount = medications.filter(m => !!medsChecked[m.id]).length;
   const toggleMedTaken = (id: string) => {
     setMedsChecked({ ...medsChecked, [id]: !medsChecked[id] });
+  };
+
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({});
+  const bpMed = medications.find(m => /lisinopril/i.test(m.name)) ?? medications[0];
+  const bpTaken = bpMed ? !!medsChecked[bpMed.id] : false;
+  const [bpReminderVisible, setBpReminderVisible] = useState(true);
+  const [bpReminderPulse, setBpReminderPulse] = useState(0);
+  const [bpNextAlertAt, setBpNextAlertAt] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (useRemind && !medsReminder) setMedsReminder(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRemind]);
+
+  // Persistent STML med reminder: re-alert every 5 minutes until marked Done / taken
+  useEffect(() => {
+    if (!useRemind || !medsReminder || bpTaken) return;
+    const tick = () => {
+      const now = Date.now();
+      if (now >= bpNextAlertAt) {
+        setBpReminderVisible(true);
+        setBpReminderPulse(p => p + 1);
+        setBpNextAlertAt(now + 5 * 60 * 1000);
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 15_000);
+    return () => window.clearInterval(id);
+  }, [useRemind, bpTaken, bpNextAlertAt]);
+
+  useEffect(() => {
+    if (bpTaken) setBpReminderVisible(false);
+  }, [bpTaken]);
+
+  const completeBpReminder = () => {
+    if (bpMed) setMedsChecked({ ...medsChecked, [bpMed.id]: true });
+    setBpReminderVisible(false);
   };
 
   const todaysMedsCard = (
@@ -1842,14 +2032,28 @@ function HomeContent({
         </div>
       </div>
 
-      {todaysMedsCard}
+      <CollapsibleSection
+        id="home-meds"
+        title="Medications today"
+        subtitle={`${takenCount} of ${medications.length} taken · tap to expand`}
+        icon={<Pill size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
+        <div className="-mx-1">{todaysMedsCard}</div>
+      </CollapsibleSection>
 
       {/* Next appointment */}
-      <div className="rounded-2xl bg-white border border-[#E5E7EB] p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Calendar size={15} style={{ color: "#00A7C8" }} />
-          <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7280]">Next appointment</p>
-        </div>
+      <CollapsibleSection
+        id="home-next-appt"
+        title="Next appointment"
+        subtitle="Dr. Sarah Patel · 2:30 PM"
+        icon={<Calendar size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center shrink-0" style={{ background: "#E0F7FA" }}>
             <p className="text-[11px] font-bold text-[#00A7C8] leading-tight">JUL</p>
@@ -1862,9 +2066,19 @@ function HomeContent({
           </div>
           <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-[#D1FAE5] text-[#059669]">Confirmed</span>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      {providerCard}
+      <CollapsibleSection
+        id="home-provider"
+        title="Primary care provider"
+        subtitle={providerName || "Dr. Sarah Patel, MD"}
+        icon={<Stethoscope size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
+        <div className="-mx-1">{providerCard}</div>
+      </CollapsibleSection>
 
       {medsReminder && (
         <div className="rounded-2xl p-3.5 flex items-center gap-3 border" style={{ background: "#E0F7FA", borderColor: "#B2EBF2" }}>
@@ -1875,12 +2089,102 @@ function HomeContent({
           <button onClick={() => setMedsReminder(false)} className="text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: "#00A7C8", color: "white" }}>Dismiss</button>
         </div>
       )}
+
+      <CollapsibleSection
+        id="home-schedule"
+        title="Schedule"
+        subtitle="Upcoming appointments · tap to expand"
+        icon={<Calendar size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
+        <div className="-mx-4 -mb-1">
+          <ScheduleContent
+            theme={{ color: primaryColor, lightBg: "#E0F7FA", borderColor: "#B2EBF2", name: "CareConnect" }}
+            useLarge={useLargeSchedule}
+            appointments={appointments}
+            setAppointments={setAppointments}
+            setModal={setModal}
+            clearModal={clearModal}
+          />
+        </div>
+      </CollapsibleSection>
+
+      {onOpenCheckin && (
+        <button
+          type="button"
+          onClick={onOpenCheckin}
+          className="rounded-2xl p-4 flex items-center gap-3 border border-[#E5E7EB] bg-white text-left"
+        >
+          <Stethoscope size={18} style={{ color: primaryColor }} />
+          <div className="flex-1">
+            <p className="text-[14px] font-bold text-[#0F172A]">Virtual Check-In</p>
+            <p className="text-[12px] text-[#6B7280]">Tap to open check-in</p>
+          </div>
+          <ChevronRight size={16} className="text-[#D1D5DB]" />
+        </button>
+      )}
     </div>
   ) : (
-    // Accessibility modes still get meds + provider messaging on the dashboard
+    // Accessibility modes still get meds + provider messaging + schedule on the dashboard
     <div className="flex flex-col gap-3 mb-1">
-      {todaysMedsCard}
-      {providerCard}
+      <CollapsibleSection
+        id="home-meds-a11y"
+        title="Medications today"
+        subtitle={`${takenCount} of ${medications.length} taken · tap to expand`}
+        icon={<Pill size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
+        <div className="-mx-1">{todaysMedsCard}</div>
+      </CollapsibleSection>
+      <CollapsibleSection
+        id="home-provider-a11y"
+        title="Primary care provider"
+        subtitle={providerName || "Dr. Sarah Patel, MD"}
+        icon={<Stethoscope size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
+        <div className="-mx-1">{providerCard}</div>
+      </CollapsibleSection>
+      <CollapsibleSection
+        id="home-schedule-a11y"
+        title="Schedule"
+        subtitle="Upcoming appointments · tap to expand"
+        icon={<Calendar size={14} style={{ color: primaryColor }} />}
+        accent={primaryColor}
+        openMap={sectionOpen}
+        setOpenMap={setSectionOpen}
+      >
+        <div className="-mx-4 -mb-1">
+          <ScheduleContent
+            theme={{ color: primaryColor, lightBg: "#E0F7FA", borderColor: "#B2EBF2", name: "CareConnect" }}
+            useLarge={useLargeSchedule}
+            appointments={appointments}
+            setAppointments={setAppointments}
+            setModal={setModal}
+            clearModal={clearModal}
+          />
+        </div>
+      </CollapsibleSection>
+      {onOpenCheckin && (
+        <button
+          type="button"
+          onClick={onOpenCheckin}
+          className="rounded-2xl p-4 flex items-center gap-3 border border-[#E5E7EB] bg-white text-left"
+        >
+          <Stethoscope size={18} style={{ color: primaryColor }} />
+          <div className="flex-1">
+            <p className="text-[14px] font-bold text-[#0F172A]">Virtual Check-In</p>
+            <p className="text-[12px] text-[#6B7280]">Tap to open check-in</p>
+          </div>
+          <ChevronRight size={16} className="text-[#D1D5DB]" />
+        </button>
+      )}
     </div>
   );
 
@@ -1923,15 +2227,39 @@ function HomeContent({
       )}
 
       {/* ── STML: Persistent reminder banner ── */}
-      {useRemind && (
-        <div className="rounded-2xl p-4 flex items-start gap-3 text-white" style={{ background: "#7C3AED" }}>
+      {useRemind && medsReminder && bpReminderVisible && !bpTaken && (
+        <div
+          key={bpReminderPulse}
+          className="rounded-2xl p-4 flex items-start gap-3 text-white"
+          style={{ background: "#7C3AED", boxShadow: bpReminderPulse > 0 ? "0 0 0 3px rgba(124,58,237,0.35)" : undefined }}
+        >
           <Bell size={20} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">Right now · repeats every 5 min</p>
             <p className="text-[16px] font-bold leading-snug">Take your blood pressure medication</p>
-            <p className="text-[12px] opacity-80 mt-1">Lisinopril 10mg · kitchen cabinet</p>
+            <p className="text-[12px] opacity-80 mt-1">
+              {bpMed ? `${bpMed.name} ${bpMed.dose}` : "Lisinopril 10mg"} · kitchen cabinet
+            </p>
           </div>
-          <button className="shrink-0 px-2.5 py-1.5 rounded-lg bg-white/20 text-[11px] font-bold">Done</button>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={completeBpReminder}
+              className="px-2.5 py-1.5 rounded-lg bg-white text-[11px] font-bold text-[#7C3AED]"
+            >
+              Done
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBpReminderVisible(false);
+                setBpNextAlertAt(Date.now() + 5 * 60 * 1000);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-white/20 text-[11px] font-bold"
+            >
+              Snooze
+            </button>
+          </div>
         </div>
       )}
 
@@ -2399,6 +2727,49 @@ interface PatientAccountSnapshot {
   lowMoodStreakAlert?: LowMoodStreakAlert | null;
 }
 
+type PatientSnapshotRegistry = Record<string, PatientAccountSnapshot>;
+
+function seedPatientSnapshotRegistryFromActive() {
+  try {
+    const active = loadPatientSnapshot();
+    if (!active?.profileName || active.profileName === "Your Name") return;
+    const registry = (() => {
+      try {
+        const raw = localStorage.getItem(PATIENT_SNAPSHOT_REGISTRY_KEY);
+        if (!raw) return {} as PatientSnapshotRegistry;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed as PatientSnapshotRegistry : {};
+      } catch {
+        return {} as PatientSnapshotRegistry;
+      }
+    })();
+    const key = patientSnapshotKey(active.profileName, active.profileDob);
+    if (registry[key]) return;
+    registry[key] = active;
+    const nameOnly = patientSnapshotKey(active.profileName);
+    if (nameOnly !== key) registry[nameOnly] = active;
+    savePatientSnapshotRegistry(registry);
+  } catch {}
+}
+
+function loadPatientSnapshotRegistry(): PatientSnapshotRegistry {
+  try {
+    seedPatientSnapshotRegistryFromActive();
+    const raw = localStorage.getItem(PATIENT_SNAPSHOT_REGISTRY_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as PatientSnapshotRegistry : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePatientSnapshotRegistry(registry: PatientSnapshotRegistry) {
+  try {
+    localStorage.setItem(PATIENT_SNAPSHOT_REGISTRY_KEY, JSON.stringify(registry));
+  } catch {}
+}
+
 function loadPatientSnapshot(): PatientAccountSnapshot | null {
   try {
     const raw = localStorage.getItem(PATIENT_SNAPSHOT_KEY);
@@ -2406,8 +2777,41 @@ function loadPatientSnapshot(): PatientAccountSnapshot | null {
   } catch { return null; }
 }
 
+function uniquePatientSnapshotsFromRegistry(): PatientAccountSnapshot[] {
+  return Object.values(loadPatientSnapshotRegistry());
+}
+
+/**
+ * Resolve which stored patient this caregiver is caring for, so a second patient
+ * signing in on the same browser cannot replace who the caregiver sees.
+ */
+function loadPatientSnapshotForCaregiver(
+  linkedPatientName?: string,
+  linkedPatientDob?: string,
+  caregiver?: CaregiverIdentity,
+): PatientAccountSnapshot | null {
+  return resolvePatientForCaregiver<PatientAccountSnapshot>({
+    snapshots: uniquePatientSnapshotsFromRegistry(),
+    activeSnapshot: loadPatientSnapshot(),
+    linkedPatientName,
+    linkedPatientDob,
+    caregiver,
+  });
+}
+
 function savePatientSnapshot(data: PatientAccountSnapshot) {
-  try { localStorage.setItem(PATIENT_SNAPSHOT_KEY, JSON.stringify(data)); } catch {}
+  try {
+    localStorage.setItem(PATIENT_SNAPSHOT_KEY, JSON.stringify(data));
+    if (data.profileName && data.profileName !== "Your Name") {
+      const registry = loadPatientSnapshotRegistry();
+      const key = patientSnapshotKey(data.profileName, data.profileDob);
+      registry[key] = data;
+      // Also index by name-only for caregivers who linked without DOB.
+      const nameOnly = patientSnapshotKey(data.profileName);
+      if (nameOnly !== key) registry[nameOnly] = data;
+      savePatientSnapshotRegistry(registry);
+    }
+  } catch {}
 }
 
 // ── Shared bottom sheet ────────────────────────────────────────────────────────
@@ -2687,7 +3091,11 @@ function MedsContent({ theme, useLarge, medications, setMedications, medsChecked
   );
 
   return (
-    <div className="px-4 pt-4 pb-6 flex flex-col gap-3">
+    <div className="px-4 pt-4 pb-2 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Pill size={18} style={{ color: theme.color }} />
+        <h2 className="text-[18px] font-bold text-[#0F172A]">Medications</h2>
+      </div>
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: theme.color }}>
           Today&apos;s medications · {medications.length}
@@ -3338,9 +3746,11 @@ function SignInScreen({
   const [method, setMethod]             = useState<SignInMethod>("password");
   const [pin, setPin]                   = useState("");
   const [pinStatus, setPinStatus]       = useState<"idle" | "error" | "success">("idle");
+  const [emailInput, setEmailInput]     = useState("");
   const [password, setPassword]         = useState("");
   const [showPw, setShowPw]             = useState(false);
   const [pwError, setPwError]           = useState(false);
+  const [emailError, setEmailError]     = useState(false);
   const [colorSeq, setColorSeq]         = useState<string[]>([]);
   const [colorStatus, setColorStatus]   = useState<"idle" | "error" | "success">("idle");
   const [showEmergency, setShowEmergency] = useState(false);
@@ -3353,9 +3763,25 @@ function SignInScreen({
   const CORRECT_PIN = (loginRole === "caregiver" ? cgAccount?.pin : savedPin)?.trim() || "";
   const CORRECT_PW  = (loginRole === "caregiver" ? cgAccount?.password : savedPassword)?.trim() || "";
   const CORRECT_SEQ = (loginRole === "caregiver" ? cgAccount?.colorSeq : savedColorSeq) ?? [];
-  const accountLabel = loginRole === "caregiver"
-    ? (cgAccount?.email?.trim() || cgAccount?.name?.trim() || "caregiver")
-    : (savedEmail?.trim() || savedName?.trim() || "patient");
+  const expectedEmail = (
+    loginRole === "caregiver"
+      ? (cgAccount?.email?.trim() || "")
+      : (savedEmail?.trim() || "")
+  ).toLowerCase();
+  const expectedName = (
+    loginRole === "caregiver"
+      ? (cgAccount?.name?.trim() || "")
+      : (savedName?.trim() || "")
+  ).toLowerCase();
+
+  // Prefill email when role / caregiver account changes, but keep it editable
+  useEffect(() => {
+    const prefill = loginRole === "caregiver"
+      ? (cgAccount?.email?.trim() || "")
+      : (savedEmail?.trim() || "");
+    setEmailInput(prefill);
+    setEmailError(false);
+  }, [loginRole, caregiverId, savedEmail, cgAccount?.email]);
 
   const finish = () => {
     if (loginRole === "caregiver") {
@@ -3367,8 +3793,18 @@ function SignInScreen({
 
   const switchMethod = (m: SignInMethod) => {
     setMethod(m); setPin(""); setPinStatus("idle");
-    setPassword(""); setPwError(false);
+    setPassword(""); setPwError(false); setEmailError(false);
     setColorSeq([]); setColorStatus("idle");
+  };
+
+  const emailMatchesAccount = (raw: string) => {
+    const entered = raw.trim().toLowerCase();
+    if (!entered) return false;
+    if (expectedEmail && entered === expectedEmail) return true;
+    if (expectedName && entered === expectedName) return true;
+    // If no email was saved on the profile yet, accept any non-empty entry with the correct password
+    if (!expectedEmail && !expectedName) return true;
+    return false;
   };
 
   const pressPin = (d: string) => {
@@ -3390,6 +3826,11 @@ function SignInScreen({
 
   const submitPw = () => {
     if (!CORRECT_PW) { setPwError(true); setTimeout(() => setPwError(false), 1500); return; }
+    if (!emailMatchesAccount(emailInput)) {
+      setEmailError(true);
+      setTimeout(() => setEmailError(false), 2000);
+      return;
+    }
     if (password === CORRECT_PW) { finish(); }
     else { setPwError(true); setTimeout(() => setPwError(false), 1500); }
   };
@@ -3591,13 +4032,35 @@ function SignInScreen({
             {!CORRECT_PW ? notSetHint("password") : (
               <>
                 <p className="text-[13px] text-[#595959] text-center">Enter your credentials</p>
-                <input
-                  type="text" value={accountLabel} readOnly
-                  className="w-full px-4 py-3.5 rounded-xl text-[#595959] outline-none"
-                  style={{ border: "2px solid #E5E7EB", background: "#F8FAFC", fontSize: 16 }}
-                  placeholder="Username"
-                />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">Email</label>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={emailInput}
+                    onChange={e => { setEmailInput(e.target.value); setEmailError(false); }}
+                    onKeyDown={e => e.key === "Enter" && submitPw()}
+                    placeholder="you@email.com"
+                    className="w-full px-4 py-3.5 rounded-xl text-[#0F172A] outline-none transition-all"
+                    style={{
+                      border: `2px solid ${emailError ? "#EF4444" : "#E5E7EB"}`,
+                      background: "white",
+                      fontSize: 16,
+                      WebkitAppearance: "none",
+                    }}
+                  />
+                  {emailError && (
+                    <p className="text-[12px] text-[#EF4444] font-semibold">
+                      Email doesn&apos;t match this account — check and try again
+                    </p>
+                  )}
+                </div>
                 <div className="relative">
+                  <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider block mb-1.5">Password</label>
                   <input
                     type={showPw ? "text" : "password"}
                     value={password}
@@ -3612,7 +4075,7 @@ function SignInScreen({
                     type="button"
                     onMouseDown={e => e.preventDefault()}
                     onClick={() => setShowPw(v => !v)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#595959] transition-colors">
+                    className="absolute right-4 bottom-3.5 text-[#9CA3AF] hover:text-[#595959] transition-colors">
                     {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
@@ -4315,6 +4778,7 @@ function SymptomsContent({ theme }: { theme: ModeTheme }) {
       <div className="flex-1 px-4 py-3 flex flex-col gap-3">
         {activeTab === "symptoms" ? (
           <>
+            <SymptomTrendChart entries={symptoms} accent={theme.color} />
             {symptoms.length === 0 && !showAdd && (
               <div className="rounded-2xl p-4 text-center border border-dashed border-[#E5E7EB] bg-[#F9FAFB]">
                 <p className="text-[14px] font-semibold text-[#0F172A]">No symptoms logged yet</p>
@@ -5109,7 +5573,7 @@ function saveHearingMemory(sessions: HearingSessionMemory[]) {
   } catch {}
 }
 
-const HEARING_SPEAKERS = ["You", "Doctor", "Caregiver", "Nurse", "Other"];
+const HEARING_SPEAKERS = [...HEARING_SPEAKER_LABELS];
 
 function buildHearingSummary(lines: HearingCaptionLine[]): string {
   if (lines.length === 0) {
@@ -5189,12 +5653,19 @@ function HearingAssistContent({
   const [partial, setPartial] = useState("");
   const [lines, setLines] = useState<HearingCaptionLine[]>([]);
   const [activeSpeaker, setActiveSpeaker] = useState("Doctor");
+  const [autoIdentify, setAutoIdentify] = useState(true);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [memory, setMemory] = useState<HearingSessionMemory[]>(loadHearingMemory);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({
+    live: true, summary: true, memory: true, coach: true, flow: true,
+  });
   const recognitionRef = useRef<{ stop: () => void; continuous?: boolean; interimResults?: boolean; lang?: string; onresult: ((ev: unknown) => void) | null; onerror: ((ev: unknown) => void) | null; onend: (() => void) | null; start: () => void } | null>(null);
   const speakerRef = useRef(activeSpeaker);
   speakerRef.current = activeSpeaker;
+  const autoIdentifyRef = useRef(autoIdentify);
+  autoIdentifyRef.current = autoIdentify;
+  const lastSpeakerRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const summary = buildHearingSummary(lines);
@@ -5254,11 +5725,16 @@ function HearingAssistContent({
         const transcript = result[0].transcript.trim();
         if (!transcript) continue;
         if (result.isFinal) {
+          const speaker = autoIdentifyRef.current
+            ? inferSpeakerFromText(transcript, lastSpeakerRef.current || speakerRef.current)
+            : speakerRef.current;
+          lastSpeakerRef.current = speaker;
+          if (autoIdentifyRef.current) setActiveSpeaker(speaker);
           setLines(prev => [
             ...prev,
             {
               id: `cap-${Date.now()}-${i}`,
-              speaker: speakerRef.current,
+              speaker,
               text: transcript,
               at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }),
             },
@@ -5325,16 +5801,27 @@ function HearingAssistContent({
   };
 
   const simulateDemo = () => {
-    const demo: HearingCaptionLine[] = [
-      { id: "d1", speaker: "Doctor", text: "Good morning. How have you been feeling since your last visit?", at: "9:00:02 AM" },
-      { id: "d2", speaker: "You", text: "A little tired in the mornings, but my blood pressure feels steadier.", at: "9:00:11 AM" },
-      { id: "d3", speaker: "Doctor", text: "That's expected with the new dosage. Please continue your medication and we'll review Thursday.", at: "9:00:22 AM" },
-      { id: "d4", speaker: "Caregiver", text: "I'll help set phone reminders for the evening dose.", at: "9:00:31 AM" },
-      { id: "d5", speaker: "You", text: "Could you repeat the appointment time one more time?", at: "9:00:40 AM" },
-      { id: "d6", speaker: "Doctor", text: "Thursday at 2:30 PM with me in clinic.", at: "9:00:48 AM" },
+    const texts = [
+      { id: "d1", text: "Good morning. How have you been feeling since your last visit?" },
+      { id: "d2", text: "A little tired in the mornings, but my blood pressure feels steadier." },
+      { id: "d3", text: "That's expected with the new dosage. Please continue your medication and we'll review Thursday." },
+      { id: "d4", text: "I'll help set phone reminders for the evening dose." },
+      { id: "d5", text: "Could you repeat the appointment time one more time?" },
+      { id: "d6", text: "Thursday at 2:30 PM with me in clinic." },
     ];
-    setLines(demo);
+    const times = ["9:00:02 AM", "9:00:11 AM", "9:00:22 AM", "9:00:31 AM", "9:00:40 AM", "9:00:48 AM"];
+    let prev: string | null = null;
+    const scripted = texts.map((row, i) => {
+      const speaker = inferSpeakerFromText(row.text, prev);
+      prev = speaker;
+      return { id: row.id, speaker, text: row.text, at: times[i] };
+    });
+    setLines(scripted);
+    lastSpeakerRef.current = scripted[scripted.length - 1]?.speaker ?? null;
+    setActiveSpeaker(scripted[scripted.length - 1]?.speaker ?? "Doctor");
+    setAutoIdentify(true);
     setPanel("live");
+    setPanelOpen(prev => ({ ...prev, live: true }));
   };
 
   const speakerColor = (name: string) => {
@@ -5379,12 +5866,16 @@ function HearingAssistContent({
           <button
             key={p.key}
             type="button"
-            onClick={() => setPanel(p.key)}
+            onClick={() => {
+              setPanel(p.key);
+              setPanelOpen(prev => ({ ...prev, [p.key]: !(prev[p.key] ?? true) && panel === p.key ? false : true }));
+            }}
             className="flex-1 min-w-[4.5rem] flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all"
             style={{
               background: panel === p.key ? "white" : "transparent",
               boxShadow: panel === p.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               color: panel === p.key ? "#0284C7" : "#9CA3AF",
+              transform: panel === p.key ? "scale(1.06)" : "scale(1)",
             }}
           >
             {p.icon}
@@ -5393,16 +5884,34 @@ function HearingAssistContent({
         ))}
       </div>
 
-      {panel === "live" && (
+      {panel === "live" && (panelOpen.live ?? true) && (
         <>
           <div className="rounded-2xl p-3 border border-[#BAE6FD] bg-[#E0F2FE]">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-[#0284C7] mb-2">Speaker identification</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#0284C7]">Speaker identification</p>
+              <button
+                type="button"
+                onClick={() => setAutoIdentify(v => !v)}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full border"
+                style={{
+                  background: autoIdentify ? "#0284C7" : "white",
+                  color: autoIdentify ? "white" : "#0284C7",
+                  borderColor: "#0284C7",
+                }}
+              >
+                {autoIdentify ? "Auto on" : "Auto off"}
+              </button>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {HEARING_SPEAKERS.map(s => (
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setActiveSpeaker(s)}
+                  onClick={() => {
+                    setActiveSpeaker(s);
+                    setAutoIdentify(false);
+                    lastSpeakerRef.current = s;
+                  }}
                   className="px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all"
                   style={{
                     background: activeSpeaker === s ? speakerColor(s) : "white",
@@ -5415,7 +5924,9 @@ function HearingAssistContent({
               ))}
             </div>
             <p className="text-[11px] text-[#0369A1] mt-2">
-              Tag who is speaking before or during captions. Current: <span className="font-bold">{activeSpeaker}</span>
+              {autoIdentify
+                ? <>Automatically identifying who is talking. Current: <span className="font-bold">{activeSpeaker}</span></>
+                : <>Manual mode — tap a label to override. Current: <span className="font-bold">{activeSpeaker}</span></>}
             </p>
           </div>
 
@@ -5494,7 +6005,7 @@ function HearingAssistContent({
         </>
       )}
 
-      {panel === "summary" && (
+      {panel === "summary" && (panelOpen.summary ?? true) && (
         <div className="rounded-2xl p-4 bg-white border border-[#E5E7EB] flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Sparkles size={16} style={{ color: "#0284C7" }} />
@@ -5519,7 +6030,7 @@ function HearingAssistContent({
         </div>
       )}
 
-      {panel === "memory" && (
+      {panel === "memory" && (panelOpen.memory ?? true) && (
         <div className="flex flex-col gap-3">
           <p className="text-[13px] text-[#6B7280]">Past captioned conversations saved on this device.</p>
           {memory.length === 0 ? (
@@ -5546,7 +6057,7 @@ function HearingAssistContent({
         </div>
       )}
 
-      {panel === "coach" && (
+      {panel === "coach" && (panelOpen.coach ?? true) && (
         <div className="rounded-2xl p-4 bg-white border border-[#E5E7EB] flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Zap size={16} style={{ color: "#0284C7" }} />
@@ -5574,7 +6085,7 @@ function HearingAssistContent({
         </div>
       )}
 
-      {panel === "flow" && (
+      {panel === "flow" && (panelOpen.flow ?? true) && (
         <div className="rounded-2xl p-4 bg-white border border-[#E5E7EB] flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Activity size={16} style={{ color: "#0284C7" }} />
@@ -7184,153 +7695,63 @@ function MoodTrendCard({
         </>
       ) : (
         <>
-          {/* Month navigator */}
-          <div className="flex items-center justify-between mb-2">
-            <button
-              type="button"
-              onClick={() => shiftMonth(-1)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center border border-[#E5E7EB] text-[#6B7280]"
-              aria-label="Previous month"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div className="text-center">
-              <p className="text-[14px] font-bold text-[#0F172A]">{monthTitle}</p>
-              <p className="text-[11px] text-[#9CA3AF]">
-                {monthStats.loggedCount} of {monthStats.daysInMonth} days logged
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => shiftMonth(1)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center border border-[#E5E7EB] text-[#6B7280]"
-              aria-label="Next month"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
-          <div className="px-3 py-2.5 rounded-xl flex items-center justify-between mb-3"
-            style={{ background: theme.lightBg, border: `1px solid ${theme.borderColor}` }}>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: theme.color }}>Monthly average</p>
-              <p className="text-[20px] font-bold text-[#0F172A] leading-tight">
-                {monthStats.avg != null ? `${monthStats.avg} / 5` : "—"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[12px] font-semibold text-[#6B7280]">
-                {monthStats.avg != null ? MOOD_LABELS[Math.round(monthStats.avg)] : "No logs"}
-              </p>
-              {monthStats.worst && (
-                <p className="text-[11px] font-semibold text-[#EF4444] mt-0.5">
-                  Lowest: {monthStats.worst.day} · {MOOD_EMOJIS[monthStats.worst.score]}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1 mb-1">
-            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-              <p key={`${d}-${i}`} className="text-center text-[10px] font-bold text-[#9CA3AF] py-0.5">{d}</p>
-            ))}
-            {Array.from({ length: startPad }).map((_, i) => (
-              <div key={`pad-${i}`} />
-            ))}
-            {monthCells.map(cell => {
-              const selected = selectedDay?.date === cell.date;
+          <p className="text-[12px] text-[#6B7280] mb-3">
+            Average mood by month (last 6 months).
+          </p>
+          <div className="flex flex-col gap-2 mb-2">
+            {Array.from({ length: 6 }).map((_, idx) => {
+              const d = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
+              const y = d.getFullYear();
+              const m = d.getMonth();
+              const label = d.toLocaleDateString([], { month: "short", year: "numeric" });
+              const cells = buildMonthMoodGrid(enrichedHistory, y, m);
+              const stats = monthFeelingStats(cells);
+              const selected = monthCursor.year === y && monthCursor.month === m;
               return (
                 <button
-                  key={cell.date}
+                  key={`${y}-${m}`}
                   type="button"
-                  onClick={() => setSelectedDay(cell)}
-                  className="aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all"
-                  style={{
-                    background: cell.score != null
-                      ? moodColor(cell.score) + (selected ? "33" : "18")
-                      : selected ? theme.lightBg : "#F9FAFB",
-                    border: cell.isToday
-                      ? `1.5px solid ${theme.color}`
-                      : selected
-                        ? `1.5px solid ${theme.color}`
-                        : "1px solid #E5E7EB",
+                  onClick={() => {
+                    setMonthCursor({ year: y, month: m });
+                    setSelectedDay(null);
                   }}
-                  title={
-                    cell.score != null
-                      ? `${formatMoodDayLabel(cell.date)}: ${MOOD_LABELS[cell.score]}${cell.symptom ? ` · ${cell.symptom}` : ""}`
-                      : `${formatMoodDayLabel(cell.date)}: not logged`
-                  }
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all text-left"
+                  style={{
+                    background: selected ? theme.lightBg : "white",
+                    borderColor: selected ? theme.color : "#E5E7EB",
+                  }}
                 >
-                  <span className="text-[10px] font-bold text-[#0F172A] leading-none">{cell.day}</span>
-                  <span className="text-[9px] leading-none">
-                    {cell.score != null ? MOOD_EMOJIS[cell.score] : ""}
-                  </span>
+                  <div>
+                    <p className="text-[14px] font-bold text-[#0F172A]">{label}</p>
+                    <p className="text-[11px] text-[#9CA3AF]">
+                      {stats.loggedCount} day{stats.loggedCount === 1 ? "" : "s"} logged
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[16px] font-bold" style={{ color: stats.avg != null ? moodColor(Math.round(stats.avg)) : "#9CA3AF" }}>
+                      {stats.avg != null ? `${stats.avg}/5` : "—"}
+                    </p>
+                    <p className="text-[11px] font-semibold text-[#6B7280]">
+                      {stats.avg != null ? MOOD_LABELS[Math.round(stats.avg)] : "No logs"}
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
-
-          {selectedDay ? (
-            <div className="mt-3 px-3 py-3 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB]">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF] mb-1">Selected day</p>
-              <p className="text-[14px] font-bold text-[#0F172A]">{formatMoodDayLabel(selectedDay.date)}</p>
-              {selectedDay.score != null ? (
-                <>
-                  <p className="text-[13px] font-semibold mt-0.5" style={{ color: moodColor(selectedDay.score) }}>
-                    {MOOD_EMOJIS[selectedDay.score]} {MOOD_LABELS[selectedDay.score]} ({selectedDay.score}/5)
-                  </p>
-                  <p className="text-[12px] text-[#6B7280] mt-1">
-                    <span className="font-bold text-[#374151]">Symptom: </span>
-                    {selectedDay.symptom && selectedDay.symptom !== NONE_SYMPTOM
-                      ? selectedDay.symptom
-                      : "None logged"}
-                  </p>
-                </>
-              ) : (
-                <p className="text-[12px] text-[#9CA3AF] mt-1">No feeling logged this day.</p>
+          {monthStats.loggedCount > 0 && (
+            <div className="px-3 py-2.5 rounded-xl"
+              style={{ background: theme.lightBg, border: `1px solid ${theme.borderColor}` }}>
+              <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: theme.color }}>
+                {monthTitle} average: {monthStats.avg != null ? `${monthStats.avg}/5` : "—"}
+              </p>
+              {monthStats.worst && (
+                <p className="text-[11px] font-semibold text-[#EF4444] mt-1">
+                  Lowest day: {monthStats.worst.day} · {MOOD_EMOJIS[monthStats.worst.score]}
+                </p>
               )}
             </div>
-          ) : (
-            <p className="text-[11px] text-center text-[#9CA3AF] mt-2">
-              Tap a day to see feeling, date, and symptom
-            </p>
           )}
-
-          {/* Recent month entries list */}
-          <div className="mt-3 pt-3 border-t border-[#F3F4F6]">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-[#9CA3AF] mb-2">
-              {monthTitle} log
-            </p>
-            {monthCells.filter(c => c.score != null).length === 0 ? (
-              <p className="text-[12px] text-[#9CA3AF]">No entries this month yet.</p>
-            ) : (
-              <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
-                {[...monthCells].filter(c => c.score != null).reverse().map(c => (
-                  <button
-                    key={c.date}
-                    type="button"
-                    onClick={() => setSelectedDay(c)}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-white border border-[#E5E7EB] text-left"
-                  >
-                    <span className="text-[16px]">{MOOD_EMOJIS[c.score!]}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-bold text-[#0F172A] truncate">
-                        {formatMoodDayLabel(c.date)}
-                      </p>
-                      <p className="text-[11px] text-[#9CA3AF] truncate">
-                        {MOOD_LABELS[c.score!]}
-                        {c.symptom && c.symptom !== NONE_SYMPTOM ? ` · ${c.symptom}` : ""}
-                      </p>
-                    </div>
-                    <span className="text-[11px] font-bold" style={{ color: moodColor(c.score!) }}>
-                      {c.score}/5
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </>
       )}
     </div>
@@ -7617,7 +8038,7 @@ interface WizardProfile {
   name: string; email: string; password: string; pin: string; colorSeq: string[];
   authMethods: Record<SignInMethod, boolean>;
   role: Role; dob: string;
-  address: string; provider: string; emergencyContact: string;
+  address: string; organization: string; provider: string; emergencyContact: string;
   conditions: string; meds: string; allergies: string;
   accessibilityMode: AppMode | null;
   enabledFeatures: FeatureId[];
@@ -7643,7 +8064,8 @@ function WizardField({
   const { isListening, voiceError, toggle } = useVoiceDictation(text =>
     onChange(value.trim() ? `${value.trim()} ${text}` : text)
   );
-  const allowVoice = type === "text";
+  const isEmail = /email/i.test(label) || type === "email";
+  const allowVoice = type === "text" && !isEmail;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
@@ -7651,7 +8073,13 @@ function WizardField({
         {allowVoice && <MicButton isListening={isListening} onClick={toggle} />}
       </div>
       <input
-        type={type} value={value}
+        type={isEmail ? "text" : type}
+        inputMode={isEmail ? "email" : undefined}
+        autoComplete={isEmail ? "email" : type === "password" ? "new-password" : "off"}
+        autoCapitalize={isEmail ? "none" : undefined}
+        autoCorrect={isEmail ? "off" : undefined}
+        spellCheck={isEmail ? false : undefined}
+        value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={allowVoice && isListening ? "Listening — speak now…" : placeholder}
         className="w-full border rounded-xl px-4 py-3.5 text-[15px] outline-none bg-white"
@@ -7681,7 +8109,7 @@ function ProfileWizard({
   const [data, setData] = useState<WizardProfile>({
     name: "", email: "", password: "", pin: "", colorSeq: [],
     authMethods: { pin: true, password: true, color: true },
-    role: initialRole, dob: "", address: "",
+    role: initialRole, dob: "", address: "", organization: "",
     provider: "", emergencyContact: "", conditions: "", meds: "", allergies: "",
     accessibilityMode: null, enabledFeatures: [...DEFAULT_PATIENT_FEATURES],
     caregiverPersonaId: "cg1",
@@ -7703,7 +8131,7 @@ function ProfileWizard({
 
   const stepTitles = data.role === "patient"
     ? ["Account & login", "Personal & care details", "Health baseline", "Feature setup", "All set!"]
-    : ["Account & login", "Professional details", "All set!"];
+    : ["Account & login", "Caregiver details", "All set!"];
 
   const applyInviteInput = (raw: string) => {
     set("inviteCode", raw);
@@ -7760,7 +8188,7 @@ function ProfileWizard({
     if (step === 1) return (
       <div className="flex flex-col gap-4">
         <WizardField label="Full name" value={data.name} onChange={v => set("name", v)} placeholder="Your name" />
-        <WizardField label="Email" value={data.email} onChange={v => set("email", v)} placeholder="you@email.com" type="email" />
+        <WizardField label="Email" value={data.email} onChange={v => set("email", v)} placeholder="you@email.com" type="text" />
         <div className="flex flex-col gap-1.5">
           <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">I am a…</label>
           <div className="grid grid-cols-2 gap-2">
@@ -7966,13 +8394,17 @@ function ProfileWizard({
     if (step === 2 && data.role === "patient") return (
       <div className="flex flex-col gap-4">
         <WizardField label="Date of birth" value={data.dob} onChange={v => set("dob", v)} placeholder="MM / DD / YYYY" />
-        <WizardField label="Home address" value={data.address} onChange={v => set("address", v)} placeholder="Start typing…" />
+        <WizardField label="Home address" value={data.address} onChange={v => set("address", v)} placeholder="Start typing your address…" />
         <WizardField label="Primary care provider" value={data.provider} onChange={v => set("provider", v)} placeholder="Dr. Name · Clinic" />
         <WizardField label="Emergency contact" value={data.emergencyContact} onChange={v => set("emergencyContact", v)} placeholder="Name · Phone" />
       </div>
     );
 
-    if (step === 2 && data.role === "caregiver") return (
+    if (step === 2 && data.role === "caregiver") {
+      const isClinical = isProfessionalCaregiverPersona(
+        CAREGIVER_PERSONAS.find(p => p.id === data.caregiverPersonaId)?.persona,
+      );
+      return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">Caregiver account type</label>
@@ -7983,7 +8415,7 @@ function ProfileWizard({
             <button key={p.id} type="button" onClick={() => {
               set("caregiverPersonaId", p.id);
               set("provider", p.label);
-              if (p.persona === "primary_physician" && !data.caregiverRelation?.trim()) {
+              if (p.persona === "primary_physician") {
                 set("caregiverRelation", "Primary Care Physician");
               }
             }}
@@ -8002,11 +8434,35 @@ function ProfileWizard({
             </button>
           ))}
         </div>
-        <WizardField label="Agency / Organization" value={data.address} onChange={v => set("address", v)} placeholder="Care agency or clinic" />
-        <WizardField label="License / Credentials" value={data.conditions} onChange={v => set("conditions", v)} placeholder="e.g. RN, LPN, MD" />
-        <WizardField label="Phone number" value={data.emergencyContact} onChange={v => set("emergencyContact", v)} placeholder="(555) 000-0000" />
+        {isClinical && (
+          <>
+            <p className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">Professional details</p>
+            <p className="text-[12px] text-[#6B7280] -mt-2">
+              For clinical caregivers. You enter your real name; relationship defaults to Primary Care Physician.
+            </p>
+            <WizardField
+              label="Agency / Organization (optional)"
+              value={data.organization}
+              onChange={v => set("organization", v)}
+              placeholder="Care agency, clinic, or practice name"
+            />
+            <WizardField
+              label="License / Credentials (optional)"
+              value={data.conditions}
+              onChange={v => set("conditions", v)}
+              placeholder="e.g. RN, LPN, MD"
+            />
+            <WizardField
+              label="Phone number"
+              value={data.emergencyContact}
+              onChange={v => set("emergencyContact", v)}
+              placeholder="(555) 000-0000"
+            />
+          </>
+        )}
       </div>
-    );
+      );
+    }
 
     if (step === 3 && data.role === "patient") return (
       <div className="flex flex-col gap-4">
@@ -8157,9 +8613,10 @@ function ProfileWizard({
     )
     && !!data.caregiverRelation?.trim()
   );
+  const professionalOk = true; // Agency / license optional for clinical caregivers
   const canAdvance = step === 1
     ? data.name.trim().length > 1 && selectedAuthCount > 0 && selectedAuthValid && caregiverPatientConfirmedOk
-    : true;
+    : professionalOk;
 
   return (
     // Full-viewport container — scrolls as a whole page so the keyboard never
@@ -8377,6 +8834,9 @@ function PatientProfilePage({
   const [inviteResult, setInviteResult] = useState<{ code: string; url: string } | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [cgSavedFlash, setCgSavedFlash] = useState(false);
+  const [profileShare, setProfileShare] = useState<{ token: string; url: string } | null>(null);
+  const [profileShareCopied, setProfileShareCopied] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
   // Draft copy of profile info for edit mode — committed on Save, thrown away on Discard.
   const currentInfo = {
@@ -8423,7 +8883,9 @@ function PatientProfilePage({
       const grants = cg.grants.includes(item)
         ? cg.grants.filter(g => g !== item)
         : [...cg.grants, item];
-      return { ...cg, grants };
+      // Granting any item also activates a pending Care Circle link
+      const status = grants.length > 0 && cg.status === "pending" ? "active" as const : cg.status;
+      return { ...cg, grants, status };
     }));
   };
 
@@ -8518,6 +8980,99 @@ function PatientProfilePage({
     setInviteCopied(false);
   };
 
+  const generateProfileShare = () => {
+    const token = createProfileShareToken();
+    const url = buildProfileShareUrl(token, profileName);
+    setProfileShare({ token, url });
+    setProfileShareCopied(false);
+  };
+
+  const revokeProfileShare = () => {
+    setProfileShare(null);
+    setProfileShareCopied(false);
+  };
+
+  const flashShareFeedback = (msg: string) => {
+    setShareFeedback(msg);
+    window.setTimeout(() => setShareFeedback(null), 2800);
+  };
+
+  const shareNativeContent = async (opts: {
+    title: string;
+    text: string;
+    url: string;
+    qrImageSrc?: string;
+    qrFileName?: string;
+  }): Promise<"shared" | "copied" | "cancelled" | "unsupported"> => {
+    const { title, text, url, qrImageSrc, qrFileName } = opts;
+    const shareText = text.includes(url) ? text : `${text}\n${url}`;
+
+    // Prefer Web Share API (opens the OS share sheet with installed apps).
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        const data: ShareData = { title, text: shareText, url };
+        if (qrImageSrc && typeof navigator.canShare === "function") {
+          try {
+            const res = await fetch(qrImageSrc);
+            const blob = await res.blob();
+            const file = new File([blob], qrFileName || "careconnect-qr.png", {
+              type: blob.type || "image/png",
+            });
+            if (navigator.canShare({ files: [file] })) {
+              data.files = [file];
+            }
+          } catch {
+            // Share link/text only if QR file attach fails
+          }
+        }
+        await navigator.share(data);
+        return "shared";
+      } catch (err) {
+        const name = err instanceof DOMException ? err.name : "";
+        if (name === "AbortError") return "cancelled";
+        // Fall through to clipboard fallback
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(url || shareText);
+      return "copied";
+    } catch {
+      window.prompt("Copy this link:", url || shareText);
+      return "copied";
+    }
+  };
+
+  const copyProfileShareLink = async () => {
+    if (!profileShare) return;
+    try {
+      await navigator.clipboard.writeText(profileShare.url);
+      setProfileShareCopied(true);
+      window.setTimeout(() => setProfileShareCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this profile share link:", profileShare.url);
+    }
+  };
+
+  const shareProfileNative = async () => {
+    if (!profileShare) return;
+    const title = `${profileName || "CareConnect"} profile`;
+    const text = `View my CareConnect profile: ${profileShare.url}`;
+    const result = await shareNativeContent({
+      title,
+      text,
+      url: profileShare.url,
+      qrImageSrc: qrImageUrl(profileShare.url, 512),
+      qrFileName: "careconnect-profile-qr.png",
+    });
+    if (result === "shared") flashShareFeedback("Opened your device share sheet");
+    else if (result === "copied") {
+      setProfileShareCopied(true);
+      flashShareFeedback("Sharing unavailable — link copied to clipboard");
+      window.setTimeout(() => setProfileShareCopied(false), 2000);
+    }
+  };
+
   const copyInviteLink = async () => {
     if (!inviteResult) return;
     try {
@@ -8527,6 +9082,25 @@ function PatientProfilePage({
     } catch {
       // Fallback for browsers without clipboard API
       window.prompt("Copy this invite link:", inviteResult.url);
+    }
+  };
+
+  const shareInviteNative = async () => {
+    if (!inviteResult) return;
+    const title = "CareConnect Care Circle invite";
+    const text = `${profileName || "A CareConnect patient"} invited you to their Care Circle: ${inviteResult.url}`;
+    const result = await shareNativeContent({
+      title,
+      text,
+      url: inviteResult.url,
+      qrImageSrc: qrImageUrl(inviteResult.url, 512),
+      qrFileName: "careconnect-invite-qr.png",
+    });
+    if (result === "shared") flashShareFeedback("Opened your device share sheet");
+    else if (result === "copied") {
+      setInviteCopied(true);
+      flashShareFeedback("Sharing unavailable — invite link copied");
+      window.setTimeout(() => setInviteCopied(false), 2000);
     }
   };
 
@@ -8541,8 +9115,9 @@ function PatientProfilePage({
       initials: makeInitials(name),
       email: inviteDraft.email.trim(),
       phone: inviteDraft.phone.trim(),
-      grants: ["mood", "checkin_summary"],
-      status: "pending",
+      grants: ["mood", "checkin_summary", "med_adherence", "symptoms"],
+      // Patient adding them here counts as approval — active as soon as they join/match.
+      status: "active",
       inviteCode: inviteResult.code,
       addedByPatient: true,
     };
@@ -8688,6 +9263,71 @@ function PatientProfilePage({
                 </div>
               </>
             )}
+
+            {/* Shareable profile link / QR (Feature 3) */}
+            <div className="rounded-2xl bg-white border border-[#E5E7EB] p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <QrCode size={18} style={{ color: theme.color }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-bold text-[#0F172A]">Share my profile</p>
+                  <p className="text-[11px] text-[#9CA3AF]">
+                    Generate a one-time link or QR others can open to view your CareConnect profile.
+                  </p>
+                </div>
+              </div>
+              {!profileShare ? (
+                <button type="button" onClick={generateProfileShare}
+                  className="w-full py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2"
+                  style={{ background: theme.color }}>
+                  <Link2 size={16} /> Create share link &amp; QR
+                </button>
+              ) : (
+                <div className="flex flex-col gap-3 items-center">
+                  <img
+                    src={qrImageUrl(profileShare.url, 160)}
+                    alt="Profile share QR code"
+                    width={160}
+                    height={160}
+                    className="rounded-lg border border-[#E5E7EB]"
+                  />
+                  <div className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E5E7EB]">
+                    <Link2 size={14} className="text-[#00A7C8] shrink-0" />
+                    <p className="flex-1 text-[12px] font-medium text-[#0F172A] break-all">{profileShare.url}</p>
+                  </div>
+                  {shareFeedback && (
+                    <p className="text-[12px] font-semibold text-center" style={{ color: theme.color }}>
+                      {shareFeedback}
+                    </p>
+                  )}
+                  <button type="button" onClick={shareProfileNative}
+                    className="w-full py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2"
+                    style={{ background: theme.color }}>
+                    <Send size={16} /> Share
+                  </button>
+                  <p className="text-[11px] text-[#9CA3AF] text-center -mt-1">
+                    Opens your device share sheet (Messages, Email, WhatsApp, and other installed apps).
+                  </p>
+                  <div className="flex gap-2 w-full">
+                    <button type="button" onClick={copyProfileShareLink}
+                      className="flex-1 py-2.5 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5"
+                      style={{
+                        background: profileShareCopied ? "#ECFDF5" : "#F3F4F6",
+                        color: profileShareCopied ? "#047857" : "#374151",
+                      }}>
+                      {profileShareCopied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
+                    </button>
+                    <button type="button" onClick={revokeProfileShare}
+                      className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white bg-[#DC2626]">
+                      Revoke
+                    </button>
+                  </div>
+                  <button type="button" onClick={generateProfileShare}
+                    className="text-[12px] font-semibold text-[#00A7C8]">
+                    Generate a new link
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -8937,17 +9577,27 @@ function PatientProfilePage({
                       <Link2 size={14} className="text-[#00A7C8] shrink-0" />
                       <p className="flex-1 text-[12px] font-medium text-[#0F172A] break-all">{inviteResult.url}</p>
                     </div>
-                    <div className="flex gap-2 w-full">
-                      <button type="button" onClick={copyInviteLink}
-                        className="flex-1 py-2.5 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5"
-                        style={{ background: inviteCopied ? "#ECFDF5" : "#F3F4F6", color: inviteCopied ? "#047857" : "#374151" }}>
-                        {inviteCopied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
-                      </button>
-                      <button type="button" onClick={addInvitedCaregiver}
-                        className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white"
+                    <div className="flex flex-col gap-2 w-full">
+                      <button type="button" onClick={shareInviteNative}
+                        className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-1.5"
                         style={{ background: theme.color }}>
-                        Add to Care Circle
+                        <Send size={14} /> Share
                       </button>
+                      <p className="text-[11px] text-[#9CA3AF] text-center">
+                        Opens your device share sheet with installed apps.
+                      </p>
+                      <div className="flex gap-2 w-full">
+                        <button type="button" onClick={copyInviteLink}
+                          className="flex-1 py-2.5 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5"
+                          style={{ background: inviteCopied ? "#ECFDF5" : "#F3F4F6", color: inviteCopied ? "#047857" : "#374151" }}>
+                          {inviteCopied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
+                        </button>
+                        <button type="button" onClick={addInvitedCaregiver}
+                          className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white"
+                          style={{ background: theme.color }}>
+                          Add to Care Circle
+                        </button>
+                      </div>
                     </div>
                     <button type="button" onClick={generateInvite}
                       className="text-[12px] font-semibold text-[#00A7C8]">
@@ -9029,7 +9679,11 @@ function SharedPatientDataPanel({
     return (
       <div className="rounded-2xl p-4 text-center" style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}>
         <p className="text-[14px] font-bold text-[#991B1B]">Access not authorized</p>
-        <p className="text-[12px] text-[#B91C1C] mt-1">This link is {access === "suspended" ? "suspended" : "unauthorized"} — no shared data is available.</p>
+        <p className="text-[12px] text-[#B91C1C] mt-1">
+          {access === "suspended"
+            ? "This link is suspended — no shared data is available."
+            : "No active Care Circle link found yet. Ask the patient to add you and turn on sharing in Care Circle."}
+        </p>
       </div>
     );
   }
@@ -9080,9 +9734,9 @@ function SharedPatientDataPanel({
 
       {grants.includes("mood") && (
         <>
-          {patient.mood !== undefined && (
-            <div className="rounded-2xl bg-white border border-[#E5E7EB] p-4">
-              <p className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">Current mood</p>
+          <div className="rounded-2xl bg-white border border-[#E5E7EB] p-4">
+            <p className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">Current mood</p>
+            {patient.mood !== undefined ? (
               <div className="flex items-center gap-3">
                 <span className="text-[36px]">{moodEmojis[patient.mood]}</span>
                 <div>
@@ -9090,8 +9744,10 @@ function SharedPatientDataPanel({
                   <p className="text-[12px] text-[#9CA3AF]">{patient.mood}/5 · Updated today</p>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-[13px] text-[#6B7280]">Mood access is shared — waiting for the patient to log how they feel.</p>
+            )}
+          </div>
           <MoodTrendCard
             theme={theme}
             history={moodHistory}
@@ -9102,11 +9758,17 @@ function SharedPatientDataPanel({
         </>
       )}
 
-      {grants.includes("checkin_summary") && patient.lastCheckin && (
+      {grants.includes("checkin_summary") && (
         <div className="rounded-2xl bg-white border border-[#E5E7EB] p-4">
           <p className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-1">Latest check-in</p>
-          <p className="text-[15px] font-semibold text-[#0F172A]">{patient.lastCheckin}</p>
-          <p className="text-[12px] text-[#9CA3AF] mt-0.5">Completed via Virtual Check-In</p>
+          {patient.lastCheckin ? (
+            <>
+              <p className="text-[15px] font-semibold text-[#0F172A]">{patient.lastCheckin}</p>
+              <p className="text-[12px] text-[#9CA3AF] mt-0.5">Completed via Virtual Check-In</p>
+            </>
+          ) : (
+            <p className="text-[13px] text-[#6B7280]">Check-in access is shared — no check-in logged yet.</p>
+          )}
         </div>
       )}
 
@@ -9200,6 +9862,7 @@ function CaregiverProfilePage({
   profileImage, setProfileImage,
   theme, onSignOut, patients, roleTitle,
   medications, medsChecked, appointments, moodHistory = [],
+  showProfessionalDetails = false,
 }: {
   account: CaregiverAccountInfo;
   onSaveAccount: (info: CaregiverAccountInfo) => void;
@@ -9212,6 +9875,7 @@ function CaregiverProfilePage({
   medsChecked?: Record<string, boolean>;
   appointments?: Appointment[];
   moodHistory?: MoodEntry[];
+  showProfessionalDetails?: boolean;
 }) {
   const [section, setSection] = useState<"info" | "circle">("info");
   const [editing, setEditing] = useState(false);
@@ -9221,7 +9885,7 @@ function CaregiverProfilePage({
   useEffect(() => {
     setDraft(account);
     setEditing(false);
-  }, [account.name, account.email, account.agency, account.credentials, account.phone, account.relationshipToPatient]);
+  }, [account.name, account.email, account.agency, account.credentials, account.phone, account.relationshipToPatient, account.linkedPatientName, account.linkedPatientDob]);
 
   const dirty = (Object.keys(account) as (keyof CaregiverAccountInfo)[])
     .some(k => draft[k] !== account[k]);
@@ -9236,6 +9900,9 @@ function CaregiverProfilePage({
       agency: draft.agency.trim(),
       credentials: draft.credentials.trim(),
       phone: draft.phone.trim(),
+      relationshipToPatient: draft.relationshipToPatient?.trim() || account.relationshipToPatient,
+      linkedPatientName: draft.linkedPatientName?.trim() || undefined,
+      linkedPatientDob: normalizeDob(draft.linkedPatientDob || "") || draft.linkedPatientDob?.trim() || undefined,
     };
     onSaveAccount(next);
     setEditing(false);
@@ -9325,10 +9992,16 @@ function CaregiverProfilePage({
                 {[
                   { label: "Full name", value: account.name || "—", icon: "👤" },
                   { label: "Email", value: account.email || "Not set", icon: "✉️" },
+                  { label: "Linked Patient / User", value: account.linkedPatientName?.trim() || "Not set", icon: "🫶" },
+                  { label: "Patient date of birth", value: account.linkedPatientDob?.trim() || "Not set", icon: "🎂" },
                   { label: "Relationship to patient", value: account.relationshipToPatient?.trim() || roleTitle || "Not set", icon: "🏷️" },
-                  { label: "Agency / Organization", value: account.agency || "Not set", icon: "🏥" },
-                  { label: "Credentials", value: account.credentials || "Not set", icon: "📋" },
-                  { label: "Contact phone", value: account.phone || "Not set", icon: "📞" },
+                  ...(showProfessionalDetails ? [
+                    { label: "Agency / Organization", value: account.agency || "Not set", icon: "🏥" },
+                    { label: "Credentials", value: account.credentials || "Not set", icon: "📋" },
+                    { label: "Contact phone", value: account.phone || "Not set", icon: "📞" },
+                  ] : [
+                    { label: "Contact phone", value: account.phone || "Not set", icon: "📞" },
+                  ]),
                 ].map(item => (
                   <div key={item.label} className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-white border border-[#E5E7EB]">
                     <span className="text-[20px] w-7 text-center shrink-0">{item.icon}</span>
@@ -9358,10 +10031,16 @@ function CaregiverProfilePage({
                 <div className="flex flex-col gap-4 px-4 py-4 rounded-2xl bg-white border border-[#E5E7EB]">
                   <VoiceField label="Full name" value={draft.name} onChange={v => setDraft({ ...draft, name: v })} placeholder="Your name" color={theme.color} />
                   <VoiceField label="Email" value={draft.email} onChange={v => setDraft({ ...draft, email: v })} placeholder="you@example.com" color={theme.color} />
+                  <VoiceField label="Linked Patient / User" value={draft.linkedPatientName || ""} onChange={v => setDraft({ ...draft, linkedPatientName: v })} placeholder="e.g. Eleanor Wright" color={theme.color} />
+                  <VoiceField label="Patient date of birth" value={draft.linkedPatientDob || ""} onChange={v => setDraft({ ...draft, linkedPatientDob: v })} placeholder="MM/DD/YYYY" color={theme.color} />
                   <VoiceField label="Relationship to patient" value={draft.relationshipToPatient || ""} onChange={v => setDraft({ ...draft, relationshipToPatient: v })} placeholder="e.g. Daughter, Friend, Neighbor" color={theme.color} />
-                  <VoiceField label="Agency / Organization" value={draft.agency} onChange={v => setDraft({ ...draft, agency: v })} placeholder="Care agency or clinic" color={theme.color} />
-                  <VoiceField label="Credentials" value={draft.credentials} onChange={v => setDraft({ ...draft, credentials: v })} placeholder="e.g. RN, BSN, MD" color={theme.color} />
-                  <VoiceField label="Contact phone" value={draft.phone} onChange={v => setDraft({ ...draft, phone: v })} placeholder="(555) 000-0000" color={theme.color} />
+                  {showProfessionalDetails && (
+                    <>
+                      <VoiceField label="Agency / Organization (optional)" value={draft.agency} onChange={v => setDraft({ ...draft, agency: v })} placeholder="Care agency, clinic, or practice name" color={theme.color} />
+                      <VoiceField label="License / Credentials (optional)" value={draft.credentials} onChange={v => setDraft({ ...draft, credentials: v })} placeholder="e.g. RN, LPN, MD" color={theme.color} />
+                    </>
+                  )}
+                  <VoiceField label="Phone number" value={draft.phone} onChange={v => setDraft({ ...draft, phone: v })} placeholder="(555) 000-0000" color={theme.color} />
                 </div>
                 <div className="flex gap-2">
                   <button type="button" onClick={discard}
@@ -9566,17 +10245,24 @@ function CaregiverPatientDetail({
   );
 }
 
-// ── Caregiver home (roster with snippet cards) ─────────────────────────────────
+// ── Caregiver home (linked patient with shared-data summary) ────────────────────
 
 function CaregiverHomeV2({
   theme, patients, onOpenPatient, viewingAs,
+  appointments = [], setAppointments, setModal, clearModal, useLarge = false,
 }: {
   theme: ModeTheme; patients: PatientSnippet[]; onOpenPatient: (p: PatientSnippet) => void;
   viewingAs?: string;
+  appointments?: Appointment[];
+  setAppointments?: (v: Appointment[]) => void;
+  setModal?: (node: React.ReactNode) => void;
+  clearModal?: () => void;
+  useLarge?: boolean;
 }) {
   const moodEmojis = ["", "😞", "😕", "😐", "🙂", "😄"];
   const alertCount = patients.filter(p => p.hasFallAlert && p.grants.includes("fall_alerts") && p.accessState === "ok").length;
   const activeShared = patients.filter(p => p.accessState === "ok" && p.grants.length > 0).length;
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({ schedule: true });
 
   return (
     <div className="flex flex-col min-h-full px-4 pt-4 pb-28 gap-3">
@@ -9606,8 +10292,30 @@ function CaregiverHomeV2({
         ))}
       </div>
 
-      {/* Patient snippet cards */}
-      <p className="text-[12px] font-bold text-[#9CA3AF] uppercase tracking-wider">Your patients</p>
+      {appointments && setAppointments && setModal && clearModal && (
+        <CollapsibleSection
+          id="cg-schedule"
+          title="Schedule"
+          icon={<Calendar size={14} style={{ color: theme.color }} />}
+          accent={theme.color}
+          openMap={sectionOpen}
+          setOpenMap={setSectionOpen}
+        >
+          <div className="-mx-4 -mb-4">
+            <ScheduleContent
+              theme={theme}
+              useLarge={useLarge}
+              appointments={appointments}
+              setAppointments={setAppointments}
+              setModal={setModal}
+              clearModal={clearModal}
+            />
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* Linked patient and all data they have shared with this caregiver */}
+      <p className="text-[12px] font-bold text-[#9CA3AF] uppercase tracking-wider">Your Patient</p>
 
       {patients.length === 0 && (
         <div className="rounded-2xl bg-white border border-[#E5E7EB] p-5 text-center">
@@ -9667,36 +10375,55 @@ function CaregiverHomeV2({
                 <p className="text-[11px] font-semibold text-[#00A7C8] mt-0.5">Ask for access ↗</p>
               </div>
             ) : (
-              <div className="px-4 py-3 flex flex-wrap gap-2">
-                {p.grants.includes("mood") && p.mood !== undefined && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#F9FAFB] border border-[#E5E7EB]">
-                    <span className="text-[14px]">{moodEmojis[p.mood]}</span>
-                    <span className="text-[11px] font-semibold text-[#374151]">Mood: {["", "Poor", "Low", "Fair", "Good", "Great"][p.mood]}</span>
-                  </div>
-                )}
-                {p.grants.includes("med_adherence") && p.medAdherence !== undefined && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border"
-                    style={{ background: p.medAdherence >= 80 ? "#D1FAE5" : "#FEF3C7", borderColor: p.medAdherence >= 80 ? "#86EFAC" : "#FDE68A" }}>
-                    <span className="text-[11px] font-semibold" style={{ color: p.medAdherence >= 80 ? "#059669" : "#D97706" }}>
-                      💊 {p.medAdherence}% meds
-                    </span>
-                  </div>
-                )}
-                {p.grants.includes("checkin_summary") && p.lastCheckin && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E0F7FA] border border-[#B2EBF2]">
-                    <span className="text-[11px] font-semibold text-[#007A94]">✓ {p.lastCheckin}</span>
-                  </div>
-                )}
-                {p.grants.includes("upcoming_visits") && p.nextVisit && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#F3F4F6] border border-[#E5E7EB]">
-                    <span className="text-[11px] font-semibold text-[#374151]">📅 {p.nextVisit}</span>
-                  </div>
-                )}
-                {p.grants.includes("symptoms") && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FDF2F8] border border-[#FBCFE8]">
-                    <span className="text-[11px] font-semibold text-[#BE185D]">🌡️ Symptoms shared</span>
-                  </div>
-                )}
+              <div className="px-4 py-3 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {p.grants.includes("mood") && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#F9FAFB] border border-[#E5E7EB]">
+                      <span className="text-[14px]">{p.mood != null ? moodEmojis[p.mood] : "🙂"}</span>
+                      <span className="text-[11px] font-semibold text-[#374151]">
+                        Mood{p.mood != null ? `: ${["", "Poor", "Low", "Fair", "Good", "Great"][p.mood]}` : " shared"}
+                      </span>
+                    </div>
+                  )}
+                  {p.grants.includes("med_adherence") && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border"
+                      style={{
+                        background: (p.medAdherence ?? 0) >= 80 ? "#D1FAE5" : "#FEF3C7",
+                        borderColor: (p.medAdherence ?? 0) >= 80 ? "#86EFAC" : "#FDE68A",
+                      }}>
+                      <span className="text-[11px] font-semibold" style={{ color: (p.medAdherence ?? 0) >= 80 ? "#059669" : "#D97706" }}>
+                        💊 {p.medAdherence != null ? `${p.medAdherence}% meds` : "Meds shared"}
+                      </span>
+                    </div>
+                  )}
+                  {p.grants.includes("checkin_summary") && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E0F7FA] border border-[#B2EBF2]">
+                      <span className="text-[11px] font-semibold text-[#007A94]">
+                        ✓ {p.lastCheckin || "Check-ins shared"}
+                      </span>
+                    </div>
+                  )}
+                  {p.grants.includes("upcoming_visits") && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#EEF2FF] border border-[#C7D2FE]">
+                      <span className="text-[11px] font-semibold text-[#4338CA]">
+                        📅 {p.nextVisit || "Visits shared"}
+                      </span>
+                    </div>
+                  )}
+                  {p.grants.includes("symptoms") && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FDF2F8] border border-[#FBCFE8]">
+                      <span className="text-[11px] font-semibold text-[#9D174D]">
+                        🌡️ {p.symptomsSummary || "Symptoms shared"}
+                      </span>
+                    </div>
+                  )}
+                  {p.grants.includes("fall_alerts") && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FEF2F2] border border-[#FECACA]">
+                      <span className="text-[11px] font-semibold text-[#B91C1C]">Fall alerts shared</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#00A7C8] font-semibold">Tap to view shared details →</p>
               </div>
             )}
           </button>
@@ -9715,44 +10442,38 @@ function PatientBottomNav({
   color: string; large: boolean; onOpenFeaturePicker: () => void;
   accessibilityMode?: AppMode | null;
 }) {
-  // Feature-gated middle tabs — Hearing only when Hearing impaired mode is selected
-  const featureTabs: { featureId: FeatureId; key: Tab; icon: React.ReactNode; label: string }[] = [
-    { featureId: "usps_mail",          key: "mail",     icon: <Mail size={large ? 22 : 19} />,        label: "Mail"     },
-    { featureId: "medication_tracker", key: "meds",     icon: <Pill size={large ? 22 : 19} />,        label: "Meds"     },
-    { featureId: "symptoms_tracker",   key: "symptoms", icon: <HeartPulse size={large ? 22 : 19} />,  label: "Health"   },
-    { featureId: "virtual_checkin",    key: "checkin",  icon: <Stethoscope size={large ? 22 : 19} />, label: "Check-In" },
-    { featureId: "calendar_asst",      key: "schedule", icon: <Calendar size={large ? 22 : 19} />,    label: "Schedule" },
-  ];
-  const maxFeatureTabs = accessibilityMode === "hearing" ? 1 : 3;
-  const enabledFeatureTabs = featureTabs.filter(f => enabledFeatures.includes(f.featureId));
-  const activeFeatureTabs = enabledFeatureTabs.slice(0, maxFeatureTabs);
-
-  const hearingTab = accessibilityMode === "hearing"
-    ? [{ key: "hearing" as Tab, icon: <Ear size={large ? 22 : 19} />, label: "Hearing" }]
-    : [];
+  // Always exactly 5 icons — Schedule lives on the Home dashboard.
+  // Hearing / Check-In remain reachable from the dashboard (not the bottom bar).
+  void enabledFeatures;
+  void accessibilityMode;
+  void onOpenFeaturePicker;
 
   const navItems: { key: Tab; icon: React.ReactNode; label: string }[] = [
     { key: "home",     icon: <Home size={large ? 22 : 19} />,           label: "Home"     },
-    ...hearingTab,
-    ...activeFeatureTabs.map(ft => ({ key: ft.key, icon: ft.icon, label: ft.label })),
-    { key: "schedule", icon: <Calendar size={large ? 22 : 19} />,       label: "Schedule" },
+    { key: "symptoms", icon: <HeartPulse size={large ? 22 : 19} />,     label: "Health"   },
+    { key: "mail",     icon: <Mail size={large ? 22 : 19} />,           label: "Mail"     },
     { key: "messages", icon: <MessageCircle size={large ? 22 : 19} />,  label: "Messages" },
+    { key: "profile",  icon: <User size={large ? 22 : 19} />,           label: "Profile"  },
   ];
-
-  // Deduplicate (if schedule is already in featureTabs it would appear twice)
-  const seen = new Set<Tab>();
-  const deduped = navItems.filter(it => { if (seen.has(it.key)) return false; seen.add(it.key); return true; });
 
   return (
     <div className="flex bg-white px-1 py-1">
-      {deduped.map(it => (
-        <button key={it.key} onClick={() => onTab(it.key)}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 transition-all duration-150"
-          style={{ minHeight: large ? 64 : 54, color: tab === it.key ? color : "#9CA3AF" }}>
-          {it.icon}
-          <span className="text-[9px] font-semibold">{it.label}</span>
-        </button>
-      ))}
+      {navItems.map(it => {
+        const active = tab === it.key || (it.key === "symptoms" && tab === "meds");
+        return (
+          <button key={it.key} onClick={() => onTab(it.key)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 transition-all duration-150"
+            style={{
+              minHeight: large ? 64 : 54,
+              color: active ? color : "#9CA3AF",
+              transform: active ? "scale(1.08)" : "scale(1)",
+              background: active ? `${color}14` : "transparent",
+            }}>
+            {it.icon}
+            <span className="text-[9px] font-semibold">{it.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -9764,21 +10485,89 @@ function CaregiverBottomNav({
 }: {
   tab: Tab; onTab: (t: Tab) => void; color: string; large: boolean;
 }) {
+  // Always exactly 5 icons — Schedule and linked-patient data live on Home.
   const items: { key: Tab; icon: React.ReactNode; label: string }[] = [
-    { key: "home",     icon: <Users size={large ? 22 : 19} />,         label: "Patients" },
-    { key: "schedule", icon: <Calendar size={large ? 22 : 19} />,      label: "Schedule" },
-    { key: "messages", icon: <MessageCircle size={large ? 22 : 19} />, label: "Messages" },
-    { key: "analytics",icon: <BarChart2 size={large ? 22 : 19} />,     label: "Analytics"},
+    { key: "home",      icon: <Users size={large ? 22 : 19} />,         label: "Patient"   },
+    { key: "checkin",   icon: <Bell size={large ? 22 : 19} />,          label: "Alerts"    },
+    { key: "messages",  icon: <MessageCircle size={large ? 22 : 19} />, label: "Messages"  },
+    { key: "analytics", icon: <BarChart2 size={large ? 22 : 19} />,     label: "Analytics" },
+    { key: "profile",   icon: <User size={large ? 22 : 19} />,          label: "Profile"   },
   ];
   return (
     <div className="flex bg-white px-1 py-1">
-      {items.map(it => (
-        <button key={it.key} onClick={() => onTab(it.key)}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 transition-all duration-150"
-          style={{ minHeight: large ? 64 : 54, color: tab === it.key ? color : "#9CA3AF" }}>
-          {it.icon}
-          <span className="text-[9px] font-semibold">{it.label}</span>
-        </button>
+      {items.map(it => {
+        const active = tab === it.key;
+        return (
+          <button key={it.key} onClick={() => onTab(it.key)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 transition-all duration-150"
+            style={{
+              minHeight: large ? 64 : 54,
+              color: active ? color : "#9CA3AF",
+              transform: active ? "scale(1.08)" : "scale(1)",
+              background: active ? `${color}14` : "transparent",
+            }}>
+            {it.icon}
+            <span className="text-[9px] font-semibold">{it.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CaregiverAlertsContent({ patients, theme }: { patients: PatientSnippet[]; theme: ModeTheme }) {
+  const alerts = patients.flatMap(patient => {
+    const items: { id: string; patientName: string; message: string; urgent: boolean }[] = [];
+    if (patient.accessState === "ok" && patient.grants.includes("fall_alerts") && patient.hasFallAlert) {
+      items.push({
+        id: `${patient.id}-fall`,
+        patientName: patient.name,
+        message: "Fall alert requires attention",
+        urgent: true,
+      });
+    }
+    if (
+      patient.accessState === "ok"
+      && patient.grants.includes("med_adherence")
+      && patient.medAdherence != null
+      && patient.medAdherence < 80
+    ) {
+      items.push({
+        id: `${patient.id}-meds`,
+        patientName: patient.name,
+        message: `Medication adherence is ${patient.medAdherence}%`,
+        urgent: false,
+      });
+    }
+    return items;
+  });
+
+  return (
+    <div className="flex flex-col min-h-full px-4 pt-4 pb-28 gap-3">
+      <p className="text-[13px] text-[#6B7280]">
+        Notifications only. Open <span className="font-bold">Your Patient</span> to view all shared information.
+      </p>
+      {alerts.length === 0 ? (
+        <div className="rounded-2xl bg-white border border-[#E5E7EB] p-6 text-center">
+          <Bell size={28} className="mx-auto mb-2 text-[#9CA3AF]" />
+          <p className="text-[15px] font-bold text-[#0F172A]">No new alerts</p>
+          <p className="text-[12px] text-[#9CA3AF] mt-1">Patient alerts will appear here.</p>
+        </div>
+      ) : alerts.map(alert => (
+        <div
+          key={alert.id}
+          className="rounded-2xl p-4 border flex items-start gap-3"
+          style={{
+            background: alert.urgent ? "#FEF2F2" : theme.lightBg,
+            borderColor: alert.urgent ? "#FCA5A5" : theme.borderColor,
+          }}
+        >
+          <AlertTriangle size={18} style={{ color: alert.urgent ? "#DC2626" : theme.color }} />
+          <div>
+            <p className="text-[14px] font-bold text-[#0F172A]">{alert.message}</p>
+            <p className="text-[12px] text-[#6B7280]">{alert.patientName}</p>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -9794,11 +10583,11 @@ function FeatureAppBar({
   accountLabel?: string;
 }) {
   const titleMap: Partial<Record<Tab, string>> = {
-    home: role === "caregiver" ? "My Patients" : "Dashboard",
-    meds: "Medications", symptoms: "Symptoms & Allergies", checkin: "Virtual Check-In",
+    home: role === "caregiver" ? "Your Patient" : "Dashboard",
+    meds: "Health", symptoms: "Health", checkin: role === "caregiver" ? "Alerts" : "Virtual Check-In",
     messages: "Messages", schedule: "Schedule", analytics: "Analytics",
-    patients: "Patient List", profile: role === "caregiver" ? "My Profile" : "My Profile",
-    hearing: "Hearing Assist",
+    patients: "Your Patient", profile: role === "caregiver" ? "My Profile" : "My Profile",
+    hearing: "Hearing Assist", mail: "Mail Digest",
   };
   const title = titleMap[tab] ?? "CareConnect";
   const roleLabel = role === "caregiver" ? "Caregiver" : "Patient / User";
@@ -9840,6 +10629,7 @@ export default function App() {
   // ── State — all initialised from localStorage where a saved value exists ──
   useState(() => {
     migrateDemoCaregiverData();
+    seedPatientSnapshotRegistryFromActive();
     return true;
   });
 
@@ -9904,7 +10694,19 @@ export default function App() {
   const [moodHistory, setMoodHistory]         = useState<MoodEntry[]>(() => loadMoodHistory());
   const [patientLastCheckin, setPatientLastCheckin] = useState(() => loadSaved("patientLastCheckin", ""));
   const [checkinsThisWeek, setCheckinsThisWeek] = useState(() => loadSaved("checkinsThisWeek", 0));
-  const [sharedPatientData, setSharedPatientData] = useState<PatientAccountSnapshot | null>(() => loadPatientSnapshot());
+  const [sharedPatientData, setSharedPatientData] = useState<PatientAccountSnapshot | null>(() => {
+    const savedRole = loadSaved<Role>("role", "patient");
+    if (savedRole === "caregiver") {
+      const acct = loadCaregiverAccount(loadSaved("activeCaregiverId", "cg1"));
+      return loadPatientSnapshotForCaregiver(acct.linkedPatientName, acct.linkedPatientDob, {
+        id: loadSaved("activeCaregiverId", "cg1"),
+        name: acct.name,
+        email: acct.email,
+        inviteCode: acct.linkedInviteCode,
+      });
+    }
+    return loadPatientSnapshot();
+  });
   const [hasFallAlert] = useState(() => loadSaved("hasFallAlert", false));
 
   const [appModal, setAppModal]               = useState<React.ReactNode>(null);
@@ -10035,18 +10837,82 @@ export default function App() {
     patientMood, moodHistory, patientLastCheckin, checkinsThisWeek, hasFallAlert,
   ]);
 
-  // When signing in as caregiver, load the shared patient snapshot into view state
+  // When signing in as caregiver, load the shared patient snapshot into view state.
+  // Also re-read on a short interval / focus so grants the patient just toggled appear.
   useEffect(() => {
     if (role !== "caregiver") return;
-    const snap = loadPatientSnapshot();
-    setSharedPatientData(snap);
-    if (snap?.appointments) setAppointments(snap.appointments);
-    if (snap?.medications) setMedications(snap.medications);
-    if (snap?.medsChecked) setMedsChecked(snap.medsChecked);
-    if (snap?.mood != null) setPatientMood(snap.mood);
-    if (snap?.moodHistory) setMoodHistory(snap.moodHistory);
-    if (snap?.lastCheckin) setPatientLastCheckin(snap.lastCheckin);
-    if (snap?.checkinsThisWeek != null) setCheckinsThisWeek(snap.checkinsThisWeek);
+    const refresh = () => {
+      const acct = loadCaregiverAccount(activeCaregiverId);
+      const caregiverRef = {
+        id: activeCaregiverId,
+        name: acct.name,
+        email: acct.email,
+        inviteCode: acct.linkedInviteCode,
+      };
+      const snap = loadPatientSnapshotForCaregiver(
+        acct.linkedPatientName,
+        acct.linkedPatientDob,
+        caregiverRef,
+      );
+      // Keep linked patient name aligned with the snapshot we actually resolved.
+      if (
+        snap?.profileName
+        && snap.profileName !== "Your Name"
+        && acct.linkedPatientName?.trim()
+        && !namesMatch(acct.linkedPatientName, snap.profileName)
+        && !namesLooselyMatch(acct.linkedPatientName, snap.profileName)
+      ) {
+        const repaired = {
+          ...acct,
+          linkedPatientName: snap.profileName,
+          linkedPatientDob: snap.profileDob || acct.linkedPatientDob,
+        };
+        saveCaregiverAccount(activeCaregiverId, repaired);
+        setCaregiverAccount(repaired);
+      }
+      let circle = scrubDemoCaregivers(snap?.linkedCaregivers ?? []);
+      // Re-apply invite / name / email matching so patient grants show after approval.
+      if (acct.name || acct.linkedInviteCode || acct.email) {
+        circle = activateInviteInCareCircle(circle, {
+          inviteCode: acct.linkedInviteCode,
+          caregiverId: activeCaregiverId,
+          caregiverName: acct.name || "Caregiver",
+          caregiverEmail: acct.email,
+          caregiverPhone: acct.phone,
+          relationship: acct.relationshipToPatient || "Caregiver",
+        });
+        if (snap) {
+          const changed = JSON.stringify(circle) !== JSON.stringify(snap.linkedCaregivers ?? []);
+          if (changed) {
+            const nextSnap = { ...snap, linkedCaregivers: circle };
+            savePatientSnapshot(nextSnap);
+            setSharedPatientData(nextSnap);
+          } else {
+            setSharedPatientData(snap);
+          }
+        } else {
+          setSharedPatientData(null);
+        }
+      } else {
+        setSharedPatientData(snap);
+      }
+      if (circle.length) setLinkedCaregivers(circle);
+      if (snap?.appointments) setAppointments(snap.appointments);
+      if (snap?.medications) setMedications(snap.medications);
+      if (snap?.medsChecked) setMedsChecked(snap.medsChecked);
+      if (snap?.mood != null) setPatientMood(snap.mood);
+      if (snap?.moodHistory) setMoodHistory(snap.moodHistory);
+      if (snap?.lastCheckin) setPatientLastCheckin(snap.lastCheckin);
+      if (snap?.checkinsThisWeek != null) setCheckinsThisWeek(snap.checkinsThisWeek);
+    };
+    refresh();
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(refresh, 2000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
   }, [role, activeCaregiverId]);
 
   // Patient session: pull Care Circle (incl. access requests) from the shared snapshot
@@ -10074,7 +10940,16 @@ export default function App() {
   useEffect(() => {
     if (role !== "caregiver") return;
     setSharedPatientData(prev => {
-      const base = prev ?? loadPatientSnapshot();
+      const base = prev ?? loadPatientSnapshotForCaregiver(
+        caregiverAccount.linkedPatientName,
+        caregiverAccount.linkedPatientDob,
+        {
+          id: activeCaregiverId,
+          name: caregiverAccount.name,
+          email: caregiverAccount.email,
+          inviteCode: caregiverAccount.linkedInviteCode,
+        },
+      );
       if (!base) return prev;
       const next: PatientAccountSnapshot = {
         ...base,
@@ -10099,7 +10974,7 @@ export default function App() {
       savePatientSnapshot(next);
       return next;
     });
-  }, [role, appointments, medications, medsChecked, patientMood, moodHistory, patientLastCheckin, checkinsThisWeek, hasFallAlert]);
+  }, [role, appointments, medications, medsChecked, patientMood, moodHistory, patientLastCheckin, checkinsThisWeek, hasFallAlert, caregiverAccount.linkedPatientName, caregiverAccount.linkedPatientDob]);
 
   // Load the selected caregiver's own account details (separate from patient profile)
   useEffect(() => {
@@ -10134,6 +11009,22 @@ export default function App() {
     setNavIndex(navIndex + 1);
     applyState(state);
   };
+
+  // When Hearing accessibility mode is active, keep Conversation Assist enabled.
+  // Must stay above phase early-returns so hook order is stable across splash → app.
+  useEffect(() => {
+    if (phase !== "app") return;
+    if (mode === "hearing") {
+      setCaptions(true);
+      setEnabledFeatures(prev =>
+        prev.includes("hearing_assist") ? prev : [...prev, "hearing_assist"]
+      );
+      return;
+    }
+    if (tab === "hearing") {
+      navigate({ phase: "app", tab: "home" });
+    }
+  }, [mode, phase, tab]);
 
   const nav: NavProps = {
     canGoBack:    navIndex > 0,
@@ -10222,8 +11113,8 @@ export default function App() {
       <ProfileWizard
         key={wizardInitialRole}
         initialRole={wizardInitialRole}
-        knownPatientName={(loadPatientSnapshot()?.profileName || profileName || "").trim()}
-        knownPatientDob={(loadPatientSnapshot()?.profileDob || profileDob || "").trim()}
+        knownPatientName=""
+        knownPatientDob=""
         onBack={() => navigate({ phase: "splash" })}
         onComplete={profile => {
           const savedPassword = profile.authMethods.password ? profile.password.trim() : "";
@@ -10260,7 +11151,7 @@ export default function App() {
               ...account,
               name: enteredName || "Caregiver",
               email: profile.email.trim(),
-              agency: profile.address.trim(),
+              agency: profile.organization.trim() || profile.address.trim(),
               credentials: profile.conditions.trim(),
               phone: profile.emergencyContact.trim(),
               password: savedPassword,
@@ -10276,7 +11167,12 @@ export default function App() {
 
             // Activate matching Care Circle invite for this caregiver + patient only
             if (inviteCode || linkedPatientName) {
-              const snap = loadPatientSnapshot();
+              const snap = loadPatientSnapshotForCaregiver(linkedPatientName, linkedPatientDob, {
+                id: profile.caregiverPersonaId,
+                name: seeded.name,
+                email: seeded.email,
+                inviteCode: inviteCode || undefined,
+              });
               const circle = scrubDemoCaregivers(snap?.linkedCaregivers ?? linkedCaregivers);
               const finalCircle = activateInviteInCareCircle(circle, {
                 inviteCode,
@@ -10338,10 +11234,25 @@ export default function App() {
   const useSpacing = mode === "dyslexia" || has("dys_spacing") || disability === "dyslexia_cond";
   const textScale  = [1, 1.125, 1.25][textSize] ?? 1;
 
-  // Caregiver roster is built from the patient's Care Circle grants + active profile only
-  const patientSnapshot = sharedPatientData ?? loadPatientSnapshot();
+  // Caregiver roster resolves the linked patient from the multi-patient registry
+  // (not whoever last signed in on this browser).
+  const patientSnapshot = role === "caregiver"
+    ? (sharedPatientData ?? loadPatientSnapshotForCaregiver(
+        caregiverAccount.linkedPatientName,
+        caregiverAccount.linkedPatientDob,
+        {
+          id: activeCaregiverId,
+          name: caregiverAccount.name,
+          email: caregiverAccount.email,
+          inviteCode: caregiverAccount.linkedInviteCode,
+        },
+      ))
+    : (sharedPatientData ?? loadPatientSnapshot());
   const patientSource = patientSnapshot ?? (
-    profileComplete && profileName && profileName !== "Your Name"
+    role !== "caregiver"
+    && profileComplete
+    && profileName
+    && profileName !== "Your Name"
       ? {
           profileComplete: true,
           profileName,
@@ -10368,11 +11279,15 @@ export default function App() {
 
   const loggedSymptomsForSummary = loadLoggedSymptoms();
   const loggedAllergiesForSummary = loadLoggedAllergies();
+  const circleForRoster =
+    (patientSource?.linkedCaregivers && patientSource.linkedCaregivers.length > 0)
+      ? patientSource.linkedCaregivers
+      : linkedCaregivers;
   const patientSnippets: PatientSnippet[] = role === "caregiver"
     ? buildCaregiverPatientRoster({
         caregiverId: activeCaregiverId,
-        linkedCaregivers: patientSource?.linkedCaregivers ?? linkedCaregivers,
-        patientActive: !!(patientSource?.profileComplete),
+        linkedCaregivers: circleForRoster,
+        patientActive: !!(patientSource?.profileComplete ?? (patientSource?.profileName && patientSource.profileName !== "Your Name")),
         profileName: patientSource?.profileName ?? "",
         profileDob: (patientSource?.profileDob || caregiverAccount.linkedPatientDob || "").trim(),
         profileConditions: patientSource?.profileConditions ?? "",
@@ -10398,8 +11313,10 @@ export default function App() {
         lastCheckin: patientSource?.lastCheckin ?? patientLastCheckin ?? undefined,
         hasFallAlert: patientSource?.hasFallAlert ?? hasFallAlert,
         linkedPatientName: caregiverAccount.linkedPatientName,
+        linkedPatientDob: caregiverAccount.linkedPatientDob,
         linkedInviteCode: caregiverAccount.linkedInviteCode,
         caregiverName: caregiverAccount.name,
+        caregiverEmail: caregiverAccount.email,
       })
     : [];
 
@@ -10413,21 +11330,6 @@ export default function App() {
     ...(colorFilter ? { filter: "grayscale(0.15) contrast(1.1)" } : {}),
     ...(reduceMotion ? { scrollBehavior: "auto" as const } : {}),
   };
-
-  // When Hearing accessibility mode is active, keep Conversation Assist enabled.
-  // If the user leaves Hearing mode while on the Hearing tab, return Home.
-  useEffect(() => {
-    if (mode === "hearing") {
-      setCaptions(true);
-      setEnabledFeatures(prev =>
-        prev.includes("hearing_assist") ? prev : [...prev, "hearing_assist"]
-      );
-      return;
-    }
-    if (tab === "hearing") {
-      navigate({ phase: "app", tab: "home" });
-    }
-  }, [mode]);
 
   const handleSetMode = (m: AppMode) => {
     setMode(m);
@@ -10489,7 +11391,7 @@ export default function App() {
     ) :
     activePatient && role === "caregiver" ? (
       <CaregiverPatientDetail
-        patient={activePatient}
+        patient={patientSnippets.find(p => p.id === activePatient.id) ?? activePatient}
         onClose={() => setActivePatient(null)}
         theme={theme}
         medications={patientSource?.medications}
@@ -10531,7 +11433,18 @@ export default function App() {
                 },
               ];
             }
-            const snap = loadPatientSnapshot();
+            const snap = role === "caregiver"
+              ? loadPatientSnapshotForCaregiver(
+                  caregiverAccount.linkedPatientName,
+                  caregiverAccount.linkedPatientDob,
+                  {
+                    id: activeCaregiverId,
+                    name: caregiverAccount.name,
+                    email: caregiverAccount.email,
+                    inviteCode: caregiverAccount.linkedInviteCode,
+                  },
+                )
+              : loadPatientSnapshot();
             if (snap) {
               const nextSnap = { ...snap, linkedCaregivers: next };
               savePatientSnapshot(nextSnap);
@@ -10659,7 +11572,7 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <p className="text-[14px] font-bold text-[#115E59]">USPS Mail Digest</p>
               <p className="text-[12px] text-[#0F766E] mt-0.5 leading-relaxed">
-                Connect Gmail to see today’s Informed Delivery mail, ranked by priority.
+                Connect your email to see today’s Informed Delivery mail, ranked by priority.
               </p>
             </div>
           </div>
@@ -10669,7 +11582,7 @@ export default function App() {
             className="w-full py-2.5 rounded-xl text-[13px] font-bold text-white"
             style={{ background: "#0D9488" }}
           >
-            Open Mail · Connect Gmail
+            Open Mail · Connect email
           </button>
         </div>
       )}
@@ -10761,20 +11674,36 @@ export default function App() {
                     goToTab("messages");
                   }}
                   onOpenHearingAssist={() => goToTab("hearing")}
+                  appointments={appointments}
+                  setAppointments={setAppointments}
+                  setModal={setAppModal}
+                  clearModal={clearModal}
+                  useLargeSchedule={useLarge}
+                  onOpenCheckin={() => goToTab("checkin")}
                 />
               </>
             )}
-            {tab === "hearing" && mode === "hearing" && (
+            {tab === "hearing" && (mode === "hearing" || enabledFeatures.includes("hearing_assist")) && (
               <HearingAssistContent
                 theme={theme}
                 onOpenMessages={() => goToTab("messages")}
               />
             )}
-            {tab === "symptoms" && enabledFeatures.includes("symptoms_tracker") && <SymptomsContent theme={theme} />}
-            {tab === "mail" && enabledFeatures.includes("usps_mail") && (
+            {(tab === "symptoms" || tab === "meds") && (
+              <>
+                {enabledFeatures.includes("medication_tracker") && (
+                  <MedsContent theme={theme} useLarge={useLarge}
+                    medications={medications} setMedications={setMedications}
+                    medsChecked={medsChecked} setMedsChecked={setMedsChecked}
+                    setModal={setAppModal} clearModal={clearModal} />
+                )}
+                {enabledFeatures.includes("symptoms_tracker") && <SymptomsContent theme={theme} />}
+              </>
+            )}
+            {tab === "mail" && (
               <MailDigestContent theme={theme} readAloudGlobal={readAloudGlobal} />
             )}
-            {tab === "checkin"  && enabledFeatures.includes("virtual_checkin")  && (
+            {tab === "checkin" && (
               <VirtualCheckinContent
                 theme={theme}
                 lastCheckin={patientLastCheckin}
@@ -10786,12 +11715,7 @@ export default function App() {
                 }}
               />
             )}
-            {tab === "meds"     && enabledFeatures.includes("medication_tracker") && (
-              <MedsContent theme={theme} useLarge={useLarge}
-                medications={medications} setMedications={setMedications}
-                medsChecked={medsChecked} setMedsChecked={setMedsChecked}
-                setModal={setAppModal} clearModal={clearModal} />
-            )}
+            {/* Schedule moved to Home dashboard — keep tab for deep links / caregiver */}
             {tab === "schedule" && (
               <ScheduleContent theme={theme} useLarge={useLarge}
                 appointments={appointments} setAppointments={setAppointments}
@@ -10851,7 +11775,7 @@ export default function App() {
         {/* ═══════════ CAREGIVER APP ═══════════ */}
         {role === "caregiver" && (
           <>
-            {tab === "home" && (
+            {(tab === "home" || tab === "patients") && (
               <CaregiverHomeV2
                 theme={theme}
                 patients={patientSnippets}
@@ -10861,7 +11785,15 @@ export default function App() {
                     : "Caregiver (set your name in Profile)"
                 }
                 onOpenPatient={p => setActivePatient(p)}
+                appointments={appointments}
+                setAppointments={setAppointments}
+                setModal={setAppModal}
+                clearModal={clearModal}
+                useLarge={useLarge}
               />
+            )}
+            {tab === "checkin" && (
+              <CaregiverAlertsContent patients={patientSnippets} theme={theme} />
             )}
             {tab === "schedule" && (
               <ScheduleContent theme={theme} useLarge={useLarge}
@@ -10895,6 +11827,20 @@ export default function App() {
                 onSaveAccount={(info) => {
                   setCaregiverAccount(info);
                   saveCaregiverAccount(activeCaregiverId, info);
+                  const snap = loadPatientSnapshotForCaregiver(
+                    info.linkedPatientName,
+                    info.linkedPatientDob,
+                    {
+                      id: activeCaregiverId,
+                      name: info.name,
+                      email: info.email,
+                      inviteCode: info.linkedInviteCode,
+                    },
+                  );
+                  setSharedPatientData(snap);
+                  if (snap?.linkedCaregivers?.length) {
+                    setLinkedCaregivers(scrubDemoCaregivers(snap.linkedCaregivers));
+                  }
                   // Keep Care Circle relationship label in sync with who this caregiver is
                   if (info.relationshipToPatient?.trim() && activeCaregiverId) {
                     setLinkedCaregivers(prev => prev.map(cg =>
@@ -10914,6 +11860,12 @@ export default function App() {
                 medsChecked={patientSource?.medsChecked}
                 appointments={patientSource?.appointments}
                 moodHistory={patientSource?.moodHistory ?? moodHistory}
+                showProfessionalDetails={
+                  isProfessionalCaregiverPersona(
+                    CAREGIVER_PERSONAS.find(p => p.id === activeCaregiverId)?.persona,
+                  )
+                  || /primary care physician/i.test(caregiverAccount.relationshipToPatient || "")
+                }
               />
             )}
           </>

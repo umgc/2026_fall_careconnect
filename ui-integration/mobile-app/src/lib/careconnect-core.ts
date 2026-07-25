@@ -75,6 +75,15 @@ export function namesMatch(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/** True when names are exact or one full name contains the other (e.g. Eleanor vs Eleanor Wright). */
+export function namesLooselyMatch(a: string, b: string): boolean {
+  const na = a.trim().toLowerCase().replace(/\s+/g, " ");
+  const nb = b.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  return na.includes(nb) || nb.includes(na);
+}
+
 /** Normalize DOB to MM/DD/YYYY; returns "" if invalid. */
 export function normalizeDob(dob: string): string {
   if (!dob.trim()) return "";
@@ -241,6 +250,135 @@ export function caregiverPatientConfirmed(
   return true;
 }
 
+const DEMO_CAREGIVER_NAMES = new Set([
+  "maria rodriguez",
+  "dr. sarah patel",
+  "dr sarah patel",
+]);
+
+/** Seeded demo names and blank placeholders must never match a real caregiver. */
+export function isDemoCaregiverName(name?: string): boolean {
+  const n = (name || "").trim().toLowerCase();
+  return !n || DEMO_CAREGIVER_NAMES.has(n) || n === "your name" || n === "caregiver";
+}
+
+/** Minimal patient snapshot shape needed to decide who a caregiver cares for. */
+export interface PatientSnapshotLike {
+  profileName: string;
+  profileDob?: string;
+  linkedCaregivers?: LinkedCaregiver[];
+}
+
+export interface CaregiverIdentity {
+  id?: string;
+  name?: string;
+  email?: string;
+  inviteCode?: string;
+}
+
+/** Stable key for a stored patient, qualified by DOB when one is known. */
+export function patientSnapshotKey(name: string, dob?: string): string {
+  const n = (name || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const d = normalizeDob(dob || "") || (dob || "").trim();
+  return d ? `${n}|${d}` : n;
+}
+
+/** True when this caregiver appears in the patient's Care Circle. */
+export function caregiverInPatientCircle(
+  snap: PatientSnapshotLike,
+  caregiver: CaregiverIdentity,
+): boolean {
+  const circle = snap.linkedCaregivers ?? [];
+  if (!circle.length) return false;
+  const invite = (caregiver.inviteCode || "").trim();
+  const id = (caregiver.id || "").trim();
+  const name = (caregiver.name || "").trim();
+  const email = (caregiver.email || "").trim();
+  return circle.some(c => {
+    if (invite && c.inviteCode && namesMatch(c.inviteCode, invite)) return true;
+    if (id && c.id === id) return true;
+    if (
+      name
+      && !isDemoCaregiverName(name)
+      && (namesMatch(c.name, name) || namesLooselyMatch(c.name, name))
+    ) return true;
+    if (
+      email
+      && c.email?.trim()
+      && (namesMatch(c.email, email) || namesLooselyMatch(c.email, email))
+    ) return true;
+    return false;
+  });
+}
+
+/**
+ * Pick which patient a caregiver is caring for.
+ *
+ * The caregiver's linked patient name normally wins, but Care Circle membership
+ * overrides it when that name points at someone whose circle does not contain
+ * this caregiver — the situation created when a second patient signs in on the
+ * same browser and overwrites the single "active patient" slot.
+ */
+export function resolvePatientForCaregiver<T extends PatientSnapshotLike>(opts: {
+  snapshots: T[];
+  activeSnapshot?: T | null;
+  linkedPatientName?: string;
+  linkedPatientDob?: string;
+  caregiver?: CaregiverIdentity;
+}): T | null {
+  const wantedName = (opts.linkedPatientName || "").trim();
+  const wantedDob =
+    normalizeDob(opts.linkedPatientDob || "") || (opts.linkedPatientDob || "").trim();
+
+  const seen = new Set<string>();
+  const all: T[] = [];
+  for (const snap of opts.snapshots) {
+    if (!snap?.profileName || snap.profileName === "Your Name") continue;
+    const key = patientSnapshotKey(snap.profileName, snap.profileDob);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    all.push(snap);
+  }
+
+  const nameMatch = (snap: T): boolean => {
+    if (!wantedName) return false;
+    const nameOk =
+      namesMatch(snap.profileName, wantedName)
+      || namesLooselyMatch(snap.profileName, wantedName);
+    const dobOk = !wantedDob || !snap.profileDob || dobsMatch(snap.profileDob, wantedDob);
+    return nameOk && dobOk;
+  };
+
+  const byLinkedName = wantedName ? (all.find(nameMatch) ?? null) : null;
+  const membership = opts.caregiver
+    ? all.filter(snap => caregiverInPatientCircle(snap, opts.caregiver!))
+    : [];
+
+  if (
+    opts.caregiver
+    && membership.length === 1
+    && (!byLinkedName || !caregiverInPatientCircle(byLinkedName, opts.caregiver))
+  ) {
+    return membership[0];
+  }
+
+  if (membership.length > 1 && wantedName) {
+    const namedMember = membership.find(nameMatch);
+    if (namedMember) return namedMember;
+  }
+
+  if (byLinkedName) return byLinkedName;
+  if (membership.length === 1) return membership[0];
+
+  // Fall back to the active snapshot only when it is plausibly the right person.
+  const active = opts.activeSnapshot;
+  if (!active?.profileName || active.profileName === "Your Name") return null;
+  if (!wantedName) {
+    return opts.caregiver && caregiverInPatientCircle(active, opts.caregiver) ? active : null;
+  }
+  return nameMatch(active) ? active : null;
+}
+
 export function buildCaregiverPatientRoster(opts: {
   caregiverId: string;
   linkedCaregivers: LinkedCaregiver[];
@@ -256,19 +394,31 @@ export function buildCaregiverPatientRoster(opts: {
   lastCheckin?: string;
   hasFallAlert?: boolean;
   linkedPatientName?: string;
+  linkedPatientDob?: string;
   linkedInviteCode?: string;
   caregiverName?: string;
+  caregiverEmail?: string;
   personas?: CaregiverPersonaInfo[];
 }): PatientSnippet[] {
   if (!opts.linkedPatientName?.trim()) {
     return [];
   }
 
-  if (
-    !opts.profileName ||
-    opts.profileName === "Your Name" ||
-    !namesMatch(opts.linkedPatientName, opts.profileName)
-  ) {
+  const nameOk =
+    !!opts.profileName
+    && opts.profileName !== "Your Name"
+    && (
+      namesMatch(opts.linkedPatientName, opts.profileName)
+      || namesLooselyMatch(opts.linkedPatientName, opts.profileName)
+    );
+  const dobOk = !!(
+    opts.linkedPatientDob
+    && opts.profileDob
+    && dobsMatch(opts.linkedPatientDob, opts.profileDob)
+  );
+
+  // Patient identity is confirmed by matching name and/or DOB from caregiver setup.
+  if (!opts.profileName || opts.profileName === "Your Name" || (!nameOk && !dobOk)) {
     return [{
       id: "patient-unmatched",
       name: opts.linkedPatientName.trim(),
@@ -282,16 +432,48 @@ export function buildCaregiverPatientRoster(opts: {
 
   const personas = opts.personas || [];
   const persona = personas.find(p => p.id === opts.caregiverId);
-  const link =
-    (opts.linkedInviteCode
-      ? opts.linkedCaregivers.find(
-          c => c.inviteCode && namesMatch(c.inviteCode, opts.linkedInviteCode!),
-        )
-      : undefined) ||
-    opts.linkedCaregivers.find(c => c.id === opts.caregiverId) ||
-    (opts.caregiverName
-      ? opts.linkedCaregivers.find(c => namesMatch(c.name, opts.caregiverName!))
-      : undefined);
+  const byInvite = opts.linkedInviteCode
+    ? opts.linkedCaregivers.find(
+        c => c.inviteCode && namesMatch(c.inviteCode, opts.linkedInviteCode!),
+      )
+    : undefined;
+  const byId = opts.linkedCaregivers.find(c => c.id === opts.caregiverId);
+  const byName = opts.caregiverName
+    ? opts.linkedCaregivers.find(c =>
+        namesMatch(c.name, opts.caregiverName!)
+        || namesLooselyMatch(c.name, opts.caregiverName!),
+      )
+    : undefined;
+  const byEmail = opts.caregiverEmail?.trim()
+    ? opts.linkedCaregivers.find(
+        c => !!c.email?.trim() && (
+          namesMatch(c.email!, opts.caregiverEmail!)
+          || namesLooselyMatch(c.email!, opts.caregiverEmail!)
+        ),
+      )
+    : undefined;
+  // Prefer caregivers who already have shared grants so patient-granted access
+  // shows even when caregiver ids differ across sessions.
+  const withGrants = opts.linkedCaregivers.filter(
+    c => c.status !== "suspended" && c.grants.length > 0,
+  );
+  const bySoloGranted =
+    !byInvite && !byId && !byName && !byEmail && withGrants.length === 1
+      ? withGrants[0]
+      : undefined;
+  const activeWithGrants = opts.linkedCaregivers.filter(
+    c => c.status === "active" && c.grants.length > 0,
+  );
+  const bySoloActive =
+    !byInvite && !byId && !byName && !byEmail && !bySoloGranted && activeWithGrants.length === 1
+      ? activeWithGrants[0]
+      : undefined;
+  const activeOrPending = opts.linkedCaregivers.filter(c => c.status !== "suspended");
+  const bySolo =
+    !byInvite && !byId && !byName && !byEmail && !bySoloGranted && !bySoloActive && activeOrPending.length === 1
+      ? activeOrPending[0]
+      : undefined;
+  const link = byInvite || byId || byName || byEmail || bySoloGranted || bySoloActive || bySolo;
 
   if (!link) {
     return [{
@@ -331,6 +513,37 @@ export function buildCaregiverPatientRoster(opts: {
     return [{ ...base, grants: [], accessState: "suspended" as const }];
   }
 
+  // If the patient already shared grant items, treat the link as authorized even when
+  // status is still "pending" (invite waiting to join) or otherwise non-active.
+  // Suspended is handled above. This fixes "Access not authorized" after grants are on.
+  const grants = [...link.grants];
+  if (grants.length > 0 && link.status !== "suspended") {
+    return [{
+      ...base,
+      grants,
+      accessState: "ok" as const,
+      mood: grants.includes("mood") ? (opts.mood ?? undefined) : undefined,
+      lastCheckin: grants.includes("checkin_summary")
+        ? (opts.lastCheckin || undefined)
+        : undefined,
+      medAdherence: grants.includes("med_adherence") ? opts.medAdherence : undefined,
+      hasFallAlert: grants.includes("fall_alerts") ? !!opts.hasFallAlert : undefined,
+      nextVisit: grants.includes("upcoming_visits")
+        ? (opts.nextVisit || undefined)
+        : undefined,
+      symptomsSummary: grants.includes("symptoms")
+        ? (opts.symptomsSummary ||
+            [
+              opts.profileConditions && `Conditions: ${opts.profileConditions}`,
+              opts.profileAllergies && `Allergies: ${opts.profileAllergies}`,
+            ]
+              .filter(Boolean)
+              .join(" · ") ||
+            "No recent symptoms logged")
+        : undefined,
+    }];
+  }
+
   if (link.status === "pending") {
     return [{ ...base, grants: [], accessState: "pending" as const }];
   }
@@ -339,7 +552,6 @@ export function buildCaregiverPatientRoster(opts: {
     return [{ ...base, grants: [], accessState: "unauthorized" as const }];
   }
 
-  const grants = [...link.grants];
   return [{
     ...base,
     grants,
@@ -393,13 +605,21 @@ export function activateInviteInCareCircle(
   let matchedExisting = false;
   const next = circle.map(cg => {
     const codeMatch = !!(inviteCode && cg.inviteCode && namesMatch(cg.inviteCode, inviteCode));
-    const nameMatch = !!(opts.caregiverName && namesMatch(cg.name, opts.caregiverName));
+    const nameMatch = !!(opts.caregiverName && (
+      namesMatch(cg.name, opts.caregiverName)
+      || namesLooselyMatch(cg.name, opts.caregiverName)
+    ));
+    const emailMatch = !!(opts.caregiverEmail?.trim() && cg.email?.trim() && (
+      namesMatch(cg.email, opts.caregiverEmail)
+      || namesLooselyMatch(cg.email, opts.caregiverEmail)
+    ));
     // Only treat as patient-approved when the Care Circle already has this invite or person.
-    if (codeMatch || nameMatch) {
+    if (codeMatch || nameMatch || emailMatch) {
       matchedExisting = true;
       return {
         ...cg,
         // Patient already added this person → treat as approved/active (unless suspended).
+        // Keep any grants the patient already toggled on.
         status: cg.status === "suspended" ? ("suspended" as const) : ("active" as const),
         name: opts.caregiverName || cg.name,
         relationship: opts.relationship || cg.relationship,
@@ -407,6 +627,9 @@ export function activateInviteInCareCircle(
         phone: opts.caregiverPhone || cg.phone,
         inviteCode: inviteCode || cg.inviteCode,
         initials: makeInitials(opts.caregiverName || cg.name),
+        grants: cg.grants.length > 0
+          ? cg.grants
+          : (["mood", "checkin_summary", "med_adherence"] as GrantedItem[]),
       };
     }
     return cg;
@@ -462,4 +685,223 @@ export function medAdherencePercent(
   const taken = Object.values(medsChecked).filter(Boolean).length;
   if (medicationsCount === 0) return 0;
   return Math.round((taken / total) * 100);
+}
+
+/** Multi-provider email detection for Mail Digest connect flow. */
+export type EmailProviderId =
+  | "gmail"
+  | "microsoft"
+  | "yahoo"
+  | "apple"
+  | "aol"
+  | "zoho"
+  | "imap";
+
+export type EmailAuthMode = "oauth" | "imap";
+
+export interface DetectedEmailProvider {
+  provider: EmailProviderId;
+  authMode: EmailAuthMode;
+  label: string;
+  imapHost?: string;
+  imapPort?: number;
+}
+
+const EMAIL_BASIC_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmailFormat(email: string): boolean {
+  return EMAIL_BASIC_RE.test(email.trim());
+}
+
+export function detectEmailProvider(email: string): DetectedEmailProvider | null {
+  if (!isValidEmailFormat(email)) return null;
+  const domain = email.trim().split("@")[1]?.toLowerCase() || "";
+  if (["gmail.com", "googlemail.com"].includes(domain)) {
+    return { provider: "gmail", authMode: "oauth", label: "Gmail" };
+  }
+  if (["outlook.com", "hotmail.com", "live.com", "msn.com", "office365.com"].includes(domain)
+    || domain.endsWith(".onmicrosoft.com")) {
+    return { provider: "microsoft", authMode: "oauth", label: "Microsoft / Outlook" };
+  }
+  if (["yahoo.com", "ymail.com", "rocketmail.com"].includes(domain)) {
+    return { provider: "yahoo", authMode: "imap", label: "Yahoo", imapHost: "imap.mail.yahoo.com", imapPort: 993 };
+  }
+  if (["icloud.com", "me.com", "mac.com"].includes(domain)) {
+    return { provider: "apple", authMode: "imap", label: "Apple iCloud", imapHost: "imap.mail.me.com", imapPort: 993 };
+  }
+  if (["aol.com"].includes(domain)) {
+    return { provider: "aol", authMode: "imap", label: "AOL", imapHost: "imap.aol.com", imapPort: 993 };
+  }
+  if (domain === "zoho.com" || domain.endsWith(".zoho.com")) {
+    return { provider: "zoho", authMode: "imap", label: "Zoho", imapHost: "imap.zoho.com", imapPort: 993 };
+  }
+  return {
+    provider: "imap",
+    authMode: "imap",
+    label: "Other IMAP",
+    imapHost: `imap.${domain}`,
+    imapPort: 993,
+  };
+}
+
+/** Patient profile share tokens (demo / local). */
+export function createProfileShareToken(): string {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `ps-${Date.now().toString(36)}-${rand}`;
+}
+
+export function buildProfileShareUrl(token: string, patientName?: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://careconnect.app";
+  const q = patientName?.trim()
+    ? `?patient=${encodeURIComponent(patientName.trim())}`
+    : "";
+  return `${origin}/p/${token}${q}`;
+}
+
+export type SymptomTrendRange = "week" | "month" | "year";
+
+export interface SymptomTrendPoint {
+  label: string;
+  dateKey: string;
+  /** Average severity per named symptom series */
+  series: Record<string, number | null>;
+}
+
+function parseSymptomDay(date?: string, time?: string): Date | null {
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const d = new Date(`${date}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (time) {
+    const d = new Date(time);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function dayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Aggregate raw symptom logs into Week / Month / Year trend points. */
+export function buildSymptomTrendPoints(
+  entries: { name: string; severity: number; date?: string; time?: string }[],
+  range: SymptomTrendRange,
+  now = new Date(),
+): SymptomTrendPoint[] {
+  const names = Array.from(new Set(entries.map(e => e.name).filter(Boolean))).slice(0, 5);
+  const points: SymptomTrendPoint[] = [];
+
+  // Year and Month both use calendar-month buckets (Month = last 6, Year = last 12).
+  if (range === "month" || range === "year") {
+    const monthCount = range === "month" ? 6 : 12;
+    const start = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1);
+    for (let i = 0; i < monthCount; i++) {
+      const cursor = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+      const series: Record<string, number | null> = {};
+      for (const name of names) {
+        const matches = entries.filter(e => {
+          const d = parseSymptomDay(e.date, e.time);
+          if (!d || e.name !== name) return false;
+          return d.getFullYear() === cursor.getFullYear() && d.getMonth() === cursor.getMonth();
+        });
+        if (!matches.length) series[name] = null;
+        else series[name] = matches.reduce((s, m) => s + m.severity, 0) / matches.length;
+      }
+      points.push({
+        label: cursor.toLocaleString(undefined, { month: "short" }),
+        dateKey: key,
+        series,
+      });
+    }
+    return points;
+  }
+
+  // Week: last 7 calendar days
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 6);
+  for (let i = 0; i < 7; i++) {
+    const cursor = new Date(start);
+    cursor.setDate(start.getDate() + i);
+    const key = dayKey(cursor);
+    const series: Record<string, number | null> = {};
+    for (const name of names) {
+      const matches = entries.filter(e => {
+        const d = parseSymptomDay(e.date, e.time);
+        return d && e.name === name && dayKey(d) === key;
+      });
+      if (!matches.length) series[name] = null;
+      else series[name] = matches.reduce((s, m) => s + m.severity, 0) / matches.length;
+    }
+    points.push({
+      label: cursor.toLocaleString(undefined, { weekday: "short" }),
+      dateKey: key,
+      series,
+    });
+  }
+  return points;
+}
+
+export function isProfessionalCaregiverPersona(persona?: string | null): boolean {
+  return persona === "primary_physician";
+}
+
+/** Heuristic speaker labels used by Hearing Conversation Assist. */
+export const HEARING_SPEAKER_LABELS = ["You", "Doctor", "Caregiver", "Nurse", "Other"] as const;
+export type HearingSpeakerLabel = (typeof HEARING_SPEAKER_LABELS)[number];
+
+/**
+ * Automatically identify who is talking from caption text (demo / browser-safe
+ * diarization). Prefers content cues; otherwise alternates with the previous speaker.
+ */
+export function inferSpeakerFromText(
+  text: string,
+  previousSpeaker?: string | null,
+): HearingSpeakerLabel {
+  const t = (text || "").toLowerCase().trim();
+  if (!t) return (previousSpeaker as HearingSpeakerLabel) || "Doctor";
+
+  const youCue =
+    /\b(i (feel|felt|have|had|am|was|need|took|will|can|could|want|don'?t)|my (blood pressure|medication|pills|pain)|a little tired)\b/.test(t);
+  const doctorCue =
+    /\b(dosage|prescription|diagnosis|clinic|continue your|we'?ll review|good morning|how have you been|expected with|appointment time|blood pressure looks|vitals look|with me in clinic)\b/.test(t)
+    || /\b(dr\.|doctor)\b/.test(t);
+  const nurseCue =
+    /\b(nurse|bandage|injection|i('ll| will) take (your|the) (vitals|blood pressure)|chart)\b/.test(t);
+  const caregiverCue =
+    /\b(i('ll| will) help|set (phone )?reminders|picked (you )?up|caregiver|as your (son|daughter|spouse))\b/.test(t);
+
+  const scores: Record<HearingSpeakerLabel, number> = {
+    You: youCue ? 3 : 0,
+    Doctor: doctorCue ? 3 : 0,
+    Nurse: nurseCue ? 3 : 0,
+    Caregiver: caregiverCue ? 3 : 0,
+    Other: 0,
+  };
+
+  // Soft first-person vs clinical imperative
+  if (/\byou (should|need to|must|will)\b/.test(t)) scores.Doctor += 2;
+  if (/\bcan you (repeat|say|explain)\b/.test(t)) scores.You += 2;
+
+  let best: HearingSpeakerLabel = "Other";
+  let bestScore = 0;
+  (Object.keys(scores) as HearingSpeakerLabel[]).forEach(label => {
+    if (scores[label] > bestScore) {
+      bestScore = scores[label];
+      best = label;
+    }
+  });
+
+  if (bestScore > 0) return best;
+
+  // Alternate when cues are weak so consecutive turns don't all share one label
+  if (previousSpeaker === "You") return "Doctor";
+  if (previousSpeaker === "Doctor" || previousSpeaker === "Nurse") return "You";
+  if (previousSpeaker === "Caregiver") return "You";
+  return "Doctor";
 }
