@@ -407,6 +407,13 @@ public class ChimeService {
                             "User is not a durable call participant"));
             if (participant.getChimeAttendeeId() != null
                     && participant.getChimeJoinToken() != null) {
+                // Opaque EventBridge / roster resolve depends on this column surviving re-joins.
+                if (participant.getChimeExternalUserId() == null
+                        || participant.getChimeExternalUserId().isBlank()) {
+                    callParticipantRepository.backfillChimeExternalUserIdIfBlank(
+                            locked.getId(), parsedUserId, externalUserId);
+                    participant.setChimeExternalUserId(externalUserId);
+                }
                 final Meeting meeting = activeMeetings.get(callId);
                 final Map<String, Object> existing = buildPersistedCredentials(meeting, participant);
                 return new AttendeeClaim(locked.getId(), parsedUserId, null, existing);
@@ -429,6 +436,12 @@ public class ChimeService {
                     .orElseThrow(() -> new IllegalStateException(
                             "User is not a durable call participant"));
             if (refreshed.getChimeAttendeeId() != null && refreshed.getChimeJoinToken() != null) {
+                if (refreshed.getChimeExternalUserId() == null
+                        || refreshed.getChimeExternalUserId().isBlank()) {
+                    callParticipantRepository.backfillChimeExternalUserIdIfBlank(
+                            locked.getId(), parsedUserId, externalUserId);
+                    refreshed.setChimeExternalUserId(externalUserId);
+                }
                 final Meeting meeting = activeMeetings.get(callId);
                 return new AttendeeClaim(
                         locked.getId(),
@@ -1052,9 +1065,24 @@ public class ChimeService {
         if (cachedAttendeeId == null || cachedAttendeeId.toString().isBlank()) {
             return false;
         }
+        final List<ChimeMeetingAttendee> live = listMeetingAttendees(meeting.meetingId());
+        boolean sawVerifiableAppAttendee = false;
+        for (final ChimeMeetingAttendee attendee : live) {
+            if (attendee.externalUserId() == null
+                    || attendee.externalUserId().isBlank()
+                    || ChimeExternalUserIdParser.isPipelineInternal(attendee.externalUserId())) {
+                continue;
+            }
+            sawVerifiableAppAttendee = true;
+            break;
+        }
+        // Empty / failed ListAttendees (or pipeline-only roster): cannot verify — keep cache.
+        if (!sawVerifiableAppAttendee) {
+            return true;
+        }
         final String liveAttendeeId =
                 findLiveAttendeeIdForUser(callId, meeting.meetingId(), userId);
-        // Null means ListAttendees did not show this user — do not treat as still live.
+        // Roster is visible but this user is absent → fail closed (stale cache).
         return liveAttendeeId != null && liveAttendeeId.equals(cachedAttendeeId.toString());
     }
 

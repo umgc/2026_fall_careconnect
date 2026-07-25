@@ -233,9 +233,13 @@ public class CallController {
           log.info("User {} joined call {}", currentUser.getId(), callId);
         }
         // Exactly one join transaction wins this durable threshold election across all nodes.
-        if (recordingStartOwner
-            && environment.getProperty(
-                "careconnect.recording.system-transcription-enabled", Boolean.class, false)) {
+        // System capture (composited recording + KVS speaker-ID ingest) share the same gate so
+        // KVS is not started without an elected system-transcription path / durable system row
+        // to persist media_stream_pipeline_id across ECS tasks.
+        final boolean systemTranscriptionEnabled = Boolean.TRUE.equals(
+            environment.getProperty(
+                "careconnect.recording.system-transcription-enabled", Boolean.class, false));
+        if (recordingStartOwner && systemTranscriptionEnabled) {
           try {
             final Map<String, Object> recording =
                 callRecordingService.startRecordingTyped(callId, null, true).toMap();
@@ -245,12 +249,9 @@ public class CallController {
               log.warn("Auto-recording start failed for call {}: {}", callId, e.getMessage());
             }
           }
-        }
-        // KVS ingest is gated on the same durable election as system recording. Late joiners
-        // only refresh attendee→stream bindings against an existing pipeline.
-        if (recordingStartOwner) {
           callRecordingService.startKvsPipelineAsync(callId);
         } else {
+          // Late joiners (or transcription-off) only refresh bindings if a pipeline already exists.
           callRecordingService.refreshKvsAttendeeStreamsAsync(callId);
         }
         return ResponseEntity.ok(response);

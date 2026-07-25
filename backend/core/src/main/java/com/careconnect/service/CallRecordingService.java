@@ -797,23 +797,30 @@ public class CallRecordingService {
   }
 
   /**
-   * Returns a real media stream pipeline id from memory or the system recording row, ignoring the
-   * in-flight claim marker.
+   * Returns a real media stream pipeline id from the durable system recording row first, then
+   * this node's memory map. DB-first keeps multi-ECS-task joins from missing a pipeline started
+   * on another task (in-memory map is node-local).
    */
   private String resolveExistingMediaStreamPipelineId(final String callId) {
-    final String inMemory = activeMediaStreamPipelineIds.get(callId);
-    if (inMemory != null && !MEDIA_STREAM_PIPELINE_PENDING.equals(inMemory)) {
-      return inMemory;
-    }
     final Optional<CallRecording> recording =
         Optional.ofNullable(
                 recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(
                     callId))
             .orElse(Optional.empty());
-    return recording
-        .map(CallRecording::getMediaStreamPipelineId)
-        .filter(id -> id != null && !id.isBlank())
-        .orElse(null);
+    final String fromDb =
+        recording
+            .map(CallRecording::getMediaStreamPipelineId)
+            .filter(id -> id != null && !id.isBlank())
+            .orElse(null);
+    if (fromDb != null) {
+      activeMediaStreamPipelineIds.put(callId, fromDb);
+      return fromDb;
+    }
+    final String inMemory = activeMediaStreamPipelineIds.get(callId);
+    if (inMemory != null && !MEDIA_STREAM_PIPELINE_PENDING.equals(inMemory)) {
+      return inMemory;
+    }
+    return null;
   }
 
   /** Stops the active media stream pipeline for a call and clears attendee stream mappings. */
