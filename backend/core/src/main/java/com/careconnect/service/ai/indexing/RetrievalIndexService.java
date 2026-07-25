@@ -620,7 +620,8 @@ public class RetrievalIndexService {
             throw new IndexingDeferredException(
                     "CLINICAL_NOTE_INDEXED patient scope does not match authoritative PatientNote");
         }
-        final String contentHash = ContentHashUtil.sha256(note.getNote());
+        final String contentHash = ContentHashUtil.clinicalNoteContentHash(
+                note.getNote(), note.getAiSummary());
         if (payload.contentHash() != null
                 && !payload.contentHash().isBlank()
                 && !payload.contentHash().equals(contentHash)) {
@@ -654,6 +655,28 @@ public class RetrievalIndexService {
     }
 
     /**
+     * Removes all retrieval chunks for a source (note, document, etc.) so deleted
+     * records are no longer returned by Ask AI. Call before or as part of soft/hard delete.
+     */
+    @Transactional
+    public void removeIndexedSource(
+            final Long patientId,
+            final String sourceRecordId,
+            final RetrievalRecordType recordType) {
+        if (patientId == null
+                || sourceRecordId == null
+                || sourceRecordId.isBlank()
+                || recordType == null) {
+            throw new IllegalArgumentException(
+                    "patientId, sourceRecordId, and recordType are required to de-index");
+        }
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, recordType.name(), sourceRecordId);
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, recordType.name());
+    }
+
+    /**
      * Indexes an uploaded document's description/caption text into
      * {@code retrieval_index_chunk} with {@link RetrievalRecordType#UPLOADED_DOCUMENT}
      * (Task 4.1, description-only MVP; full OCR-backed text indexing is future work).
@@ -681,8 +704,33 @@ public class RetrievalIndexService {
             throw new IndexingDeferredException(
                     "DOCUMENT_INDEXED patient scope does not match authoritative UserFile");
         }
-        final String textExcerpt = firstNonBlank(payload.textExcerpt(), file.getDescription());
+
+        // Soft-deleted files must leave the retrieval index (late outbox events included).
+        if (Boolean.FALSE.equals(file.getIsActive())) {
+            removeIndexedSource(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT);
+            log.info("De-indexed soft-deleted DOCUMENT for fileId={}", payload.fileId());
+            return 0;
+        }
+
+        // Authoritative description only — stale outbox excerpts must not win.
+        final String textExcerpt = file.getDescription();
+        if (textExcerpt == null || textExcerpt.isBlank()) {
+            removeIndexedSource(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT);
+            log.info(
+                    "DOCUMENT_INDEXED skipped blank description for fileId={}; chunks cleared",
+                    payload.fileId());
+            return 0;
+        }
+
         final String contentHash = ContentHashUtil.sha256(textExcerpt);
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "DOCUMENT_INDEXED content hash does not match authoritative UserFile");
+        }
         chunkRepository.acquireSourceReplacementLock(
                 patientId, RetrievalRecordType.UPLOADED_DOCUMENT.name(), sourceRecordId);
 

@@ -29,11 +29,14 @@ class ConsentServiceTest {
     @Mock
     private ConsentGrantRepository consentGrantRepository;
 
+    @Mock
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+
     private ConsentService service;
 
     @BeforeEach
     void setUp() {
-        service = new ConsentService(consentGrantRepository);
+        service = new ConsentService(consentGrantRepository, caregiverPatientLinkService);
     }
 
     @Test
@@ -70,8 +73,51 @@ class ConsentServiceTest {
     }
 
     @Test
+    @DisplayName("effective consent is true when an active grant exists")
+    void isEffectiveAiRetrievalConsent_trueWhenExplicitGrant() {
+        when(consentGrantRepository.existsActiveGrant(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq("AI_RETRIEVAL"), any(Instant.class)))
+                .thenReturn(true);
+
+        assertThat(service.isEffectiveAiRetrievalConsent(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("effective consent falls back to care-circle when no grant history")
+    void isEffectiveAiRetrievalConsent_fallsBackToCareCircle() {
+        when(consentGrantRepository.existsActiveGrant(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq("AI_RETRIEVAL"), any(Instant.class)))
+                .thenReturn(false);
+        when(consentGrantRepository.existsByPatientUserIdAndGranteeUserIdAndScope(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, ConsentGrant.SCOPE_AI_RETRIEVAL))
+                .thenReturn(false);
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(true);
+
+        assertThat(service.isEffectiveAiRetrievalConsent(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("effective consent stays false after revoke history despite link")
+    void isEffectiveAiRetrievalConsent_falseAfterRevokeHistory() {
+        when(consentGrantRepository.existsActiveGrant(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq("AI_RETRIEVAL"), any(Instant.class)))
+                .thenReturn(false);
+        when(consentGrantRepository.existsByPatientUserIdAndGranteeUserIdAndScope(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, ConsentGrant.SCOPE_AI_RETRIEVAL))
+                .thenReturn(true);
+
+        assertThat(service.isEffectiveAiRetrievalConsent(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("grants consent and persists an ACTIVE row when none exists")
     void grantAiRetrievalConsent_persistsActiveGrant() {
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(true);
         when(consentGrantRepository.findActiveGrants(
                 eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq("AI_RETRIEVAL"), any(Instant.class)))
                 .thenReturn(List.of());
@@ -90,8 +136,24 @@ class ConsentServiceTest {
     }
 
     @Test
+    @DisplayName("rejects grant when caregiver has no active care-circle link")
+    void grantAiRetrievalConsent_requiresCareCircleLink() {
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(false);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.careconnect.exception.AppException.class,
+                () -> service.grantAiRetrievalConsent(
+                        PATIENT_USER_ID, CAREGIVER_USER_ID, "CAREGIVER", null));
+
+        verify(consentGrantRepository, times(0)).save(any());
+    }
+
+    @Test
     @DisplayName("refresh existing ACTIVE grant instead of inserting a duplicate")
     void grantAiRetrievalConsent_refreshesExistingActiveGrant() {
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(true);
         final ConsentGrant existing = ConsentGrant.builder()
                 .id(55L)
                 .patientUserId(PATIENT_USER_ID)
@@ -151,6 +213,28 @@ class ConsentServiceTest {
         final ArgumentCaptor<List<ConsentGrant>> captor = ArgumentCaptor.forClass(List.class);
         verify(consentGrantRepository, times(1)).saveAll(captor.capture());
         assertThat(captor.getValue()).containsExactly(active);
+    }
+
+    @Test
+    @DisplayName("writes REVOKED sentinel to end grandfather when no grant history")
+    void revokeAiRetrievalConsent_writesSentinelWhenNoHistory() {
+        when(consentGrantRepository.findActiveGrants(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq("AI_RETRIEVAL"), any(Instant.class)))
+                .thenReturn(List.of());
+        when(consentGrantRepository.existsByPatientUserIdAndGranteeUserIdAndScope(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, ConsentGrant.SCOPE_AI_RETRIEVAL))
+                .thenReturn(false);
+        when(consentGrantRepository.save(any(ConsentGrant.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        final int revoked =
+                service.revokeAiRetrievalConsent(PATIENT_USER_ID, CAREGIVER_USER_ID);
+
+        assertThat(revoked).isEqualTo(1);
+        final ArgumentCaptor<ConsentGrant> captor = ArgumentCaptor.forClass(ConsentGrant.class);
+        verify(consentGrantRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(ConsentGrant.STATUS_REVOKED);
+        assertThat(captor.getValue().getRevokedAt()).isNotNull();
     }
 
     @Test

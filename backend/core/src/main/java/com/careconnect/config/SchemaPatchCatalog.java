@@ -58,7 +58,10 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607232100_visit_summaries_and_ask_confirmation.sql"),
             new SchemaPatchLedger.Patch(
                     "2607241000-consent-grants",
-                    "db/schema-patches/2607241000_create_consent_grants.sql"));
+                    "db/schema-patches/2607241000_create_consent_grants.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607250100-consent-grants-active-unique",
+                    "db/schema-patches/2607250100_uq_consent_grants_active.sql"));
 
     private SchemaPatchCatalog() {
     }

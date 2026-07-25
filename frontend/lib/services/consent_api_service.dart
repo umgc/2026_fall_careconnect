@@ -51,15 +51,20 @@ class ConsentApiService {
   }
 
   /// Revokes AI-retrieval consent previously granted to [granteeUserId].
+  /// Uses a JSON body (not a query param) so grantee ids are not captured in
+  /// URLs / access logs.
   static Future<Map<String, dynamic>> revokeAiRetrieval({
     required int granteeUserId,
   }) async {
     final headers = await ApiService.getAuthHeaders();
-    final uri = Uri.parse(_baseUrl).replace(
-      queryParameters: {'granteeUserId': granteeUserId.toString()},
-    );
+    headers['Content-Type'] = 'application/json';
+    headers['Accept'] = 'application/json';
 
-    final response = await http.delete(uri, headers: headers);
+    final response = await http.delete(
+      Uri.parse(_baseUrl),
+      headers: headers,
+      body: jsonEncode({'granteeUserId': granteeUserId}),
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
@@ -76,8 +81,10 @@ class ConsentApiService {
     return Map<String, dynamic>.from(decoded);
   }
 
-  /// Returns whether AI-retrieval consent from [patientUserId] to
-  /// [granteeUserId] is currently active.
+  /// Returns whether Ask AI retrieval consent from [patientUserId] to
+  /// [granteeUserId] is effectively granted (explicit grant or care-circle
+  /// grandfather when no grant history exists). Prefer `effectiveConsent`,
+  /// falling back to `granted` for older backends.
   static Future<bool> isAiRetrievalGranted({
     required int patientUserId,
     required int granteeUserId,
@@ -103,6 +110,9 @@ class ConsentApiService {
       throw const FormatException(
         'AI retrieval consent check response is not an object',
       );
+    }
+    if (decoded.containsKey('effectiveConsent')) {
+      return decoded['effectiveConsent'] == true;
     }
     return decoded['granted'] == true;
   }

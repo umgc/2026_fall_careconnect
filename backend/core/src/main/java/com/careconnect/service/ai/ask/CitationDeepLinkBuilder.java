@@ -95,8 +95,9 @@ final class CitationDeepLinkBuilder {
         if (noteId == null || !noteId.chars().allMatch(Character::isDigit)) {
             return null;
         }
+        // NotetakerDetailView requires ?patientId=; omit the link rather than a broken route.
         if (patientId == null || patientId <= 0) {
-            return "/notetaker/detail/" + noteId;
+            return null;
         }
         return "/notetaker/detail/" + noteId + "?patientId=" + patientId;
     }

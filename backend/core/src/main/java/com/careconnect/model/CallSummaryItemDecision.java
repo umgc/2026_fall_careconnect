@@ -64,6 +64,10 @@ public class CallSummaryItemDecision {
      * Decision recorded by the acting user. Permitted values match the team
      * TDD section 6.2.2 contract: {@code approve}, {@code approve-for-session},
      * or {@code decline}.
+     *
+     * <p>MVP: {@code approve-for-session} is stored as a label only (clears the
+     * item's confirmation gate) and does <em>not</em> create Ask-style
+     * session-scoped suppression.
      */
     @Column(name = "decision", nullable = false, length = 24)
     private String decision;

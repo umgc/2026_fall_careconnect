@@ -14,6 +14,8 @@ import com.careconnect.repository.StructuredDocumentEntryRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.service.ai.indexing.RetrievalIndexService;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +54,7 @@ public class FileManagementService {
     private final S3StorageService s3StorageService;
     private final DocumentComplianceService documentComplianceService;
     private final IndexingEventEmitter indexingEventEmitter;
+    private final RetrievalIndexService retrievalIndexService;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
@@ -61,6 +64,7 @@ public class FileManagementService {
                                DatabaseStorageService databaseStorageService,
                                DocumentComplianceService documentComplianceService,
                                IndexingEventEmitter indexingEventEmitter,
+                               RetrievalIndexService retrievalIndexService,
                                @Autowired(required = false) S3StorageService s3StorageService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
@@ -69,6 +73,7 @@ public class FileManagementService {
         this.databaseStorageService = databaseStorageService;
         this.documentComplianceService = documentComplianceService;
         this.indexingEventEmitter = indexingEventEmitter;
+        this.retrievalIndexService = retrievalIndexService;
         this.s3StorageService = s3StorageService;
     }
     
@@ -309,6 +314,16 @@ public class FileManagementService {
         UserFile userFile = userFileRepository.findById(fileId)
                 .orElseThrow(() -> new RuntimeException("File not found: " + fileId));
 
+        if (userFile.getPatientId() != null) {
+            try {
+                retrievalIndexService.removeIndexedSource(
+                        userFile.getPatientId(),
+                        String.valueOf(userFile.getId()),
+                        RetrievalRecordType.UPLOADED_DOCUMENT);
+            } catch (Exception e) {
+                log.warn("Failed to de-index uploaded document {}: {}", fileId, e.getMessage(), e);
+            }
+        }
 
         // Soft delete
         userFile.setIsActive(false);

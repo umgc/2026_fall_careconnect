@@ -13,6 +13,8 @@ import com.careconnect.model.PatientNotetakerKeyword;
 import com.careconnect.model.PatientNotetakerKeyword.EventType;
 import com.careconnect.repository.PatientNoteRepository;
 import com.careconnect.repository.PatientNotetakerConfigRepository;
+import com.careconnect.service.ai.indexing.RetrievalIndexService;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.v2.TaskServiceV2;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +39,7 @@ class PatientNotetakerServiceTest {
     @Mock private AIChatService aiChatService;
     @Mock private TaskServiceV2 taskService;
     @Mock private IndexingEventEmitter indexingEventEmitter;
+    @Mock private RetrievalIndexService retrievalIndexService;
 
     private PatientNotetakerService service;
 
@@ -54,7 +57,8 @@ class PatientNotetakerServiceTest {
                 patientService,
                 aiChatService,
                 taskService,
-                indexingEventEmitter
+                indexingEventEmitter,
+                retrievalIndexService
         );
 
         patient = Patient.builder().id(10L).firstName("John").lastName("Doe").build();
@@ -219,12 +223,14 @@ class PatientNotetakerServiceTest {
     }
 
     @Test
-    @DisplayName("deleteNoteById deletes note")
+    @DisplayName("deleteNoteById de-indexes then deletes note")
     void deleteNoteById() {
-        doNothing().when(patientNoteRepository).deleteById(1L);
+        when(patientNoteRepository.findById(1L)).thenReturn(Optional.of(patientNote));
 
         service.deleteNoteById(1L);
 
-        verify(patientNoteRepository).deleteById(1L);
+        verify(retrievalIndexService).removeIndexedSource(
+                10L, "1", RetrievalRecordType.CLINICAL_NOTE);
+        verify(patientNoteRepository).delete(patientNote);
     }
 }

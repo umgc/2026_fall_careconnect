@@ -134,6 +134,7 @@ class VisitSummaryServiceTest {
                 eq("visit-" + VISIT_ID), sourceTextCaptor.capture(), eq(Map.of()));
         assertThat(sourceTextCaptor.getValue())
                 .contains("Medication Management")
+                .contains("Date: 2026-07-24 09:00")
                 .contains("Patient tolerated new medication well.");
     }
 

@@ -11,7 +11,7 @@
 //   Branches tested:
 //     grantAiRetrieval — 200 success (decodes response), optional fields
 //       omitted/included in the request body, non-2xx throws.
-//     revokeAiRetrieval — 200 success, query parameter present, non-2xx throws.
+//     revokeAiRetrieval — 200 success, JSON body with granteeUserId, non-2xx throws.
 //     isAiRetrievalGranted — true/false from `granted`, non-2xx throws.
 
 import 'dart:convert';
@@ -94,7 +94,7 @@ void main() {
   });
 
   group('ConsentApiService.revokeAiRetrieval()', () {
-    test('returns decoded map on 200 with granteeUserId query param',
+    test('returns decoded map on 200 with granteeUserId in JSON body',
         () async {
       late http.Request captured;
       final result = await http.runWithClient(
@@ -106,7 +106,9 @@ void main() {
       );
 
       expect(captured.method, 'DELETE');
-      expect(captured.url.queryParameters['granteeUserId'], '99');
+      expect(captured.url.queryParameters.containsKey('granteeUserId'), isFalse);
+      final sentBody = jsonDecode(captured.body) as Map;
+      expect(sentBody['granteeUserId'], 99);
       expect(result['status'], 'REVOKED');
     });
 
@@ -153,6 +155,27 @@ void main() {
       );
 
       expect(result, isFalse);
+    });
+
+    test('prefers effectiveConsent over granted when both present', () async {
+      final result = await http.runWithClient(
+        () => ConsentApiService.isAiRetrievalGranted(
+          patientUserId: 7,
+          granteeUserId: 42,
+        ),
+        () => MockClient((req) async {
+          return http.Response(
+            jsonEncode({
+              'granted': false,
+              'effectiveConsent': true,
+              'explicitGrant': false,
+            }),
+            200,
+          );
+        }),
+      );
+
+      expect(result, isTrue);
     });
 
     test('throws on non-2xx status', () async {

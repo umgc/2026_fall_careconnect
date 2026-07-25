@@ -7,7 +7,8 @@ package com.careconnect.indexing;
  * @param noteId       persisted {@code patient_note.id}; used as
  *                     {@code retrieval_index_chunk.source_record_id}
  * @param patientId    patient scope key for RBAC / indexing
- * @param contentHash  SHA-256 of the note text for idempotent re-index
+ * @param contentHash  SHA-256 of note body + AI summary for idempotent re-index
+ *                     (see {@link com.careconnect.util.ContentHashUtil#clinicalNoteContentHash})
  * @param consentScope caregiver visibility label
  */
 public record ClinicalNoteIndexedPayload(

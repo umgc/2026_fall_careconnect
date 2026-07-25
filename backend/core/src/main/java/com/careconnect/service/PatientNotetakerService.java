@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,8 @@ import com.careconnect.model.PatientNotetakerKeyword;
 import com.careconnect.model.PatientNotetakerKeyword.EventType;
 import com.careconnect.repository.PatientNoteRepository;
 import com.careconnect.repository.PatientNotetakerConfigRepository;
+import com.careconnect.service.ai.indexing.RetrievalIndexService;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.v2.TaskServiceV2;
 import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -40,13 +43,15 @@ public class PatientNotetakerService {
     private final PatientNotetakerConfigRepository patientNotetakerConfigRepository;
     private final PatientService patientService;
     private final IndexingEventEmitter indexingEventEmitter;
+    private final RetrievalIndexService retrievalIndexService;
     
     public PatientNotetakerService(PatientNoteRepository patientNoteRepository, 
         PatientNotetakerConfigRepository patientNotetakerConfigRepository, 
         PatientService patientService,
         AIChatService aiChatService,
         TaskServiceV2 taskService,
-        IndexingEventEmitter indexingEventEmitter
+        IndexingEventEmitter indexingEventEmitter,
+        RetrievalIndexService retrievalIndexService
         ) {
         this.patientNoteRepository = patientNoteRepository;
         this.patientNotetakerConfigRepository = patientNotetakerConfigRepository;
@@ -54,6 +59,7 @@ public class PatientNotetakerService {
         this.aiChatService = aiChatService;
         this.taskService = taskService;
         this.indexingEventEmitter = indexingEventEmitter;
+        this.retrievalIndexService = retrievalIndexService;
     }
 
     public PatientNotetakerConfigDTO getNotetakerConfigByPatientId(Long patientId) {
@@ -148,7 +154,7 @@ public class PatientNotetakerService {
             indexingEventEmitter.emitClinicalNoteIndexed(new ClinicalNoteIndexedPayload(
                     note.getId(),
                     note.getPatientId(),
-                    ContentHashUtil.sha256(note.getNote()),
+                    ContentHashUtil.clinicalNoteContentHash(note.getNote(), note.getAiSummary()),
                     DEFAULT_CONSENT_SCOPE));
         } catch (Exception e) {
             log.warn("Failed to emit CLINICAL_NOTE_INDEXED for noteId {}: {}",
@@ -158,7 +164,22 @@ public class PatientNotetakerService {
 
     @Transactional
     public void deleteNoteById(Long noteId) {
-        patientNoteRepository.deleteById(noteId);
+        final Optional<PatientNote> found = patientNoteRepository.findById(noteId);
+        if (found.isEmpty()) {
+            return;
+        }
+        final PatientNote note = found.get();
+        if (note.getPatientId() != null) {
+            try {
+                retrievalIndexService.removeIndexedSource(
+                        note.getPatientId(),
+                        String.valueOf(note.getId()),
+                        RetrievalRecordType.CLINICAL_NOTE);
+            } catch (Exception e) {
+                log.warn("Failed to de-index clinical note {}: {}", noteId, e.getMessage(), e);
+            }
+        }
+        patientNoteRepository.delete(note);
     }
 
     private void validatePatientId(Long patientId) {

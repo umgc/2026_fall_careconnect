@@ -46,6 +46,25 @@ class CitationDeepLinkBuilderTest {
     }
 
     @Test
+    @DisplayName("clinical note links require patientId")
+    void build_clinicalNote_requiresPatientId() {
+        assertThat(builder.build(new RankedChunk(
+                        UUID.randomUUID(),
+                        null,
+                        RetrievalRecordType.CLINICAL_NOTE,
+                        null,
+                        "42",
+                        "text",
+                        null,
+                        "auto",
+                        0.1d,
+                        1,
+                        null,
+                        "C1")))
+                .isNull();
+    }
+
+    @Test
     @DisplayName("call-owned summary rows emit call summary deep links")
     void build_sharedSummaryType_routesCallOwnedRows() {
         assertThat(build(

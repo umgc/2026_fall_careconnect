@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.exception.AppException;
 import com.careconnect.model.ConsentGrant;
 import com.careconnect.repository.ConsentGrantRepository;
 import java.time.Instant;
@@ -7,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsentService {
 
     private final ConsentGrantRepository consentGrantRepository;
+    private final CaregiverPatientLinkService caregiverPatientLinkService;
 
     /**
      * Returns whether the caregiver currently holds an active AI-retrieval consent grant
@@ -59,6 +62,30 @@ public class ConsentService {
     }
 
     /**
+     * Returns whether Ask AI retrieval consent is effectively granted for the pair —
+     * an active explicit grant, or (when no grant history exists) an active care-circle
+     * link. Matches {@link com.careconnect.service.ai.retrieval.DefaultRetrievalConsentProvider}.
+     *
+     * @param caregiverUserId grantee user id
+     * @param patientUserId patient user id
+     * @return true when Ask AI may treat {@code on_consent} content as consented
+     */
+    @Transactional(readOnly = true)
+    public boolean isEffectiveAiRetrievalConsent(
+            final Long caregiverUserId, final Long patientUserId) {
+        if (caregiverUserId == null || patientUserId == null) {
+            return false;
+        }
+        if (isAiRetrievalConsentGranted(caregiverUserId, patientUserId)) {
+            return true;
+        }
+        if (hasAnyAiRetrievalGrantHistory(caregiverUserId, patientUserId)) {
+            return false;
+        }
+        return caregiverPatientLinkService.hasAccessToPatient(caregiverUserId, patientUserId);
+    }
+
+    /**
      * Grants AI-retrieval consent from a patient to a grantee (typically a caregiver).
      *
      * <p>If an ACTIVE grant already exists for the tuple, it is refreshed in place (and any
@@ -78,6 +105,13 @@ public class ConsentService {
             final Instant expiresAt) {
         if (patientUserId == null || granteeUserId == null) {
             throw new IllegalArgumentException("patientUserId and granteeUserId are required");
+        }
+        // Prevent orphan grants to users outside the patient's care circle. Ask still
+        // enforces assertCanAsk, but grants should not accumulate without a live link.
+        if (!caregiverPatientLinkService.hasAccessToPatient(granteeUserId, patientUserId)) {
+            throw new AppException(
+                    HttpStatus.BAD_REQUEST,
+                    "No active caregiver relationship with this patient");
         }
         final Instant now = Instant.now();
         final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
@@ -127,28 +161,54 @@ public class ConsentService {
     /**
      * Revokes any active AI-retrieval consent grants from a patient to a grantee.
      *
+     * <p>When no ACTIVE grant exists and no grant history exists, inserts a {@code REVOKED}
+     * sentinel so care-circle grandfather access ends (toggle OFF matches Ask AI).
+     *
      * @param patientUserId user identifier of the patient
      * @param granteeUserId user identifier of the grantee
-     * @return number of grants revoked
+     * @return number of grants revoked or sentinel rows written
      */
     @Transactional
     public int revokeAiRetrievalConsent(final Long patientUserId, final Long granteeUserId) {
         if (patientUserId == null || granteeUserId == null) {
             return 0;
         }
-        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
-                patientUserId, granteeUserId, ConsentGrant.SCOPE_AI_RETRIEVAL, Instant.now());
         final Instant now = Instant.now();
-        for (final ConsentGrant grant : active) {
-            grant.setStatus(ConsentGrant.STATUS_REVOKED);
-            grant.setRevokedAt(now);
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, granteeUserId, ConsentGrant.SCOPE_AI_RETRIEVAL, now);
+        if (!active.isEmpty()) {
+            for (final ConsentGrant grant : active) {
+                grant.setStatus(ConsentGrant.STATUS_REVOKED);
+                grant.setRevokedAt(now);
+            }
+            consentGrantRepository.saveAll(active);
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Revoked {} AI retrieval consent grant(s): patient={} grantee={}",
+                        active.size(), patientUserId, granteeUserId);
+            }
+            return active.size();
         }
-        consentGrantRepository.saveAll(active);
-        if (log.isInfoEnabled()) {
-            log.info(
-                    "Revoked {} AI retrieval consent grant(s): patient={} grantee={}",
-                    active.size(), patientUserId, granteeUserId);
+
+        // End grandfather access when the patient toggles OFF without a prior grant row.
+        if (!hasAnyAiRetrievalGrantHistory(granteeUserId, patientUserId)) {
+            final ConsentGrant sentinel = ConsentGrant.builder()
+                    .patientUserId(patientUserId)
+                    .granteeUserId(granteeUserId)
+                    .granteeRole("CAREGIVER")
+                    .scope(ConsentGrant.SCOPE_AI_RETRIEVAL)
+                    .status(ConsentGrant.STATUS_REVOKED)
+                    .grantedAt(now)
+                    .revokedAt(now)
+                    .build();
+            consentGrantRepository.save(sentinel);
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Wrote AI retrieval revoke sentinel (end grandfather): patient={} grantee={}",
+                        patientUserId, granteeUserId);
+            }
+            return 1;
         }
-        return active.size();
+        return 0;
     }
 }

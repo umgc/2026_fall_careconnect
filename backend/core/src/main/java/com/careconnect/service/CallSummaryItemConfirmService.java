@@ -36,6 +36,16 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Medication care instructions are re-validated through {@link SafetyPipeline} before the
  * decision is recorded; when the pipeline escalates to Tier-2, a HITL hold is created instead
  * of clearing the item's confirmation gate, so a clinician reviews it first.
+ *
+ * <p><b>MVP note — {@code approve-for-session}:</b> the decision label is persisted on
+ * {@link CallSummaryItemDecision} and clears {@code needsConfirmation} on the item, but it does
+ * <em>not</em> install session-scoped suppression the way Ask AI
+ * {@code APPROVE_SESSION} does. Treat it as an audit/label variant of approve until session
+ * semantics are wired.
+ *
+ * <p><b>MVP note — HITL hold dedupe:</b> {@link HitlService#findOpenHold} then
+ * {@link HitlService#createHold} is best-effort only (no unique claim on open holds). Concurrent
+ * retries can still insert duplicates; acceptable for MVP, not for multi-writer production load.
  */
 @Slf4j
 @Service
@@ -97,19 +107,8 @@ public class CallSummaryItemConfirmService {
                     "Item not found in summary: itemId=" + itemId);
         }
 
-        final boolean isMedicationInstruction =
-                CATEGORY_CARE_INSTRUCTIONS.equals(lookup.category())
-                        && CARE_INSTRUCTION_TYPE_MEDICATION.equalsIgnoreCase(
-                                String.valueOf(lookup.item().get("type")));
-
-        if (isMedicationInstruction && !DECISION_DECLINE.equals(decision)) {
-            final SummaryItemConfirmResponse held =
-                    tryHoldForMedicationSafety(summary, callId, itemId, actor, lookup.item());
-            if (held != null) {
-                return held;
-            }
-        }
-
+        // Idempotency first: already-confirmed items must not re-enter medication
+        // safety / HITL (retries would otherwise return held=true again).
         final Object needsConfirmationRaw = lookup.item().get("needsConfirmation");
         final boolean alreadyConfirmed = Boolean.FALSE.equals(needsConfirmationRaw)
                 || "false".equalsIgnoreCase(String.valueOf(needsConfirmationRaw));
@@ -125,6 +124,19 @@ public class CallSummaryItemConfirmService {
                         false,
                         null,
                         existing.getId());
+            }
+        }
+
+        final boolean isMedicationInstruction =
+                CATEGORY_CARE_INSTRUCTIONS.equals(lookup.category())
+                        && CARE_INSTRUCTION_TYPE_MEDICATION.equalsIgnoreCase(
+                                String.valueOf(lookup.item().get("type")));
+
+        if (isMedicationInstruction && !DECISION_DECLINE.equals(decision)) {
+            final SummaryItemConfirmResponse held =
+                    tryHoldForMedicationSafety(summary, callId, itemId, actor, lookup.item());
+            if (held != null) {
+                return held;
             }
         }
 

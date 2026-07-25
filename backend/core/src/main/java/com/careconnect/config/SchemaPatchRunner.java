@@ -367,6 +367,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "H2 – consent_grants lookup index",
             "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
                 + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
+        applyRequiredPatch(
+            "H2 – consent_grants active unique",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
+                + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
+                + "WHERE status = 'ACTIVE'");
     }
 
     /**

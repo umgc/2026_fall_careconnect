@@ -60,14 +60,18 @@ public class ConsentController {
                 .body(AiRetrievalConsentResponse.from(grant));
     }
 
-    @DeleteMapping(value = "/ai-retrieval", produces = MediaType.APPLICATION_JSON_VALUE)
+    @DeleteMapping(
+            value = "/ai-retrieval",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Revoke AI-retrieval consent previously granted to a caregiver")
     public ResponseEntity<Map<String, Object>> revokeAiRetrieval(
-            @RequestParam final Long granteeUserId) {
+            @RequestBody final AiRetrievalConsentRequest request) {
         final User patient = requirePatientCaller();
-        if (granteeUserId == null) {
+        if (request == null || request.granteeUserId() == null) {
             throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
         }
+        final Long granteeUserId = request.granteeUserId();
         final int revoked =
                 consentService.revokeAiRetrievalConsent(patient.getId(), granteeUserId);
         return ResponseEntity.ok(Map.of(
@@ -88,12 +92,18 @@ public class ConsentController {
         if (!selfPatient && !selfGrantee && caller.getRole() != Role.ADMIN) {
             throw new AppException(HttpStatus.FORBIDDEN, "Not allowed to inspect this consent");
         }
-        final boolean granted =
+        final boolean explicitGrant =
                 consentService.isAiRetrievalConsentGranted(granteeUserId, patientUserId);
+        final boolean effectiveConsent =
+                consentService.isEffectiveAiRetrievalConsent(granteeUserId, patientUserId);
         return ResponseEntity.ok(Map.of(
                 "patientUserId", patientUserId,
                 "granteeUserId", granteeUserId,
-                "granted", granted));
+                // `granted` mirrors Ask AI effective consent so the dashboard toggle matches
+                // retrieval (including care-circle grandfather when no grant history exists).
+                "granted", effectiveConsent,
+                "explicitGrant", explicitGrant,
+                "effectiveConsent", effectiveConsent));
     }
 
     private User requirePatientCaller() {

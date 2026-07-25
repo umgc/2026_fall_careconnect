@@ -1020,6 +1020,9 @@ public class CallController {
       return ResponseEntity.ok(response);
     } catch (final IllegalArgumentException ex) {
       throw new AppException(HttpStatus.BAD_REQUEST, ex.getMessage());
+    } catch (final IllegalStateException ex) {
+      // Fail-closed cases (e.g. medication confirm without patientId) must not become 500s.
+      throw new AppException(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
   }
 

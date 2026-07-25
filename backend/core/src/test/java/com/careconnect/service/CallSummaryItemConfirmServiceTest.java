@@ -281,6 +281,35 @@ class CallSummaryItemConfirmServiceTest {
     }
 
     @Test
+    @DisplayName("already-confirmed medication does not re-enter safety or HITL")
+    void confirm_alreadyConfirmedMedication_skipsSafetyAndHitl() {
+        final CallSummary summary = summaryWithItems(
+                "{\"actionItems\":[],\"appointments\":[],\"careInstructions\":["
+                        + "{\"itemId\":\"item-med\",\"type\":\"medication\","
+                        + "\"text\":\"Take metformin\",\"needsConfirmation\":false}]}");
+        when(callSummaryRepository.findTopByCallIdOrderByGeneratedAtDesc(CALL_ID))
+                .thenReturn(Optional.of(summary));
+        final CallSummaryItemDecision prior = CallSummaryItemDecision.builder()
+                .id(88L)
+                .summaryId(1L)
+                .itemId("item-med")
+                .decision("approve")
+                .build();
+        when(decisionRepository.findTopBySummaryIdAndItemIdOrderByDecidedAtDesc(1L, "item-med"))
+                .thenReturn(Optional.of(prior));
+
+        final SummaryItemConfirmResponse response = service.confirm(
+                CALL_ID, "item-med", actor(),
+                new SummaryItemConfirmRequest("approve", null, null));
+
+        assertThat(response.decision()).isEqualTo("approve");
+        assertThat(response.decisionId()).isEqualTo(88L);
+        assertThat(response.held()).isFalse();
+        verifyNoHitlInteraction();
+        verify(decisionRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("declining a medication instruction skips the safety pipeline")
     void confirm_declineMedicationInstruction_skipsSafetyPipeline() {
         final CallSummary summary = summaryWithItems(

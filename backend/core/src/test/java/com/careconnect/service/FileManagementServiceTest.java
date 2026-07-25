@@ -36,6 +36,7 @@ class FileManagementServiceTest {
     @Mock private DatabaseStorageService databaseStorageService;
     @Mock private DocumentComplianceService documentComplianceService;
     @Mock private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
+    @Mock private com.careconnect.service.ai.indexing.RetrievalIndexService retrievalIndexService;
     @Mock private S3StorageService s3StorageService;
     @Mock private MultipartFile multipartFile;
 
@@ -49,7 +50,8 @@ class FileManagementServiceTest {
         MockitoAnnotations.openMocks(this);
         fileManagementService = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, s3StorageService);
+                databaseStorageService, documentComplianceService, indexingEventEmitter,
+                retrievalIndexService, s3StorageService);
         ReflectionTestUtils.setField(fileManagementService, "defaultStorageType", "database");
         ReflectionTestUtils.setField(fileManagementService, "useS3ForNewFiles", false);
 
@@ -143,7 +145,8 @@ class FileManagementServiceTest {
     void uploadFile_s3EnabledNullService_fallsBackToDatabase() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter,
+                retrievalIndexService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", true);
 
@@ -370,7 +373,8 @@ class FileManagementServiceTest {
     void getFile_s3FileNullS3Service_returnsUnavailableUrl() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter,
+                retrievalIndexService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -414,7 +418,8 @@ class FileManagementServiceTest {
     void downloadFile_s3FileNullS3Service_throwsRuntimeException() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter,
+                retrievalIndexService, null);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -550,13 +555,15 @@ class FileManagementServiceTest {
     // deleteFile tests
 
     @Test
-    @DisplayName("deleteFile - existing file - soft deletes file")
+    @DisplayName("deleteFile - existing file - soft deletes file and de-indexes")
     void deleteFile_existingFile_softDeletesFile() throws Exception {
         when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
 
         fileManagementService.deleteFile(10L, 1L);
 
         assertFalse(userFile.getIsActive());
+        verify(retrievalIndexService).removeIndexedSource(
+                1L, "10", com.careconnect.service.ai.retrieval.RetrievalRecordType.UPLOADED_DOCUMENT);
         verify(userFileRepository).save(userFile);
     }
 
