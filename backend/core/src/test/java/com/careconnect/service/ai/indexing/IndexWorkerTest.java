@@ -203,7 +203,7 @@ class IndexWorkerTest {
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt()))
                 .thenReturn(List.of(row));
         when(retrievalIndexService.ingestSummaryCreated(any()))
-                .thenThrow(new IndexingDeferredException("Visit summary indexing not implemented yet (Task 1.4)", false));
+                .thenThrow(new IndexingDeferredException("VisitSummary not found", false));
 
         worker.pollAndProcess();
 
@@ -212,9 +212,9 @@ class IndexWorkerTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
         assertThat(captor.getValue().getProcessedAt()).isNull();
-        // Future claimed_at parks until Task 1.4 so polls do not reclaim every 15s.
+        // Future claimed_at parks so polls do not reclaim every 15s.
         assertThat(captor.getValue().getClaimedAt()).isAfter(LocalDateTime.now().plusHours(5));
-        assertThat(captor.getValue().getLastError()).contains("Task 1.4");
+        assertThat(captor.getValue().getLastError()).contains("VisitSummary not found");
     }
 
     @Test

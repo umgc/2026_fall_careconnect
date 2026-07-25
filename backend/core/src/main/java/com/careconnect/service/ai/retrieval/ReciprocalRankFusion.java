@@ -33,13 +33,31 @@ final class ReciprocalRankFusion {
             final int rrfK,
             final int finalTopK,
             final int maxChunksPerSource) {
+        return merge(ftsHits, vectorHits, List.of(), rrfK, finalTopK, maxChunksPerSource, 1.0d);
+    }
+
+    /**
+     * RRF over FTS, vector, and an optional structured arm (e.g. medication timeline prefilter).
+     *
+     * @param structuredWeight multiplier applied to structured-arm contributions (design default 1.5)
+     */
+    static List<MergedHit> merge(
+            final List<RetrievalIndexChunk> ftsHits,
+            final List<RetrievalIndexChunk> vectorHits,
+            final List<RetrievalIndexChunk> structuredHits,
+            final int rrfK,
+            final int finalTopK,
+            final int maxChunksPerSource,
+            final double structuredWeight) {
         final int k = Math.max(1, rrfK);
         final int topK = Math.max(1, finalTopK);
         final int sourceCap = Math.max(1, maxChunksPerSource);
+        final double weight = structuredWeight <= 0.0d ? 1.0d : structuredWeight;
 
         final Map<UUID, MergedHit> byId = new LinkedHashMap<>();
-        accumulate(byId, ftsHits, true, k);
-        accumulate(byId, vectorHits, false, k);
+        accumulate(byId, ftsHits, Arm.FTS, k, 1.0d);
+        accumulate(byId, vectorHits, Arm.VECTOR, k, 1.0d);
+        accumulate(byId, structuredHits, Arm.STRUCTURED, k, weight);
 
         final List<MergedHit> ranked = new ArrayList<>(byId.values());
         ranked.sort((a, b) -> {
@@ -47,9 +65,8 @@ final class ReciprocalRankFusion {
             if (scoreCmp != 0) {
                 return scoreCmp;
             }
-            // Stable tie-break: prefer chunks that hit both arms, then FTS-only, then id.
-            final int armsA = (a.ftsRank() != null ? 1 : 0) + (a.vectorRank() != null ? 1 : 0);
-            final int armsB = (b.ftsRank() != null ? 1 : 0) + (b.vectorRank() != null ? 1 : 0);
+            final int armsA = armCount(a);
+            final int armsB = armCount(b);
             if (armsA != armsB) {
                 return Integer.compare(armsB, armsA);
             }
@@ -58,6 +75,20 @@ final class ReciprocalRankFusion {
 
         final List<MergedHit> diverse = capChunksPerSource(ranked, sourceCap, topK);
         return List.copyOf(diverse);
+    }
+
+    private static int armCount(final MergedHit hit) {
+        int count = 0;
+        if (hit.ftsRank() != null) {
+            count++;
+        }
+        if (hit.vectorRank() != null) {
+            count++;
+        }
+        if (hit.structuredRank() != null) {
+            count++;
+        }
+        return count;
     }
 
     private static List<MergedHit> capChunksPerSource(
@@ -85,11 +116,18 @@ final class ReciprocalRankFusion {
         return "source:" + sourceRecordId;
     }
 
+    private enum Arm {
+        FTS,
+        VECTOR,
+        STRUCTURED
+    }
+
     private static void accumulate(
             final Map<UUID, MergedHit> byId,
             final List<RetrievalIndexChunk> hits,
-            final boolean ftsArm,
-            final int k) {
+            final Arm arm,
+            final int k,
+            final double weight) {
         if (hits == null || hits.isEmpty()) {
             return;
         }
@@ -99,7 +137,7 @@ final class ReciprocalRankFusion {
                 continue;
             }
             final int rank = i + 1;
-            final double contribution = 1.0d / (k + rank);
+            final double contribution = weight / (k + rank);
             final MergedHit existing = byId.get(chunk.getId());
             if (existing == null) {
                 byId.put(
@@ -107,16 +145,20 @@ final class ReciprocalRankFusion {
                         new MergedHit(
                                 chunk,
                                 contribution,
-                                ftsArm ? rank : null,
-                                ftsArm ? null : rank));
+                                arm == Arm.FTS ? Integer.valueOf(rank) : null,
+                                arm == Arm.VECTOR ? Integer.valueOf(rank) : null,
+                                arm == Arm.STRUCTURED ? Integer.valueOf(rank) : null));
             } else {
                 byId.put(
                         chunk.getId(),
                         new MergedHit(
                                 existing.chunk(),
                                 existing.rrfScore() + contribution,
-                                ftsArm ? rank : existing.ftsRank(),
-                                ftsArm ? existing.vectorRank() : rank));
+                                arm == Arm.FTS ? Integer.valueOf(rank) : existing.ftsRank(),
+                                arm == Arm.VECTOR ? Integer.valueOf(rank) : existing.vectorRank(),
+                                arm == Arm.STRUCTURED
+                                        ? Integer.valueOf(rank)
+                                        : existing.structuredRank()));
             }
         }
     }
@@ -128,6 +170,15 @@ final class ReciprocalRankFusion {
             RetrievalIndexChunk chunk,
             double rrfScore,
             Integer ftsRank,
-            Integer vectorRank) {
+            Integer vectorRank,
+            Integer structuredRank) {
+
+        MergedHit(
+                final RetrievalIndexChunk chunk,
+                final double rrfScore,
+                final Integer ftsRank,
+                final Integer vectorRank) {
+            this(chunk, rrfScore, ftsRank, vectorRank, null);
+        }
     }
 }
