@@ -1148,6 +1148,134 @@ void main() {
       expect(result.confirmation?.required, isTrue);
     });
 
+    test('accepts DELIVERED when confirmation prompt is suppressed', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'DELIVERED',
+          'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+          'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+          'answer': {'text': 'Metformin was started.'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Metformin was started.',
+              'deepLink': null,
+            }
+          ],
+          'disclaimer': {
+            'text': 'Records-based information; not medical advice.',
+            'aiNoticeRequired': true,
+            'recordsBasedFraming': true,
+            'locale': 'en-US',
+          },
+          'escalation': {
+            'tier': 1,
+            'reason': 'Tier1_auto_deliver',
+            'requiresClinicianReview': false,
+          },
+          'confirmation': {
+            'promptConfirmWithProvider': false,
+            'message': null,
+          },
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.answer, 'Metformin was started.');
+      expect(result.confirmation?.required, isFalse);
+      expect(result.confirmation?.text, isNull);
+    });
+
+    test('models medicationTimeline events on a delivered response', () async {
+      final body = _validDeliveredAskResponse();
+      body['medicationTimeline'] = {
+        'events': [
+          {
+            'itemId': 'item-1',
+            'medicationName': 'Metformin',
+            'medicationNameNormalized': 'metformin',
+            'eventType': 'START',
+            'effectiveDate': '2026-01-05',
+            'doseFrom': null,
+            'doseTo': '500mg',
+            'citationRef': 'C1',
+          },
+          {
+            'medicationName': 'Lisinopril',
+            'eventType': 'DOSE_CHANGE',
+            'effectiveDate': '2026-02-10',
+            'doseFrom': '5mg',
+            'doseTo': '10mg',
+          },
+        ],
+      };
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'medications', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.medicationTimeline, isNotNull);
+      expect(result.medicationTimeline!.events, hasLength(2));
+      final first = result.medicationTimeline!.events.first;
+      expect(first.itemId, 'item-1');
+      expect(first.medicationName, 'Metformin');
+      expect(first.eventType, 'START');
+      expect(first.effectiveDate, '2026-01-05');
+      expect(first.doseFrom, isNull);
+      expect(first.doseTo, '500mg');
+      expect(first.citationRef, 'C1');
+      final second = result.medicationTimeline!.events[1];
+      expect(second.medicationName, 'Lisinopril');
+      expect(second.itemId, isNull);
+      expect(second.citationRef, isNull);
+    });
+
+    test('medicationTimeline defaults to null when absent', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, _validDeliveredAskResponse()),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.medicationTimeline, isNull);
+    });
+
+    test('rejects malformed medicationTimeline payload', () async {
+      final body = _validDeliveredAskResponse();
+      body['medicationTimeline'] = 'not-an-object';
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('never exposes medicationTimeline from a non-2xx response',
+        () async {
+      final body = _validDeliveredAskResponse();
+      body['medicationTimeline'] = {
+        'events': [
+          {'medicationName': 'Metformin'},
+        ],
+      };
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(503, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.medicationTimeline, isNull);
+    });
+
     test('fails closed when DELIVERED omits mandatory safety metadata',
         () async {
       final result = await http.runWithClient(

@@ -33,6 +33,7 @@ import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/widgets/menu/menu_page.dart';
+import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
 import 'package:care_connect_app/widgets/search/route_search_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -990,7 +991,53 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
     GoRoute(
       path: '/file-management',
-      builder: (_, __) => const FileManagementPage(),
+      builder: (context, state) => FileManagementPage(
+        highlightFileId: state.uri.queryParameters['fileId'],
+      ),
+    ),
+    GoRoute(
+      path: '/calls/:callId/summary',
+      builder: (context, state) {
+        final callId = state.pathParameters['callId'];
+        if (callId == null || callId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text('Missing call id')),
+          );
+        }
+        return PostCallTelemetrySummaryScreen(callId: callId);
+      },
+    ),
+    GoRoute(
+      path: '/visits/:visitId/summary',
+      builder: (context, state) {
+        final visitId = state.pathParameters['visitId'] ?? '';
+        return Scaffold(
+          appBar: AppBar(title: const Text('Visit summary')),
+          body: Center(
+            child: Text(
+              visitId.isEmpty
+                  ? 'Missing visit id'
+                  : 'Visit $visitId summary is available in EVV visit history.',
+            ),
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/mail/:mailId',
+      builder: (context, state) {
+        final mailId = state.pathParameters['mailId'] ?? '';
+        return Scaffold(
+          appBar: AppBar(title: const Text('Mail piece')),
+          body: Center(
+            child: Text(
+              mailId.isEmpty
+                  ? 'Missing mail id'
+                  : 'Open Informed Delivery for mail piece $mailId.',
+            ),
+          ),
+        );
+      },
     ),
     GoRoute(
       path: '/ai-configuration',
@@ -1007,14 +1054,9 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: "/notetaker/detail/:noteId",
       builder: (context, state) {
-        final noteId = state.pathParameters['noteId'];
-        final extra = state.extra;
-        if (noteId == null || extra == null || extra is! PatientNote) {
-          return const Scaffold(
-            body: Center(child: Text('Invalid note ID or missing note data')),
-          );
-        }
-        return NotetakerDetailView();
+        // Accept either a PatientNote via `extra` (list → detail) or
+        // noteId + optional ?patientId= (Ask AI citation deep link).
+        return const NotetakerDetailView();
       },
     ),
 

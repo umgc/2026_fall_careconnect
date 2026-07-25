@@ -12,10 +12,14 @@ import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.PatientNoteRepository;
+import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.ClinicalNoteChunker;
+import com.careconnect.service.ai.indexing.chunker.DocumentChunker;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
@@ -76,6 +80,10 @@ class IndexingPipelineE2ETest {
     @Mock
     private UspsMailpieceRepository uspsMailpieceRepository;
     @Mock
+    private PatientNoteRepository patientNoteRepository;
+    @Mock
+    private UserFileRepository userFileRepository;
+    @Mock
     private RetrievalIndexChunkRepository chunkRepository;
     @Mock
     private ChunkEmbeddingService chunkEmbeddingService;
@@ -94,10 +102,14 @@ class IndexingPipelineE2ETest {
                 callSessionRepository,
                 callTranscriptService,
                 uspsMailpieceRepository,
+                patientNoteRepository,
+                userFileRepository,
                 chunkRepository,
                 new SummaryChunker(objectMapper),
                 new TranscriptSegmentChunker(),
                 new MailpieceChunker(),
+                new ClinicalNoteChunker(),
+                new DocumentChunker(),
                 objectMapper,
                 chunkEmbeddingService);
         worker = new IndexWorker(

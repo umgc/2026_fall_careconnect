@@ -1,5 +1,7 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.ClinicalNoteIndexedPayload;
+import com.careconnect.indexing.DocumentIndexedPayload;
 import com.careconnect.indexing.IndexingEventType;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
@@ -247,6 +249,16 @@ public class IndexWorker {
                 final MailpieceIndexedPayload payload =
                         objectMapper.treeToValue(payloadNode, MailpieceIndexedPayload.class);
                 return retrievalIndexService.ingestMailpieceIndexed(payload);
+            }
+            if (IndexingEventType.CLINICAL_NOTE_INDEXED.equals(eventType)) {
+                final ClinicalNoteIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, ClinicalNoteIndexedPayload.class);
+                return retrievalIndexService.ingestClinicalNoteIndexed(payload);
+            }
+            if (IndexingEventType.DOCUMENT_INDEXED.equals(eventType)) {
+                final DocumentIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, DocumentIndexedPayload.class);
+                return retrievalIndexService.ingestDocumentIndexed(payload);
             }
         } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
             throw ex;

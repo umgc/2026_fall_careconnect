@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import '../services/ai_chat_service.dart';
 import '../config/theme/app_theme.dart';
 import 'package:provider/provider.dart';
@@ -29,6 +30,7 @@ class ChatMessage {
   final String? requestId;
   final String? auditId;
   final String? sessionId;
+  final MedicationTimeline? medicationTimeline;
 
   ChatMessage({
     required this.text,
@@ -47,6 +49,7 @@ class ChatMessage {
     this.requestId,
     this.auditId,
     this.sessionId,
+    this.medicationTimeline,
   });
 
   ChatMessage copyWith({
@@ -66,6 +69,7 @@ class ChatMessage {
     String? requestId,
     String? auditId,
     String? sessionId,
+    MedicationTimeline? medicationTimeline,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -84,6 +88,7 @@ class ChatMessage {
       requestId: requestId ?? this.requestId,
       auditId: auditId ?? this.auditId,
       sessionId: sessionId ?? this.sessionId,
+      medicationTimeline: medicationTimeline ?? this.medicationTimeline,
     );
   }
 }
@@ -1162,6 +1167,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       AiAskDisclaimer? disclaimer;
       AiAskEscalation? escalation;
       AiAskConfirmation? confirmation;
+      MedicationTimeline? medicationTimeline;
       var showRetry = false;
 
       if (askResult != null) {
@@ -1185,6 +1191,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         disclaimer = askResult.disclaimer;
         escalation = askResult.escalation;
         confirmation = askResult.confirmation;
+        medicationTimeline = askResult.medicationTimeline;
         switch (askResult.deliveryStatus) {
           case AiAskDeliveryStatus.delivered:
             aiText = askResult.answer?.trim().isNotEmpty == true
@@ -1261,6 +1268,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             requestId: askResult?.requestId,
             auditId: askResult?.auditId,
             sessionId: askResult?.sessionId ?? _askSessionId,
+            medicationTimeline: medicationTimeline,
           ),
         );
         _isLoading = false;
@@ -1736,31 +1744,135 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                 color: colorScheme.error,
                               ),
                             ),
+                          if (msg.medicationTimeline != null &&
+                              msg.medicationTimeline!.events.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Medication timeline',
+                              key: const Key('ask-ai-medication-timeline'),
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            ...msg.medicationTimeline!.events.map((event) {
+                              final hasDose = (event.doseFrom
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true) ||
+                                  (event.doseTo?.trim().isNotEmpty == true);
+                              final parts = <String>[
+                                if (event.effectiveDate
+                                        ?.trim()
+                                        .isNotEmpty ==
+                                    true)
+                                  event.effectiveDate!.trim(),
+                                event.medicationName,
+                                if (event.eventType?.trim().isNotEmpty ==
+                                    true)
+                                  event.eventType!.trim(),
+                                if (hasDose)
+                                  '${event.doseFrom ?? '—'} \u2192 '
+                                      '${event.doseTo ?? '—'}',
+                              ];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        parts.join(' · '),
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                    ),
+                                    if (event.citationRef
+                                            ?.trim()
+                                            .isNotEmpty ==
+                                        true) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 1,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.surface,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: colorScheme.outlineVariant,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          event.citationRef!.trim(),
+                                          style: theme.textTheme.labelSmall,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
                           if (msg.citations.isNotEmpty) ...[
                             const SizedBox(height: 6),
                             ...msg.citations.map(
-                              (citation) => Semantics(
-                                label:
-                                    'Citation ${citation.citationId}: ${citation.excerpt}',
-                                child: Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(top: 4),
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: colorScheme.outlineVariant,
+                              (citation) {
+                                final deepLink = citation.deepLink?.trim();
+                                final hasDeepLink =
+                                    deepLink != null && deepLink.isNotEmpty;
+                                final content = Text(
+                                  '${citation.citationId}'
+                                  '${citation.title == null ? '' : ' — ${citation.title}'}\n'
+                                  '${citation.excerpt}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: hasDeepLink
+                                        ? colorScheme.primary
+                                        : null,
+                                    decoration: hasDeepLink
+                                        ? TextDecoration.underline
+                                        : null,
+                                  ),
+                                );
+                                return Semantics(
+                                  label:
+                                      'Citation ${citation.citationId}: ${citation.excerpt}',
+                                  button: hasDeepLink,
+                                  child: InkWell(
+                                    onTap: hasDeepLink
+                                        ? () {
+                                            try {
+                                              context.go(deepLink);
+                                            } catch (_) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Could not open that citation.',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        : null,
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: colorScheme.outlineVariant,
+                                        ),
+                                      ),
+                                      child: content,
                                     ),
                                   ),
-                                  child: Text(
-                                    '${citation.citationId}'
-                                    '${citation.title == null ? '' : ' — ${citation.title}'}\n'
-                                    '${citation.excerpt}',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
                           ],
                           if (msg.disclaimer?.aiNoticeRequired == true) ...[

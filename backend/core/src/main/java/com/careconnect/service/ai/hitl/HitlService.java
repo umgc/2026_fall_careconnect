@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -87,6 +88,29 @@ public class HitlService {
         this.safetyPipeline = safetyPipeline;
         this.objectMapper = objectMapper;
         this.ttlHours = ttlHours <= 0 ? 72 : ttlHours;
+    }
+
+    /**
+     * Returns an open ({@code PENDING_REVIEW}) hold for {@code sourceSurface} whose
+     * {@code queryTextHash} matches {@code correlationKey}, if one exists. Used to dedupe
+     * summary-item HITL retries that would otherwise create duplicate holds.
+     *
+     * @param sourceSurface surface that created the hold (e.g. {@code CALL_SUMMARY})
+     * @param correlationKey stable key hashed the same way as {@link #createHold} query text
+     * @return the open hold, or empty when none exists
+     */
+    @Transactional(readOnly = true)
+    public Optional<AiHeldItem> findOpenHold(
+            final String sourceSurface, final String correlationKey) {
+        if (sourceSurface == null
+                || sourceSurface.isBlank()
+                || correlationKey == null
+                || correlationKey.isBlank()) {
+            return Optional.empty();
+        }
+        return heldItemRepository
+                .findFirstBySourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        sourceSurface, sha256(correlationKey), AiHeldItemStatus.PENDING_REVIEW);
     }
 
     @Transactional

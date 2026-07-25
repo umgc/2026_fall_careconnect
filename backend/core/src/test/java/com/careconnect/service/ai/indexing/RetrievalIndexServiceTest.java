@@ -1,20 +1,28 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.ClinicalNoteIndexedPayload;
+import com.careconnect.indexing.DocumentIndexedPayload;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.model.PatientNote;
+import com.careconnect.model.UserFile;
 import com.careconnect.model.UspsMailpiece;
 import com.careconnect.model.VisitSummary;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallSessionRepository;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.PatientNoteRepository;
+import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.ClinicalNoteChunker;
+import com.careconnect.service.ai.indexing.chunker.DocumentChunker;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
@@ -67,6 +75,10 @@ class RetrievalIndexServiceTest {
     @Mock
     private UspsMailpieceRepository uspsMailpieceRepository;
     @Mock
+    private PatientNoteRepository patientNoteRepository;
+    @Mock
+    private UserFileRepository userFileRepository;
+    @Mock
     private RetrievalIndexChunkRepository chunkRepository;
     @Mock
     private ChunkEmbeddingService chunkEmbeddingService;
@@ -82,10 +94,14 @@ class RetrievalIndexServiceTest {
                 callSessionRepository,
                 callTranscriptService,
                 uspsMailpieceRepository,
+                patientNoteRepository,
+                userFileRepository,
                 chunkRepository,
                 new SummaryChunker(mapper),
                 new TranscriptSegmentChunker(),
                 new MailpieceChunker(),
+                new ClinicalNoteChunker(),
+                new DocumentChunker(),
                 mapper,
                 chunkEmbeddingService);
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
@@ -1207,6 +1223,287 @@ class RetrievalIndexServiceTest {
         assertThat(service.ingestMailpieceIndexed(payload)).isZero();
         verify(chunkRepository).acquireSourceReplacementLock(
                 42L, RetrievalRecordType.USPS_MAIL.name(), "55");
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestClinicalNoteIndexed writes CLINICAL_NOTE chunk and replaces prior source rows")
+    void ingestClinicalNoteIndexed_writesChunk() {
+        final PatientNote note = PatientNote.builder()
+                .id(7L)
+                .patientId(42L)
+                .note("Patient reports mild headache.")
+                .aiSummary("Mild headache noted.")
+                .build();
+        when(patientNoteRepository.findById(7L)).thenReturn(Optional.of(note));
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                eq(42L), eq("7"), any()))
+                .thenReturn(List.of());
+
+        final String contentHash = ContentHashUtil.clinicalNoteContentHash(
+                note.getNote(), note.getAiSummary());
+        final ClinicalNoteIndexedPayload payload =
+                new ClinicalNoteIndexedPayload(7L, 42L, contentHash, "on_consent");
+
+        final int written = service.ingestClinicalNoteIndexed(payload);
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "7", RetrievalRecordType.CLINICAL_NOTE.name());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(1);
+        assertThat(captor.getValue().get(0).getRecordType())
+                .isEqualTo(RetrievalRecordType.CLINICAL_NOTE.name());
+        assertThat(captor.getValue().get(0).getChunkText())
+                .contains("Patient reports mild headache.")
+                .contains("Mild headache noted.");
+    }
+
+    @Test
+    @DisplayName("ingestClinicalNoteIndexed skips when contentHash already indexed")
+    void ingestClinicalNoteIndexed_skipsUnchangedHash() {
+        final PatientNote note = PatientNote.builder()
+                .id(7L)
+                .patientId(42L)
+                .note("Patient reports mild headache.")
+                .aiSummary("Mild headache noted.")
+                .build();
+        when(patientNoteRepository.findById(7L)).thenReturn(Optional.of(note));
+        final String contentHash = ContentHashUtil.clinicalNoteContentHash(
+                note.getNote(), note.getAiSummary());
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.CLINICAL_NOTE.name())
+                .sourceRecordId("7")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"" + contentHash + "\"}")
+                .build();
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "7", RetrievalRecordType.CLINICAL_NOTE.name()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestClinicalNoteIndexed(
+                new ClinicalNoteIndexedPayload(7L, 42L, contentHash, "on_consent"));
+
+        assertThat(written).isZero();
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ingestClinicalNoteIndexed reindexes when only aiSummary changes")
+    void ingestClinicalNoteIndexed_reindexesWhenAiSummaryChanges() {
+        final PatientNote note = PatientNote.builder()
+                .id(7L)
+                .patientId(42L)
+                .note("Patient reports mild headache.")
+                .aiSummary("Updated summary.")
+                .build();
+        when(patientNoteRepository.findById(7L)).thenReturn(Optional.of(note));
+        final String oldHash = ContentHashUtil.clinicalNoteContentHash(
+                note.getNote(), "Mild headache noted.");
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.CLINICAL_NOTE.name())
+                .sourceRecordId("7")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"" + oldHash + "\"}")
+                .build();
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "7", RetrievalRecordType.CLINICAL_NOTE.name()))
+                .thenReturn(List.of(existing));
+
+        final String newHash = ContentHashUtil.clinicalNoteContentHash(
+                note.getNote(), note.getAiSummary());
+        final int written = service.ingestClinicalNoteIndexed(
+                new ClinicalNoteIndexedPayload(7L, 42L, newHash, "on_consent"));
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "7", RetrievalRecordType.CLINICAL_NOTE.name());
+        verify(chunkRepository).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("removeIndexedSource deletes chunks for the source")
+    void removeIndexedSource_deletesChunks() {
+        service.removeIndexedSource(42L, "7", RetrievalRecordType.CLINICAL_NOTE);
+
+        verify(chunkRepository).acquireSourceReplacementLock(
+                42L, RetrievalRecordType.CLINICAL_NOTE.name(), "7");
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "7", RetrievalRecordType.CLINICAL_NOTE.name());
+    }
+
+    @Test
+    @DisplayName("ingestClinicalNoteIndexed defers when patient scope does not match")
+    void ingestClinicalNoteIndexed_rejectsCrossPatientStalePayload() {
+        final PatientNote note = PatientNote.builder()
+                .id(7L)
+                .patientId(42L)
+                .note("Patient reports mild headache.")
+                .build();
+        when(patientNoteRepository.findById(7L)).thenReturn(Optional.of(note));
+
+        assertThatThrownBy(() -> service.ingestClinicalNoteIndexed(
+                new ClinicalNoteIndexedPayload(7L, 99L, "sha-x", "on_consent")))
+                .isInstanceOf(IndexingDeferredException.class);
+
+        verify(chunkRepository, never())
+                .findByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ingestDocumentIndexed writes UPLOADED_DOCUMENT chunk from description")
+    void ingestDocumentIndexed_writesChunk() {
+        final UserFile file = UserFile.builder()
+                .id(21L)
+                .patientId(42L)
+                .filename("scan.pdf")
+                .originalFilename("scan.pdf")
+                .ownerId(42L)
+                .ownerType(UserFile.OwnerType.PATIENT)
+                .fileCategory(UserFile.FileCategory.MEDICAL_RECORD)
+                .description("Lab results from annual physical.")
+                .build();
+        when(userFileRepository.findById(21L)).thenReturn(Optional.of(file));
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                eq(42L), eq("21"), any()))
+                .thenReturn(List.of());
+
+        final String contentHash = ContentHashUtil.sha256(file.getDescription());
+        final DocumentIndexedPayload payload = new DocumentIndexedPayload(
+                21L, 42L, contentHash, "MEDICAL_RECORD",
+                file.getDescription(), "on_consent");
+
+        final int written = service.ingestDocumentIndexed(payload);
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "21", RetrievalRecordType.UPLOADED_DOCUMENT.name());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(1);
+        assertThat(captor.getValue().get(0).getRecordType())
+                .isEqualTo(RetrievalRecordType.UPLOADED_DOCUMENT.name());
+        assertThat(captor.getValue().get(0).getChunkText())
+                .contains("Lab results from annual physical.");
+    }
+
+    @Test
+    @DisplayName("ingestDocumentIndexed skips when contentHash already indexed")
+    void ingestDocumentIndexed_skipsUnchangedHash() {
+        final UserFile file = UserFile.builder()
+                .id(21L)
+                .patientId(42L)
+                .filename("scan.pdf")
+                .originalFilename("scan.pdf")
+                .ownerId(42L)
+                .ownerType(UserFile.OwnerType.PATIENT)
+                .fileCategory(UserFile.FileCategory.MEDICAL_RECORD)
+                .description("Lab results from annual physical.")
+                .build();
+        when(userFileRepository.findById(21L)).thenReturn(Optional.of(file));
+        final String contentHash = ContentHashUtil.sha256(file.getDescription());
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.UPLOADED_DOCUMENT.name())
+                .sourceRecordId("21")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"" + contentHash + "\"}")
+                .build();
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "21", RetrievalRecordType.UPLOADED_DOCUMENT.name()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestDocumentIndexed(new DocumentIndexedPayload(
+                21L, 42L, contentHash, "MEDICAL_RECORD", file.getDescription(), "on_consent"));
+
+        assertThat(written).isZero();
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestDocumentIndexed de-indexes soft-deleted files")
+    void ingestDocumentIndexed_deindexesInactiveFile() {
+        final UserFile file = UserFile.builder()
+                .id(21L)
+                .patientId(42L)
+                .filename("scan.pdf")
+                .originalFilename("scan.pdf")
+                .ownerId(42L)
+                .ownerType(UserFile.OwnerType.PATIENT)
+                .fileCategory(UserFile.FileCategory.MEDICAL_RECORD)
+                .description("Lab results from annual physical.")
+                .isActive(false)
+                .build();
+        when(userFileRepository.findById(21L)).thenReturn(Optional.of(file));
+
+        final int written = service.ingestDocumentIndexed(new DocumentIndexedPayload(
+                21L, 42L, "sha-stale", "MEDICAL_RECORD", "stale excerpt", "on_consent"));
+
+        assertThat(written).isZero();
+        verify(chunkRepository).acquireSourceReplacementLock(
+                42L, RetrievalRecordType.UPLOADED_DOCUMENT.name(), "21");
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "21", RetrievalRecordType.UPLOADED_DOCUMENT.name());
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestDocumentIndexed prefers authoritative description over payload excerpt")
+    void ingestDocumentIndexed_ignoresStalePayloadExcerpt() {
+        final UserFile file = UserFile.builder()
+                .id(21L)
+                .patientId(42L)
+                .filename("scan.pdf")
+                .originalFilename("scan.pdf")
+                .ownerId(42L)
+                .ownerType(UserFile.OwnerType.PATIENT)
+                .fileCategory(UserFile.FileCategory.MEDICAL_RECORD)
+                .description("Authoritative lab caption.")
+                .isActive(true)
+                .build();
+        when(userFileRepository.findById(21L)).thenReturn(Optional.of(file));
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                eq(42L), eq("21"), any()))
+                .thenReturn(List.of());
+
+        final String contentHash = ContentHashUtil.sha256(file.getDescription());
+        final int written = service.ingestDocumentIndexed(new DocumentIndexedPayload(
+                21L, 42L, contentHash, "MEDICAL_RECORD", "stale outbox text", "on_consent"));
+
+        assertThat(written).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getChunkText())
+                .contains("Authoritative lab caption.")
+                .doesNotContain("stale outbox text");
+    }
+
+    @Test
+    @DisplayName("ingestDocumentIndexed defers when payload contentHash mismatches file")
+    void ingestDocumentIndexed_rejectsHashMismatch() {
+        final UserFile file = UserFile.builder()
+                .id(21L)
+                .patientId(42L)
+                .filename("scan.pdf")
+                .originalFilename("scan.pdf")
+                .ownerId(42L)
+                .ownerType(UserFile.OwnerType.PATIENT)
+                .fileCategory(UserFile.FileCategory.MEDICAL_RECORD)
+                .description("Lab results from annual physical.")
+                .isActive(true)
+                .build();
+        when(userFileRepository.findById(21L)).thenReturn(Optional.of(file));
+
+        assertThatThrownBy(() -> service.ingestDocumentIndexed(new DocumentIndexedPayload(
+                21L, 42L, "sha256:deadbeef", "MEDICAL_RECORD",
+                file.getDescription(), "on_consent")))
+                .isInstanceOf(IndexingDeferredException.class);
+
         verify(chunkRepository, never()).saveAll(anyList());
     }
 

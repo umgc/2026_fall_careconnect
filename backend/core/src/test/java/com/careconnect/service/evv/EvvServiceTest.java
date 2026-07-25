@@ -21,6 +21,7 @@ import com.careconnect.repository.evv.EvvCorrectionRepository;
 import com.careconnect.repository.evv.EvvOfflineQueueRepository;
 import com.careconnect.repository.evv.EvvRecordRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
+import com.careconnect.service.VisitSummaryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -58,6 +59,7 @@ class EvvServiceTest {
     @Mock private EvvLocationService locationService;
     @Mock private AuditLogger audit;
     @Mock private ScheduledVisitRepository scheduledVisitRepository;
+    @Mock private VisitSummaryService visitSummaryService;
 
     @InjectMocks
     private EvvService evvService;

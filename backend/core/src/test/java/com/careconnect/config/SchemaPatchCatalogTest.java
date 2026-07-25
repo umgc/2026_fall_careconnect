@@ -31,7 +31,9 @@ class SchemaPatchCatalogTest {
                 "2607192000-summary-replay-quarantine-reason",
                 "2607211800-ai-held-item",
                 "2607231600-ai-ask-audit",
-                "2607232100-visit-summaries-ask-confirmation");
+                "2607232100-visit-summaries-ask-confirmation",
+                "2607241000-consent-grants",
+                "2607250100-consent-grants-active-unique");
     }
 
     @Test
