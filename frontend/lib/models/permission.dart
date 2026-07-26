@@ -1,5 +1,5 @@
 /// Permissions in the CareConnect system.
-/// Must match backend Permission enum exactly (28 total).
+/// Must match backend Permission enum exactly (29 total).
 enum Permission {
   // User Management (3)
   viewAllUsers,
@@ -41,8 +41,9 @@ enum Permission {
   viewAnalytics,
   exportReports,
 
-  // AI & Assistant (1)
+  // AI & Assistant (2)
   useAiFeatures,
+  reviewAiHolds,
 
   // Device Integration (1)
   manageDevices,
@@ -104,6 +105,8 @@ enum Permission {
         return Permission.exportReports;
       case 'USE_AI_FEATURES':
         return Permission.useAiFeatures;
+      case 'REVIEW_AI_HOLDS':
+        return Permission.reviewAiHolds;
       case 'MANAGE_DEVICES':
         return Permission.manageDevices;
       case 'MANAGE_NOTIFICATIONS':
@@ -168,6 +171,8 @@ enum Permission {
         return 'EXPORT_REPORTS';
       case Permission.useAiFeatures:
         return 'USE_AI_FEATURES';
+      case Permission.reviewAiHolds:
+        return 'REVIEW_AI_HOLDS';
       case Permission.manageDevices:
         return 'MANAGE_DEVICES';
       case Permission.manageNotifications:
@@ -240,6 +245,8 @@ enum Permission {
         return 'Generate and export reports';
       case Permission.useAiFeatures:
         return 'Use AI assistant features';
+      case Permission.reviewAiHolds:
+        return 'Review and release held Ask AI answers';
       case Permission.manageDevices:
         return 'Connect and manage wearable devices';
       case Permission.manageNotifications:
@@ -292,7 +299,7 @@ enum Permission {
     if ([viewBilling, manageSubscriptions].contains(this)) {
       return PermissionCategory.billing;
     }
-    if (this == Permission.useAiFeatures) {
+    if (this == Permission.useAiFeatures || this == Permission.reviewAiHolds) {
       return PermissionCategory.aiAssistant;
     }
     if (this == Permission.manageDevices) {

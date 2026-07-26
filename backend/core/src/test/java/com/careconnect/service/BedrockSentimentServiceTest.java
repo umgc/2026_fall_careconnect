@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -984,7 +985,7 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_missingConfidence_getsDefault() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "sourceTurnId": "turn-1"}]
+                    [{"text": "action A", "sourceTurnId": "transcript"}]
                     """);
             Map<String, Object> item = firstItem(result);
 
@@ -1020,7 +1021,7 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_confidenceAboveRange_clampedToOne() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": 1.5, "sourceTurnId": "turn-1"}]
+                    [{"text": "action A", "confidence": 1.5, "sourceTurnId": "transcript"}]
                     """);
             Map<String, Object> item = firstItem(result);
 
@@ -1032,7 +1033,7 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_confidenceBelowRange_clampedToZero() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": -0.5, "sourceTurnId": "turn-1"}]
+                    [{"text": "action A", "confidence": -0.5, "sourceTurnId": "transcript"}]
                     """);
             Map<String, Object> item = firstItem(result);
 
@@ -1045,16 +1046,16 @@ class BedrockSentimentServiceTest {
             Map<String, Object> result = summarizeWithActionItems(
                     """
                     [
-                      {"text": "a1", "sourceTurnId": "t1"},
-                      {"text": "a2", "sourceTurnId": "t2"},
-                      {"text": "a3", "sourceTurnId": "t3"},
-                      {"text": "a4", "sourceTurnId": "t4"},
-                      {"text": "a5", "sourceTurnId": "t5"},
-                      {"text": "a6", "sourceTurnId": "t6"},
-                      {"text": "a7", "sourceTurnId": "t7"},
-                      {"text": "a8", "sourceTurnId": "t8"},
-                      {"text": "a9", "sourceTurnId": "t9"},
-                      {"text": "a10", "sourceTurnId": "t10"}
+                      {"text": "a1", "sourceTurnId": "transcript"},
+                      {"text": "a2", "sourceTurnId": "transcript"},
+                      {"text": "a3", "sourceTurnId": "transcript"},
+                      {"text": "a4", "sourceTurnId": "transcript"},
+                      {"text": "a5", "sourceTurnId": "transcript"},
+                      {"text": "a6", "sourceTurnId": "transcript"},
+                      {"text": "a7", "sourceTurnId": "transcript"},
+                      {"text": "a8", "sourceTurnId": "transcript"},
+                      {"text": "a9", "sourceTurnId": "transcript"},
+                      {"text": "a10", "sourceTurnId": "transcript"}
                     ]
                     """);
 
@@ -1067,7 +1068,7 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_nonObjectEntry_isSkipped() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    ["not-an-object", {"text": "valid item", "sourceTurnId": "t1"}]
+                    ["not-an-object", {"text": "valid item", "sourceTurnId": "transcript"}]
                     """);
 
             List<Object> items = asList(result.get("actionItems"));
@@ -1082,16 +1083,157 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_wellFormedItem_hasAllSafetyFields() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": 0.85, "sourceTurnId": "turn-42"}]
+                    [{"text": "action A", "confidence": 0.85, "sourceTurnId": "transcript"}]
                     """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(item)
                     .containsKey("itemId")
                     .containsEntry("needsConfirmation", Boolean.TRUE)
-                    .containsEntry("sourceTurnId", "turn-42")
+                    .containsEntry("sourceTurnId", "transcript")
                     .containsEntry("text", "action A");
             assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.85);
+        }
+
+        // ── Citation validation (TC-E-SUM-003a / FR-SUM-3) ────────────────
+
+        @Test
+        @DisplayName("Item with fabricated sourceTurnId is rejected; ItemsRejectedNoCitation increments (TC-E-SUM-003a)")
+        void extractTypedItems_fabricatedSourceTurnId_isRejected() {
+            // Model returns a made-up turn ID that doesn't appear in the
+            // legit set — this is the fabrication case TC-E-SUM-003a
+            // targets. The item should be rejected outright and the
+            // counter should increment.
+            service = awsBackedService("""
+                    {
+                      "headline": "Test summary",
+                      "overallAssessment": "Test.",
+                      "actionItems": [{"text": "fabricated citation", "sourceTurnId": "turn-42"}],
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """);
+            final long before = service.getItemsRejectedNoCitation();
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(asList(result.get("actionItems")))
+                    .as("item with fabricated sourceTurnId must not surface")
+                    .isEmpty();
+            assertThat(service.getItemsRejectedNoCitation() - before)
+                    .as("rejection counter increments per rejected item")
+                    .isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("Item with sourceTurnId='transcript' is accepted; counter unchanged")
+        void extractTypedItems_legitimateSourceTurnId_isAccepted() {
+            service = awsBackedService("""
+                    {
+                      "headline": "Test summary",
+                      "overallAssessment": "Test.",
+                      "actionItems": [{"text": "legit citation", "sourceTurnId": "transcript"}],
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """);
+            final long before = service.getItemsRejectedNoCitation();
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            assertThat(asList(result.get("actionItems")))
+                    .as("item with legit sourceTurnId must surface")
+                    .hasSize(1);
+            assertThat(service.getItemsRejectedNoCitation() - before)
+                    .as("no rejection means no counter increment")
+                    .isEqualTo(0L);
+        }
+
+        @Test
+        @DisplayName("Mixed batch: only legit items surface; counter matches rejection count")
+        void extractTypedItems_mixedBatch_onlyLegitSurface() {
+            service = awsBackedService("""
+                    {
+                      "headline": "Test summary",
+                      "overallAssessment": "Test.",
+                      "actionItems": [
+                        {"text": "legit A", "sourceTurnId": "transcript"},
+                        {"text": "fabricated B", "sourceTurnId": "turn-99"},
+                        {"text": "legit C", "sourceTurnId": "transcript"},
+                        {"text": "fabricated D", "sourceTurnId": "made-up"}
+                      ],
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """);
+            final long before = service.getItemsRejectedNoCitation();
+
+            Map<String, Object> result = service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript available.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+
+            List<Object> items = asList(result.get("actionItems"));
+            assertThat(items)
+                    .as("only the two legit items should surface")
+                    .hasSize(2);
+            assertThat(service.getItemsRejectedNoCitation() - before)
+                    .as("counter increments once per fabricated item")
+                    .isEqualTo(2L);
+        }
+
+            @Test
+        @DisplayName("Counter accumulates across summarizeTranscript calls on same service instance (per YgPadawan PR #322 review)")
+        void extractTypedItems_counterAccumulatesAcrossCalls() {
+            // Verifies the lifetime-aggregate semantics called out in the
+            // JavaDoc for itemsRejectedNoCitation. Two summarizeTranscript
+            // calls on the same service instance, each with one fabricated
+            // citation. The counter should reflect both rejections — it does
+            // NOT reset between calls, mirroring Prometheus/Micrometer/JMX
+            // counter conventions where rate-per-window is computed at query
+            // time.
+            service = awsBackedService("""
+                    {
+                      "headline": "Test summary",
+                      "overallAssessment": "Test.",
+                      "actionItems": [{"text": "first fabricated", "sourceTurnId": "turn-99"}],
+                      "appointments": [],
+                      "careInstructions": []
+                    }
+                    """);
+            final long before = service.getItemsRejectedNoCitation();
+
+            // First call — one fabricated item, counter delta should be 1.
+            service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript one.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+            final long afterFirst = service.getItemsRejectedNoCitation();
+            assertThat(afterFirst - before)
+                    .as("first call: counter increments by 1")
+                    .isEqualTo(1L);
+
+            // Second call on the same service instance — another fabricated
+            // item. Counter delta from `before` should now be 2, proving
+            // accumulation across the bean's lifetime.
+            service.summarizeTranscript(
+                    CALL_ID,
+                    "Transcript two.",
+                    Map.of("COMBINED", new SentimentResult(0.55, "CALM", "ok", "COMBINED", CALL_ID, 1L, false))
+            );
+            assertThat(service.getItemsRejectedNoCitation() - before)
+                    .as("second call: counter accumulates (not reset)")
+                    .isEqualTo(2L);
         }
     }
 
@@ -1264,19 +1406,17 @@ class BedrockSentimentServiceTest {
         }
 
         @Test
-        @DisplayName("Bedrock throws → fallback with sentiment context (fault injection)")
-        void summarizeTranscript_bedrockThrows_fallsBackWithSentimentContext() {
+        @DisplayName("Bedrock throws → classified model inference failure")
+        void summarizeTranscript_bedrockThrows_isModelInferenceFailure() {
             service = awsBackedServiceThrowing(new RuntimeException("Bedrock 503"));
 
-            Map<String, Object> result = service.summarizeTranscript(
-                    CALL_ID,
-                    "Transcript available.",
-                    calmChannelResults());
-
-            assertThat(result).containsEntry("headline", "Call Summary");
-            assertThat(asList(result.get("keyConcerns")))
-                    .as("exception fallback should propagate COMBINED sentiment")
-                    .contains("Overall sentiment: CALM");
+            assertThatThrownBy(() -> service.summarizeTranscript(
+                            CALL_ID,
+                            "Transcript available.",
+                            calmChannelResults()))
+                    .isInstanceOf(ModelInferenceException.class)
+                    .hasMessageContaining("Bedrock transcript summary failed")
+                    .hasRootCauseMessage("Bedrock 503");
         }
 
         @Test

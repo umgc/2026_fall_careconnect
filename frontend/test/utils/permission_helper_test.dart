@@ -3,7 +3,7 @@ import 'package:care_connect_app/utils/permission_helper.dart';
 
 void main() {
   group('PermissionHelper Tests', () {
-    test('Admin has all 26 permissions', () {
+    test('Admin has all 27 permissions', () {
       final permissions = [
         'VIEW_ALL_USERS',
         'MANAGE_USERS',
@@ -28,6 +28,7 @@ void main() {
         'VIEW_ANALYTICS',
         'EXPORT_REPORTS',
         'USE_AI_FEATURES',
+        'REVIEW_AI_HOLDS',
         'MANAGE_DEVICES',
         'MANAGE_NOTIFICATIONS',
         'VIEW_AUDIT_LOGS',
@@ -41,10 +42,10 @@ void main() {
         );
       }
 
-      expect(PermissionHelper.getPermissionCount('ADMIN'), 26);
+      expect(PermissionHelper.getPermissionCount('ADMIN'), 27);
     });
 
-    test('Caregiver has exactly 19 permissions', () {
+    test('Caregiver has exactly 20 permissions', () {
       final caregiverPermissions = [
         'VIEW_ASSIGNED_PATIENTS',
         'CREATE_PATIENTS',
@@ -64,6 +65,7 @@ void main() {
         'VIEW_ANALYTICS',
         'EXPORT_REPORTS',
         'USE_AI_FEATURES',
+        'REVIEW_AI_HOLDS',
         'MANAGE_DEVICES',
       ];
 
@@ -75,8 +77,8 @@ void main() {
         );
       }
 
-      expect(PermissionHelper.getPermissionCount('CAREGIVER'), 19);
-      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 19);
+      expect(PermissionHelper.getPermissionCount('CAREGIVER'), 20);
+      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 20);
     });
 
     test('Caregiver does NOT have admin-only permissions', () {
@@ -200,7 +202,7 @@ void main() {
     });
 
     test('FAMILY_LINK shares permissions with CAREGIVER', () {
-      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 19);
+      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 20);
       expect(PermissionHelper.hasPermission('FAMILY_LINK', 'CREATE_TASKS'), true);
       expect(PermissionHelper.hasPermission('FAMILY_LINK', 'DELETE_PATIENTS'), false);
     });

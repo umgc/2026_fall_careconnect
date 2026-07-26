@@ -1,7 +1,11 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallRecording;
+import com.careconnect.model.RecordingLifecycleStatus;
+import com.careconnect.model.RecordingPurgeState;
+import com.careconnect.model.RecordingPurpose;
 import com.careconnect.repository.CallRecordingRepository;
+import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -13,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -100,15 +104,14 @@ public class CallRecordingService {
   private static final String CONCATENATION_STATUS_READY = "READY";
   private static final String CONCATENATION_STATUS_FAILED = "FAILED";
   private static final String STATUS_STARTED = "STARTED";
+  private static final String STATUS_STOP_RETRYABLE = "STOP_RETRYABLE";
+  private static final String STATUS_FINALIZATION_RETRYABLE = "FINALIZE_RETRYABLE";
   private static final String STATUS_STOPPED = "STOPPED";
   private static final int MAX_KEYS_SMALL = 20;
   private static final int MAX_KEYS_MEDIUM = 50;
   private static final int MAX_KEYS_LARGE = 1000;
   private static final int SLR_RETRY_DELAY_MS = 5000;
   private static final int PIPELINE_ID_MIN_LENGTH = 32;
-
-  // tracks active pipeline IDs so we can stop them cleanly
-  private final Map<String, String> activePipelineIds = new ConcurrentHashMap<>();
 
   @Autowired(required = false)
   private ChimeSdkMediaPipelinesClient pipelinesClient;
@@ -133,6 +136,12 @@ public class CallRecordingService {
   @Autowired private CallRecordingRepository recordingRepository;
 
   @Autowired private PostCallTranscriptionService postCallTranscriptionService;
+
+  @Autowired(required = false)
+  private RecordingCompensationWorker compensationWorker;
+
+  @Autowired(required = false)
+  private PostCallTranscriptionJobRepository transcriptionJobRepository;
 
   @Value("${careconnect.recording.enabled:false}")
   private boolean recordingEnabled;
@@ -192,42 +201,88 @@ public class CallRecordingService {
    * active. Returns a map describing the recording that was started.
    */
   public Map<String, Object> startRecording(final String callId, final Long initiatedByUserId) {
+    return startRecordingTyped(
+        callId, initiatedByUserId, true).toMap();
+  }
+
+  /**
+   * Starts a recording using a database reservation as the sole cross-node owner.
+   *
+   * @param consented explicit consent for user-playback capture; ignored for system transcription
+   */
+  @Transactional
+  public RecordingStartResult startRecordingTyped(
+      final String callId, final Long initiatedByUserId, final boolean consented) {
+    final RecordingPurpose purpose = initiatedByUserId == null
+        ? RecordingPurpose.SYSTEM_TRANSCRIPTION : RecordingPurpose.USER_PLAYBACK;
+    if (purpose == RecordingPurpose.USER_PLAYBACK && !consented) {
+      return startResult(
+          RecordingStartResult.Status.POLICY_BLOCKED, callId, null,
+          "Explicit recording consent is required");
+    }
     if (!recordingEnabled) {
-      return Map.of(
-          "status", "DISABLED", "message", "Recording is not enabled in this environment");
+      return startResult(
+          RecordingStartResult.Status.DISABLED, callId, null,
+          "Recording is not enabled in this environment");
     }
 
     final String meetingId = chimeService.getMeetingId(callId);
     if (meetingId == null) {
-      return Map.of(
-          "status", "ERROR", "message", "No active Chime meeting found for callId: " + callId);
+      return startResult(
+          RecordingStartResult.Status.ERROR, callId, null,
+          "No active Chime meeting found for callId: " + callId);
     }
 
-    if (activePipelineIds.containsKey(callId)) {
-      // If a user explicitly toggles recording while the system recording is already running,
-      // claim the system recording for playback by setting initiatedByUserId on it.
-      if (initiatedByUserId != null) {
-        recordingRepository
-            .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
-            .ifPresent(
-                sys -> {
-                  sys.setInitiatedByUserId(initiatedByUserId);
-                  recordingRepository.save(sys);
-                  if (log.isInfoEnabled()) {
-                    log.info(
-                        "System recording {} claimed for playback by user {} on call {}",
-                        sys.getId(), initiatedByUserId, callId);
-                  }
-                });
-        return Map.of(
-            "status", "RECORDING_CLAIMED",
-            "pipelineId", activePipelineIds.get(callId),
-            "message", "Recording claimed for playback");
+    final int reserved = recordingRepository.reserveActiveGeneration(
+        callId, purpose.name(), initiatedByUserId, consented);
+    CallRecording recording = recordingRepository.findActiveByCallId(callId).orElse(null);
+    if (reserved == 0 && recording != null) {
+      // Another node owns this generation — never drive AWS on their RESERVED/STARTING row.
+      if (recording.getLifecycleStatus() != RecordingLifecycleStatus.RESERVED
+          && recording.getLifecycleStatus() != RecordingLifecycleStatus.STARTING) {
+        if (initiatedByUserId != null) {
+          return new RecordingStartResult(
+              RecordingStartResult.Status.POLICY_BLOCKED, callId, recording.getId(),
+              recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+              "A capture is already active");
+        }
+        return new RecordingStartResult(
+            RecordingStartResult.Status.ALREADY_RECORDING, callId, recording.getId(),
+            recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+            "Recording already in progress for this call");
       }
-      return Map.of(
-          "status", "ALREADY_RECORDING",
-          "pipelineId", activePipelineIds.get(callId),
-          "message", "Recording already in progress for this call");
+      return new RecordingStartResult(
+          RecordingStartResult.Status.ALREADY_RECORDING, callId, recording.getId(),
+          recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+          "Another node is starting capture for this call");
+    }
+    if (recording != null && recording.getLifecycleStatus() != RecordingLifecycleStatus.RESERVED) {
+      if (initiatedByUserId != null) {
+        return new RecordingStartResult(
+            RecordingStartResult.Status.POLICY_BLOCKED, callId, recording.getId(),
+            recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+            "A capture is already active");
+      }
+      return new RecordingStartResult(
+          RecordingStartResult.Status.ALREADY_RECORDING, callId, recording.getId(),
+          recording.getGeneration(), effectivePipelineId(recording), null, null, null,
+          "Recording already in progress for this call");
+    }
+    if (recording == null) {
+      // Unit-test/non-PostgreSQL fallback. PostgreSQL always returns the durable reservation.
+      recording = new CallRecording();
+      recording.setCallId(callId);
+      recording.setGeneration(1L);
+      recording.setPurpose(purpose);
+      recording.setLifecycleStatus(RecordingLifecycleStatus.RESERVED);
+      recording.setPurgeState(RecordingPurgeState.NONE);
+      recording.setInitiatedByUserId(initiatedByUserId);
+      recording.setOwnerUserId(initiatedByUserId);
+      if (consented && initiatedByUserId != null) {
+        recording.setConsentedAt(LocalDateTime.now(ZoneOffset.UTC));
+        recording.setConsentedByUserId(initiatedByUserId);
+      }
+      recording.setStartedAt(LocalDateTime.now(ZoneOffset.UTC));
     }
 
     if (!isAwsAvailable()) {
@@ -235,25 +290,35 @@ public class CallRecordingService {
         log.warn(
             "AWS Chime Media Pipelines not available — recording skipped for callId={}", callId);
       }
-      return Map.of("status", "UNAVAILABLE", "message", "AWS media pipeline client not available");
+      recording.setLifecycleStatus(RecordingLifecycleStatus.FAILED);
+      recording.setLastError("AWS media pipeline client not available");
+      recordingRepository.save(recording);
+      return startResult(
+          RecordingStartResult.Status.UNAVAILABLE, callId, recording,
+          "AWS media pipeline client not available");
     }
 
     final String bucket = resolveOrCreateRecordingBucket();
     if (bucket == null) {
-      return Map.of(
-          "status", "ERROR", "message", "Could not resolve or create the recording bucket");
+      failReservation(recording, "Could not resolve or create the recording bucket");
+      return startResult(
+          RecordingStartResult.Status.ERROR, callId, recording,
+          "Could not resolve or create the recording bucket");
     }
 
-    final String timestamp = LocalDateTime.now().format(S3_TS_FORMAT);
+    final String timestamp = utcNow().format(S3_TS_FORMAT);
     final String s3Prefix = "recordings/" + callId + "/" + timestamp + "/";
     final String accountId = getAwsAccountId();
     if (accountId == null) {
-      return Map.of(
-          "status", "ERROR", "message", "Could not resolve AWS account ID for meeting ARN");
+      failReservation(recording, "Could not resolve AWS account ID for meeting ARN");
+      return startResult(
+          RecordingStartResult.Status.ERROR, callId, recording,
+          "Could not resolve AWS account ID for meeting ARN");
     }
 
     final String sourceArn = "arn:aws:chime::" + accountId + ":meeting/" + meetingId;
     final String sinkArn = "arn:aws:s3:::" + bucket;
+    final long recordingGeneration = recording.getGeneration();
 
     try {
       final CreateMediaCapturePipelineRequest request =
@@ -262,7 +327,7 @@ public class CallRecordingService {
               .sourceArn(sourceArn)
               .sinkType(MediaPipelineSinkType.S3_BUCKET)
               .sinkArn(sinkArn)
-              .clientRequestToken(UUID.randomUUID().toString())
+              .clientRequestToken(deterministicToken(callId, recordingGeneration, "capture"))
               .chimeSdkMeetingConfiguration(
                   ChimeSdkMeetingConfiguration.builder()
                       .artifactsConfiguration(
@@ -299,47 +364,49 @@ public class CallRecordingService {
       final CreateMediaCapturePipelineResponse response = createPipelineWithSlrRetry(request);
       final String pipelineId = response.mediaCapturePipeline().mediaPipelineId();
 
-      activePipelineIds.put(callId, pipelineId);
-
-      final CallRecording recording = new CallRecording();
-      recording.setCallId(callId);
       recording.setPipelineId(pipelineId);
+      recording.setAwsPipelineId(pipelineId);
       recording.setS3Bucket(bucket);
       recording.setS3Prefix(s3Prefix);
       recording.setStatus(STATUS_STARTED);
+      recording.setLifecycleStatus(RecordingLifecycleStatus.ACTIVE);
       recording.setConcatenationStatus(CONCATENATION_STATUS_NOT_REQUESTED);
       recording.setInitiatedByUserId(initiatedByUserId);
-      recording.setStartedAt(LocalDateTime.now());
-      recordingRepository.save(recording);
+      recording.setOwnerUserId(initiatedByUserId);
+      if (recording.getStartedAt() == null) {
+        recording.setStartedAt(utcNow());
+      }
+      try {
+        recordingRepository.saveAndFlush(recording);
+      } catch (RuntimeException persistenceFailure) {
+        enqueueCompensation(recording, pipelineId, bucket, s3Prefix);
+        throw persistenceFailure;
+      }
 
       if (log.isInfoEnabled()) {
         log.info(
             "Recording started callId={} pipelineId={} s3Prefix={}", callId, pipelineId, s3Prefix);
       }
 
-      final Map<String, Object> result = new HashMap<>();
-      result.put("status", "STARTED");
-      result.put("callId", callId);
-      result.put("pipelineId", pipelineId);
-      result.put("s3Bucket", bucket);
-      result.put("s3Prefix", s3Prefix);
-      result.put("startedAt", recording.getStartedAt().toString());
-      return result;
+      return new RecordingStartResult(
+          RecordingStartResult.Status.STARTED, callId, recording.getId(),
+          recording.getGeneration(), pipelineId, bucket, s3Prefix, recording.getStartedAt(), null);
 
     } catch (Exception e) {
       if (log.isErrorEnabled()) {
         log.error("Failed to start recording for callId={}: {}", callId, e.getMessage(), e);
       }
 
-      final CallRecording failed = new CallRecording();
-      failed.setCallId(callId);
-      failed.setStatus("FAILED");
-      failed.setInitiatedByUserId(initiatedByUserId);
-      failed.setStartedAt(LocalDateTime.now());
-      failed.setErrorMessage(e.getMessage());
-      recordingRepository.save(failed);
-
-      return Map.of("status", "ERROR", "message", e.getMessage());
+      recording.setStatus("FAILED");
+      recording.setLifecycleStatus(RecordingLifecycleStatus.FAILED);
+      recording.setErrorMessage(e.getMessage());
+      recording.setLastError(e.getMessage());
+      try {
+        recordingRepository.save(recording);
+      } catch (RuntimeException ignored) {
+        log.warn("Could not persist failed recording reservation for call {}", callId);
+      }
+      return startResult(RecordingStartResult.Status.ERROR, callId, recording, e.getMessage());
     }
   }
 
@@ -352,62 +419,83 @@ public class CallRecordingService {
    * (no-op).
    */
   public Map<String, Object> stopRecording(final String callId) {
-    String pipelineId = activePipelineIds.remove(callId);
-    CallRecording recording = null;
-    if (pipelineId == null) {
-      // Check DB for a STARTED entry (e.g. after restart)
-      final Optional<CallRecording> dbRec =
+    CallRecording recording = recordingRepository.findActiveByCallId(callId).orElse(null);
+    if (recording == null) {
+      final Optional<CallRecording> legacy =
           recordingRepository.findTopByCallIdOrderByStartedAtDesc(callId);
-      if (dbRec.isPresent() && STATUS_STARTED.equals(dbRec.get().getStatus())) {
-        recording = dbRec.get();
-        pipelineId = dbRec.get().getPipelineId();
+      if (legacy.isPresent() && isStopPending(legacy.get().getStatus())) {
+        recording = legacy.get();
       }
     }
-
-    if (pipelineId == null) {
+    if (recording == null) {
       if (log.isDebugEnabled()) {
         log.debug("No active recording pipeline found for callId={}", callId);
       }
       return Map.of("status", "NOT_RECORDING", "callId", callId);
     }
-
-    if (recording == null) {
-      recording = recordingRepository.findTopByCallIdOrderByStartedAtDesc(callId).orElse(null);
-    }
-    if (recording == null) {
+    final String pipelineId = effectivePipelineId(recording);
+    if (pipelineId == null) {
       return Map.of("status", "NOT_RECORDING", "callId", callId);
     }
-
-    finalizeRecordingInDb(recording);
+    final UUID stopClaim = UUID.randomUUID();
+    if (recording.getLifecycleStatus() != null
+        && recordingRepository.claimForStop(recording.getId(), stopClaim, 120L) != 1) {
+      final Optional<CallRecording> currentOwner = recordingRepository.findActiveByCallId(callId);
+      if (currentOwner.isPresent()
+          && currentOwner.get().getClaimToken() != null
+          && !stopClaim.equals(currentOwner.get().getClaimToken())) {
+        return Map.of(
+            "status", "RETRYABLE_FAILURE",
+            "recordingStatus", recording.getLifecycleStatus().name(),
+            "callId", callId,
+            "pipelineId", pipelineId,
+            "message", "Another worker owns the recording stop lease");
+      }
+    }
+    recording.setClaimToken(stopClaim);
+    recording.setLifecycleStatus(RecordingLifecycleStatus.STOP_CLAIMED);
 
     if (!isAwsAvailable()) {
-      return Map.of("status", "STOPPED", "callId", callId, "pipelineId", pipelineId);
+      return markStopRetryable(
+          recording, STATUS_STOP_RETRYABLE, "AWS media pipeline client is unavailable");
     }
 
-    final String capturePipelineArn = resolveCapturePipelineArn(pipelineId);
-    String warning = null;
-    try {
-      pipelinesClient.deleteMediaCapturePipeline(
-          DeleteMediaCapturePipelineRequest.builder().mediaPipelineId(pipelineId).build());
+    final String capturePipelineArn = resolveOrBuildCapturePipelineArn(pipelineId);
+    if (capturePipelineArn == null) {
+      return markStopRetryable(
+          recording,
+          STATUS_STOP_RETRYABLE,
+          "Could not resolve capture pipeline ARN for finalization");
+    }
 
-    } catch (Exception e) {
-      // Pipeline may have been auto-terminated by Chime when the meeting ended
-      if (log.isWarnEnabled()) {
-        log.warn(
-            "Could not delete pipeline {} for callId={} (may already be gone): {}",
-            pipelineId,
-            callId,
-            e.getMessage());
+    if (!STATUS_FINALIZATION_RETRYABLE.equals(recording.getStatus())) {
+      try {
+        pipelinesClient.deleteMediaCapturePipeline(
+            DeleteMediaCapturePipelineRequest.builder().mediaPipelineId(pipelineId).build());
+      } catch (Exception e) {
+        if (e instanceof
+                software.amazon.awssdk.services.chimesdkmediapipelines.model
+                    .ChimeSdkMediaPipelinesException serviceException
+            && serviceException.statusCode() == 404) {
+        } else {
+          if (log.isWarnEnabled()) {
+            log.warn(
+                "Could not delete pipeline {} for callId={}; stop remains retryable: {}",
+                pipelineId,
+                callId,
+                e.getMessage());
+          }
+          return markStopRetryable(recording, STATUS_STOP_RETRYABLE, e.getMessage());
+        }
       }
-      warning = e.getMessage();
     }
 
     final Map<String, Object> result = new HashMap<>();
-    result.put("status", "STOPPED");
     result.put("callId", callId);
     result.put("pipelineId", pipelineId);
 
-    if (capturePipelineArn != null) {
+    if (recording.getConcatenationPipelineId() == null
+        || recording.getConcatenationPipelineId().isBlank()) {
       try {
         final CreateMediaConcatenationPipelineResponse response =
             createConcatenationPipeline(recording, capturePipelineArn);
@@ -415,7 +503,6 @@ public class CallRecordingService {
             response.mediaConcatenationPipeline().mediaPipelineId();
         recording.setConcatenationPipelineId(concatenationPipelineId);
         recording.setConcatenationStatus(CONCATENATION_STATUS_PROCESSING);
-        recording.setErrorMessage(null);
         recordingRepository.save(recording);
         result.put("concatenationPipelineId", concatenationPipelineId);
         result.put("concatenationStatus", CONCATENATION_STATUS_PROCESSING);
@@ -427,25 +514,23 @@ public class CallRecordingService {
         }
       } catch (Exception e) {
         recording.setConcatenationStatus(CONCATENATION_STATUS_FAILED);
-        recording.setErrorMessage(e.getMessage());
-        recordingRepository.save(recording);
-        result.put("concatenationStatus", CONCATENATION_STATUS_FAILED);
-        result.put("concatenationWarning", e.getMessage());
         if (log.isWarnEnabled()) {
           log.warn(
-              "Failed to start recording concatenation for callId={}: {}", callId, e.getMessage());
+              "Failed to start recording concatenation for callId={}; finalization remains"
+                  + " retryable: {}",
+              callId,
+              e.getMessage());
         }
+        return markStopRetryable(recording, STATUS_FINALIZATION_RETRYABLE, e.getMessage());
       }
     } else {
-      recording.setConcatenationStatus(CONCATENATION_STATUS_FAILED);
-      recording.setErrorMessage("Could not resolve capture pipeline ARN for concatenation");
-      recordingRepository.save(recording);
-      result.put("concatenationStatus", CONCATENATION_STATUS_FAILED);
+      result.put("concatenationPipelineId", recording.getConcatenationPipelineId());
+      result.put("concatenationStatus", recording.getConcatenationStatus());
     }
 
-    if (warning != null && !warning.isBlank()) {
-      result.put("warning", warning);
-    }
+    recording.setErrorMessage(null);
+    finalizeRecordingInDb(recording);
+    result.put("status", STATUS_STOPPED);
     return result;
   }
 
@@ -462,11 +547,28 @@ public class CallRecordingService {
     }
 
     final CallRecording rec = opt.get();
-    refreshConcatenationStatus(rec);
+    // READY rows are already reconciled by the background cleaner. Re-listing S3 + raw cleanup
+    // on every status poll made this endpoint ~15–20s and Flutter's 15s client timed out to null
+    // (no Call Recording card / no sentiment clips). Only refresh while still stitching.
+    if (!CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())) {
+      try {
+        refreshConcatenationStatus(rec);
+      } catch (Exception e) {
+        if (log.isWarnEnabled()) {
+          log.warn(
+              "Concatenation refresh failed for callId={}; returning DB recording metadata: {}",
+              callId,
+              e.getMessage());
+        }
+      }
+    }
     final Map<String, Object> result = buildRecordingMap(rec);
 
     // Enrich with live pipeline status if still active and AWS available
-    final String pipelineId = activePipelineIds.get(callId);
+    final String pipelineId =
+        rec.getLifecycleStatus() != null
+                && rec.getLifecycleStatus() != RecordingLifecycleStatus.COMPLETE
+            ? effectivePipelineId(rec) : null;
     if (pipelineId != null && isAwsAvailable()) {
       try {
         final GetMediaCapturePipelineResponse live =
@@ -521,6 +623,13 @@ public class CallRecordingService {
     }
 
     final CallRecording rec = opt.get();
+    if (rec.getInitiatedByUserId() == null) {
+      return Map.of(
+          "status", "TRANSCRIPTION_ONLY",
+          "callId", callId,
+          "playbackReady", false,
+          "message", "System capture is retained for transcription only");
+    }
     refreshConcatenationStatus(rec);
     if (rec.getS3Bucket() == null || rec.getS3Prefix() == null) {
       return Map.of("status", "ERROR", "message", "Recording has no S3 location stored");
@@ -565,14 +674,13 @@ public class CallRecordingService {
       playbackResult.put("recordingStatus", rec.getStatus());
       playbackResult.put("concatenationStatus", rec.getConcatenationStatus());
       playbackResult.put("transcriptionStatus", rec.getTranscriptionStatus());
-      // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
-      // User-initiated recordings with a resolved video key are ready to play.
-      playbackResult.put("playbackReady", rec.getInitiatedByUserId() != null);
+      // System recordings (initiatedByUserId == null) are transcription-only and should not
+      // reach this success branch without a resolved composited key. Once the video key is
+      // resolved, the clip is ready to play (R5).
+      playbackResult.put("playbackReady", true);
       playbackResult.put(
           "recordingStartedAt",
-          rec.getStartedAt() != null
-              ? rec.getStartedAt().atZone(ZoneOffset.UTC).toInstant().toString()
-              : null);
+          rec.getStartedAt() != null ? toUtcInstantString(rec.getStartedAt()) : null);
       return playbackResult;
 
     } catch (Exception e) {
@@ -587,16 +695,34 @@ public class CallRecordingService {
   // PRIVATE HELPERS
   // ================================================================
 
+  /**
+   * Recording timestamps are stored as {@link LocalDateTime} but always represent UTC wall-clock.
+   * Emitting {@code atZone(UTC).toInstant()} is only correct when writers use this helper.
+   */
+  private static LocalDateTime utcNow() {
+    return LocalDateTime.now(ZoneOffset.UTC);
+  }
+
+  /** ISO-8601 UTC Instant ({@code ...Z}) for Flutter {@code DateTime.parse(...).toUtc()}. */
+  private static String toUtcInstantString(final LocalDateTime utcWallClock) {
+    return utcWallClock.atZone(ZoneOffset.UTC).toInstant().toString();
+  }
+
   private void finalizeRecordingInDb(final CallRecording rec) {
     if (rec == null) {
       return;
     }
-    if (!STATUS_STARTED.equals(rec.getStatus())) {
+    if (!isStopPending(rec.getStatus())) {
       return;
     }
 
-    final LocalDateTime endedAt = LocalDateTime.now();
+    final LocalDateTime endedAt = utcNow();
     rec.setStatus(STATUS_STOPPED);
+    rec.setLifecycleStatus(RecordingLifecycleStatus.COMPLETE);
+    rec.setClaimToken(null);
+    rec.setClaimLeaseUntil(null);
+    rec.setNextRetryAt(null);
+    rec.setLastError(null);
     rec.setEndedAt(endedAt);
 
     if (rec.getStartedAt() != null) {
@@ -606,10 +732,43 @@ public class CallRecordingService {
     recordingRepository.save(rec);
   }
 
+  private boolean isStopPending(final String status) {
+    return STATUS_STARTED.equals(status)
+        || STATUS_STOP_RETRYABLE.equals(status)
+        || STATUS_FINALIZATION_RETRYABLE.equals(status);
+  }
+
+  private Map<String, Object> markStopRetryable(
+      final CallRecording recording, final String status, final String errorMessage) {
+    recording.setStatus(status);
+    recording.setLifecycleStatus(
+        STATUS_FINALIZATION_RETRYABLE.equals(status)
+            ? RecordingLifecycleStatus.FINALIZE_RETRYABLE
+            : RecordingLifecycleStatus.STOP_RETRYABLE);
+    recording.setErrorMessage(errorMessage);
+    recording.setLastError(errorMessage);
+    recording.setClaimToken(null);
+    recording.setClaimLeaseUntil(null);
+    recording.setNextRetryAt(LocalDateTime.now(ZoneOffset.UTC).plusSeconds(30L));
+    recordingRepository.save(recording);
+    final Map<String, Object> result = new HashMap<>();
+    result.put("status", "RETRYABLE_FAILURE");
+    result.put("recordingStatus", status);
+    result.put("callId", recording.getCallId());
+    result.put("pipelineId", recording.getPipelineId());
+    result.put("message", errorMessage == null ? "Recording stop must be retried" : errorMessage);
+    return result;
+  }
+
   private Map<String, Object> buildRecordingMap(final CallRecording rec) {
     final Map<String, Object> m = new HashMap<>();
     m.put("id", rec.getId());
     m.put("callId", rec.getCallId());
+    m.put("generation", rec.getGeneration());
+    m.put("purpose", rec.getPurpose() == null ? null : rec.getPurpose().name());
+    m.put(
+        "lifecycleStatus",
+        rec.getLifecycleStatus() == null ? null : rec.getLifecycleStatus().name());
     m.put("pipelineId", rec.getPipelineId());
     m.put("s3Bucket", rec.getS3Bucket());
     m.put("s3Prefix", rec.getS3Prefix());
@@ -617,10 +776,13 @@ public class CallRecordingService {
     m.put("concatenationPipelineId", rec.getConcatenationPipelineId());
     m.put("concatenationStatus", rec.getConcatenationStatus());
     m.put("transcriptionStatus", rec.getTranscriptionStatus());
-    // System recordings (initiatedByUserId == null) are transcription-only; never allow playback
-    m.put("playbackReady",
-        rec.getInitiatedByUserId() != null && resolvePlayableVideoKey(rec) != null);
+    // System recordings (initiatedByUserId == null) are transcription-only; never allow playback.
+    // Do not hit S3 here — metadata reads must stay fast (see getRecordingStatus).
+    m.put("playbackReady", isPlaybackReadyFromMetadata(rec));
     m.put("initiatedByUserId", rec.getInitiatedByUserId());
+    m.put("ownerUserId", rec.getOwnerUserId());
+    m.put("consentedAt", rec.getConsentedAt());
+    m.put("purgeState", rec.getPurgeState() == null ? null : rec.getPurgeState().name());
     m.put("startedAt", rec.getStartedAt() != null ? rec.getStartedAt().toString() : null);
     m.put("endedAt", rec.getEndedAt() != null ? rec.getEndedAt().toString() : null);
     m.put("durationSeconds", rec.getDurationSeconds());
@@ -687,7 +849,8 @@ public class CallRecordingService {
                 sink ->
                     sink.type(ConcatenationSinkType.S3_BUCKET)
                         .s3BucketSinkConfiguration(bucket -> bucket.destination(destinationArn)))
-            .clientRequestToken(UUID.randomUUID().toString())
+            .clientRequestToken(
+                deterministicToken(recording.getCallId(), recording.getGeneration(), "concat"))
             .build());
   }
 
@@ -706,6 +869,19 @@ public class CallRecordingService {
       }
       return null;
     }
+  }
+
+  private String resolveOrBuildCapturePipelineArn(final String pipelineId) {
+    final String resolved = resolveCapturePipelineArn(pipelineId);
+    if (resolved != null) {
+      return resolved;
+    }
+    final String accountId = getAwsAccountId();
+    if (accountId == null || pipelineId == null || pipelineId.isBlank()) {
+      return null;
+    }
+    final String regionId = defaultAwsRegion == null ? "us-east-1" : defaultAwsRegion.id();
+    return "arn:aws:chime:" + regionId + ":" + accountId + ":media-pipeline/" + pipelineId;
   }
 
   private void refreshConcatenationStatus(final CallRecording rec) {
@@ -789,7 +965,12 @@ public class CallRecordingService {
   /** Periodically reconciles stopped recordings and attempts raw artifact cleanup. */
   @Scheduled(fixedDelayString = "${careconnect.recording.raw-cleanup.interval-ms:60000}")
   public void reconcileCompletedRecordingCleanup() {
-    if (!recordingEnabled || !rawCleanupEnabled || s3Client == null) {
+    if (!recordingEnabled) {
+      return;
+    }
+    retryPendingStops(STATUS_STOP_RETRYABLE);
+    retryPendingStops(STATUS_FINALIZATION_RETRYABLE);
+    if (!rawCleanupEnabled || s3Client == null) {
       return;
     }
 
@@ -805,6 +986,25 @@ public class CallRecordingService {
         if (log.isDebugEnabled()) {
           log.debug(
               "Raw cleanup reconciliation skipped for callId {}: {}",
+              recording.getCallId(),
+              e.getMessage());
+        }
+      }
+    }
+  }
+
+  private void retryPendingStops(final String status) {
+    for (final CallRecording recording :
+        recordingRepository.findTop100ByStatusOrderByStartedAtDesc(status)) {
+      if (recording == null || recording.getCallId() == null) {
+        continue;
+      }
+      try {
+        stopRecording(recording.getCallId());
+      } catch (RuntimeException e) {
+        if (log.isDebugEnabled()) {
+          log.debug(
+              "Recording stop reconciliation remains pending for callId {}: {}",
               recording.getCallId(),
               e.getMessage());
         }
@@ -843,6 +1043,24 @@ public class CallRecordingService {
       }
       return fallbackStatus == null ? CONCATENATION_STATUS_PROCESSING : fallbackStatus;
     }
+  }
+
+  /**
+   * Fast playback-ready flag for status/list responses. Trusts DB {@code READY} so callers do not
+   * block on S3. Presigned playback still resolves the object key on demand.
+   */
+  private boolean isPlaybackReadyFromMetadata(final CallRecording rec) {
+    if (rec == null || rec.getInitiatedByUserId() == null) {
+      return false;
+    }
+    if (CONCATENATION_STATUS_READY.equals(rec.getConcatenationStatus())) {
+      return true;
+    }
+    // Legacy recordings (no concatenation pipeline) may still have chunk video in S3.
+    if (rec.getConcatenationPipelineId() == null || rec.getConcatenationPipelineId().isBlank()) {
+      return resolvePlayableVideoKeyWithoutRefresh(rec) != null;
+    }
+    return false;
   }
 
   private String resolvePlayableVideoKey(final CallRecording rec) {
@@ -1245,9 +1463,22 @@ public class CallRecordingService {
    * <p>Returns a summary map: { deletedS3Objects, deletedDbRows, bucket }.
    */
   public Map<String, Object> purgeAllRecordings() {
+    final List<CallRecording> active = recordingRepository.findAll().stream()
+        .filter(recording -> (recording.getLifecycleStatus() != null
+                && recording.getLifecycleStatus() != RecordingLifecycleStatus.COMPLETE
+                && recording.getLifecycleStatus() != RecordingLifecycleStatus.FAILED)
+            || hasPendingTranscription(recording))
+        .toList();
+    if (!active.isEmpty()) {
+      return Map.of(
+          "status", "PENDING",
+          "activeRecordings", active.size(),
+          "deletedS3Objects", 0L,
+          "deletedDbRows", 0L,
+          "message", "Active AWS capture ownership must be reconciled before purge");
+    }
     final long deletedDbRows = recordingRepository.count();
     recordingRepository.deleteAll();
-    activePipelineIds.clear();
 
     long deletedS3Objects = 0;
     final String bucket = resolveOrCreateRecordingBucket();
@@ -1311,9 +1542,35 @@ public class CallRecordingService {
           "deletedDbRows", 0L);
     }
 
-    activePipelineIds.remove(normalizedCallId);
     final List<CallRecording> recordings =
         recordingRepository.findByCallIdOrderByStartedAtDesc(normalizedCallId);
+    final List<CallRecording> activeCaptures = recordings.stream()
+        .filter(recording -> isActiveLifecycle(recording.getLifecycleStatus())
+            || isStopPending(recording.getStatus()))
+        .toList();
+    if (!activeCaptures.isEmpty()) {
+      for (final CallRecording recording : activeCaptures) {
+        recording.setPurgeState(RecordingPurgeState.REQUESTED);
+        recording.setPurgeRequestedAt(LocalDateTime.now(ZoneOffset.UTC));
+        recording.setLifecycleStatus(RecordingLifecycleStatus.PURGE_PENDING);
+        recordingRepository.save(recording);
+        stopRecording(normalizedCallId);
+      }
+      return Map.of(
+          "status", "PENDING",
+          "callId", normalizedCallId,
+          "deletedS3Objects", 0L,
+          "deletedDbRows", 0L,
+          "message", "Active capture stop/reconciliation is pending");
+    }
+    if (recordings.stream().anyMatch(this::hasPendingTranscription)) {
+      return Map.of(
+          "status", "PENDING",
+          "callId", normalizedCallId,
+          "deletedS3Objects", 0L,
+          "deletedDbRows", 0L,
+          "message", "Post-call transcription still owns recording artifacts");
+    }
     final long deletedDbRows = recordings.size();
     long deletedS3Objects = 0L;
 
@@ -1658,6 +1915,100 @@ public class CallRecordingService {
     }
     String trimmed = callId.trim();
     return trimmed.isEmpty() ? null : trimmed;
+  }
+
+  /** Typed stop API used by new internal flows; the map API remains for compatibility. */
+  public RecordingStopResult stopRecordingTyped(final String callId) {
+    final Map<String, Object> result = stopRecording(callId);
+    final RecordingStopResult.Status status;
+    try {
+      status = RecordingStopResult.Status.valueOf(
+          String.valueOf(result.getOrDefault("status", "RETRYABLE_FAILURE")));
+    } catch (IllegalArgumentException exception) {
+      return new RecordingStopResult(
+          RecordingStopResult.Status.RETRYABLE_FAILURE, callId,
+          asNullableString(result.get("pipelineId")),
+          asNullableString(result.get("recordingStatus")),
+          asNullableString(result.get("concatenationPipelineId")),
+          asNullableString(result.get("concatenationStatus")),
+          asNullableString(result.get("message")));
+    }
+    return new RecordingStopResult(
+        status, callId, asNullableString(result.get("pipelineId")),
+        asNullableString(result.get("recordingStatus")),
+        asNullableString(result.get("concatenationPipelineId")),
+        asNullableString(result.get("concatenationStatus")),
+        asNullableString(result.get("message")));
+  }
+
+  private RecordingStartResult startResult(
+      final RecordingStartResult.Status status,
+      final String callId,
+      final CallRecording recording,
+      final String message) {
+    return new RecordingStartResult(
+        status, callId, recording == null ? null : recording.getId(),
+        recording == null ? 0L : recording.getGeneration(),
+        recording == null ? null : effectivePipelineId(recording),
+        recording == null ? null : recording.getS3Bucket(),
+        recording == null ? null : recording.getS3Prefix(),
+        recording == null ? null : recording.getStartedAt(), message);
+  }
+
+  private String effectivePipelineId(final CallRecording recording) {
+    if (recording == null) {
+      return null;
+    }
+    return recording.getAwsPipelineId() == null
+        ? recording.getPipelineId() : recording.getAwsPipelineId();
+  }
+
+  private void enqueueCompensation(
+      final CallRecording recording,
+      final String pipelineId,
+      final String bucket,
+      final String prefix) {
+    if (compensationWorker != null) {
+      compensationWorker.enqueueCapture(
+          recording.getCallId(), recording.getGeneration(), pipelineId, bucket, prefix);
+    } else {
+      log.error(
+          "AWS pipeline {} needs compensation, but compensation worker is unavailable", pipelineId);
+    }
+  }
+
+  private void failReservation(final CallRecording recording, final String error) {
+    recording.setStatus("FAILED");
+    recording.setLifecycleStatus(RecordingLifecycleStatus.FAILED);
+    recording.setErrorMessage(error);
+    recording.setLastError(error);
+    recordingRepository.save(recording);
+  }
+
+  private static String deterministicToken(
+      final String callId, final long generation, final String operation) {
+    return UUID.nameUUIDFromBytes(
+        (callId + ":" + generation + ":" + operation).getBytes(StandardCharsets.UTF_8))
+        .toString();
+  }
+
+  private static boolean isActiveLifecycle(final RecordingLifecycleStatus status) {
+    return status != null
+        && status != RecordingLifecycleStatus.COMPLETE
+        && status != RecordingLifecycleStatus.FAILED;
+  }
+
+  private boolean hasPendingTranscription(final CallRecording recording) {
+    if (recording == null || recording.getId() == null || transcriptionJobRepository == null) {
+      return false;
+    }
+    return transcriptionJobRepository.findByRecordingId(recording.getId())
+        .filter(job -> !"COMPLETE".equals(job.getState()) && !"TERMINAL".equals(job.getState()))
+        .isPresent();
+  }
+
+  private static String asNullableString(final Object value) {
+    return value == null ? null : value.toString();
   }
 }
 

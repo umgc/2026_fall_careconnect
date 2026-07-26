@@ -5,10 +5,9 @@ import com.careconnect.dto.CreateInviteRequest;
 import com.careconnect.dto.CreateInviteResponse;
 import com.careconnect.dto.InvitePreviewResponse;
 import com.careconnect.dto.RevokeInviteRequest;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.security.Permission;
-import com.careconnect.security.RequirePermission;
 import com.careconnect.security.Role;
 import com.careconnect.service.InviteTokenService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,16 +42,32 @@ public class InviteController {
 
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Long currentUserId = Long.parseLong(authentication.getName());
-        return userRepository.findById(currentUserId)
-                .orElseThrow(() -> new RuntimeException("User not authenticated"));
+        if (authentication == null || authentication.getName() == null) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        }
+
+        final String principal = authentication.getName();
+
+        // JWT subject is usually email in this app; keep ID parsing as a fallback
+        // for environments that still set the principal to numeric user ID.
+        return userRepository.findByEmail(principal).orElseGet(() -> {
+            try {
+                Long currentUserId = Long.parseLong(principal);
+                return userRepository.findById(currentUserId).orElseThrow(
+                        () -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
+            } catch (NumberFormatException ignored) {
+                throw new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+            }
+        });
     }
 
     /**
      * Create a unique invite token for an existing care-circle link.
      * Family members may not mint invites; patients/caregivers/admins can.
      */
-    @RequirePermission(Permission.CREATE_TASKS)
+    // Note: invite creation is role-gated (patient/caregiver/admin) instead of
+    // permission-gated. Patients should be able to invite family even if their
+    // role does not include CREATE_TASKS.
     @PostMapping("/care-circle/{linkId}/invite")
     public ResponseEntity<CreateInviteResponse> createInvite(
             @PathVariable Long linkId,
@@ -100,7 +115,6 @@ public class InviteController {
     }
 
     /** Revoke a pending invite token. Idempotent. */
-    @RequirePermission(Permission.CREATE_TASKS)
     @DeleteMapping("/care-circle/{linkId}/invite/{tokenId}")
     public ResponseEntity<Void> revokeInvite(
             @PathVariable Long linkId,

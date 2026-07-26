@@ -53,15 +53,22 @@ Future<http.Response> _defaultHandler(http.Request request) async =>
 
 /// Drop-in replacement for http.runWithClient that routes the MockClient's
 /// handler through the singleton's delegating client instead.
-/// Works by calling send() on the test's mock client and converting the
-/// StreamedResponse back to a Response for the delegating mock.
+/// Clones the request before forwarding — the outer MockClient already
+/// finalized the original, so a second send() would throw otherwise.
 T _runWithMockHandler<T>(
   T Function() callback,
   http.Client Function() clientFactory,
 ) {
   final client = clientFactory();
   _httpHandler = (http.Request request) async {
-    final streamed = await client.send(request);
+    final clone = http.Request(request.method, request.url)
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+    clone.headers.addAll(request.headers);
+    // Safe after outer MockClient.finalize() — body bytes remain readable.
+    clone.bodyBytes = request.bodyBytes;
+    final streamed = await client.send(clone);
     return http.Response.fromStream(streamed);
   };
   return callback();
@@ -78,17 +85,23 @@ const MethodChannel _connectivityChannel =
 void _setupStubs() {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_secureStorageChannel, (call) async {
+    final farFutureExpiry =
+        (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
     if (call.method == 'readAll') {
-      return <String, String>{'jwt_token': 'mock-jwt-for-test'};
+      return <String, String>{
+        'jwt_token': 'mock-jwt-for-test',
+        'token_expiry': '$farFutureExpiry',
+      };
     }
     if (call.method == 'read') {
       final key = (call.arguments as Map?)?['key'] as String?;
       if (key == 'jwt_token') return 'mock-jwt-for-test';
+      if (key == 'token_expiry') return '$farFutureExpiry';
       return null;
     }
     if (call.method == 'containsKey') {
       final key = (call.arguments as Map?)?['key'] as String?;
-      if (key == 'jwt_token') return true;
+      if (key == 'jwt_token' || key == 'token_expiry') return true;
       return false;
     }
     if (call.method == 'write' || call.method == 'delete') return null;
@@ -213,9 +226,15 @@ void main() {
     _httpHandler = _defaultHandler;
     final delegatingClient =
         MockClient((request) => _httpHandler(request));
-    _runWithMockHandler(() {
-      ApiServiceOffline.httpClient;
-    }, () => delegatingClient);
+    // OfflineQueueHttpClient keeps a real IOClient by default; inject a
+    // delegating MockClient so per-test _httpHandler overrides take effect.
+    ApiServiceOffline.debugSetHttpClient(delegatingClient);
+    ApiServiceOffline.configure(canQueueOfflineWrites: () => false);
+  });
+
+  tearDownAll(() {
+    ApiServiceOffline.debugResetHttpClient();
+    ApiServiceOffline.configure(canQueueOfflineWrites: () => true);
   });
 
   setUp(() {

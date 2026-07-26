@@ -741,9 +741,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                         messenger.showSnackBar(
                           SnackBar(
-                            content: Text(
-                              t.settings_telemetryFailedToUpdate,
-                            ),
+                            content: Text(t.settings_telemetryFailedToUpdate),
                             backgroundColor: errorColor,
                           ),
                         );
@@ -790,7 +788,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       context.push('/notetaker-configuration');
                     },
                   ),
-
                   const SizedBox(height: 24),
 
                   // General
@@ -805,7 +802,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? t.settings_generalSectionOfflinePersistenceSettingEnabled
                         : t.settings_generalSectionOfflinePersistenceSettingDisabled,
                     value: userProvider.offlineModeEnabled,
-                    // loading: _loadingPersistence,
                     onChanged: (enabled) async {
                       userProvider.setOfflineMode(enabled);
                       // BNS 7: Privacy-Preserving Observability and Telemetry.
@@ -860,6 +856,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     textColor: Theme.of(context).colorScheme.error,
                     iconColor: Theme.of(context).colorScheme.error,
                   ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

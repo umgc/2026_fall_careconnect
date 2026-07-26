@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -43,6 +44,10 @@ public class CallTranscriptSegment extends Auditable {
   /** Call identifier associated with the transcript segment. */
   @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
   private String callId;
+
+  /** Stable client-provided identifier used to make transcript retries idempotent. */
+  @Column(name = "client_segment_id")
+  private UUID clientSegmentId;
 
   /** Display label for the speaking participant. */
   @Column(name = "speaker_label", length = SPEAKER_LABEL_LENGTH)

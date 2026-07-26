@@ -295,12 +295,13 @@ void main() {
 
     testWidgets('shows generic instructions for other categories',
         (tester) async {
-      await tester.pumpWidget(_wrap());
+      await tester.pumpWidget(_wrap(
+        allowedCategories: [FileCategory.aiChatUpload],
+      ));
       await tester.tap(find.byType(DropdownButtonFormField<FileCategory>));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Select AI Chat File (falls into default case)
       await tester.tap(find.textContaining('AI Chat File').last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -661,9 +662,10 @@ void main() {
 
     testWidgets('selecting different categories updates instructions',
         (tester) async {
-      await tester.pumpWidget(_wrap());
+      await tester.pumpWidget(_wrap(
+        allowedCategories: [FileCategory.generalDocument],
+      ));
 
-      // Select General Document (default case)
       await tester.tap(find.byType(DropdownButtonFormField<FileCategory>));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
