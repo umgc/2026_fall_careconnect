@@ -358,6 +358,8 @@
   "signup_backLoginButton": "Вернуться к авторизации",
   "signup_signUpButton": "Зарегистрироваться",
   "signup_nextButton": "Далее",
+  "signup_step": "Шаг",
+  "signup_of": "из",
 
   "oauthcallback_initilizeAuth": "Обработка аутентификации",
   "oauthcallback_missingAuthData": "Отсутствуют данные аутентификации. Пожалуйста, попробуйте войти еще раз.",

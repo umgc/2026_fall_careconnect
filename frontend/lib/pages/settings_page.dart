@@ -699,60 +699,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 24),
 
-                  // Privacy
-                  _buildSectionHeader(context, 'Privacy'),
-                  _buildToggleCard(
-                    context,
-                    icon: Icons.privacy_tip,
-                    title: 'Telemetry',
-                    subtitle: 'Anonymous diagnostics and performance metrics',
-                    value: _telemetryEnabled,
-                    loading: _loadingTelemetry,
-                    onChanged: (enabled) async {
-                      if (_loadingTelemetry) return;
-
-                      final messenger = ScaffoldMessenger.of(context);
-                      final errorColor = Theme.of(context).colorScheme.error;
-
-                      final allowed = enabled
-                          ? await _confirmOptIn()
-                          : await _confirmOptOut();
-                      if (!allowed) return;
-
-                      setState(() => _loadingTelemetry = true);
-
-                      try {
-                        await TelemetrySettings.setOptedOut(!enabled);
-
-                        if (!mounted) return;
-                        setState(() {
-                          _telemetryEnabled = enabled;
-                          _loadingTelemetry = false;
-                        });
-
-                        if (_telemetryEnabled) {
-                          await Telemetry.event('privacy_telemetry_toggle', {
-                            'enabled': enabled,
-                          });
-                        }
-                      } catch (_) {
-                        if (!mounted) return;
-                        setState(() => _loadingTelemetry = false);
-
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: const Text(
-                              'Unable to update telemetry setting.',
-                            ),
-                            backgroundColor: errorColor,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-
-                  const SizedBox(height: 24),
-
                   // Subscription (hide for patient/family member)
                   if (!shouldHideSubscription) ...[
                     _buildSectionHeader(context, t.settingsSubscription),
@@ -851,10 +797,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildToggleCard(
                     context,
                     icon: Icons.cloud_off,
-                    title: 'Offline Persistence',
+                    title: t.settings_generalSectionOfflinePersistenceSetting,
                     subtitle: userProvider.offlineModeEnabled
-                        ? 'Save data locally and sync when reconnected'
-                        : 'New data will not be stored locally for offline use.',
+                        ? t.settings_generalSectionOfflinePersistenceSettingEnabled
+                        : t.settings_generalSectionOfflinePersistenceSettingDisabled,
                     value: userProvider.offlineModeEnabled,
                     // loading: _loadingPersistence,
                     onChanged: (enabled) async {

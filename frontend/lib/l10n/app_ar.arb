@@ -374,6 +374,8 @@
   "signup_backLoginButton": "العودة إلى تسجيل الدخول",
   "signup_signUpButton": "اشتراك",
   "signup_nextButton": "التالي",
+  "signup_step": "خطوة",
+  "signup_of": "من",
 
   "oauthcallback_initilizeAuth": "جاري معالجة المصادقة",
   "oauthcallback_missingAuthData": "بيانات المصادقة مفقودة. يرجى محاولة تسجيل الدخول مرة أخرى.",

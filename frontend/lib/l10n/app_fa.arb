@@ -376,6 +376,8 @@
   "signup_backLoginButton": "بازگشت به صفحه ورود",
   "signup_signUpButton": "ثبت‌نام",
   "signup_nextButton": "بعدی",
+  "signup_step": "مرحله",
+  "signup_of": "از",
 
   "oauthcallback_initilizeAuth": "در حال پردازش احراز هویت",
   "oauthcallback_missingAuthData": "اطلاعات احراز هویت موجود نیست. لطفاً دوباره وارد شوید.",

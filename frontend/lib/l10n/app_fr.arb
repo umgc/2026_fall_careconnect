@@ -374,6 +374,8 @@
   "signup_backLoginButton": "Retour à la connexion",
   "signup_signUpButton": "S'inscrire",
   "signup_nextButton": "Suivant",
+  "signup_step": "Étape",
+  "signup_of": "de",
 
   "oauthcallback_initilizeAuth": "Traitement de l'authentification",
   "oauthcallback_missingAuthData": "Données d'authentification manquantes. Veuillez réessayer de vous connecter.",

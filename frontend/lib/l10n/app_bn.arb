@@ -357,6 +357,8 @@
   "signup_backLoginButton": "লগইনে ফিরে যান",
   "signup_signUpButton": "নিবন্ধন করুন",
   "signup_nextButton": "পরবর্তী",
+  "signup_step": "ধাপ",
+  "signup_of": "এর",
 
   "oauthcallback_initilizeAuth": "প্রমাণীকরণ প্রক্রিয়া চলছে",
   "oauthcallback_missingAuthData": "অথেন্টিকেশন ডেটা পাওয়া যায়নি। অনুগ্রহ করে পুনরায় সাইন-ইন করার চেষ্টা করুন।",

@@ -358,6 +358,8 @@
   "signup_backLoginButton": "ログインに戻る",
   "signup_signUpButton": "サインアップ",
   "signup_nextButton": "次へ",
+  "signup_step": "ステップ",
+  "signup_of": "の",
 
   "oauthcallback_initilizeAuth": "認証処理中",
   "oauthcallback_missingAuthData": "認証データが不足しています。もう一度サインインしてください。",

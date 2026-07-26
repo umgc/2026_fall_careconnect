@@ -1024,6 +1024,8 @@ void main() {
       loc.homecarereview_reviewed,
       loc.homecarereview_savedForm,
       loc.homecarereview_failedToSave,
+      loc.signup_step,
+      loc.signup_of,
     ];
   }
 

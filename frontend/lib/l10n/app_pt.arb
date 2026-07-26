@@ -359,6 +359,8 @@
   "signup_backLoginButton": "Voltar para o login",
   "signup_signUpButton": "Cadastre-se",
   "signup_nextButton": "Próximo",
+  "signup_step": "Etapa",
+  "signup_of": "de",
 
   "oauthcallback_initilizeAuth": "Processando autenticação",
   "oauthcallback_missingAuthData": "Dados de autenticação ausentes. Tente iniciar sessão novamente.",

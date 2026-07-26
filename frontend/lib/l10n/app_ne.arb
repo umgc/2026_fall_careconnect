@@ -374,6 +374,8 @@
   "signup_backLoginButton": "लगइनमा फर्कनुहोस्",
   "signup_signUpButton": "साइन अप गर्नुहोस्",
   "signup_nextButton": "अर्को",
+  "signup_step": "चरण",
+  "signup_of": "को",
 
   "oauthcallback_initilizeAuth": "प्रमाणीकरण प्रशोधन गर्दै",
   "oauthcallback_missingAuthData": "प्रमाणीकरण डेटा हराइरहेको छ। कृपया फेरि साइन इन गर्ने प्रयास गर्नुहोस्।",

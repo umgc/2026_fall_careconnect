@@ -373,6 +373,8 @@
   "signup_backLoginButton": "ወደ መግቢያ ተመለስ",
   "signup_signUpButton": "ይመዝገቡ",
   "signup_nextButton": "ቀጣይ",
+  "signup_step": "ደረጃ",
+  "signup_of": "የ",
 
   "oauthcallback_initilizeAuth": "ማረጋገጫን በማስኬድ ላይ",
   "oauthcallback_missingAuthData": "የማረጋገጫ ውሂብ ይጎድላል። እባክዎ እንደገና ለመግባት ይሞክሩ።",

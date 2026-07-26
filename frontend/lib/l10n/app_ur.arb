@@ -375,6 +375,8 @@
   "signup_backLoginButton": "لاگ ان پر واپس",
   "signup_signUpButton": "سائن اپ",
   "signup_nextButton": "اگلا",
+  "signup_step": "قدم",
+  "signup_of": "میں سے",
 
   "oauthcallback_initilizeAuth": "تصدیق پر کارروائی ہو رہی ہے",
   "oauthcallback_missingAuthData": "توثیقی ڈیٹا غائب ہے۔ براہ کرم دوبارہ سائن ان کرنے کی کوشش کریں۔",

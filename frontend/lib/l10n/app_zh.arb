@@ -358,6 +358,8 @@
   "signup_backLoginButton": "返回登录",
   "signup_signUpButton": "注册",
   "signup_nextButton": "下一步",
+  "signup_step": "步骤",
+  "signup_of": "的",
 
   "oauthcallback_initilizeAuth": "正在处理身份验证",
   "oauthcallback_missingAuthData": "缺少身份验证数据。请尝试重新登录。",
