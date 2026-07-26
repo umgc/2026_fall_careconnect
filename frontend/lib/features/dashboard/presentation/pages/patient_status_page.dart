@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
@@ -37,9 +38,12 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
   bool _isSavingPersonalization = false;
   bool _isEditingPersonalization = false;
 
+  bool _initialized = false;
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     fetchData();
   }
 
@@ -57,6 +61,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       loading = true;
       error = null;
     });
+    final t = AppLocalizations.of(context)!;
 
     try {
       // Use the patientId passed to the widget if available,
@@ -66,7 +71,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
       if (user == null) {
         setState(() {
-          error = 'User not logged in.';
+          error = t.ptdashboard_userNotLoggedIn;
           loading = false;
         });
         return;
@@ -82,7 +87,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
       if (patientId == null) {
         setState(() {
-          error = 'No patient ID available';
+          error = t.ptstatusscreen_noPtID;
           loading = false;
         });
         return;
@@ -113,7 +118,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       if (profileRes.statusCode != 200) {
         setState(() {
           error =
-              'Failed to load patient profile. Status: ${profileRes.statusCode}';
+              '${t.ptstatusscreen_failedToLoadProfile}: ${profileRes.statusCode}';
           loading = false;
         });
         print('🔍 API Error: ${profileRes.statusCode} - ${profileRes.body}');
@@ -205,7 +210,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       if (vitalsRes.statusCode != 200) {
         setState(() {
           error =
-              'Failed to load vitals summary. Status: ${vitalsRes.statusCode}';
+              '${t.ptstatusscreen_failedToLoadVitals}: ${vitalsRes.statusCode}';
           loading = false;
         });
         print(
@@ -225,7 +230,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     } catch (e) {
       print('🔍 Error fetching patient data: $e');
       setState(() {
-        error = 'Error: $e';
+        error = '${t.voicecommand_phaseLabelError}: $e';
         loading = false;
       });
     }
@@ -251,6 +256,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
   Future<void> _saveInHomePersonalization() async {
     final p = patient;
+    final t = AppLocalizations.of(context)!;
     if (p == null) return;
 
     setState(() => _isSavingPersonalization = true);
@@ -282,7 +288,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Personalization saved')),
+            SnackBar(content: Text(t.ptstatusscreen_personaliztionSaved)),
           );
           setState(() {
             _isEditingPersonalization = false;
@@ -292,7 +298,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Save failed: ${resp.statusCode}'),
+              content: Text('${t.ptstatusscreen_saveFailed}: ${resp.statusCode}'),
             ),
           );
         }
@@ -300,7 +306,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
+          SnackBar(content: Text('${t.ptstatusscreen_saveFailed}: $e')),
         );
       }
     } finally {
@@ -311,6 +317,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
   }
 
   Widget _buildInHomePersonalizationSection() {
+    final t = AppLocalizations.of(context)!;
     final p = patient;
     if (p == null) return const SizedBox.shrink();
 
@@ -370,7 +377,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    value.isEmpty ? 'Not set' : value,
+                    value.isEmpty ? t.ptstatusscreen_notSaved : value,
                     style: theme.textTheme.bodyMedium,
                   ),
                 ],
@@ -382,7 +389,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     }
 
     return _buildInfoSection(
-      'Personalization',
+      t.ptstatusscreen_personalization,
       Icons.favorite_outline,
       [],
       customContent: Column(
@@ -392,7 +399,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
             children: [
               Expanded(
                 child: Text(
-                  'Personalization',
+                  t.ptstatusscreen_personalization,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -424,7 +431,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                                     : Icons.edit,
                               ),
                         label: Text(
-                          _isEditingPersonalization ? 'Save' : 'Edit',
+                          _isEditingPersonalization ? t.save : t.ptstatusscreen_edit,
                         ),
                       ),
             ],
@@ -432,25 +439,25 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
           const SizedBox(height: 12),
                 row(
                   icon: Icons.thumb_up_alt_outlined,
-                  label: 'Likes',
+                  label: t.ptstatusscreen_likes,
                   controller: _likesController,
                 ),
                 const SizedBox(height: 12),
                 row(
                   icon: Icons.thumb_down_alt_outlined,
-                  label: 'Dislikes',
+                  label: t.ptstatusscreen_dislikes,
                   controller: _dislikesController,
                 ),
                 const SizedBox(height: 12),
                 row(
                   icon: Icons.repeat_rounded,
-                  label: 'Habits',
+                  label: t.ptstatusscreen_habits,
                   controller: _habitsController,
                 ),
                 const SizedBox(height: 12),
                 row(
                   icon: Icons.warning_amber_outlined,
-                  label: 'Phobias',
+                  label: t.ptstatusscreen_phobia,
                   controller: _phobiasController,
                 ),
                 const SizedBox(height: 12),
@@ -469,22 +476,22 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                       child: _isEditingPersonalization
                           ? DropdownButtonFormField<String>(
                               initialValue: _preferredCommunicationMethod,
-                              items: const [
+                              items: [
                                 DropdownMenuItem(
                                   value: 'verbal',
-                                  child: Text('Verbal'),
+                                  child: Text(t.ptstatusscreen_verbal),
                                 ),
                                 DropdownMenuItem(
                                   value: 'visual',
-                                  child: Text('Visual'),
+                                  child: Text(t.ptstatusscreen_visual),
                                 ),
                                 DropdownMenuItem(
                                   value: 'written',
-                                  child: Text('Written'),
+                                  child: Text(t.ptstatusscreen_written),
                                 ),
                                 DropdownMenuItem(
                                   value: 'gesture',
-                                  child: Text('Gesture'),
+                                  child: Text(t.ptstatusscreen_gesture),
                                 ),
                               ],
                               onChanged: (v) => setState(
@@ -492,13 +499,13 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                                             _preferredCommunicationMethod = v,
                                       ),
                               decoration:
-                                  deco('Preferred communication method'),
+                                  deco(t.ptstatusscreen_preferComMethod),
                             )
                           : Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Preferred communication method',
+                                  t.ptstatusscreen_preferComMethod,
                                   style:
                                       theme.textTheme.bodySmall?.copyWith(
                                     color: Colors.grey.shade700,
@@ -509,7 +516,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                                 Text(
                                   (_preferredCommunicationMethod ?? '')
                                           .isEmpty
-                                      ? 'Not set'
+                                      ? t.ptstatusscreen_notSaved
                                       : _preferredCommunicationMethod!
                                           .substring(0, 1)
                                           .toUpperCase() +
@@ -533,6 +540,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     List<Widget> children, {
     Widget? customContent,
   }) {
+    final t = AppLocalizations.of(context)!;
     return Card(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -565,7 +573,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
             ] else ...[
               const SizedBox(height: 16),
               Text(
-                'No information available',
+                t.ptstatusscreen_noInfoAvail,
                 style: TextStyle(
                   color: Colors.grey.shade600,
                   fontStyle: FontStyle.italic,
@@ -627,6 +635,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
   Widget _buildMedicalInfoSection() {
     final hasAllergies = patient!.allergies?.isNotEmpty == true;
     final hasVitalConditions = patient!.vitalConditions?.isNotEmpty == true;
+    final t = AppLocalizations.of(context)!;
 
     // Safely extract medications from various possible sources
     String? medications;
@@ -648,7 +657,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     // Check if we have any medical information to display
     if (!hasAllergies && !hasVitalConditions && !hasMedications) {
       return _buildInfoSection(
-        'Medical Information',
+        t.ptstatusscreen_medInfo,
         Icons.medical_information,
         [],
       );
@@ -661,12 +670,12 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
         ? (patient!.allergies is List
               ? (patient!.allergies as List).join(', ')
               : patient!.allergies.toString())
-        : 'No allergies listed';
-    children.add(_buildInfoRow('Allergies', allergiesText));
+        : t.ptstatusscreen_noAllergies;
+    children.add(_buildInfoRow(t.ptstatusscreen_allergies, allergiesText));
 
     // Add medications if available
     if (hasMedications) {
-      children.add(_buildInfoRow('Current Medications', medications!));
+      children.add(_buildInfoRow(t.ptstatusscreen_currentMed, medications!));
     }
 
     // Add vital signs if available
@@ -677,7 +686,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       if (vitals.containsKey('heartRate') && vitals['heartRate'] != null) {
         final heartRate = vitals['heartRate'].toString();
         if (heartRate.isNotEmpty && heartRate != 'null') {
-          children.add(_buildInfoRow('Heart Rate', '$heartRate bpm'));
+          children.add(_buildInfoRow(t.ptstatusscreen_heartRate, '$heartRate ${t.ptstatusscreen_bpm}'));
         }
       }
 
@@ -685,14 +694,14 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
           vitals['bloodPressure'] != null) {
         final bloodPressure = vitals['bloodPressure'].toString();
         if (bloodPressure.isNotEmpty && bloodPressure != 'null') {
-          children.add(_buildInfoRow('Blood Pressure', '$bloodPressure mmHg'));
+          children.add(_buildInfoRow(t.ptstatusscreen_bloodPressure, '$bloodPressure mmHg'));
         }
       }
 
       if (vitals.containsKey('temperature') && vitals['temperature'] != null) {
         final temperature = vitals['temperature'].toString();
         if (temperature.isNotEmpty && temperature != 'null') {
-          children.add(_buildInfoRow('Temperature', '$temperature°F'));
+          children.add(_buildInfoRow(t.ptstatusscreen_temp, '$temperature°F'));
         }
       }
 
@@ -700,7 +709,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
           vitals['oxygenSaturation'] != null) {
         final oxygenSat = vitals['oxygenSaturation'].toString();
         if (oxygenSat.isNotEmpty && oxygenSat != 'null') {
-          children.add(_buildInfoRow('Oxygen Saturation', '$oxygenSat%'));
+          children.add(_buildInfoRow(t.ptstatusscreen_oxSat, '$oxygenSat%'));
         }
       }
 
@@ -737,7 +746,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     }
 
     return _buildInfoSection(
-      'Medical Information',
+      t.ptstatusscreen_medInfo,
       Icons.medical_information,
       children,
     );
@@ -745,6 +754,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
   /// Persistent risk alert banner shown at top of dashboard when client has flagged risks.
   Widget _buildRiskBanner() {
+    final t = AppLocalizations.of(context)!;
     if (_flaggedRiskNames.isEmpty) return const SizedBox.shrink();
     final names = _flaggedRiskNames.join(', ');
     return Container(
@@ -759,7 +769,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Known Risks: $names',
+                '${t.ptstatusscreen_knownRisk}: $names',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -775,6 +785,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final isMobile = MediaQuery.of(context).size.width < 600;
     final user = Provider.of<UserProvider>(context).user;
     final isCaregiver = user != null &&
@@ -783,7 +794,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBarHelper.createAppBar(context, title: 'Patient Status'),
+      appBar: AppBarHelper.createAppBar(context, title: t.ptstatusscreen_ptStatus),
       drawer: const CommonDrawer(currentRoute: '/patient'),
       body: _buildDashboardBody(context, isMobile, isCaregiver),
     );
@@ -791,6 +802,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
 
   Widget _buildDashboardBody(
       BuildContext context, bool isMobile, bool isCaregiver) {
+    final t = AppLocalizations.of(context)!;
     if (loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -803,7 +815,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       );
     }
     if (patient == null) {
-      return const Center(child: Text('No patient data'));
+      return Center(child: Text(t.ptstatusscreen_noPtData));
     }
     final scrollContent = SingleChildScrollView(
       child: Card(
@@ -841,17 +853,17 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                             const SizedBox(height: 8),
                             if (patient!.dob.isNotEmpty)
                               Text(
-                                'Age: ${_calculateAge(patient!.dob)}',
+                                '${t.ptstatusscreen_age}: ${_calculateAge(patient!.dob)}',
                                 textAlign: TextAlign.center,
                               ),
                             if (patient!.phone.isNotEmpty)
                               Text(
-                                'Phone: ${patient!.phone}',
+                                '${t.ptstatusscreen_phone}: ${patient!.phone}',
                                 textAlign: TextAlign.center,
                               ),
                             if (patient!.email.isNotEmpty)
                               Text(
-                                'Email: ${patient!.email}',
+                                '${t.resetpassword_emailTitle}: ${patient!.email}',
                                 textAlign: TextAlign.center,
                               ),
                           ],
@@ -883,11 +895,11 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                                     ),
                               ),
                               if (patient!.dob.isNotEmpty)
-                                Text('Age: ${_calculateAge(patient!.dob)}'),
+                                Text('${t.ptstatusscreen_age}: ${_calculateAge(patient!.dob)}'),
                               if (patient!.phone.isNotEmpty)
-                                Text('Phone: ${patient!.phone}'),
+                                Text('${t.ptstatusscreen_phone}: ${patient!.phone}'),
                               if (patient!.email.isNotEmpty)
-                                Text('Email: ${patient!.email}'),
+                                Text('${t.resetpassword_emailTitle}: ${patient!.email}'),
                             ],
                           ),
                         ),
@@ -899,30 +911,30 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   ? Column(
                       children: [
                         // Patient Information Section
-                        _buildInfoSection('Patient Information', Icons.person, [
+                        _buildInfoSection(t.ptstatusscreen_ptInfo, Icons.person, [
                           if (patient!.relationship.isNotEmpty)
-                            _buildInfoRow('Relationship', patient!.relationship),
+                            _buildInfoRow(t.ptstatusscreen_relationship, patient!.relationship),
                           if (patient!.gender != null &&
                               patient!.gender!.isNotEmpty)
-                            _buildInfoRow('Gender', patient!.gender!),
+                            _buildInfoRow(t.signup_accountGender, patient!.gender!),
                           if (patient!.dob.isNotEmpty)
                             _buildInfoRow('Date of Birth', patient!.dob),
                         ]),
                         const SizedBox(height: 16),
                         // Address Section
                         if (patient!.address != null) ...[
-                          _buildInfoSection('Address', Icons.location_on, [
+                          _buildInfoSection(t.signup_accountAddress, Icons.location_on, [
                             if (patient!.address!.line1?.isNotEmpty == true)
                               _buildInfoRow(
-                                'Address',
+                                t.signup_accountAddress,
                                 '${patient!.address!.line1}${patient!.address!.line2?.isNotEmpty == true ? '\n${patient!.address!.line2}' : ''}',
                               ),
                             if (patient!.address!.city?.isNotEmpty == true)
-                              _buildInfoRow('City', patient!.address!.city!),
+                              _buildInfoRow(t.signup_accountCity, patient!.address!.city!),
                             if (patient!.address!.state?.isNotEmpty == true)
-                              _buildInfoRow('State', patient!.address!.state!),
+                              _buildInfoRow(t.signup_accountState, patient!.address!.state!),
                             if (patient!.address!.zip?.isNotEmpty == true)
-                              _buildInfoRow('ZIP Code', patient!.address!.zip!),
+                              _buildInfoRow(t.signup_accountZIP, patient!.address!.zip!),
                           ]),
                           const SizedBox(height: 16),
                         ],
@@ -934,7 +946,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                         const SizedBox(height: 16),
                         // Vitals Summary Section
                         _buildInfoSection(
-                          'Vitals Summary (Past 7 Days)',
+                          t.ptstatusscreen_vitalSummary,
                           Icons.favorite,
                           [],
                           customContent: buildVitalsSummary(vitals),
@@ -957,30 +969,30 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   : Column(
                       children: [
                         // Patient Information Section
-                        _buildInfoSection('Patient Information', Icons.person, [
+                        _buildInfoSection(t.ptstatusscreen_ptInfo, Icons.person, [
                           if (patient!.relationship.isNotEmpty)
-                            _buildInfoRow('Relationship', patient!.relationship),
+                            _buildInfoRow(t.ptstatusscreen_relationship, patient!.relationship),
                           if (patient!.gender != null &&
                               patient!.gender!.isNotEmpty)
-                            _buildInfoRow('Gender', patient!.gender!),
+                            _buildInfoRow(t.signup_accountGender, patient!.gender!),
                           if (patient!.dob.isNotEmpty)
-                            _buildInfoRow('Date of Birth', patient!.dob),
+                            _buildInfoRow(t.signup_accountDOB, patient!.dob),
                         ]),
                         const SizedBox(height: 24),
                         // Address Section
                         if (patient!.address != null) ...[
-                          _buildInfoSection('Address', Icons.location_on, [
+                          _buildInfoSection(t.signup_accountAddress, Icons.location_on, [
                             if (patient!.address!.line1?.isNotEmpty == true)
                               _buildInfoRow(
-                                'Address',
+                                t.signup_accountAddress,
                                 '${patient!.address!.line1}${patient!.address!.line2?.isNotEmpty == true ? '\n${patient!.address!.line2}' : ''}',
                               ),
                             if (patient!.address!.city?.isNotEmpty == true)
-                              _buildInfoRow('City', patient!.address!.city!),
+                              _buildInfoRow(t.signup_accountCity, patient!.address!.city!),
                             if (patient!.address!.state?.isNotEmpty == true)
-                              _buildInfoRow('State', patient!.address!.state!),
+                              _buildInfoRow(t.signup_accountState, patient!.address!.state!),
                             if (patient!.address!.zip?.isNotEmpty == true)
-                              _buildInfoRow('ZIP Code', patient!.address!.zip!),
+                              _buildInfoRow(t.signup_accountZIP, patient!.address!.zip!),
                           ]),
                           const SizedBox(height: 24),
                         ],
@@ -992,7 +1004,7 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                         const SizedBox(height: 24),
                         // Vitals Summary Section
                         _buildInfoSection(
-                          'Vitals Summary (Past 7 Days)',
+                          t.ptstatusscreen_vitalSummary,
                           Icons.favorite,
                           [],
                           customContent: buildVitalsSummary(vitals),
@@ -1031,9 +1043,10 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
   }
 
   Widget buildVitalsSummary(DashboardAnalytics? vitals) {
+    final t = AppLocalizations.of(context)!;
     if (vitals == null) {
       return Text(
-        'No vitals data available for summary.',
+        t.ptstatusscreen_noVitalsData,
         style: TextStyle(
           color: Colors.grey.shade600,
           fontStyle: FontStyle.italic,
@@ -1046,8 +1059,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       children: [
         if (vitals.avgHeartRate != null)
           _buildVitalRow(
-            'Heart Rate',
-            '${vitals.avgHeartRate!.toStringAsFixed(1)} bpm',
+            t.ptstatusscreen_heartRate,
+            '${vitals.avgHeartRate!.toStringAsFixed(1)} ${t.ptstatusscreen_bpm}',
           ),
         if (vitals.avgSpo2 != null)
           _buildVitalRow('SpO₂', '${vitals.avgSpo2!.toStringAsFixed(1)}%'),

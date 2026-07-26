@@ -4,12 +4,13 @@
 // Pure StatelessWidget with no Provider or HTTP.
 // Uses RichText internally — text assertions use find.byType(RichText).
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/alter_notification_widget.dart';
 
 Widget _wrap(AlertNotification widget) =>
-    MaterialApp(home: Scaffold(body: widget));
+    MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: widget));
 
 void main() {
   group('AlertNotification widget', () {

@@ -5,12 +5,16 @@
 // _isLoading is set to true at the start of _loadFiles().
 // Tests use pump() only to check the initial loading state.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/files/presentation/pages/patient_files_page.dart';
 
 Widget _wrap({int patientId = 1, String patientName = 'Jane Doe'}) =>
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale('en'),
       home: PatientFilesPage(patientId: patientId, patientName: patientName),
     );
 

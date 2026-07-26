@@ -1,6 +1,8 @@
 package com.careconnect.controller;
 
 import com.careconnect.exception.AppException;
+import com.careconnect.dto.SummaryItemConfirmRequest;
+import com.careconnect.dto.SummaryItemConfirmResponse;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
@@ -10,6 +12,7 @@ import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
+import com.careconnect.service.CallSummaryItemConfirmService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTerminationExecutor;
@@ -95,6 +98,8 @@ public class CallController {
   private CallTranscriptService callTranscriptService;
   @Autowired
   private CallSummaryService callSummaryService;
+  @Autowired
+  private CallSummaryItemConfirmService callSummaryItemConfirmService;
   @Autowired
   private CallRecordingService callRecordingService;
   @Autowired
@@ -993,6 +998,32 @@ public class CallController {
                         "callId", callId,
                         "status", "NOT_FOUND",
                         "message", "No stored summary found for this call")));
+  }
+
+  @PostMapping("/{callId}/summary/items/{itemId}/confirm")
+  @Operation(summary = "Confirm or decline a single extracted call summary item (FR-SUM-4)")
+  /**
+   * Records a user decision (approve, approve-for-session, or decline) on a single extracted
+   * call summary item. Medication care instructions are re-validated through the Ask AI safety
+   * pipeline first and may be routed to Tier-2 HITL review instead of being recorded
+   * immediately (Task 6.7).
+   */
+  public final ResponseEntity<SummaryItemConfirmResponse> confirmSummaryItem(
+      @PathVariable final String callId,
+      @PathVariable final String itemId,
+      @RequestBody final SummaryItemConfirmRequest request) {
+    final User currentUser = getCurrentUser();
+    requireDurableCallAccess(callId, currentUser);
+    try {
+      final SummaryItemConfirmResponse response =
+          callSummaryItemConfirmService.confirm(callId, itemId, currentUser, request);
+      return ResponseEntity.ok(response);
+    } catch (final IllegalArgumentException ex) {
+      throw new AppException(HttpStatus.BAD_REQUEST, ex.getMessage());
+    } catch (final IllegalStateException ex) {
+      // Fail-closed cases (e.g. medication confirm without patientId) must not become 500s.
+      throw new AppException(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
   }
 
   @GetMapping("/{callId}/transcript/segments")

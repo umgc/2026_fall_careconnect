@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -21,16 +22,20 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
   String _status = 'Processing OAuth callback...';
   bool _isError = false;
 
+  bool _initialized = false;
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     _processOAuthCallback();
   }
 
   Future<void> _processOAuthCallback() async {
+    final t = AppLocalizations.of(context)!;
     try {
       setState(() {
-        _status = 'Processing authentication...';
+        _status = '${t.oauthcallback_initilizeAuth}...';
         _isError = false;
       });
 
@@ -50,7 +55,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       // Check if we have required parameters
       if (widget.token == null || widget.user == null) {
         setState(() {
-          _status = 'Missing authentication data. Please try signing in again.';
+          _status = t.oauthcallback_missingAuthData;
           _isError = true;
         });
         _redirectToLogin();
@@ -58,7 +63,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       }
 
       setState(() {
-        _status = 'Saving authentication data...';
+        _status = '${t.oauthcallback_savingAuthData}...';
       });
 
       // Parse user data (it's URL encoded)
@@ -70,7 +75,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       await ApiService.saveJWTToken(widget.token!);
 
       setState(() {
-        _status = 'Completing sign in...';
+        _status = '${t.oauthcallback_completeSignIn}...';
       });
 
       // Save user to provider
@@ -82,14 +87,14 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
 
         // Navigate to appropriate dashboard based on role
         if (mounted) {
-          navigateToDashboard(context);
+          navigateToDashboard(context, routePatientToDailyBrief: true);
         }
 
         // Check for invalid role
         if (userSession.role.toUpperCase() != 'CAREGIVER' &&
             userSession.role.toUpperCase() != 'PATIENT') {
           setState(() {
-            _status = 'Unknown user role: ${userSession.role}';
+            _status = '${t.oauthcallback_unknownUserRole}: ${userSession.role}';
             _isError = true;
           });
           _redirectToLogin();
@@ -97,7 +102,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       }
     } catch (e) {
       setState(() {
-        _status = 'Failed to process authentication: $e';
+        _status = '${t.oauthcallback_failedToProcessAuth}: $e';
         _isError = true;
       });
       _redirectToLogin();
@@ -106,17 +111,18 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
 
   // ✅ IMPROVED ERROR MESSAGES
   String _getErrorMessage(String error) {
+    final t = AppLocalizations.of(context)!;
     switch (error.toLowerCase()) {
       case 'oauth_failed':
-        return 'OAuth authentication failed. Please try again.';
+        return t.oauthcallback_oauthFailed;
       case 'access_denied':
-        return 'Access was denied. Please grant permission to continue.';
+        return t.oauthcallback_accessDenied;
       case 'invalid_request':
-        return 'Invalid request. Please try signing in again.';
+        return t.oauthcallback_invalidRequest;
       case 'server_error':
-        return 'Server error occurred. Please try again later.';
+        return t.oauthcallback_serverError;
       default:
-        return 'Authentication error: $error';
+        return '${t.oauthcallback_authError}: $error';
     }
   }
 
@@ -130,6 +136,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
@@ -139,7 +146,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Logo
-              const Text(
+              Text(
                 'Care Connect',
                 style: TextStyle(
                   fontSize: 28,
@@ -175,8 +182,8 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF003366),
                   ),
-                  child: const Text(
-                    'Back to Login',
+                  child: Text(
+                    t.signup_backLoginButton,
                     style: TextStyle(color: Colors.white),
                   ),
                 ),

@@ -5,6 +5,7 @@
 // Test with pump(4s) to drain timers before disposal.
 // Uses provider for UserProvider.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -59,7 +60,7 @@ Widget _wrap({
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
 }
 
 void main() {

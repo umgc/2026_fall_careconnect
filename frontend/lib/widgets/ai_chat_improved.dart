@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import '../services/ai_chat_service.dart';
 import '../config/theme/app_theme.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:uuid/uuid.dart';
 
 // Message model for chat
@@ -23,6 +25,12 @@ class ChatMessage {
   final bool showRetry;
   final String? retryQuery;
   final String? requestIdentity;
+  final String? heldItemId;
+  final bool showHitlResume;
+  final String? requestId;
+  final String? auditId;
+  final String? sessionId;
+  final MedicationTimeline? medicationTimeline;
 
   ChatMessage({
     required this.text,
@@ -36,7 +44,53 @@ class ChatMessage {
     this.showRetry = false,
     this.retryQuery,
     this.requestIdentity,
+    this.heldItemId,
+    this.showHitlResume = false,
+    this.requestId,
+    this.auditId,
+    this.sessionId,
+    this.medicationTimeline,
   });
+
+  ChatMessage copyWith({
+    String? text,
+    bool? isUser,
+    DateTime? timestamp,
+    String? errorMessage,
+    List<AiAskCitation>? citations,
+    AiAskDisclaimer? disclaimer,
+    AiAskEscalation? escalation,
+    AiAskConfirmation? confirmation,
+    bool? showRetry,
+    String? retryQuery,
+    String? requestIdentity,
+    String? heldItemId,
+    bool? showHitlResume,
+    String? requestId,
+    String? auditId,
+    String? sessionId,
+    MedicationTimeline? medicationTimeline,
+  }) {
+    return ChatMessage(
+      text: text ?? this.text,
+      isUser: isUser ?? this.isUser,
+      timestamp: timestamp ?? this.timestamp,
+      errorMessage: errorMessage ?? this.errorMessage,
+      citations: citations ?? this.citations,
+      disclaimer: disclaimer ?? this.disclaimer,
+      escalation: escalation ?? this.escalation,
+      confirmation: confirmation ?? this.confirmation,
+      showRetry: showRetry ?? this.showRetry,
+      retryQuery: retryQuery ?? this.retryQuery,
+      requestIdentity: requestIdentity ?? this.requestIdentity,
+      heldItemId: heldItemId ?? this.heldItemId,
+      showHitlResume: showHitlResume ?? this.showHitlResume,
+      requestId: requestId ?? this.requestId,
+      auditId: auditId ?? this.auditId,
+      sessionId: sessionId ?? this.sessionId,
+      medicationTimeline: medicationTimeline ?? this.medicationTimeline,
+    );
+  }
 }
 
 // Helper class for uploaded files
@@ -70,6 +124,9 @@ class AIChat extends StatefulWidget {
   final int? patientId;
   final int? userId;
   final AiChatMode mode;
+  /// Max status polls while waiting for clinician release (default ~5 minutes).
+  final int hitlMaxPollAttempts;
+  final Duration hitlPollInterval;
 
   const AIChat({
     super.key,
@@ -79,6 +136,8 @@ class AIChat extends StatefulWidget {
     this.isModal = false,
     this.patientId,
     this.userId,
+    this.hitlMaxPollAttempts = 60,
+    this.hitlPollInterval = const Duration(seconds: 5),
   });
 
   @override
@@ -115,6 +174,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   String? _retryQuery;
   String? _retryRequestIdentity;
   bool _retryEnabled = false;
+  String _lastInputModality = 'TEXT';
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechReady = false;
+  bool _isListening = false;
 
   bool get _isGrounded => widget.mode == AiChatMode.groundedRecords;
 
@@ -130,6 +193,29 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     _checkAndLoadHistory();
 
     _startInactivityTimer(); // Start 15-minute inactivity timer
+    if (_isGrounded) {
+      unawaited(_initSpeech());
+    }
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      _speechReady = await _speech.initialize(
+        onError: (_) {
+          if (mounted) {
+            setState(() => _isListening = false);
+          }
+        },
+        onStatus: (status) {
+          if (!mounted) return;
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isListening = false);
+          }
+        },
+      );
+    } catch (_) {
+      _speechReady = false;
+    }
   }
 
   @override
@@ -217,6 +303,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _invalidatePendingRequests();
+    if (_isListening) {
+      unawaited(_speech.stop());
+    }
     _controller.dispose();
     _animationController.dispose();
     _inactivityTimer?.cancel();
@@ -742,16 +831,114 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
   void _sendMessage() {
     // Allow sending if there's a message OR (legacy) uploaded files
+    if (_isLoading) {
+      return;
+    }
     if (_controller.text.trim().isEmpty &&
         (_isGrounded || _uploadedFiles.isEmpty)) {
       return;
     }
+    _lastInputModality = 'TEXT';
     final userMessage = _controller.text.trim();
     _controller.clear();
     unawaited(_dispatchMessage(
       userMessage: userMessage,
       isRetry: false,
     ));
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    if (!_isGrounded || _isLoading) return;
+    _resetInactivityTimer();
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    if (!_speechReady) {
+      await _initSpeech();
+    }
+    if (!_speechReady) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Speech recognition is unavailable.')),
+      );
+      return;
+    }
+    setState(() => _isListening = true);
+    try {
+      await _speech.listen(
+        listenFor: const Duration(seconds: 12),
+        pauseFor: const Duration(seconds: 2),
+        onResult: (result) {
+          if (!mounted) return;
+          if (result.recognizedWords.isNotEmpty) {
+            _controller.text = result.recognizedWords;
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _controller.text.length),
+            );
+          }
+          if (result.finalResult) {
+            setState(() => _isListening = false);
+            final spoken = _controller.text.trim();
+            if (spoken.isNotEmpty && !_isLoading) {
+              _lastInputModality = 'VOICE';
+              _controller.clear();
+              unawaited(_dispatchMessage(
+                userMessage: spoken,
+                isRetry: false,
+              ));
+            }
+          }
+        },
+        listenOptions: stt.SpeechListenOptions(
+          cancelOnError: true,
+          partialResults: true,
+          listenMode: stt.ListenMode.dictation,
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isListening = false);
+    }
+  }
+
+  Future<void> _submitConfirmationDecision({
+    required ChatMessage message,
+    required String decision,
+  }) async {
+    final sessionId = message.sessionId ?? _askSessionId;
+    final patientId = widget.patientId;
+    if (sessionId == null ||
+        sessionId.isEmpty ||
+        patientId == null ||
+        patientId <= 0) {
+      return;
+    }
+    final ok = await AIChatService.submitConfirmation(
+      sessionId: sessionId,
+      patientId: patientId,
+      requestId: message.requestId,
+      auditId: message.auditId,
+      decision: decision,
+    );
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        final index = _messages.indexWhere((m) => identical(m, message));
+        if (index >= 0) {
+          _messages[index] = message.copyWith(
+            confirmation: const AiAskConfirmation(false, null),
+          );
+        }
+      });
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Confirmation recorded.'
+            : 'Could not record confirmation. Please try again.'),
+      ),
+    );
   }
 
   void _retryGroundedAsk() {
@@ -776,6 +963,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     // Reset inactivity timer on user activity
     _resetInactivityTimer();
 
+    // Retire any in-flight Ask HTTP or HITL poll from a prior turn so a released
+    // answer cannot land under a different follow-up question.
+    _requestEpoch++;
     final epoch = _requestEpoch;
     final abortCompleter = Completer<void>();
     final previousAbort = _activeAbort;
@@ -838,6 +1028,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               disclaimer: msg.disclaimer,
               escalation: msg.escalation,
               confirmation: msg.confirmation,
+              requestId: msg.requestId,
+              auditId: msg.auditId,
+              sessionId: msg.sessionId,
             );
             break;
           }
@@ -942,6 +1135,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               patientId: currentPatientId!,
               sessionId: _askSessionId,
               conversationId: _conversationId,
+              inputModality: _lastInputModality,
               abortTrigger: abortCompleter.future,
             )
           : null;
@@ -973,6 +1167,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       AiAskDisclaimer? disclaimer;
       AiAskEscalation? escalation;
       AiAskConfirmation? confirmation;
+      MedicationTimeline? medicationTimeline;
       var showRetry = false;
 
       if (askResult != null) {
@@ -985,10 +1180,18 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         if (askResult.sessionId != null) {
           _askSessionId = askResult.sessionId;
         }
+        if (askResult.deliveryStatus == AiAskDeliveryStatus.held) {
+          await _handleHeldAskResult(
+            epoch: epoch,
+            askResult: askResult,
+          );
+          return;
+        }
         citations = askResult.citations;
         disclaimer = askResult.disclaimer;
         escalation = askResult.escalation;
         confirmation = askResult.confirmation;
+        medicationTimeline = askResult.medicationTimeline;
         switch (askResult.deliveryStatus) {
           case AiAskDeliveryStatus.delivered:
             aiText = askResult.answer?.trim().isNotEmpty == true
@@ -1014,6 +1217,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             } else {
               _clearRetryState();
             }
+          case AiAskDeliveryStatus.held:
+            // Handled above; keep switch exhaustive.
+            aiText = askResult.message ??
+                "We're reviewing this before showing it to you.";
+            _clearRetryState();
         }
       } else if (response!['success'] == false) {
         // If backend explicitly failed, show the error message
@@ -1057,11 +1265,16 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             showRetry: showRetry,
             retryQuery: showRetry ? _retryQuery : null,
             requestIdentity: showRetry ? stableRequestIdentity : null,
+            requestId: askResult?.requestId,
+            auditId: askResult?.auditId,
+            sessionId: askResult?.sessionId ?? _askSessionId,
+            medicationTimeline: medicationTimeline,
           ),
         );
         _isLoading = false;
         // Clear uploaded files after successful processing
         _uploadedFiles.clear();
+        _lastInputModality = 'TEXT';
       })) {
         return;
       }
@@ -1088,6 +1301,236 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
+  }
+
+  static const String _hitlReviewingFallback =
+      "We're reviewing this before showing it to you.";
+  static const String _hitlUnavailableFallback =
+      'This answer is no longer available. Please ask again or contact your care provider.';
+  static const String _hitlStillReviewingFallback =
+      'Still under review. Check back later or contact your care provider.';
+  static const String _hitlUnauthorizedFallback =
+      'Unable to check review status for this answer. Please ask again or contact your care provider.';
+
+  static bool _isHitlTerminalDelivery(String deliveryStatus) {
+    return deliveryStatus == 'DELIVERED' ||
+        deliveryStatus == 'REJECTED' ||
+        deliveryStatus == 'EXPIRED' ||
+        deliveryStatus == 'WITHHELD_PERMANENTLY';
+  }
+
+  Future<void> _handleHeldAskResult({
+    required int epoch,
+    required AiAskResult askResult,
+  }) async {
+    _clearRetryState();
+    final reviewingText =
+        askResult.message?.trim().isNotEmpty == true
+            ? askResult.message!.trim()
+            : _hitlReviewingFallback;
+
+    if (!_safeSetState(epoch, () {
+      _messages.add(
+        ChatMessage(
+          text: reviewingText,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      // Keep sends blocked while the HITL poll may still deliver an answer.
+      _isLoading = true;
+      _uploadedFiles.clear();
+    })) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+    final heldItemId = askResult.heldItemId;
+    if (heldItemId == null || heldItemId.isEmpty) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnavailableFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_MISSING_ID',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    await _pollAndApplyHitlStatus(epoch: epoch, heldItemId: heldItemId);
+  }
+
+  Future<void> _resumeHitlPoll(String heldItemId) async {
+    if (_isLoading || heldItemId.isEmpty) return;
+    final epoch = _requestEpoch;
+    if (!_safeSetState(epoch, () {
+      _isLoading = true;
+      for (var i = _messages.length - 1; i >= 0; i--) {
+        final msg = _messages[i];
+        if (msg.showHitlResume && msg.heldItemId == heldItemId) {
+          _messages[i] = ChatMessage(
+            text: _hitlReviewingFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            heldItemId: heldItemId,
+          );
+          break;
+        }
+      }
+    })) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    await _pollAndApplyHitlStatus(epoch: epoch, heldItemId: heldItemId);
+    if (_isCurrentEpoch(epoch)) {
+      _safeSetState(epoch, () => _isLoading = false);
+    }
+  }
+
+  Future<void> _pollAndApplyHitlStatus({
+    required int epoch,
+    required String heldItemId,
+  }) async {
+    HitlPollResult? terminal;
+    HitlPollHttpException? permanentFailure;
+    var parseFailed = false;
+    final maxAttempts = widget.hitlMaxPollAttempts < 1
+        ? 1
+        : widget.hitlMaxPollAttempts;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      if (!_isCurrentEpoch(epoch)) return;
+      await Future<void>.delayed(widget.hitlPollInterval);
+      if (!_isCurrentEpoch(epoch)) return;
+
+      try {
+        final poll = await AIChatService.pollHitlStatus(heldItemId);
+        if (!_isCurrentEpoch(epoch)) return;
+        if (_isHitlTerminalDelivery(poll.deliveryStatus) ||
+            poll.status == 'REJECTED' ||
+            poll.status == 'EXPIRED') {
+          terminal = poll;
+          break;
+        }
+      } on HitlPollHttpException catch (error) {
+        if (error.isPermanent) {
+          permanentFailure = error;
+          break;
+        }
+        // Retry transient 5xx / unexpected HTTP until the attempt cap.
+      } on FormatException {
+        parseFailed = true;
+        break;
+      } catch (_) {
+        // Keep polling through transient network failures until the attempt cap.
+      }
+    }
+
+    if (!_isCurrentEpoch(epoch)) return;
+
+    if (parseFailed) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnavailableFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_PARSE_ERROR',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (permanentFailure != null) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlUnauthorizedFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_HTTP_${permanentFailure!.statusCode}',
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (terminal == null) {
+      if (!_safeSetState(epoch, () {
+        _isLoading = false;
+        _messages.add(
+          ChatMessage(
+            text: _hitlStillReviewingFallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: 'HELD_POLL_CLIENT_TIMEOUT',
+            heldItemId: heldItemId,
+            showHitlResume: true,
+          ),
+        );
+      })) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      return;
+    }
+
+    if (!_safeSetState(epoch, () => _isLoading = false)) {
+      return;
+    }
+
+    if (terminal.deliveryStatus == 'DELIVERED') {
+      final answerText = terminal.answer?.trim().isNotEmpty == true
+          ? terminal.answer!.trim()
+          : 'Ask AI returned no answer.';
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: answerText,
+            isUser: false,
+            timestamp: DateTime.now(),
+            citations: terminal!.citations,
+            disclaimer: terminal.disclaimer,
+            confirmation: terminal.confirmation,
+          ),
+        );
+      })) {
+        return;
+      }
+    } else {
+      final fallback = terminal.message?.trim().isNotEmpty == true
+          ? terminal.message!.trim()
+          : _hitlUnavailableFallback;
+      if (!_safeSetState(epoch, () {
+        _messages.add(
+          ChatMessage(
+            text: fallback,
+            isUser: false,
+            timestamp: DateTime.now(),
+            errorMessage: terminal!.deliveryStatus,
+          ),
+        );
+      })) {
+        return;
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   String _guessMimeType(String fileName) {
@@ -1293,38 +1736,143 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                   )
                                 : theme.textTheme.bodyMedium,
                           ),
-                          if (msg.errorMessage != null)
+                          if (msg.errorMessage != null &&
+                              !msg.errorMessage!.startsWith('HELD_'))
                             Text(
                               msg.errorMessage!,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: colorScheme.error,
                               ),
                             ),
+                          if (msg.medicationTimeline != null &&
+                              msg.medicationTimeline!.events.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Medication timeline',
+                              key: const Key('ask-ai-medication-timeline'),
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            ...msg.medicationTimeline!.events.map((event) {
+                              final hasDose = (event.doseFrom
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true) ||
+                                  (event.doseTo?.trim().isNotEmpty == true);
+                              final parts = <String>[
+                                if (event.effectiveDate
+                                        ?.trim()
+                                        .isNotEmpty ==
+                                    true)
+                                  event.effectiveDate!.trim(),
+                                event.medicationName,
+                                if (event.eventType?.trim().isNotEmpty ==
+                                    true)
+                                  event.eventType!.trim(),
+                                if (hasDose)
+                                  '${event.doseFrom ?? '—'} \u2192 '
+                                      '${event.doseTo ?? '—'}',
+                              ];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        parts.join(' · '),
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                    ),
+                                    if (event.citationRef
+                                            ?.trim()
+                                            .isNotEmpty ==
+                                        true) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 1,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.surface,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: colorScheme.outlineVariant,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          event.citationRef!.trim(),
+                                          style: theme.textTheme.labelSmall,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
                           if (msg.citations.isNotEmpty) ...[
                             const SizedBox(height: 6),
                             ...msg.citations.map(
-                              (citation) => Semantics(
-                                label:
-                                    'Citation ${citation.citationId}: ${citation.excerpt}',
-                                child: Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(top: 4),
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: colorScheme.outlineVariant,
+                              (citation) {
+                                final deepLink = citation.deepLink?.trim();
+                                final hasDeepLink =
+                                    deepLink != null && deepLink.isNotEmpty;
+                                final content = Text(
+                                  '${citation.citationId}'
+                                  '${citation.title == null ? '' : ' — ${citation.title}'}\n'
+                                  '${citation.excerpt}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: hasDeepLink
+                                        ? colorScheme.primary
+                                        : null,
+                                    decoration: hasDeepLink
+                                        ? TextDecoration.underline
+                                        : null,
+                                  ),
+                                );
+                                return Semantics(
+                                  label:
+                                      'Citation ${citation.citationId}: ${citation.excerpt}',
+                                  button: hasDeepLink,
+                                  child: InkWell(
+                                    onTap: hasDeepLink
+                                        ? () {
+                                            try {
+                                              context.go(deepLink);
+                                            } catch (_) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Could not open that citation.',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        : null,
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: colorScheme.outlineVariant,
+                                        ),
+                                      ),
+                                      child: content,
                                     ),
                                   ),
-                                  child: Text(
-                                    '${citation.citationId}'
-                                    '${citation.title == null ? '' : ' — ${citation.title}'}\n'
-                                    '${citation.excerpt}',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
                           ],
                           if (msg.disclaimer?.aiNoticeRequired == true) ...[
@@ -1354,6 +1902,48 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 4,
+                              children: [
+                                TextButton(
+                                  key: const Key('ask-ai-confirm-once'),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => unawaited(
+                                            _submitConfirmationDecision(
+                                              message: msg,
+                                              decision: 'APPROVE_ONCE',
+                                            ),
+                                          ),
+                                  child: const Text('Approve once'),
+                                ),
+                                TextButton(
+                                  key: const Key('ask-ai-confirm-session'),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => unawaited(
+                                            _submitConfirmationDecision(
+                                              message: msg,
+                                              decision: 'APPROVE_SESSION',
+                                            ),
+                                          ),
+                                  child: const Text('Approve for session'),
+                                ),
+                                TextButton(
+                                  key: const Key('ask-ai-confirm-decline'),
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => unawaited(
+                                            _submitConfirmationDecision(
+                                              message: msg,
+                                              decision: 'DECLINE',
+                                            ),
+                                          ),
+                                  child: const Text('Decline'),
+                                ),
+                              ],
+                            ),
                           ],
                           if (msg.showRetry &&
                               msg.retryQuery != null &&
@@ -1365,6 +1955,19 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                               onPressed: _isLoading ? null : _retryGroundedAsk,
                               icon: const Icon(Icons.refresh, size: 16),
                               label: const Text('Retry'),
+                            ),
+                          ],
+                          if (msg.showHitlResume &&
+                              msg.heldItemId != null &&
+                              msg.heldItemId!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              key: const Key('ask-ai-hitl-resume'),
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => _resumeHitlPoll(msg.heldItemId!),
+                              icon: const Icon(Icons.hourglass_top, size: 16),
+                              label: const Text('Check review status'),
                             ),
                           ],
                           Text(
@@ -1469,6 +2072,18 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                     onPressed: _isFilePickerOpen ? null : _pickFiles,
                     tooltip: 'Attach file',
                   ),
+                if (_isGrounded)
+                  IconButton(
+                    key: const Key('ask-ai-mic'),
+                    icon: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      color: _isListening
+                          ? colorScheme.error
+                          : colorScheme.primary,
+                    ),
+                    onPressed: _isLoading ? null : () => unawaited(_toggleVoiceInput()),
+                    tooltip: _isListening ? 'Stop listening' : 'Voice input',
+                  ),
                 Expanded(
                   child: TextField(
                     controller: _controller,
@@ -1476,7 +2091,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                     maxLines: 4,
                     decoration: InputDecoration(
                       hintText: _isGrounded
-                          ? 'Ask about this patient\'s records...'
+                          ? (_isListening
+                              ? 'Listening...'
+                              : 'Ask about this patient\'s records...')
                           : 'Type your message...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),

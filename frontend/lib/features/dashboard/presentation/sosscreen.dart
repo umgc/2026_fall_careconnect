@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 class SosScreen extends StatelessWidget {
@@ -5,9 +6,10 @@ class SosScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text("CarConnect"),
+        title: const Text("CareConnect"),
         centerTitle: true,
         backgroundColor: Colors.indigo,
       ),
@@ -17,12 +19,12 @@ class SosScreen extends StatelessWidget {
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 60),
             const SizedBox(height: 20),
-            const Text(
-              "SOS Sent",
+            Text(
+              t.sosscreen_sosSent,
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            const Text("Your caregiver has been notified."),
+            Text(t.sosscreen_caregiverNotified),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
@@ -30,7 +32,7 @@ class SosScreen extends StatelessWidget {
                 backgroundColor: Colors.purple,
                 foregroundColor: Colors.white,
               ),
-              child: const Text("Back"),
+              child: Text(t.sosscreen_backButton),
             ),
           ],
         ),

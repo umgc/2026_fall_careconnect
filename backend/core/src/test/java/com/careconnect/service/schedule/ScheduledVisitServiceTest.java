@@ -43,6 +43,7 @@ import com.careconnect.model.schedule.ScheduledVisitAudit;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.schedule.ScheduledVisitAuditRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
+import com.careconnect.service.VisitSummaryService;
 import com.careconnect.service.schedule.ScheduleConflictService.ConflictSummary;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -68,6 +69,9 @@ class ScheduledVisitServiceTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private VisitSummaryService visitSummaryService;
 
     @InjectMocks
     private ScheduledVisitService visitService;

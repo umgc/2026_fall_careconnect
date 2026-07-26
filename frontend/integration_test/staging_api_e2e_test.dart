@@ -5,8 +5,8 @@
 //     --dart-define=STAGING_BACKEND_URL=https://252kex9t5g.execute-api.us-east-1.amazonaws.com/v1
 //
 // In CI the URL is injected via the STAGING_BACKEND_URL secret.
-// Tests that hit endpoints returning 500 are marked // BLOCKED: and skipped
-// by the CI pipeline until Team A resolves the underlying backend issue.
+// Historical note: 5 tests here were formerly skipped over staging 500s (issue #232);
+// the root cause was wrong test paths, fixed in PR #295.
 
 import 'dart:convert';
 

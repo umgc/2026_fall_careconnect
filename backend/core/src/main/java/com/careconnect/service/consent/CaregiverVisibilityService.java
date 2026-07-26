@@ -17,27 +17,24 @@ package com.careconnect.service.consent;
  *       response bodies.</li>
  * </ul>
  *
- * <p>Real implementation ships in David's WBS 3.15.5 PR; until then a
- * permissive {@link NoOpCaregiverVisibilityService} default bean
- * allows access. When David's PR lands, replace the no-op to avoid a
- * duplicate-bean conflict.
- *
- * <p>Lookup key across both methods is the {@code (caregiverUserId,
- * patientUserId)} pair.
+ * <p>Production bean: {@link ConsentBackedCaregiverVisibilityService} (ConsentGrant /
+ * effective Ask AI consent). Lookup key is {@code (caregiverUserId, patientEntityId)}
+ * — the patient argument is the patient <em>entity</em> id from call summaries; the
+ * implementation resolves it to the patient user id for consent lookups.
  */
 public interface CaregiverVisibilityService {
 
     /**
      * Returns {@code true} when the given caregiver is currently
      * authorized to view summaries for the given patient. Equivalent
-     * to {@code getStatus(caregiverUserId, patientUserId).canViewSummaries()}
+     * to {@code getStatus(caregiverUserId, patientEntityId).canViewSummaries()}
      * for callers that don't need the status detail.
      *
      * @param caregiverUserId user identifier of the caregiver
-     * @param patientUserId   user identifier of the patient
+     * @param patientEntityId patient <em>entity</em> id (call summary / Ask scope key)
      * @return whether the caregiver may currently read summaries
      */
-    boolean canViewSummaries(Long caregiverUserId, Long patientUserId);
+    boolean canViewSummaries(Long caregiverUserId, Long patientEntityId);
 
     /**
      * Returns the full visibility check result for the given
@@ -48,8 +45,8 @@ public interface CaregiverVisibilityService {
      * to decide whether the consent gate applies at all.
      *
      * @param caregiverUserId user identifier of the caregiver
-     * @param patientUserId   user identifier of the patient
+     * @param patientEntityId patient <em>entity</em> id (call summary / Ask scope key)
      * @return combined status + boolean decision
      */
-    CaregiverVisibilityCheck getStatus(Long caregiverUserId, Long patientUserId);
+    CaregiverVisibilityCheck getStatus(Long caregiverUserId, Long patientEntityId);
 }

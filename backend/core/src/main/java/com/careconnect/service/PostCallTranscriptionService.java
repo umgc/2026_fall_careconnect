@@ -89,6 +89,9 @@ public class PostCallTranscriptionService {
   @Autowired
   private PostCallTranscriptionJobRepository jobRepository;
 
+  @Autowired
+  private CallSummaryService callSummaryService;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
@@ -161,6 +164,19 @@ public class PostCallTranscriptionService {
       job.setClaimedUntil(null);
       job.setLastError(null);
       jobRepository.save(job);
+      // Best-effort only: transcription_status / job state are already COMPLETE above.
+      // Summary generation must not roll back transcription completeness — a missing
+      // summary after COMPLETE is possible if Bedrock (or similar) fails here.
+      try {
+        callSummaryService.generateAndStoreSummary(
+            job.getCallId(), null, callTelemetryService.getLatestSentimentByChannel(job.getCallId()));
+      } catch (Exception e) {
+        if (log.isWarnEnabled()) {
+          log.warn(
+              "Post-call summary regeneration failed for call {}: {}",
+              job.getCallId(), e.getMessage(), e);
+        }
+      }
     } else {
       final String error = recording.getErrorMessage() == null
           ? "Transcription has not completed" : recording.getErrorMessage();

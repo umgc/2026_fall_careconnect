@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart';
+
 import 'package:http/http.dart' as http;
 
 import '../features/telemetry/telemetry.dart';
@@ -29,11 +30,23 @@ class ApiServiceOffline {
   static bool Function()? _canQueueOfflineWrites;
 
   /// HTTP client that automatically routes requests through the offline queue.
-  static final http.Client httpClient = OfflineQueueHttpClient(
+  /// Tests may replace this via [debugOverrideHttpClient] to bypass the
+  /// offline-queue and telemetry wrappers, which otherwise swallow mock
+  /// clients and return synthetic responses.
+  static http.Client get httpClient => _testHttpClient ?? _defaultHttpClient;
+
+  static http.Client? _testHttpClient;
+
+  static final http.Client _defaultHttpClient = OfflineQueueHttpClient(
     inner: TelemetryHttpClient(http.Client()),
     offlineSyncService: _offlineSyncService,
     canQueueWrites: () => _canQueueOfflineWrites?.call() ?? true,
   );
+
+  @visibleForTesting
+  static void debugOverrideHttpClient(http.Client? client) {
+    _testHttpClient = client;
+  }
 
   /// Swap the underlying transport on [httpClient] (tests only).
   @visibleForTesting

@@ -84,6 +84,13 @@ public class CheckInSnapshotService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Cannot assign inactive questions: " + inactiveIds);
         }
 
+        Set<String> selectedForms = questions.stream()
+                .map(q -> q.getFormKey() + ":" + q.getFormVersion())
+                .collect(Collectors.toSet());
+        if (selectedForms.size() > 1) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Selected questions must belong to a single form version");
+        }
+
         CheckIn checkIn = CheckIn.builder()
                 .patient(patient)
                 .build();
@@ -100,7 +107,12 @@ public class CheckInSnapshotService {
                     q.isRequired(),
                     q.getOrdinal(),
                     q.getPrompt(),
-                    q.getType().name()
+                    q.getType().name(),
+                    q.getFormKey(),
+                    q.getFormVersion(),
+                    q.getSectionKey(),
+                    q.getFieldKey(),
+                    q.getScoreWeight()
             ));
         }
         checkInQuestionRepository.saveAll(snapshots);

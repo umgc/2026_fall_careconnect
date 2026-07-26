@@ -46,7 +46,28 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607191900_chime_attendee_claim.sql"),
             new SchemaPatchLedger.Patch(
                     "2607192000-summary-replay-quarantine-reason",
-                    "db/schema-patches/2607192000_summary_replay_quarantine_reason.sql"));
+                    "db/schema-patches/2607192000_summary_replay_quarantine_reason.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607211800-ai-held-item",
+                    "db/schema-patches/2607211800_create_ai_held_item.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607231600-ai-ask-audit",
+                    "db/schema-patches/2607231600_create_ai_ask_audit.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607232100-visit-summaries-ask-confirmation",
+                    "db/schema-patches/2607232100_visit_summaries_and_ask_confirmation.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607241000-consent-grants",
+                    "db/schema-patches/2607241000_create_consent_grants.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607250100-consent-grants-active-unique",
+                    "db/schema-patches/2607250100_uq_consent_grants_active.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607251300-ai-held-item-open-unique",
+                    "db/schema-patches/2607251300_uq_ai_held_item_open_surface_hash.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607251310-user-files-extracted-text",
+                    "db/schema-patches/2607251310_user_files_extracted_text.sql"));
 
     private SchemaPatchCatalog() {
     }

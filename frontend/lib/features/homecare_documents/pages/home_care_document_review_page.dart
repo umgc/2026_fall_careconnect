@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import 'package:care_connect_app/config/theme/app_theme.dart';
@@ -62,9 +63,10 @@ class _HomeCareDocumentReviewPageState
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final result = widget.result;
     return Scaffold(
-      appBar: AppBar(title: Text('Review: ${result.documentTypeDisplayName}')),
+      appBar: AppBar(title: Text('${t.homecarereview_review}: ${result.documentTypeDisplayName}')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -84,12 +86,12 @@ class _HomeCareDocumentReviewPageState
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save),
-              label: Text(_saving ? 'Saving...' : 'Confirm & Save'),
+              label: Text(_saving ? '${t.homecarereview_saving}...' : t.homecarereview_confirmSave),
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: _saving ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(t.cancel),
             ),
           ],
         ),
@@ -98,13 +100,14 @@ class _HomeCareDocumentReviewPageState
   }
 
   Widget _buildStatusBanner(HomeCareExtractionResult result) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final manual = result.manualEntryRequired;
     final color = manual ? AppTheme.warning : theme.colorScheme.primary;
     final text = result.message ??
         (manual
-            ? 'Automatic extraction was unavailable. Please enter the fields manually.'
-            : 'Fields below were prefilled by AI from your document. Review and edit them before saving.');
+            ? t.homecarereview_autoExtractUnavailable
+            : t.homecarereview_fieldsPrefilled);
 
     return Card(
       color: color.withOpacity(0.08),
@@ -125,6 +128,7 @@ class _HomeCareDocumentReviewPageState
   Widget _buildFieldRow(HomeCareExtractedField field) {
     final isMachine = _machineGenerated.contains(field.key);
     final wasEdited = _editedByUser.contains(field.key);
+    final t = AppLocalizations.of(context)!;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -134,11 +138,11 @@ class _HomeCareDocumentReviewPageState
         decoration: InputDecoration(
           labelText: field.label,
           helperText: isMachine
-              ? 'Machine-generated — please verify before saving'
-              : (wasEdited ? 'Edited by you' : null),
+              ? t.homecarereview_machineGenerated
+              : (wasEdited ? t.homecarereview_editedBy : null),
           suffixIcon: isMachine
-              ? const Tooltip(
-                  message: 'Prefilled by AI (OCR + LLM)',
+              ? Tooltip(
+                  message: t.homecarereview_prefilledBy,
                   child: Icon(Icons.auto_awesome, size: 20),
                 )
               : null,
@@ -157,11 +161,12 @@ class _HomeCareDocumentReviewPageState
   }
 
   Future<void> _save() async {
+    final t = AppLocalizations.of(context)!;
     final userId = widget.patientId;
     if (userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to save digitized form: missing user ID.'),
+        SnackBar(
+          content: Text(t.homecarereview_unableToSave),
           backgroundColor: AppTheme.error,
         ),
       );
@@ -206,7 +211,7 @@ class _HomeCareDocumentReviewPageState
         fileName: fileName,
         category: homeCareDocumentTypeToFileCategory(widget.result.documentType),
         description:
-            'Digitized ${widget.result.documentTypeDisplayName} (reviewed)',
+            '${t.homecarereview_digitized} ${widget.result.documentTypeDisplayName} ${t.homecarereview_reviewed}',
         patientId: userId,
       );
 
@@ -215,19 +220,19 @@ class _HomeCareDocumentReviewPageState
       if (response != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Saved digitized form: ${response.fileName}'),
+            content: Text('${t.homecarereview_savedForm}: ${response.fileName}'),
             backgroundColor: AppTheme.success,
           ),
         );
         Navigator.of(context).pop(true);
       } else {
-        throw Exception('Upload failed - no response received');
+        throw Exception(t.manualentrywidget_uploadFailedNoResp);
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save digitized form: $e'),
+          content: Text('${t.homecarereview_failedToSave}: $e'),
           backgroundColor: AppTheme.error,
         ),
       );

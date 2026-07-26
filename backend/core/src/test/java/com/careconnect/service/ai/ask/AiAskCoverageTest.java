@@ -40,8 +40,12 @@ class AiAskCoverageTest {
         assertThat(source).contains("GroundedAskLlmService");
         assertThat(source).contains("NO_RECORDS");
         assertThat(source).contains("AskAiGroundingException");
-        assertThat(source).contains("fail closed");
-        assertThat(source).contains("TODO(Task 6.x)");
+        assertThat(source).contains("HitlService");
+        assertThat(source).contains("HOLD_TIER2");
+        assertThat(source).contains("HITL is disabled");
+        assertThat(source).contains("AiAskAuditService");
+        assertThat(source).contains("finalizeRecord");
+        assertThat(source).doesNotContain("TODO(Task 6.x)");
         assertThat(source).doesNotContain("patientId={}", "caller={}");
         assertThat(source).doesNotContain("MedicalContextService");
     }

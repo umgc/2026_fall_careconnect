@@ -25,6 +25,7 @@ public record AiAskResponse(
         AiRetrievalMeta retrievalMeta,
         String message,
         String pollUrl,
-        AiErrorBlock error
+        AiErrorBlock error,
+        MedicationTimelineDto medicationTimeline
 ) {
 }

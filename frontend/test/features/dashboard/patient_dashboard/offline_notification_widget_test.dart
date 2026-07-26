@@ -5,12 +5,13 @@
 // Tests cover: renders correctly, shows "Never synced", and shows
 // the time-since-sync label for different elapsed durations.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/offline_notification_widget.dart';
 
 Widget _wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: child));
+    MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: child));
 
 void main() {
   group('OfflineNotification', () {

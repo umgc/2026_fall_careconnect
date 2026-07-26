@@ -38,6 +38,29 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
 
     List<RetrievalIndexChunk> findByPatientIdAndRecordType(Long patientId, String recordType);
 
+    /**
+     * Newest-first ACTIVE chunks for a patient/record-type pair (structured retrieval arm).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND record_type = :recordType
+                      AND migration_status = 'ACTIVE'
+                    ORDER BY indexed_at DESC NULLS LAST, id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
+            @Param("patientId") Long patientId,
+            @Param("recordType") String recordType,
+            @Param("limit") int limit);
+
     List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdAndRecordType(
             Long patientId, String sourceRecordId, String recordType);
 
