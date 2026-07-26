@@ -8,36 +8,47 @@ import {
   HeartPulse, Users, BarChart2, Send, Video,
   SmilePlus, Stethoscope, Activity, FileText, Star,
   X, ChevronUp, TrendingUp, Clock, MapPin, Menu as MenuIcon,
-  Link2, QrCode, Copy, Plus, PhoneOff, PhoneCall, Mail,
+  Link2, QrCode, Copy, Plus, PhoneOff, PhoneCall, Mail, Share2, Watch, Home as HomeIcon,
 } from "lucide-react";
 import MailDigestContent from "./MailDigest";
 import SymptomTrendChart from "./SymptomTrendChart";
+import { NativeShareButton } from "./components/NativeShareButton";
+import { nativeShareResultMessage, shareNative } from "../lib/nativeShare";
 import {
   ageFromDob,
   buildCaregiverPatientRoster as buildCaregiverPatientRosterCore,
   buildInviteUrl,
   buildProfileShareUrl,
   caregiverPatientConfirmed,
+  clearSignInAttempts,
   createProfileShareToken,
   dobsMatch,
+  emptySignInAttemptState,
   formatCheckinStamp,
   HEARING_SPEAKER_LABELS,
   inferSpeakerFromText,
   isDemoCaregiverName,
   isProfessionalCaregiverPersona,
+  isSignInLocked,
   makeInitials,
+  MAX_SIGNIN_ATTEMPTS,
+  MIN_COLOR_SEQ_LENGTH,
   namesMatch,
   namesLooselyMatch,
   normalizeDob,
   parseInviteFromUrl,
   patientSnapshotKey,
   qrImageUrl,
+  recordSignInFailure,
+  remainingSignInAttempts,
   resolvePatientForCaregiver,
   activateInviteInCareCircle,
   approveCaregiverInCircle,
   canAddCaregiver,
   MAX_CAREGIVERS,
+  verifySignIn,
   type CaregiverIdentity,
+  type SignInAttemptState,
 } from "../lib/careconnect-core";
 
 /** Tap header to minimize / enlarge dashboard and tab sections (accessibility-style dropdown). */
@@ -211,6 +222,9 @@ interface MoodEntry {
   date: string;      // YYYY-MM-DD
   score: number;     // 1–5
   symptom?: string;  // primary symptom noted for that day (if any)
+  callTone?: string;
+  callEmotion?: string;
+  callAnxiety?: string;
 }
 
 const MOOD_LABELS = ["", "Poor", "Low", "Fair", "Good", "Great"] as const;
@@ -274,6 +288,9 @@ function upsertMoodHistory(
   else symptom = existing?.symptom;
   const entry: MoodEntry = { date, score: clamped };
   if (symptom) entry.symptom = symptom;
+  if (existing?.callTone) entry.callTone = existing.callTone;
+  if (existing?.callEmotion) entry.callEmotion = existing.callEmotion;
+  if (existing?.callAnxiety) entry.callAnxiety = existing.callAnxiety;
   return [...history.filter(e => e.date !== date), entry]
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-93);
@@ -572,7 +589,7 @@ function loadMoodHistory(): MoodEntry[] {
 type DisabilityKey = "stml" | "dyslexia" | "carpal" | "hearing";
 type AppMode = DisabilityKey | "custom";
 type Role = "patient" | "caregiver";
-type Tab = "home" | "schedule" | "meds" | "settings" | "symptoms" | "checkin" | "messages" | "patients" | "analytics" | "profile" | "hearing" | "mail";
+type Tab = "home" | "schedule" | "meds" | "settings" | "symptoms" | "checkin" | "messages" | "patients" | "analytics" | "profile" | "hearing" | "mail" | "wearables" | "smart_devices";
 type Phase = "splash" | "signin" | "profile-create" | "role" | "landing" | "builder" | "app";
 interface NavState { phase: Phase; tab?: Tab; }
 interface NavProps { canGoBack: boolean; canGoForward: boolean; onBack: () => void; onForward: () => void; }
@@ -719,7 +736,7 @@ function caregiverAccountConfigured(info: CaregiverAccountInfo): boolean {
   const hasAuth = !!(
     info.password?.trim() ||
     info.pin?.trim() ||
-    (info.colorSeq && info.colorSeq.length >= 3)
+    (info.colorSeq && info.colorSeq.length >= MIN_COLOR_SEQ_LENGTH)
   );
   return hasAuth && !isDemoCaregiverName(info.name) && !!info.name.trim();
 }
@@ -758,7 +775,7 @@ function migrateDemoCaregiverData() {
       const hasAuth = !!(
         parsed.password?.trim() ||
         parsed.pin?.trim() ||
-        (parsed.colorSeq && parsed.colorSeq.length >= 3)
+        (parsed.colorSeq && parsed.colorSeq.length >= MIN_COLOR_SEQ_LENGTH)
       );
       if (isDemoCaregiverName(parsed.name) && !hasAuth) {
         localStorage.removeItem(caregiverAccountKey(id));
@@ -910,7 +927,7 @@ const DISABILITY_OPTIONS: DisabilityOption[] = [
 // ── Feature catalogue ──────────────────────────────────────────────────────────
 
 const FEATURE_DEFS: FeatureDef[] = [
-  { id: "medication_tracker", label: "Medication Tracker",   icon: "💊", category: "health",    description: "Track doses, set reminders, and log adherence.",       tab: "symptoms" },
+  { id: "medication_tracker", label: "Medication Tracker",   icon: "💊", category: "health",    description: "Track doses, set reminders, and log adherence.",       tab: "meds" },
   { id: "virtual_checkin",    label: "Virtual Check-In",     icon: "🩺", category: "health",    description: "Guided daily health check-in with your care team.",     tab: "checkin"  },
   { id: "symptoms_tracker",   label: "Symptoms & Allergies", icon: "🌡️", category: "health",    description: "Log symptoms and manage your allergy list.",            tab: "symptoms" },
   { id: "hearing_assist",     label: "Hearing Conversation Assist", icon: "👂", category: "ai", description: "Live captions, speaker ID, AI summaries, memory, and conversation coaching.", tab: "hearing" },
@@ -919,8 +936,8 @@ const FEATURE_DEFS: FeatureDef[] = [
   { id: "notetaker",          label: "Notetaker Assistant",  icon: "📝", category: "ai",       description: "AI-powered notes with live transcription.",             tab: undefined  },
   { id: "calendar_asst",      label: "Calendar Assistant",   icon: "📅", category: "ai",       description: "AI scheduling and appointment management.",             tab: "schedule" },
   { id: "invoice_asst",       label: "Invoice Assistant",    icon: "🧾", category: "ai",       description: "OCR invoice capture and expense management.",           tab: undefined  },
-  { id: "wearables",          label: "Wearables",            icon: "⌚", category: "devices",  description: "Sync health data from Fitbit and other wearables.",    tab: undefined  },
-  { id: "smart_devices",      label: "Smart Devices",        icon: "🏠", category: "devices",  description: "Control and monitor smart home devices.",               tab: undefined  },
+  { id: "wearables",          label: "Wearables",            icon: "⌚", category: "devices",  description: "Sync health data from Fitbit and other wearables.",    tab: "wearables" as Tab },
+  { id: "smart_devices",      label: "Smart Devices",        icon: "🏠", category: "devices",  description: "Control and monitor smart home devices.",               tab: "smart_devices" as Tab },
   { id: "social_feed",        label: "Social Feed",          icon: "👥", category: "social",   description: "Connect with family, friends, and your care community.", tab: undefined },
   { id: "gamification",       label: "Gamification",         icon: "🏆", category: "social",   description: "Earn points and badges for health milestones.",         tab: undefined  },
   { id: "file_management",    label: "File Management",      icon: "📁", category: "documents", description: "Manage care documents and compliance records.",        tab: undefined  },
@@ -1515,102 +1532,94 @@ function FeatureBuilder({
 }: {
   settings: CustomSettings;
   onChange: (s: CustomSettings) => void;
-  /** When set, that category starts expanded; others stay collapsed. */
+  /** When set, that category is the starting step. */
   defaultOpenCategory?: DisabilityKey | null;
 }) {
   const toggle = (id: string) => onChange({ ...settings, [id]: !settings[id] });
   const categories = (["stml", "dyslexia", "carpal", "hearing"] as DisabilityKey[]);
-
-  const initialOpen = () => {
-    const open: Record<string, boolean> = {};
-    for (const cat of categories) {
-      const features = ALL_FEATURES.filter(f => f.category === cat);
-      const activeN = features.filter(f => settings[f.id]).length;
-      // Expand matching mode, or any group that already has features on
-      open[cat] = defaultOpenCategory === cat || (defaultOpenCategory == null && activeN > 0);
-    }
-    // If nothing would be open, leave all collapsed
-    return open;
-  };
-
-  const [openCats, setOpenCats] = useState<Record<string, boolean>>(initialOpen);
-
-  const toggleCat = (cat: DisabilityKey) => {
-    setOpenCats(prev => ({ ...prev, [cat]: !prev[cat] }));
+  const startIdx = Math.max(0, defaultOpenCategory ? categories.indexOf(defaultOpenCategory) : 0);
+  const [step, setStep] = useState(startIdx + 1);
+  const totalSteps = categories.length;
+  const progress = (step / totalSteps) * 100;
+  const cat = categories[step - 1];
+  const meta = CAT_META[cat];
+  const features = ALL_FEATURES.filter(f => f.category === cat);
+  const activeN = features.filter(f => settings[f.id]).length;
+  const emoji = cat === "stml" ? "🧠" : cat === "dyslexia" ? "📖" : cat === "carpal" ? "✋" : "👂";
+  const stepTitles: Record<DisabilityKey, string> = {
+    stml: "Memory support",
+    dyslexia: "Reading support",
+    carpal: "Motor support",
+    hearing: "Hearing support",
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      {categories.map(cat => {
-        const meta     = CAT_META[cat];
-        const features = ALL_FEATURES.filter(f => f.category === cat);
-        const activeN  = features.filter(f => settings[f.id]).length;
-        const isOpen   = !!openCats[cat];
-        const emoji    = cat === "stml" ? "🧠" : cat === "dyslexia" ? "📖" : cat === "carpal" ? "✋" : "👂";
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">
+            Step {step} of {totalSteps} · {stepTitles[cat]}
+          </p>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: meta.lightBg, color: meta.color }}>
+            {activeN}/{features.length} on
+          </span>
+        </div>
+        <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: meta.color }} />
+        </div>
+      </div>
 
-        return (
-          <div key={cat} className="rounded-2xl overflow-hidden border-2" style={{ borderColor: meta.borderColor }}>
-            <button
-              type="button"
-              onClick={() => toggleCat(cat)}
-              className="w-full flex items-center gap-2 px-4 py-3 text-left transition-colors"
-              style={{ background: meta.lightBg }}
-              aria-expanded={isOpen}
-            >
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: meta.color, color: "white" }}>
-                {meta.icon}
-              </div>
-              <span className="text-[16px] shrink-0" aria-hidden>{emoji}</span>
-              <div className="flex-1 min-w-0">
-                <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: meta.color }}>{meta.label}</span>
-                <p className="text-[11px] text-[#6B7280] mt-0.5">
-                  {activeN > 0 ? `${activeN} feature${activeN === 1 ? "" : "s"} on` : "No features on"}
-                  {" · "}
-                  {isOpen ? "Tap to collapse" : "Tap to expand"}
-                </p>
-              </div>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                style={{ background: "white", color: meta.color, border: `1px solid ${meta.borderColor}` }}>
-                {activeN}/{features.length}
-              </span>
-              <ChevronDown
-                size={18}
-                className="shrink-0 transition-transform duration-200"
-                style={{
-                  color: meta.color,
-                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                }}
-              />
-            </button>
-
-            {isOpen && features.map((feat, idx) => {
-              const on = !!settings[feat.id];
-              return (
-                <div key={feat.id}
-                  className={`flex items-center gap-3 px-4 py-3 bg-white ${idx < features.length - 1 ? "border-b" : ""}`}
-                  style={{ borderColor: meta.borderColor, minHeight: 64 }}
-                >
-                  <button type="button" role="checkbox" aria-checked={on}
-                    onClick={() => toggle(feat.id)}
-                    className="shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all duration-150"
-                    style={{ borderColor: on ? meta.color : "#CBD5E1", background: on ? meta.color : "white" }}
-                  >
-                    {on && <Check size={13} color="white" strokeWidth={3} />}
-                  </button>
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggle(feat.id)}>
-                    <p className="text-[14px] font-semibold text-[#0F172A] leading-snug">{feat.label}</p>
-                    <p className="text-[12px] text-[#595959] leading-snug mt-0.5">{feat.description}</p>
-                  </div>
-                  {on && (
-                    <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
-                      style={{ background: meta.lightBg, color: meta.color }}>ON</span>
-                  )}
-                </div>
-              );
-            })}
+      <div className="rounded-2xl overflow-hidden border-2" style={{ borderColor: meta.borderColor }}>
+        <div className="flex items-center gap-2 px-4 py-3" style={{ background: meta.lightBg }}>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: meta.color, color: "white" }}>
+            {meta.icon}
           </div>
-        );
-      })}
+          <span className="text-[16px] shrink-0" aria-hidden>{emoji}</span>
+          <div className="flex-1 min-w-0">
+            <span className="text-[13px] font-bold uppercase tracking-wider" style={{ color: meta.color }}>{meta.label}</span>
+            <p className="text-[11px] text-[#6B7280] mt-0.5">Turn features on or off for this category only</p>
+          </div>
+        </div>
+        {features.map((feat, idx) => {
+          const on = !!settings[feat.id];
+          return (
+            <div key={feat.id}
+              className={`flex items-center gap-3 px-4 py-3 bg-white ${idx < features.length - 1 ? "border-b" : ""}`}
+              style={{ borderColor: meta.borderColor, minHeight: 64 }}
+            >
+              <button type="button" role="checkbox" aria-checked={on}
+                onClick={() => toggle(feat.id)}
+                className="shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all duration-150"
+                style={{ borderColor: on ? meta.color : "#CBD5E1", background: on ? meta.color : "white" }}
+              >
+                {on && <Check size={13} color="white" strokeWidth={3} />}
+              </button>
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggle(feat.id)}>
+                <p className="text-[14px] font-semibold text-[#0F172A] leading-snug">{feat.label}</p>
+                <p className="text-[12px] text-[#595959] leading-snug mt-0.5">{feat.description}</p>
+              </div>
+              {on && (
+                <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                  style={{ background: meta.lightBg, color: meta.color }}>ON</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step <= 1}
+          className="flex-1 py-3 rounded-xl text-[14px] font-bold border disabled:opacity-40"
+          style={{ borderColor: "#E5E7EB", color: "#6B7280", background: "white" }}>
+          Back
+        </button>
+        <button type="button" onClick={() => setStep(s => Math.min(totalSteps, s + 1))} disabled={step >= totalSteps}
+          className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white disabled:opacity-40"
+          style={{ background: meta.color }}>
+          {step >= totalSteps ? "Done" : "Next"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -2926,38 +2935,190 @@ function AddMedForm({ theme, onSave, onClose }: {
   onSave: (m: Medication) => void;
   onClose: () => void;
 }) {
-  const [name,    setName]    = useState("");
-  const [dose,    setDose]    = useState("");
-  const [time,    setTime]    = useState("");
+  const [entryMode, setEntryMode] = useState<"list" | "custom">("list");
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [name, setName] = useState("");
+  const [dose, setDose] = useState("");
+  const [time, setTime] = useState<string>("Morning");
+  const [purposeCategory, setPurposeCategory] = useState(MEDICATION_PURPOSE_CATEGORIES[0].category);
   const [purpose, setPurpose] = useState("");
+  const [purposeQuery, setPurposeQuery] = useState("");
+
+  const catalogMatches = MEDICATION_CATALOG.filter(med =>
+    med.toLowerCase().includes(catalogQuery.trim().toLowerCase())
+  );
+  const activePurposeCategory = MEDICATION_PURPOSE_CATEGORIES.find(c => c.category === purposeCategory)
+    ?? MEDICATION_PURPOSE_CATEGORIES[0];
+  const purposeMatches = activePurposeCategory.items.filter(item =>
+    item.toLowerCase().includes(purposeQuery.trim().toLowerCase())
+  );
 
   const save = () => {
     if (!name.trim()) return;
-    onSave({ id: Date.now().toString(), name: name.trim(), dose: dose.trim(), time: time.trim() || "As needed", purpose: purpose.trim() });
+    onSave({
+      id: Date.now().toString(),
+      name: name.trim(),
+      dose: dose.trim(),
+      time: time.trim() || "As needed",
+      purpose: purpose.trim(),
+    });
   };
 
   return (
     <FormSheet title="Add medication" onClose={onClose}>
-      <FormField label="Medication name *">
-        <VoiceInput className={inputCls} placeholder="e.g. Lisinopril" value={name} onChange={setName} />
-      </FormField>
+      <div className="flex rounded-xl p-1 gap-1 mb-1" style={{ background: "#F3F4F6" }}>
+        <button type="button" onClick={() => setEntryMode("list")}
+          className="flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all"
+          style={{
+            background: entryMode === "list" ? "white" : "transparent",
+            color: entryMode === "list" ? theme.color : "#6B7280",
+            boxShadow: entryMode === "list" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+          }}>
+          Pick from list
+        </button>
+        <button type="button" onClick={() => setEntryMode("custom")}
+          className="flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all"
+          style={{
+            background: entryMode === "custom" ? "white" : "transparent",
+            color: entryMode === "custom" ? theme.color : "#6B7280",
+            boxShadow: entryMode === "custom" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+          }}>
+          Type my own
+        </button>
+      </div>
+
+      {entryMode === "list" ? (
+        <FormField label="Medication name *">
+          <input
+            value={catalogQuery}
+            onChange={e => setCatalogQuery(e.target.value)}
+            placeholder="Search medications…"
+            className={inputCls}
+          />
+          <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border-2 border-[#E5E7EB] bg-white">
+            {catalogMatches.length === 0 ? (
+              <p className="px-3 py-3 text-[13px] text-[#9CA3AF]">No matches — switch to Type my own</p>
+            ) : (
+              catalogMatches.map(med => {
+                const selected = name === med;
+                return (
+                  <button
+                    key={med}
+                    type="button"
+                    onClick={() => { setName(med); setCatalogQuery(med); }}
+                    className="w-full text-left px-3 py-2.5 text-[14px] font-semibold border-b border-[#F3F4F6] last:border-b-0"
+                    style={{
+                      background: selected ? theme.lightBg : "white",
+                      color: selected ? theme.color : "#0F172A",
+                    }}
+                  >
+                    {med}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {name && (
+            <p className="text-[12px] font-semibold mt-1.5" style={{ color: theme.color }}>
+              Selected: {name}
+            </p>
+          )}
+        </FormField>
+      ) : (
+        <FormField label="Medication name *">
+          <VoiceInput className={inputCls} placeholder="e.g. Lisinopril" value={name} onChange={setName} />
+        </FormField>
+      )}
+
       <FormField label="Dose">
         <VoiceInput className={inputCls} placeholder="e.g. 10mg" value={dose} onChange={setDose} />
       </FormField>
-      <FormField label="Time">
-        <VoiceInput className={inputCls} placeholder="e.g. 8:00 AM" value={time} onChange={setTime} />
+
+      <FormField label="Time of day *">
+        <div className="flex flex-wrap gap-1.5">
+          {MEDICATION_TIME_OPTIONS.map(opt => {
+            const selected = time === opt.value;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setTime(opt.value)}
+                className="px-3 py-2 rounded-full text-[12px] font-bold border transition-all"
+                style={{
+                  background: selected ? theme.color : "white",
+                  color: selected ? "white" : "#6B7280",
+                  borderColor: selected ? theme.color : "#E5E7EB",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
       </FormField>
-      <FormField label="Purpose">
-        <VoiceInput className={inputCls} placeholder="e.g. Blood pressure" value={purpose} onChange={setPurpose} />
+
+      <FormField label="Purpose category">
+        <select
+          value={purposeCategory}
+          onChange={e => {
+            setPurposeCategory(e.target.value);
+            setPurpose("");
+            setPurposeQuery("");
+          }}
+          className={inputCls}
+          style={{ appearance: "auto" }}
+        >
+          {MEDICATION_PURPOSE_CATEGORIES.map(cat => (
+            <option key={cat.category} value={cat.category}>{cat.category}</option>
+          ))}
+        </select>
       </FormField>
+
+      <FormField label="Purpose *">
+        <input
+          value={purposeQuery}
+          onChange={e => setPurposeQuery(e.target.value)}
+          placeholder={`Search in ${activePurposeCategory.category}…`}
+          className={inputCls}
+        />
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border-2 border-[#E5E7EB] bg-white">
+          {purposeMatches.length === 0 ? (
+            <p className="px-3 py-3 text-[13px] text-[#9CA3AF]">No matches in this category</p>
+          ) : (
+            purposeMatches.map(item => {
+              const selected = purpose === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => { setPurpose(item); setPurposeQuery(item); }}
+                  className="w-full text-left px-3 py-2.5 text-[13px] font-semibold border-b border-[#F3F4F6] last:border-b-0 leading-snug"
+                  style={{
+                    background: selected ? theme.lightBg : "white",
+                    color: selected ? theme.color : "#0F172A",
+                  }}
+                >
+                  {item}
+                </button>
+              );
+            })
+          )}
+        </div>
+        {purpose && (
+          <p className="text-[12px] font-semibold mt-1.5" style={{ color: theme.color }}>
+            Selected: {purpose}
+          </p>
+        )}
+      </FormField>
+
       <div className="flex gap-3 pt-1">
         <button onClick={onClose}
           className="flex-1 py-3.5 rounded-xl border-2 border-[#E5E7EB] font-semibold text-[14px] text-[#595959]">
           Cancel
         </button>
-        <button onClick={save} disabled={!name.trim()}
+        <button onClick={save} disabled={!name.trim() || !purpose.trim()}
           className="flex-1 py-3.5 rounded-xl font-bold text-[15px] text-white transition-all"
-          style={{ background: name.trim() ? theme.color : "#CBD5E1" }}>
+          style={{ background: name.trim() && purpose.trim() ? theme.color : "#CBD5E1" }}>
           Add medication
         </button>
       </div>
@@ -3070,25 +3231,153 @@ function ScheduleContent({ theme, useLarge, appointments, setAppointments, setMo
 
 // ── Meds tab ───────────────────────────────────────────────────────────────────
 
-function MedsContent({ theme, useLarge, medications, setMedications, medsChecked, setMedsChecked, setModal, clearModal }: {
+function MedsContent({ theme, useLarge, medications, setMedications, medsChecked, setMedsChecked, setModal, clearModal, onSendToMessages }: {
   theme: ModeTheme; useLarge: boolean;
   medications: Medication[]; setMedications: (v: Medication[]) => void;
   medsChecked: Record<string, boolean>; setMedsChecked: (v: Record<string, boolean>) => void;
   setModal: (node: React.ReactNode) => void; clearModal: () => void;
+  onSendToMessages?: (imageDataUrl: string, caption: string) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [timeFilter, setTimeFilter] = useState<"all" | "morning" | "afternoon" | "evening" | "night" | "other">("all");
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({
+    morning: true, afternoon: true, evening: true, night: true, other: true,
+  });
+  const medsRef = useRef<HTMLDivElement>(null);
+
   const toggleTake = (id: string) => setMedsChecked({ ...medsChecked, [id]: !medsChecked[id] });
   const removeMed  = (id: string) => {
     setMedications(medications.filter(m => m.id !== id));
     const next = { ...medsChecked }; delete next[id]; setMedsChecked(next);
   };
 
-  const openAddForm = () => setModal(
-    <AddMedForm
-      theme={theme}
-      onSave={med => { setMedications([...medications, med]); clearModal(); }}
-      onClose={clearModal}
-    />
-  );
+  const atCap = medications.length >= MAX_MEDICATIONS;
+  const openAddForm = () => {
+    if (atCap) return;
+    setModal(
+      <AddMedForm
+        theme={theme}
+        onSave={med => { setMedications([...medications, med]); clearModal(); }}
+        onClose={clearModal}
+      />
+    );
+  };
+
+  const filtered = medications.filter(m => {
+    const q = search.trim().toLowerCase();
+    const cat = medTimeCategory(m.time);
+    if (timeFilter !== "all" && cat !== timeFilter) return false;
+    if (!q) return true;
+    return (
+      m.name.toLowerCase().includes(q)
+      || m.dose.toLowerCase().includes(q)
+      || m.time.toLowerCase().includes(q)
+      || m.purpose.toLowerCase().includes(q)
+      || cat.includes(q)
+    );
+  });
+
+  const groups: { key: string; label: string; items: Medication[] }[] = [
+    { key: "morning", label: "Morning", items: [] },
+    { key: "afternoon", label: "Afternoon", items: [] },
+    { key: "evening", label: "Evening", items: [] },
+    { key: "night", label: "Night", items: [] },
+    { key: "other", label: "Other / unscheduled", items: [] },
+  ];
+  for (const med of filtered) {
+    const cat = medTimeCategory(med.time);
+    const g = groups.find(x => x.key === cat) || groups[4];
+    g.items.push(med);
+  }
+
+  const buildMedsImageDataUrl = (): string | null => {
+    const node = medsRef.current;
+    if (!node) return null;
+    try {
+      const width = Math.max(320, node.scrollWidth);
+      const height = Math.max(200, node.scrollHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = width * 2;
+      canvas.height = height * 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.scale(2, 2);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#0F172A";
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillText("Medications", 16, 28);
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#6B7280";
+      ctx.fillText(`${medications.length} medication${medications.length === 1 ? "" : "s"} · CareConnect`, 16, 48);
+      let y = 72;
+      for (const med of medications) {
+        const done = !!medsChecked[med.id];
+        ctx.fillStyle = done ? "#10B981" : "#0F172A";
+        ctx.font = "bold 13px sans-serif";
+        ctx.fillText(`${done ? "✓ " : "• "}${med.name} ${med.dose}`, 16, y);
+        y += 18;
+        ctx.fillStyle = "#6B7280";
+        ctx.font = "11px sans-serif";
+        ctx.fillText(`${med.time}${med.purpose ? ` · ${med.purpose}` : ""}`, 28, y);
+        y += 22;
+        if (y > height - 24) break;
+      }
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  };
+
+  const medsPlainText = () =>
+    medications.map(m => {
+      const done = medsChecked[m.id] ? "taken" : "due";
+      return `• ${m.name} ${m.dose} — ${m.time}${m.purpose ? ` (${m.purpose})` : ""} [${done}]`;
+    }).join("\n");
+
+  const captureAndSend = async () => {
+    if (!onSendToMessages) return;
+    const dataUrl = buildMedsImageDataUrl();
+    if (!dataUrl) return;
+    onSendToMessages(dataUrl, `Medication list (${medications.length})`);
+  };
+
+  const renderMedCard = (med: Medication) => {
+    const done = !!medsChecked[med.id];
+    return (
+      <div key={med.id} className="rounded-2xl bg-white border-2 transition-all"
+        style={{ borderColor: done ? "#10B981" : theme.borderColor, minHeight: useLarge ? 84 : 68 }}>
+        <div className="flex items-center gap-4 px-4 pt-3 pb-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold"
+              style={{ color: done ? "#10B981" : "#0F172A",
+                textDecoration: done ? "line-through" : "none",
+                textDecorationColor: "#10B981" }}>
+              {med.name}{med.dose ? <span className="font-normal text-[13px] text-[#595959]"> {med.dose}</span> : null}
+            </p>
+            <p className="text-[12px] mt-0.5 font-medium" style={{ color: done ? "#10B981" : theme.color }}>{med.time}</p>
+            {med.purpose && <p className="text-[11px] text-[#595959]">{med.purpose}</p>}
+          </div>
+          <button onClick={() => toggleTake(med.id)}
+            className="shrink-0 flex items-center justify-center rounded-xl font-bold text-[13px] transition-all duration-150"
+            style={{
+              width: useLarge ? 80 : 68, height: useLarge ? 48 : 40,
+              background: done ? "#10B981" : theme.lightBg,
+              color:      done ? "white"   : theme.color,
+              border: `2px solid ${done ? "#10B981" : theme.borderColor}`,
+            }}>
+            {done ? <Check size={18} /> : "Take"}
+          </button>
+        </div>
+        <div className="flex gap-2 px-4 pb-3">
+          <button onClick={() => removeMed(med.id)}
+            className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA] hover:bg-[#FEE2E2] transition-all">
+            Remove
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="px-4 pt-4 pb-2 flex flex-col gap-3">
@@ -3096,67 +3385,110 @@ function MedsContent({ theme, useLarge, medications, setMedications, medsChecked
         <Pill size={18} style={{ color: theme.color }} />
         <h2 className="text-[18px] font-bold text-[#0F172A]">Medications</h2>
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: theme.color }}>
-          Today&apos;s medications · {medications.length}
+          Today&apos;s medications · {medications.length}/{MAX_MEDICATIONS}
         </p>
-        <button onClick={openAddForm}
-          className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-80"
-          style={{ background: theme.lightBg, color: theme.color, border: `1.5px solid ${theme.borderColor}` }}>
-          + Add
-        </button>
-      </div>
-
-      {medications.length === 0 && (
-        <div className="py-10 flex flex-col items-center gap-3 text-center">
-          <Pill size={36} style={{ color: theme.borderColor }} />
-          <p className="text-[14px] font-semibold text-[#595959]">No medications added</p>
-          <button onClick={openAddForm}
-            className="px-5 py-2.5 rounded-xl font-bold text-[13px] text-white"
-            style={{ background: theme.color }}>
-            + Add your first medication
+        <div className="flex gap-2 flex-wrap justify-end">
+          {medications.length > 0 && (
+            <NativeShareButton
+              variant="secondary"
+              color={theme.color}
+              label="Share"
+              getPayload={async () => {
+                const dataUrl = buildMedsImageDataUrl();
+                return {
+                  title: "CareConnect medications",
+                  text: `CareConnect medications (${medications.length}):\n${medsPlainText()}`,
+                  files: dataUrl
+                    ? [{ dataUrl, fileName: "careconnect-medications.png", mimeType: "image/png" }]
+                    : undefined,
+                };
+              }}
+            />
+          )}
+          {onSendToMessages && medications.length > 0 && (
+            <button type="button" onClick={captureAndSend}
+              className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg"
+              style={{ background: "#F3F4F6", color: "#374151", border: "1.5px solid #E5E7EB" }}>
+              📷 Messages
+            </button>
+          )}
+          <button onClick={openAddForm} disabled={atCap}
+            className="flex items-center gap-1 text-[12px] font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
+            style={{ background: theme.lightBg, color: theme.color, border: `1.5px solid ${theme.borderColor}` }}>
+            + Add
           </button>
         </div>
+      </div>
+      {atCap && (
+        <p className="text-[12px] text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-xl px-3 py-2">
+          Medication list is full ({MAX_MEDICATIONS}). Remove one to add another.
+        </p>
       )}
 
-      {medications.map(med => {
-        const done = !!medsChecked[med.id];
-        return (
-          <div key={med.id} className="rounded-2xl bg-white border-2 transition-all"
-            style={{ borderColor: done ? "#10B981" : theme.borderColor, minHeight: useLarge ? 84 : 68 }}>
-            <div className="flex items-center gap-4 px-4 pt-3 pb-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-semibold"
-                  style={{ color: done ? "#10B981" : "#0F172A",
-                    textDecoration: done ? "line-through" : "none",
-                    textDecorationColor: "#10B981" }}>
-                  {med.name}{med.dose ? <span className="font-normal text-[13px] text-[#595959]"> {med.dose}</span> : null}
-                </p>
-                <p className="text-[12px] mt-0.5 font-medium" style={{ color: done ? "#10B981" : theme.color }}>{med.time}</p>
-                {med.purpose && <p className="text-[11px] text-[#595959]">{med.purpose}</p>}
-              </div>
-              <button onClick={() => toggleTake(med.id)}
-                className="shrink-0 flex items-center justify-center rounded-xl font-bold text-[13px] transition-all duration-150"
-                style={{
-                  width: useLarge ? 80 : 68, height: useLarge ? 48 : 40,
-                  background: done ? "#10B981" : theme.lightBg,
-                  color:      done ? "white"   : theme.color,
-                  border: `2px solid ${done ? "#10B981" : theme.borderColor}`,
-                }}>
-                {done ? <Check size={18} /> : "Take"}
-              </button>
-            </div>
-            <div className="flex gap-2 px-4 pb-3">
-              <button onClick={() => removeMed(med.id)}
-                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA] hover:bg-[#FEE2E2] transition-all">
-                Remove
-              </button>
-            </div>
-          </div>
-        );
-      })}
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search by name, dose, or time of day…"
+        className="w-full px-4 py-3 rounded-xl border-2 border-[#E5E7EB] text-[14px] outline-none focus:border-[#00A7C8]"
+      />
+      <div className="flex gap-1.5 flex-wrap">
+        {([
+          { key: "all" as const, label: "All" },
+          { key: "morning" as const, label: "Morning" },
+          { key: "afternoon" as const, label: "Afternoon" },
+          { key: "evening" as const, label: "Evening" },
+          { key: "night" as const, label: "Night" },
+          { key: "other" as const, label: "Other" },
+        ]).map(f => (
+          <button key={f.key} type="button" onClick={() => setTimeFilter(f.key)}
+            className="px-2.5 py-1.5 rounded-full text-[11px] font-bold border"
+            style={{
+              background: timeFilter === f.key ? theme.color : "white",
+              color: timeFilter === f.key ? "white" : "#6B7280",
+              borderColor: timeFilter === f.key ? theme.color : "#E5E7EB",
+            }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Refills */}
+      <div ref={medsRef} className="flex flex-col gap-3">
+        {medications.length === 0 && (
+          <div className="py-10 flex flex-col items-center gap-3 text-center">
+            <Pill size={36} style={{ color: theme.borderColor }} />
+            <p className="text-[14px] font-semibold text-[#595959]">No medications added</p>
+            <button onClick={openAddForm}
+              className="px-5 py-2.5 rounded-xl font-bold text-[13px] text-white"
+              style={{ background: theme.color }}>
+              + Add your first medication
+            </button>
+          </div>
+        )}
+
+        {medications.length > 0 && filtered.length === 0 && (
+          <p className="text-[13px] text-[#9CA3AF] text-center py-6">No medications match this search or filter.</p>
+        )}
+
+        {groups.filter(g => g.items.length > 0).map(g => (
+          <CollapsibleSection
+            key={g.key}
+            id={g.key}
+            title={`${g.label} (${g.items.length})`}
+            subtitle="Tap to expand or minimize"
+            icon={<Clock size={14} style={{ color: theme.color }} />}
+            accent={theme.color}
+            openMap={sectionOpen}
+            setOpenMap={setSectionOpen}
+          >
+            <div className="flex flex-col gap-2 pt-2">
+              {g.items.map(renderMedCard)}
+            </div>
+          </CollapsibleSection>
+        ))}
+      </div>
+
       <div className="rounded-2xl bg-white border border-[#E5E7EB] overflow-hidden">
         <p className="text-[11px] font-bold uppercase tracking-wider text-[#595959] px-4 pt-3 pb-2">Upcoming refills</p>
         {[
@@ -3314,6 +3646,7 @@ function SettingsContent({ mode, setMode, customSettings, setCustomSettings, the
   ttySupport: boolean; setTtySupport: (v: boolean) => void;
   hearingAidMode: boolean; setHearingAidMode: (v: boolean) => void;
   onSignOut: () => void;
+  onOpenFeatureTab?: (tab: Tab) => void;
 }) {
   const c = theme.color;
   const lb = theme.lightBg;
@@ -3716,13 +4049,351 @@ function SplashScreen({ onGetStarted, onSignIn, onFeatureSignIn }: {
 // ── Sign-in screen ──────────────────────────────────────────────────────────────
 
 const AUTH_COLORS = [
-  { hex: "#3B82F6", label: "Blue"   },
-  { hex: "#EF4444", label: "Red"    },
-  { hex: "#F59E0B", label: "Amber"  },
-  { hex: "#10B981", label: "Green"  },
-  { hex: "#8B5CF6", label: "Purple" },
-  { hex: "#F97316", label: "Orange" },
+  { hex: "#00A7C8", label: "Primary"   },
+  { hex: "#0E7E57", label: "Secondary" },
+  { hex: "#000000", label: "Black"     },
+  { hex: "#FFFFFF", label: "White"     },
+  { hex: "#3B82F6", label: "Blue"      },
+  { hex: "#EF4444", label: "Red"       },
+  { hex: "#F59E0B", label: "Amber"     },
+  { hex: "#10B981", label: "Green"     },
+  { hex: "#8B5CF6", label: "Purple"    },
+  { hex: "#F97316", label: "Orange"    },
+  { hex: "#EC4899", label: "Pink"      },
+  { hex: "#64748B", label: "Slate"     },
 ];
+
+const MAX_MEDICATIONS = 30;
+
+/** Preset medication names users can pick when adding a med. */
+const MEDICATION_CATALOG = [
+  "Acetaminophen",
+  "Albuterol",
+  "Amoxicillin-Clavulanate",
+  "Benzonatate",
+  "Ciprofloxacin",
+  "Citalopram",
+  "Dexamethasone",
+  "Etoposide",
+  "Fluticasone",
+  "Furosemide",
+  "Hycamtin",
+  "Hydrocodone",
+  "Iron supplement",
+  "Lactulose",
+  "Megestrol Acetate",
+  "Metoclopramide",
+  "Metronidazole",
+  "Mirtazapine",
+  "Mirtazapin",
+  "Olanzapine",
+  "Oxycodone",
+  "Polyethylene Glycol",
+  "Prednisone",
+  "Spironolactone",
+  "Temodar",
+  "Zofran",
+  "Zyprexa",
+] as const;
+
+const MEDICATION_TIME_OPTIONS = [
+  { key: "morning", label: "Morning", value: "Morning" },
+  { key: "afternoon", label: "Afternoon", value: "Afternoon" },
+  { key: "evening", label: "Evening", value: "Evening" },
+  { key: "night", label: "Night", value: "Night" },
+  { key: "other", label: "Other / as needed", value: "As needed" },
+] as const;
+
+/** Purpose categories with selectable sub-reasons. */
+const MEDICATION_PURPOSE_CATEGORIES: { category: string; items: string[] }[] = [
+  {
+    category: "Preventive (Prevention)",
+    items: [
+      "Prevent disease before it occurs",
+      "Reduce the risk of heart attack or stroke",
+      "Prevent blood clots",
+      "Prevent infections",
+      "Prevent migraines",
+      "Prevent seizures",
+      "Prevent osteoporosis or fractures",
+      "Prevent pregnancy (birth control)",
+      "Prevent organ rejection after a transplant",
+      "Prevent recurrence of cancer",
+    ],
+  },
+  {
+    category: "Treatment of Acute Illness",
+    items: [
+      "Treat bacterial infections (antibiotics)",
+      "Treat viral infections",
+      "Treat fungal infections",
+      "Treat parasites",
+      "Reduce fever",
+      "Relieve cold or flu symptoms",
+      "Treat food poisoning",
+      "Recover from injuries or surgery",
+    ],
+  },
+  {
+    category: "Management of Chronic Conditions",
+    items: [
+      "High blood pressure",
+      "Diabetes",
+      "High cholesterol",
+      "Heart disease",
+      "Asthma",
+      "Chronic obstructive pulmonary disease (COPD)",
+      "Arthritis",
+      "Kidney disease",
+      "Liver disease",
+      "Thyroid disorders",
+      "Autoimmune diseases",
+    ],
+  },
+  {
+    category: "Pain Management",
+    items: [
+      "Headaches or migraines",
+      "Muscle pain",
+      "Joint pain",
+      "Back pain",
+      "Nerve pain",
+      "Cancer-related pain",
+      "Post-surgical pain",
+      "Menstrual cramps",
+    ],
+  },
+  {
+    category: "Mental and Behavioral Health",
+    items: [
+      "Depression",
+      "Anxiety",
+      "Panic disorder",
+      "Bipolar disorder",
+      "Schizophrenia",
+      "ADHD",
+      "PTSD",
+      "Obsessive-compulsive disorder (OCD)",
+      "Sleep disorders",
+      "Substance use disorder treatment",
+    ],
+  },
+  {
+    category: "Hormone Replacement or Regulation",
+    items: [
+      "Thyroid hormone replacement",
+      "Insulin replacement",
+      "Testosterone replacement",
+      "Estrogen or progesterone therapy",
+      "Menopause symptom management",
+      "Fertility treatment",
+      "Growth hormone therapy",
+    ],
+  },
+  {
+    category: "Allergies and Immune System",
+    items: [
+      "Seasonal allergies",
+      "Food allergies",
+      "Skin allergies",
+      "Anaphylaxis emergency treatment",
+      "Immune suppression",
+      "Immune system enhancement (specific medical conditions)",
+    ],
+  },
+  {
+    category: "Digestive Health",
+    items: [
+      "Acid reflux (GERD)",
+      "Ulcers",
+      "Nausea and vomiting",
+      "Constipation",
+      "Diarrhea",
+      "Inflammatory bowel disease",
+      "Irritable bowel syndrome",
+      "Digestive enzyme replacement",
+    ],
+  },
+  {
+    category: "Respiratory Conditions",
+    items: [
+      "Asthma control",
+      "COPD management",
+      "Pneumonia treatment",
+      "Chronic cough",
+      "Nasal congestion",
+      "Allergic rhinitis",
+    ],
+  },
+  {
+    category: "Skin Conditions",
+    items: [
+      "Acne",
+      "Eczema",
+      "Psoriasis",
+      "Rosacea",
+      "Fungal skin infections",
+      "Bacterial skin infections",
+      "Itching",
+      "Wound healing",
+    ],
+  },
+  {
+    category: "Neurological Conditions",
+    items: [
+      "Epilepsy",
+      "Parkinson's disease",
+      "Alzheimer's disease",
+      "Multiple sclerosis",
+      "Essential tremor",
+      "Neuropathic pain",
+      "Muscle spasms",
+    ],
+  },
+  {
+    category: "Eye and Ear Conditions",
+    items: [
+      "Glaucoma",
+      "Dry eyes",
+      "Eye infections",
+      "Ear infections",
+      "Vertigo",
+      "Motion sickness",
+    ],
+  },
+  {
+    category: "Cancer and Blood Disorders",
+    items: [
+      "Chemotherapy",
+      "Immunotherapy",
+      "Targeted cancer therapy",
+      "Anemia treatment",
+      "Blood clotting disorders",
+      "Sickle cell disease",
+    ],
+  },
+  {
+    category: "Nutritional Support",
+    items: [
+      "Vitamin deficiencies",
+      "Iron deficiency",
+      "Calcium supplementation",
+      "Electrolyte replacement",
+      "Malnutrition",
+    ],
+  },
+  {
+    category: "Emergency or Rescue Medications",
+    items: [
+      "Severe allergic reactions",
+      "Asthma attacks",
+      "Heart attacks",
+      "Opioid overdose reversal",
+      "Seizure emergencies",
+      "Low blood sugar emergencies",
+    ],
+  },
+  {
+    category: "Lifestyle and Quality of Life",
+    items: [
+      "Weight management",
+      "Smoking cessation",
+      "Alcohol dependence treatment",
+      "Hair loss",
+      "Erectile dysfunction",
+      "Motion sickness prevention",
+      "Smoking cravings",
+      "Excessive daytime sleepiness",
+    ],
+  },
+  {
+    category: "Diagnostic or Procedural Use",
+    items: [
+      "Sedation before procedures",
+      "Anesthesia during surgery",
+      "Contrast preparation for imaging",
+      "Colonoscopy preparation",
+      "Eye dilation during examinations",
+    ],
+  },
+  {
+    category: "Palliative and End-of-Life Care",
+    items: [
+      "Pain relief",
+      "Anxiety reduction",
+      "Nausea control",
+      "Breathlessness management",
+      "Comfort care",
+    ],
+  },
+  {
+    category: "Common Reasons (Simplified)",
+    items: [
+      "Pain relief",
+      "Infection treatment",
+      "Blood pressure control",
+      "Diabetes management",
+      "Mental health treatment",
+      "Allergy relief",
+      "Asthma management",
+      "Cholesterol reduction",
+      "Sleep improvement",
+      "Hormone replacement",
+      "Birth control",
+      "Weight management",
+      "Heart disease prevention",
+      "Cancer treatment",
+      "Autoimmune disease management",
+      "Digestive disorder treatment",
+      "Skin condition treatment",
+      "Seizure prevention",
+      "Migraine prevention",
+      "Vitamin or nutrient replacement",
+      "Recovery after surgery",
+      "Emergency treatment",
+      "Improving quality of life",
+    ],
+  },
+];
+
+const SIGNIN_ATTEMPT_KEY = "careconnect_signin_attempts";
+
+function loadSignInAttempts(): SignInAttemptState {
+  try {
+    const raw = localStorage.getItem(SIGNIN_ATTEMPT_KEY);
+    if (!raw) return emptySignInAttemptState();
+    const parsed = JSON.parse(raw) as SignInAttemptState;
+    return clearSignInAttempts(parsed);
+  } catch {
+    return emptySignInAttemptState();
+  }
+}
+
+function saveSignInAttempts(state: SignInAttemptState) {
+  try {
+    localStorage.setItem(SIGNIN_ATTEMPT_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+function medTimeCategory(time: string): "morning" | "afternoon" | "evening" | "night" | "other" {
+  const t = (time || "").toLowerCase();
+  if (/morn|am\b|breakfast|wake/.test(t)) return "morning";
+  if (/afternoon|noon|lunch/.test(t)) return "afternoon";
+  if (/evening|dinner|pm\b|supper/.test(t)) return "evening";
+  if (/night|bed|sleep/.test(t)) return "night";
+  const m = t.match(/(\d{1,2})\s*:?\s*(\d{2})?\s*(am|pm)?/);
+  if (m) {
+    let hour = Number(m[1]);
+    const ap = m[3];
+    if (ap === "pm" && hour < 12) hour += 12;
+    if (ap === "am" && hour === 12) hour = 0;
+    if (hour >= 5 && hour < 12) return "morning";
+    if (hour >= 12 && hour < 17) return "afternoon";
+    if (hour >= 17 && hour < 21) return "evening";
+    return "night";
+  }
+  return "other";
+}
 
 type SignInMethod = "pin" | "password" | "color";
 
@@ -3754,6 +4425,22 @@ function SignInScreen({
   const [colorSeq, setColorSeq]         = useState<string[]>([]);
   const [colorStatus, setColorStatus]   = useState<"idle" | "error" | "success">("idle");
   const [showEmergency, setShowEmergency] = useState(false);
+  const [attemptState, setAttemptState] = useState<SignInAttemptState>(() => loadSignInAttempts());
+
+  const locked = isSignInLocked(attemptState);
+  const attemptsLeft = remainingSignInAttempts(attemptState);
+
+  const noteFailure = () => {
+    const next = recordSignInFailure(attemptState);
+    setAttemptState(next);
+    saveSignInAttempts(next);
+  };
+
+  const noteSuccess = () => {
+    const next = emptySignInAttemptState();
+    setAttemptState(next);
+    saveSignInAttempts(next);
+  };
 
   useEffect(() => {
     setLoginRole(initialRole);
@@ -3784,10 +4471,12 @@ function SignInScreen({
   }, [loginRole, caregiverId, savedEmail, cgAccount?.email]);
 
   const finish = () => {
+    if (locked) return;
     if (loginRole === "caregiver") {
       const acct = loadCaregiverAccount(caregiverId);
       if (!caregiverAccountConfigured(acct)) return;
     }
+    noteSuccess();
     onSuccess(loginRole, loginRole === "caregiver" ? caregiverId : undefined);
   };
 
@@ -3808,15 +4497,16 @@ function SignInScreen({
   };
 
   const pressPin = (d: string) => {
-    if (pinStatus !== "idle") return;
+    if (locked || pinStatus !== "idle") return;
     if (!CORRECT_PIN) return;
     const next = pin + d;
     setPin(next);
     if (next.length === 4) {
-      if (next === CORRECT_PIN) {
+      if (verifySignIn("pin", { pin: next }, { pin: CORRECT_PIN })) {
         setPinStatus("success");
         setTimeout(finish, 700);
       } else {
+        noteFailure();
         setPinStatus("error");
         setTimeout(() => { setPin(""); setPinStatus("idle"); }, 900);
       }
@@ -3825,29 +4515,40 @@ function SignInScreen({
   const deletePin = () => { if (pinStatus === "idle") setPin(p => p.slice(0, -1)); };
 
   const submitPw = () => {
+    if (locked) return;
     if (!CORRECT_PW) { setPwError(true); setTimeout(() => setPwError(false), 1500); return; }
     if (!emailMatchesAccount(emailInput)) {
       setEmailError(true);
+      noteFailure();
       setTimeout(() => setEmailError(false), 2000);
       return;
     }
-    if (password === CORRECT_PW) { finish(); }
-    else { setPwError(true); setTimeout(() => setPwError(false), 1500); }
+    if (verifySignIn("password", { password }, { password: CORRECT_PW })) { finish(); }
+    else { noteFailure(); setPwError(true); setTimeout(() => setPwError(false), 1500); }
   };
 
   const tapColor = (hex: string) => {
-    if (colorStatus !== "idle" || colorSeq.length >= 3) return;
-    if (CORRECT_SEQ.length !== 3) return;
-    const next = [...colorSeq, hex];
-    setColorSeq(next);
-    if (next.length === 3) {
-      if (next.join() === CORRECT_SEQ.join()) {
-        setColorStatus("success");
-        setTimeout(finish, 600);
-      } else {
-        setColorStatus("error");
-        setTimeout(() => { setColorSeq([]); setColorStatus("idle"); }, 900);
-      }
+    if (locked || colorStatus !== "idle") return;
+    if (CORRECT_SEQ.length < MIN_COLOR_SEQ_LENGTH) return;
+    if (colorSeq.includes(hex)) {
+      setColorSeq(colorSeq.filter(c => c !== hex));
+      return;
+    }
+    if (colorSeq.length >= AUTH_COLORS.length) return;
+    setColorSeq([...colorSeq, hex]);
+  };
+
+  const submitColor = () => {
+    if (locked || colorStatus !== "idle") return;
+    if (CORRECT_SEQ.length < MIN_COLOR_SEQ_LENGTH) return;
+    if (colorSeq.length < MIN_COLOR_SEQ_LENGTH) return;
+    if (verifySignIn("color", { colorSeq }, { colorSeq: CORRECT_SEQ })) {
+      setColorStatus("success");
+      setTimeout(finish, 600);
+    } else {
+      noteFailure();
+      setColorStatus("error");
+      setTimeout(() => { setColorSeq([]); setColorStatus("idle"); }, 900);
     }
   };
 
@@ -4090,57 +4791,82 @@ function SignInScreen({
           </div>
         )}
 
+        {(locked || (attemptState.failures > 0 && !locked)) && (
+          <div className="rounded-2xl px-4 py-3" style={{
+            background: locked ? "#FEF2F2" : "#FFFBEB",
+            border: `1px solid ${locked ? "#FECACA" : "#FDE68A"}`,
+          }}>
+            <p className="text-[13px] font-semibold" style={{ color: locked ? "#991B1B" : "#92400E" }}>
+              {locked
+                ? `Too many failed attempts — try again in about a minute.`
+                : `${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} remaining before a temporary lockout.`}
+            </p>
+          </div>
+        )}
+
         {method === "color" && (
           <div className="flex flex-col items-center gap-4">
-            {CORRECT_SEQ.length !== 3 ? notSetHint("colour sequence") : (
+            {CORRECT_SEQ.length < MIN_COLOR_SEQ_LENGTH ? notSetHint("colour sequence") : (
               <>
                 <div className="text-center">
                   <p className="text-[13px] font-semibold text-[#595959] mb-0.5">Tap your colour sequence</p>
-                  <p className="text-[11px] text-[#9CA3AF]">Select 3 colours in the correct order</p>
+                  <p className="text-[11px] text-[#9CA3AF]">
+                    Enter at least {MIN_COLOR_SEQ_LENGTH} colours in order ({colorSeq.length} selected)
+                  </p>
                 </div>
 
-                <div className="flex gap-3">
-                  {[0, 1, 2].map(i => (
-                    <div key={i} className="w-12 h-12 rounded-full border-2 transition-all duration-200 flex items-center justify-center"
+                <div className="flex flex-wrap gap-2 justify-center max-w-full">
+                  {colorSeq.length === 0 ? (
+                    <p className="text-[12px] text-[#9CA3AF]">No colours selected yet</p>
+                  ) : colorSeq.map((hex, i) => (
+                    <div key={`${hex}-${i}`} className="w-9 h-9 rounded-full border-2 border-white shadow-sm"
                       style={{
-                        borderStyle: colorSeq[i] ? "solid" : "dashed",
-                        borderColor: colorStatus === "error" ? "#EF4444" : colorStatus === "success" ? "#10B981" : colorSeq[i] ?? "#CBD5E1",
-                        background: colorSeq[i] ?? "transparent",
-                      }}>
-                      {!colorSeq[i] && <span className="text-[15px] font-bold text-[#CBD5E1]">{i + 1}</span>}
-                    </div>
+                        background: hex,
+                        outline: colorStatus === "error" ? "2px solid #EF4444" : colorStatus === "success" ? "2px solid #10B981" : "1px solid #E5E7EB",
+                      }}
+                      title={`Step ${i + 1}`}
+                    />
                   ))}
                 </div>
 
                 {colorStatus === "error"   && <p className="text-[12px] text-[#EF4444] font-semibold">Wrong sequence — try again</p>}
                 {colorStatus === "success" && <p className="text-[12px] text-[#10B981] font-semibold">✓ Correct — welcome back!</p>}
 
-                <div className="grid grid-cols-3 gap-2.5 w-full">
+                <div className="grid grid-cols-4 gap-2 w-full">
                   {AUTH_COLORS.map(col => {
                     const isPicked = colorSeq.includes(col.hex);
+                    const isWhite = col.hex.toUpperCase() === "#FFFFFF";
                     return (
                       <button key={col.hex} type="button" onClick={() => tapColor(col.hex)}
-                        disabled={isPicked || colorSeq.length >= 3}
-                        className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl transition-all duration-150"
+                        disabled={locked || colorStatus !== "idle"}
+                        className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-2xl transition-all duration-150"
                         style={{
-                          border: `2px solid ${isPicked ? col.hex : "#E5E7EB"}`,
-                          background: isPicked ? col.hex + "22" : "white",
-                          opacity: isPicked ? 0.5 : 1,
-                          minHeight: 78,
+                          border: `2px solid ${isPicked ? (isWhite ? "#94A3B8" : col.hex) : "#E5E7EB"}`,
+                          background: isPicked ? (isWhite ? "#F8FAFC" : col.hex + "22") : "white",
+                          opacity: isPicked ? 0.55 : 1,
+                          minHeight: 72,
                         }}>
-                        <div className="w-10 h-10 rounded-full shadow-sm" style={{ background: col.hex }} />
-                        <p className="text-[10px] font-bold text-[#595959] uppercase tracking-wide">{col.label}</p>
+                        <div className="w-8 h-8 rounded-full shadow-sm"
+                          style={{ background: col.hex, border: isWhite ? "1px solid #CBD5E1" : undefined }} />
+                        <p className="text-[9px] font-bold text-[#595959] uppercase tracking-wide">{col.label}</p>
                       </button>
                     );
                   })}
                 </div>
 
-                {colorSeq.length > 0 && colorStatus === "idle" && (
-                  <button type="button" onClick={() => setColorSeq([])}
-                    className="text-[12px] font-semibold text-[#595959] underline underline-offset-2">
-                    Clear &amp; start over
+                <div className="flex gap-2 w-full">
+                  {colorSeq.length > 0 && colorStatus === "idle" && (
+                    <button type="button" onClick={() => setColorSeq([])}
+                      className="flex-1 py-3 rounded-xl text-[13px] font-bold text-[#6B7280] border border-[#E5E7EB]">
+                      Clear
+                    </button>
+                  )}
+                  <button type="button" onClick={submitColor} disabled={locked || colorSeq.length < MIN_COLOR_SEQ_LENGTH || colorStatus !== "idle"}
+                    className="flex-1 py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-40"
+                    style={{ background: "#00A7C8" }}>
+                    Sign in with colours
                   </button>
-                )}
+                </div>
               </>
             )}
 
@@ -4755,7 +5481,30 @@ function SymptomsContent({ theme }: { theme: ModeTheme }) {
       <div className="px-4 pt-4 pb-0">
         <div className="flex items-center gap-2 mb-3">
           <HeartPulse size={18} style={{ color: theme.color }} />
-          <h2 className="text-[18px] font-bold text-[#0F172A]">Symptoms & Allergies</h2>
+          <h2 className="text-[18px] font-bold text-[#0F172A] flex-1">Symptoms & Allergies</h2>
+          <NativeShareButton
+            variant="icon"
+            color={theme.color}
+            ariaLabel="Share symptoms and allergies"
+            getPayload={() => {
+              const symptomLines = symptoms.slice(0, 20).map(s =>
+                `• ${s.name} (severity ${s.severity}/5) — ${s.time}${s.note ? `: ${s.note}` : ""}`
+              );
+              const allergyLines = allergies.slice(0, 20).map(a =>
+                `• ${a.name}${a.reaction ? ` — ${a.reaction}` : ""} (${a.severity})`
+              );
+              return {
+                title: "CareConnect symptoms & allergies",
+                text: [
+                  "Symptoms:",
+                  ...(symptomLines.length ? symptomLines : ["(none logged)"]),
+                  "",
+                  "Allergies:",
+                  ...(allergyLines.length ? allergyLines : ["(none logged)"]),
+                ].join("\n"),
+              };
+            }}
+          />
         </div>
         <div className="flex rounded-xl p-1 gap-1" style={{ background: "#F3F4F6" }}>
           {(["symptoms", "allergies"] as const).map(t => (
@@ -5172,12 +5921,72 @@ function SymptomsContent({ theme }: { theme: ModeTheme }) {
 // ── Virtual Check-In (Patient) ─────────────────────────────────────────────────
 
 const CHECKIN_QUESTIONS = [
-  { id: "q1", question: "How are you feeling today overall?", type: "scale" as const },
-  { id: "q2", question: "Any new symptoms since your last check-in?", type: "yesno" as const },
-  { id: "q3", question: "Did you take all your medications today?", type: "yesno" as const },
-  { id: "q4", question: "Describe your sleep quality last night", type: "scale" as const },
-  { id: "q5", question: "Any notes for your care team?", type: "text" as const },
+  { id: "q1", question: "How are you feeling today overall?", type: "scale" as const, help: "1 = Poor · 5 = Great" },
+  { id: "q2", question: "Any new symptoms since your last check-in?", type: "yesno" as const, help: "Tell your care team if something new started" },
+  { id: "q3", question: "Did you take all your medications today?", type: "yesno" as const, help: "Helps track medication adherence" },
+  { id: "q4", question: "Describe your sleep quality last night", type: "scale" as const, help: "1 = Very poor · 5 = Excellent" },
+  { id: "q5", question: "Any notes for your care team?", type: "text" as const, help: "Optional message shared with caregivers you grant access to" },
 ];
+
+const CHECKIN_SCALE_LABELS = ["", "Poor", "Low", "Fair", "Good", "Great"] as const;
+const CHECKIN_HISTORY_KEY = "careconnect_checkin_history";
+
+interface CheckinHistoryEntry {
+  id: string;
+  date: string;
+  feeling: number;
+  newSymptoms: "Yes" | "No" | "";
+  medsTaken: "Yes" | "No" | "";
+  sleep: number;
+  notes: string;
+}
+
+function scaleLabel(n: number): string {
+  if (n >= 1 && n <= 5) return CHECKIN_SCALE_LABELS[n];
+  return "Not rated";
+}
+
+function scoreColor(n: number): string {
+  if (n >= 4) return "#10B981";
+  if (n === 3) return "#F59E0B";
+  return "#EF4444";
+}
+
+function loadCheckinHistory(): CheckinHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(CHECKIN_HISTORY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as CheckinHistoryEntry[];
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {}
+  return [
+    {
+      id: "demo-1",
+      date: "Yesterday · 8:40 AM",
+      feeling: 3,
+      newSymptoms: "No",
+      medsTaken: "Yes",
+      sleep: 2,
+      notes: "Woke up a few times overnight.",
+    },
+    {
+      id: "demo-2",
+      date: "Earlier this week · Mon 9:15 AM",
+      feeling: 2,
+      newSymptoms: "Yes",
+      medsTaken: "No",
+      sleep: 2,
+      notes: "Mild headache in the afternoon.",
+    },
+  ];
+}
+
+function saveCheckinHistory(entries: CheckinHistoryEntry[]) {
+  try {
+    localStorage.setItem(CHECKIN_HISTORY_KEY, JSON.stringify(entries.slice(0, 30)));
+  } catch {}
+}
 
 function VirtualCheckinContent({
   theme, lastCheckin, checkinsThisWeek = 0, onCheckinComplete,
@@ -5196,6 +6005,8 @@ function VirtualCheckinContent({
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | number>>({});
   const [done, setDone] = useState(false);
+  const [history, setHistory] = useState<CheckinHistoryEntry[]>(() => loadCheckinHistory());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const q = CHECKIN_QUESTIONS[qIndex];
   const { isListening: checkinListening, toggle: checkinMicToggle } = useVoiceDictation(text =>
     setAnswers(prev => {
@@ -5206,30 +6017,47 @@ function VirtualCheckinContent({
   const progress = (qIndex / CHECKIN_QUESTIONS.length) * 100;
 
   const completeCheckin = () => {
-    const scaleAns = Number(answers.q1) || Number(answers.q4) || 3;
+    const feeling = Number(answers.q1) || 3;
+    const sleep = Number(answers.q4) || 3;
+    const newSymptoms = (String(answers.q2) === "Yes" || String(answers.q2) === "No"
+      ? String(answers.q2)
+      : "") as CheckinHistoryEntry["newSymptoms"];
+    const medsTaken = (String(answers.q3) === "Yes" || String(answers.q3) === "No"
+      ? String(answers.q3)
+      : "") as CheckinHistoryEntry["medsTaken"];
+    const notes = String(answers.q5 ?? "").trim();
     const stamp = formatCheckinStamp();
     const weekCount = Math.min(7, (checkinsThisWeek || 0) + 1);
-    const hasNewSymptoms = String(answers.q2).toLowerCase() === "yes";
-    const note = String(answers.q5 ?? "").trim();
+    const hasNewSymptoms = newSymptoms === "Yes";
     const symptomNote = hasNewSymptoms
-      ? (note || "New symptoms reported in check-in")
+      ? (notes || "New symptoms reported in check-in")
       : undefined;
+
+    const entry: CheckinHistoryEntry = {
+      id: `ci-${Date.now()}`,
+      date: stamp,
+      feeling,
+      newSymptoms,
+      medsTaken,
+      sleep,
+      notes,
+    };
+    const nextHistory = [entry, ...history].slice(0, 30);
+    setHistory(nextHistory);
+    saveCheckinHistory(nextHistory);
+    setExpandedId(entry.id);
+
     onCheckinComplete?.({
       lastCheckin: stamp,
-      score: scaleAns,
+      score: feeling,
       checkinsThisWeek: weekCount,
       symptomNote,
     });
     setDone(true);
   };
 
-  const HISTORY = [
-    ...(lastCheckin ? [{ date: lastCheckin, score: 4, status: "Latest" }] : []),
-    { date: "Yesterday", score: 3, status: "Fair" },
-    { date: "Earlier this week", score: 2, status: "Poor" },
-  ];
-
   if (step === "history") {
+    const latest = history[0];
     return (
       <div className="flex flex-col min-h-full px-4 pt-4 pb-4 gap-4">
         <div className="flex items-center justify-between">
@@ -5246,24 +6074,105 @@ function VirtualCheckinContent({
 
         <div className="rounded-2xl p-4" style={{ background: theme.lightBg, border: `1.5px solid ${theme.borderColor}` }}>
           <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: theme.color }}>Last check-in</p>
-          <p className="text-[22px] font-bold text-[#0F172A]">{lastCheckin || "Not yet today"}</p>
+          <p className="text-[22px] font-bold text-[#0F172A]">{lastCheckin || latest?.date || "Not yet today"}</p>
           <p className="text-[13px] font-semibold text-[#374151] mt-1">
             {checkinsThisWeek}/7 check-ins this week
+          </p>
+          {latest && (
+            <p className="text-[12px] text-[#6B7280] mt-2 leading-relaxed">
+              Overall feeling: <span className="font-bold" style={{ color: scoreColor(latest.feeling) }}>{scaleLabel(latest.feeling)} ({latest.feeling}/5)</span>
+              {" · "}Sleep: <span className="font-semibold">{scaleLabel(latest.sleep)}</span>
+              {" · "}Meds: <span className="font-semibold">{latest.medsTaken || "—"}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-xl px-3 py-2.5 bg-[#F8FAFC] border border-[#E5E7EB]">
+          <p className="text-[12px] text-[#6B7280] leading-relaxed">
+            Each check-in records how you feel, new symptoms, medication adherence, sleep quality, and optional notes for your care team. Tap an entry to see the full details.
           </p>
         </div>
 
         <div className="flex flex-col gap-2">
           <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7280]">Check-in history</p>
-          {HISTORY.map((h, i) => (
-            <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white border border-[#E5E7EB]">
-              <div className="w-2 h-10 rounded-full shrink-0" style={{ background: h.score >= 4 ? "#10B981" : h.score === 3 ? "#F59E0B" : "#EF4444" }} />
-              <div className="flex-1">
-                <p className="text-[13px] font-semibold text-[#0F172A]">{h.date}</p>
-                <p className="text-[12px] text-[#6B7280]">{h.status} · {h.score}/5</p>
-              </div>
-              <ChevronRight size={16} className="text-[#D1D5DB]" />
+          {history.length === 0 && (
+            <div className="rounded-xl border border-dashed border-[#E5E7EB] p-5 text-center">
+              <p className="text-[14px] font-semibold text-[#0F172A]">No check-ins yet</p>
+              <p className="text-[12px] text-[#9CA3AF] mt-1">Start a check-in to build your history.</p>
             </div>
-          ))}
+          )}
+          {history.map((h) => {
+            const open = expandedId === h.id;
+            return (
+              <div key={h.id} className="rounded-xl bg-white border border-[#E5E7EB] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(open ? null : h.id)}
+                  className="w-full flex items-center gap-3 p-3 text-left"
+                >
+                  <div className="w-2 h-10 rounded-full shrink-0" style={{ background: scoreColor(h.feeling) }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-[#0F172A]">{h.date}</p>
+                    <p className="text-[12px] text-[#6B7280]">
+                      Feeling: {scaleLabel(h.feeling)} ({h.feeling}/5)
+                      {h.newSymptoms === "Yes" ? " · New symptoms" : ""}
+                      {h.medsTaken === "No" ? " · Missed meds" : ""}
+                    </p>
+                  </div>
+                  <ChevronRight
+                    size={16}
+                    className="text-[#D1D5DB] shrink-0 transition-transform"
+                    style={{ transform: open ? "rotate(90deg)" : "none" }}
+                  />
+                </button>
+                {open && (
+                  <div className="px-3 pb-3 pt-0 flex flex-col gap-2 border-t border-[#F3F4F6]">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#9CA3AF] mt-2">What this check-in recorded</p>
+                    {[
+                      {
+                        label: "Overall feeling",
+                        meaning: "How you felt overall that day (1 Poor → 5 Great)",
+                        value: `${scaleLabel(h.feeling)} · ${h.feeling}/5`,
+                        color: scoreColor(h.feeling),
+                      },
+                      {
+                        label: "New symptoms",
+                        meaning: "Whether anything new started since the previous check-in",
+                        value: h.newSymptoms || "Not answered",
+                        color: h.newSymptoms === "Yes" ? "#EF4444" : "#374151",
+                      },
+                      {
+                        label: "Medications taken",
+                        meaning: "Whether all scheduled doses were taken that day",
+                        value: h.medsTaken || "Not answered",
+                        color: h.medsTaken === "No" ? "#F59E0B" : "#374151",
+                      },
+                      {
+                        label: "Sleep quality",
+                        meaning: "How well you slept the night before (1 Very poor → 5 Excellent)",
+                        value: `${scaleLabel(h.sleep)} · ${h.sleep}/5`,
+                        color: scoreColor(h.sleep),
+                      },
+                      {
+                        label: "Notes for care team",
+                        meaning: "Optional message shared when caregivers have check-in access",
+                        value: h.notes || "No notes added",
+                        color: "#374151",
+                      },
+                    ].map(row => (
+                      <div key={row.label} className="rounded-lg px-3 py-2.5" style={{ background: "#F8FAFC" }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[13px] font-bold text-[#0F172A]">{row.label}</p>
+                          <p className="text-[12px] font-bold text-right shrink-0" style={{ color: row.color }}>{row.value}</p>
+                        </div>
+                        <p className="text-[11px] text-[#9CA3AF] mt-0.5 leading-snug">{row.meaning}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -5277,7 +6186,7 @@ function VirtualCheckinContent({
         </div>
         <div>
           <p className="text-[20px] font-bold text-[#0F172A]">Check-in complete!</p>
-          <p className="text-[14px] text-[#6B7280] mt-1">Your care team has been notified. Great job staying on track.</p>
+          <p className="text-[14px] text-[#6B7280] mt-1">Your care team has been notified. Open history to review what you reported.</p>
         </div>
         <button onClick={() => setStep("history")} className="px-6 py-3 rounded-2xl text-white font-bold text-[15px]" style={{ background: theme.color }}>
           Back to history
@@ -5298,21 +6207,33 @@ function VirtualCheckinContent({
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, background: theme.color }} />
       </div>
 
-      <p className="text-[18px] font-bold text-[#0F172A] mb-6 leading-snug">{q.question}</p>
+      <p className="text-[18px] font-bold text-[#0F172A] mb-2 leading-snug">{q.question}</p>
+      <p className="text-[12px] text-[#9CA3AF] mb-6 leading-relaxed">{q.help}</p>
 
       {q.type === "scale" && (
-        <div className="flex gap-2 mb-8">
-          {[1,2,3,4,5].map(n => (
-            <button key={n} onClick={() => setAnswers({ ...answers, [q.id]: n })}
-              className="flex-1 aspect-square rounded-2xl text-[18px] font-bold border-2 transition-all"
-              style={{
-                borderColor: answers[q.id] === n ? theme.color : "#E5E7EB",
-                background: answers[q.id] === n ? theme.lightBg : "white",
-                color: answers[q.id] === n ? theme.color : "#6B7280",
-              }}>
-              {n}
-            </button>
-          ))}
+        <div className="mb-8">
+          <div className="flex gap-2 mb-2">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} onClick={() => setAnswers({ ...answers, [q.id]: n })}
+                className="flex-1 aspect-square rounded-2xl text-[18px] font-bold border-2 transition-all"
+                style={{
+                  borderColor: answers[q.id] === n ? theme.color : "#E5E7EB",
+                  background: answers[q.id] === n ? theme.lightBg : "white",
+                  color: answers[q.id] === n ? theme.color : "#6B7280",
+                }}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-between px-0.5">
+            <span className="text-[10px] font-semibold text-[#9CA3AF]">Poor</span>
+            <span className="text-[10px] font-semibold text-[#9CA3AF]">Great</span>
+          </div>
+          {typeof answers[q.id] === "number" && (
+            <p className="text-[13px] font-bold text-center mt-2" style={{ color: theme.color }}>
+              Selected: {scaleLabel(Number(answers[q.id]))} ({answers[q.id]}/5)
+            </p>
+          )}
         </div>
       )}
       {q.type === "yesno" && (
@@ -5392,6 +6313,8 @@ interface ChatMessage {
   text: string;
   time: string;
   mine: boolean;
+  /** Optional image attachment (data URL or remote URL). */
+  imageUrl?: string;
 }
 
 const SAMPLE_MESSAGES: Record<string, ChatMessage[]> = {
@@ -6141,7 +7064,7 @@ function CallSessionOverlay({
   theme: ModeTheme;
   contact: ChatConversation;
   mode: "voice" | "video";
-  onEnd: (durationSec: number) => void;
+  onEnd: (durationSec: number, sentiment?: { tone: string; emotion: string; anxiety: string }) => void;
   hearingAssist?: boolean;
 }) {
   const [status, setStatus] = useState<"calling" | "connected" | "ended">("calling");
@@ -6165,13 +7088,15 @@ function CallSessionOverlay({
     return () => window.clearInterval(tick);
   }, [status]);
 
-  // Demo + optional mic captions during connected hearing-assist calls
+  // Demo + optional mic captions during connected calls
   useEffect(() => {
-    if (!hearingAssist || status !== "connected") return;
+    if (status !== "connected") return;
     const demoScript = [
       { delay: 1200, speaker: contact.name.split(" ")[0] || "Caller", text: "Can you hear me okay on this call?" },
       { delay: 4200, speaker: "You", text: "Yes — I have live captions on." },
       { delay: 7500, speaker: contact.name.split(" ")[0] || "Caller", text: "Great. Let's review your medication schedule for this week." },
+      { delay: 11000, speaker: "You", text: "Morning dose is done. Afternoon still to take." },
+      { delay: 14500, speaker: contact.name.split(" ")[0] || "Caller", text: "Perfect. Call me if anything feels off." },
     ];
     const timers = demoScript.map(item =>
       window.setTimeout(() => {
@@ -6184,7 +7109,7 @@ function CallSessionOverlay({
       webkitSpeechRecognition?: new () => any;
     };
     const SR = win.SpeechRecognition || win.webkitSpeechRecognition;
-    if (SR) {
+    if (SR && hearingAssist) {
       try {
         const recognition = new SR();
         recognition.continuous = true;
@@ -6221,10 +7146,16 @@ function CallSessionOverlay({
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   };
 
+  const liveSentiment = {
+    tone: elapsed < 20 ? "Warm" : "Steady",
+    emotion: elapsed < 35 ? "Calm" : "Engaged",
+    anxiety: elapsed < 45 ? "Low" : "Mild",
+  };
+
   const endCall = () => {
     try { recognitionRef.current?.stop(); } catch {}
     setStatus("ended");
-    onEnd(elapsedRef.current);
+    onEnd(elapsedRef.current, liveSentiment);
   };
 
   const openNative = () => {
@@ -6249,51 +7180,87 @@ function CallSessionOverlay({
           style={{ background: "radial-gradient(circle at 30% 20%, #38BDF8 0%, transparent 45%), radial-gradient(circle at 70% 80%, #A78BFA 0%, transparent 40%)" }} />
       )}
 
-      <div className="relative flex-1 flex flex-col items-center justify-center px-6 text-center gap-4">
-        <div className="w-24 h-24 rounded-full flex items-center justify-center text-white text-[28px] font-bold border-4 border-white/30"
+      {/* Compact caller header — leaves room for captions */}
+      <div className={`relative flex flex-col items-center text-center px-5 ${
+        status === "connected" ? "pt-5 pb-3 gap-1.5" : "flex-1 justify-center px-6 gap-4"
+      }`}>
+        <div
+          className={`rounded-full flex items-center justify-center text-white font-bold border-4 border-white/30 ${
+            status === "connected" ? "w-14 h-14 text-[18px]" : "w-24 h-24 text-[28px]"
+          }`}
           style={{ background: theme.color, boxShadow: status === "calling" ? "0 0 0 12px rgba(255,255,255,0.12)" : "none" }}>
           {contact.avatar}
         </div>
         <div>
-          <p className="text-white text-[22px] font-bold">{contact.name}</p>
-          <p className="text-white/70 text-[13px] mt-1">{contact.role}</p>
-          {contact.phone && (
-            <p className="text-white/50 text-[12px] mt-0.5">{contact.phone}</p>
+          <p className={`text-white font-bold ${status === "connected" ? "text-[17px]" : "text-[22px]"}`}>
+            {contact.name}
+          </p>
+          {status !== "connected" && (
+            <>
+              <p className="text-white/70 text-[13px] mt-1">{contact.role}</p>
+              {contact.phone && (
+                <p className="text-white/50 text-[12px] mt-0.5">{contact.phone}</p>
+              )}
+            </>
           )}
         </div>
-        <p className="text-white/90 text-[15px] font-semibold">
+        <p className="text-white/90 text-[14px] font-semibold">
           {status === "calling" && (mode === "video" ? "FaceTime connecting…" : "Calling…")}
           {status === "connected" && (mode === "video" ? `FaceTime · ${formatElapsed(elapsed)}` : formatElapsed(elapsed))}
           {status === "ended" && "Call ended"}
         </p>
-        {mode === "video" && status === "connected" && (
+        {mode === "video" && status === "connected" && !hearingAssist && (
           <div className="absolute bottom-36 right-5 w-24 h-32 rounded-2xl border-2 border-white/40 overflow-hidden bg-[#1E293B] flex items-center justify-center">
             <p className="text-white/60 text-[10px] font-semibold">You</p>
           </div>
         )}
       </div>
 
-      {hearingAssist && status === "connected" && (
-        <div className="relative mx-4 mb-3 rounded-2xl bg-black/70 border border-white/20 px-3 py-2.5 max-h-36 overflow-y-auto text-left">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Captions size={12} className="text-[#7DD3FC]" />
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#7DD3FC]">Live call captions</p>
+      {status === "connected" && (
+        <div className="relative mx-4 mb-2 rounded-2xl bg-black/55 border border-white/15 px-3 py-2.5 text-left shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#FDE68A] mb-1.5">Live call sentiment</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: "Tone", value: liveSentiment.tone },
+              { label: "Emotion", value: liveSentiment.emotion },
+              { label: "Anxiety", value: liveSentiment.anxiety },
+            ].map(s => (
+              <span key={s.label} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/10 text-white">
+                {s.label}: {s.value}
+              </span>
+            ))}
           </div>
-          {callCaptions.length === 0 && !livePartial && (
-            <p className="text-[12px] text-white/50 italic">Waiting for speech…</p>
-          )}
-          {callCaptions.slice(-4).map((c, i) => (
-            <p key={i} className="text-[13px] text-white leading-snug mb-1">
-              <span className="font-bold text-[#7DD3FC]">{c.speaker}: </span>{c.text}
-            </p>
-          ))}
-          {livePartial && (
-            <p className="text-[13px] text-white/70 italic">You: {livePartial}…</p>
-          )}
         </div>
       )}
 
-      <div className="relative px-6 pb-10 flex flex-col items-center gap-3">
+      {status === "connected" && (
+        <div
+          className="relative mx-3 mb-3 flex-1 min-h-[280px] rounded-2xl bg-[#0B1220]/95 border-2 border-[#7DD3FC] px-4 py-4 text-left shadow-xl flex flex-col overflow-hidden"
+          role="log"
+          aria-live="polite"
+          aria-label="Live call captions"
+        >
+          <div className="flex items-center gap-2 mb-3 shrink-0">
+            <Captions size={22} className="text-[#7DD3FC]" />
+            <p className="text-[16px] font-bold uppercase tracking-wider text-[#7DD3FC]">Live call captions</p>
+          </div>
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+            {callCaptions.length === 0 && !livePartial && (
+              <p className="text-[18px] text-white/60 italic leading-relaxed">Waiting for speech… Captions will appear here in large text.</p>
+            )}
+            {callCaptions.map((c, i) => (
+              <p key={i} className="text-[20px] text-white leading-relaxed">
+                <span className="font-bold text-[#7DD3FC]">{c.speaker}: </span>{c.text}
+              </p>
+            ))}
+            {livePartial && (
+              <p className="text-[20px] text-white/80 italic leading-relaxed">You: {livePartial}…</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="relative px-6 pb-8 pt-1 flex flex-col items-center gap-2 shrink-0">
         {contact.phone && status !== "ended" && (
           <button type="button" onClick={openNative}
             className="text-white/80 text-[12px] font-semibold underline">
@@ -6324,6 +7291,9 @@ function MessagesContent({
   messagingMode = "patient",
   patientName = "",
   caregiverName = "",
+  pendingAttachment,
+  onPendingAttachmentConsumed,
+  onCallSentiment,
 }: {
   theme: ModeTheme;
   initialChatId?: string | null;
@@ -6333,6 +7303,9 @@ function MessagesContent({
   messagingMode?: "patient" | "caregiver-doctor";
   patientName?: string;
   caregiverName?: string;
+  pendingAttachment?: { imageUrl: string; caption: string } | null;
+  onPendingAttachmentConsumed?: () => void;
+  onCallSentiment?: (sentiment: { tone: string; emotion: string; anxiety: string }) => void;
 }) {
   const doctorOnly = messagingMode === "caregiver-doctor";
   const [activeChat, setActiveChat] = useState<string | null>(initialChatId ?? null);
@@ -6487,7 +7460,8 @@ function MessagesContent({
 
   const sendMessage = () => {
     const text = msgText.trim();
-    if (!text || !activeChat || !conv) return;
+    const hasAttachment = !!pendingAttachment?.imageUrl;
+    if ((!text && !hasAttachment) || !activeChat || !conv) return;
 
     const chatId = activeChat;
     const now = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -6495,22 +7469,25 @@ function MessagesContent({
       doctorOnly && patientName
         ? `${caregiverName || "Caregiver"} (on behalf of ${patientName})`
         : "You";
+    const caption = text || pendingAttachment?.caption || "Shared image";
     const outgoing: ChatMessage = {
       id: `user-${Date.now()}`,
       sender: onBehalfLabel,
       text: doctorOnly && patientName
-        ? `[On behalf of ${patientName}] ${text}`
-        : text,
+        ? `[On behalf of ${patientName}] ${caption}`
+        : caption,
       time: now,
       mine: true,
+      imageUrl: pendingAttachment?.imageUrl,
     };
 
     setMessages(current => ({
       ...current,
       [chatId]: [...(current[chatId] ?? []), outgoing],
     }));
-    updateConversationPreview(chatId, outgoing.text);
+    updateConversationPreview(chatId, outgoing.imageUrl ? "📷 Shared an image" : outgoing.text);
     setMsgText("");
+    onPendingAttachmentConsumed?.();
 
     window.setTimeout(() => {
       const reply: ChatMessage = {
@@ -6566,8 +7543,9 @@ function MessagesContent({
             contact={conv}
             mode={callSession.mode}
             hearingAssist={hearingAssist}
-            onEnd={(durationSec) => {
+            onEnd={(durationSec, sentiment) => {
               logCallToChat(callSession.mode, durationSec);
+              if (sentiment) onCallSentiment?.(sentiment);
               setCallSession(null);
             }}
           />
@@ -6622,6 +7600,23 @@ function MessagesContent({
                     borderBottomRightRadius: m.mine ? 4 : 16,
                     borderBottomLeftRadius: m.mine ? 16 : 4,
                   }}>
+                  {m.imageUrl && (
+                    <div className="mb-2">
+                      <img src={m.imageUrl} alt="Shared attachment" className="w-full max-w-[220px] rounded-xl border border-white/20" />
+                      <div className="mt-1.5">
+                        <NativeShareButton
+                          variant="secondary"
+                          color={m.mine ? "#ffffff" : theme.color}
+                          label="Share"
+                          getPayload={() => ({
+                            title: "CareConnect attachment",
+                            text: m.text || "Shared from CareConnect",
+                            files: [{ dataUrl: m.imageUrl!, fileName: "careconnect-attachment.png", mimeType: "image/png" }],
+                          })}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[14px] leading-relaxed">{m.text}</p>
                 </div>
                 <p className="text-[10px] text-[#9CA3AF] mt-1 ml-1">{m.time}</p>
@@ -6632,6 +7627,16 @@ function MessagesContent({
         </div>
 
         {/* Input */}
+        {pendingAttachment?.imageUrl && (
+          <div className="px-3 pt-3 border-t border-[#E5E7EB] bg-white flex items-center gap-3">
+            <img src={pendingAttachment.imageUrl} alt="Pending attachment" className="w-16 h-16 object-cover rounded-xl border border-[#E5E7EB]" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-bold text-[#0F172A]">Ready to send</p>
+              <p className="text-[11px] text-[#6B7280] truncate">{pendingAttachment.caption}</p>
+            </div>
+            <button type="button" onClick={() => onPendingAttachmentConsumed?.()} className="text-[12px] font-semibold text-[#EF4444]">Remove</button>
+          </div>
+        )}
         <div className="px-3 py-3 border-t border-[#E5E7EB] bg-white flex items-center gap-2">
           <MicButton isListening={micListening} onClick={micToggle} color={theme.color} size="md" />
           <input
@@ -6647,10 +7652,10 @@ function MessagesContent({
             style={{ fontSize: 16, borderColor: micListening ? "#EF4444" : "#E5E7EB", background: micListening ? "#FEF2F2" : "white" }}
           />
           <button onClick={sendMessage}
-            disabled={!msgText.trim()}
+            disabled={!msgText.trim() && !pendingAttachment?.imageUrl}
             aria-label={`Send message to ${conv.name}`}
             className="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0"
-            style={{ background: theme.color, opacity: msgText.trim() ? 1 : 0.45 }}>
+            style={{ background: theme.color, opacity: (msgText.trim() || pendingAttachment?.imageUrl) ? 1 : 0.45 }}>
             <Send size={16} />
           </button>
         </div>
@@ -7484,6 +8489,7 @@ function MoodTrendCard({
     score >= 4 ? "#10B981" : score === 3 ? "#F59E0B" : "#EF4444";
 
   const hasAnyHistory = enrichedHistory.length > 0;
+  const latestCall = [...enrichedHistory].reverse().find(e => e.callTone || e.callEmotion || e.callAnxiety);
 
   return (
     <div className="rounded-2xl p-4 bg-white border border-[#E5E7EB]">
@@ -7493,17 +8499,59 @@ function MoodTrendCard({
             <Activity size={14} style={{ color: theme.color }} />
             <p className="text-[13px] font-bold text-[#0F172A]">{title}</p>
           </div>
-          <p className="text-[11px] text-[#9CA3AF]">Daily logs · weekly trends · monthly history</p>
+          <p className="text-[11px] text-[#9CA3AF]">Daily logs · weekly trends · call tone & emotion</p>
         </div>
-        {currentMood != null && currentMood >= 1 && currentMood <= 5 && (
-          <div className="text-right shrink-0">
-            <p className="text-[20px] leading-none">{MOOD_EMOJIS[currentMood]}</p>
-            <p className="text-[11px] font-bold mt-0.5" style={{ color: theme.color }}>
-              {MOOD_LABELS[currentMood]}
-            </p>
-          </div>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <NativeShareButton
+            variant="icon"
+            color={theme.color}
+            ariaLabel="Share mood summary"
+            getPayload={() => {
+              const lines = enrichedHistory.slice(-14).map(e => {
+                const mood = MOOD_LABELS[e.score] || String(e.score);
+                const extra = [
+                  e.symptom ? `symptom: ${e.symptom}` : "",
+                  e.callTone ? `tone: ${e.callTone}` : "",
+                  e.callEmotion ? `emotion: ${e.callEmotion}` : "",
+                  e.callAnxiety ? `anxiety: ${e.callAnxiety}` : "",
+                ].filter(Boolean).join(", ");
+                return `${e.date}: ${mood}${extra ? ` (${extra})` : ""}`;
+              });
+              return {
+                title: "CareConnect mood summary",
+                text: `Mood summary\n${lines.join("\n") || "No mood entries yet."}`,
+              };
+            }}
+          />
+          {currentMood != null && currentMood >= 1 && currentMood <= 5 && (
+            <div className="text-right">
+              <p className="text-[20px] leading-none">{MOOD_EMOJIS[currentMood]}</p>
+              <p className="text-[11px] font-bold mt-0.5" style={{ color: theme.color }}>
+                {MOOD_LABELS[currentMood]}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {latestCall && (
+        <div className="mb-3 rounded-xl px-3 py-2.5" style={{ background: theme.lightBg, border: `1px solid ${theme.borderColor}` }}>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: theme.color }}>
+            Latest call sentiment · {formatMoodDayLabel(latestCall.date)}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {latestCall.callTone && (
+              <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white text-[#374151]">Tone: {latestCall.callTone}</span>
+            )}
+            {latestCall.callEmotion && (
+              <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white text-[#374151]">Emotion: {latestCall.callEmotion}</span>
+            )}
+            {latestCall.callAnxiety && (
+              <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-white text-[#374151]">Anxiety: {latestCall.callAnxiety}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-1 p-1 rounded-xl mb-3" style={{ background: "#F3F4F6" }}>
         {([
@@ -7797,14 +8845,32 @@ function SOSOverlay({ onClose }: { onClose: () => void }) {
           </button>
 
           <div className="flex flex-col gap-2 w-full">
-            {[
-              { icon: <MessageCircle size={16} />, label: "Text emergency contacts" },
-              { icon: <MapPin size={16} />, label: "Share my location" },
-            ].map(a => (
-              <button key={a.label} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/15 text-white text-[14px] font-semibold border border-white/20">
-                {a.icon} {a.label}
-              </button>
-            ))}
+            <button type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/15 text-white text-[14px] font-semibold border border-white/20">
+              <MessageCircle size={16} /> Text emergency contacts
+            </button>
+            <button type="button"
+              onClick={() => {
+                const shareLoc = (text: string) => {
+                  void shareNative({ title: "CareConnect emergency location", text });
+                };
+                if (!navigator.geolocation) {
+                  shareLoc("I need help. Please check on me. (Location unavailable on this device.)");
+                  return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                  pos => {
+                    const { latitude, longitude } = pos.coords;
+                    const maps = `https://maps.google.com/?q=${latitude},${longitude}`;
+                    shareLoc(`I need help. My location: ${maps}`);
+                  },
+                  () => shareLoc("I need help. Please check on me. (Could not read GPS.)"),
+                  { enableHighAccuracy: true, timeout: 8000 },
+                );
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/15 text-white text-[14px] font-semibold border border-white/20">
+              <Share2 size={16} /> Share my location
+            </button>
           </div>
 
           <button onClick={onClose} className="mt-2 flex items-center gap-2 text-white/70 text-[14px] font-semibold">
@@ -7818,7 +8884,7 @@ function SOSOverlay({ onClose }: { onClose: () => void }) {
 
 // ── Menu bottom-sheet drawer ───────────────────────────────────────────────────
 
-const MENU_ITEMS = [
+const MENU_ITEMS: { icon: React.ReactNode; label: string; category: string; tab?: Tab }[] = [
   { icon: <FileText size={18} />, label: "Invoice Assistant",    category: "Tools" },
   { icon: <Activity size={18} />, label: "Notetaker Assistant",  category: "Tools" },
   { icon: <Mic size={18} />,      label: "Voice Commands",       category: "Tools" },
@@ -7830,11 +8896,14 @@ const MENU_ITEMS = [
   { icon: <Users size={18} />,    label: "Social Feed",          category: "Community" },
   { icon: <Shield size={18} />,   label: "Fall Detection",       category: "Safety" },
   { icon: <AlertTriangle size={18} />, label: "SOS Emergency",   category: "Safety" },
-  { icon: <LayoutGrid size={18} />, label: "Smart Devices",      category: "Integrations" },
-  { icon: <Settings size={18} />, label: "Settings",             category: "Account" },
+  { icon: <Watch size={18} />, label: "Wearables", category: "Integrations", tab: "wearables" as Tab | undefined },
+  { icon: <LayoutGrid size={18} />, label: "Smart Devices", category: "Integrations", tab: "smart_devices" as Tab | undefined },
+  { icon: <Settings size={18} />, label: "Settings", category: "Account", tab: "profile" as Tab | undefined },
 ];
 
-function MenuDrawer({ theme, onClose, onSOS }: { theme: ModeTheme; onClose: () => void; onSOS: () => void }) {
+function MenuDrawer({ theme, onClose, onSOS, onNavigate }: {
+  theme: ModeTheme; onClose: () => void; onSOS: () => void; onNavigate?: (tab: Tab) => void;
+}) {
   const categories = Array.from(new Set(MENU_ITEMS.map(m => m.category)));
 
   return (
@@ -7856,7 +8925,11 @@ function MenuDrawer({ theme, onClose, onSOS }: { theme: ModeTheme; onClose: () =
               {MENU_ITEMS.filter(m => m.category === cat).map(item => (
                 <button
                   key={item.label}
-                  onClick={item.label === "SOS Emergency" ? onSOS : onClose}
+                  onClick={() => {
+                    if (item.label === "SOS Emergency") { onSOS(); return; }
+                    if ("tab" in item && item.tab && onNavigate) { onNavigate(item.tab); onClose(); return; }
+                    onClose();
+                  }}
                   className="w-full flex items-center gap-3 px-5 py-3 hover:bg-[#F9FAFB] transition-colors text-left"
                   style={{ color: item.label === "SOS Emergency" ? "#EF4444" : "#0F172A" }}
                 >
@@ -8180,7 +9253,7 @@ function ProfileWizard({
       set("colorSeq", data.colorSeq.filter(c => c !== hex));
       return;
     }
-    if (data.colorSeq.length >= 3) return;
+    if (data.colorSeq.length >= AUTH_COLORS.length) return;
     set("colorSeq", [...data.colorSeq, hex]);
   };
 
@@ -8272,32 +9345,38 @@ function ProfileWizard({
           </div>}
 
           {data.authMethods.color && <div className="flex flex-col gap-2">
-            <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">Colour sequence (pick 3)</label>
-            <div className="flex gap-2 justify-center mb-1">
-              {[0, 1, 2].map(i => (
-                <div key={i} className="w-10 h-10 rounded-full border-2 flex items-center justify-center"
-                  style={{
-                    borderStyle: data.colorSeq[i] ? "solid" : "dashed",
-                    borderColor: data.colorSeq[i] ?? "#CBD5E1",
-                    background: data.colorSeq[i] ?? "transparent",
-                  }}>
-                  {!data.colorSeq[i] && <span className="text-[12px] font-bold text-[#CBD5E1]">{i + 1}</span>}
-                </div>
+            <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">
+              Colour sequence (at least {MIN_COLOR_SEQ_LENGTH})
+            </label>
+            <p className="text-[11px] text-[#9CA3AF] -mt-1">
+              {data.colorSeq.length} selected
+              {data.colorSeq.length < MIN_COLOR_SEQ_LENGTH
+                ? ` · pick ${MIN_COLOR_SEQ_LENGTH - data.colorSeq.length} more`
+                : " · ready"}
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center mb-1 min-h-[40px]">
+              {data.colorSeq.length === 0 ? (
+                <span className="text-[12px] text-[#CBD5E1]">Tap colours below in order</span>
+              ) : data.colorSeq.map((hex, i) => (
+                <div key={`${hex}-${i}`} className="w-9 h-9 rounded-full border-2 border-white shadow-sm"
+                  style={{ background: hex, outline: hex.toUpperCase() === "#FFFFFF" ? "1px solid #CBD5E1" : undefined }}
+                  title={`Step ${i + 1}`} />
               ))}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {AUTH_COLORS.map(col => {
                 const picked = data.colorSeq.includes(col.hex);
+                const isWhite = col.hex.toUpperCase() === "#FFFFFF";
                 return (
                   <button key={col.hex} type="button" onClick={() => tapWizardColor(col.hex)}
-                    className="flex flex-col items-center gap-1.5 py-2.5 rounded-xl border-2 transition-all"
+                    className="flex flex-col items-center gap-1.5 py-2 rounded-xl border-2 transition-all"
                     style={{
-                      borderColor: picked ? col.hex : "#E5E7EB",
-                      background: picked ? col.hex + "22" : "white",
-                      opacity: data.colorSeq.length >= 3 && !picked ? 0.5 : 1,
+                      borderColor: picked ? (isWhite ? "#94A3B8" : col.hex) : "#E5E7EB",
+                      background: picked ? (isWhite ? "#F8FAFC" : col.hex + "22") : "white",
+                      opacity: data.colorSeq.length >= AUTH_COLORS.length && !picked ? 0.5 : 1,
                     }}>
-                    <div className="w-8 h-8 rounded-full" style={{ background: col.hex }} />
-                    <span className="text-[10px] font-bold text-[#595959] uppercase">{col.label}</span>
+                    <div className="w-7 h-7 rounded-full" style={{ background: col.hex, border: isWhite ? "1px solid #CBD5E1" : undefined }} />
+                    <span className="text-[9px] font-bold text-[#595959] uppercase">{col.label}</span>
                   </button>
                 );
               })}
@@ -8603,7 +9682,7 @@ function ProfileWizard({
   const selectedAuthValid =
     (!data.authMethods.password || data.password.trim().length >= 4) &&
     (!data.authMethods.pin || data.pin.length === 4) &&
-    (!data.authMethods.color || data.colorSeq.length === 3);
+    (!data.authMethods.color || data.colorSeq.length >= MIN_COLOR_SEQ_LENGTH);
   const caregiverPatientConfirmedOk = data.role !== "caregiver" || (
     caregiverPatientConfirmed(
       data.linkedPatientName,
@@ -8688,13 +9767,86 @@ function ProfileWizard({
 
 // ── Feature picker bottom sheet ────────────────────────────────────────────────
 
+
+function WearablesContent({ theme, onOpenSmartDevices }: { theme: ModeTheme; onOpenSmartDevices?: () => void }) {
+  return (
+    <div className="px-4 pt-4 pb-28 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Watch size={18} style={{ color: theme.color }} />
+        <h2 className="text-[18px] font-bold text-[#0F172A]">Wearables</h2>
+      </div>
+      <p className="text-[13px] text-[#6B7280]">
+        Sync body-worn devices such as Fitbit, Apple Watch, and continuous glucose monitors.
+        Wearables track personal vitals — not room sensors or home appliances.
+      </p>
+      {onOpenSmartDevices && (
+        <button type="button" onClick={onOpenSmartDevices}
+          className="text-left text-[12px] font-bold underline" style={{ color: theme.color }}>
+          Looking for home sensors? Open Smart Devices
+        </button>
+      )}
+      {[
+        { name: "Fitbit Charge", status: "Connected", metric: "7,842 steps today" },
+        { name: "Apple Watch", status: "Not linked", metric: "Heart rate · Sleep" },
+        { name: "CGM sensor", status: "Optional", metric: "Glucose trends" },
+      ].map(d => (
+        <div key={d.name} className="rounded-2xl bg-white border border-[#E5E7EB] px-4 py-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: theme.lightBg }}>⌚</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-bold text-[#0F172A]">{d.name}</p>
+            <p className="text-[11px] text-[#9CA3AF]">{d.metric}</p>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: theme.lightBg, color: theme.color }}>{d.status}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SmartDevicesContent({ theme, onOpenWearables }: { theme: ModeTheme; onOpenWearables?: () => void }) {
+  return (
+    <div className="px-4 pt-4 pb-28 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <HomeIcon size={18} style={{ color: theme.color }} />
+        <h2 className="text-[18px] font-bold text-[#0F172A]">Smart Devices</h2>
+      </div>
+      <p className="text-[13px] text-[#6B7280]">
+        Control and monitor home devices — lights, locks, thermostats, and fall sensors.
+        These are environment devices, separate from body-worn wearables.
+      </p>
+      {onOpenWearables && (
+        <button type="button" onClick={onOpenWearables}
+          className="text-left text-[12px] font-bold underline" style={{ color: theme.color }}>
+          Looking for Fitbit / watches? Open Wearables
+        </button>
+      )}
+      {[
+        { name: "Front door lock", status: "Locked", metric: "Last opened 8:12 AM" },
+        { name: "Living room lights", status: "On", metric: "Brightness 60%" },
+        { name: "Fall detection sensor", status: "Armed", metric: "Hallway · Bathroom" },
+        { name: "Thermostat", status: "72°F", metric: "Eco schedule" },
+      ].map(d => (
+        <div key={d.name} className="rounded-2xl bg-white border border-[#E5E7EB] px-4 py-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: theme.lightBg }}>🏠</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-bold text-[#0F172A]">{d.name}</p>
+            <p className="text-[11px] text-[#9CA3AF]">{d.metric}</p>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: theme.lightBg, color: theme.color }}>{d.status}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FeaturePickerSheet({
-  enabledFeatures, onToggle, onClose, onOpenMail,
+  enabledFeatures, onToggle, onClose, onOpenMail, onOpenTab,
 }: {
   enabledFeatures: FeatureId[];
   onToggle: (id: FeatureId) => void;
   onClose: () => void;
   onOpenMail?: () => void;
+  onOpenTab?: (tab: Tab) => void;
 }) {
   const categories: { key: string; label: string; emoji: string }[] = [
     { key: "health",    label: "Health",              emoji: "❤️" },
@@ -8704,13 +9856,25 @@ function FeaturePickerSheet({
     { key: "social",    label: "Social",               emoji: "👥" },
     { key: "documents", label: "Documents & Mail",     emoji: "📁" },
   ];
+  const [step, setStep] = useState(1);
+  const totalSteps = categories.length;
+  const cat = categories[step - 1];
+  const progress = (step / totalSteps) * 100;
+  const items = FEATURE_DEFS.filter(f => f.category === cat.key);
 
   const handleToggle = (id: FeatureId) => {
     const turningOn = !enabledFeatures.includes(id);
     onToggle(id);
-    if (turningOn && id === "usps_mail" && onOpenMail) {
+    if (!turningOn) return;
+    if (id === "usps_mail" && onOpenMail) {
       onClose();
       onOpenMail();
+      return;
+    }
+    const def = FEATURE_DEFS.find(f => f.id === id);
+    if (def?.tab && onOpenTab && (id === "wearables" || id === "smart_devices" || id === "medication_tracker")) {
+      onClose();
+      onOpenTab(def.tab);
     }
   };
 
@@ -8718,43 +9882,60 @@ function FeaturePickerSheet({
     <div className="absolute inset-0 z-50 flex flex-col">
       <div className="flex-1 bg-black/40" onClick={onClose} />
       <div className="bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: "82%" }}>
-        {/* Handle + header */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-[#E5E7EB]" />
         </div>
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#F3F4F6]">
           <div>
             <p className="text-[17px] font-bold text-[#0F172A]">My Features</p>
-            <p className="text-[12px] text-[#9CA3AF]">{enabledFeatures.length} enabled · changes take effect instantly</p>
+            <p className="text-[12px] text-[#9CA3AF]">
+              Step {step} of {totalSteps} · {cat.emoji} {cat.label} · {enabledFeatures.length} enabled
+            </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center bg-[#F3F4F6]">
             <X size={16} className="text-[#6B7280]" />
           </button>
         </div>
+        <div className="px-5 pt-3">
+          <div className="h-2 rounded-full bg-[#E5E7EB] overflow-hidden mb-3">
+            <div className="h-full rounded-full bg-[#00A7C8] transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
 
-        <div className="overflow-y-auto flex-1 pb-6">
-          {categories.map(cat => {
-            const items = FEATURE_DEFS.filter(f => f.category === cat.key);
-            return (
-              <div key={cat.key} className="px-4 pt-4">
-                <p className="text-[12px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">
-                  {cat.emoji} {cat.label}
-                </p>
-                <div className="rounded-2xl overflow-hidden border border-[#E5E7EB] bg-white">
-                  {items.map((f, i) => (
-                    <div key={f.id} className={`flex items-center gap-3 px-4 py-3.5 ${i > 0 ? "border-t border-[#F3F4F6]" : ""}`}>
-                      <span className="text-[22px] w-8 text-center shrink-0">{f.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-semibold text-[#0F172A]">{f.label}</p>
-                        <p className="text-[11px] text-[#9CA3AF] leading-snug mt-0.5">{f.description}</p>
-                      </div>
-                      <Switch checked={enabledFeatures.includes(f.id)} onChange={() => handleToggle(f.id)} id={`fp-${f.id}`} color="#00A7C8" />
-                    </div>
-                  ))}
+        <div className="overflow-y-auto flex-1 px-4 pb-3">
+          <div className="rounded-2xl overflow-hidden border border-[#E5E7EB] bg-white">
+            {items.map((f, i) => (
+              <div key={f.id} className={`flex items-center gap-3 px-4 py-3.5 ${i > 0 ? "border-t border-[#F3F4F6]" : ""}`}>
+                <span className="text-[22px] w-8 text-center shrink-0">{f.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-semibold text-[#0F172A]">{f.label}</p>
+                  <p className="text-[11px] text-[#9CA3AF] leading-snug mt-0.5">{f.description}</p>
                 </div>
+                <Switch checked={enabledFeatures.includes(f.id)} onChange={() => handleToggle(f.id)} id={`fp-${f.id}`} color="#00A7C8" />
               </div>
-            );
-          })}
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2 px-4 py-4 border-t border-[#F3F4F6]">
+          <button type="button" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step <= 1}
+            className="flex-1 py-3 rounded-xl text-[14px] font-bold border disabled:opacity-40"
+            style={{ borderColor: "#E5E7EB", color: "#6B7280" }}>
+            Back
+          </button>
+          {step < totalSteps ? (
+            <button type="button" onClick={() => setStep(s => s + 1)}
+              className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white"
+              style={{ background: "#00A7C8" }}>
+              Next
+            </button>
+          ) : (
+            <button type="button" onClick={onClose}
+              className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white"
+              style={{ background: "#00A7C8" }}>
+              Done
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -8785,6 +9966,7 @@ function PatientProfilePage({
   captions, setCaptions, soundAmplify, setSoundAmplify,
   ttySupport, setTtySupport, hearingAidMode, setHearingAidMode,
   onSignOut,
+  onOpenFeatureTab,
 }: {
   profileName: string; profileImage: string | null;
   setProfileImage: (v: string | null) => void; setProfileName: (v: string) => void;
@@ -9003,44 +10185,16 @@ function PatientProfilePage({
     url: string;
     qrImageSrc?: string;
     qrFileName?: string;
-  }): Promise<"shared" | "copied" | "cancelled" | "unsupported"> => {
+  }) => {
     const { title, text, url, qrImageSrc, qrFileName } = opts;
-    const shareText = text.includes(url) ? text : `${text}\n${url}`;
-
-    // Prefer Web Share API (opens the OS share sheet with installed apps).
-    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try {
-        const data: ShareData = { title, text: shareText, url };
-        if (qrImageSrc && typeof navigator.canShare === "function") {
-          try {
-            const res = await fetch(qrImageSrc);
-            const blob = await res.blob();
-            const file = new File([blob], qrFileName || "careconnect-qr.png", {
-              type: blob.type || "image/png",
-            });
-            if (navigator.canShare({ files: [file] })) {
-              data.files = [file];
-            }
-          } catch {
-            // Share link/text only if QR file attach fails
-          }
-        }
-        await navigator.share(data);
-        return "shared";
-      } catch (err) {
-        const name = err instanceof DOMException ? err.name : "";
-        if (name === "AbortError") return "cancelled";
-        // Fall through to clipboard fallback
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(url || shareText);
-      return "copied";
-    } catch {
-      window.prompt("Copy this link:", url || shareText);
-      return "copied";
-    }
+    return shareNative({
+      title,
+      text,
+      url,
+      files: qrImageSrc
+        ? [{ dataUrl: qrImageSrc, fileName: qrFileName || "careconnect-qr.png", mimeType: "image/png" }]
+        : undefined,
+    });
   };
 
   const copyProfileShareLink = async () => {
@@ -9299,28 +10453,48 @@ function PatientProfilePage({
                       {shareFeedback}
                     </p>
                   )}
-                  <button type="button" onClick={shareProfileNative}
-                    className="w-full py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2"
-                    style={{ background: theme.color }}>
-                    <Send size={16} /> Share
-                  </button>
-                  <p className="text-[11px] text-[#9CA3AF] text-center -mt-1">
-                    Opens your device share sheet (Messages, Email, WhatsApp, and other installed apps).
-                  </p>
-                  <div className="flex gap-2 w-full">
+                  <div className="flex gap-2 w-full items-start">
+                    <NativeShareButton
+                      className="flex-1"
+                      color={theme.color}
+                      label="Share"
+                      getPayload={() => ({
+                        title: `${profileName || "CareConnect"} profile`,
+                        text: "View my CareConnect profile",
+                        url: profileShare.url,
+                        files: [{
+                          dataUrl: qrImageUrl(profileShare.url, 512),
+                          fileName: "careconnect-profile-qr.png",
+                          mimeType: "image/png",
+                        }],
+                      })}
+                      onResult={(result) => {
+                        const msg = nativeShareResultMessage(result);
+                        if (msg) flashShareFeedback(msg);
+                        if (result === "copied") {
+                          setProfileShareCopied(true);
+                          window.setTimeout(() => setProfileShareCopied(false), 2000);
+                        }
+                      }}
+                    />
                     <button type="button" onClick={copyProfileShareLink}
-                      className="flex-1 py-2.5 rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5"
+                      className="flex-1 py-3 rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 border"
                       style={{
-                        background: profileShareCopied ? "#ECFDF5" : "#F3F4F6",
+                        background: profileShareCopied ? "#ECFDF5" : "white",
                         color: profileShareCopied ? "#047857" : "#374151",
+                        borderColor: "#E5E7EB",
+                        minHeight: 44,
                       }}>
-                      {profileShareCopied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
-                    </button>
-                    <button type="button" onClick={revokeProfileShare}
-                      className="flex-1 py-2.5 rounded-xl text-[13px] font-bold text-white bg-[#DC2626]">
-                      Revoke
+                      {profileShareCopied ? <><Check size={16} /> Copied</> : <><Copy size={16} /> Copy</>}
                     </button>
                   </div>
+                  <p className="text-[11px] text-[#9CA3AF] text-center">
+                    Share opens your device sheet (Messages, Email, WhatsApp, and more). Copy is a fallback.
+                  </p>
+                  <button type="button" onClick={revokeProfileShare}
+                    className="w-full py-2.5 rounded-xl text-[13px] font-bold text-white bg-[#DC2626]">
+                    Revoke link
+                  </button>
                   <button type="button" onClick={generateProfileShare}
                     className="text-[12px] font-semibold text-[#00A7C8]">
                     Generate a new link
@@ -9349,6 +10523,13 @@ function PatientProfilePage({
                           <p className="text-[14px] font-semibold text-[#0F172A]">{f.label}</p>
                           <p className="text-[11px] text-[#9CA3AF] truncate">{f.description}</p>
                         </div>
+                        {f.tab && enabledFeatures.includes(f.id) && onOpenFeatureTab && (
+                          <button type="button" onClick={() => onOpenFeatureTab(f.tab!)}
+                            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg shrink-0"
+                            style={{ background: "#E0F7FA", color: "#007A94" }}>
+                            Open
+                          </button>
+                        )}
                         <Switch checked={enabledFeatures.includes(f.id)} onChange={() => onToggleFeature(f.id)} id={`prof-${f.id}`} color="#00A7C8" />
                       </div>
                     ))}
@@ -9578,13 +10759,30 @@ function PatientProfilePage({
                       <p className="flex-1 text-[12px] font-medium text-[#0F172A] break-all">{inviteResult.url}</p>
                     </div>
                     <div className="flex flex-col gap-2 w-full">
-                      <button type="button" onClick={shareInviteNative}
-                        className="w-full py-3 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-1.5"
-                        style={{ background: theme.color }}>
-                        <Send size={14} /> Share
-                      </button>
+                      <NativeShareButton
+                        color={theme.color}
+                        label="Share"
+                        getPayload={() => ({
+                          title: "CareConnect Care Circle invite",
+                          text: `${profileName || "A CareConnect patient"} invited you to their Care Circle`,
+                          url: inviteResult.url,
+                          files: [{
+                            dataUrl: qrImageUrl(inviteResult.url, 512),
+                            fileName: "careconnect-invite-qr.png",
+                            mimeType: "image/png",
+                          }],
+                        })}
+                        onResult={(result) => {
+                          const msg = nativeShareResultMessage(result);
+                          if (msg) flashShareFeedback(msg);
+                          if (result === "copied") {
+                            setInviteCopied(true);
+                            window.setTimeout(() => setInviteCopied(false), 2000);
+                          }
+                        }}
+                      />
                       <p className="text-[11px] text-[#9CA3AF] text-center">
-                        Opens your device share sheet with installed apps.
+                        Opens your device share sheet with installed apps (SMS, Email, WhatsApp, and more).
                       </p>
                       <div className="flex gap-2 w-full">
                         <button type="button" onClick={copyInviteLink}
@@ -9911,6 +11109,10 @@ function CaregiverProfilePage({
   };
 
   const displayName = account.name || "Caregiver";
+  const [focusedPatientId, setFocusedPatientId] = useState<string | null>(null);
+  const circlePatients = focusedPatientId
+    ? patients.filter(p => p.id === focusedPatientId)
+    : patients;
 
   return (
     <div className="flex flex-col min-h-full bg-[#F9FAFB] pb-28">
@@ -10066,6 +11268,9 @@ function CaregiverProfilePage({
                 Read-only Care Circle — you can view the person you care for and what they shared. You cannot change access, invites, or patient settings.
               </p>
             </div>
+            <p className="text-[12px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+              Linked patients ({patients.length})
+            </p>
             {patients.length === 0 && (
               <div className="rounded-2xl bg-white border border-[#E5E7EB] p-5 text-center">
                 <p className="text-[15px] font-bold text-[#0F172A] mb-1">No patient linked</p>
@@ -10074,7 +11279,31 @@ function CaregiverProfilePage({
                 </p>
               </div>
             )}
-            {patients.map(p => (
+            {patients.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button type="button" onClick={() => setFocusedPatientId(null)}
+                  className="shrink-0 px-3 py-2 rounded-xl border text-[12px] font-bold"
+                  style={{
+                    borderColor: focusedPatientId == null ? theme.color : "#E5E7EB",
+                    color: focusedPatientId == null ? "white" : "#6B7280",
+                    background: focusedPatientId == null ? theme.color : "white",
+                  }}>
+                  All
+                </button>
+                {patients.map(p => (
+                  <button key={`switch-${p.id}`} type="button" onClick={() => setFocusedPatientId(p.id)}
+                    className="shrink-0 px-3 py-2 rounded-xl border text-[12px] font-bold"
+                    style={{
+                      borderColor: focusedPatientId === p.id ? theme.color : "#E5E7EB",
+                      color: focusedPatientId === p.id ? "white" : theme.color,
+                      background: focusedPatientId === p.id ? theme.color : theme.lightBg,
+                    }}>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {circlePatients.map(p => (
               <div key={p.id} className="flex flex-col gap-3">
                 <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white border border-[#E5E7EB]">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[12px] font-bold" style={{ background: theme.color }}>
@@ -10459,7 +11688,7 @@ function PatientBottomNav({
   return (
     <div className="flex bg-white px-1 py-1">
       {navItems.map(it => {
-        const active = tab === it.key || (it.key === "symptoms" && tab === "meds");
+        const active = tab === it.key || (it.key === "symptoms" && (tab === "meds" || tab === "wearables" || tab === "smart_devices"));
         return (
           <button key={it.key} onClick={() => onTab(it.key)}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 transition-all duration-150"
@@ -10584,7 +11813,8 @@ function FeatureAppBar({
 }) {
   const titleMap: Partial<Record<Tab, string>> = {
     home: role === "caregiver" ? "Your Patient" : "Dashboard",
-    meds: "Health", symptoms: "Health", checkin: role === "caregiver" ? "Alerts" : "Virtual Check-In",
+    meds: "Health", symptoms: "Health", wearables: "Wearables", smart_devices: "Smart Devices",
+    checkin: role === "caregiver" ? "Alerts" : "Virtual Check-In",
     messages: "Messages", schedule: "Schedule", analytics: "Analytics",
     patients: "Your Patient", profile: role === "caregiver" ? "My Profile" : "My Profile",
     hearing: "Hearing Assist", mail: "Mail Digest",
@@ -10660,6 +11890,7 @@ export default function App() {
   const [showFeaturePicker, setShowFeaturePicker] = useState(false);
   const [activePatient, setActivePatient]     = useState<PatientSnippet | null>(null);
   const [openChatId, setOpenChatId]           = useState<string | null>(null);
+  const [pendingMessageAttachment, setPendingMessageAttachment] = useState<{ imageUrl: string; caption: string } | null>(null);
   const [careTeamMoodAlert, setCareTeamMoodAlert] = useState<LowMoodStreakAlert | null>(() => {
     const existing = loadLowMoodStreakAlert();
     if (!existing) return null;
@@ -11072,14 +12303,14 @@ export default function App() {
             setActiveCaregiverId(cgId);
             const account = loadCaregiverAccount(cgId);
             setCaregiverAccount(account);
-            const hasAuth = !!(account.password?.trim() || account.pin?.trim() || (account.colorSeq && account.colorSeq.length === 3));
+            const hasAuth = !!(account.password?.trim() || account.pin?.trim() || (account.colorSeq && account.colorSeq.length >= MIN_COLOR_SEQ_LENGTH));
             if (!hasAuth) {
               setWizardInitialRole("caregiver");
               navigate({ phase: "profile-create" });
               return;
             }
           } else {
-            const hasAuth = !!(accountPassword?.trim() || accountPin?.trim() || accountColorSeq.length === 3);
+            const hasAuth = !!(accountPassword?.trim() || accountPin?.trim() || accountColorSeq.length >= MIN_COLOR_SEQ_LENGTH);
             const savedComplete = profileComplete || loadSaved("profileComplete", false);
             if (!savedComplete || !hasAuth) {
               setWizardInitialRole("patient");
@@ -11387,6 +12618,7 @@ export default function App() {
         onToggle={toggleFeature}
         onClose={() => setShowFeaturePicker(false)}
         onOpenMail={() => goToTab("mail")}
+        onOpenTab={t => goToTab(t)}
       />
     ) :
     activePatient && role === "caregiver" ? (
@@ -11695,7 +12927,11 @@ export default function App() {
                   <MedsContent theme={theme} useLarge={useLarge}
                     medications={medications} setMedications={setMedications}
                     medsChecked={medsChecked} setMedsChecked={setMedsChecked}
-                    setModal={setAppModal} clearModal={clearModal} />
+                    setModal={setAppModal} clearModal={clearModal}
+                    onSendToMessages={(imageUrl, caption) => {
+                      setPendingMessageAttachment({ imageUrl, caption });
+                      goToTab("messages");
+                    }} />
                 )}
                 {enabledFeatures.includes("symptoms_tracker") && <SymptomsContent theme={theme} />}
               </>
@@ -11728,7 +12964,26 @@ export default function App() {
                 onChatOpened={() => setOpenChatId(null)}
                 linkedCaregivers={linkedCaregivers}
                 hearingAssist={mode === "hearing" || enabledFeatures.includes("hearing_assist") || captions}
+                pendingAttachment={pendingMessageAttachment}
+                onPendingAttachmentConsumed={() => setPendingMessageAttachment(null)}
+                onCallSentiment={(sentiment) => {
+                  setMoodHistory(prev => {
+                    const date = moodDateKey();
+                    const existing = prev.find(e => e.date === date);
+                    const score = existing?.score ?? patientMood ?? 3;
+                    const next = upsertMoodHistory(prev, score, { date });
+                    return next.map(e => e.date === date
+                      ? { ...e, callTone: sentiment.tone, callEmotion: sentiment.emotion, callAnxiety: sentiment.anxiety }
+                      : e);
+                  });
+                }}
               />
+            )}
+            {tab === "wearables" && enabledFeatures.includes("wearables") && (
+              <WearablesContent theme={theme} onOpenSmartDevices={() => goToTab("smart_devices")} />
+            )}
+            {tab === "smart_devices" && enabledFeatures.includes("smart_devices") && (
+              <SmartDevicesContent theme={theme} onOpenWearables={() => goToTab("wearables")} />
             )}
             {tab === "profile"  && (
               <PatientProfilePage
@@ -11767,6 +13022,7 @@ export default function App() {
                 ttySupport={ttySupport} setTtySupport={setTtySupport}
                 hearingAidMode={hearingAidMode} setHearingAidMode={setHearingAidMode}
                 onSignOut={doSignOut}
+                onOpenFeatureTab={t => goToTab(t)}
               />
             )}
           </>
@@ -11807,6 +13063,19 @@ export default function App() {
                 patientName={patientSource?.profileName || profileName}
                 caregiverName={caregiverAccount.name}
                 linkedCaregivers={patientSource?.linkedCaregivers ?? linkedCaregivers}
+                pendingAttachment={pendingMessageAttachment}
+                onPendingAttachmentConsumed={() => setPendingMessageAttachment(null)}
+                onCallSentiment={(sentiment) => {
+                  setMoodHistory(prev => {
+                    const date = moodDateKey();
+                    const existing = prev.find(e => e.date === date);
+                    const score = existing?.score ?? patientMood ?? 3;
+                    const next = upsertMoodHistory(prev, score, { date });
+                    return next.map(e => e.date === date
+                      ? { ...e, callTone: sentiment.tone, callEmotion: sentiment.emotion, callAnxiety: sentiment.anxiety }
+                      : e);
+                  });
+                }}
               />
             )}
             {tab === "analytics" && (

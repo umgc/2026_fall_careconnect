@@ -24,6 +24,13 @@ import {
   qrImageUrl,
   validateSelectedAuthMethods,
   verifySignIn,
+  MIN_COLOR_SEQ_LENGTH,
+  recordSignInFailure,
+  clearSignInAttempts,
+  isSignInLocked,
+  remainingSignInAttempts,
+  emptySignInAttemptState,
+  MAX_SIGNIN_ATTEMPTS,
   detectEmailProvider,
   isValidEmailFormat,
   buildProfileShareUrl,
@@ -130,11 +137,14 @@ describe("invite URL helpers", () => {
 });
 
 describe("auth helpers", () => {
+  const sixColors = ["#1", "#2", "#3", "#4", "#5", "#6"];
+
   it("detects configured auth", () => {
     expect(hasAnyAuthConfigured({})).toBe(false);
     expect(hasAnyAuthConfigured({ password: "abcd" })).toBe(true);
     expect(hasAnyAuthConfigured({ pin: "1234" })).toBe(true);
-    expect(hasAnyAuthConfigured({ colorSeq: ["a", "b", "c"] })).toBe(true);
+    expect(hasAnyAuthConfigured({ colorSeq: ["a", "b", "c"] })).toBe(false);
+    expect(hasAnyAuthConfigured({ colorSeq: sixColors })).toBe(true);
   });
 
   it("validates selected methods", () => {
@@ -153,22 +163,32 @@ describe("auth helpers", () => {
     expect(
       validateSelectedAuthMethods(
         { pin: true, password: true, color: true },
-        { password: "abcd", pin: "1234", colorSeq: ["#1", "#2", "#3"] },
+        { password: "abcd", pin: "1234", colorSeq: sixColors },
       ),
     ).toBe(true);
+    expect(
+      validateSelectedAuthMethods(
+        { pin: false, password: false, color: true },
+        { colorSeq: ["#1", "#2", "#3"] },
+      ),
+    ).toBe(false);
   });
 
   it("strips deselected credentials", () => {
     expect(
       credentialsForSelectedMethods(
         { pin: true, password: false, color: false },
-        { password: "secret", pin: "9999", colorSeq: ["a", "b", "c"] },
+        { password: "secret", pin: "9999", colorSeq: sixColors },
       ),
     ).toEqual({ password: "", pin: "9999", colorSeq: [] });
   });
 
   it("verifies password/pin/color sign-in", () => {
-    const stored = { password: "care123", pin: "4321", colorSeq: ["#3B82F6", "#F59E0B", "#10B981"] };
+    const stored = {
+      password: "care123",
+      pin: "4321",
+      colorSeq: ["#3B82F6", "#F59E0B", "#10B981", "#000000", "#FFFFFF", "#00A7C8"],
+    };
     expect(verifySignIn("password", { password: "care123" }, stored)).toBe(true);
     expect(verifySignIn("password", { password: "nope" }, stored)).toBe(false);
     expect(verifySignIn("password", { password: "x" }, {})).toBe(false);
@@ -176,10 +196,30 @@ describe("auth helpers", () => {
     expect(verifySignIn("pin", { pin: "0000" }, stored)).toBe(false);
     expect(verifySignIn("pin", { pin: "1" }, { pin: "" })).toBe(false);
     expect(
-      verifySignIn("color", { colorSeq: ["#3B82F6", "#F59E0B", "#10B981"] }, stored),
+      verifySignIn("color", {
+        colorSeq: ["#3B82F6", "#F59E0B", "#10B981", "#000000", "#FFFFFF", "#00A7C8"],
+      }, stored),
     ).toBe(true);
     expect(verifySignIn("color", { colorSeq: ["#3B82F6"] }, stored)).toBe(false);
-    expect(verifySignIn("color", { colorSeq: ["a", "b", "c"] }, { colorSeq: [] })).toBe(false);
+    expect(verifySignIn("color", { colorSeq: sixColors }, { colorSeq: [] })).toBe(false);
+  });
+
+  it("locks after too many failed attempts", () => {
+    let state = emptySignInAttemptState();
+    for (let i = 0; i < MAX_SIGNIN_ATTEMPTS - 1; i++) {
+      state = recordSignInFailure(state, 1_000);
+      expect(isSignInLocked(state, 1_000)).toBe(false);
+    }
+    expect(remainingSignInAttempts(state)).toBe(1);
+    state = recordSignInFailure(state, 1_000);
+    expect(isSignInLocked(state, 1_000)).toBe(true);
+    expect(remainingSignInAttempts(state)).toBe(0);
+    expect(clearSignInAttempts(state, 1_000).failures).toBe(MAX_SIGNIN_ATTEMPTS);
+    expect(clearSignInAttempts(state, 1_000 + 60_001)).toEqual(emptySignInAttemptState());
+  });
+
+  it("exports a colour-sequence minimum of 6", () => {
+    expect(MIN_COLOR_SEQ_LENGTH).toBe(6);
   });
 
   it("requires patient confirmation for caregivers", () => {
@@ -504,7 +544,7 @@ describe("coverage branch gaps", () => {
       ),
     ).toEqual({ password: "secret", pin: "", colorSeq: [] });
     expect(verifySignIn("pin", { pin: "1234" }, { pin: "123" })).toBe(false);
-    expect(verifySignIn("color", {}, { colorSeq: ["a", "b", "c"] })).toBe(false);
+    expect(verifySignIn("color", {}, { colorSeq: ["a", "b", "c", "d", "e", "f"] })).toBe(false);
   });
 
   it("covers roster fallback branches", () => {

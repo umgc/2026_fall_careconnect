@@ -22,6 +22,7 @@ import {
   type DetectedEmailProvider,
   type EmailProviderId,
 } from "../lib/careconnect-core";
+import { NativeShareButton } from "./components/NativeShareButton";
 
 export interface ModeTheme {
   color: string;
@@ -1294,6 +1295,22 @@ export default function MailDigestContent({
             </p>
             <p className="text-[13px] text-[#374151] leading-relaxed mb-3">{selected.ocrText}</p>
             <div className="flex flex-col gap-2">
+              <NativeShareButton
+                color={theme.color}
+                label="Share"
+                getPayload={() => ({
+                  title: `Mail: ${selected.senderHint}`,
+                  text: [
+                    selected.senderHint,
+                    selected.subjectHint,
+                    "",
+                    selected.ocrText || "(No OCR text)",
+                  ].join("\n"),
+                  files: selected.imageUrl && !selected.imageMissing
+                    ? [{ dataUrl: selected.imageUrl, fileName: "careconnect-mail.png", mimeType: "image/png" }]
+                    : undefined,
+                })}
+              />
               <button type="button" onClick={() => readPiece(selected)}
                 className="w-full py-3 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2"
                 style={{ background: speakingId === selected.id ? "#DC2626" : theme.color }}

@@ -14,6 +14,8 @@ export default function SymptomTrendChart({
   accent?: string;
 }) {
   const [range, setRange] = useState<SymptomTrendRange>("week");
+  /** null = show all series; string = isolate that symptom */
+  const [selectedSeries, setSelectedSeries] = useState<string | null>(null);
   const points = useMemo(
     () => buildSymptomTrendPoints(entries, range),
     [entries, range],
@@ -22,6 +24,10 @@ export default function SymptomTrendChart({
     const first = points[0];
     return first ? Object.keys(first.series) : [];
   }, [points]);
+
+  const visibleNames = selectedSeries
+    ? seriesNames.filter(n => n === selectedSeries)
+    : seriesNames;
 
   const width = 320;
   const height = 180;
@@ -106,7 +112,8 @@ export default function SymptomTrendChart({
                 {p.label}
               </text>
             ))}
-            {seriesNames.map((name, sIdx) => {
+            {visibleNames.map(name => {
+              const sIdx = seriesNames.indexOf(name);
               const color = SERIES_COLORS[sIdx % SERIES_COLORS.length];
               const coords = points
                 .map((p, i) => {
@@ -129,19 +136,46 @@ export default function SymptomTrendChart({
               );
             })}
           </svg>
-          <div className="flex flex-wrap gap-2">
-            {seriesNames.map((name, i) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#374151]"
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full"
-                  style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }}
-                />
-                {name.length > 32 ? `${name.slice(0, 30)}…` : name}
-              </span>
-            ))}
+          <div className="flex flex-wrap gap-2 items-center">
+            <button
+              type="button"
+              onClick={() => setSelectedSeries(null)}
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all"
+              style={{
+                background: selectedSeries == null ? accent : "white",
+                color: selectedSeries == null ? "white" : "#374151",
+                borderColor: selectedSeries == null ? accent : "#E5E7EB",
+              }}
+              aria-pressed={selectedSeries == null}
+            >
+              All
+            </button>
+            {seriesNames.map((name, i) => {
+              const active = selectedSeries === name;
+              const dimmed = selectedSeries != null && !active;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setSelectedSeries(prev => (prev === name ? null : name))}
+                  className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full border transition-all"
+                  style={{
+                    background: active ? `${SERIES_COLORS[i % SERIES_COLORS.length]}18` : "white",
+                    color: "#374151",
+                    borderColor: active ? SERIES_COLORS[i % SERIES_COLORS.length] : "#E5E7EB",
+                    opacity: dimmed ? 0.45 : 1,
+                  }}
+                  aria-pressed={active}
+                  title={active ? "Showing only this symptom — tap All to restore" : "Tap to show only this symptom"}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }}
+                  />
+                  {name.length > 32 ? `${name.slice(0, 30)}…` : name}
+                </button>
+              );
+            })}
           </div>
         </>
       )}

@@ -180,11 +180,63 @@ export function qrImageUrl(data: string, size = 200): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
 }
 
+/** Minimum length for a colour-sequence passcode (open-ended above this). */
+export const MIN_COLOR_SEQ_LENGTH = 6;
+
+/** Failed sign-in attempts before a temporary lockout. */
+export const MAX_SIGNIN_ATTEMPTS = 5;
+
+/** Lockout duration after too many failed sign-ins. */
+export const SIGNIN_LOCKOUT_MS = 60_000;
+
+export interface SignInAttemptState {
+  failures: number;
+  lockedUntil: number | null;
+}
+
+export function emptySignInAttemptState(): SignInAttemptState {
+  return { failures: 0, lockedUntil: null };
+}
+
+export function isSignInLocked(state: SignInAttemptState, now = Date.now()): boolean {
+  return state.lockedUntil != null && state.lockedUntil > now;
+}
+
+export function remainingSignInAttempts(state: SignInAttemptState): number {
+  return Math.max(0, MAX_SIGNIN_ATTEMPTS - state.failures);
+}
+
+/** Record a failed attempt; locks when the failure cap is reached. */
+export function recordSignInFailure(
+  state: SignInAttemptState,
+  now = Date.now(),
+): SignInAttemptState {
+  if (isSignInLocked(state, now)) return state;
+  const failures = state.failures + 1;
+  if (failures >= MAX_SIGNIN_ATTEMPTS) {
+    return { failures, lockedUntil: now + SIGNIN_LOCKOUT_MS };
+  }
+  return { failures, lockedUntil: null };
+}
+
+/** Clear failures after a successful sign-in or when a lockout expires. */
+export function clearSignInAttempts(
+  state: SignInAttemptState = emptySignInAttemptState(),
+  now = Date.now(),
+): SignInAttemptState {
+  if (state.lockedUntil != null && state.lockedUntil > now) return state;
+  return emptySignInAttemptState();
+}
+
+export function isColorSeqConfigured(colorSeq?: string[] | null): boolean {
+  return !!colorSeq && colorSeq.length >= MIN_COLOR_SEQ_LENGTH;
+}
+
 export function hasAnyAuthConfigured(creds: AuthCredentials): boolean {
   return !!(
     creds.password?.trim() ||
     creds.pin?.trim() ||
-    (creds.colorSeq && creds.colorSeq.length === 3)
+    isColorSeqConfigured(creds.colorSeq)
   );
 }
 
@@ -197,7 +249,7 @@ export function validateSelectedAuthMethods(
   if (selected === 0) return false;
   if (methods.password && (!creds.password || creds.password.trim().length < 4)) return false;
   if (methods.pin && (!creds.pin || creds.pin.length !== 4)) return false;
-  if (methods.color && (!creds.colorSeq || creds.colorSeq.length !== 3)) return false;
+  if (methods.color && !isColorSeqConfigured(creds.colorSeq)) return false;
   return true;
 }
 
@@ -228,9 +280,9 @@ export function verifySignIn(
     return attempt.pin === expected;
   }
   const expected = stored.colorSeq || [];
-  if (expected.length !== 3) return false;
+  if (expected.length < MIN_COLOR_SEQ_LENGTH) return false;
   const got = attempt.colorSeq || [];
-  return got.length === 3 && got.join() === expected.join();
+  return got.length === expected.length && got.join() === expected.join();
 }
 
 export function caregiverPatientConfirmed(
