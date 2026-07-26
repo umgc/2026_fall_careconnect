@@ -118,5 +118,16 @@
   "login_badgeHipaa": "符合 HIPAA",
   "login_badgeAccessible": "无障碍",
   "login_e2eEncrypted": "端到端加密",
-  "login_wcagAACompliant": "符合 WCAG AA"
+  "login_wcagAACompliant": "符合 WCAG AA",
+
+  "ptdashboard_twiceDaily": "每日两次",
+  "ptdashboard_onceDaily": "每日一次",
+  "ptdashboard_threeTimesDaily": "每天三次",
+  "ptdashboard_fourTimesDaily": "每天四次",
+  "ptdashboard_asNeeded": "根据需要",
+  "ptdashboard_hourly": "每小时",
+  "ptdashboard_weekly": "每周",
+  "ptdashboard_monthly": "每月",
+  "ptdashboard_onceAtBed": "每天睡前运行一次"
+
 }

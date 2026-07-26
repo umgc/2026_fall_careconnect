@@ -118,5 +118,15 @@
   "login_badgeHipaa": "HIPAA অনুবর্তী",
   "login_badgeAccessible": "অ্যাক্সেসযোগ্য",
   "login_e2eEncrypted": "এন্ড-টু-এন্ড এনক্রিপ্টেড",
-  "login_wcagAACompliant": "WCAG AA অনুবর্তী"
+  "login_wcagAACompliant": "WCAG AA অনুবর্তী",
+
+  "ptdashboard_twiceDaily": "দিনে দুইবার",
+  "ptdashboard_onceDaily": "দিনে একবার",
+  "ptdashboard_threeTimesDaily": "দিনে তিনবার",
+  "ptdashboard_fourTimesDaily": "দৈনিক চারবার",
+  "ptdashboard_asNeeded": "প্রয়োজন অনুযায়ী",
+  "ptdashboard_hourly": "ঘণ্টাভিত্তিক",
+  "ptdashboard_weekly": "সাপ্তাহিক",
+  "ptdashboard_monthly": "মাসিক",
+  "ptdashboard_onceAtBed": "প্রতিদিন ঘুমানোর সময় একবার"
 }

@@ -560,7 +560,6 @@
   "ptdashboard_moodScoreLow": "Mood score below normal range. Consider contacting your healthcare provider.",
   "ptdashboard_medicationReminders": "You have medication reminders that are not marked as taken.",
   "ptdashboard_medPendingReminder": "reminder:pending_medications",
-
   "ptdashboard_twiceDaily": "Twice daily",
   "ptdashboard_onceDaily": "Once daily",
   "ptdashboard_threeTimesDaily": "Three times daily",

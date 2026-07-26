@@ -118,5 +118,15 @@
   "login_badgeHipaa": "HIPAA準拠",
   "login_badgeAccessible": "アクセシブル",
   "login_e2eEncrypted": "エンドツーエンド暗号化",
-  "login_wcagAACompliant": "WCAG AA準拠"
+  "login_wcagAACompliant": "WCAG AA準拠",
+
+  "ptdashboard_twiceDaily": "1日2回",
+  "ptdashboard_onceDaily": "1日1回",
+  "ptdashboard_threeTimesDaily": "1日3回",
+  "ptdashboard_fourTimesDaily": "1日4回",
+  "ptdashboard_asNeeded": "必要に応じて",
+  "ptdashboard_hourly": "時間単位",
+  "ptdashboard_weekly": "週次",
+  "ptdashboard_monthly": "月次",
+  "ptdashboard_onceAtBed": "就寝時に1日1回"
 }
