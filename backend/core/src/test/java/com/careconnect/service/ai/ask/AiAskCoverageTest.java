@@ -1,0 +1,52 @@
+package com.careconnect.service.ai.ask;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Task 5.3 — contract checks for Ask AI gateway wiring.
+ */
+class AiAskCoverageTest {
+
+    @Test
+    @DisplayName("AiAskController exposes POST /ask under /api/ai")
+    void controller_contract() throws Exception {
+        final String source = Files.readString(Path.of(
+                "src/main/java/com/careconnect/controller/AiAskController.java"));
+        assertThat(source).contains("@PostMapping");
+        assertThat(source).contains("/ask");
+        assertThat(source).contains("USE_AI_FEATURES");
+        assertThat(source).contains("careconnect.ai.ask.enabled");
+        assertThat(source).contains("resolveCurrentUser");
+        assertThat(source).contains("ForbiddenScopeException");
+        assertThat(source).contains("AskAiException");
+        assertThat(source).contains("ex.getStatus()");
+        assertThat(source).contains("ex.getRequestId()");
+        assertThat(source).contains("deliveryStatus=WITHHELD");
+    }
+
+    @Test
+    @DisplayName("AiAskService wires scope → hybrid → grounded LLM")
+    void service_contract() throws Exception {
+        final String source = Files.readString(Path.of(
+                "src/main/java/com/careconnect/service/ai/ask/AiAskService.java"));
+        assertThat(source).contains("RetrievalScopeService");
+        assertThat(source).contains("HybridRetrievalService");
+        assertThat(source).contains("GroundedAskLlmService");
+        assertThat(source).contains("NO_RECORDS");
+        assertThat(source).contains("AskAiGroundingException");
+        assertThat(source).contains("HitlService");
+        assertThat(source).contains("HOLD_TIER2");
+        assertThat(source).contains("HITL is disabled");
+        assertThat(source).contains("AiAskAuditService");
+        assertThat(source).contains("finalizeRecord");
+        assertThat(source).doesNotContain("TODO(Task 6.x)");
+        assertThat(source).doesNotContain("patientId={}", "caller={}");
+        assertThat(source).doesNotContain("MedicalContextService");
+    }
+}

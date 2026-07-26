@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
@@ -21,21 +22,113 @@ import java.util.UUID;
 @Repository
 public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIndexChunk, UUID> {
 
+    interface SummaryReplayCandidate {
+        Long getPatientId();
+
+        String getSourceRecordId();
+
+        String getSourceKind();
+
+        UUID getClaimToken();
+
+        Integer getAttempts();
+    }
+
     List<RetrievalIndexChunk> findByPatientId(Long patientId);
 
     List<RetrievalIndexChunk> findByPatientIdAndRecordType(Long patientId, String recordType);
 
-    List<RetrievalIndexChunk> findBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
+    /**
+     * Newest-first ACTIVE chunks for a patient/record-type pair (structured retrieval arm).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND record_type = :recordType
+                      AND migration_status = 'ACTIVE'
+                    ORDER BY indexed_at DESC NULLS LAST, id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
+            @Param("patientId") Long patientId,
+            @Param("recordType") String recordType,
+            @Param("limit") int limit);
+
+    List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdAndRecordType(
+            Long patientId, String sourceRecordId, String recordType);
+
+    List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdAndRecordTypeIn(
+            Long patientId,
+            String sourceRecordId,
+            Collection<String> recordTypes);
+
+    List<RetrievalIndexChunk> findByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+            Long patientId,
+            Collection<String> sourceRecordIds,
+            Collection<String> recordTypes);
 
     long countByPatientId(Long patientId);
 
-    void deleteBySourceRecordIdAndRecordType(String sourceRecordId, String recordType);
+    void deleteByPatientIdAndSourceRecordIdAndRecordType(
+            Long patientId, String sourceRecordId, String recordType);
 
-    /**
-     * Deletes all chunks for a source record (all record types). Used when re-indexing
-     * a summary that emits overview + typed item chunks under the same source id.
-     */
-    void deleteBySourceRecordId(String sourceRecordId);
+    void deleteByPatientIdAndSourceRecordIdAndRecordTypeIn(
+            Long patientId,
+            String sourceRecordId,
+            Collection<String> recordTypes);
+
+    void deleteByPatientIdAndSourceRecordIdInAndRecordTypeIn(
+            Long patientId,
+            Collection<String> sourceRecordIds,
+            Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT ric.id, ric.patient_id, ric.record_type, ric.source_record_id,
+                           ric.chunk_text, ric.chunk_metadata, ric.indexed_at,
+                           ric.consent_scope, ric.source_kind,
+                           ric.citation_replay_after, ric.citation_replay_attempts,
+                           ric.citation_replay_claimed_until, ric.citation_replay_claim_token,
+                           ric.migration_status
+                    FROM retrieval_index_chunk ric
+                    WHERE ric.patient_id = :patientId
+                      AND ric.record_type IN (:recordTypes)
+                      AND ric.source_record_id = :currentSourceRecordId
+                      AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
+                      AND ric.source_record_id <> :legacySourceRecordId
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findCallSummaryChunksForReplacement(
+            @Param("patientId") Long patientId,
+            @Param("currentSourceRecordId") String currentSourceRecordId,
+            @Param("legacySourceRecordId") String legacySourceRecordId,
+            @Param("sourceKind") String sourceKind,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Modifying(clearAutomatically = true)
+    @Query(
+            value = """
+                    DELETE FROM retrieval_index_chunk ric
+                    WHERE ric.patient_id = :patientId
+                      AND ric.record_type IN (:recordTypes)
+                      AND ric.source_record_id = :currentSourceRecordId
+                      AND (ric.source_kind = :sourceKind OR ric.source_kind IS NULL)
+                      AND ric.source_record_id <> :legacySourceRecordId
+                    """,
+            nativeQuery = true)
+    int deleteCallSummaryChunksForReplacement(
+            @Param("patientId") Long patientId,
+            @Param("currentSourceRecordId") String currentSourceRecordId,
+            @Param("legacySourceRecordId") String legacySourceRecordId,
+            @Param("sourceKind") String sourceKind,
+            @Param("recordTypes") Collection<String> recordTypes);
 
     /**
      * Patient-scoped full-text search over {@code search_vector} (Task 4.2).
@@ -52,12 +145,17 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
+                      AND migration_status = 'ACTIVE'
                       AND search_vector @@ plainto_tsquery('english', :query)
                     ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
-                             indexed_at DESC
+                             indexed_at DESC,
+                             id ASC
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -76,13 +174,18 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     @Query(
             value = """
                     SELECT id, patient_id, record_type, source_record_id, chunk_text,
-                           chunk_metadata, indexed_at, consent_scope
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
+                      AND migration_status = 'ACTIVE'
                       AND search_vector @@ plainto_tsquery('english', :query)
                       AND record_type IN (:recordTypes)
                     ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
-                             indexed_at DESC
+                             indexed_at DESC,
+                             id ASC
                     LIMIT :limit
                     """,
             nativeQuery = true)
@@ -97,9 +200,603 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
      * Should be zero once the Task 4.2 trigger + backfill have run.
      */
     @Query(
-            value = "SELECT COUNT(*) FROM retrieval_index_chunk WHERE search_vector IS NULL",
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE search_vector IS NULL
+                      AND migration_status = 'ACTIVE'
+                    """,
             nativeQuery = true)
     long countMissingSearchVector();
+
+    /**
+     * Counts ACTIVE chunks still missing an embedding after Task 4.3 ingest.
+     */
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                    """,
+            nativeQuery = true)
+    long countMissingEmbedding();
+
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingForSummary(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id IN (:sourceRecordIds)
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingForSummarySources(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordIds") Collection<String> sourceRecordIds,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForSummary(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND source_record_id IN (:sourceRecordIds)
+                      AND record_type IN (:recordTypes)
+                      AND embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForSummarySources(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordIds") Collection<String> sourceRecordIds,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT DISTINCT
+                           replay.patient_id AS "patientId",
+                           replay.source_record_id AS "sourceRecordId",
+                           replay.source_kind AS "sourceKind",
+                           replay.attempts AS "attempts"
+                    FROM summary_citation_replay_source replay
+                    WHERE replay.source_kind = 'CALL_SUMMARY'
+                      AND replay.migration_status = 'ACTIVE'
+                      AND replay.attempts < :maxAttempts
+                      AND (replay.replay_after IS NULL OR replay.replay_after <= NOW())
+                      AND (replay.claimed_until IS NULL OR replay.claimed_until <= NOW())
+                      AND EXISTS (
+                        SELECT 1
+                        FROM retrieval_index_chunk ric
+                        WHERE ric.patient_id = replay.patient_id
+                          AND ric.record_type IN (:recordTypes)
+                          AND ric.migration_status = 'ACTIVE'
+                          AND ric.source_kind = replay.source_kind
+                          AND ric.source_record_id = replay.source_record_id
+                          AND CASE
+                                WHEN COALESCE(
+                                  ric.chunk_metadata->>'citationMetadataVersion', '')
+                                  ~ '^[0-9]{1,9}$'
+                                THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
+                                ELSE -1
+                              END < :version
+                        UNION ALL
+                        SELECT 1
+                        FROM retrieval_index_chunk legacy
+                        WHERE legacy.patient_id = replay.patient_id
+                          AND legacy.record_type IN (:recordTypes)
+                          AND legacy.migration_status = 'QUARANTINED'
+                          AND legacy.source_kind IS NULL
+                          AND replay.source_record_id ~ '^call-summary:[0-9]+$'
+                          AND legacy.source_record_id =
+                              SUBSTRING(replay.source_record_id FROM 14)
+                          AND NOT EXISTS (
+                            SELECT 1
+                            FROM retrieval_index_chunk canonical
+                            WHERE canonical.patient_id = replay.patient_id
+                              AND canonical.record_type IN (:recordTypes)
+                              AND canonical.migration_status = 'ACTIVE'
+                              AND canonical.source_kind = replay.source_kind
+                              AND canonical.source_record_id = replay.source_record_id
+                              AND CASE
+                                    WHEN COALESCE(
+                                      canonical.chunk_metadata
+                                        ->>'citationMetadataVersion', '')
+                                      ~ '^[0-9]{1,9}$'
+                                    THEN (canonical.chunk_metadata
+                                      ->>'citationMetadataVersion')::integer
+                                    ELSE -1
+                                  END >= :version
+                          )
+                      )
+                    ORDER BY replay.replay_after ASC NULLS FIRST,
+                             replay.attempts,
+                             replay.patient_id,
+                             replay.source_record_id
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<SummaryReplayCandidate> findStaleSummaryCitationSources(
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("version") int version,
+            @Param("limit") int limit,
+            @Param("maxAttempts") int maxAttempts);
+
+    @Transactional
+    @Query(
+            value = """
+                    WITH locked_sources AS (
+                      SELECT replay.patient_id, replay.source_kind,
+                             replay.source_record_id
+                      FROM summary_citation_replay_source replay
+                      WHERE replay.source_kind = 'CALL_SUMMARY'
+                        AND replay.migration_status = 'ACTIVE'
+                        AND replay.attempts < :maxAttempts
+                        AND (replay.replay_after IS NULL OR replay.replay_after <= NOW())
+                        AND (replay.claimed_until IS NULL OR replay.claimed_until <= NOW())
+                        AND EXISTS (
+                          SELECT 1
+                          FROM retrieval_index_chunk ric
+                          WHERE ric.patient_id = replay.patient_id
+                            AND ric.record_type IN (:recordTypes)
+                            AND ric.migration_status = 'ACTIVE'
+                            AND ric.source_kind = replay.source_kind
+                            AND ric.source_record_id = replay.source_record_id
+                            AND CASE
+                                  WHEN COALESCE(
+                                    ric.chunk_metadata->>'citationMetadataVersion', '')
+                                    ~ '^[0-9]{1,9}$'
+                                  THEN (ric.chunk_metadata->>'citationMetadataVersion')::integer
+                                  ELSE -1
+                                END < :version
+                          UNION ALL
+                          SELECT 1
+                          FROM retrieval_index_chunk legacy
+                          WHERE legacy.patient_id = replay.patient_id
+                            AND legacy.record_type IN (:recordTypes)
+                            AND legacy.migration_status = 'QUARANTINED'
+                            AND legacy.source_kind IS NULL
+                            AND replay.source_record_id ~ '^call-summary:[0-9]+$'
+                            AND legacy.source_record_id =
+                                SUBSTRING(replay.source_record_id FROM 14)
+                            AND NOT EXISTS (
+                              SELECT 1
+                              FROM retrieval_index_chunk canonical
+                              WHERE canonical.patient_id = replay.patient_id
+                                AND canonical.record_type IN (:recordTypes)
+                                AND canonical.migration_status = 'ACTIVE'
+                                AND canonical.source_kind = replay.source_kind
+                                AND canonical.source_record_id = replay.source_record_id
+                                AND CASE
+                                      WHEN COALESCE(
+                                        canonical.chunk_metadata
+                                          ->>'citationMetadataVersion', '')
+                                        ~ '^[0-9]{1,9}$'
+                                      THEN (canonical.chunk_metadata
+                                        ->>'citationMetadataVersion')::integer
+                                      ELSE -1
+                                    END >= :version
+                            )
+                        )
+                      ORDER BY replay.replay_after ASC NULLS FIRST,
+                               replay.attempts ASC,
+                               replay.patient_id,
+                               replay.source_kind,
+                               replay.source_record_id
+                      FOR UPDATE OF replay SKIP LOCKED
+                      LIMIT :limit
+                    ),
+                    claimed_sources AS (
+                      UPDATE summary_citation_replay_source replay
+                      SET claimed_until = :claimedUntil,
+                          claim_token = gen_random_uuid(),
+                          updated_at = NOW()
+                      FROM locked_sources candidate
+                      WHERE replay.patient_id = candidate.patient_id
+                        AND replay.source_kind = candidate.source_kind
+                        AND replay.source_record_id = candidate.source_record_id
+                      RETURNING replay.patient_id, replay.source_kind,
+                                replay.source_record_id, replay.claim_token,
+                                replay.attempts
+                    )
+                    SELECT claimed.patient_id AS "patientId",
+                           claimed.source_record_id AS "sourceRecordId",
+                           claimed.source_kind AS "sourceKind",
+                           claimed.claim_token AS "claimToken",
+                           claimed.attempts AS "attempts"
+                    FROM claimed_sources claimed
+                    ORDER BY claimed.patient_id, claimed.source_record_id
+                    """,
+            nativeQuery = true)
+    List<SummaryReplayCandidate> claimStaleSummaryCitationSources(
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("version") int version,
+            @Param("limit") int limit,
+            @Param("claimedUntil") java.time.OffsetDateTime claimedUntil,
+            @Param("maxAttempts") int maxAttempts);
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE summary_citation_replay_source
+                    SET attempts =
+                          CASE WHEN attempts < 2147483647
+                               THEN attempts + 1
+                               ELSE 2147483647 END,
+                        replay_after = :retryAfter,
+                        claimed_until = NULL,
+                        claim_token = NULL,
+                        updated_at = NOW()
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND source_kind = 'CALL_SUMMARY'
+                      AND migration_status = 'ACTIVE'
+                      AND claim_token = :claimToken
+                    """,
+            nativeQuery = true)
+    int markSummaryCitationReplayFailure(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("retryAfter") java.time.OffsetDateTime retryAfter,
+            @Param("claimToken") UUID claimToken);
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE summary_citation_replay_source
+                    SET claimed_until = NULL,
+                        claim_token = NULL,
+                        updated_at = NOW()
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND source_kind = 'CALL_SUMMARY'
+                      AND migration_status = 'ACTIVE'
+                      AND claim_token = :claimToken
+                    """,
+            nativeQuery = true)
+    int releaseSummaryCitationReplayClaim(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("claimToken") UUID claimToken);
+
+    /**
+     * Extends an owned replay lease. Returns 0 when the claim token is stale.
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE summary_citation_replay_source
+                    SET claimed_until = :claimedUntil,
+                        updated_at = NOW()
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND source_kind = 'CALL_SUMMARY'
+                      AND migration_status = 'ACTIVE'
+                      AND claim_token = :claimToken
+                    """,
+            nativeQuery = true)
+    int renewSummaryCitationReplayClaim(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("claimToken") UUID claimToken,
+            @Param("claimedUntil") java.time.OffsetDateTime claimedUntil);
+
+    /**
+     * True when the caller still owns the active lease for this source.
+     */
+    @Query(
+            value = """
+                    SELECT EXISTS (
+                      SELECT 1
+                      FROM summary_citation_replay_source
+                      WHERE patient_id = :patientId
+                        AND source_record_id = :sourceRecordId
+                        AND source_kind = 'CALL_SUMMARY'
+                        AND migration_status = 'ACTIVE'
+                        AND claim_token = :claimToken
+                        AND claimed_until IS NOT NULL
+                        AND claimed_until > NOW()
+                    )
+                    """,
+            nativeQuery = true)
+    boolean hasActiveSummaryCitationReplayClaim(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("claimToken") UUID claimToken);
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    WITH fenced AS (
+                      UPDATE summary_citation_replay_source
+                      SET migration_status = 'QUARANTINED',
+                          quarantine_reason = :reason,
+                          claimed_until = NULL,
+                          claim_token = NULL,
+                          updated_at = NOW()
+                      WHERE patient_id = :patientId
+                        AND source_record_id = :sourceRecordId
+                        AND source_kind = 'CALL_SUMMARY'
+                        AND migration_status = 'ACTIVE'
+                        AND claim_token = :claimToken
+                      RETURNING patient_id, source_kind, source_record_id
+                    )
+                    UPDATE retrieval_index_chunk ric
+                    SET migration_status = 'QUARANTINED',
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
+                    FROM fenced
+                    WHERE ric.patient_id = fenced.patient_id
+                      AND ric.source_kind = fenced.source_kind
+                      AND ric.source_record_id = fenced.source_record_id
+                      AND ric.record_type IN (:recordTypes)
+                    """,
+            nativeQuery = true)
+    int quarantineSummarySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("claimToken") UUID claimToken,
+            @Param("reason") String reason);
+
+    @Modifying
+    @Transactional
+    @Query(
+            value = """
+                    INSERT INTO summary_citation_replay_source (
+                      patient_id, source_kind, source_record_id)
+                    VALUES (:patientId, :sourceKind, :sourceRecordId)
+                    ON CONFLICT (patient_id, source_kind, source_record_id)
+                    DO UPDATE SET migration_status = 'ACTIVE',
+                                  quarantine_reason = NULL,
+                                  updated_at = NOW()
+                    """,
+            nativeQuery = true)
+    void registerSummaryCitationReplaySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceKind") String sourceKind,
+            @Param("sourceRecordId") String sourceRecordId);
+
+    /**
+     * Registers authoritative recovery without mutating ambiguous numeric chunks.
+     * Replaying writes a canonical namespaced source; legacy rows remain quarantined.
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    INSERT INTO summary_citation_replay_source (
+                      patient_id, source_kind, source_record_id)
+                    SELECT :patientId, 'CALL_SUMMARY', 'call-summary:' || cs.id
+                    FROM call_summaries cs
+                    WHERE cs.id::text = :sourceRecordId
+                      AND cs.patient_id = :patientId
+                      AND EXISTS (
+                        SELECT 1 FROM retrieval_index_chunk ric
+                        WHERE ric.patient_id = :patientId
+                          AND ric.source_record_id = :sourceRecordId
+                          AND ric.record_type IN (:recordTypes)
+                          AND ric.source_kind IS NULL
+                          AND ric.migration_status = 'QUARANTINED')
+                    ON CONFLICT (patient_id, source_kind, source_record_id)
+                    DO UPDATE SET migration_status = 'ACTIVE',
+                                  quarantine_reason = NULL,
+                                  replay_after = NULL,
+                                  claimed_until = NULL,
+                                  claim_token = NULL,
+                                  updated_at = NOW()
+                    """,
+            nativeQuery = true)
+    int promoteReconciledLegacySummarySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET migration_status = 'QUARANTINED',
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
+                    WHERE patient_id = :patientId
+                      AND source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND (source_kind IS NULL OR source_kind = 'CALL_SUMMARY')
+                      AND migration_status = 'ACTIVE'
+                    """,
+            nativeQuery = true)
+    int quarantineLegacySummarySource(
+            @Param("patientId") Long patientId,
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    /**
+     * Quarantines ambiguous or call-owned numeric rows across every patient scope.
+     * Typed visit rows are preserved even when their table-local ID collides.
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET migration_status = 'QUARANTINED',
+                        citation_replay_claimed_until = NULL,
+                        citation_replay_claim_token = NULL
+                    WHERE source_record_id = :sourceRecordId
+                      AND record_type IN (:recordTypes)
+                      AND (source_kind IS NULL OR source_kind = 'CALL_SUMMARY')
+                      AND migration_status = 'ACTIVE'
+                    """,
+            nativeQuery = true)
+    int quarantineLegacySummarySourceAcrossPatients(
+            @Param("sourceRecordId") String sourceRecordId,
+            @Param("recordTypes") Collection<String> recordTypes);
+
+    @Query(
+            value = """
+                    SELECT pg_try_advisory_xact_lock(
+                        hashtextextended(:lockKey, 0))
+                    """,
+            nativeQuery = true)
+    boolean tryAcquireSummaryReplayLock(@Param("lockKey") String lockKey);
+
+    /** Serializes delete-and-replace for one patient/source identity. */
+    @Query(
+            value = """
+                    SELECT pg_advisory_xact_lock(hashtextextended(
+                        CONCAT(:patientId, ':', :sourceKind, ':', :sourceRecordId), 0))
+                    """,
+            nativeQuery = true)
+    void acquireSourceReplacementLock(
+            @Param("patientId") Long patientId,
+            @Param("sourceKind") String sourceKind,
+            @Param("sourceRecordId") String sourceRecordId);
+
+    /**
+     * Oldest chunks missing embeddings across all sources (Task 4.4 backfill worker).
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    ORDER BY indexed_at ASC NULLS LAST, id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> findMissingEmbeddingsForBackfill(@Param("limit") int limit);
+
+    /**
+     * Counts embeddable chunks still missing an embedding (Task 4.4 ops / backfill progress).
+     */
+    @Query(
+            value = """
+                    SELECT COUNT(*) FROM retrieval_index_chunk
+                    WHERE embedding IS NULL
+                      AND migration_status = 'ACTIVE'
+                      AND chunk_text IS NOT NULL
+                      AND TRIM(chunk_text) <> ''
+                    """,
+            nativeQuery = true)
+    long countMissingEmbeddingsForBackfill();
+
+    /**
+     * Patient-scoped vector similarity search (Task 5.1).
+     *
+     * <p>Orders by cosine distance ({@code <=>}) using the ivfflat cosine ops index.
+     * Only rows with a non-null {@code embedding} are eligible.
+     * Production must tune PostgreSQL {@code ivfflat.probes} at the session or database
+     * level and validate the recall/latency trade-off with representative data.
+     *
+     * @param queryEmbedding pgvector literal from {@link com.careconnect.service.ai.embedding.EmbeddingVectorFormat}
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND migration_status = 'ACTIVE'
+                      AND embedding IS NOT NULL
+                    ORDER BY embedding <=> CAST(:queryEmbedding AS vector),
+                             indexed_at DESC,
+                             id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> searchByPatientIdVector(
+            @Param("patientId") Long patientId,
+            @Param("queryEmbedding") String queryEmbedding,
+            @Param("limit") int limit);
+
+    /**
+     * Patient-scoped vector search with {@code record_type} filter applied before {@code LIMIT}.
+     */
+    @Query(
+            value = """
+                    SELECT id, patient_id, record_type, source_record_id, chunk_text,
+                           chunk_metadata, indexed_at, consent_scope, source_kind,
+                           citation_replay_after, citation_replay_attempts,
+                           citation_replay_claimed_until, citation_replay_claim_token,
+                           migration_status
+                    FROM retrieval_index_chunk
+                    WHERE patient_id = :patientId
+                      AND migration_status = 'ACTIVE'
+                      AND embedding IS NOT NULL
+                      AND record_type IN (:recordTypes)
+                    ORDER BY embedding <=> CAST(:queryEmbedding AS vector),
+                             indexed_at DESC,
+                             id ASC
+                    LIMIT :limit
+                    """,
+            nativeQuery = true)
+    List<RetrievalIndexChunk> searchByPatientIdVectorAndRecordTypes(
+            @Param("patientId") Long patientId,
+            @Param("queryEmbedding") String queryEmbedding,
+            @Param("recordTypes") Collection<String> recordTypes,
+            @Param("limit") int limit);
 
     /**
      * Writes a pgvector embedding for an indexed chunk (Task 4.3).
@@ -108,9 +805,40 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
      * @param embedding pgvector literal, e.g. {@code [0.1,0.2,...]} with
      *                  {@link com.careconnect.model.retrieval.RetrievalIndexSchema#EMBEDDING_DIMENSION} values
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query(
-            value = "UPDATE retrieval_index_chunk SET embedding = CAST(:embedding AS vector) WHERE id = :id",
+            value = """
+                    UPDATE retrieval_index_chunk
+                    SET embedding = CAST(:embedding AS vector)
+                    WHERE id = :id
+                      AND migration_status = 'ACTIVE'
+                    """,
             nativeQuery = true)
-    void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
+    int updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
+
+    /**
+     * Writes an embedding only while the caller still owns the replay lease for the
+     * chunk's source. Stale owners mutate nothing.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(
+            value = """
+                    UPDATE retrieval_index_chunk ric
+                    SET embedding = CAST(:embedding AS vector)
+                    FROM summary_citation_replay_source replay
+                    WHERE ric.id = :id
+                      AND ric.migration_status = 'ACTIVE'
+                      AND replay.patient_id = ric.patient_id
+                      AND replay.source_kind = ric.source_kind
+                      AND replay.source_record_id = ric.source_record_id
+                      AND replay.migration_status = 'ACTIVE'
+                      AND replay.claim_token = :claimToken
+                      AND replay.claimed_until IS NOT NULL
+                      AND replay.claimed_until > NOW()
+                    """,
+            nativeQuery = true)
+    int updateEmbeddingIfReplayClaimHeld(
+            @Param("id") UUID id,
+            @Param("embedding") String embedding,
+            @Param("claimToken") UUID claimToken);
 }

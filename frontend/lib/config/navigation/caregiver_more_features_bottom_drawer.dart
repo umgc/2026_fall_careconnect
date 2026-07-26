@@ -1,8 +1,12 @@
+import 'package:care_connect_app/features/ai_hitl/presentation/hitl_queue_page.dart';
 import 'package:care_connect_app/features/tasks/presentation/calendar_assisiant.dart';
 import 'package:care_connect_app/features/invoices/screens/dashboard/invoice_dashboard_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/shared/widgets/more_features_bottom_drawer.dart';
+import 'package:care_connect_app/utils/permission_helper.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../features/notetaker/presentation/notetaker_search.dart';
 
@@ -12,6 +16,8 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final role =
+        Provider.of<UserProvider>(context, listen: false).user?.role ?? '';
     final List<FeatureItem> features = [
       FeatureItem(
         icon: Icons.calendar_month_outlined,
@@ -28,21 +34,6 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           );
         },
       ),
-      // FeatureItem(
-      //   icon: Icons.file_open,
-      //   iconColor: Colors.blue,
-      //   title: 'File Management',
-      //   subtitle: 'Manage your files',
-      //   onTap: () {
-      //     Navigator.pop(context);
-      //     Navigator.push(
-      //       context,
-      //       MaterialPageRoute(
-      //         builder: (context) => const FileManagementPage(),
-      //       ),
-      //     );
-      //   },
-      // ),
       FeatureItem(
         icon: Icons.payments,
         iconColor: Colors.blue,
@@ -73,6 +64,22 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           );
         },
       ),
+      if (PermissionHelper.hasPermission(role, 'REVIEW_AI_HOLDS'))
+        FeatureItem(
+          icon: Icons.fact_check_outlined,
+          iconColor: Colors.blue,
+          title: 'AI review queue',
+          subtitle: 'Release or reject held Ask AI answers',
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const HitlQueuePage(),
+              ),
+            );
+          },
+        ),
       FeatureItem(
         icon: Icons.settings,
         iconColor: Colors.blue,

@@ -35,7 +35,12 @@ public interface CheckInQuestionRepository extends JpaRepository<CheckInQuestion
                 ciq.typeSnapshot,
                 ciq.required,
                 true,
-                ciq.ordinal
+                ciq.ordinal,
+                ciq.formKeySnapshot,
+                ciq.formVersionSnapshot,
+                ciq.sectionKeySnapshot,
+                ciq.fieldKeySnapshot,
+                ciq.scoreWeightSnapshot
             )
             FROM CheckInQuestion ciq
             JOIN ciq.question q

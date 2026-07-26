@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.IndexingEventType;
+import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.indexing.IndexingOutboxRow;
@@ -21,12 +22,19 @@ import java.util.List;
 
 /**
  * Polls {@code indexing_outbox} and drives {@link RetrievalIndexService} (Task 4.1).
+ * This is the canonical, production indexing path — covers CALL_SUMMARY /
+ * VISIT_SUMMARY, TRANSCRIPT_SEGMENT, and USPS_MAIL as their source events
+ * land in the outbox. See {@link com.careconnect.service.ai.RetrievalIndexingService}
+ * for the separate, synchronous MEDICATION/TASK/VITAL_SIGN indexer — the two
+ * cover disjoint record types and both write {@code retrieval_index_chunk};
+ * do not add a record type to both paths.
  *
  * <p>MVP transport: process outbox rows in-process (same pattern as {@code EvvOutboxProcessor}).
  * Claim and per-row work run in <em>separate</em> transactions so a deferred/failed ingest
  * cannot mark the batch rollback-only and undo earlier successes. Rows are claimed with
  * {@code FOR UPDATE SKIP LOCKED} and a durable {@code claimed_at} lease so multiple ECS
- * tasks do not process the same outbox row after the claim transaction commits. A later
+ * tasks do not process the same outbox row after the claim transaction commits. Default
+ * lease is 10 minutes to cover Titan embedding latency after ingest commits. A later
  * change can publish to SNS/SQS and keep this service as the message handler.
  */
 @Service
@@ -46,6 +54,7 @@ public class IndexWorker {
     private final int batchSize;
     private final int maxAttempts;
     private final int claimLeaseMinutes;
+    private final int noBurnParkHours;
 
     public IndexWorker(
             final IndexingOutboxRepository outboxRepository,
@@ -54,7 +63,8 @@ public class IndexWorker {
             final PlatformTransactionManager transactionManager,
             @Value("${careconnect.indexing.outbox.batch-size:25}") final int batchSize,
             @Value("${careconnect.indexing.outbox.max-attempts:5}") final int maxAttempts,
-            @Value("${careconnect.indexing.outbox.claim-lease-minutes:2}") final int claimLeaseMinutes) {
+            @Value("${careconnect.indexing.outbox.claim-lease-minutes:10}") final int claimLeaseMinutes,
+            @Value("${careconnect.indexing.outbox.no-burn-park-hours:6}") final int noBurnParkHours) {
         this.outboxRepository = outboxRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.objectMapper = objectMapper;
@@ -62,6 +72,7 @@ public class IndexWorker {
         this.batchSize = Math.max(1, batchSize);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.claimLeaseMinutes = Math.max(1, claimLeaseMinutes);
+        this.noBurnParkHours = Math.max(1, noBurnParkHours);
     }
 
     /**
@@ -138,33 +149,40 @@ public class IndexWorker {
 
     /**
      * Known-unimplemented work (e.g. visit summaries until Task 1.4): leave unprocessed
-     * and clear the lease without burning attempt budget.
+     * without burning attempt budget. Sets {@code claimed_at} into the future so the
+     * claim query skips the row for {@code no-burn-park-hours} (default 6h) instead of
+     * reclaiming every poll (~15s) or every short lease window.
      */
     private void releaseClaimWithoutBurn(final IndexingOutboxRow row, final String message) {
-        row.setClaimedAt(null);
+        row.setClaimedAt(LocalDateTime.now().plusHours(noBurnParkHours));
         row.setLastError(truncate(message));
         outboxRepository.save(row);
-        log.warn("IndexWorker parking outboxId={} eventType={} without burning attempts: {}",
-                row.getId(), row.getEventType(), message);
+        log.warn(
+                "IndexWorker parking outboxId={} eventType={} for {}h (no attempt burn): {}",
+                row.getId(), row.getEventType(), noBurnParkHours, message);
     }
 
     /**
-     * Deferred rows stay unprocessed but burn attempt budget so they eventually dead-letter
-     * instead of retrying forever every poll interval.
+     * Deferred rows stay unprocessed but burn attempt budget so they eventually dead-letter.
+     * Intermediate deferrals call {@link #refreshSoftLease} — not the no-burn park —
+     * so retries wait the normal claim-lease window (default 10m), not ~15s polls.
+     * Dead-letter clears the lease.
      */
     private void recordDeferOrDeadLetter(
             final IndexingOutboxRow row, final int attempts, final String message) {
         final int nextAttempts = attempts + 1;
         row.setAttemptCount(nextAttempts);
-        row.setClaimedAt(null);
         row.setLastError(truncate(message));
         if (nextAttempts >= maxAttempts) {
+            row.setClaimedAt(null);
             row.setProcessedAt(LocalDateTime.now());
             log.error("IndexWorker dead-lettered deferred outboxId={} eventType={} after {} attempts: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         } else {
-            log.warn("IndexWorker deferring outboxId={} eventType={} attempt={}/{}: {}",
-                    row.getId(), row.getEventType(), nextAttempts, maxAttempts, message);
+            refreshSoftLease(row);
+            log.warn("IndexWorker deferring outboxId={} eventType={} attempt={}/{} (lease ~{}m): {}",
+                    row.getId(), row.getEventType(), nextAttempts, maxAttempts,
+                    claimLeaseMinutes, message);
         }
         outboxRepository.save(row);
     }
@@ -173,17 +191,29 @@ public class IndexWorker {
             final IndexingOutboxRow row, final int attempts, final String message) {
         final int nextAttempts = attempts + 1;
         row.setAttemptCount(nextAttempts);
-        row.setClaimedAt(null);
         row.setLastError(truncate(message));
         if (nextAttempts >= maxAttempts) {
+            row.setClaimedAt(null);
             row.setProcessedAt(LocalDateTime.now());
             log.error("IndexWorker dead-lettered outboxId={} eventType={} after {} attempts: {}",
                     row.getId(), row.getEventType(), nextAttempts, message);
         } else {
-            log.error("IndexWorker failed outboxId={} eventType={} attempt={}: {}",
-                    row.getId(), row.getEventType(), nextAttempts, message);
+            refreshSoftLease(row);
+            log.error("IndexWorker failed outboxId={} eventType={} attempt={} (lease ~{}m): {}",
+                    row.getId(), row.getEventType(), nextAttempts, claimLeaseMinutes, message);
         }
         outboxRepository.save(row);
+    }
+
+    /**
+     * Soft lease: stamp {@code claimed_at = now()}. The claim query only reclaims when
+     * {@code claimed_at < NOW() - make_interval(mins => claimLeaseMinutes)}, so setting
+     * {@code now()} (not null) starts a fresh lease window — typically 10 minutes — and
+     * does <em>not</em> allow reclaim on the next 15s poll. This is intentionally shorter
+     * than {@link #releaseClaimWithoutBurn}'s multi-hour park.
+     */
+    private void refreshSoftLease(final IndexingOutboxRow row) {
+        row.setClaimedAt(LocalDateTime.now());
     }
 
     private int dispatch(final IndexingOutboxRow row) {
@@ -212,6 +242,11 @@ public class IndexWorker {
                 final TranscriptIndexedPayload payload =
                         objectMapper.treeToValue(payloadNode, TranscriptIndexedPayload.class);
                 return retrievalIndexService.ingestTranscriptIndexed(payload);
+            }
+            if (IndexingEventType.MAILPIECE_INDEXED.equals(eventType)) {
+                final MailpieceIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, MailpieceIndexedPayload.class);
+                return retrievalIndexService.ingestMailpieceIndexed(payload);
             }
         } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
             throw ex;

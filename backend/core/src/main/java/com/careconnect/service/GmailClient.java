@@ -107,6 +107,17 @@ public class GmailClient {
             }
 
             return Optional.ofNullable(bestMatch);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            final int status = e.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                throw new com.careconnect.exception.EmailAuthException(
+                        "Gmail API unauthorized (" + status + ")", e);
+            }
+            System.err.println("[GmailClient] Error fetching digest for date " + date + ": " + e.getMessage());
+            e.printStackTrace();
+            return Optional.empty();
+        } catch (com.careconnect.exception.EmailAuthException e) {
+            throw e;
         } catch (Exception e) {
             System.err.println("[GmailClient] Error fetching digest for date " + date + ": " + e.getMessage());
             e.printStackTrace();
@@ -159,6 +170,16 @@ public class GmailClient {
             }
 
             return Optional.ofNullable(newestPayload);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            final int status = e.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                throw new com.careconnect.exception.EmailAuthException(
+                        "Gmail API unauthorized (" + status + ")", e);
+            }
+            e.printStackTrace();
+            return Optional.empty();
+        } catch (com.careconnect.exception.EmailAuthException e) {
+            throw e;
         } catch (Exception e) {
             e.printStackTrace();
             return Optional.empty();

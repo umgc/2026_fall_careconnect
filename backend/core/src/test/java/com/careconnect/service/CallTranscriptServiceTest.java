@@ -1,7 +1,9 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.TranscriptArchiveLifecycleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,6 +20,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,13 +39,38 @@ class CallTranscriptServiceTest {
     @Mock
     private CallTranscriptArchiveService callTranscriptArchiveService;
 
+    @Mock
+    private CallPatientResolver callPatientResolver;
+
+    @Mock
+    private TranscriptArchiveLifecycleRepository lifecycleRepository;
+
+    @Mock
+    private DatabaseLockService databaseLockService;
+
     private CallTranscriptService service;
 
     private static final String CALL_ID = "call-1";
 
     @BeforeEach
     void setUp() {
-        service = new CallTranscriptService(callTranscriptSegmentRepository, callTranscriptArchiveService, indexingEventEmitter);
+        service = new CallTranscriptService(
+                callTranscriptSegmentRepository,
+                callTranscriptArchiveService,
+                indexingEventEmitter,
+                callPatientResolver,
+                lifecycleRepository,
+                databaseLockService);
+        org.mockito.Mockito.lenient()
+                .when(callPatientResolver.requirePatientId(CALL_ID))
+                .thenReturn(42L);
+        org.mockito.Mockito.lenient()
+                .when(lifecycleRepository.find(CALL_ID))
+                .thenReturn(new TranscriptArchiveLifecycleRepository.ArchiveLifecycle(0L, false));
+        org.mockito.Mockito.lenient()
+                .when(callTranscriptSegmentRepository.insertIdempotent(
+                        any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
     }
 
     private CallTranscriptSegment segment(
@@ -74,7 +102,8 @@ class CallTranscriptServiceTest {
         @DisplayName("returns zero when callId is blank or segments are empty")
         void recordSegments_blankOrEmpty_returnsZero() {
             assertThat(service.recordSegments(" ", 1L, List.of())).isZero();
-            verify(callTranscriptSegmentRepository, never()).save(any(CallTranscriptSegment.class));
+            verify(callTranscriptSegmentRepository, never()).insertIdempotent(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -100,25 +129,71 @@ class CallTranscriptServiceTest {
                     new CallTranscriptService.TranscriptSegmentInput(" patient ", longText, 50L, 60L, null)
             ));
             inputs.add(1, null);
+            when(callTranscriptSegmentRepository
+                    .findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(List.of(
+                            segment("NURSE1", "hello there", 10L, 20L,
+                                    "localsource", 7L, LocalDateTime.now()),
+                            segment("PATIENT", "x".repeat(1200), 50L, 60L,
+                                    "CLIENT_TRANSCRIPT", 7L, LocalDateTime.now())));
+            when(callTranscriptArchiveService.getArchivedSegments(CALL_ID))
+                    .thenReturn(List.of());
 
             int saved = service.recordSegments("  " + CALL_ID + "  ", 7L, inputs);
 
             assertThat(saved).isEqualTo(2);
 
-            ArgumentCaptor<CallTranscriptSegment> captor = ArgumentCaptor.forClass(CallTranscriptSegment.class);
-            verify(callTranscriptSegmentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
-            List<CallTranscriptSegment> stored = captor.getAllValues();
+            verify(callTranscriptSegmentRepository).insertIdempotent(
+                    eq(CALL_ID), nullable(java.util.UUID.class), eq("NURSE1"),
+                    eq("hello there"), eq(10L), eq(20L), eq("localsource"), eq(7L), any());
+            verify(callTranscriptSegmentRepository).insertIdempotent(
+                    eq(CALL_ID), nullable(java.util.UUID.class), eq("PATIENT"),
+                    eq("x".repeat(1200)), eq(50L), eq(60L),
+                    eq("CLIENT_TRANSCRIPT"), eq(7L), any());
+            final ArgumentCaptor<TranscriptIndexedPayload> eventCaptor =
+                    ArgumentCaptor.forClass(TranscriptIndexedPayload.class);
+            verify(indexingEventEmitter).emitTranscriptIndexed(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().patientId()).isEqualTo(42L);
+            assertThat(eventCaptor.getValue().totalSegmentCount()).isEqualTo(2);
+            assertThat(eventCaptor.getValue().snapshotVersion()).startsWith("sha256:");
+        }
 
-            assertThat(stored.get(0).getCallId()).isEqualTo(CALL_ID);
-            assertThat(stored.get(0).getActorUserId()).isEqualTo(7L);
-            assertThat(stored.get(0).getSpeakerLabel()).isEqualTo("NURSE1");
-            assertThat(stored.get(0).getText()).isEqualTo("hello there");
-            assertThat(stored.get(0).getSource()).isEqualTo("localsource");
+        @Test
+        @DisplayName("idempotent retry does not emit a duplicate indexing event")
+        void recordSegments_duplicateStableId_isNoOp() {
+            final java.util.UUID stableId =
+                    java.util.UUID.fromString("2d398e64-aa89-4cc7-a99b-5af45f80b536");
+            when(callTranscriptSegmentRepository.insertIdempotent(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(0);
 
-            assertThat(stored.get(1).getSpeakerLabel()).isEqualTo("PATIENT");
-            assertThat(stored.get(1).getText()).hasSize(1200);
-            assertThat(stored.get(1).getSource()).isEqualTo("CLIENT_TRANSCRIPT");
-            assertThat(stored.get(1).getOccurredAt()).isNotNull();
+            final int saved = service.recordSegments(
+                    CALL_ID,
+                    7L,
+                    List.of(new CallTranscriptService.TranscriptSegmentInput(
+                            stableId, "patient", "hello", 1L, 2L, "client")));
+
+            assertThat(saved).isZero();
+            verify(databaseLockService).acquireCallArchiveLock(CALL_ID);
+            verify(indexingEventEmitter, never()).emitTranscriptIndexed(any());
+        }
+
+        @Test
+        @DisplayName("terminal purge fence rejects transcript resurrection")
+        void recordSegments_afterPurge_returnsGone() {
+            when(lifecycleRepository.find(CALL_ID))
+                    .thenReturn(new TranscriptArchiveLifecycleRepository.ArchiveLifecycle(2L, true));
+
+            assertThatThrownBy(() -> service.recordSegments(
+                    CALL_ID,
+                    7L,
+                    List.of(new CallTranscriptService.TranscriptSegmentInput(
+                            java.util.UUID.randomUUID(), "patient", "hello", 1L, 2L, "client"))))
+                    .isInstanceOf(com.careconnect.exception.AppException.class)
+                    .extracting("status")
+                    .isEqualTo(org.springframework.http.HttpStatus.GONE);
+            verify(callTranscriptSegmentRepository, never()).insertIdempotent(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any());
         }
     }
 
@@ -190,6 +265,42 @@ class CallTranscriptServiceTest {
             assertThat(transcript).doesNotContain("[NURSE]");
             assertThat(transcript.length()).isLessThanOrEqualTo(16000);
         }
+
+        @Test
+        @DisplayName("summary snapshot keeps text count and version from one segment read")
+        void captureSummarySnapshot_isStableAndVersioned() {
+            final List<CallTranscriptSegment> captured = List.of(
+                    segment("PATIENT", "first", 10L, 20L, "SRC", 1L, LocalDateTime.now()),
+                    segment("NURSE", "second", 30L, 40L, "SRC", 2L, LocalDateTime.now()));
+            when(callTranscriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(captured);
+            when(callTranscriptArchiveService.getArchivedSegments(CALL_ID)).thenReturn(List.of());
+
+            final CallTranscriptService.TranscriptSnapshot snapshot =
+                    service.captureSummarySnapshot(CALL_ID);
+
+            assertThat(snapshot.segmentCount()).isEqualTo(2);
+            assertThat(snapshot.transcriptText()).contains("[PATIENT] first", "[NURSE] second");
+            assertThat(snapshot.version()).startsWith("sha256:");
+            verify(callTranscriptSegmentRepository).findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("authoritative snapshots fail closed when archive content is incomplete")
+        void captureIndexingSnapshot_incompleteArchive_failsClosed() {
+            when(callTranscriptSegmentRepository
+                    .findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID))
+                    .thenReturn(List.of());
+            when(callTranscriptArchiveService.getArchivedSegments(CALL_ID))
+                    .thenReturn(List.of());
+            when(callTranscriptArchiveService.isArchived(CALL_ID)).thenReturn(true);
+            when(callTranscriptArchiveService.getArchivedSegmentCount(CALL_ID))
+                    .thenReturn(3L);
+
+            assertThatThrownBy(() -> service.captureIndexingSnapshot(CALL_ID))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("archive");
+        }
     }
 
     @Nested
@@ -197,11 +308,9 @@ class CallTranscriptServiceTest {
     class PassthroughOperationTests {
 
         @Test
-        @DisplayName("archiveIfEligible trims callId and delegates merged segments")
+        @DisplayName("archiveIfEligible trims callId and delegates atomic archival")
         void archiveIfEligible_delegates() {
-            List<CallTranscriptSegment> segments = List.of(segment("PATIENT", "hello", 10L, 20L, "SRC", 2L, LocalDateTime.now()));
-            when(callTranscriptSegmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(CALL_ID)).thenReturn(segments);
-            when(callTranscriptArchiveService.archiveIfEligible(CALL_ID, segments)).thenReturn(true);
+            when(callTranscriptArchiveService.archiveIfEligible(CALL_ID)).thenReturn(true);
 
             assertThat(service.archiveIfEligible("  " + CALL_ID + "  ")).isTrue();
         }
@@ -217,8 +326,8 @@ class CallTranscriptServiceTest {
         @Test
         @DisplayName("purgeForCall deletes transcript rows and archives")
         void purgeForCall_deletesBothSources() {
-            when(callTranscriptSegmentRepository.deleteByCallId(CALL_ID)).thenReturn(3L);
-            when(callTranscriptArchiveService.purgeArchiveForCall(CALL_ID)).thenReturn(1L);
+            when(callTranscriptArchiveService.purgeTranscriptForCall(CALL_ID))
+                    .thenReturn(new CallTranscriptArchiveService.TranscriptPurgeResult(3L, 1L));
 
             Map<String, Long> result = service.purgeForCall("  " + CALL_ID + "  ");
 

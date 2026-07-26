@@ -700,12 +700,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 24),
 
                   // Privacy
-                  _buildSectionHeader(context, 'Privacy'),
+                  _buildSectionHeader(context, t.settings_privacySectionHeader),
                   _buildToggleCard(
                     context,
                     icon: Icons.privacy_tip,
-                    title: 'Telemetry',
-                    subtitle: 'Anonymous diagnostics and performance metrics',
+                    title: t.settings_privacySectionTelemetrySetting,
+                    subtitle: t.settings_privacySectionTelemetrySettingDescription,
                     value: _telemetryEnabled,
                     loading: _loadingTelemetry,
                     onChanged: (enabled) async {
@@ -741,9 +741,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                         messenger.showSnackBar(
                           SnackBar(
-                            content: const Text(
-                              'Unable to update telemetry setting.',
-                            ),
+                            content: Text(t.settings_telemetryFailedToUpdate),
                             backgroundColor: errorColor,
                           ),
                         );
@@ -789,59 +787,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       context.push('/notetaker-configuration');
                     },
                   ),
-              const SizedBox(height: 24),
-
-              // Privacy
-              _buildSectionHeader(context, t.settings_privacySectionHeader),
-              _buildToggleCard(
-                context,
-                icon: Icons.privacy_tip,
-                title: t.settings_privacySectionTelemetrySetting,
-                subtitle: t.settings_privacySectionTelemetrySettingDescription,
-                value: _telemetryEnabled,
-                loading: _loadingTelemetry,
-                onChanged: (enabled) async {
-                  if (_loadingTelemetry) return;
-
-                  final messenger = ScaffoldMessenger.of(context);
-                  final errorColor = Theme.of(context).colorScheme.error;
-
-                  final allowed =
-                      enabled ? await _confirmOptIn() : await _confirmOptOut();
-                  if (!allowed) return;
-
-                  setState(() => _loadingTelemetry = true);
-
-                  try {
-                    await TelemetrySettings.setOptedOut(!enabled);
-
-                    if (!mounted) return;
-                    setState(() {
-                      _telemetryEnabled = enabled;
-                      _loadingTelemetry = false;
-                    });
-
-                    if (_telemetryEnabled) {
-                      await Telemetry.event('privacy_telemetry_toggle', {
-                        'enabled': enabled,
-                      });
-                    }
-                  } catch (_) {
-                    if (!mounted) return;
-                    setState(() => _loadingTelemetry = false);
-
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          t.settings_telemetryFailedToUpdate,
-                        ),
-                        backgroundColor: errorColor,
-                      ),
-                    );
-                  }
-                },
-              ),
-
                   const SizedBox(height: 24),
 
                   // General
@@ -851,12 +796,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildToggleCard(
                     context,
                     icon: Icons.cloud_off,
-                    title: 'Offline Persistence',
+                    title: t.settings_generalSectionOfflinePersistenceSetting,
                     subtitle: userProvider.offlineModeEnabled
-                        ? 'Save data locally and sync when reconnected'
-                        : 'New data will not be stored locally for offline use.',
+                        ? t.settings_generalSectionOfflinePersistenceSettingEnabled
+                        : t.settings_generalSectionOfflinePersistenceSettingDisabled,
                     value: userProvider.offlineModeEnabled,
-                    // loading: _loadingPersistence,
                     onChanged: (enabled) async {
                       userProvider.setOfflineMode(enabled);
                       // BNS 7: Privacy-Preserving Observability and Telemetry.
@@ -911,31 +855,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     textColor: Theme.of(context).colorScheme.error,
                     iconColor: Theme.of(context).colorScheme.error,
                   ),
-              const SizedBox(height: 24),
-
-              // General
-              _buildSectionHeader(context, t.settingsGeneral),
-
-              // User-Controlled Persistence Toggle (BNS 5)
-              _buildToggleCard(
-                context,
-                icon: Icons.cloud_off,
-                title: t.settings_generalSectionOfflinePersistenceSetting,
-                subtitle: userProvider.offlineModeEnabled
-                    ? t.settings_generalSectionOfflinePersistenceSettingEnabled
-                    : t.settings_generalSectionOfflinePersistenceSettingDisabled,
-                value: userProvider.offlineModeEnabled,
-                // loading: _loadingPersistence,
-                onChanged: (enabled) async {
-                  userProvider.setOfflineMode(enabled);
-                  // BNS 7: Privacy-Preserving Observability and Telemetry.
-                  if (_telemetryEnabled) {
-                    await Telemetry.event('offline_toggled', {
-                      'enabled': enabled,
-                    });
-                  }
-                },
-              ),
 
                   const SizedBox(height: 24),
                 ],
