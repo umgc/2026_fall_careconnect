@@ -368,11 +368,11 @@ void main() {
       expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
-    testWidgets('shows Check In button', (tester) async {
+    testWidgets('shows Open Check-In button', (tester) async {
       await tester.pumpWidget(_wrap(
         const RecentCheckInsWidget(checkIns: []),
       ));
-      expect(find.text('Check In'), findsOneWidget);
+      expect(find.text('Open Check-In'), findsOneWidget);
     });
 
     testWidgets('shows show_chart icon', (tester) async {

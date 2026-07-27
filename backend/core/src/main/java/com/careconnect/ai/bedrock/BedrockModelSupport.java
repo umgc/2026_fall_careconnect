@@ -24,15 +24,18 @@ public final class BedrockModelSupport {
             "anthropic.claude-3-haiku-20240307-v1:0",
             "anthropic.claude-3-5-sonnet-20240620-v1:0",
             "anthropic.claude-sonnet-4-20250514-v1:0",
-            "anthropic.claude-sonnet-4-5-20250929-v1:0",
-            "anthropic.claude-sonnet-4-6"
+            "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    );
+    public static final Set<String> APPROVED_INFERENCE_PROFILE_IDS = Set.of(
+            "us.anthropic.claude-sonnet-4-20250514-v1:0",
+            "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     );
 
     private static final String NOVA_PREFIX = "amazon.nova";
     private static final String CLAUDE_PREFIX = "anthropic.claude";
     private static final String CLAUDE_PROFILE_SEGMENT = ".anthropic.claude";
 
-        private static final Map<String, String> CLAUDE_MODEL_TO_PROFILE_ID = Map.of(
+    private static final Map<String, String> CLAUDE_MODEL_TO_PROFILE_ID = Map.of(
             "anthropic.claude-sonnet-4-20250514-v1:0", "us.anthropic.claude-sonnet-4-20250514-v1:0",
             "anthropic.claude-sonnet-4-5-20250929-v1:0", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         );
@@ -67,10 +70,9 @@ public final class BedrockModelSupport {
         return modelId;
     }
 
-    private static boolean isApprovedModelId(String modelId) {
+    public static boolean isApprovedModelId(String modelId) {
         return APPROVED_MODEL_IDS.contains(modelId)
-                || isApprovedClaudeInferenceProfileId(modelId)
-                || isApprovedClaudeInferenceProfileArn(modelId);
+                || APPROVED_INFERENCE_PROFILE_IDS.contains(modelId);
     }
 
     private static String normalizeKnownClaudeModelToProfile(String modelId) {
@@ -91,19 +93,6 @@ public final class BedrockModelSupport {
                 || modelId.contains("anthropic.claude"));
     }
 
-    private static boolean isApprovedClaudeInferenceProfileId(String modelId) {
-        return modelId != null
-                && modelId.contains(CLAUDE_PROFILE_SEGMENT)
-                && !modelId.startsWith("arn:");
-    }
-
-    private static boolean isApprovedClaudeInferenceProfileArn(String modelId) {
-        return modelId != null
-                && modelId.startsWith("arn:aws:bedrock:")
-                && modelId.contains(":inference-profile/")
-                && modelId.contains("anthropic.claude");
-    }
-
     public static String buildInvokePayload(
             String modelId,
             String prompt,
@@ -117,7 +106,8 @@ public final class BedrockModelSupport {
 
     /**
      * Builds a Bedrock invoke payload with optional system instructions and a user message.
-     * Claude models use the native {@code system} field; Nova models prepend system text to the user message.
+     * Claude and Nova models use native system fields so policy remains separate
+     * from untrusted user/retrieval data in the final provider payload.
      */
     public static String buildChatPayload(
             String modelId,
@@ -133,24 +123,18 @@ public final class BedrockModelSupport {
             String safeSystem = systemPrompt == null ? "" : systemPrompt.trim();
 
             if (isNovaModel(modelId)) {
-                String combinedPrompt = safeSystem.isBlank()
-                        ? safeUser
-                        : safeSystem + "\n\n" + safeUser;
-                Map<String, Object> payload = Map.of(
-                        "messages", List.of(
-                                Map.of(
-                                        "role", "user",
-                                        "content", List.of(
-                                                Map.of("text", combinedPrompt)
-                                        )
-                                )
-                        ),
-                        "inferenceConfig", Map.of(
-                                "maxTokens", maxTokens,
-                                "temperature", temperature,
-                                "topP", topP
-                        )
-                );
+                Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                if (!safeSystem.isBlank()) {
+                    payload.put("system", List.of(Map.of("text", safeSystem)));
+                }
+                payload.put("messages", List.of(
+                        Map.of(
+                                "role", "user",
+                                "content", List.of(Map.of("text", safeUser)))));
+                payload.put("inferenceConfig", Map.of(
+                        "maxTokens", maxTokens,
+                        "temperature", temperature,
+                        "topP", topP));
                 return objectMapper.writeValueAsString(payload);
             }
 

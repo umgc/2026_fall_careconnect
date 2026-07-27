@@ -5,9 +5,11 @@ import com.careconnect.model.CallSummary;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
+import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryService;
-import com.careconnect.service.CallTelemetryService;
-import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.consent.CaregiverVisibilityCheck;
+import com.careconnect.service.consent.CaregiverVisibilityService;
+import com.careconnect.service.consent.CaregiverVisibilityStatus;
 
 import java.util.Map;
 import java.util.Optional;
@@ -37,18 +39,15 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code GET /api/v3/calls/{callId}/summary} and new callers hitting
  * {@code GET /api/v3/summaries/{id}} deserialize identically.
  *
- * <p><b>Authorization:</b> two-layer check.
+ * <p><b>Authorization:</b>
  * <ol>
  *   <li>{@code @PreAuthorize} gates the endpoint at the role level to
- *       {@code CAREGIVER}, {@code PATIENT}, or {@code ADMIN}. Silent
- *       no-op until Brandon's {@code feature/bjackson-rbac-infrastructure}
- *       branch enables {@code @EnableMethodSecurity} in
- *       {@code SecurityConfig}.</li>
- *   <li>The endpoint itself runs the same four-way access check used by
- *       {@code CallController.getCallSummary}: admin, telemetry participant,
- *       transcript access, or summary owner. Unauthorized callers receive
- *       {@code 403 Forbidden} rather than 404 so the failure is explicit
- *       (matching the sibling endpoint's contract).</li>
+ *       {@code CAREGIVER}, {@code PATIENT}, or {@code ADMIN}.</li>
+ *   <li>Durable access: admin, historical call participant, or current
+ *       patient relationship via {@link CallSessionService} (aligned with
+ *       {@code CallController.requireDurableCallAccess}).</li>
+ *   <li>TC-E-SUM-009: caregivers must still pass the {@code on_consent}
+ *       visibility gate when {@code caregiverVisibility == on_consent}.</li>
  * </ol>
  */
 @RestController
@@ -59,9 +58,9 @@ public class CallSummaryController {
     private static final String MSG_ACCESS_DENIED = "Access denied";
 
     private final CallSummaryService callSummaryService;
-    private final CallTelemetryService callTelemetryService;
-    private final CallTranscriptService callTranscriptService;
+    private final CallSessionService callSessionService;
     private final UserRepository userRepository;
+    private final CaregiverVisibilityService caregiverVisibilityService;
 
     /**
      * Returns the stored summary payload for the given database identifier,
@@ -70,8 +69,8 @@ public class CallSummaryController {
      *
      * @param id database identifier of the summary row
      * @return 200 with the summary response map, 404 when not found,
-     *         403 when the caller is not admin / telemetry participant /
-     *         transcript-authorized / summary owner
+     *         403 when the caller is not admin / historical participant /
+     *         current patient relationship, or fails the on_consent gate
      */
     @PreAuthorize("hasAnyRole('CAREGIVER', 'PATIENT', 'ADMIN')")
     @GetMapping("/{id}")
@@ -83,22 +82,56 @@ public class CallSummaryController {
         }
         final CallSummary summary = entity.get();
         final User currentUser = getCurrentUser();
-
         final boolean isAdmin = currentUser.getRole() == Role.ADMIN;
-        final boolean inTelemetry = callTelemetryService.getTelemetryForCall(summary.getCallId()).stream()
-                .anyMatch(e -> currentUser.getId().equals(e.getActorUserId())
-                        || currentUser.getId().equals(e.getTargetUserId()));
-        final boolean inTranscript = callTranscriptService.hasTranscriptAccess(
-                summary.getCallId(), currentUser.getId());
-        final boolean isSummaryOwner = currentUser.getId().equals(summary.getGeneratedByUserId());
 
-        if (!isAdmin && !inTelemetry && !inTranscript && !isSummaryOwner) {
+        if (!canAccessSummary(currentUser, summary)) {
             throw new AppException(HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED);
+        }
+
+        // TC-E-SUM-009 — on-consent gate for caregivers.
+        // Independent of durable access above: a caregiver who passes
+        // historical/relationship checks must still be blocked when the
+        // summary's caregiverVisibility='on_consent' and no active consent
+        // record exists. Admins bypass. Status NONE also bypasses — the
+        // consent policy does not apply to non-caregivers.
+        if (!isAdmin
+                && summary.getPatientId() != null
+                && "on_consent".equalsIgnoreCase(summary.getCaregiverVisibility())) {
+            final CaregiverVisibilityCheck check =
+                    caregiverVisibilityService.getStatus(
+                            currentUser.getId(),
+                            summary.getPatientId());
+            if (check.status() != CaregiverVisibilityStatus.NONE
+                    && !check.canViewSummaries()) {
+                throw new AppException(HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED);
+            }
         }
 
         return callSummaryService.getSummaryById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private boolean canAccessSummary(final User currentUser, final CallSummary summary) {
+        if (currentUser.getRole() == Role.ADMIN) {
+            return true;
+        }
+        try {
+            callSessionService.requireHistoricalParticipant(
+                    summary.getCallId(), currentUser.getId());
+            return true;
+        } catch (AppException ignored) {
+            // Fall through to current patient relationship (same as callId summary path).
+        }
+        if (summary.getPatientId() == null) {
+            return false;
+        }
+        try {
+            callSessionService.requirePatientEntityAccess(currentUser, summary.getPatientId());
+            return true;
+        } catch (AppException accessFailure) {
+            return false;
+        }
     }
 
     /**
@@ -113,4 +146,3 @@ public class CallSummaryController {
                 .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
     }
 }
-

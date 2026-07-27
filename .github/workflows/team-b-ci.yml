@@ -18,17 +18,35 @@
 
 name: Team B CI
 
+# Push runs are scoped to develop and Team B branches — running the
+# full ~2h pipeline on every push to every team's feature branches
+# burns Actions minutes and spams their authors with failure emails.
+# PRs still run the full pipeline whenever they target develop or
+# team-b-develop, regardless of source branch, so the coverage gate
+# continues to protect every merge into those branches.
 on:
   push:
     branches:
-      - '**'
+      - develop
+      - team-b-develop
+      - 'feature/b-*'
+      - 'fix/b-*'
+      - 'sync/team-b-*'
   pull_request:
     branches:
-      - '**'
+      - develop
+      - team-b-develop
 
 env:
   FLUTTER_VERSION: '3.x'
   JAVA_VERSION: '17'
+  # Parallel Flutter test runners — matches local full-suite verification.
+  FLUTTER_TEST_CONCURRENCY: '4'
+
+# Cancel superseded runs on the same branch/PR so CI does not pile up.
+concurrency:
+  group: team-b-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   team-b-pipeline:
@@ -88,6 +106,13 @@ jobs:
         working-directory: backend/core
         run: mvn -B clean compile -DskipTests
 
+      # Web uses different conditional imports (dart.library.js_interop)
+      # than the native path, so web-only breakage is invisible to the
+      # other build/test steps. Compile check only — no artifacts kept.
+      - name: Flutter build web (compile check)
+        working-directory: frontend
+        run: flutter build web --release
+
       # ----------------------------------------------------------------
       # Stage 3: Unit tests
       # ----------------------------------------------------------------
@@ -95,7 +120,10 @@ jobs:
         working-directory: frontend
         continue-on-error: true
         run: |
-          flutter test --exclude-tags integration --reporter expanded 2>&1 | tail -5
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --exclude-tags integration \
+            --reporter expanded 2>&1 | tail -5
           echo "Note: pre-existing test failures are tracked — coverage gate enforces quality."
 
       - name: Maven unit tests
@@ -109,7 +137,11 @@ jobs:
       - name: Flutter test with coverage
         working-directory: frontend
         continue-on-error: true
-        run: flutter test --coverage --exclude-tags integration
+        run: >
+          flutter test
+          --concurrency="${FLUTTER_TEST_CONCURRENCY}"
+          --coverage
+          --exclude-tags integration
 
       - name: Maven verify (JaCoCo report + check)
         working-directory: backend/core

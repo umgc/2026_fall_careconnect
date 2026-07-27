@@ -18,6 +18,7 @@ import '../providers/user_provider.dart';
 import 'messaging_service.dart';
 import 'auth_token_manager.dart';
 import 'user_role_storage_service.dart';
+import 'transcript_outbox/encrypted_transcript_outbox.dart';
 import 'dart:io';
 
 class ApiConstants {
@@ -467,16 +468,22 @@ class AuthService {
   static Future<void> logout() async {
     final headers = await AuthTokenManager.getAuthHeaders();
 
-    final response = await http.post(
-      Uri.parse('${ApiConstants.auth}/logout'),
-      headers: headers,
-    );
-
-    // Clear all auth data using the new token manager
-    await AuthTokenManager.clearAuthData();
-
-    // Clear user data from UserRoleStorageService
-    await UserRoleStorageService.instance.clearUserData();
+    late final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('${ApiConstants.auth}/logout'),
+        headers: headers,
+      );
+    } finally {
+      try {
+        await EncryptedTranscriptOutbox.purgeDefault();
+      } catch (_) {
+        // Never expose transcript storage details or block credential cleanup.
+      } finally {
+        await AuthTokenManager.clearAuthData();
+        await UserRoleStorageService.instance.clearUserData();
+      }
+    }
 
     if (response.statusCode == 200) {
       print("Logout successful");
