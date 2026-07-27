@@ -1,5 +1,6 @@
 package com.careconnect.exception;
 
+import com.careconnect.exception.EmailCredentialNeedsReauthException;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,19 @@ import java.util.Map;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(EmailCredentialNeedsReauthException.class)
+    public ResponseEntity<Map<String, Object>> handleEmailCredentialNeedsReauth(
+            final EmailCredentialNeedsReauthException ex) {
+        final Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", "NEEDS_REAUTH");
+        body.put("message", ex.getMessage());
+        body.put("userId", ex.getUserId());
+        body.put("needsReconnect", true);
+        body.put("reconnectPath", ex.getReconnectPath());
+        body.put("syncHalted", true);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<?> handleUnauthorizedException(UnauthorizedException ex) {

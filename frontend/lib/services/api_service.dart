@@ -62,6 +62,9 @@ class ApiConstants {
 
   // Telemetry endpoints
   static final String telemetryV3 = '$_host/v1/api/dev/telemetry';
+
+  // Admin analytics endpoints
+  static final String adminAnalytics = '$_host/v1/api/admin/analytics';
 }
 
 class ApiService {
@@ -1285,6 +1288,40 @@ class ApiService {
     } catch (e) {
       // Convert any errors to an error response
       return http.Response(jsonEncode({'error': e.toString()}), 500);
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getRecentVitalAlerts(
+    int patientId, {
+    int limit = 5,
+  }) async {
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
+      final response = await _httpClient
+          .get(
+            Uri.parse(
+              '${ApiConstants.baseUrl}analytics/alerts/recent?patientId=$patientId&limit=$limit',
+            ),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        return const [];
+      }
+
+      final decoded = jsonDecode(response.body);
+      final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+      if (data is! List) {
+        return const [];
+      }
+
+      return data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -2594,7 +2631,10 @@ class ApiService {
             Uri.parse('${ApiConstants.callsV3}/$callId/recording'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 15));
+          // Status used to block on S3 refresh (~15–20s) and this timeout wiped the
+          // Call Recording card. Backend now returns READY metadata without S3; keep
+          // headroom for processing calls that still refresh.
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -2612,7 +2652,7 @@ class ApiService {
             Uri.parse('${ApiConstants.callsV3}/$callId/recording/playback-url'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);

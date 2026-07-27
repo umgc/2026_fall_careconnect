@@ -113,6 +113,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
     try {
       final user = Provider.of<UserProvider>(context, listen: false).user;
       final int? id = user?.id;
+      final int? patientId = user?.patientId;
 
       if (id == null) {
         setState(() {
@@ -123,7 +124,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       }
 
       await _loadMedicationReminders();
-      final alerts = await _buildAlerts(id);
+      final alerts = await _buildAlerts(id, patientId: patientId);
 
       if (!mounted) {
         return;
@@ -168,10 +169,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
           sortDirection: 'DESC',
         ),
       );
-      _pastEvvVisits = result.content
-          .where((r) => r.patient?.id == patientId)
-          .toList();
-
+      _pastEvvVisits =
+          result.content.where((r) => r.patient?.id == patientId).toList();
 
       // Fetch scheduled visits directly for this patient
       try {
@@ -187,7 +186,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
         final url = Uri.parse(
           '${ApiConstants.baseUrl}scheduled-visits/patient/$patientId/range?startDate=$startStr&endDate=$endStr',
         );
-        final res = await ApiServiceOffline.httpClient.get(url, headers: headers);
+        final res =
+            await ApiServiceOffline.httpClient.get(url, headers: headers);
         if (res.statusCode == 200) {
           final List<dynamic> data = jsonDecode(res.body);
 
@@ -195,7 +195,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
             final v = m['scheduledTime'] ?? m['scheduled_time'] ?? m['time'];
             if (v is String) {
               if (RegExp(r'^\d{1,2}:\d{2}(:\d{2})?$').hasMatch(v)) {
-                final d = (m['scheduledDate'] ?? m['scheduled_date']) as String?;
+                final d =
+                    (m['scheduledDate'] ?? m['scheduled_date']) as String?;
                 if (d != null && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(d)) {
                   return DateTime.tryParse('$d $v');
                 }
@@ -204,10 +205,14 @@ class _PatientDashboardState extends State<PatientDashboard> {
               if (dt != null) return dt;
             }
             if (v is int) {
-              try { return DateTime.fromMillisecondsSinceEpoch(v); } catch (_) {}
+              try {
+                return DateTime.fromMillisecondsSinceEpoch(v);
+              } catch (_) {}
             }
-            final dateStr = (m['scheduledDate'] ?? m['scheduled_date']) as String?;
-            final timeStr = (m['scheduledTime'] ?? m['scheduled_time']) as String?;
+            final dateStr =
+                (m['scheduledDate'] ?? m['scheduled_date']) as String?;
+            final timeStr =
+                (m['scheduledTime'] ?? m['scheduled_time']) as String?;
             if (dateStr != null && timeStr != null) {
               final date = DateTime.tryParse(dateStr);
               if (date != null) {
@@ -231,7 +236,10 @@ class _PatientDashboardState extends State<PatientDashboard> {
             final id = raw['id'] ?? raw['visitId'] ?? raw['scheduledVisitId'];
             if (id != null && seenIds.contains(id)) continue;
             if (id != null) seenIds.add(id);
-            final service = raw['serviceType'] ?? raw['service_type'] ?? raw['service'] ?? 'Service';
+            final service = raw['serviceType'] ??
+                raw['service_type'] ??
+                raw['service'] ??
+                'Service';
             normalized.add({
               'id': id,
               'serviceType': service,
@@ -239,7 +247,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
             });
           }
           normalized.sort(
-            (a, b) => DateTime.parse(a['scheduledTime']).compareTo(DateTime.parse(b['scheduledTime'])),
+            (a, b) => DateTime.parse(a['scheduledTime'])
+                .compareTo(DateTime.parse(b['scheduledTime'])),
           );
           _upcomingEvvAppointments = normalized;
         }
@@ -297,9 +306,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
         recentCheckIns = entries.take(3).map((entry) {
           final score = entry['score'] as int;
           final label = entry['label'] as String;
-          final normalizedLabel = label.isNotEmpty
-              ? label
-              : _moodLabelFromScore(score);
+          final normalizedLabel =
+              label.isNotEmpty ? label : _moodLabelFromScore(score);
           return CheckIn(
             date: entry['createdAt'] as DateTime,
             status: normalizedLabel,
@@ -405,14 +413,13 @@ class _PatientDashboardState extends State<PatientDashboard> {
       if (provider == null || provider.isEmpty) {
         provider = {
           ...fallback,
-          'caregiverUserId':
-              _toInt(_callableCaregiver?['caregiverUserId']) ??
+          'caregiverUserId': _toInt(_callableCaregiver?['caregiverUserId']) ??
               _toInt(fallback['caregiverUserId']),
         };
       } else {
         provider['caregiverUserId'] ??=
             _toInt(_callableCaregiver?['caregiverUserId']) ??
-            _toInt(fallback['caregiverUserId']);
+                _toInt(fallback['caregiverUserId']);
       }
       provider = _normalizeProvider(provider);
 
@@ -754,14 +761,84 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   /// Build alerts from real dashboard data only.
-  Future<List<AlertNotification>> _buildAlerts(int userId) async {
+  AlertType _alertTypeForVitalSeverity(String severity) {
+    switch (severity.toUpperCase()) {
+      case 'CRITICAL':
+      case 'HIGH':
+        return AlertType.important;
+      case 'LOW':
+        return AlertType.info;
+      default:
+        return AlertType.info;
+    }
+  }
+
+  String _vitalLabel(String metricType) {
+    switch (metricType.toLowerCase()) {
+      case 'heart_rate':
+        return 'heart rate';
+      case 'blood_pressure':
+        return 'blood pressure';
+      default:
+        return metricType.replaceAll('_', ' ');
+    }
+  }
+
+  List<AlertNotification> _buildVitalAlertNotifications(
+    List<Map<String, dynamic>> events,
+  ) {
+    return events.map((event) {
+      final metricType = (event['metricType'] ?? '').toString();
+      final measuredValue = (event['measuredValue'] ?? '').toString();
+      final alertLevel = (event['alertLevel'] ?? '').toString();
+      final successCount = event['successCount'] is int
+          ? event['successCount'] as int
+          : int.tryParse('${event['successCount']}') ?? 0;
+      final failureCount = event['failureCount'] is int
+          ? event['failureCount'] as int
+          : int.tryParse('${event['failureCount']}') ?? 0;
+
+      final deliverySummary = failureCount > 0
+          ? ' ($successCount delivered, $failureCount failed)'
+          : ' ($successCount delivered)';
+      final message =
+          '${_vitalLabel(metricType)} alert: $measuredValue [$alertLevel]$deliverySummary';
+
+      return AlertNotification(
+        type: _alertTypeForVitalSeverity(alertLevel),
+        message: message,
+      );
+    }).toList();
+  }
+
+  Future<List<AlertNotification>> _buildAlerts(
+    int userId, {
+    int? patientId,
+  }) async {
     final moodHistory = await ApiService.getMoodHistory(userId);
     final averageMood = _averageMoodLast7Days(moodHistory);
-    final moodAlerts = _withMoodAlertForAverage(<AlertNotification>[], averageMood);
-    return _withMedicationReminderAlert(
+    final moodAlerts =
+        _withMoodAlertForAverage(<AlertNotification>[], averageMood);
+    final withMedication = _withMedicationReminderAlert(
       moodAlerts,
       hasPendingUntaken: _hasPendingMedicationReminders(medicationReminders),
     );
+    if (patientId == null) {
+      return withMedication;
+    }
+
+    final recentVitalEvents = await ApiService.getRecentVitalAlerts(
+      patientId,
+      limit: 3,
+    );
+    if (recentVitalEvents.isEmpty) {
+      return withMedication;
+    }
+
+    return [
+      ..._buildVitalAlertNotifications(recentVitalEvents),
+      ...withMedication,
+    ];
   }
 
   /// Load family members
@@ -800,7 +877,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
       }
     }
   }
-
 
   /// Handle medication action
   Future<void> _handleMedicationAction(int medicationId, bool taken) async {
@@ -955,7 +1031,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
               enabled: _providerVideoCallsEnabled,
               onTap: _providerVideoCallsEnabled
                   ? () async {
-                Navigator.pop(context);
+                      Navigator.pop(context);
 
                 if (primaryCareProvider == null) {
                   if (!mounted) return;
@@ -967,10 +1043,10 @@ class _PatientDashboardState extends State<PatientDashboard> {
                   return;
                 }
 
-                final user = Provider.of<UserProvider>(
-                  this.context,
-                  listen: false,
-                ).user;
+                      final user = Provider.of<UserProvider>(
+                        this.context,
+                        listen: false,
+                      ).user;
 
                 if (user == null) {
                   if (!mounted) return;
@@ -982,52 +1058,52 @@ class _PatientDashboardState extends State<PatientDashboard> {
                   return;
                 }
 
-                final targetCaregiver = <String, dynamic>{
-                  ...?primaryCareProvider,
-                  ...?_callableCaregiver,
-                  'id': _callableCaregiver?['caregiverUserId'] ??
-                      primaryCareProvider?['caregiverUserId'],
-                  'name': (_callableCaregiver?['caregiverName'] ??
-                      primaryCareProvider?['name'] ??
-                      '')
-                    .toString(),
-                  'firstName': (((_callableCaregiver?['caregiverName'] ??
-                          primaryCareProvider?['name']) ??
-                        '')
-                          .toString()
-                          .split(' ')
-                          .isNotEmpty)
-                    ? ((_callableCaregiver?['caregiverName'] ??
-                            primaryCareProvider?['name']) ??
-                          '')
-                        .toString()
-                        .split(' ')
-                        .first
-                      : '',
-                  'lastName': (((_callableCaregiver?['caregiverName'] ??
-                          primaryCareProvider?['name']) ??
-                        '')
-                          .toString()
-                          .split(' ')
-                          .length >
-                      1)
-                    ? ((_callableCaregiver?['caregiverName'] ??
-                            primaryCareProvider?['name']) ??
-                          '')
-                          .toString()
-                          .split(' ')
-                          .skip(1)
-                          .join(' ')
-                      : '',
-                };
+                      final targetCaregiver = <String, dynamic>{
+                        ...?primaryCareProvider,
+                        ...?_callableCaregiver,
+                        'id': _callableCaregiver?['caregiverUserId'] ??
+                            primaryCareProvider?['caregiverUserId'],
+                        'name': (_callableCaregiver?['caregiverName'] ??
+                                primaryCareProvider?['name'] ??
+                                '')
+                            .toString(),
+                        'firstName': (((_callableCaregiver?['caregiverName'] ??
+                                        primaryCareProvider?['name']) ??
+                                    '')
+                                .toString()
+                                .split(' ')
+                                .isNotEmpty)
+                            ? ((_callableCaregiver?['caregiverName'] ??
+                                        primaryCareProvider?['name']) ??
+                                    '')
+                                .toString()
+                                .split(' ')
+                                .first
+                            : '',
+                        'lastName': (((_callableCaregiver?['caregiverName'] ??
+                                            primaryCareProvider?['name']) ??
+                                        '')
+                                    .toString()
+                                    .split(' ')
+                                    .length >
+                                1)
+                            ? ((_callableCaregiver?['caregiverName'] ??
+                                        primaryCareProvider?['name']) ??
+                                    '')
+                                .toString()
+                                .split(' ')
+                                .skip(1)
+                                .join(' ')
+                            : '',
+                      };
 
-                await CallIntegrationHelper.startVideoCallToCaregiver(
-                  context: this.context,
-                  currentUser: user,
-                  targetCaregiver: targetCaregiver,
-                  isVideoCall: true,
-                );
-              }
+                      await CallIntegrationHelper.startVideoCallToCaregiver(
+                        context: this.context,
+                        currentUser: user,
+                        targetCaregiver: targetCaregiver,
+                        isVideoCall: true,
+                      );
+                    }
                   : () {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(this.context).showSnackBar(
@@ -1086,10 +1162,14 @@ class _PatientDashboardState extends State<PatientDashboard> {
             builder: (context) => SizedBox(
               height: sheetHeight,
               child: AIChat(
+                key: ValueKey(
+                  'ai-chat-${AiChatMode.groundedRecords.name}-${user?.patientId ?? 'none'}',
+                ),
                 role: 'patient',
                 isModal: true,
                 patientId: user?.patientId, // Pass the actual patient ID
                 userId: user?.id,
+                mode: AiChatMode.groundedRecords,
               ),
             ),
           );
@@ -1537,7 +1617,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 onPressed: _loadEvvSections,
                 icon: const Icon(Icons.refresh),
               ),
-
             ],
           ),
           const SizedBox(height: 8),
@@ -1559,7 +1638,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 subtitle: Text(
                   '${when.month}/${when.day}/${when.year} • ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}',
                 ),
-
               );
             }),
         ],
@@ -1604,7 +1682,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
                   r.serviceType,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-
                 subtitle: Text('${date.month}/${date.day}/${date.year}'),
               );
             }),
@@ -1613,5 +1690,3 @@ class _PatientDashboardState extends State<PatientDashboard> {
     );
   }
 }
-
-

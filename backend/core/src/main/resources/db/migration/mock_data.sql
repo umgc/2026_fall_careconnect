@@ -1,6 +1,6 @@
 -- ============================================
 -- CareConnect Mock Data Generation - Fixed Schema
--- 1 Patient, 1 Caregiver, 1 Family Member
+-- 1 Patient, 1 Caregiver, 1 Family Member, 1 Admin
 -- Corrected to match actual entity schemas
 -- ============================================
 
@@ -24,6 +24,11 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'sarah.mitchell@careconnect.
 -- Family Member User
 INSERT INTO users (email, email_verified, password, password_hash, role, status, last_login_date, created_at) VALUES
 ('family@careconnect.com', true, 'password', '$2a$10$a5mrP5BJfagHEYTGsrgPGOYcC0X80L4RUSf2BcHlcccS.IdJgoANq', 'FAMILY_MEMBER', 'ACTIVE', '2024-07-11', '2024-07-10 16:00:00');
+
+-- Admin User
+INSERT INTO users (email, email_verified, password, password_hash, role, status, last_login_date, created_at)
+SELECT 'admin@careconnect.com', true, 'password', '$2a$10$a5mrP5BJfagHEYTGsrgPGOYcC0X80L4RUSf2BcHlcccS.IdJgoANq', 'ADMIN', 'ACTIVE', '2024-07-01', '2024-07-01 09:00:00'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@careconnect.com');
 
 -- ============================================
 -- 2. PATIENT TABLE - Use embedded Address fields (line1, line2, not address_line1/2)

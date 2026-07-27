@@ -67,8 +67,8 @@ class AIServiceFactoryTest {
         AIServiceFactory factory = factory(deepSeekService, bedrockService, "not-a-provider");
 
         assertThatThrownBy(factory::getService)
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Unknown provider: not-a-provider");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unknown AI provider 'not-a-provider'");
     }
 
     @Test
@@ -76,8 +76,8 @@ class AIServiceFactoryTest {
         AIServiceFactory factory = factory(deepSeekService, null, "bedrock");
 
         assertThatThrownBy(factory::getService)
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("BedrockService not available");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("BedrockAIChatService");
     }
 
     @Test
@@ -85,7 +85,7 @@ class AIServiceFactoryTest {
         AIServiceFactory factory = factory(null, bedrockService, "deepseek");
 
         assertThatThrownBy(factory::getService)
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("DeepSeekService not available");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DeepSeekService");
     }
 }

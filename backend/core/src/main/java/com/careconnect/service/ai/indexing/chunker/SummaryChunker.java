@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.indexing.chunker;
 
 import com.careconnect.service.ai.indexing.IndexingChunkDraft;
+import com.careconnect.service.ai.indexing.MedicationNameNormalizer;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +26,8 @@ import java.util.Map;
 public class SummaryChunker {
 
     private static final Logger log = LoggerFactory.getLogger(SummaryChunker.class);
+    /** Increment when citation-routing metadata requires existing summary chunks to be rebuilt. */
+    public static final int CITATION_METADATA_VERSION = 1;
 
     private final ObjectMapper objectMapper;
 
@@ -46,6 +49,30 @@ public class SummaryChunker {
             final String contentHash,
             final String caregiverVisibility,
             final String summarizationEngine) {
+        return chunk(
+                episodeType,
+                summaryJson,
+                contentHash,
+                caregiverVisibility,
+                summarizationEngine,
+                null,
+                null);
+    }
+
+    /**
+     * Builds summary chunks with citation-routing metadata.
+     *
+     * @param episodeId callId or visitId used to construct validated citation deep links
+     * @param occurredAt ISO-8601 summary timestamp used in citation display metadata
+     */
+    public List<IndexingChunkDraft> chunk(
+            final String episodeType,
+            final String summaryJson,
+            final String contentHash,
+            final String caregiverVisibility,
+            final String summarizationEngine,
+            final String episodeId,
+            final String occurredAt) {
         final List<IndexingChunkDraft> drafts = new ArrayList<>();
         if (summaryJson == null || summaryJson.isBlank()) {
             return drafts;
@@ -73,7 +100,7 @@ public class SummaryChunker {
                     contentHash,
                     caregiverVisibility,
                     summarizationEngine,
-                    Map.of("section", "overview")));
+                    overviewMetadata(root)));
         }
 
         chunkIndex = appendArrayItems(
@@ -99,6 +126,14 @@ public class SummaryChunker {
                 root.path("careInstructions"),
                 RetrievalRecordType.SUMMARY_CARE_INSTRUCTION,
                 "text",
+                chunkIndex,
+                contentHash,
+                caregiverVisibility,
+                summarizationEngine);
+
+        chunkIndex = appendMedicationTimelineEvents(
+                drafts,
+                root.path("careInstructions"),
                 chunkIndex,
                 contentHash,
                 caregiverVisibility,
@@ -138,7 +173,7 @@ public class SummaryChunker {
                     Map.of("section", "clinicalObservations")));
         }
 
-        return drafts;
+        return enrichCitationMetadata(drafts, episodeType, episodeId, occurredAt);
     }
 
     private int appendArrayItems(
@@ -170,6 +205,7 @@ public class SummaryChunker {
             putIfPresent(extra, "sourceTurnId", textOrNull(item, "sourceTurnId"));
             putIfPresent(extra, "type", textOrNull(item, "type"));
             putIfPresent(extra, "status", textOrNull(item, "status"));
+            putConfidenceIfValid(extra, item.path("confidence"));
             drafts.add(draft(
                     recordType,
                     text.trim(),
@@ -180,6 +216,91 @@ public class SummaryChunker {
                     extra));
         }
         return chunkIndex;
+    }
+
+    /**
+     * FR-AI-11 / Task 4.5 — explode medication careInstructions into derived timeline events.
+     */
+    private int appendMedicationTimelineEvents(
+            final List<IndexingChunkDraft> drafts,
+            final JsonNode array,
+            int chunkIndex,
+            final String contentHash,
+            final String caregiverVisibility,
+            final String summarizationEngine) {
+        if (array == null || !array.isArray()) {
+            return chunkIndex;
+        }
+        for (final JsonNode item : array) {
+            if (item == null || item.isNull()) {
+                continue;
+            }
+            final String type = textOrNull(item, "type");
+            if (type == null || !"medication".equalsIgnoreCase(type.trim())) {
+                continue;
+            }
+            final String medicationName = firstNonBlank(
+                    textOrNull(item, "medicationName"),
+                    textOrNull(item, "name"),
+                    textOrNull(item, "text"),
+                    textOrNull(item, "description"));
+            if (medicationName == null || medicationName.isBlank()) {
+                continue;
+            }
+            final String status = firstNonBlank(textOrNull(item, "status"), "unknown");
+            final String effectiveDate = firstNonBlank(
+                    textOrNull(item, "effectiveDate"),
+                    textOrNull(item, "date"));
+            final String doseFrom = textOrNull(item, "doseFrom");
+            final String doseTo = textOrNull(item, "doseTo");
+            final String normalized = MedicationNameNormalizer.normalize(medicationName);
+            final String chunkText = buildMedicationTimelineText(
+                    medicationName, status, effectiveDate, doseFrom, doseTo);
+            final Map<String, Object> extra = new LinkedHashMap<>();
+            extra.put("section", "medication_timeline");
+            putIfPresent(extra, "itemId", textOrNull(item, "itemId"));
+            putIfPresent(extra, "sourceTurnId", textOrNull(item, "sourceTurnId"));
+            putIfPresent(extra, "type", "medication");
+            putIfPresent(extra, "eventType", status);
+            putIfPresent(extra, "status", status);
+            putIfPresent(extra, "medicationName", medicationName.trim());
+            putIfPresent(extra, "medicationNameNormalized", normalized);
+            putIfPresent(extra, "effectiveDate", effectiveDate);
+            putIfPresent(extra, "doseFrom", doseFrom);
+            putIfPresent(extra, "doseTo", doseTo);
+            putIfPresent(extra, "caregiverVisibility", caregiverVisibility);
+            putConfidenceIfValid(extra, item.path("confidence"));
+            drafts.add(draft(
+                    RetrievalRecordType.MEDICATION_TIMELINE_EVENT,
+                    chunkText,
+                    chunkIndex++,
+                    contentHash,
+                    caregiverVisibility,
+                    summarizationEngine,
+                    extra));
+        }
+        return chunkIndex;
+    }
+
+    private static String buildMedicationTimelineText(
+            final String medicationName,
+            final String status,
+            final String effectiveDate,
+            final String doseFrom,
+            final String doseTo) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("Medication ").append(status == null ? "event" : status.trim())
+                .append(": ").append(medicationName.trim());
+        if (effectiveDate != null && !effectiveDate.isBlank()) {
+            sb.append(" effective ").append(effectiveDate.trim());
+        }
+        if (doseFrom != null && !doseFrom.isBlank()) {
+            sb.append("; from ").append(doseFrom.trim());
+        }
+        if (doseTo != null && !doseTo.isBlank()) {
+            sb.append(" to ").append(doseTo.trim());
+        }
+        return sb.toString();
     }
 
     private int appendAppointments(
@@ -204,6 +325,7 @@ public class SummaryChunker {
             extra.put("section", "appointments");
             putIfPresent(extra, "itemId", textOrNull(item, "itemId"));
             putIfPresent(extra, "sourceTurnId", textOrNull(item, "sourceTurnId"));
+            putConfidenceIfValid(extra, item.path("confidence"));
             drafts.add(draft(
                     RetrievalRecordType.SUMMARY_APPOINTMENT,
                     text,
@@ -235,7 +357,58 @@ public class SummaryChunker {
         if (extra != null) {
             metadata.putAll(extra);
         }
+        if (caregiverVisibility != null && !caregiverVisibility.isBlank()) {
+            metadata.putIfAbsent("caregiverVisibility", caregiverVisibility);
+        }
         return new IndexingChunkDraft(recordType, chunkText, metadata, caregiverVisibility);
+    }
+
+    private static Map<String, Object> overviewMetadata(final JsonNode root) {
+        final Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("section", "overview");
+        putIfPresent(metadata, "title", textOrNull(root, "headline"));
+        putConfidenceIfValid(metadata, root.path("summaryConfidence"), "summaryConfidence");
+        return metadata;
+    }
+
+    private static List<IndexingChunkDraft> enrichCitationMetadata(
+            final List<IndexingChunkDraft> drafts,
+            final String episodeType,
+            final String episodeId,
+            final String occurredAt) {
+        if (drafts.isEmpty()) {
+            return drafts;
+        }
+        final boolean visit = isVisit(episodeType);
+        final List<IndexingChunkDraft> enriched = new ArrayList<>(drafts.size());
+        for (final IndexingChunkDraft draft : drafts) {
+            final Map<String, Object> metadata = new LinkedHashMap<>(draft.metadata());
+            metadata.put("citationMetadataVersion", CITATION_METADATA_VERSION);
+            metadata.put("episodeType", visit ? "visit" : "call");
+            putIfPresent(metadata, visit ? "visitId" : "callId", episodeId);
+            putIfPresent(metadata, "occurredAt", occurredAt);
+            enriched.add(new IndexingChunkDraft(
+                    draft.recordType(),
+                    draft.chunkText(),
+                    metadata,
+                    draft.consentScope()));
+        }
+        return enriched;
+    }
+
+    private static void putConfidenceIfValid(
+            final Map<String, Object> map, final JsonNode confidence) {
+        putConfidenceIfValid(map, confidence, "confidence");
+    }
+
+    private static void putConfidenceIfValid(
+            final Map<String, Object> map, final JsonNode confidence, final String key) {
+        if (confidence != null && confidence.isNumber()) {
+            final double value = confidence.asDouble();
+            if (Double.isFinite(value) && value >= 0.0d && value <= 1.0d) {
+                map.put(key, value);
+            }
+        }
     }
 
     private static String buildOverviewText(final JsonNode root) {

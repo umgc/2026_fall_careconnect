@@ -2,9 +2,13 @@ package com.careconnect.service;
 
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.indexing.TranscriptIndexedPayload;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.TranscriptArchiveLifecycleRepository;
+import com.careconnect.util.ContentHashUtil;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -12,8 +16,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Service that records, reads, and formats transcript content for calls. */
@@ -51,6 +57,15 @@ public class CallTranscriptService {
   /** Emits TRANSCRIPT_INDEXED events after successful segment batches. */
   private final IndexingEventEmitter indexingEventEmitter;
 
+  /** Resolves patient ownership from the authoritative call session. */
+  private final CallPatientResolver callPatientResolver;
+
+  /** Durable terminal-purge fence checked by every transcript writer. */
+  private final TranscriptArchiveLifecycleRepository lifecycleRepository;
+
+  /** PostgreSQL advisory lock helper used to serialize transcript writes/purges. */
+  private final DatabaseLockService databaseLockService;
+
   /**
    * Stores transcript segments for a call and emits a
    * {@code TRANSCRIPT_INDEXED} event to the indexing outbox when at
@@ -72,21 +87,37 @@ public class CallTranscriptService {
     int saved = 0;
     if (normalizedCallId != null && segments != null && !segments.isEmpty()) {
       validateSegmentCount(segments);
+      databaseLockService.acquireCallArchiveLock(normalizedCallId);
+      lifecycleRepository.ensureActive(normalizedCallId);
+      if (lifecycleRepository.find(normalizedCallId).purged()) {
+        throw new AppException(HttpStatus.GONE, "Transcript was permanently purged");
+      }
       for (final TranscriptSegmentInput input : segments) {
         final String text = truncateText(input == null ? null : trim(input.text()));
         if (text == null) {
           continue;
         }
-        segmentRepository.save(createSegment(normalizedCallId, actorUserId, input, text));
-        saved += 1;
+        final CallTranscriptSegment segment =
+            createSegment(normalizedCallId, actorUserId, input, text);
+        saved += segmentRepository.insertIdempotent(
+            segment.getCallId(),
+            segment.getClientSegmentId(),
+            segment.getSpeakerLabel(),
+            segment.getText(),
+            segment.getStartMs(),
+            segment.getEndMs(),
+            segment.getSource(),
+            segment.getActorUserId(),
+            segment.getOccurredAt());
       }
       if (saved > 0) {
-        final String source = segments.get(0) != null ? segments.get(0).source() : null;
+        final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
+        final IndexingSnapshot snapshot = captureIndexingSnapshot(normalizedCallId);
         indexingEventEmitter.emitTranscriptIndexed(new TranscriptIndexedPayload(
             normalizedCallId,
-            null, // patientId — nullable until telemetry lookup lands; resolved downstream by Ravi's poller (WBS 3.11.1 followup)
-            saved,
-            source));
+            patientId,
+            Math.toIntExact(snapshot.segments().size()),
+            snapshot.version()));
       }
     }
     return saved;
@@ -170,7 +201,21 @@ public class CallTranscriptService {
    * @return transcript text used for summary generation
    */
   public String buildTranscriptTextForSummary(final String callId) {
-    final List<CallTranscriptSegment> segments = getSegmentsForCall(callId);
+    return captureSummarySnapshot(callId).transcriptText();
+  }
+
+  /**
+   * Captures text, count, and a deterministic version from one materialized segment list.
+   * The returned value is detached from later transcript writes and is safe to use during
+   * remote inference after this short read transaction completes.
+   */
+  @Transactional(readOnly = true)
+  public TranscriptSnapshot captureSummarySnapshot(final String callId) {
+    final String normalizedCallId = trim(callId);
+    final List<CallTranscriptSegment> segments =
+        normalizedCallId == null
+            ? List.of()
+            : getAuthoritativeSegmentsForCall(normalizedCallId);
     final String transcriptText;
     if (segments.isEmpty()) {
       transcriptText = "";
@@ -190,7 +235,28 @@ public class CallTranscriptService {
       }
       transcriptText = out.toString().trim();
     }
-    return transcriptText;
+    final String version = ContentHashUtil.sha256(
+        transcriptText + "\nsegmentCount=" + segments.size());
+    return new TranscriptSnapshot(transcriptText, segments.size(), version);
+  }
+
+  /**
+   * Materializes the complete archive-plus-live transcript used by retrieval indexing.
+   */
+  @Transactional(readOnly = true)
+  public IndexingSnapshot captureIndexingSnapshot(final String callId) {
+    final String normalizedCallId = trim(callId);
+    final List<CallTranscriptSegment> segments =
+        normalizedCallId == null
+            ? List.of()
+            : List.copyOf(getAuthoritativeSegmentsForCall(normalizedCallId));
+    final StringBuilder versionInput = new StringBuilder();
+    for (final CallTranscriptSegment segment : segments) {
+      versionInput.append(segmentKey(segment)).append('\n');
+    }
+    versionInput.append("segmentCount=").append(segments.size());
+    return new IndexingSnapshot(
+        segments, ContentHashUtil.sha256(versionInput.toString()));
   }
 
   /**
@@ -205,9 +271,7 @@ public class CallTranscriptService {
     if (normalizedCallId == null) {
       archived = false;
     } else {
-      final List<CallTranscriptSegment> dbSegments =
-          segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(normalizedCallId);
-      archived = archiveService.archiveIfEligible(normalizedCallId, dbSegments);
+      archived = archiveService.archiveIfEligible(normalizedCallId);
     }
     return archived;
   }
@@ -235,9 +299,9 @@ public class CallTranscriptService {
     if (normalizedCallId == null) {
       purgeCounts = deletedCounts(0L, 0L);
     } else {
-      final long deletedSegments = segmentRepository.deleteByCallId(normalizedCallId);
-      final long deletedArchives = archiveService.purgeArchiveForCall(normalizedCallId);
-      purgeCounts = deletedCounts(deletedSegments, deletedArchives);
+      final CallTranscriptArchiveService.TranscriptPurgeResult result =
+          archiveService.purgeTranscriptForCall(normalizedCallId);
+      purgeCounts = deletedCounts(result.deletedSegments(), result.deletedArchives());
     }
     return purgeCounts;
   }
@@ -249,14 +313,44 @@ public class CallTranscriptService {
       final String text) {
     final CallTranscriptSegment segment = new CallTranscriptSegment();
     segment.setCallId(normalizedCallId);
+    segment.setClientSegmentId(input.clientSegmentId());
     segment.setActorUserId(actorUserId);
     segment.setSpeakerLabel(normalizeSpeaker(input.speakerLabel()));
     segment.setText(text);
     segment.setStartMs(input.startMs());
     segment.setEndMs(input.endMs());
     segment.setSource(normalizeSource(input.source()));
-    segment.setOccurredAt(input.occurredAt() != null ? input.occurredAt() : LocalDateTime.now());
+    // The legacy column has no offset; new values are normalized to UTC so index
+    // metadata can safely interpret them with ZoneOffset.UTC.
+    segment.setOccurredAt(
+        input.occurredAt() != null
+            ? input.occurredAt()
+            : LocalDateTime.now(ZoneOffset.UTC));
     return segment;
+  }
+
+  private List<CallTranscriptSegment> getAuthoritativeSegmentsForCall(
+      final String normalizedCallId) {
+    final List<CallTranscriptSegment> dbSegments =
+        segmentRepository.findByCallIdOrderByStartMsAscOccurredAtAsc(normalizedCallId);
+    final List<CallTranscriptSegment> archivedSegments =
+        archiveService.getArchivedSegments(normalizedCallId);
+    if (archiveService.isArchived(normalizedCallId)) {
+      final long expectedArchivedCount =
+          archiveService.getArchivedSegmentCount(normalizedCallId);
+      if (archivedSegments.size() != expectedArchivedCount) {
+        throw new IllegalStateException(
+            "Authoritative transcript archive is unavailable or incomplete for callId="
+                + normalizedCallId);
+      }
+    }
+    if (archivedSegments.isEmpty()) {
+      return dbSegments;
+    }
+    if (dbSegments.isEmpty()) {
+      return archivedSegments;
+    }
+    return mergeSegments(archivedSegments, dbSegments);
   }
 
   private static void validateSegmentCount(final List<TranscriptSegmentInput> segments) {
@@ -377,16 +471,39 @@ public class CallTranscriptService {
 
   /**
    * Input payload for storing transcript segments.
-   * {@code occurredAt} is optional; when null the segment is timestamped to the current time.
+   * {@code occurredAt} is an offset-free UTC value. When null, the segment is
+   * timestamped from the UTC clock.
    */
   public record TranscriptSegmentInput(
-      String speakerLabel, String text, Long startMs, Long endMs, String source,
+      UUID clientSegmentId, String speakerLabel, String text, Long startMs, Long endMs, String source,
       LocalDateTime occurredAt) {
 
     /** Convenience constructor that leaves occurredAt null (defaults to now on persist). */
     public TranscriptSegmentInput(
+        UUID clientSegmentId,
         String speakerLabel, String text, Long startMs, Long endMs, String source) {
-      this(speakerLabel, text, startMs, endMs, source, null);
+      this(clientSegmentId, speakerLabel, text, startMs, endMs, source, null);
     }
+
+    /** Compatibility constructor for trusted server-produced segments. */
+    public TranscriptSegmentInput(
+        String speakerLabel, String text, Long startMs, Long endMs, String source,
+        LocalDateTime occurredAt) {
+      this(null, speakerLabel, text, startMs, endMs, source, occurredAt);
+    }
+
+    /** Compatibility constructor for trusted server-produced segments. */
+    public TranscriptSegmentInput(
+        String speakerLabel, String text, Long startMs, Long endMs, String source) {
+      this(null, speakerLabel, text, startMs, endMs, source, null);
+    }
+  }
+
+  /** Immutable transcript input used by one summary generation attempt. */
+  public record TranscriptSnapshot(String transcriptText, long segmentCount, String version) {
+  }
+
+  /** Complete immutable transcript snapshot used by retrieval indexing. */
+  public record IndexingSnapshot(List<CallTranscriptSegment> segments, String version) {
   }
 }
