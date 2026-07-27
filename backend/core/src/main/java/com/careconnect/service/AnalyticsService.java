@@ -180,6 +180,7 @@ public class AnalyticsService {
                 .systolic(doubleToInt(wearableMap.get(WearableMetric.MetricType.BLOOD_PRESSURE_SYS)))
                 .diastolic(doubleToInt(wearableMap.get(WearableMetric.MetricType.BLOOD_PRESSURE_DIA)))
                 .weight(wearableMap.get(WearableMetric.MetricType.WEIGHT))
+                .steps(wearableMap.get(WearableMetric.MetricType.STEPS))
                 .moodValue(moodValue)
                 .painValue(painValue)
                 .build();
@@ -279,6 +280,7 @@ public class AnalyticsService {
                 .systolic(0)
                 .diastolic(0)
                 .weight(0.0)
+                .steps(0.0)
                 .moodValue(0)
                 .painValue(0)
                 .build();

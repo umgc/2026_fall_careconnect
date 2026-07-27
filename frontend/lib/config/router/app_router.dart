@@ -684,7 +684,13 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         return OAuthCallbackPage(token: token, user: user, error: error);
       },
     ),
-    GoRoute(path: '/wearables', builder: (_, __) => const WearablesScreen()),
+    GoRoute(
+      path: '/wearables',
+      builder: (context, state) => WearablesScreen(
+        googleHealthStatus: state.uri.queryParameters['googleHealth'],
+        googleHealthError: state.uri.queryParameters['googleHealthError'],
+      ),
+    ),
     GoRoute(
       path: '/home-monitoring',
       builder: (_, __) => const HomeMonitoringScreen(),

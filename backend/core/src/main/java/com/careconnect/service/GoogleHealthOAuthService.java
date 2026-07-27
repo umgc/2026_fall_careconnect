@@ -26,8 +26,14 @@ public class GoogleHealthOAuthService {
 
     private static final EmailCredential.Provider PROVIDER = EmailCredential.Provider.GOOGLE_HEALTH;
     private static final String GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-    private static final String GOOGLE_HEALTH_EXERCISE_URL =
-            "https://health.googleapis.com/v4/users/me/dataTypes/exercise/dataPoints";
+    private static final String GOOGLE_HEALTH_DATA_POINTS_BASE =
+            "https://health.googleapis.com/v4/users/me/dataTypes/";
+    private static final java.util.Set<String> SUPPORTED_DATA_TYPES = java.util.Set.of(
+            "steps",
+            "heart-rate",
+            "exercise",
+            "sleep"
+    );
 
     private final GoogleOAuthService googleOAuthService;
     private final TokenCryptor tokenCryptor;
@@ -39,7 +45,7 @@ public class GoogleHealthOAuthService {
     @Value("${google.health.oauth.redirect-uri:${careconnect.baseurl:http://localhost:8080}/oauth/google-health/callback}")
     String redirectUri;
 
-    @Value("${google.health.oauth.scope:https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly}")
+    @Value("${google.health.oauth.scope:https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly}")
     String scope;
 
     @Value("${google.health.oauth.frontend-url:${frontend.base-url:http://localhost:3000}/wearables}")
@@ -89,10 +95,31 @@ public class GoogleHealthOAuthService {
             String pageToken,
             String filter
     ) {
+        return listDataPoints(userId, "exercise", pageSize, pageToken, filter);
+    }
+
+    public Map<String, Object> listDataPoints(
+            String userId,
+            String dataType,
+            Integer pageSize,
+            String pageToken,
+            String filter
+    ) {
+        if (dataType == null || dataType.isBlank()) {
+            throw new IllegalArgumentException("dataType is required");
+        }
+        String normalizedType = dataType.trim().toLowerCase();
+        if (!SUPPORTED_DATA_TYPES.contains(normalizedType)) {
+            throw new IllegalArgumentException("Unsupported Google Health dataType: " + dataType);
+        }
+
         EmailCredential credential = getFreshCredential(userId);
         String accessToken = tokenCryptor.decrypt(credential.getAccessTokenEnc());
 
-        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromHttpUrl(GOOGLE_HEALTH_EXERCISE_URL);
+        // Build path directly — UriComponentsBuilder + {dataType} leaves braces
+        // unexpanded under build(true), which Google rejects.
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder
+                .fromHttpUrl(GOOGLE_HEALTH_DATA_POINTS_BASE + normalizedType + "/dataPoints");
         if (pageSize != null && pageSize > 0) {
             uriBuilder.queryParam("pageSize", pageSize);
         }

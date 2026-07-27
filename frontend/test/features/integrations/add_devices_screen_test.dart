@@ -3,9 +3,8 @@
 //
 // Coverage strategy:
 //   AddDeviceScreen is a multi-step wizard for connecting health platforms.
-//   Fitbit env vars are optional. The screen can now connect Fitbit through
-//   Google Health / Health Connect when Fitbit OAuth client credentials are
-//   unavailable.
+//   Fitbit connects through Google Health OAuth (Authorization Code + PKCE).
+//   Legacy Fitbit Web API credentials are no longer used for this flow.
 //
 //   The widget also calls _loadConnectedDevices() in initState which reads
 //   SharedPreferences ('connected_devices' key).  We seed mock prefs to
@@ -99,7 +98,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('Connect Fitbit using Google Health'),
+        find.textContaining('Connect Fitbit through Google Health API'),
         findsOneWidget,
       );
     });

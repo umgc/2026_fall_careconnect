@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:care_connect_app/config/env_constant.dart';
-import 'package:fitbitter/fitbitter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
@@ -69,27 +68,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       const FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
   List<ConnectedDevice> _connectedDevices = [];
 
-  // Fitbit configuration (optional at runtime; show graceful message if missing)
-  final String? fitbitClientId = _resolveFitbitClientId();
-  final String? fitbitClientSecret = _resolveFitbitClientSecret();
-  static const String redirectUri = 'care-connect://add-device';
-
-  static String? _resolveFitbitClientId() {
-    try {
-      return getFitbitClientId();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static String? _resolveFitbitClientSecret() {
-    try {
-      return getFitbitClientSecret();
-    } catch (_) {
-      return null;
-    }
-  }
-
   // Platform-specific health platforms
   List<Map<String, dynamic>> get healthPlatforms {
     List<Map<String, dynamic>> platforms = [
@@ -97,14 +75,14 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         'id': 'fitbit',
         'name': 'Fitbit',
         'description':
-            'Connect Fitbit using Google Health (Health Connect on Android)',
+            'Connect Fitbit through Google Health (Google OAuth)',
         'icon': Icons.fitness_center,
         'color': Colors.green,
         'features': [
           'Steps',
           'Heart Rate',
-          'Blood Pressure (Diastolic)',
-          'Blood Pressure (Systolic)'
+          'Sleep',
+          'Activity',
         ],
       },
     ];
@@ -195,16 +173,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     }
   }
 
-  // New method to store Fitbit userID
-  Future<void> _storeFitbitUserID(String userID) async {
-    try {
-      await _secureStorage.write(key: 'fitbit_user_id', value: userID);
-      print('Stored Fitbit userID securely: $userID');
-    } catch (e) {
-      print('Failed to store Fitbit userID: $e');
-    }
-  }
-
   Future<void> _storeConnectedDevice(
     String platform,
     List<String> permissions,
@@ -291,11 +259,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     // Start connection process immediately
     try {
       if (platformId == 'fitbit') {
-        if (kIsWeb) {
-          await _connectToGoogleHealthWebOAuth(platformId);
-          return;
-        }
-        await _connectToFitbitReal();
+        // Fitbit uses backend-mediated Google Health OAuth on all platforms
+        // (matches the Web OAuth client redirect to /oauth/google-health/callback).
+        await _connectToGoogleHealthOAuth(platformId);
       } else if (platformId == 'apple_health') {
         await _connectToAppleHealthReal();
       } else if (platformId == 'google_fit') {
@@ -995,7 +961,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
           // Retry connection
           if (selectedPlatform == 'fitbit') {
-            _connectToFitbitReal();
+            _connectToGoogleHealthOAuth('fitbit');
           } else if (selectedPlatform == 'apple_health') {
             _connectToAppleHealthReal();
           } else if (selectedPlatform == 'google_fit') {
@@ -1007,73 +973,22 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     return null;
   }
 
-  Future<void> _connectToFitbitReal() async {
+  Future<void> _connectToGoogleHealthOAuth(String platformId) async {
     try {
-      if (_isPlatformConnected('fitbit')) {
+      if (_isPlatformConnected(platformId)) {
         setState(() {
-          errorMessage = 'Fitbit is already connected to this account.';
+          errorMessage =
+              '${_getPlatformDisplayName(platformId)} is already connected to this account.';
           isConnecting = false;
         });
         return;
       }
 
-      // Google Health API migration path: Fitbit no longer requires a dedicated
-      // Fitbit client ID for this app flow.
-      if (fitbitClientId == null || fitbitClientSecret == null) {
-        await _connectToHealthConnectPlatform(
-          platformKey: 'fitbit',
-          successLabel: 'Fitbit (Google Health)',
-        );
-        return;
-      }
-
-      FitbitCredentials? fitbitCredentials = await FitbitConnector.authorize(
-        clientID: fitbitClientId!,
-        clientSecret: fitbitClientSecret!,
-        redirectUri: redirectUri,
-        callbackUrlScheme: 'care-connect',
-      );
-
-      if (fitbitCredentials != null) {
-        String accessToken = fitbitCredentials.fitbitAccessToken;
-        String userID = fitbitCredentials.userID; // Get the userID
-
-        if (accessToken.isNotEmpty && userID.isNotEmpty) {
-          print('Valid access token and userID received');
-
-          // Store both access token and userID
-          await _storeAccessToken('fitbit', accessToken);
-          await _storeFitbitUserID(userID);
-
-          List<String> permissions = ['steps', 'calories'];
-
-          await _storeConnectedDevice('fitbit', permissions);
-
-          setState(() {
-            isConnecting = false;
-            isConnected = true;
-          });
-
-          print('Fitbit connected successfully');
-        } else {
-          print('Access token or userID is empty');
-          throw Exception(
-            'Failed to get access token or userID - one or both are empty',
-          );
-        }
-      } else {
-        throw Exception('Authorization was cancelled or failed');
-      }
-    } catch (e) {
       setState(() {
-        isConnecting = false;
-        errorMessage = 'Failed to connect to Fitbit: ${e.toString()}';
+        isConnecting = true;
+        errorMessage = null;
       });
-    }
-  }
 
-  Future<void> _connectToGoogleHealthWebOAuth(String platformId) async {
-    try {
       final authHeaders = await ApiService.getAuthHeaders();
       final callbackReturnUrl = _buildWearablesReturnUrl();
       final authUrlResponse = await http.get(
@@ -1087,7 +1002,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       if (authUrlResponse.statusCode != 200) {
         throw Exception(
           'Failed to start Google Health authorization '
-          '(${authUrlResponse.statusCode})',
+          '(${authUrlResponse.statusCode}). '
+          'Confirm GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set on the backend.',
         );
       }
 
@@ -1099,10 +1015,29 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
       final launched = await launchUrl(
         Uri.parse(authUrl),
-        webOnlyWindowName: '_self',
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+        webOnlyWindowName: kIsWeb ? '_self' : null,
       );
       if (!launched) {
         throw Exception('Could not open Google Health authorization');
+      }
+
+      // External browser owns the rest of the flow. On return, Wearables
+      // syncs connection status from the backend.
+      if (!kIsWeb && mounted) {
+        setState(() {
+          isConnecting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Finish signing in with Google in the browser. '
+              'You will return to Wearables when authorization completes.',
+            ),
+          ),
+        );
       }
     } catch (e) {
       setState(() {
@@ -1126,7 +1061,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       final originText = origin.toString().replaceAll(RegExp(r'/$'), '');
       return '$originText/#/wearables';
     }
-    return '${getWebBaseUrl()}/wearables';
+    // Native: deep link back into the app after backend OAuth callback.
+    return 'careconnect://wearables';
   }
 
   Future<void> _connectToHealthConnectPlatform({
