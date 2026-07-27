@@ -24,6 +24,8 @@ class TelemetryGuardrails {
     'sync_failed',
     'session_start',
     'session_end',
+    // Usability instrumentation (anonymous efficiency metrics — taps/duration)
+    'usability_task_complete',
     // Feature analytics (anonymous)
     'feature.medications.view_all',
     'feature.medications.view_active',
