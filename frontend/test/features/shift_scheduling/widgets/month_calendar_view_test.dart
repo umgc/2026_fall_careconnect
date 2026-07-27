@@ -143,6 +143,42 @@ void main() {
       expect(find.byType(MonthCalendarView), findsOneWidget);
     });
 
+    testWidgets('flags a day with overlapping visits with a conflict badge',
+        (tester) async {
+      // Two visits on the same day at the same hour overlap in time.
+      final visits = [
+        _makeVisit(id: 1, scheduledDate: DateTime(2026, 3, 17), hour: 10),
+        _makeVisit(id: 2, scheduledDate: DateTime(2026, 3, 17), hour: 10),
+      ];
+      await tester.pumpWidget(_wrap(visits: visits));
+      await tester.pump();
+      expect(find.byIcon(Icons.warning), findsWidgets);
+    });
+
+    testWidgets('shows a +N overflow badge when a day has more than two visits',
+        (tester) async {
+      final visits = [
+        _makeVisit(id: 1, scheduledDate: DateTime(2026, 3, 17), hour: 8),
+        _makeVisit(id: 2, scheduledDate: DateTime(2026, 3, 17), hour: 12),
+        _makeVisit(id: 3, scheduledDate: DateTime(2026, 3, 17), hour: 16),
+      ];
+      await tester.pumpWidget(_wrap(visits: visits));
+      await tester.pump();
+      expect(find.text('+1'), findsOneWidget); // 3 visits -> shows first 2 + "+1"
+    });
+
+    testWidgets('tapping a day cell invokes onDateSelected', (tester) async {
+      DateTime? tapped;
+      final visits = [_makeVisit(scheduledDate: DateTime(2026, 3, 17))];
+      await tester.pumpWidget(
+          _wrap(visits: visits, onDateSelected: (d) => tapped = d));
+      await tester.pump();
+
+      await tester.tap(find.text('17').first);
+      await tester.pump();
+      expect(tapped, isNotNull);
+    });
+
     testWidgets('navigates across year boundary', (tester) async {
       await tester.pumpWidget(_wrap(selectedDate: DateTime(2026, 1, 15)));
       await tester.pump();
