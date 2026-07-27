@@ -279,7 +279,8 @@ class AiAskControllerTest {
                         UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
                         java.util.List.of(11L, 12L),
                         2,
-                        java.time.Instant.parse("2026-07-27T12:00:00Z")));
+                        java.time.Instant.parse("2026-07-27T12:00:00Z"),
+                        "[{\"role\":\"user\",\"text\":\"Hello\"}]"));
 
         mockMvc.perform(post("/api/ai/ask/share")
                         .contentType("application/json")
@@ -296,7 +297,8 @@ class AiAskControllerTest {
                 .andExpect(jsonPath("$.shareId").value("11111111-1111-1111-1111-111111111111"))
                 .andExpect(jsonPath("$.patientId").value(42))
                 .andExpect(jsonPath("$.recipientUserIds", hasSize(2)))
-                .andExpect(jsonPath("$.messageCount").value(2));
+                .andExpect(jsonPath("$.messageCount").value(2))
+                .andExpect(jsonPath("$.transcriptJson").value("[{\"role\":\"user\",\"text\":\"Hello\"}]"));
     }
 
     @Test
@@ -355,13 +357,43 @@ class AiAskControllerTest {
                         null,
                         java.util.List.of(11L),
                         1,
-                        java.time.Instant.parse("2026-07-27T12:00:00Z"))));
+                        java.time.Instant.parse("2026-07-27T12:00:00Z"),
+                        "[{\"role\":\"user\",\"text\":\"Hello\"}]")));
 
         mockMvc.perform(get("/api/ai/ask/shares").param("patientId", "42"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].shareId").value("11111111-1111-1111-1111-111111111111"))
-                .andExpect(jsonPath("$[0].recipientUserIds[0]").value(11));
+                .andExpect(jsonPath("$[0].recipientUserIds[0]").value(11))
+                .andExpect(jsonPath("$[0].transcriptJson").value("[{\"role\":\"user\",\"text\":\"Hello\"}]"));
+    }
+
+    @Test
+    @DisplayName("list shares maps forbidden scope to 403")
+    void listShares_forbiddenScopeReturns403() throws Exception {
+        when(askShareService.listShares(any(), eq(42L)))
+                .thenThrow(ForbiddenScopeException.of(
+                        ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                        42L,
+                        7L,
+                        "no access",
+                        UUID.randomUUID()));
+
+        mockMvc.perform(get("/api/ai/ask/shares").param("patientId", "42"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN_SCOPE"));
+    }
+
+    @Test
+    @DisplayName("list shares maps AskAiRejectedException to status from exception")
+    void listShares_rejectedReturnsMappedStatus() throws Exception {
+        when(askShareService.listShares(any(), eq(42L)))
+                .thenThrow(new AskAiRejectedException("INVALID_REQUEST", "patientId is required", 400));
+
+        mockMvc.perform(get("/api/ai/ask/shares").param("patientId", "42"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("patientId is required"));
     }
 
     @Test

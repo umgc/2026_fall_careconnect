@@ -36,7 +36,8 @@ class SchemaPatchCatalogTest {
                 "2607250100-consent-grants-active-unique",
                 "2607251300-ai-held-item-open-unique",
                 "2607251310-user-files-extracted-text",
-                "2607271430-ai-ask-conversation-share");
+                "2607271430-ai-ask-conversation-share",
+                "2607271830-ask-ai-share-recipient-ocr-outbox");
     }
 
     @Test

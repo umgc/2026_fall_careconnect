@@ -20,6 +20,7 @@ import com.careconnect.model.User;
 import com.careconnect.model.ai.ask.AiAskConversationShare;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ai.ask.AiAskConversationShareRepository;
+import com.careconnect.repository.ai.ask.AiAskShareRecipientRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChatAuditService;
@@ -49,6 +50,7 @@ class AiAskShareServiceTest {
     @Mock private PatientRepository patientRepository;
     @Mock private CaregiverPatientLinkService caregiverPatientLinkService;
     @Mock private AiAskConversationShareRepository shareRepository;
+    @Mock private AiAskShareRecipientRepository recipientRepository;
     @Mock private ChatAuditService chatAuditService;
 
     private AiAskShareService service;
@@ -60,12 +62,15 @@ class AiAskShareServiceTest {
                 patientRepository,
                 caregiverPatientLinkService,
                 shareRepository,
+                recipientRepository,
                 chatAuditService,
-                new ObjectMapper());
+                new ObjectMapper(),
+                null);
         lenient()
                 .when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
                         any(), any(), anyString()))
                 .thenReturn(Optional.empty());
+        lenient().when(recipientRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -105,6 +110,7 @@ class AiAskShareServiceTest {
         assertThat(response.sessionId()).isEqualTo(sessionId);
         assertThat(response.recipientUserIds()).containsExactly(11L, 12L);
         assertThat(response.messageCount()).isEqualTo(2);
+        assertThat(response.transcriptJson()).contains("Metformin");
 
         final ArgumentCaptor<AiAskConversationShare> captor =
                 ArgumentCaptor.forClass(AiAskConversationShare.class);
@@ -364,8 +370,10 @@ class AiAskShareServiceTest {
                 patientRepository,
                 caregiverPatientLinkService,
                 shareRepository,
+                recipientRepository,
                 chatAuditService,
-                failingMapper);
+                failingMapper,
+                null);
 
         final User caller = user(9L, Role.PATIENT);
         final User patientUser = user(42L, Role.PATIENT);
@@ -399,8 +407,10 @@ class AiAskShareServiceTest {
                 patientRepository,
                 caregiverPatientLinkService,
                 shareRepository,
+                recipientRepository,
                 chatAuditService,
-                failingMapper);
+                failingMapper,
+                null);
 
         final User caller = user(9L, Role.PATIENT);
         final User patientUser = user(42L, Role.PATIENT);
@@ -447,7 +457,7 @@ class AiAskShareServiceTest {
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L), link(99L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
                         any(), any(), anyString()))
                 .thenReturn(Optional.of(existing));
@@ -463,22 +473,111 @@ class AiAskShareServiceTest {
         assertThat(response.shareId()).isEqualTo(existingId);
         assertThat(response.messageCount()).isEqualTo(1);
         assertThat(response.recipientUserIds()).containsExactly(11L);
+        assertThat(response.transcriptJson()).contains("hi");
         verify(shareRepository, never()).save(any());
         verify(chatAuditService, never()).logConversationShared(any(), anyString(), any());
+        verify(recipientRepository).deleteByShareId(existingId);
+        verify(recipientRepository).saveAll(any());
     }
 
     @Test
-    void listShares_returnsPatientSharesAfterScopeCheck() throws Exception {
+    void share_mergesRecipientsOnDuplicateTranscript() throws Exception {
+        final User caller = user(9L, Role.PATIENT);
+        final User patientUser = user(42L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(7L);
+        patient.setUser(patientUser);
+
+        final UUID existingId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        final AiAskConversationShare existing = AiAskConversationShare.builder()
+                .id(existingId)
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[11]")
+                .transcriptJson("[{\"role\":\"user\",\"text\":\"hi\"}]")
+                .transcriptSha256("abc")
+                .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                .build();
+
+        when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
+        when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
+        when(caregiverPatientLinkService.getCaregiversByPatient(42L))
+                .thenReturn(List.of(link(11L), link(12L)));
+        when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
+                        any(), any(), anyString()))
+                .thenReturn(Optional.of(existing));
+        when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        final AiAskShareResponse response = service.share(
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null))));
+
+        assertThat(response.recipientUserIds()).containsExactly(11L, 12L);
+        verify(shareRepository).save(existing);
+        verify(recipientRepository).deleteByShareId(existingId);
+    }
+
+    @Test
+    void share_recoversFromUniqueConstraintRaceViaRequiresNewLookup() throws Exception {
+        final User caller = user(9L, Role.PATIENT);
+        final User patientUser = user(42L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(7L);
+        patient.setUser(patientUser);
+
+        final UUID existingId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        final AiAskConversationShare existing = AiAskConversationShare.builder()
+                .id(existingId)
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[11]")
+                .transcriptJson("[{\"role\":\"user\",\"text\":\"hi\"}]")
+                .transcriptSha256("abc")
+                .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                .build();
+
+        when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
+        when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
+        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(shareRepository.save(any(AiAskConversationShare.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_ai_ask_share_dedupe"))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
+                        any(), any(), anyString()))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existing));
+
+        final AiAskShareResponse response = service.share(
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null))));
+
+        assertThat(response.shareId()).isEqualTo(existingId);
+        assertThat(response.transcriptJson()).contains("hi");
+        verify(recipientRepository).deleteByShareId(existingId);
+    }
+
+    @Test
+    void listShares_returnsSharesVisibleViaQueryAcl() throws Exception {
         final User caller = user(9L, Role.PATIENT);
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
-        when(shareRepository.findByPatientIdOrderByCreatedAtDesc(7L)).thenReturn(List.of(
+        when(shareRepository.findVisibleForCaller(7L, 9L, false)).thenReturn(List.of(
                 AiAskConversationShare.builder()
                         .id(UUID.fromString("11111111-1111-1111-1111-111111111111"))
                         .patientId(7L)
                         .sharedByUserId(9L)
                         .messageCount(2)
                         .recipientUserIds("[11,12]")
-                        .transcriptJson("[]")
+                        .transcriptJson("[{\"role\":\"user\",\"text\":\"shared\"}]")
                         .transcriptSha256("x")
                         .createdAt(java.time.Instant.parse("2026-07-27T12:00:00Z"))
                         .build()));
@@ -488,6 +587,150 @@ class AiAskShareServiceTest {
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).recipientUserIds()).containsExactly(11L, 12L);
         assertThat(responses.get(0).messageCount()).isEqualTo(2);
+        assertThat(responses.get(0).transcriptJson()).contains("shared");
+        verify(shareRepository).findVisibleForCaller(7L, 9L, false);
+    }
+
+    @Test
+    void listShares_caregiverUsesNonElevatedQuery() throws Exception {
+        final User caregiver = user(11L, Role.CAREGIVER);
+        when(retrievalScopeService.resolveRetrievalScope(caregiver, 7L)).thenReturn(scope(11L));
+
+        final AiAskConversationShare forMe = AiAskConversationShare.builder()
+                .id(UUID.fromString("11111111-1111-1111-1111-111111111111"))
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[11]")
+                .transcriptJson("[{\"role\":\"user\",\"text\":\"for me\"}]")
+                .transcriptSha256("a")
+                .createdAt(java.time.Instant.parse("2026-07-27T12:00:00Z"))
+                .build();
+        when(shareRepository.findVisibleForCaller(7L, 11L, false)).thenReturn(List.of(forMe));
+
+        final var responses = service.listShares(caregiver, 7L);
+
+        assertThat(responses).extracting(AiAskShareResponse::shareId).containsExactly(forMe.getId());
+        assertThat(responses.get(0).transcriptJson()).contains("for me");
+        verify(shareRepository).findVisibleForCaller(7L, 11L, false);
+    }
+
+    @Test
+    void listShares_adminSeesAllAndRejectsUnauthorizedCaller() throws Exception {
+        final User admin = user(1L, Role.ADMIN);
+        when(retrievalScopeService.resolveRetrievalScope(admin, 7L)).thenReturn(scope(1L));
+        when(shareRepository.findVisibleForCaller(7L, 1L, true)).thenReturn(List.of(
+                AiAskConversationShare.builder()
+                        .id(UUID.fromString("11111111-1111-1111-1111-111111111111"))
+                        .patientId(7L)
+                        .sharedByUserId(9L)
+                        .messageCount(1)
+                        .recipientUserIds("not-json")
+                        .transcriptJson("[]")
+                        .transcriptSha256("x")
+                        .createdAt(java.time.Instant.parse("2026-07-27T12:00:00Z"))
+                        .build(),
+                AiAskConversationShare.builder()
+                        .id(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                        .patientId(7L)
+                        .sharedByUserId(9L)
+                        .messageCount(1)
+                        .recipientUserIds("null")
+                        .transcriptJson("[]")
+                        .transcriptSha256("y")
+                        .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                        .build(),
+                AiAskConversationShare.builder()
+                        .id(UUID.fromString("33333333-3333-3333-3333-333333333333"))
+                        .patientId(7L)
+                        .sharedByUserId(9L)
+                        .messageCount(1)
+                        .recipientUserIds(null)
+                        .transcriptJson("[]")
+                        .transcriptSha256("z")
+                        .createdAt(java.time.Instant.parse("2026-07-27T10:00:00Z"))
+                        .build()));
+
+        final var responses = service.listShares(admin, 7L);
+        assertThat(responses).hasSize(3);
+        assertThat(responses.get(0).recipientUserIds()).isEmpty();
+        assertThat(responses.get(1).recipientUserIds()).isEmpty();
+        assertThat(responses.get(2).recipientUserIds()).isEmpty();
+        verify(shareRepository).findVisibleForCaller(7L, 1L, true);
+
+        assertThatThrownBy(() -> service.listShares(null, 7L))
+                .isInstanceOf(com.careconnect.security.UnauthorizedException.class);
+        assertThatThrownBy(() -> service.listShares(admin, null))
+                .isInstanceOf(AskAiRejectedException.class)
+                .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
+                .isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    void share_whenUniqueRaceAndLookupMisses_rethrows() throws Exception {
+        final User caller = user(9L, Role.PATIENT);
+        final User patientUser = user(42L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(7L);
+        patient.setUser(patientUser);
+
+        when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
+        when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
+        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(shareRepository.save(any(AiAskConversationShare.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq"));
+        when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
+                        any(), any(), anyString()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.share(
+                        caller,
+                        new AiAskShareRequest(
+                                7L,
+                                null,
+                                null,
+                                List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void mergeRecipients_skipsNullIdsAndRepopulatesJoinTable() {
+        final UUID existingId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        final AiAskConversationShare existing = AiAskConversationShare.builder()
+                .id(existingId)
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[]")
+                .transcriptJson("[]")
+                .transcriptSha256("abc")
+                .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                .build();
+        when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        final List<Long> withNull = new java.util.ArrayList<>();
+        withNull.add(11L);
+        withNull.add(null);
+
+        final AiAskShareResponse response = service.mergeRecipientsIfNeeded(existing, withNull);
+
+        assertThat(response.recipientUserIds()).containsExactly(11L);
+        verify(recipientRepository).deleteByShareId(existingId);
+        verify(recipientRepository).saveAll(any());
+
+        // Null recipient list is a no-op union; join table still refreshed from existing JSON.
+        final AiAskConversationShare existing2 = AiAskConversationShare.builder()
+                .id(existingId)
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[11]")
+                .transcriptJson("[]")
+                .transcriptSha256("abc")
+                .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                .build();
+        service.mergeRecipientsIfNeeded(existing2, null);
+        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).deleteByShareId(existingId);
     }
 
     @Test

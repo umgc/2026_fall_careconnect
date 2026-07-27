@@ -10,4 +10,5 @@ public record AiAskShareResponse(
         UUID sessionId,
         List<Long> recipientUserIds,
         int messageCount,
-        Instant createdAt) {}
+        Instant createdAt,
+        String transcriptJson) {}

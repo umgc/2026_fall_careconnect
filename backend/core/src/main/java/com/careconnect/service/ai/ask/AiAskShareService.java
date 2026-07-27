@@ -6,8 +6,11 @@ import com.careconnect.dto.ai.AiAskShareResponse;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.model.ai.ask.AiAskConversationShare;
+import com.careconnect.model.ai.ask.AiAskShareRecipient;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ai.ask.AiAskConversationShareRepository;
+import com.careconnect.repository.ai.ask.AiAskShareRecipientRepository;
+import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChatAuditService;
@@ -28,8 +31,11 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -46,25 +52,36 @@ public class AiAskShareService {
     private final PatientRepository patientRepository;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final AiAskConversationShareRepository shareRepository;
+    private final AiAskShareRecipientRepository recipientRepository;
     private final ChatAuditService chatAuditService;
     private final ObjectMapper objectMapper;
+    private final AiAskShareService self;
 
+    @Autowired
     public AiAskShareService(
             final RetrievalScopeService retrievalScopeService,
             final PatientRepository patientRepository,
             final CaregiverPatientLinkService caregiverPatientLinkService,
             final AiAskConversationShareRepository shareRepository,
+            final AiAskShareRecipientRepository recipientRepository,
             final ChatAuditService chatAuditService,
-            final ObjectMapper objectMapper) {
+            final ObjectMapper objectMapper,
+            @Lazy final AiAskShareService self) {
         this.retrievalScopeService = retrievalScopeService;
         this.patientRepository = patientRepository;
         this.caregiverPatientLinkService = caregiverPatientLinkService;
         this.shareRepository = shareRepository;
+        this.recipientRepository = recipientRepository;
         this.chatAuditService = chatAuditService;
         this.objectMapper = objectMapper;
+        this.self = self != null ? self : this;
     }
 
-    @Transactional
+    /**
+     * Creates a share receipt. Outer method is intentionally non-transactional so a unique
+     * constraint race can be recovered via {@link Propagation#REQUIRES_NEW} without leaving
+     * the caller transaction rollback-only.
+     */
     public AiAskShareResponse share(final User caller, final AiAskShareRequest request)
             throws UnauthorizedException, ForbiddenScopeException {
         if (caller == null || caller.getId() == null) {
@@ -112,68 +129,95 @@ public class AiAskShareService {
                 .findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
                         request.patientId(), caller.getId(), transcriptSha256);
         if (existing.isPresent()) {
-            return toResponse(existing.get());
+            return self.mergeRecipientsIfNeeded(existing.get(), recipients);
         }
 
-        final String recipientJson;
-        try {
-            recipientJson = objectMapper.writeValueAsString(recipients);
-        } catch (JsonProcessingException e) {
-            throw new AskAiRejectedException(
-                    "INTERNAL_ERROR", "Could not serialize recipients", 500);
-        }
+        final String recipientJson = writeRecipientJson(recipients);
 
         try {
-            final AiAskConversationShare saved = shareRepository.save(AiAskConversationShare.builder()
-                    .id(UUID.randomUUID())
-                    .patientId(request.patientId())
-                    .sharedByUserId(caller.getId())
-                    .sessionId(request.sessionId())
-                    .recipientUserIds(recipientJson)
-                    .messageCount(transcript.messageCount())
-                    .transcriptJson(transcript.json())
-                    .transcriptSha256(transcriptSha256)
-                    .build());
-
-            for (final Long caregiverUserId : recipients) {
-                try {
-                    chatAuditService.logConversationShared(
-                            caller.getId(),
-                            request.sessionId() == null
-                                    ? saved.getId().toString()
-                                    : request.sessionId().toString(),
-                            caregiverUserId);
-                } catch (Exception e) {
-                    log.warn(
-                            "Chat audit share log failed shareId={} caregiverUserId={}: {}",
-                            saved.getId(),
-                            caregiverUserId,
-                            e.getMessage());
-                }
-            }
-
-            if (log.isInfoEnabled()) {
-                log.info(
-                        "Ask AI conversation shared shareId={} patientId={} recipients={} messages={}",
-                        saved.getId(),
-                        request.patientId(),
-                        recipients.size(),
-                        transcript.messageCount());
-            }
-
-            return toResponse(saved);
+            return self.persistNewShare(
+                    caller,
+                    request,
+                    recipients,
+                    recipientJson,
+                    transcript,
+                    transcriptSha256);
         } catch (DataIntegrityViolationException dup) {
-            // Concurrent insert hit uq_ai_ask_share_dedupe — return the winner.
-            return shareRepository
-                    .findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
+            return self.findDuplicateShareEntity(
                             request.patientId(), caller.getId(), transcriptSha256)
-                    .map(this::toResponse)
+                    .map(existingShare -> self.mergeRecipientsIfNeeded(existingShare, recipients))
                     .orElseThrow(() -> dup);
         }
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public AiAskShareResponse persistNewShare(
+            final User caller,
+            final AiAskShareRequest request,
+            final List<Long> recipients,
+            final String recipientJson,
+            final TranscriptPayload transcript,
+            final String transcriptSha256) {
+        final AiAskConversationShare saved = shareRepository.save(AiAskConversationShare.builder()
+                .id(UUID.randomUUID())
+                .patientId(request.patientId())
+                .sharedByUserId(caller.getId())
+                .sessionId(request.sessionId())
+                .recipientUserIds(recipientJson)
+                .messageCount(transcript.messageCount())
+                .transcriptJson(transcript.json())
+                .transcriptSha256(transcriptSha256)
+                .build());
+
+        replaceRecipientRows(saved.getId(), recipients);
+        auditShare(caller, request.sessionId(), saved.getId(), recipients);
+
+        log.info(
+                "Ask AI conversation shared shareId={} patientId={} recipients={} messages={}",
+                saved.getId(),
+                request.patientId(),
+                recipients.size(),
+                transcript.messageCount());
+
+        return toResponse(saved);
+    }
+
     /**
-     * Lists share receipts for a patient the caller is allowed to access (FR-AI-1 scope).
+     * Unions new recipients onto an existing soft-deduped share (R4).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public AiAskShareResponse mergeRecipientsIfNeeded(
+            final AiAskConversationShare existing, final List<Long> recipients) {
+        final Set<Long> merged = new LinkedHashSet<>(parseRecipientIds(existing.getRecipientUserIds()));
+        boolean changed = false;
+        if (recipients != null) {
+            for (final Long recipientId : recipients) {
+                if (recipientId != null && merged.add(recipientId)) {
+                    changed = true;
+                }
+            }
+        }
+        final List<Long> mergedList = new ArrayList<>(merged);
+        if (changed) {
+            existing.setRecipientUserIds(writeRecipientJson(mergedList));
+            shareRepository.save(existing);
+        }
+        // Ensure join table is populated for legacy rows / recipient unions.
+        replaceRecipientRows(existing.getId(), mergedList);
+        return toResponse(existing);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Optional<AiAskConversationShare> findDuplicateShareEntity(
+            final Long patientId, final Long sharedByUserId, final String transcriptSha256) {
+        return shareRepository
+                .findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
+                        patientId, sharedByUserId, transcriptSha256);
+    }
+
+    /**
+     * Lists share receipts for a patient the caller may access (FR-AI-1 scope).
+     * Admins see all shares; everyone else only shares they created or are a recipient of (R3/R5).
      */
     @Transactional(readOnly = true)
     public List<AiAskShareResponse> listShares(final User caller, final Long patientId)
@@ -185,9 +229,53 @@ public class AiAskShareService {
             throw new AskAiRejectedException("INVALID_REQUEST", "patientId is required", 400);
         }
         retrievalScopeService.resolveRetrievalScope(caller, patientId);
-        return shareRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
+        final boolean elevated = caller.getRole() == Role.ADMIN;
+        return shareRepository
+                .findVisibleForCaller(patientId, caller.getId(), elevated)
+                .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private void replaceRecipientRows(final UUID shareId, final List<Long> recipients) {
+        recipientRepository.deleteByShareId(shareId);
+        final List<AiAskShareRecipient> rows = new ArrayList<>(recipients.size());
+        for (final Long userId : recipients) {
+            rows.add(AiAskShareRecipient.builder().shareId(shareId).userId(userId).build());
+        }
+        if (!rows.isEmpty()) {
+            recipientRepository.saveAll(rows);
+        }
+    }
+
+    private void auditShare(
+            final User caller,
+            final UUID sessionId,
+            final UUID shareId,
+            final List<Long> recipients) {
+        for (final Long caregiverUserId : recipients) {
+            try {
+                chatAuditService.logConversationShared(
+                        caller.getId(),
+                        sessionId == null ? shareId.toString() : sessionId.toString(),
+                        caregiverUserId);
+            } catch (Exception e) {
+                log.warn(
+                        "Chat audit share log failed shareId={} caregiverUserId={}: {}",
+                        shareId,
+                        caregiverUserId,
+                        e.getMessage());
+            }
+        }
+    }
+
+    private String writeRecipientJson(final List<Long> recipients) {
+        try {
+            return objectMapper.writeValueAsString(recipients);
+        } catch (JsonProcessingException e) {
+            throw new AskAiRejectedException(
+                    "INTERNAL_ERROR", "Could not serialize recipients", 500);
+        }
     }
 
     private AiAskShareResponse toResponse(final AiAskConversationShare share) {
@@ -197,7 +285,8 @@ public class AiAskShareService {
                 share.getSessionId(),
                 parseRecipientIds(share.getRecipientUserIds()),
                 share.getMessageCount(),
-                share.getCreatedAt());
+                share.getCreatedAt(),
+                share.getTranscriptJson());
     }
 
     private List<Long> parseRecipientIds(final String recipientJson) {
@@ -273,5 +362,6 @@ public class AiAskShareService {
         return "assistant";
     }
 
-    private record TranscriptPayload(String json, int messageCount) {}
+    /** Visible for persistNewShare signature / unit tests. */
+    public record TranscriptPayload(String json, int messageCount) {}
 }

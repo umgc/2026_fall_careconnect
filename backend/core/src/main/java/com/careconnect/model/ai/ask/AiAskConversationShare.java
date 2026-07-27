@@ -12,7 +12,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Durable Ask AI conversation share receipt for provider medical-record review. */
+/** Durable Ask AI conversation share receipt for linked-caregiver medical-record review. */
 @Entity
 @Table(name = "ai_ask_conversation_share")
 @Data
@@ -34,8 +34,8 @@ public class AiAskConversationShare {
     @Column(name = "session_id", updatable = false)
     private UUID sessionId;
 
-    /** JSON array of recipient caregiver user ids. */
-    @Column(name = "recipient_user_ids", nullable = false, updatable = false, columnDefinition = "TEXT")
+    /** JSON array of recipient caregiver user ids (kept for API payloads; ACL uses join table). */
+    @Column(name = "recipient_user_ids", nullable = false, columnDefinition = "TEXT")
     private String recipientUserIds;
 
     @Column(name = "message_count", nullable = false, updatable = false)

@@ -1929,6 +1929,58 @@ void main() {
       expect(result.message, contains('Unable to share'));
     });
   });
+
+  group('listShares()', () {
+    test('gets shares and parses transcript for review', () async {
+      final (client, captured) = _capturingClient(200, [
+        {
+          'shareId': '11111111-1111-1111-1111-111111111111',
+          'patientId': 42,
+          'sessionId': null,
+          'recipientUserIds': [11],
+          'messageCount': 1,
+          'createdAt': '2026-07-27T12:00:00Z',
+          'transcriptJson': '[{"role":"user","text":"Hello"}]',
+        },
+      ]);
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, hasLength(1));
+      expect(result.first.shareId, '11111111-1111-1111-1111-111111111111');
+      expect(result.first.recipientUserIds, [11]);
+      expect(result.first.transcriptJson, contains('Hello'));
+      expect(captured, hasLength(1));
+      expect(captured.first.method, 'GET');
+      expect(captured.first.url.path, endsWith('/api/ai/ask/shares'));
+      expect(captured.first.url.queryParameters['patientId'], '42');
+    });
+
+    test('returns empty list on non-2xx', () async {
+      final client = _mockJson(403, {'error': 'FORBIDDEN_SCOPE'});
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('returns empty list on transport failure', () async {
+      final client = _mockThrows(Exception('offline'));
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, isEmpty);
+    });
+  });
 }
 
 Map<String, dynamic> _validDeliveredAskResponse() => {

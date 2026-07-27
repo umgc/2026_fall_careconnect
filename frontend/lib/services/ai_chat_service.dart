@@ -639,6 +639,49 @@ class AiAskShareResult {
   });
 }
 
+class AiAskShareListItem {
+  final String shareId;
+  final int patientId;
+  final String? sessionId;
+  final List<int> recipientUserIds;
+  final int messageCount;
+  final String? createdAt;
+  final String? transcriptJson;
+
+  const AiAskShareListItem({
+    required this.shareId,
+    required this.patientId,
+    this.sessionId,
+    this.recipientUserIds = const [],
+    this.messageCount = 0,
+    this.createdAt,
+    this.transcriptJson,
+  });
+
+  factory AiAskShareListItem.fromJson(Map<String, dynamic> json) {
+    final recipients = <int>[];
+    final rawRecipients = json['recipientUserIds'];
+    if (rawRecipients is List) {
+      for (final item in rawRecipients) {
+        if (item is int) {
+          recipients.add(item);
+        } else if (item is num) {
+          recipients.add(item.toInt());
+        }
+      }
+    }
+    return AiAskShareListItem(
+      shareId: json['shareId']?.toString() ?? '',
+      patientId: (json['patientId'] as num?)?.toInt() ?? 0,
+      sessionId: json['sessionId']?.toString(),
+      recipientUserIds: recipients,
+      messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
+      createdAt: json['createdAt']?.toString(),
+      transcriptJson: json['transcriptJson']?.toString(),
+    );
+  }
+}
+
 /// Service for AI chat communication through Spring Boot backend
 class AIChatService {
   static String get _baseUrl => '${getBackendBaseUrl()}/v1/api/ai-chat';
@@ -944,6 +987,53 @@ class AIChatService {
         errorCode: 'NETWORK_ERROR',
         message: 'Unable to share conversation. Please try again.',
       );
+    }
+  }
+
+  /// Lists Ask AI conversation shares visible to the caller for [patientId].
+  ///
+  /// Caregivers only receive shares where they are a recipient (or that they
+  /// created). Patients/admins receive all shares for the patient. Each item
+  /// includes [AiAskShareListItem.transcriptJson] for caregiver review.
+  static Future<List<AiAskShareListItem>> listShares({
+    required int patientId,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .get(
+            Uri.parse(
+              '${getBackendBaseUrl()}/api/ai/ask/shares',
+            ).replace(queryParameters: {'patientId': '$patientId'}),
+            headers: headers,
+          )
+          .timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'Ask AI list shares failed: HTTP ${response.statusCode} ${response.body}',
+        );
+        return const [];
+      }
+      final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (decoded is! List) {
+        return const [];
+      }
+      final items = <AiAskShareListItem>[];
+      for (final row in decoded) {
+        if (row is Map<String, dynamic>) {
+          items.add(AiAskShareListItem.fromJson(row));
+        } else if (row is Map) {
+          items.add(
+            AiAskShareListItem.fromJson(Map<String, dynamic>.from(row)),
+          );
+        }
+      }
+      return items;
+    } catch (e) {
+      debugPrint('Ask AI list shares failed: $e');
+      return const [];
     }
   }
 
