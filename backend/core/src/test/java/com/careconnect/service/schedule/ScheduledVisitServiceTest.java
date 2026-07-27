@@ -986,6 +986,26 @@ class ScheduledVisitServiceTest {
             verify(scheduledVisitRepository).deleteById(VISIT_ID);
             verify(scheduledVisitAuditRepository).save(any(ScheduledVisitAudit.class));
         }
+
+        @Test
+        @DisplayName("should fall back to a plain audit entry when the first audit save fails")
+        void shouldFallBackWhenFirstAuditSaveFailsDuringDelete() throws Exception {
+            ScheduledVisit visit = createVisit();
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(visit));
+            when(objectMapper.writeValueAsString(any())).thenReturn("{\"id\":100}");
+            // First audit save (inside the try) fails; the catch retries with a
+            // plain "Unable to serialize" entry, which succeeds.
+            when(scheduledVisitAuditRepository.save(any(ScheduledVisitAudit.class)))
+                    .thenThrow(new RuntimeException("audit db unavailable"))
+                    .thenReturn(new ScheduledVisitAudit());
+
+            visitService.deleteScheduledVisit(VISIT_ID);
+
+            verify(scheduledVisitAuditRepository, times(2))
+                    .save(any(ScheduledVisitAudit.class));
+            verify(scheduledVisitRepository).deleteById(VISIT_ID);
+        }
     }
 
     // ========================================================================
