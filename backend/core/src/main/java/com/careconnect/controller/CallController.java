@@ -233,9 +233,9 @@ public class CallController {
           log.info("User {} joined call {}", currentUser.getId(), callId);
         }
         // Exactly one join transaction wins this durable threshold election across all nodes.
-        // System capture (composited recording + KVS speaker-ID ingest) share the same gate so
-        // KVS is not started without an elected system-transcription path / durable system row
-        // to persist media_stream_pipeline_id across ECS tasks.
+        // Optional system transcription (Ravi gate): auto MCP + KVS on election when enabled.
+        // Default path: caregiver Record starts USER_PLAYBACK and KVS (see recording/start).
+        // Late joiners always refresh attendee→stream bindings if a pipeline already exists.
         final boolean systemTranscriptionEnabled = Boolean.TRUE.equals(
             environment.getProperty(
                 "careconnect.recording.system-transcription-enabled", Boolean.class, false));
@@ -251,7 +251,6 @@ public class CallController {
           }
           callRecordingService.startKvsPipelineAsync(callId);
         } else {
-          // Late joiners (or transcription-off) only refresh bindings if a pipeline already exists.
           callRecordingService.refreshKvsAttendeeStreamsAsync(callId);
         }
         return ResponseEntity.ok(response);
@@ -1637,6 +1636,7 @@ public class CallController {
         ? callRecordingService.startRecording(callId, currentUser.getId())
         : typedResult.toMap();
     notifyRecordingState(callId, result);
+    maybeStartKvsForUserRecording(callId, result);
     callTelemetryService.recordCallEvent(
         callId,
         "RECORDING_START",
@@ -1657,7 +1657,25 @@ public class CallController {
     final Map<String, Object> result =
         callRecordingService.startRecording(callId, currentUser.getId());
     notifyRecordingState(callId, result);
+    maybeStartKvsForUserRecording(callId, result);
     return ResponseEntity.ok(result);
+  }
+
+  /**
+   * Caregiver Record is the consent moment for speaker-ID ingest when system transcription is off:
+   * successful USER_PLAYBACK start also kicks off KVS (no-op when KVS is disabled).
+   */
+  private void maybeStartKvsForUserRecording(
+      final String callId, final Map<String, Object> recordingStartResult) {
+    if (recordingStartResult == null) {
+      return;
+    }
+    final String status =
+        String.valueOf(recordingStartResult.getOrDefault("status", "")).toUpperCase();
+    if (!"STARTED".equals(status) && !"ALREADY_RECORDING".equals(status)) {
+      return;
+    }
+    callRecordingService.startKvsPipelineAsync(callId);
   }
 
   @PostMapping("/{callId}/recording/stop")

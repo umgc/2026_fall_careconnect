@@ -497,7 +497,7 @@ class CallControllerTest {
         }
 
         @Test
-        @DisplayName("SPEAKER-037: POST /join election owner starts recording and KVS pipeline")
+        @DisplayName("SPEAKER-037: POST /join election owner starts recording and KVS when system transcription on")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void speaker037_secondJoinStartsRecordingAndKvs() throws Exception {
             mockCurrentCaregiver();
@@ -523,6 +523,36 @@ class CallControllerTest {
             verify(callRecordingService).startRecordingTyped(CALL_ID, null, true);
             verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
             verify(callRecordingService, never()).refreshKvsAttendeeStreamsAsync(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-039: POST /recording/start starts KVS after successful USER_PLAYBACK")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker039_userRecordStartsKvs() throws Exception {
+            mockCurrentCaregiver();
+            when(callRecordingService.startRecordingTyped(eq(CALL_ID), eq(2L), eq(true)))
+                    .thenReturn(new com.careconnect.service.RecordingStartResult(
+                            com.careconnect.service.RecordingStartResult.Status.STARTED,
+                            CALL_ID,
+                            1L,
+                            1L,
+                            "pipeline-1",
+                            "bucket",
+                            "prefix",
+                            null,
+                            "started"));
+            CallParticipant joined = new CallParticipant();
+            joined.setUserId(2L);
+            joined.setStatus(CallSessionService.PARTICIPANT_JOINED);
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(joined));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/recording/start")
+                            .with(csrf())
+                            .param("consent", "true"))
+                    .andExpect(status().isOk());
+
+            verify(callRecordingService).startRecordingTyped(CALL_ID, 2L, true);
+            verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
         }
 
         @Test
@@ -1253,6 +1283,7 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(callRecordingService).startRecording(CALL_ID, 2L);
+            verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
             verify(callNotificationHandler).sendNotificationToUser(eq("2"), any());
             verify(callSessionService, never()).getParticipants(CALL_ID);
         }

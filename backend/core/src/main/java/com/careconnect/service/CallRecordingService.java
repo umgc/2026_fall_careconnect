@@ -742,8 +742,8 @@ public class CallRecordingService {
 
       activeMediaStreamPipelineIds.put(callId, mediaStreamPipelineId);
 
-      recordingRepository
-          .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
+      // Prefer system row; fall back to latest recording (USER_PLAYBACK when Record started KVS).
+      findRecordingForMediaStreamPipeline(callId)
           .ifPresent(
               recording -> {
                 recording.setMediaStreamPipelineId(mediaStreamPipelineId);
@@ -797,21 +797,12 @@ public class CallRecordingService {
   }
 
   /**
-   * Returns a real media stream pipeline id from the durable system recording row first, then
-   * this node's memory map. DB-first keeps multi-ECS-task joins from missing a pipeline started
-   * on another task (in-memory map is node-local).
+   * Returns a real media stream pipeline id from DB (system row, then any latest recording such as
+   * USER_PLAYBACK), then this node's memory map. DB-first keeps multi-ECS joins from missing a
+   * pipeline started on another task (in-memory map is node-local).
    */
   private String resolveExistingMediaStreamPipelineId(final String callId) {
-    final Optional<CallRecording> recording =
-        Optional.ofNullable(
-                recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(
-                    callId))
-            .orElse(Optional.empty());
-    final String fromDb =
-        recording
-            .map(CallRecording::getMediaStreamPipelineId)
-            .filter(id -> id != null && !id.isBlank())
-            .orElse(null);
+    final String fromDb = findPersistedMediaStreamPipelineId(callId);
     if (fromDb != null) {
       activeMediaStreamPipelineIds.put(callId, fromDb);
       return fromDb;
@@ -823,6 +814,39 @@ public class CallRecordingService {
     return null;
   }
 
+  private String findPersistedMediaStreamPipelineId(final String callId) {
+    final String fromSystem =
+        optionalRecording(
+                recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(
+                    callId))
+            .map(CallRecording::getMediaStreamPipelineId)
+            .filter(id -> id != null && !id.isBlank())
+            .orElse(null);
+    if (fromSystem != null) {
+      return fromSystem;
+    }
+    return optionalRecording(recordingRepository.findTopByCallIdOrderByStartedAtDesc(callId))
+        .map(CallRecording::getMediaStreamPipelineId)
+        .filter(id -> id != null && !id.isBlank())
+        .orElse(null);
+  }
+
+  /** Prefer system capture row as write target; else latest recording (e.g. USER_PLAYBACK). */
+  private Optional<CallRecording> findRecordingForMediaStreamPipeline(final String callId) {
+    final Optional<CallRecording> system =
+        optionalRecording(
+            recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(
+                callId));
+    if (system.isPresent()) {
+      return system;
+    }
+    return optionalRecording(recordingRepository.findTopByCallIdOrderByStartedAtDesc(callId));
+  }
+
+  private static Optional<CallRecording> optionalRecording(final Optional<CallRecording> maybe) {
+    return Optional.ofNullable(maybe).orElse(Optional.empty());
+  }
+
   /** Stops the active media stream pipeline for a call and clears attendee stream mappings. */
   public Map<String, Object> stopMediaStreamPipeline(final String callId) {
     final String pipelineId = activeMediaStreamPipelineIds.remove(callId);
@@ -831,11 +855,7 @@ public class CallRecordingService {
     String resolvedPipelineId = pipelineId;
     if (resolvedPipelineId == null
         || MEDIA_STREAM_PIPELINE_PENDING.equals(resolvedPipelineId)) {
-      resolvedPipelineId =
-          recordingRepository
-              .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
-              .map(CallRecording::getMediaStreamPipelineId)
-              .orElse(null);
+      resolvedPipelineId = findPersistedMediaStreamPipelineId(callId);
     }
 
     clearPersistedMediaStreamPipelineId(callId);
@@ -884,15 +904,22 @@ public class CallRecordingService {
 
   /** Clears DB pipeline id so a failed/stopped ingest cannot false-positive ALREADY_STARTED. */
   private void clearPersistedMediaStreamPipelineId(final String callId) {
-    recordingRepository
-        .findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(callId)
-        .ifPresent(
-            recording -> {
-              if (recording.getMediaStreamPipelineId() != null) {
-                recording.setMediaStreamPipelineId(null);
-                recordingRepository.save(recording);
-              }
-            });
+    clearMediaStreamPipelineIdOn(
+        optionalRecording(
+            recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(
+                callId)));
+    clearMediaStreamPipelineIdOn(
+        optionalRecording(recordingRepository.findTopByCallIdOrderByStartedAtDesc(callId)));
+  }
+
+  private void clearMediaStreamPipelineIdOn(final Optional<CallRecording> recording) {
+    recording.ifPresent(
+        rec -> {
+          if (rec.getMediaStreamPipelineId() != null) {
+            rec.setMediaStreamPipelineId(null);
+            recordingRepository.save(rec);
+          }
+        });
   }
 
   /**
