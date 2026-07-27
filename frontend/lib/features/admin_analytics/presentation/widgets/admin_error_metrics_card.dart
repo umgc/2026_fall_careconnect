@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import '../../models/admin_analytics_summary_model.dart';
 
 class AdminErrorMetricsCard extends StatelessWidget {
-  const AdminErrorMetricsCard({super.key, required this.metrics});
+  const AdminErrorMetricsCard({
+    super.key,
+    required this.metrics,
+    this.onErrorTap,
+  });
 
   final ErrorMetrics metrics;
+  final ValueChanged<EndpointErrorCount>? onErrorTap;
 
   static const _chartColors = [
     Color(0xFFE57373),
@@ -40,7 +45,7 @@ class AdminErrorMetricsCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'HTTP error telemetry by endpoint bucket',
+              'HTTP error telemetry by endpoint bucket · tap for details',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -61,15 +66,26 @@ class AdminErrorMetricsCard extends StatelessWidget {
                         children: [
                           Expanded(
                             flex: 2,
-                            child: PieChart(_buildPieData(buckets)),
+                            child: PieChart(
+                              _buildPieData(buckets, onErrorTap),
+                            ),
                           ),
                           const SizedBox(width: 16),
-                          Expanded(flex: 3, child: _BucketTable(buckets: buckets)),
+                          Expanded(
+                            flex: 3,
+                            child: _BucketTable(
+                              buckets: buckets,
+                              onErrorTap: onErrorTap,
+                            ),
+                          ),
                         ],
                       ),
                     );
                   }
-                  return _BucketTable(buckets: buckets);
+                  return _BucketTable(
+                    buckets: buckets,
+                    onErrorTap: onErrorTap,
+                  );
                 },
               ),
             ],
@@ -79,7 +95,10 @@ class AdminErrorMetricsCard extends StatelessWidget {
     );
   }
 
-  PieChartData _buildPieData(List<EndpointErrorCount> buckets) {
+  PieChartData _buildPieData(
+    List<EndpointErrorCount> buckets,
+    ValueChanged<EndpointErrorCount>? onErrorTap,
+  ) {
     final sections = buckets.asMap().entries.map((entry) {
       final color = _chartColors[entry.key % _chartColors.length];
       return PieChartSectionData(
@@ -101,6 +120,19 @@ class AdminErrorMetricsCard extends StatelessWidget {
       sections: sections,
       sectionsSpace: 2,
       centerSpaceRadius: 28,
+      pieTouchData: PieTouchData(
+        enabled: onErrorTap != null,
+        touchCallback: (event, response) {
+          if (onErrorTap == null ||
+              event is! FlTapUpEvent ||
+              response?.touchedSection == null) {
+            return;
+          }
+          final idx = response!.touchedSection!.touchedSectionIndex;
+          if (idx < 0 || idx >= buckets.length) return;
+          onErrorTap(buckets[idx]);
+        },
+      ),
     );
   }
 }
@@ -139,9 +171,13 @@ class _TotalErrorsBanner extends StatelessWidget {
 }
 
 class _BucketTable extends StatelessWidget {
-  const _BucketTable({required this.buckets});
+  const _BucketTable({
+    required this.buckets,
+    this.onErrorTap,
+  });
 
   final List<EndpointErrorCount> buckets;
+  final ValueChanged<EndpointErrorCount>? onErrorTap;
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +195,9 @@ class _BucketTable extends StatelessWidget {
         rows: buckets
             .map(
               (bucket) => DataRow(
+                onSelectChanged: onErrorTap == null
+                    ? null
+                    : (_) => onErrorTap!(bucket),
                 cells: [
                   DataCell(Text(bucket.endpoint.isEmpty ? 'unknown' : bucket.endpoint)),
                   DataCell(Text('${bucket.count}')),

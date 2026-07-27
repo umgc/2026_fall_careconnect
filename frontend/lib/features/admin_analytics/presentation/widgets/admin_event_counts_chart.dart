@@ -6,9 +6,16 @@ import 'package:flutter/material.dart';
 import '../../models/admin_analytics_summary_model.dart';
 
 class AdminEventCountsChart extends StatelessWidget {
-  const AdminEventCountsChart({super.key, required this.events});
+  const AdminEventCountsChart({
+    super.key,
+    required this.events,
+    required this.totalEvents,
+    this.onEventTap,
+  });
 
   final List<EventNameCount> events;
+  final int totalEvents;
+  final ValueChanged<EventNameCount>? onEventTap;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +42,7 @@ class AdminEventCountsChart extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Telemetry events grouped by name',
+              'Telemetry events grouped by name · tap a bar for details',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -50,6 +57,16 @@ class AdminEventCountsChart extends StatelessWidget {
               SizedBox(
                 height: 260,
                 child: BarChart(_buildChartData(context, top)),
+              ),
+            if (onEventTap != null && top.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Based on $totalEvents total events in this period',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ),
           ],
         ),
@@ -130,6 +147,16 @@ class AdminEventCountsChart extends StatelessWidget {
       ),
       barTouchData: BarTouchData(
         enabled: true,
+        touchCallback: (event, response) {
+          if (onEventTap == null ||
+              event is! FlTapUpEvent ||
+              response?.spot == null) {
+            return;
+          }
+          final idx = response!.spot!.touchedBarGroupIndex;
+          if (idx < 0 || idx >= top.length) return;
+          onEventTap!(top[idx]);
+        },
         touchTooltipData: BarTouchTooltipData(
           getTooltipItem: (group, groupIndex, rod, rodIndex) {
             final event = top[group.x.toInt()];

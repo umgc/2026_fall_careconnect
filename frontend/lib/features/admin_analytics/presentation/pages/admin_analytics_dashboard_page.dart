@@ -6,9 +6,15 @@ import '../../../../widgets/responsive_container.dart';
 import '../../../../widgets/role_based_drawer.dart';
 import '../../data/admin_analytics_api.dart';
 import '../../models/admin_analytics_summary_model.dart';
+import '../../models/feature_trend_model.dart';
+import '../../utils/admin_analytics_csv_exporter.dart';
+import '../../utils/admin_analytics_export.dart';
+import '../widgets/admin_analytics_detail_sheet.dart';
+import '../widgets/admin_analytics_item_descriptions.dart';
 import '../widgets/admin_analytics_kpi_row.dart';
 import '../widgets/admin_error_metrics_card.dart';
 import '../widgets/admin_event_counts_chart.dart';
+import '../widgets/admin_feature_trend_section.dart';
 import '../widgets/admin_sync_metrics_card.dart';
 import '../widgets/admin_top_features_section.dart';
 
@@ -22,17 +28,36 @@ class AdminAnalyticsDashboardPage extends StatefulWidget {
 
 class _AdminAnalyticsDashboardPageState
     extends State<AdminAnalyticsDashboardPage> {
+  static const int _maxRangeDays = 90;
+
   final AdminAnalyticsApi _api = const AdminAnalyticsApi();
   AdminAnalyticsSummary? _summary;
   bool _loading = true;
   String? _error;
-  int _selectedDays = 7;
+  late DateTimeRange _selectedRange;
+  bool _featuresSortDescending = true;
+  String? _selectedTrendFeature;
+  FeatureTrend? _featureTrend;
+  bool _trendLoading = false;
+  String? _trendError;
 
   @override
   void initState() {
     super.initState();
+    _selectedRange = _defaultDateRange();
     WidgetsBinding.instance.addPostFrameCallback((_) => _fetchSummary());
   }
+
+  DateTimeRange _defaultDateRange() {
+    final today = _dateOnly(DateTime.now());
+    return DateTimeRange(
+      start: today.subtract(const Duration(days: 6)),
+      end: today,
+    );
+  }
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 
   Future<void> _fetchSummary() async {
     setState(() {
@@ -41,12 +66,16 @@ class _AdminAnalyticsDashboardPageState
     });
 
     try {
-      final summary = await _api.fetchSummary(days: _selectedDays);
+      final from = _dateOnly(_selectedRange.start);
+      final to = _dateOnly(_selectedRange.end).add(const Duration(days: 1));
+      final summary = await _api.fetchSummary(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _summary = summary;
         _loading = false;
       });
+      _syncSelectedTrendFeature(summary);
+      await _fetchFeatureTrend();
     } on AdminAnalyticsApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -62,10 +91,95 @@ class _AdminAnalyticsDashboardPageState
     }
   }
 
-  void _onDaysChanged(int days) {
-    if (_selectedDays == days) return;
-    setState(() => _selectedDays = days);
-    _fetchSummary();
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: now.subtract(const Duration(days: 365 * 5)),
+      lastDate: now,
+      initialDateRange: _selectedRange,
+      helpText: 'Select analytics period',
+    );
+    if (picked == null || !mounted) return;
+
+    final inclusiveDays = _dateOnly(picked.end).difference(_dateOnly(picked.start)).inDays + 1;
+    if (inclusiveDays > _maxRangeDays) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Date range cannot exceed $_maxRangeDays days'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _selectedRange = picked);
+    await _fetchSummary();
+  }
+
+  void _syncSelectedTrendFeature(AdminAnalyticsSummary summary) {
+    final features = summary.topFeatures;
+    if (features.isEmpty) {
+      _selectedTrendFeature = null;
+      return;
+    }
+
+    if (_selectedTrendFeature == null ||
+        !features.any((feature) => feature.feature == _selectedTrendFeature)) {
+      final sorted = List<FeatureUsageCount>.from(features)
+        ..sort((a, b) => b.count.compareTo(a.count));
+      _selectedTrendFeature = sorted.first.feature;
+    }
+  }
+
+  Future<void> _fetchFeatureTrend() async {
+    final feature = _selectedTrendFeature;
+    if (feature == null) {
+      if (!mounted) return;
+      setState(() {
+        _featureTrend = null;
+        _trendLoading = false;
+        _trendError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _trendLoading = true;
+      _trendError = null;
+    });
+
+    try {
+      final from = _dateOnly(_selectedRange.start);
+      final to = _dateOnly(_selectedRange.end).add(const Duration(days: 1));
+      final trend = await _api.fetchFeatureTrends(
+        from: from,
+        to: to,
+        feature: feature,
+      );
+      if (!mounted) return;
+      setState(() {
+        _featureTrend = trend;
+        _trendLoading = false;
+      });
+    } on AdminAnalyticsApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _trendError = e.message;
+        _trendLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _trendError = 'Error: $e';
+        _trendLoading = false;
+      });
+    }
+  }
+
+  String _formatSelectedRangeLabel() {
+    final formatter = DateFormat.yMMMd();
+    return '${formatter.format(_selectedRange.start)} – '
+        '${formatter.format(_selectedRange.end)}';
   }
 
   String _formatSyncRate(SyncMetrics metrics) {
@@ -79,52 +193,76 @@ class _AdminAnalyticsDashboardPageState
         '${formatter.format(summary.periodEnd.toLocal())}';
   }
 
-  Widget _buildFilterChips() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = MediaQuery.of(context).size.width;
+  Future<void> _exportCsv() async {
+    final summary = _summary;
+    if (summary == null) return;
 
-        return Wrap(
-          spacing: screenWidth < 400 ? 6 : 8,
-          runSpacing: 6,
-          children: [7, 14, 21, 30].map((days) {
-            final isSelected = _selectedDays == days;
-            return FilterChip(
-              label: Text(
-                screenWidth < 400 ? '${days}d' : '$days days',
-                style: TextStyle(fontSize: screenWidth < 400 ? 12 : 14),
-              ),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) _onDaysChanged(days);
-              },
-              selectedColor:
-                  Theme.of(context).colorScheme.primary.withOpacity(0.15),
-              checkmarkColor: Theme.of(context).colorScheme.primary,
-              labelStyle: TextStyle(
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey.shade600,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: screenWidth < 400 ? 12 : 14,
-              ),
-              backgroundColor: Colors.grey.shade100,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade300,
-                ),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: screenWidth < 400 ? 8 : 12,
-                vertical: screenWidth < 400 ? 4 : 8,
-              ),
-            );
-          }).toList(),
-        );
-      },
+    try {
+      final csv = AdminAnalyticsCsvExporter.build(
+        summary,
+        sortFeaturesDescending: _featuresSortDescending,
+      );
+      final fileName =
+          'product_analytics_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
+      await exportAdminAnalyticsCsv(csv, fileName, context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('CSV export failed: $e')),
+      );
+    }
+  }
+
+  void _showEventDetail(EventNameCount event, AdminAnalyticsSummary summary) {
+    AdminAnalyticsDetailSheet.show(
+      context,
+      kind: AdminAnalyticsDetailKind.event,
+      title: event.eventName,
+      count: event.count,
+      totalEvents: summary.totalEvents,
+      description: AdminAnalyticsItemDescriptions.event(event.eventName),
+    );
+  }
+
+  void _showFeatureDetail(
+    FeatureUsageCount feature,
+    AdminAnalyticsSummary summary,
+  ) {
+    AdminAnalyticsDetailSheet.show(
+      context,
+      kind: AdminAnalyticsDetailKind.feature,
+      title: feature.feature,
+      count: feature.count,
+      totalEvents: summary.totalEvents,
+      description: AdminAnalyticsItemDescriptions.feature(feature.feature),
+    );
+  }
+
+  void _showErrorDetail(
+    EndpointErrorCount error,
+    AdminAnalyticsSummary summary,
+  ) {
+    AdminAnalyticsDetailSheet.show(
+      context,
+      kind: AdminAnalyticsDetailKind.error,
+      title: error.endpoint.isEmpty ? 'unknown' : error.endpoint,
+      count: error.count,
+      totalEvents: summary.totalEvents,
+      totalErrors: summary.errorMetrics.totalErrors,
+      shareOfErrors: error.rate,
+      description: AdminAnalyticsItemDescriptions.errorEndpoint(error.endpoint),
+    );
+  }
+
+  Widget _buildDateRangeSelector() {
+    return OutlinedButton.icon(
+      onPressed: _pickDateRange,
+      icon: const Icon(Icons.date_range),
+      label: Text(_formatSelectedRangeLabel()),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        alignment: Alignment.centerLeft,
+      ),
     );
   }
 
@@ -148,7 +286,7 @@ class _AdminAnalyticsDashboardPageState
           style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
         ),
         const SizedBox(height: 16),
-        _buildFilterChips(),
+        _buildDateRangeSelector(),
         const SizedBox(height: 16),
         AdminAnalyticsKpiRow(
           items: [
@@ -181,13 +319,39 @@ class _AdminAnalyticsDashboardPageState
           ],
         ),
         const SizedBox(height: 16),
-        AdminEventCountsChart(events: summary.eventCountsByName),
+        AdminEventCountsChart(
+          events: summary.eventCountsByName,
+          totalEvents: summary.totalEvents,
+          onEventTap: (event) => _showEventDetail(event, summary),
+        ),
         const SizedBox(height: 16),
-        AdminTopFeaturesSection(features: summary.topFeatures),
+        AdminTopFeaturesSection(
+          features: summary.topFeatures,
+          sortDescending: _featuresSortDescending,
+          onSortToggle: () =>
+              setState(() => _featuresSortDescending = !_featuresSortDescending),
+          onFeatureTap: (feature) => _showFeatureDetail(feature, summary),
+        ),
+        const SizedBox(height: 16),
+        AdminFeatureTrendSection(
+          features: summary.topFeatures,
+          selectedFeature: _selectedTrendFeature,
+          trend: _featureTrend,
+          loading: _trendLoading,
+          error: _trendError,
+          onFeatureChanged: (feature) {
+            setState(() => _selectedTrendFeature = feature);
+            _fetchFeatureTrend();
+          },
+          onRetry: _fetchFeatureTrend,
+        ),
         const SizedBox(height: 16),
         AdminSyncMetricsCard(metrics: summary.syncMetrics),
         const SizedBox(height: 16),
-        AdminErrorMetricsCard(metrics: summary.errorMetrics),
+        AdminErrorMetricsCard(
+          metrics: summary.errorMetrics,
+          onErrorTap: (error) => _showErrorDetail(error, summary),
+        ),
         const SizedBox(height: 16),
         Text(
           'Period: ${_formatPeriod(summary)}',
@@ -262,6 +426,11 @@ class _AdminAnalyticsDashboardPageState
         context,
         title: 'Product Analytics',
         additionalActions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Export CSV',
+            onPressed: _exportCsv,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
