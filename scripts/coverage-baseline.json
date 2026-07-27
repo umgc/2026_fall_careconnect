@@ -1,0 +1,30 @@
+{
+  "_comment": "Auto-generated no-regression baseline for coverage-gate.sh. Values only ratchet UP. Regenerate with GATE_MODE=baseline scripts/coverage-gate.sh .",
+  "backend": {},
+  "frontend": {
+    "lib/features/ai": {
+      "branch": null,
+      "line": 82.6
+    },
+    "lib/features/auth": {
+      "branch": null,
+      "line": 95.2
+    },
+    "lib/features/communication": {
+      "branch": null,
+      "line": 100.0
+    },
+    "lib/features/evv": {
+      "branch": null,
+      "line": 52.2
+    },
+    "lib/features/shift_scheduling": {
+      "branch": null,
+      "line": 86.4
+    },
+    "lib/widgets": {
+      "branch": null,
+      "line": 60.8
+    }
+  }
+}

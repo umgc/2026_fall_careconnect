@@ -210,11 +210,14 @@ jobs:
             -Dsonar.exclusions="**/build/**,**/*.g.dart,**/*.freezed.dart" || true
 
       # ----------------------------------------------------------------
-      # Stage 5b: Coverage gate
-      # Posts failure details as a PR comment on hard failures.
+      # Stage 5b: Coverage gate (BLOCKING — no-regression ratchet)
+      # Fails the build only when a module drops below its committed
+      # baseline in scripts/coverage-baseline.json (a "dip"). Modules that
+      # are below their aspirational target but not regressed emit a
+      # non-blocking PR comment. Ratchet the baseline up on a green build
+      # of a protected branch:  GATE_MODE=baseline scripts/coverage-gate.sh .
       # ----------------------------------------------------------------
       - name: Run coverage gate
-        continue-on-error: true
         run: |
           chmod +x scripts/coverage-gate.sh
           scripts/coverage-gate.sh \
