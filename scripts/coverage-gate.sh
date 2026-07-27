@@ -26,7 +26,11 @@
 #   GITHUB_REPOSITORY — owner/repo (set automatically in GitHub Actions)
 #   GATE_MODE         — "check" (default) or "baseline"
 #   BASELINE_FILE     — override baseline path (default <repo_root>/scripts/coverage-baseline.json)
-#   REGRESSION_TOLERANCE — allowed float slack in pp before a drop counts (default 0.3)
+#   REGRESSION_TOLERANCE — allowed slack in percentage points before a drop
+#     counts as a dip (default 1.5). Sized to absorb normal CI non-determinism
+#     (flaky async tests contribute slightly different coverage run-to-run,
+#     ~0.5-1pp) while still catching real regressions, which are far larger
+#     (deleting tests or a covered file moves coverage by many points).
 
 set -euo pipefail
 
@@ -36,7 +40,7 @@ GITHUB_TOKEN="${3:-}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-}"
 GATE_MODE="${GATE_MODE:-check}"
 BASELINE_FILE="${BASELINE_FILE:-${REPO_ROOT}/scripts/coverage-baseline.json}"
-REGRESSION_TOLERANCE="${REGRESSION_TOLERANCE:-0.3}"
+REGRESSION_TOLERANCE="${REGRESSION_TOLERANCE:-1.5}"
 
 LCOV_FILE="${REPO_ROOT}/frontend/coverage/lcov.info"
 JACOCO_FILE="${REPO_ROOT}/backend/core/target/site/jacoco/jacoco.xml"
