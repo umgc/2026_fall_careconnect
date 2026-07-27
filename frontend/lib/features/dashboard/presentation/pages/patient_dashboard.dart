@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -305,9 +305,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
           const SizedBox(width: 8),
         ],
       ),
-      drawer: user == null
-          ? null
-          : const CommonDrawer(currentRoute: '/dashboard'),
+      drawer:
+          user == null ? null : const CommonDrawer(currentRoute: '/dashboard'),
       floatingActionButton: FloatingActionButton(
         backgroundColor: theme.colorScheme.primary,
         child: const Icon(Icons.chat_bubble_outline),
@@ -325,7 +324,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
             ),
             builder: (context) => SizedBox(
               height: sheetHeight,
-              child: const AIChat(role: 'patient', isModal: true),
+              child: const AIChat(
+                role: 'patient',
+                isModal: true,
+                mode: AiChatMode.legacyGeneral,
+              ),
             ),
           );
         },
@@ -333,432 +336,458 @@ class _PatientDashboardState extends State<PatientDashboard> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
-          ? Center(child: Text(error!))
-          : SafeArea(
-              child: SingleChildScrollView(
-                child: ResponsiveContainer(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${greeting()} ${patient?['firstName'] ?? 'Patient'}!',
-                        style: theme.textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'How are you feeling today?',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildMoodSelector(),
-                      const SizedBox(height: 16),
-                      Text(
-                        'How is your pain today?',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildPainSelector(),
-                      const Divider(height: 30, thickness: 2),
-                      Text(
-                        'Your Caregivers',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      ...caregivers.map(
-                        (caregiver) => _buildCaregiverCard(caregiver),
-                      ),
-                      const SizedBox(height: 20),
-                      const Divider(height: 30, thickness: 2),
-                      Column(
+              ? Center(child: Text(error!))
+              : SafeArea(
+                  child: SingleChildScrollView(
+                    child: ResponsiveContainer(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          Text(
+                            '${greeting()} ${patient?['firstName'] ?? 'Patient'}!',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'How are you feeling today?',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildMoodSelector(),
+                          const SizedBox(height: 16),
+                          Text(
+                            'How is your pain today?',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildPainSelector(),
+                          const Divider(height: 30, thickness: 2),
+                          Text(
+                            'Your Caregivers',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          ...caregivers.map(
+                            (caregiver) => _buildCaregiverCard(caregiver),
+                          ),
+                          const SizedBox(height: 20),
+                          const Divider(height: 30, thickness: 2),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Family Members',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Family Members',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: _addFamilyMember,
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add Family Member'),
+                                  ),
+                                ],
+                              ),
+                              if (isLoading)
+                                const Center(child: CircularProgressIndicator())
+                              else if (error != null)
+                                Text(
+                                  'Error: $error',
+                                  style: const TextStyle(color: Colors.red),
+                                )
+                              else if (familyMembers.isEmpty)
+                                const Text('No family members added yet')
+                              else
+                                ...familyMembers.map(
+                                  (f) => FamilyMemberCard(
+                                    firstName: f['firstName'] ?? '',
+                                    lastName: f['lastName'] ?? '',
+                                    relationship: f['relationship'] ?? '',
+                                    phone: f['phone'] ?? '',
+                                    email: f['email'] ?? '',
+                                    lastInteraction:
+                                        f['lastSeen'] ?? 'Not available',
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          GestureDetector(
+                            onTap: () => context.go('/tasks/today'),
+                            child: const Text(
+                              'View Today\'s Task',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                decoration: TextDecoration.underline,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Divider(height: 30, thickness: 2),
+                          Text(
+                            'EVV Visits',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.schedule),
+                                  label: const Text('Visit Schedule'),
+                                  onPressed: () => context.go('/evv'),
                                 ),
                               ),
-                              TextButton.icon(
-                                onPressed: _addFamilyMember,
-                                icon: const Icon(Icons.add),
-                                label: const Text('Add Family Member'),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.history),
+                                  label: const Text('Visit History'),
+                                  onPressed: () => context.go('/evv'),
+                                ),
                               ),
                             ],
                           ),
-                          if (isLoading)
-                            const Center(child: CircularProgressIndicator())
-                          else if (error != null)
-                            Text(
-                              'Error: $error',
-                              style: const TextStyle(color: Colors.red),
-                            )
-                          else if (familyMembers.isEmpty)
-                            const Text('No family members added yet')
-                          else
-                            ...familyMembers.map(
-                              (f) => FamilyMemberCard(
-                                firstName: f['firstName'] ?? '',
-                                lastName: f['lastName'] ?? '',
-                                relationship: f['relationship'] ?? '',
-                                phone: f['phone'] ?? '',
-                                email: f['email'] ?? '',
-                                lastInteraction:
-                                    f['lastSeen'] ?? 'Not available',
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      GestureDetector(
-                        onTap: () => context.go('/tasks/today'),
-                        child: const Text(
-                          'View Today\'s Task',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Divider(height: 30, thickness: 2),
-                      Text(
-                        'EVV Visits',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.schedule),
-                              label: const Text('Visit Schedule'),
-                              onPressed: () => context.go('/evv'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.history),
-                              label: const Text('Visit History'),
-                              onPressed: () => context.go('/evv'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 30),
-                      // SOS Emergency Button
-                      // SOS Emergency Button with improved modal UX
-                      Builder(
-                        builder: (context) {
-                          return ElevatedButton.icon(
-                            icon: const Icon(Icons.sos),
-                            label: const Text('SOS Emergency'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.error,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onError,
-                              minimumSize: const Size.fromHeight(48),
-                            ),
-                            onPressed: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.white,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(16),
-                                  ),
+                          const SizedBox(height: 30),
+                          // SOS Emergency Button
+                          // SOS Emergency Button with improved modal UX
+                          Builder(
+                            builder: (context) {
+                              return ElevatedButton.icon(
+                                icon: const Icon(Icons.sos),
+                                label: const Text('SOS Emergency'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.error,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onError,
+                                  minimumSize: const Size.fromHeight(48),
                                 ),
-                                builder: (context) {
-                                  return SafeArea(
-                                    child: StatefulBuilder(
-                                      builder: (context, setState) {
-                                        bool isLoadingLocation = false;
-                                        String locationStatus = '';
-                                        bool showLocation = false;
-                                        double sheetHeight =
-                                            MediaQuery.of(context).size.height *
-                                            0.6;
-                                        return LayoutBuilder(
-                                          builder: (context, constraints) {
-                                            return SizedBox(
-                                              height: sheetHeight,
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
+                                onPressed: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.white,
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(16),
+                                      ),
+                                    ),
+                                    builder: (context) {
+                                      return SafeArea(
+                                        child: StatefulBuilder(
+                                          builder: (context, setState) {
+                                            bool isLoadingLocation = false;
+                                            String locationStatus = '';
+                                            bool showLocation = false;
+                                            double sheetHeight =
+                                                MediaQuery.of(context)
+                                                        .size
+                                                        .height *
+                                                    0.6;
+                                            return LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                return SizedBox(
+                                                  height: sheetHeight,
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
                                                     children: [
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets.all(
+                                                      Row(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .spaceBetween,
+                                                        children: [
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .all(
                                                               16.0,
                                                             ),
-                                                        child: Text(
-                                                          'SOS Emergency Options',
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .titleMedium
-                                                              ?.copyWith(
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                color: Theme.of(
-                                                                  context,
-                                                                ).colorScheme.error,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(
-                                                          Icons.close,
-                                                        ),
-                                                        onPressed: () =>
-                                                            Navigator.of(
+                                                            child: Text(
+                                                              'SOS Emergency Options',
+                                                              style: Theme.of(
+                                                                      context)
+                                                                  .textTheme
+                                                                  .titleMedium
+                                                                  ?.copyWith(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    color: Theme
+                                                                            .of(
+                                                                      context,
+                                                                    )
+                                                                        .colorScheme
+                                                                        .error,
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            icon: const Icon(
+                                                              Icons.close,
+                                                            ),
+                                                            onPressed: () =>
+                                                                Navigator.of(
                                                               context,
                                                             ).pop(),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const Divider(),
+                                                      Flexible(
+                                                        child:
+                                                            SingleChildScrollView(
+                                                          child: Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              ListTile(
+                                                                leading: Icon(
+                                                                  Icons.warning,
+                                                                  color: Theme
+                                                                          .of(
+                                                                    context,
+                                                                  )
+                                                                      .colorScheme
+                                                                      .error,
+                                                                ),
+                                                                title:
+                                                                    const Text(
+                                                                  'SOS Emergency',
+                                                                ),
+                                                                subtitle:
+                                                                    const Text(
+                                                                  'Select emergency type and send alert',
+                                                                ),
+                                                                onTap: () {
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop();
+                                                                  CallIntegrationHelper
+                                                                      .showSOSDialog(
+                                                                    context:
+                                                                        context,
+                                                                    currentPatient:
+                                                                        patient,
+                                                                  );
+                                                                },
+                                                              ),
+                                                              ListTile(
+                                                                leading: Icon(
+                                                                  Icons
+                                                                      .location_on,
+                                                                  color: Theme
+                                                                          .of(
+                                                                    context,
+                                                                  )
+                                                                      .colorScheme
+                                                                      .primary,
+                                                                ),
+                                                                title:
+                                                                    const Text(
+                                                                  'Share My Location (Quick)',
+                                                                ),
+                                                                onTap:
+                                                                    () async {
+                                                                  setState(() {
+                                                                    isLoadingLocation =
+                                                                        true;
+                                                                    locationStatus =
+                                                                        'Getting geolocation...';
+                                                                    showLocation =
+                                                                        true;
+                                                                  });
+                                                                  await CallIntegrationHelper
+                                                                      .sendSOSEmergencyAlert(
+                                                                    context:
+                                                                        context,
+                                                                    currentUser:
+                                                                        patient,
+                                                                    additionalInfo:
+                                                                        'Location shared (quick)',
+                                                                  );
+                                                                  setState(() {
+                                                                    isLoadingLocation =
+                                                                        false;
+                                                                    locationStatus =
+                                                                        'Location shared and alert sent!';
+                                                                  });
+                                                                  // Hide the status after 2 seconds
+                                                                  Future
+                                                                      .delayed(
+                                                                    const Duration(
+                                                                      seconds:
+                                                                          2,
+                                                                    ),
+                                                                    () {
+                                                                      if (mounted) {
+                                                                        setState(
+                                                                            () {
+                                                                          showLocation =
+                                                                              false;
+                                                                        });
+                                                                      }
+                                                                    },
+                                                                  );
+                                                                },
+                                                              ),
+                                                              if (showLocation)
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .all(
+                                                                    16.0,
+                                                                  ),
+                                                                  child:
+                                                                      SingleChildScrollView(
+                                                                    scrollDirection:
+                                                                        Axis.horizontal,
+                                                                    child:
+                                                                        Column(
+                                                                      children: [
+                                                                        if (isLoadingLocation)
+                                                                          Row(
+                                                                            children: [
+                                                                              CircularProgressIndicator(
+                                                                                color: Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.primary,
+                                                                              ),
+                                                                              const SizedBox(
+                                                                                width: 12,
+                                                                              ),
+                                                                              Expanded(
+                                                                                child: Text(
+                                                                                  locationStatus,
+                                                                                ),
+                                                                              ),
+                                                                              IconButton(
+                                                                                icon: const Icon(
+                                                                                  Icons.close,
+                                                                                ),
+                                                                                onPressed: () {
+                                                                                  setState(
+                                                                                    () {
+                                                                                      showLocation = false;
+                                                                                    },
+                                                                                  );
+                                                                                },
+                                                                              ),
+                                                                            ],
+                                                                          )
+                                                                        else
+                                                                          Row(
+                                                                            children: [
+                                                                              Icon(
+                                                                                Icons.check_circle,
+                                                                                color: Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.secondary,
+                                                                              ),
+                                                                              const SizedBox(
+                                                                                width: 12,
+                                                                              ),
+                                                                              Expanded(
+                                                                                child: Text(
+                                                                                  locationStatus,
+                                                                                ),
+                                                                              ),
+                                                                              IconButton(
+                                                                                icon: const Icon(
+                                                                                  Icons.close,
+                                                                                ),
+                                                                                onPressed: () {
+                                                                                  setState(
+                                                                                    () {
+                                                                                      showLocation = false;
+                                                                                    },
+                                                                                  );
+                                                                                },
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       ),
                                                     ],
                                                   ),
-                                                  const Divider(),
-                                                  Flexible(
-                                                    child: SingleChildScrollView(
-                                                      child: Column(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          ListTile(
-                                                            leading: Icon(
-                                                              Icons.warning,
-                                                              color: Theme.of(
-                                                                context,
-                                                              ).colorScheme.error,
-                                                            ),
-                                                            title: const Text(
-                                                              'SOS Emergency',
-                                                            ),
-                                                            subtitle: const Text(
-                                                              'Select emergency type and send alert',
-                                                            ),
-                                                            onTap: () {
-                                                              Navigator.of(
-                                                                context,
-                                                              ).pop();
-                                                              CallIntegrationHelper.showSOSDialog(
-                                                                context:
-                                                                    context,
-                                                                currentPatient:
-                                                                    patient,
-                                                              );
-                                                            },
-                                                          ),
-                                                          ListTile(
-                                                            leading: Icon(
-                                                              Icons.location_on,
-                                                              color:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .primary,
-                                                            ),
-                                                            title: const Text(
-                                                              'Share My Location (Quick)',
-                                                            ),
-                                                            onTap: () async {
-                                                              setState(() {
-                                                                isLoadingLocation =
-                                                                    true;
-                                                                locationStatus =
-                                                                    'Getting geolocation...';
-                                                                showLocation =
-                                                                    true;
-                                                              });
-                                                              await CallIntegrationHelper.sendSOSEmergencyAlert(
-                                                                context:
-                                                                    context,
-                                                                currentUser:
-                                                                    patient,
-                                                                additionalInfo:
-                                                                    'Location shared (quick)',
-                                                              );
-                                                              setState(() {
-                                                                isLoadingLocation =
-                                                                    false;
-                                                                locationStatus =
-                                                                    'Location shared and alert sent!';
-                                                              });
-                                                              // Hide the status after 2 seconds
-                                                              Future.delayed(
-                                                                const Duration(
-                                                                  seconds: 2,
-                                                                ),
-                                                                () {
-                                                                  if (mounted) {
-                                                                    setState(() {
-                                                                      showLocation =
-                                                                          false;
-                                                                    });
-                                                                  }
-                                                                },
-                                                              );
-                                                            },
-                                                          ),
-                                                          if (showLocation)
-                                                            Padding(
-                                                              padding:
-                                                                  const EdgeInsets.all(
-                                                                    16.0,
-                                                                  ),
-                                                              child: SingleChildScrollView(
-                                                                scrollDirection:
-                                                                    Axis.horizontal,
-                                                                child: Column(
-                                                                  children: [
-                                                                    if (isLoadingLocation)
-                                                                      Row(
-                                                                        children: [
-                                                                          CircularProgressIndicator(
-                                                                            color: Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.primary,
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            width:
-                                                                                12,
-                                                                          ),
-                                                                          Expanded(
-                                                                            child: Text(
-                                                                              locationStatus,
-                                                                            ),
-                                                                          ),
-                                                                          IconButton(
-                                                                            icon: const Icon(
-                                                                              Icons.close,
-                                                                            ),
-                                                                            onPressed: () {
-                                                                              setState(
-                                                                                () {
-                                                                                  showLocation = false;
-                                                                                },
-                                                                              );
-                                                                            },
-                                                                          ),
-                                                                        ],
-                                                                      )
-                                                                    else
-                                                                      Row(
-                                                                        children: [
-                                                                          Icon(
-                                                                            Icons.check_circle,
-                                                                            color: Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.secondary,
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            width:
-                                                                                12,
-                                                                          ),
-                                                                          Expanded(
-                                                                            child: Text(
-                                                                              locationStatus,
-                                                                            ),
-                                                                          ),
-                                                                          IconButton(
-                                                                            icon: const Icon(
-                                                                              Icons.close,
-                                                                            ),
-                                                                            onPressed: () {
-                                                                              setState(
-                                                                                () {
-                                                                                  showLocation = false;
-                                                                                },
-                                                                              );
-                                                                            },
-                                                                          ),
-                                                                        ],
-                                                                      ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                                );
+                                              },
                                             );
                                           },
-                                        );
-                                      },
-                                    ),
+                                        ),
+                                      );
+                                    },
                                   );
                                 },
                               );
                             },
-                          );
-                        },
+                          ),
+                          const SizedBox(height: 20),
+                          // Send SMS Notification Button
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.sms),
+                            label: const Text('Send SMS Notification'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.secondary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onSecondary,
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                            onPressed: () async {
+                              // Pick the first caregiver with a phone number
+                              final caregiver = caregivers.firstWhere(
+                                (c) =>
+                                    c['phone'] != null &&
+                                    c['phone'].toString().isNotEmpty,
+                                orElse: () => {},
+                              );
+                              final user = Provider.of<UserProvider>(
+                                context,
+                                listen: false,
+                              ).user;
+                              if (caregiver.isNotEmpty && user != null) {
+                                _showSendMessageDialog(
+                                    context, caregiver, user);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      'No caregiver with phone number found.',
+                                    ),
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.error,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 80),
+                        ],
                       ),
-                      const SizedBox(height: 20),
-                      // Send SMS Notification Button
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.sms),
-                        label: const Text('Send SMS Notification'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.secondary,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onSecondary,
-                          minimumSize: const Size.fromHeight(48),
-                        ),
-                        onPressed: () async {
-                          // Pick the first caregiver with a phone number
-                          final caregiver = caregivers.firstWhere(
-                            (c) =>
-                                c['phone'] != null &&
-                                c['phone'].toString().isNotEmpty,
-                            orElse: () => {},
-                          );
-                          final user = Provider.of<UserProvider>(
-                            context,
-                            listen: false,
-                          ).user;
-                          if (caregiver.isNotEmpty && user != null) {
-                            _showSendMessageDialog(context, caregiver, user);
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text(
-                                  'No caregiver with phone number found.',
-                                ),
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.error,
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 80),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
     );
   }
 

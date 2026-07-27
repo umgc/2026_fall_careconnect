@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 /// Primary Care Provider Widget
@@ -25,6 +26,7 @@ class PrimaryCareProviderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -45,7 +47,7 @@ class PrimaryCareProviderWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Your Primary Care Provider',
+            t.pcpwidget_pcpTitle,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -102,8 +104,8 @@ class PrimaryCareProviderWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Contact Information',
+          Text(
+            t.signup_accountContactInfo,
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
@@ -123,13 +125,13 @@ class PrimaryCareProviderWidget extends StatelessWidget {
           ),
           if (nextAppointment != null) ...[
             const SizedBox(height: 20),
-            const Text(
-              'Next Appointment',
+            Text(
+              t.pcpwidget_nextAppointment,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              _formatAppointmentDate(nextAppointment!),
+              _formatAppointmentDate(nextAppointment!, t),
               style: const TextStyle(fontSize: 14),
             ),
             Text(
@@ -154,8 +156,8 @@ class PrimaryCareProviderWidget extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              child: const Text(
-                'Contact Provider',
+              child: Text(
+                t.pcpwidget_contactProvider,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
@@ -166,20 +168,20 @@ class PrimaryCareProviderWidget extends StatelessWidget {
   }
 
   /// Formats the appointment date into a more readable format
-  String _formatAppointmentDate(DateTime date) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+  String _formatAppointmentDate(DateTime date, AppLocalizations t) {
+    final months = [
+      t.pcpwidget_janLong,
+      t.pcpwidget_febLong,
+      t.pcpwidget_marLong,
+      t.pcpwidget_aprLong,
+      t.pcpwidget_mayLong,
+      t.pcpwidget_junLong,
+      t.pcpwidget_julLong,
+      t.pcpwidget_augLong,
+      t.pcpwidget_sepLong,
+      t.pcpwidget_octLong,
+      t.pcpwidget_novLong,
+      t.pcpwidget_decLong,
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }

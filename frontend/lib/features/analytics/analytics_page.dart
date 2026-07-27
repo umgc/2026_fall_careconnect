@@ -12,11 +12,8 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/widgets/responsive_container.dart';
 import 'models/vital_model.dart';
 import 'models/dashboard_analytics_model.dart';
-import 'web_utils.dart'
-    if (dart.library.html) 'web_utils_web.dart'
+import 'web_utils.dart' if (dart.library.html) 'web_utils_web.dart'
     as web_utils;
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../../../widgets/ai_chat_improved.dart';
 
 class AnalyticsPage extends StatefulWidget {
@@ -235,240 +232,46 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   Future<void> _exportToCsv() async {
-    // Create CSV content
-    StringBuffer csvContent = StringBuffer();
-    csvContent.writeln(
-      'Date,Heart Rate (bpm),SpO2 (%),Systolic (mmHg),Diastolic (mmHg),Weight (lbs)',
-    );
-
-    for (var vital in vitals) {
-      csvContent.writeln(
-        '${vital.timestamp.toIso8601String()},${vital.heartRate},${vital.spo2},${vital.systolic},${vital.diastolic},${vital.weight}',
-      );
-    }
-
-    // Add summary data
-    csvContent.writeln('');
-    csvContent.writeln('Summary Data');
-    if (dashboard != null) {
-      csvContent.writeln(
-        'Adherence Rate,%,${dashboard!.adherenceRate?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Heart Rate,bpm,${dashboard!.avgHeartRate?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg SpO2,%,${dashboard!.avgSpo2?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Systolic,mmHg,${dashboard!.avgSystolic?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Diastolic,mmHg,${dashboard!.avgDiastolic?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Weight,lbs,${dashboard!.avgWeight?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Mood,/10,${dashboard!.avgMoodValue?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-      csvContent.writeln(
-        'Avg Pain Level,/10,${dashboard!.avgPainValue?.toStringAsFixed(1) ?? 'N/A'}',
-      );
-    }
-
-    final fileName =
-        'patient_${widget.patientId}_analytics_${selectedDays}days_${DateTime.now().millisecondsSinceEpoch}.csv';
-
-    if (kIsWeb) {
-      final bytes = utf8.encode(csvContent.toString());
-      web_utils.downloadFile(fileName, bytes);
-    }
+    await _downloadExportFromApi('csv');
   }
 
   Future<void> _exportToPdf() async {
-    // Create a PDF document
-    final pdf = pw.Document();
+    await _downloadExportFromApi('pdf');
+  }
 
-    // Add page to PDF
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Header(
-                level: 0,
-                child: pw.Text(
-                  'PATIENT ANALYTICS REPORT',
-                  style: pw.TextStyle(
-                    fontSize: 24,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 20),
-              pw.Text('Patient ID: ${widget.patientId}'),
-              pw.Text('Period: Last $selectedDays days'),
-              pw.Text(
-                'Generated: ${DateTime.now().toString().substring(0, 19)}',
-              ),
-              pw.SizedBox(height: 20),
-
-              if (dashboard != null) ...[
-                pw.Header(level: 1, child: pw.Text('HEALTH SUMMARY')),
-                pw.SizedBox(height: 10),
-                pw.Text(
-                  'Period: ${dashboard!.periodStart?.month ?? '?'}/${dashboard!.periodStart?.day ?? '?'} - ${dashboard!.periodEnd?.month ?? '?'}/${dashboard!.periodEnd?.day ?? '?'}',
-                ),
-                pw.Text(
-                  'Adherence Rate: ${dashboard!.adherenceRate?.toStringAsFixed(1) ?? 'N/A'}%',
-                ),
-                pw.Text(
-                  'Avg Heart Rate: ${dashboard!.avgHeartRate?.toStringAsFixed(1) ?? 'N/A'} bpm',
-                ),
-                pw.Text(
-                  'Avg SpO₂: ${dashboard!.avgSpo2?.toStringAsFixed(1) ?? 'N/A'}%',
-                ),
-                pw.Text(
-                  'Avg Systolic: ${dashboard!.avgSystolic?.toStringAsFixed(1) ?? 'N/A'} mmHg',
-                ),
-                pw.Text(
-                  'Avg Diastolic: ${dashboard!.avgDiastolic?.toStringAsFixed(1) ?? 'N/A'} mmHg',
-                ),
-                pw.Text(
-                  'Avg Weight: ${dashboard!.avgWeight?.toStringAsFixed(1) ?? 'N/A'} lbs',
-                ),
-                pw.SizedBox(height: 20),
-              ],
-
-              pw.Header(level: 1, child: pw.Text('DETAILED VITALS DATA')),
-              pw.SizedBox(height: 10),
-
-              // Create table for vitals data
-              pw.Table(
-                border: pw.TableBorder.all(),
-                children: [
-                  // Header row
-                  pw.TableRow(
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.grey300,
-                    ),
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Date',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Heart Rate',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'SpO₂',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Blood Pressure',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Weight',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Mood',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Pain',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Data rows
-                  ...vitals.map(
-                    (vital) => pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            vital.timestamp.toString().substring(0, 10),
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${vital.heartRate} bpm'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${vital.spo2}%'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            '${vital.systolic}/${vital.diastolic}',
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${vital.weight} lbs'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            vital.moodValue != null
-                                ? '${vital.moodValue}/10'
-                                : 'N/A',
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            vital.painValue != null
-                                ? '${vital.painValue}/10'
-                                : 'N/A',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
+  Future<void> _downloadExportFromApi(String type) async {
+    final authHeaders = await ApiService.getAuthHeaders();
+    final response = await http.get(
+      Uri.parse(
+        '${ApiConstants.baseUrl}analytics/export/vitals/$type?patientId=${widget.patientId}&days=$selectedDays',
       ),
+      headers: authHeaders,
     );
 
-    final fileName =
-        'patient_${widget.patientId}_analytics_${selectedDays}days_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-    if (kIsWeb) {
-      final bytes = await pdf.save();
-      web_utils.downloadFile(fileName, bytes);
+    if (response.statusCode != 200) {
+      throw Exception('Export failed with status ${response.statusCode}');
     }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fallbackFileName =
+        'patient_${widget.patientId}_analytics_${selectedDays}days_$timestamp.$type';
+    final contentDisposition = response.headers['content-disposition'];
+    final fileName = _extractFileName(contentDisposition) ?? fallbackFileName;
+
+    if (!kIsWeb) {
+      throw Exception('Export download is currently supported on web builds.');
+    }
+
+    web_utils.downloadFile(fileName, response.bodyBytes);
+  }
+
+  String? _extractFileName(String? contentDisposition) {
+    if (contentDisposition == null || contentDisposition.isEmpty) {
+      return null;
+    }
+    final fileNameRegex = RegExp(r'filename="?([^";]+)"?');
+    final match = fileNameRegex.firstMatch(contentDisposition);
+    return match?.group(1);
   }
 
   /*
@@ -529,15 +332,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       // Calculate averages from vitals data
       double avgHeartRate =
           vitals.map((v) => v.heartRate).reduce((a, b) => a + b) /
-          vitals.length;
+              vitals.length;
       double avgSpo2 =
           vitals.map((v) => v.spo2).reduce((a, b) => a + b) / vitals.length;
       double avgSystolic =
           vitals.map((v) => v.systolic.toDouble()).reduce((a, b) => a + b) /
-          vitals.length;
+              vitals.length;
       double avgDiastolic =
           vitals.map((v) => v.diastolic.toDouble()).reduce((a, b) => a + b) /
-          vitals.length;
+              vitals.length;
       double avgWeight =
           vitals.map((v) => v.weight).reduce((a, b) => a + b) / vitals.length;
 
@@ -1056,9 +859,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       title,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: MediaQuery.of(context).size.width < 400
-                            ? 14
-                            : 16,
+                        fontSize:
+                            MediaQuery.of(context).size.width < 400 ? 14 : 16,
                         color: Colors.grey.shade800,
                       ),
                     ),
@@ -1066,12 +868,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   if (unit != null)
                     Container(
                       padding: EdgeInsets.symmetric(
-                        horizontal: MediaQuery.of(context).size.width < 400
-                            ? 6
-                            : 8,
-                        vertical: MediaQuery.of(context).size.width < 400
-                            ? 3
-                            : 4,
+                        horizontal:
+                            MediaQuery.of(context).size.width < 400 ? 6 : 8,
+                        vertical:
+                            MediaQuery.of(context).size.width < 400 ? 3 : 4,
                       ),
                       decoration: BoxDecoration(
                         color: themePrimary.withOpacity(0.1),
@@ -1080,9 +880,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       child: Text(
                         unit,
                         style: TextStyle(
-                          fontSize: MediaQuery.of(context).size.width < 400
-                              ? 12
-                              : 14,
+                          fontSize:
+                              MediaQuery.of(context).size.width < 400 ? 12 : 14,
                           color: primaryColor ?? themePrimary,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1143,11 +942,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                             show: spots.length <= 10,
                             getDotPainter: (spot, percent, barData, index) =>
                                 FlDotCirclePainter(
-                                  radius: 4,
-                                  color: primaryColor ?? themePrimary,
-                                  strokeWidth: 2,
-                                  strokeColor: Colors.white,
-                                ),
+                              radius: 4,
+                              color: primaryColor ?? themePrimary,
+                              strokeWidth: 2,
+                              strokeColor: Colors.white,
+                            ),
                           ),
                           belowBarData: BarAreaData(
                             show: true,
@@ -1556,12 +1355,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     Color color,
   ) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode
-        ? color.withOpacity(0.25)
-        : color.withOpacity(0.15);
-    final borderColor = isDarkMode
-        ? color.withOpacity(0.4)
-        : color.withOpacity(0.3);
+    final backgroundColor =
+        isDarkMode ? color.withOpacity(0.25) : color.withOpacity(0.15);
+    final borderColor =
+        isDarkMode ? color.withOpacity(0.4) : color.withOpacity(0.3);
     final textColor = isDarkMode ? Colors.white : Colors.white;
     final unitTextColor = isDarkMode
         ? Colors.white.withOpacity(0.7)
@@ -1738,12 +1535,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }) {
     // Dark mode support
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode
-        ? color.withOpacity(0.2)
-        : color.withOpacity(0.15);
-    final borderColor = isDarkMode
-        ? color.withOpacity(0.4)
-        : color.withOpacity(0.3);
+    final backgroundColor =
+        isDarkMode ? color.withOpacity(0.2) : color.withOpacity(0.15);
+    final borderColor =
+        isDarkMode ? color.withOpacity(0.4) : color.withOpacity(0.3);
     final textColor = isDarkMode
         ? (hasData ? Colors.white : Colors.white60)
         : (hasData ? Colors.grey.shade900 : Colors.grey.shade600);
@@ -1868,9 +1663,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               builder: (context) => SizedBox(
                 height: sheetHeight,
                 child: AIChat(
+                  key: ValueKey(
+                    'ai-chat-${AiChatMode.groundedRecords.name}-${widget.patientId}',
+                  ),
                   role: 'caregiver',
                   healthDataContext: _getHealthDataContext(),
                   isModal: true,
+                  patientId: widget.patientId,
+                  mode: AiChatMode.groundedRecords,
                 ),
               ),
             );
@@ -1962,9 +1762,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   backgroundColor: Colors.green.shade600,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width > 500
-                        ? 12
-                        : 10,
+                    horizontal:
+                        MediaQuery.of(context).size.width > 500 ? 12 : 10,
                     vertical: 8,
                   ),
                   minimumSize: const Size(
@@ -1992,9 +1791,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   backgroundColor: Colors.red.shade600,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width > 500
-                        ? 12
-                        : 10,
+                    horizontal:
+                        MediaQuery.of(context).size.width > 500 ? 12 : 10,
                     vertical: 8,
                   ),
                   minimumSize: const Size(
@@ -2143,8 +1941,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                               'Health Summary',
                                               style: TextStyle(
                                                 color: Colors.white,
-                                                fontSize:
-                                                    MediaQuery.of(
+                                                fontSize: MediaQuery.of(
                                                           context,
                                                         ).size.width <
                                                         400
@@ -2173,8 +1970,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                                     'Last $selectedDays days overview',
                                                     style: TextStyle(
                                                       color: Colors.white70,
-                                                      fontSize:
-                                                          MediaQuery.of(
+                                                      fontSize: MediaQuery.of(
                                                                 context,
                                                               ).size.width <
                                                               400
@@ -2196,14 +1992,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                   SizedBox(
                                     height:
                                         MediaQuery.of(context).size.width < 400
-                                        ? 16
-                                        : 20,
+                                            ? 16
+                                            : 20,
                                   ),
                                   // Use constrained height to prevent overflow
                                   Container(
                                     constraints: BoxConstraints(
-                                      maxHeight:
-                                          MediaQuery.of(context).size.height *
+                                      maxHeight: MediaQuery.of(context)
+                                              .size
+                                              .height *
                                           0.4, // Maximum 40% of screen height
                                     ),
                                     child: SingleChildScrollView(
@@ -2343,6 +2140,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 role: 'caregiver',
                 healthDataContext: _getHealthDataContext(),
                 isModal: true,
+                patientId: widget.patientId,
+                mode: AiChatMode.groundedRecords,
               ),
             ),
           );

@@ -2,7 +2,6 @@ package com.careconnect.service;
 
 import com.careconnect.model.CallRecording;
 import com.careconnect.repository.CallRecordingRepository;
-import com.careconnect.service.PostCallTranscriptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,6 +20,7 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaC
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipelineResponse;
@@ -44,14 +44,20 @@ import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -177,11 +183,40 @@ class CallRecordingServiceTest {
 
             service.startRecording(CALL_ID, null); // first call registers pipeline (null userId avoids RECORDING_CLAIMED)
 
-            // Second call — should hit ALREADY_RECORDING branch (null userId skips claim logic)
+            CallRecording active = buildRecording("STARTED");
+            active.setInitiatedByUserId(null);
+            active.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
+            when(recordingRepository.findActiveByCallId(CALL_ID))
+                    .thenReturn(Optional.of(active));
+
+            // Second call observes the durable active owner.
             Map<String, Object> result = service.startRecording(CALL_ID, null);
 
             assertThat(result).containsEntry("status", "ALREADY_RECORDING");
             assertThat(result).containsKey("pipelineId");
+        }
+
+        @Test
+        @DisplayName("returns ALREADY_RECORDING when peer owns RESERVED generation")
+        void startRecording_peerReserved_doesNotDriveAws() {
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(recordingRepository.reserveActiveGeneration(anyString(), anyString(), any(), anyBoolean()))
+                    .thenReturn(0);
+            CallRecording peerReserved = buildRecording("STARTED");
+            peerReserved.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.RESERVED);
+            peerReserved.setInitiatedByUserId(null);
+            when(recordingRepository.findActiveByCallId(CALL_ID))
+                    .thenReturn(Optional.of(peerReserved));
+
+            Map<String, Object> result = service.startRecording(CALL_ID, null);
+
+            assertThat(result).containsEntry("status", "ALREADY_RECORDING");
+            assertThat(result.get("message").toString()).contains("Another node");
+            verify(pipelinesClient, never()).createMediaCapturePipeline(
+                    any(CreateMediaCapturePipelineRequest.class));
+            verify(recordingRepository, never()).saveAndFlush(any(CallRecording.class));
         }
 
         @Test
@@ -227,9 +262,57 @@ class CallRecordingServiceTest {
             assertThat(result).containsKey("s3Bucket");
             assertThat(result).containsKey("s3Prefix");
 
-            verify(recordingRepository).save(any(CallRecording.class));
+            verify(recordingRepository).saveAndFlush(any(CallRecording.class));
             verify(pipelinesClient).createMediaCapturePipeline(
                     any(CreateMediaCapturePipelineRequest.class));
+        }
+
+        @Test
+        @DisplayName(
+                "SENT-CLIP-R1: startedAt is UTC wall-clock even when JVM default zone is not UTC")
+        void startRecording_persistsStartedAtAsUtcWallClock_independentOfDefaultZone() {
+            final TimeZone previous = TimeZone.getDefault();
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+            try {
+                when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+                MediaCapturePipeline pipeline =
+                        MediaCapturePipeline.builder().mediaPipelineId(PIPELINE_ID).build();
+                when(pipelinesClient.createMediaCapturePipeline(
+                                any(CreateMediaCapturePipelineRequest.class)))
+                        .thenReturn(
+                                CreateMediaCapturePipelineResponse.builder()
+                                        .mediaCapturePipeline(pipeline)
+                                        .build());
+                when(s3Client.putBucketPolicy(
+                                any(
+                                        software.amazon.awssdk.services.s3.model
+                                                .PutBucketPolicyRequest.class)))
+                        .thenReturn(
+                                software.amazon.awssdk.services.s3.model.PutBucketPolicyResponse
+                                        .builder()
+                                        .build());
+
+                final Instant before = Instant.now().minusSeconds(2);
+                Map<String, Object> result = service.startRecording(CALL_ID, USER_ID);
+                final Instant after = Instant.now().plusSeconds(2);
+
+                assertThat(result).containsEntry("status", "STARTED");
+
+                ArgumentCaptor<CallRecording> captor = ArgumentCaptor.forClass(CallRecording.class);
+                verify(recordingRepository).saveAndFlush(captor.capture());
+                LocalDateTime startedAt = captor.getValue().getStartedAt();
+                assertThat(startedAt).isNotNull();
+
+                // Contract: LocalDateTime is UTC wall-clock. Interpreting it as UTC must land
+                // near Instant.now() even when the JVM default zone is America/New_York.
+                Instant asUtc = startedAt.atZone(ZoneOffset.UTC).toInstant();
+                assertThat(asUtc).isBetween(before, after);
+                assertThat(Duration.between(asUtc, Instant.now()).abs().toMinutes())
+                        .isLessThan(5);
+            } finally {
+                TimeZone.setDefault(previous);
+            }
         }
 
         @Test
@@ -323,6 +406,7 @@ class CallRecordingServiceTest {
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
             assertThat(result).containsEntry("status", "STOPPED");
+            assertThat(rec.getStatus()).isEqualTo("STOPPED");
             verify(pipelinesClient).deleteMediaCapturePipeline(
                     any(DeleteMediaCapturePipelineRequest.class));
         }
@@ -356,6 +440,10 @@ class CallRecordingServiceTest {
             rec.setS3Bucket(BUCKET);
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationStatus("NOT_REQUESTED");
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -374,6 +462,27 @@ class CallRecordingServiceTest {
             assertThat(result).containsEntry("callId", CALL_ID);
             assertThat(result).containsEntry("status", "STOPPED");
             assertThat(result).containsKey("pipelineId");
+        }
+
+        @Test
+        @DisplayName("READY recordings skip S3 refresh and still report playbackReady")
+        void getRecordingStatus_readyRecording_skipsS3AndIsPlaybackReady() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setPipelineId(PIPELINE_ID);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            rec.setConcatenationPipelineId("concat-pipe-001");
+            rec.setConcatenationStatus("READY");
+            rec.setTranscriptionStatus("COMPLETE");
+
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.getRecordingStatus(CALL_ID);
+
+            assertThat(result).containsEntry("concatenationStatus", "READY");
+            assertThat(result).containsEntry("playbackReady", true);
+            verify(s3Client, never()).listObjectsV2(any(ListObjectsV2Request.class));
         }
     }
 
@@ -448,6 +557,26 @@ class CallRecordingServiceTest {
         }
 
         @Test
+        @DisplayName("system transcription capture never returns a playback URL")
+        void generatePlaybackUrl_systemCapture_suppressesPlayback() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setInitiatedByUserId(null);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            rec.setConcatenationStatus("READY");
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.generatePlaybackUrl(CALL_ID);
+
+            assertThat(result)
+                    .containsEntry("status", "TRANSCRIPTION_ONLY")
+                    .containsEntry("playbackReady", false)
+                    .doesNotContainKey("playbackUrl");
+            verify(s3Presigner, never()).presignGetObject(any(GetObjectPresignRequest.class));
+        }
+
+        @Test
         @DisplayName("SENT-CLIP-002 returns presigned URL with recordingStartedAt when video is available")
         void generatePlaybackUrl_withRecording_returnsUrl() throws Exception {
             String stitchedKey = S3_PREFIX + "concatenated/composited-video/concat-pipe-001.mp4";
@@ -457,6 +586,8 @@ class CallRecordingServiceTest {
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationPipelineId("concat-pipe-001");
             rec.setConcatenationStatus("READY");
+            // R1: UTC wall-clock stored in LocalDateTime; emit as Instant ...Z
+            rec.setStartedAt(LocalDateTime.of(2026, 7, 7, 22, 7, 12));
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -499,15 +630,14 @@ class CallRecordingServiceTest {
 
             assertThat(result).containsKey("playbackUrl");
             assertThat(result.get("playbackUrl").toString()).contains("presigned-url");
+            // R5: success path has a resolved video key → playbackReady is always true.
             assertThat(result).containsEntry("playbackReady", true);
             assertThat(result).containsKey("recordingStartedAt");
+            // R1: UTC Instant with Z — matches Flutter DateTime.parse(...).toUtc().
+            assertThat(result.get("recordingStartedAt")).isEqualTo("2026-07-07T22:07:12Z");
             assertThat(result.get("recordingStartedAt").toString()).endsWith("Z");
-            assertThat(result.get("recordingStartedAt"))
-                    .isEqualTo(
-                            rec.getStartedAt()
-                                    .atZone(java.time.ZoneOffset.UTC)
-                                    .toInstant()
-                                    .toString());
+            assertThat(Instant.parse(result.get("recordingStartedAt").toString()))
+                    .isEqualTo(Instant.parse("2026-07-07T22:07:12Z"));
         }
     }
 
@@ -801,8 +931,8 @@ class CallRecordingServiceTest {
     class AdditionalEdgePathTests {
 
         @Test
-        @DisplayName("stopRecording returns STOPPED without AWS delete when clients are unavailable after DB recovery")
-        void stopRecording_awsUnavailableAfterDbRecovery_returnsStopped() {
+        @DisplayName("stopRecording remains retryable when AWS is unavailable after DB recovery")
+        void stopRecording_awsUnavailableAfterDbRecovery_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
 
@@ -813,13 +943,15 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "STOP_RETRYABLE");
             assertThat(result).containsEntry("pipelineId", PIPELINE_ID);
+            assertThat(rec.getStatus()).isEqualTo("STOP_RETRYABLE");
         }
 
         @Test
-        @DisplayName("stopRecording reports warning and failed concatenation when delete and ARN lookup fail")
-        void stopRecording_deleteAndArnLookupFail_reportsWarning() {
+        @DisplayName("stopRecording keeps deletion failures retryable")
+        void stopRecording_deleteFailure_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
             rec.setS3Bucket(BUCKET);
@@ -835,9 +967,10 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
-            assertThat(result).containsEntry("concatenationStatus", "FAILED");
-            assertThat(result.get("warning").toString()).contains("delete failed");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "STOP_RETRYABLE");
+            assertThat(result.get("message").toString()).contains("delete failed");
+            assertThat(rec.getStatus()).isEqualTo("STOP_RETRYABLE");
         }
 
         @Test
@@ -848,6 +981,8 @@ class CallRecordingServiceTest {
             rec.setS3Bucket(BUCKET);
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationStatus("NOT_REQUESTED");
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -860,11 +995,6 @@ class CallRecordingServiceTest {
                                     .status("Initializing")
                                     .build())
                             .build());
-
-            @SuppressWarnings("unchecked")
-            Map<String, String> activePipelineIds =
-                    (Map<String, String>) ReflectionTestUtils.getField(service, "activePipelineIds");
-            activePipelineIds.put(CALL_ID, PIPELINE_ID);
 
             Map<String, Object> result = service.getRecordingStatus(CALL_ID);
 
@@ -1232,7 +1362,9 @@ class CallRecordingServiceTest {
 
             service.reconcileCompletedRecordingCleanup();
 
-            verifyNoInteractions(recordingRepository);
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("STOP_RETRYABLE");
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("FINALIZE_RETRYABLE");
+            verify(recordingRepository, never()).findTop100ByStatusOrderByStartedAtDesc("STOPPED");
         }
 
         @Test
@@ -1242,7 +1374,9 @@ class CallRecordingServiceTest {
 
             service.reconcileCompletedRecordingCleanup();
 
-            verifyNoInteractions(recordingRepository);
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("STOP_RETRYABLE");
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("FINALIZE_RETRYABLE");
+            verify(recordingRepository, never()).findTop100ByStatusOrderByStartedAtDesc("STOPPED");
         }
 
         @Test
@@ -1321,14 +1455,9 @@ class CallRecordingServiceTest {
     class StopRecordingAdditionalTests {
 
         @Test
-        @DisplayName("returns NOT_RECORDING when DB lookup returns null recording after pipeline removal")
+        @DisplayName("returns NOT_RECORDING when durable ownership is absent")
         void stopRecording_dbReturnsNullAfterPipelineRemoval_returnsNotRecording() {
-            // Seed activePipelineIds with a value, then the second DB lookup returns empty
-            @SuppressWarnings("unchecked")
-            Map<String, String> activePipelineIds =
-                    (Map<String, String>) ReflectionTestUtils.getField(service, "activePipelineIds");
-            activePipelineIds.put(CALL_ID, PIPELINE_ID);
-
+            when(recordingRepository.findActiveByCallId(CALL_ID)).thenReturn(Optional.empty());
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.empty());
 
@@ -1338,8 +1467,8 @@ class CallRecordingServiceTest {
         }
 
         @Test
-        @DisplayName("concatenation failure sets FAILED status when concatenation pipeline throws")
-        void stopRecording_concatenationPipelineThrows_setsFailed() {
+        @DisplayName("concatenation failure remains retryable when concatenation pipeline throws")
+        void stopRecording_concatenationPipelineThrows_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
             rec.setS3Bucket(BUCKET);
@@ -1364,8 +1493,49 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
-            assertThat(result).containsEntry("concatenationStatus", "FAILED");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "FINALIZE_RETRYABLE");
+            assertThat(rec.getStatus()).isEqualTo("FINALIZE_RETRYABLE");
+        }
+
+        @Test
+        @DisplayName("retry after deletion failure can complete stop and finalization")
+        void stopRecording_retryAfterDeleteFailure_completes() {
+            CallRecording rec = buildRecording("STARTED");
+            rec.setPipelineId(PIPELINE_ID);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+            when(pipelinesClient.getMediaCapturePipeline(
+                    any(GetMediaCapturePipelineRequest.class)))
+                    .thenReturn(GetMediaCapturePipelineResponse.builder()
+                            .mediaCapturePipeline(MediaCapturePipeline.builder()
+                                    .mediaPipelineId(PIPELINE_ID)
+                                    .mediaPipelineArn("arn:aws:chime:us-east-1:"
+                                            + ACCOUNT_ID + ":media-pipeline/" + PIPELINE_ID)
+                                    .build())
+                            .build());
+            when(pipelinesClient.deleteMediaCapturePipeline(
+                            any(DeleteMediaCapturePipelineRequest.class)))
+                    .thenThrow(new RuntimeException("temporary delete failure"))
+                    .thenReturn(DeleteMediaCapturePipelineResponse.builder().build());
+            when(pipelinesClient.createMediaConcatenationPipeline(
+                    any(CreateMediaConcatenationPipelineRequest.class)))
+                    .thenReturn(CreateMediaConcatenationPipelineResponse.builder()
+                            .mediaConcatenationPipeline(MediaConcatenationPipeline.builder()
+                                    .mediaPipelineId("concat-retry")
+                                    .build())
+                            .build());
+
+            assertThat(service.stopRecording(CALL_ID))
+                    .containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(service.stopRecording(CALL_ID))
+                    .containsEntry("status", "STOPPED");
+
+            assertThat(rec.getStatus()).isEqualTo("STOPPED");
+            verify(pipelinesClient, times(2)).deleteMediaCapturePipeline(
+                    any(DeleteMediaCapturePipelineRequest.class));
         }
     }
 
@@ -1405,7 +1575,7 @@ class CallRecordingServiceTest {
         rec.setPipelineId(PIPELINE_ID);
         rec.setStatus(status);
         rec.setInitiatedByUserId(USER_ID);
-        rec.setStartedAt(LocalDateTime.now().minusMinutes(10));
+        rec.setStartedAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10));
         return rec;
     }
 }

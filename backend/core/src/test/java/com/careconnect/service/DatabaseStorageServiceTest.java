@@ -563,17 +563,16 @@ class DatabaseStorageServiceTest {
     }
 
     @Test
-    @DisplayName("uploadFile_unknownCategory_defaultsToOtherDocument")
-    void uploadFile_unknownCategory_defaultsToOtherDocument() throws IOException {
+    @DisplayName("uploadFile_unknownCategory_rejectsInvalidCategory")
+    void uploadFile_unknownCategory_rejectsInvalidCategory() throws IOException {
         final MultipartFile file = createMockFile();
-        final UserFile saved = UserFile.builder().id(1L).build();
-        when(userFileRepository.save(any(UserFile.class))).thenReturn(saved);
 
-        storageService.uploadFile(file, 1L, "PATIENT", "UNKNOWN_CATEGORY");
+        final RuntimeException thrown = assertThrows(
+                RuntimeException.class,
+                () -> storageService.uploadFile(file, 1L, "PATIENT", "UNKNOWN_CATEGORY"));
 
-        final ArgumentCaptor<UserFile> captor = ArgumentCaptor.forClass(UserFile.class);
-        verify(userFileRepository).save(captor.capture());
-        assertEquals(UserFile.FileCategory.OTHER_DOCUMENT, captor.getValue().getFileCategory());
+        assertTrue(thrown.getMessage().contains("Invalid file category 'UNKNOWN_CATEGORY'"));
+        verify(userFileRepository, never()).save(any(UserFile.class));
     }
 
     @Test

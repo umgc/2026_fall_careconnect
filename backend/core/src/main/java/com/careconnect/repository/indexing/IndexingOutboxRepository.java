@@ -51,6 +51,37 @@ public interface IndexingOutboxRepository extends JpaRepository<IndexingOutboxRo
     List<IndexingOutboxRow> findUnprocessedForPolling(Pageable pageable);
 
     /**
+     * Selects a batch of claimable outbox rows using {@code FOR UPDATE SKIP LOCKED}.
+     * Callers must stamp {@code claimed_at} in the <em>same</em> short transaction
+     * before commit so the lease survives after the lock is released (multi-ECS safe).
+     * Rows with a non-expired {@code claimed_at} are skipped using
+     * {@code make_interval(mins => :leaseMinutes)} so integer lease params bind safely
+     * (avoids {@code integer || unknown}). {@code make_interval} requires PostgreSQL 9.6+;
+     * CareConnect RDS targets PostgreSQL 15+ for pgvector. Soft-lease refreshes set
+     * {@code claimed_at = now()} so reclaim waits a full lease window — not clearing
+     * the column (which would reclaim every poll). Future {@code claimed_at} (no-burn parks)
+     * remain unclaimable until that timestamp ages past the lease window.
+     * Rows that have already reached {@code maxAttempts} are still selected so they
+     * can be dead-lettered.
+     *
+     * @param limit         maximum rows to claim
+     * @param leaseMinutes  rows claimed more recently than this many minutes ago are skipped
+     * @return locked unprocessed rows in insertion order
+     */
+    @Query(value = """
+            SELECT * FROM indexing_outbox
+            WHERE processed_at IS NULL
+              AND (claimed_at IS NULL
+                   OR claimed_at < (NOW() - make_interval(mins => :leaseMinutes)))
+            ORDER BY id ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<IndexingOutboxRow> claimUnprocessedForPolling(
+            @Param("limit") int limit,
+            @Param("leaseMinutes") int leaseMinutes);
+
+    /**
      * Count of unprocessed rows. Cheap because it uses the partial
      * index. Useful for the poller's monitoring or backlog dashboards.
      */

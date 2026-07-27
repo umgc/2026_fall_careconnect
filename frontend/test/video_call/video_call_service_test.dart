@@ -16,11 +16,15 @@
 // expose them as public static constants (e.g. `static const int
 // maxBufferedTranscriptSegments = 120;`) and update the references below.
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'dart:convert';
 import 'package:care_connect_app/services/video_call_service.dart';
+import 'package:care_connect_app/services/transcript_outbox/encrypted_transcript_outbox.dart';
+import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal stub so VideoCallService can be instantiated without a live
@@ -35,6 +39,377 @@ void main() {
     // VideoCallService._completedCallIds is a static Set.  We cannot clear it
     // from outside the library, but each test that relies on it uses unique
     // call IDs to avoid collisions.
+  });
+
+  group('Durable call patient ownership', () {
+    test('patient initiator owns the session by user ID', () {
+      expect(
+        resolveCallSessionPatientUserId(
+          currentUserId: '7',
+          currentRole: 'PATIENT',
+          recipientId: '2',
+          recipientRole: 'CAREGIVER',
+        ),
+        '7',
+      );
+    });
+
+    test('caregiver-to-patient call uses recipient user ID', () {
+      expect(
+        resolveCallSessionPatientUserId(
+          currentUserId: '2',
+          currentRole: 'CAREGIVER',
+          recipientId: '7',
+          recipientRole: 'PATIENT',
+        ),
+        '7',
+      );
+    });
+
+    test('care-team call requires one unambiguous context patient', () {
+      expect(
+        () => resolveCallSessionPatientUserId(
+          currentUserId: '2',
+          currentRole: 'CAREGIVER',
+          recipientId: '3',
+          recipientRole: 'CAREGIVER',
+          callKind: 'CARE_TEAM',
+          contextPatientUserIds: [7, 8],
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('care-team ambiguity asks for explicit patient selection', () {
+      expect(
+        () => resolveCallSessionPatientUserId(
+          currentUserId: '2',
+          currentRole: 'CAREGIVER',
+          recipientId: '3',
+          recipientRole: 'CAREGIVER',
+          callKind: 'CARE_TEAM',
+          contextPatientUserIds: [7, 8],
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('Select one patient'),
+          ),
+        ),
+      );
+    });
+
+    test('call-session errors do not expose backend diagnostics', () {
+      final safe = safeCallSessionError(
+        Exception('500 patient@example.com database stack trace'),
+      );
+
+      expect(safe, isNot(contains('patient@example.com')));
+      expect(safe, isNot(contains('database')));
+    });
+
+    test('createCallSession posts durable ownership before joining', () async {
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
+      Map<String, dynamic>? requestBody;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '2',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: false,
+        );
+        await service.createCallSession(
+          callId: 'call-123',
+          patientUserId: '7',
+          inviteeUserId: '7',
+        );
+      }, () {
+        return MockClient((request) async {
+          requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(request.url.path, '/api/v3/calls/sessions');
+          expect(request.headers['Authorization'], 'Bearer test-token');
+          return http.Response('{"status":"CREATED"}', 201);
+        });
+      });
+
+      expect(requestBody, {
+        'callId': 'call-123',
+        'patientUserId': '7',
+        'inviteeUserId': '7',
+      });
+      service.dispose();
+    });
+  });
+
+  group('Remote call end transcript buffering', () {
+    test('awaits an in-flight transcript batch before clearing call state',
+        () async {
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
+      final transcriptRequestStarted = Completer<void>();
+      final transcriptResponse = Completer<http.Response>();
+      var endedCallbackCalled = false;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+          onCallEnded: () => endedCallbackCalled = true,
+        );
+        await service.joinCall(
+          callId: 'remote-end-buffer-test',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        expect(
+          await service.sendTranscriptSegment(text: 'Buffered final words'),
+          isTrue,
+        );
+        await transcriptRequestStarted.future;
+
+        final remoteEnd = service.handleRemoteCallEndForTest();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(endedCallbackCalled, isFalse);
+        expect(service.pendingTranscriptSegmentCountForTest, 1);
+
+        transcriptResponse.complete(http.Response('{}', 201));
+        await remoteEnd;
+
+        expect(endedCallbackCalled, isTrue);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+        expect(service.currentCallId, isNull);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              jsonEncode({
+                'meetingId': 'meeting-1',
+                'attendeeId': 'attendee-1',
+                'joinToken': 'token-1',
+                'mediaPlacement': <String, dynamic>{},
+              }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            if (!transcriptRequestStarted.isCompleted) {
+              transcriptRequestStarted.complete();
+            }
+            return transcriptResponse.future;
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('joining a failed in-flight flush retries remaining segment',
+        () async {
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
+      final firstRequestStarted = Completer<void>();
+      final firstResponse = Completer<http.Response>();
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'remote-end-inflight-retry',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Do not lose these words');
+        await firstRequestStarted.future;
+
+        final remoteEnd = service.handleRemoteCallEndForTest();
+        firstResponse.complete(http.Response('{}', 500));
+        await remoteEnd;
+
+        expect(transcriptRequests, 2);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            if (transcriptRequests == 1) {
+              firstRequestStarted.complete();
+              return firstResponse.future;
+            }
+            return http.Response('{}', 201);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('transient 500 retries without clearing the segment', () async {
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
+      var transcriptRequests = 0;
+      final uploadedSegmentIds = <String>[];
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'transient-500-retry',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Retry this segment');
+        await service.handleRemoteCallEndForTest();
+
+        expect(transcriptRequests, 2);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+        expect(uploadedSegmentIds, hasLength(2));
+        expect(uploadedSegmentIds.toSet(), hasLength(1));
+        expect(
+          uploadedSegmentIds.first,
+          matches(
+            RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            ),
+          ),
+        );
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            uploadedSegmentIds.add(
+              (jsonDecode(request.body)
+                  as Map<String, dynamic>)['clientSegmentId'] as String,
+            );
+            return http.Response('{}', transcriptRequests == 1 ? 500 : 201);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('transient timeout retries without clearing the segment', () async {
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'transient-timeout-retry',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Retry after timeout');
+        await service.handleRemoteCallEndForTest();
+
+        expect(transcriptRequests, 2);
+        expect(service.pendingTranscriptSegmentCountForTest, 0);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            if (transcriptRequests == 1) {
+              throw TimeoutException('transient timeout');
+            }
+            return http.Response('{}', 201);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+    });
+
+    test('hang-up reset retains final segment after retry exhaustion',
+        () async {
+      final service = VideoCallService(
+        transcriptOutbox: MemoryTranscriptOutbox(),
+      );
+      var transcriptRequests = 0;
+
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: '7',
+          jwtToken: 'test-token',
+          enablePatientSentimentCapture: true,
+        );
+        await service.joinCall(
+          callId: 'hangup-retains-unsent',
+          otherPartyId: '2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.sendTranscriptSegment(text: 'Unsent final segment');
+        await service.handleRemoteCallEndForTest();
+
+        expect(transcriptRequests, greaterThanOrEqualTo(2));
+        expect(service.pendingTranscriptSegmentCountForTest, 1);
+        expect(service.currentCallId, isNull);
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/transcript/segments')) {
+            transcriptRequests++;
+            return http.Response('{}', 500);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+
+      service.dispose();
+      expect(service.pendingTranscriptSegmentCountForTest, 1);
+    });
   });
 
   // =========================================================================
@@ -104,6 +479,14 @@ void main() {
             reason: 'Constant _transcriptFlushInterval must be 4 s');
       },
     );
+
+    test('transcript truncation preserves complete Unicode runes', () {
+      final truncated = truncateToUnicodeCodePoints('A😀B', 2);
+
+      expect(truncated, 'A😀');
+      expect(truncated.runes.length, 2);
+      expect(truncated.codeUnits.last, isNot(inInclusiveRange(0xD800, 0xDBFF)));
+    });
   });
 
   // =========================================================================
@@ -222,6 +605,27 @@ void main() {
             returnsNormally);
       },
     );
+  });
+
+  group('Active-call event scoping', () {
+    test('accepts only events carrying the active call ID', () {
+      expect(
+        isEventForActiveCall('call-a', {'callId': 'call-a'}),
+        isTrue,
+      );
+      expect(
+        isEventForActiveCall('call-a', {'callId': 'call-b'}),
+        isFalse,
+      );
+      expect(
+        isEventForActiveCall('call-a', {'type': 'recording-state'}),
+        isFalse,
+      );
+      expect(
+        isEventForActiveCall(null, {'callId': 'call-a'}),
+        isFalse,
+      );
+    });
   });
 
   // =========================================================================
@@ -424,7 +828,8 @@ void main() {
       () {
         // If we got here without exception the callback was wired correctly.
         expect(receivedUpdates, isEmpty,
-            reason: 'No WebSocket events arrive in unit tests without a broker');
+            reason:
+                'No WebSocket events arrive in unit tests without a broker');
       },
     );
 
@@ -708,6 +1113,93 @@ void main() {
       expect(endBody, isNotNull);
       expect(endBody!['participantUserIds'], containsAll(['user-2', 'user-4']));
       expect(endBody!['otherPartyId'], 'user-2');
+    });
+
+    test('endCall_marksCompletedOnProcessingStatus', () async {
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: 'user-1',
+          jwtToken: 'tok',
+          enablePatientSentimentCapture: false,
+        );
+        await service.joinCall(
+          callId: 'call-processing-end',
+          otherPartyId: 'user-2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.endCall();
+
+        await expectLater(
+          service.joinCall(
+            callId: 'call-processing-end',
+            otherPartyId: 'user-2',
+            isVideoEnabled: true,
+            isAudioEnabled: true,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (e) => e.toString(),
+              'message',
+              contains('already ended'),
+            ),
+          ),
+        );
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/end')) {
+            return http.Response('{"status":"processing"}', 202);
+          }
+          return http.Response('{}', 404);
+        });
+      });
+    });
+
+    test('endCall_doesNotMarkCompletedOnHttpFailure', () async {
+      await http.runWithClient(() async {
+        await service.initialize(
+          userId: 'user-1',
+          jwtToken: 'tok',
+          enablePatientSentimentCapture: false,
+        );
+        await service.joinCall(
+          callId: 'call-end-http-fail',
+          otherPartyId: 'user-2',
+          isVideoEnabled: true,
+          isAudioEnabled: true,
+        );
+        await service.endCall();
+
+        // Failed end must not fence rejoin — server call may still be ACTIVE.
+        await expectLater(
+          service.joinCall(
+            callId: 'call-end-http-fail',
+            otherPartyId: 'user-2',
+            isVideoEnabled: true,
+            isAudioEnabled: true,
+          ),
+          completes,
+        );
+      }, () {
+        return MockClient((request) async {
+          if (request.url.path.endsWith('/join')) {
+            return http.Response(
+              '{"meetingId":"m1","attendeeId":"a1","joinToken":"t","mediaPlacement":{}}',
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/end')) {
+            return http.Response('{"message":"unavailable"}', 503);
+          }
+          return http.Response('{}', 404);
+        });
+      });
     });
   });
 }

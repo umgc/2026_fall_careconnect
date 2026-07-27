@@ -24,15 +24,3 @@ CREATE INDEX idx_patient_medication_patient_id ON patient_medication(patient_id)
 CREATE INDEX idx_patient_medication_active ON patient_medication(patient_id, is_active);
 CREATE INDEX idx_patient_medication_type ON patient_medication(medication_type);
 CREATE INDEX idx_patient_medication_name ON patient_medication(medication_name);
-
-CREATE TABLE patient_caregiver
-(
-    id                BIGSERIAL PRIMARY KEY,
-    patient_id        BIGINT NOT NULL,
-    caregiver_user_id BIGINT NOT NULL,
-    relationship_type VARCHAR(50),
-    created_at        TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT fk_patient FOREIGN KEY (patient_id) REFERENCES patient (id),
-    CONSTRAINT fk_caregiver FOREIGN KEY (caregiver_user_id) REFERENCES users (id),
-    CONSTRAINT uk_patient_caregiver UNIQUE (patient_id, caregiver_user_id)
-);

@@ -1,0 +1,1242 @@
+package com.careconnect.service.ai.indexing;
+
+import com.careconnect.indexing.MailpieceIndexedPayload;
+import com.careconnect.indexing.SummaryCreatedPayload;
+import com.careconnect.indexing.TranscriptIndexedPayload;
+import com.careconnect.model.CallSummary;
+import com.careconnect.model.CallSession;
+import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.model.UspsMailpiece;
+import com.careconnect.model.VisitSummary;
+import com.careconnect.model.retrieval.RetrievalIndexChunk;
+import com.careconnect.repository.CallSummaryRepository;
+import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.repository.CallTranscriptSegmentRepository;
+import com.careconnect.repository.UspsMailpieceRepository;
+import com.careconnect.repository.VisitSummaryRepository;
+import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
+import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
+import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
+import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
+import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.careconnect.util.ContentHashUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class RetrievalIndexServiceTest {
+
+    @Mock
+    private CallSummaryRepository callSummaryRepository;
+    @Mock
+    private VisitSummaryRepository visitSummaryRepository;
+    @Mock
+    private CallSessionRepository callSessionRepository;
+    @Mock
+    private CallTranscriptSegmentRepository transcriptSegmentRepository;
+    @Mock
+    private CallTranscriptService callTranscriptService;
+    @Mock
+    private UspsMailpieceRepository uspsMailpieceRepository;
+    @Mock
+    private RetrievalIndexChunkRepository chunkRepository;
+    @Mock
+    private ChunkEmbeddingService chunkEmbeddingService;
+
+    private RetrievalIndexService service;
+
+    @BeforeEach
+    void setUp() {
+        final ObjectMapper mapper = new ObjectMapper();
+        service = new RetrievalIndexService(
+                callSummaryRepository,
+                visitSummaryRepository,
+                callSessionRepository,
+                callTranscriptService,
+                uspsMailpieceRepository,
+                chunkRepository,
+                new SummaryChunker(mapper),
+                new TranscriptSegmentChunker(),
+                new MailpieceChunker(),
+                mapper,
+                chunkEmbeddingService);
+        lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(chunkRepository.tryAcquireSummaryReplayLock(anyString()))
+                .thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated writes CALL_SUMMARY chunks and replaces prior source rows")
+    void ingestSummaryCreated_writesChunks() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        summary.setSummaryJson("""
+                {"headline":"Hello","overallAssessment":"Stable","actionItems":[{"text":"Rest"}]}
+                """);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of());
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                3,
+                "on_consent",
+                "aws_bedrock:test",
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        final int written = service.ingestSummaryCreated(payload);
+
+        assertThat(written).isGreaterThanOrEqualTo(2);
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
+        assertThat(captor.getValue())
+                .extracting(RetrievalIndexChunk::getRecordType)
+                .contains(RetrievalRecordType.CALL_SUMMARY.name(),
+                        RetrievalRecordType.SUMMARY_ACTION_ITEM.name());
+        assertThat(captor.getValue().get(0).getPatientId()).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated skips when contentHash already indexed (exact match)")
+    void ingestSummaryCreated_skipsUnchangedHash() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId(SummarySourceKey.call(99L))
+                .sourceKind(SummarySourceKey.CALL_KIND)
+                .chunkText("old")
+                .consentScope("on_consent")
+                .chunkMetadata(
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256("{\"headline\":\"old\"}") + "\","
+                                + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
+                                + "\"summarizationEngine\":\"engine\","
+                                + "\"section\":\"overview\",\"title\":\"old\","
+                                + "\"caregiverVisibility\":\"on_consent\","
+                                + "\"episodeType\":\"call\",\"callId\":\"call-9\"}")
+                .build();
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of(existing));
+        when(chunkRepository.countMissingEmbeddingForSummarySources(
+                eq(42L), eq(List.of(SummarySourceKey.call(99L))), anyCollection()))
+                .thenReturn(0L);
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(callSummaryRepository).findByIdForUpdate(99L);
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+        verify(chunkEmbeddingService, never()).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("unchanged content rebuilds when authoritative caregiver visibility changes")
+    void ingestSummaryCreated_visibilityChanged_rebuildsWithAuthoritativeScope() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("hidden");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId(SummarySourceKey.call(99L))
+                .sourceKind(SummarySourceKey.CALL_KIND)
+                .chunkText("old")
+                .consentScope("on_consent")
+                .chunkMetadata(
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256("{\"headline\":\"old\"}") + "\","
+                                + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
+                                + "\"summarizationEngine\":\"engine\","
+                                + "\"section\":\"overview\",\"title\":\"old\","
+                                + "\"caregiverVisibility\":\"on_consent\","
+                                + "\"episodeType\":\"call\",\"callId\":\"call-9\"}")
+                .build();
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "on_consent", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson())));
+
+        assertThat(written).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getConsentScope()).isEqualTo("hidden");
+        assertThat(captor.getValue().get(0).getSourceRecordId())
+                .isEqualTo("call-summary:99");
+    }
+
+    @Test
+    @DisplayName("stale event patient scope is rejected before retrieval chunks are touched")
+    void ingestSummaryCreated_patientScopeMismatch_isRejected() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(43L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine", "sha256:same")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isTrue());
+
+        verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+    }
+
+    @Test
+    void ingestSummaryCreated_payloadOnlyOwnershipIsRejected() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(null);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("authoritative patientId");
+
+        verify(chunkRepository, never()).quarantineLegacySummarySourceAcrossPatients(
+                any(), anyCollection());
+    }
+
+    @Test
+    void ingestSummaryCreated_staleSuccessEventCannotOverrideFailedRow() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("FAILED");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("not successful");
+
+        verify(chunkRepository, never()).quarantineLegacySummarySourceAcrossPatients(
+                any(), anyCollection());
+    }
+
+    @Test
+    void ingestSummaryCreated_eventHashMismatchIsIntegrityFailure() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                "sha256:" + "0".repeat(64))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("content hash");
+
+        verify(chunkRepository, never()).quarantineLegacySummarySourceAcrossPatients(
+                any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("summary row is locked before scoped chunks are inspected")
+    void ingestSummaryCreated_locksBeforeReadingChunks() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"Current\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection())).thenReturn(List.of());
+
+        service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson())));
+
+        final InOrder order = inOrder(callSummaryRepository, chunkRepository);
+        order.verify(callSummaryRepository).findByIdForUpdate(99L);
+        order.verify(chunkRepository).findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated rebuilds unchanged content when citation metadata is stale")
+    void ingestSummaryCreated_sameHash_staleCitationMetadata_rebuilds() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("99")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha256:same\"}")
+                .build();
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of(existing));
+
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        final LocalDateTime generatedAt = LocalDateTime.of(2026, 7, 17, 12, 0);
+        summary.setGeneratedAt(generatedAt);
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThat(service.ingestSummaryCreated(payload)).isEqualTo(1);
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getChunkMetadata())
+                .contains("\"citationMetadataVersion\":1")
+                .contains("\"callId\":\"call-9\"")
+                .contains("\"occurredAt\":\""
+                        + generatedAt.toInstant(ZoneOffset.UTC) + "\"");
+    }
+
+    @Test
+    @DisplayName("unchanged hash rebuilds when an expected typed summary chunk is missing")
+    void ingestSummaryCreated_sameHashMissingTypedChunk_rebuilds() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("""
+                {"headline":"Stable","actionItems":[{"text":"Call clinician"}]}
+                """);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        final RetrievalIndexChunk overviewOnly = RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("99")
+                .chunkText("Stable")
+                .chunkMetadata(
+                        "{\"contentHash\":\"same\",\"citationMetadataVersion\":1,"
+                                + "\"chunkIndex\":0}")
+                .build();
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection())).thenReturn(List.of(overviewOnly));
+
+        final int written = service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "auto", "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson())));
+
+        assertThat(written).isEqualTo(2);
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated retries embed when contentHash matches but embeddings missing")
+    void ingestSummaryCreated_hashMatch_missingEmbeddings_retriesEmbed() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .id(java.util.UUID.randomUUID())
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId(SummarySourceKey.call(99L))
+                .sourceKind(SummarySourceKey.CALL_KIND)
+                .chunkText("old")
+                .consentScope("on_consent")
+                .chunkMetadata(
+                        "{\"contentHash\":\""
+                                + ContentHashUtil.sha256("{\"headline\":\"old\"}") + "\","
+                                + "\"citationMetadataVersion\":1,\"chunkIndex\":0,"
+                                + "\"summarizationEngine\":\"engine\","
+                                + "\"section\":\"overview\",\"title\":\"old\","
+                                + "\"caregiverVisibility\":\"on_consent\","
+                                + "\"episodeType\":\"call\",\"callId\":\"call-9\"}")
+                .build();
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        summary.setSummaryJson("{\"headline\":\"old\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of(existing));
+        when(chunkRepository.countMissingEmbeddingForSummarySources(
+                eq(42L), eq(List.of(SummarySourceKey.call(99L))), anyCollection()))
+                .thenReturn(1L);
+        when(chunkRepository.findMissingEmbeddingsForSummarySources(
+                eq(42L), eq(List.of(SummarySourceKey.call(99L))), anyCollection()))
+                .thenReturn(List.of(existing));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated does not skip when contentHash is only a prefix substring")
+    void ingestSummaryCreated_doesNotSkipOnHashPrefix() {
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("99")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha256:same-but-longer\"}")
+                .build();
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of(existing));
+
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"Updated\"}");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call",
+                "call_summaries",
+                99L,
+                "call-9",
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                1,
+                "on_consent",
+                "engine",
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThat(service.ingestSummaryCreated(payload)).isGreaterThan(0);
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(RetrievalIndexChunk::getSourceRecordId)
+                .containsOnly(SummarySourceKey.call(99L));
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated does not delete when drafts are empty")
+    void ingestSummaryCreated_emptyDrafts_doesNotDelete() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(8L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{}");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:8"), eq("8"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of());
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        // "{}" no longer dumps compact JSON as overview — empty structured fields => no drafts.
+        summary.setSummaryJson("{}");
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkEmbeddingService, never()).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated empty drafts still retries missing embeddings")
+    void ingestSummaryCreated_emptyDrafts_retriesMissingEmbeddings() {
+        final RetrievalIndexChunk orphan = RetrievalIndexChunk.builder()
+                .id(java.util.UUID.randomUUID())
+                .patientId(42L)
+                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
+                .sourceRecordId("8")
+                .chunkText("prior")
+                .chunkMetadata("{\"contentHash\":\"sha256:other\"}")
+                .build();
+        final CallSummary summary = new CallSummary();
+        summary.setId(8L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{}");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:8"), eq("8"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of(orphan));
+        when(chunkRepository.countMissingEmbeddingForSummarySources(
+                eq(42L), eq(List.of(SummarySourceKey.call(8L))), anyCollection()))
+                .thenReturn(1L);
+        when(chunkRepository.findMissingEmbeddingsForSummarySources(
+                eq(42L), eq(List.of(SummarySourceKey.call(8L))), anyCollection()))
+                .thenReturn(List.of(orphan));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 8L, "c", 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+        verify(chunkEmbeddingService).embedAndPersist(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated leaves existing chunks when summary text is blank")
+    void ingestSummaryCreated_blankSummary_doesNotDelete() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(9L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("   ");
+        summary.setCaregiverVisibility("on_consent");
+        when(callSummaryRepository.findByIdForUpdate(9L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:9"), eq("9"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of());
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 9L, "c", 42L, "SUCCESS",
+                LocalDateTime.now(), 0, "on_consent", null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThat(service.ingestSummaryCreated(payload)).isZero();
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated indexes visit summaries when VisitSummary is present")
+    void ingestSummaryCreated_indexesVisitWhenPresent() {
+        final VisitSummary summary = new VisitSummary();
+        summary.setId(50L);
+        summary.setVisitId("visit-50");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("on_consent");
+        summary.setGeneratedAt(LocalDateTime.now());
+        summary.setSummaryJson("""
+                {"headline":"Clinic visit","careInstructions":[
+                  {"type":"medication","text":"Take metformin with food","status":"started"}
+                ]}
+                """);
+        when(visitSummaryRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(summary));
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("visit-summary:50"), eq("visit-summary:50"),
+                eq(SummarySourceKey.VISIT_KIND), anyCollection()))
+                .thenReturn(List.of());
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "visit",
+                "visit_summaries",
+                50L,
+                null,
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                0,
+                "on_consent",
+                null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        final int written = service.ingestSummaryCreated(payload);
+
+        assertThat(written).isGreaterThanOrEqualTo(2);
+        verify(visitSummaryRepository).findByIdForUpdate(50L);
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+        verify(chunkRepository).deleteCallSummaryChunksForReplacement(
+                eq(42L), eq("visit-summary:50"), eq("visit-summary:50"),
+                eq(SummarySourceKey.VISIT_KIND), anyCollection());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(RetrievalIndexChunk::getRecordType)
+                .contains(
+                        RetrievalRecordType.VISIT_SUMMARY.name(),
+                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated defers when VisitSummary is missing without burning attempts")
+    void ingestSummaryCreated_defersVisitWhenMissing() {
+        when(visitSummaryRepository.findByIdForUpdate(50L)).thenReturn(Optional.empty());
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "visit",
+                "visit_summaries",
+                50L,
+                null,
+                42L,
+                "SUCCESS",
+                LocalDateTime.now(),
+                0,
+                "on_consent",
+                null,
+                "sha256:v");
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(payload))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("VisitSummary not found")
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt()).isFalse());
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("ingestSummaryCreated defers when patientId is missing")
+    void ingestSummaryCreated_defersWithoutPatientId() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(7L);
+        summary.setSummaryJson("{\"headline\":\"x\"}");
+        summary.setPatientId(null);
+        summary.setStatus("SUCCESS");
+        when(callSummaryRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(summary));
+
+        final SummaryCreatedPayload payload = new SummaryCreatedPayload(
+                "call", "call_summaries", 7L, "c", null, "SUCCESS",
+                LocalDateTime.now(), 0, null, null,
+                ContentHashUtil.sha256(summary.getSummaryJson()));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(payload))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("patientId");
+    }
+
+    @Test
+    @DisplayName("metadata replay returns RETRYABLE for blank authoritative summary")
+    void replaySummaryCitationMetadata_blankSummary_returnsRetryable() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson(" ");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.RETRYABLE);
+
+        verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("metadata replay quarantines a candidate under the wrong patient")
+    void replaySummaryCitationMetadata_ownerMismatch_returnsQuarantined() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(43L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 43L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.TERMINAL_QUARANTINED);
+
+        verify(chunkRepository, never()).findCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("metadata replay quarantines non-success summaries terminally")
+    void replaySummaryCitationMetadata_nonSuccess_isTerminal() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setPatientId(42L);
+        summary.setStatus("FAILED");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000005");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.TERMINAL_QUARANTINED);
+    }
+
+    @Test
+    @DisplayName("metadata replay does not race another application instance")
+    void replaySummaryCitationMetadata_lockBusy_returnsBusy() {
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(chunkRepository.tryAcquireSummaryReplayLock("summary-citation:42:99"))
+                .thenReturn(false);
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.BUSY);
+
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    @DisplayName("metadata replay refuses stale claim owners before mutation")
+    void replaySummaryCitationMetadata_staleOwner_mutatesNothing() {
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(0);
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.BUSY);
+
+        verify(callSummaryRepository, never()).findByIdForUpdate(any());
+        verify(chunkRepository, never()).deleteCallSummaryChunksForReplacement(
+                any(), any(), any(), any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("metadata replay quarantines legacy ownership before namespaced replacement")
+    void replaySummaryCitationMetadata_currentLegacySource_isUpdated() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setCaregiverVisibility("auto");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        final UUID claim = UUID.fromString("00000000-0000-0000-0000-000000000006");
+        when(chunkRepository.renewSummaryCitationReplayClaim(
+                eq(42L), eq("call-summary:99"), eq(claim), any())).thenReturn(1);
+        when(chunkRepository.hasActiveSummaryCitationReplayClaim(
+                42L, "call-summary:99", claim)).thenReturn(true);
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        when(chunkRepository.findCallSummaryChunksForReplacement(
+                eq(42L), eq("call-summary:99"), eq("99"),
+                eq(SummarySourceKey.CALL_KIND), anyCollection()))
+                .thenReturn(List.of());
+
+        assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
+                .isEqualTo(SummaryCitationReplayOutcome.UPDATED);
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        verify(chunkRepository).quarantineLegacySummarySourceAcrossPatients(
+                eq("99"), eq(RetrievalRecordType.summaryTypeNames()));
+        assertThat(captor.getValue())
+                .allSatisfy(chunk -> {
+                    assertThat(chunk.getSourceRecordId()).isEqualTo("call-summary:99");
+                    assertThat(chunk.getSourceKind()).isEqualTo(SummarySourceKey.CALL_KIND);
+                });
+    }
+
+    @Test
+    @DisplayName("ingestTranscriptIndexed writes one chunk per segment")
+    void ingestTranscriptIndexed_writesSegments() {
+        when(callSessionRepository.findByCallIdForIndexing("call-1"))
+                .thenReturn(Optional.of(callSession("call-1", 42L)));
+        final CallTranscriptSegment segment = new CallTranscriptSegment();
+        segment.setId(5L);
+        segment.setText("Feeling better today");
+        segment.setSpeakerLabel("Patient");
+        when(callTranscriptService.captureIndexingSnapshot("call-1"))
+                .thenReturn(indexingSnapshot(List.of(segment), "sha256:v1"));
+
+        final int written = service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-1", 42L, 1, "sha256:v1"));
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "call-1", RetrievalRecordType.TRANSCRIPT_SEGMENT.name());
+        verify(chunkRepository).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("later live batches retain archived chunks and use persisted segment sources")
+    void ingestTranscriptIndexed_archiveThenLaterBatch_keepsCompleteSnapshot() {
+        when(callSessionRepository.findByCallIdForIndexing("call-archive"))
+                .thenReturn(Optional.of(callSession("call-archive", 42L)));
+        final CallTranscriptSegment archived = new CallTranscriptSegment();
+        archived.setText("Archived opening");
+        archived.setSpeakerLabel("Patient");
+        archived.setSource("ARCHIVE_S3");
+        final CallTranscriptSegment live = new CallTranscriptSegment();
+        live.setId(22L);
+        live.setText("Later live segment");
+        live.setSpeakerLabel("Nurse");
+        live.setSource("POST_CALL_TRANSCRIBE");
+        when(callTranscriptService.captureIndexingSnapshot("call-archive"))
+                .thenReturn(indexingSnapshot(List.of(archived, live), "sha256:complete"));
+
+        assertThat(service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload(
+                        "call-archive", 42L, 2, "sha256:complete"))).isEqualTo(2);
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(2);
+        assertThat(captor.getValue().get(0).getChunkMetadata()).contains("ARCHIVE_S3");
+        assertThat(captor.getValue().get(1).getChunkMetadata())
+                .contains("POST_CALL_TRANSCRIBE");
+    }
+
+    @Test
+    void ingestSummaryCreated_rejectsTamperedEngineMetadata() {
+        final CallSummary summary = new CallSummary();
+        summary.setId(99L);
+        summary.setCallId("call-9");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummarizationEngine("aws_bedrock:trusted");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
+
+        assertThatThrownBy(() -> service.ingestSummaryCreated(new SummaryCreatedPayload(
+                "call", "call_summaries", 99L, "call-9", 42L, "SUCCESS",
+                LocalDateTime.now(), 1, "on_consent", "aws_bedrock:tampered",
+                ContentHashUtil.sha256(summary.getSummaryJson()))))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("engine");
+
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestTranscriptIndexed does not delete when no segment drafts")
+    void ingestTranscriptIndexed_emptyDrafts_doesNotDelete() {
+        when(callSessionRepository.findByCallIdForIndexing("call-2"))
+                .thenReturn(Optional.of(callSession("call-2", 77L)));
+        when(callTranscriptService.captureIndexingSnapshot("call-2"))
+                .thenReturn(indexingSnapshot(List.of(), "sha256:empty"));
+
+        assertThat(service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-2", null, 0, "sha256:empty")))
+                .isZero();
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestTranscriptIndexed defers when patientId cannot be resolved")
+    void ingestTranscriptIndexed_defersWithoutPatientId() {
+        when(callSessionRepository.findByCallIdForIndexing("call-3"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-3", null, 1, "sha256:v1")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("CallSession")
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isFalse());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+    }
+
+    @Test
+    void ingestTranscriptIndexed_rejectsCrossPatientStalePayload() {
+        when(callSessionRepository.findByCallIdForIndexing("call-4"))
+                .thenReturn(Optional.of(callSession("call-4", 77L)));
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-4", 42L, 1, "sha256:v1")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("CallSession");
+
+        verify(chunkRepository, never()).acquireSourceReplacementLock(any(), any(), any());
+    }
+
+    @Test
+    void ingestTranscriptIndexed_defersIncompleteLongCallSnapshotWithoutBurning() {
+        when(callSessionRepository.findByCallIdForIndexing("call-long"))
+                .thenReturn(Optional.of(callSession("call-long", 42L)));
+        when(callTranscriptService.captureIndexingSnapshot("call-long"))
+                .thenReturn(indexingSnapshot(List.of(new CallTranscriptSegment()), "sha256:short"));
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-long", 42L, 200, "sha256:long")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("incomplete")
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isFalse());
+
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ingestTranscriptIndexed accepts an older append-only snapshot as superseded")
+    void ingestTranscriptIndexed_olderSnapshotIsSuccessfulNoOp() {
+        when(callSessionRepository.findByCallIdForIndexing("call-growing"))
+                .thenReturn(Optional.of(callSession("call-growing", 42L)));
+        when(callTranscriptService.captureIndexingSnapshot("call-growing"))
+                .thenReturn(indexingSnapshot(
+                        List.of(new CallTranscriptSegment(), new CallTranscriptSegment()),
+                        "sha256:newer"));
+
+        assertThat(service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-growing", 42L, 1, "sha256:older")))
+                .isZero();
+
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("ingestTranscriptIndexed still defers a future snapshot")
+    void ingestTranscriptIndexed_futureSnapshotStillDefers() {
+        when(callSessionRepository.findByCallIdForIndexing("call-future"))
+                .thenReturn(Optional.of(callSession("call-future", 42L)));
+        when(callTranscriptService.captureIndexingSnapshot("call-future"))
+                .thenReturn(indexingSnapshot(
+                        List.of(new CallTranscriptSegment()), "sha256:current"));
+
+        assertThatThrownBy(() -> service.ingestTranscriptIndexed(
+                new TranscriptIndexedPayload("call-future", 42L, 2, "sha256:future")))
+                .isInstanceOf(IndexingDeferredException.class)
+                .satisfies(ex -> assertThat(((IndexingDeferredException) ex).burnsAttempt())
+                        .isFalse());
+    }
+
+    private static CallTranscriptService.IndexingSnapshot indexingSnapshot(
+            final List<CallTranscriptSegment> segments, final String version) {
+        return new CallTranscriptService.IndexingSnapshot(segments, version);
+    }
+
+    @Test
+    @DisplayName("ingestMailpieceIndexed writes USPS_MAIL chunk and replaces prior source rows")
+    void ingestMailpieceIndexed_writesChunk() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setSender("Acme Bank");
+        mailpiece.setSummary("Monthly statement");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                eq(42L), eq("55"), any()))
+                .thenReturn(List.of());
+
+        final MailpieceIndexedPayload payload = new MailpieceIndexedPayload(
+                55L, 42L, "2025-03-03|m-1", "sha-abc",
+                "Acme Bank", "Monthly statement",
+                java.time.LocalDate.of(2025, 3, 3), "on_consent");
+
+        final int written = service.ingestMailpieceIndexed(payload);
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(1);
+        assertThat(captor.getValue().get(0).getRecordType())
+                .isEqualTo(RetrievalRecordType.USPS_MAIL.name());
+        assertThat(captor.getValue().get(0).getPatientId()).isEqualTo(42L);
+        assertThat(captor.getValue().get(0).getChunkText()).contains("Acme Bank");
+    }
+
+    @Test
+    @DisplayName("ingestMailpieceIndexed skips when contentHash and importance fingerprint match")
+    void ingestMailpieceIndexed_skipsUnchangedHash() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setSender("Acme");
+        mailpiece.setSummary("Statement");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.USPS_MAIL.name())
+                .sourceRecordId("55")
+                .chunkText("old")
+                .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
+                .build();
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 42L, "2025-03-03|m-1", "sha-abc",
+                "Acme", "Statement", java.time.LocalDate.of(2025, 3, 3), "on_consent"));
+
+        assertThat(written).isZero();
+        verify(chunkRepository, never()).saveAll(anyList());
+        verify(chunkRepository, never())
+                .deleteByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ingestMailpieceIndexed rebuilds when hash matches but classification is missing from chunk")
+    void ingestMailpieceIndexed_rebuildsOnClassificationBackfill() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setSender("Acme Bank");
+        mailpiece.setSummary("Monthly statement");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        mailpiece.setImportanceLevel("HIGH");
+        mailpiece.setImportanceCategory("FINANCIAL");
+        mailpiece.setClassificationMethod("RULES");
+        mailpiece.setImportanceReasoning("Matched bank keyword.");
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+
+        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
+                .recordType(RetrievalRecordType.USPS_MAIL.name())
+                .sourceRecordId("55")
+                .chunkText("old without importance")
+                .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
+                .build();
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name()))
+                .thenReturn(List.of(existing));
+
+        final int written = service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 42L, "2025-03-03|m-1", "sha-abc",
+                "Acme Bank", "Monthly statement",
+                java.time.LocalDate.of(2025, 3, 3), "on_consent"));
+
+        assertThat(written).isEqualTo(1);
+        verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name());
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        verify(chunkRepository).saveAll(captor.capture());
+        assertThat(captor.getValue().get(0).getChunkText()).contains("Importance: HIGH");
+        assertThat(captor.getValue().get(0).getChunkMetadata()).contains("importanceFingerprint");
+    }
+
+    @Test
+    void ingestMailpieceIndexed_rejectsCrossPatientStalePayloadBeforeChunkAccess() {
+        final UspsMailpiece mailpiece = authoritativeMailpiece();
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+
+        assertThatThrownBy(() -> service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 99L, mailpiece.getSourceKey(), mailpiece.getContentHash(),
+                mailpiece.getSender(), mailpiece.getSummary(),
+                mailpiece.getDigestDate(), mailpiece.getConsentScope())))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("authoritative");
+
+        verify(chunkRepository, never()).acquireSourceReplacementLock(any(), any(), any());
+    }
+
+    @Test
+    void ingestMailpieceIndexed_rejectsStaleContentAssertion() {
+        final UspsMailpiece mailpiece = authoritativeMailpiece();
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+
+        assertThatThrownBy(() -> service.ingestMailpieceIndexed(new MailpieceIndexedPayload(
+                55L, 42L, mailpiece.getSourceKey(), "sha-stale",
+                mailpiece.getSender(), "stale summary",
+                mailpiece.getDigestDate(), mailpiece.getConsentScope())))
+                .isInstanceOf(IndexingDeferredException.class)
+                .hasMessageContaining("authoritative");
+
+        verify(chunkRepository, never())
+                .findByPatientIdAndSourceRecordIdAndRecordType(any(), any(), any());
+    }
+
+    @Test
+    void ingestMailpieceIndexed_duplicateDeliveryLocksAndSkipsExistingChunk() {
+        final UspsMailpiece mailpiece = authoritativeMailpiece();
+        when(uspsMailpieceRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(mailpiece));
+        when(chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                42L, "55", RetrievalRecordType.USPS_MAIL.name()))
+                .thenReturn(List.of(RetrievalIndexChunk.builder()
+                        .sourceRecordId("55")
+                        .recordType(RetrievalRecordType.USPS_MAIL.name())
+                        .chunkText("existing")
+                        .chunkMetadata("{\"contentHash\":\"sha-abc\"}")
+                        .build()));
+
+        final MailpieceIndexedPayload payload = new MailpieceIndexedPayload(
+                55L, 42L, mailpiece.getSourceKey(), mailpiece.getContentHash(),
+                mailpiece.getSender(), mailpiece.getSummary(),
+                mailpiece.getDigestDate(), mailpiece.getConsentScope());
+
+        assertThat(service.ingestMailpieceIndexed(payload)).isZero();
+        verify(chunkRepository).acquireSourceReplacementLock(
+                42L, RetrievalRecordType.USPS_MAIL.name(), "55");
+        verify(chunkRepository, never()).saveAll(anyList());
+    }
+
+    private static CallSession callSession(final String callId, final Long patientId) {
+        final CallSession session = new CallSession();
+        session.setCallId(callId);
+        session.setPatientId(patientId);
+        return session;
+    }
+
+    private static UspsMailpiece authoritativeMailpiece() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setSender("Acme");
+        mailpiece.setSummary("Statement");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        return mailpiece;
+    }
+
+    private static Collection<String> anyCollection() {
+        return any();
+    }
+
+    private static List<String> summarySources(final long summaryId) {
+        return List.of(
+                SummarySourceKey.call(summaryId),
+                SummarySourceKey.legacy(summaryId));
+    }
+}

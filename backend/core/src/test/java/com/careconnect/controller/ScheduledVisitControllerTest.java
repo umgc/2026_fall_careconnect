@@ -193,12 +193,13 @@ class ScheduledVisitControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 500 when date format is invalid")
-        void returns500WhenDateFormatInvalid() throws Exception {
+        @DisplayName("Returns 400 when date format is invalid")
+        void returns400WhenDateFormatInvalid() throws Exception {
             // Act + Assert
+            // Invalid LocalDate path variable triggers MethodArgumentTypeMismatchException,
+            // which GlobalExceptionHandler now maps to 400 (was 500 before the handler was added).
             mockMvc.perform(get("/v1/api/scheduled-visits/caregiver/5/date/03-01-2026"))
-                    .andExpect(status().isInternalServerError());
-
+                    .andExpect(status().isBadRequest());
             // Assert
             verifyNoInteractions(scheduledVisitService);
         }

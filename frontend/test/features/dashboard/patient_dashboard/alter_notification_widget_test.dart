@@ -2,6 +2,7 @@
 // (lib/features/dashboard/patient_dashboard/widgets/alter_notification_widget.dart).
 
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/alter_notification_widget.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,6 +27,9 @@ void main() {
     testWidgets('renders Important: label and message', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales, 
           home: Scaffold(
             body: AlertNotification(
               type: AlertType.important,
@@ -41,6 +45,9 @@ void main() {
     testWidgets('renders Reminder: label', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales, 
           home: Scaffold(
             body: AlertNotification(
               type: AlertType.reminder,
@@ -55,6 +62,9 @@ void main() {
     testWidgets('renders Success: label', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales, 
           home: Scaffold(
             body: AlertNotification(
               type: AlertType.success,
@@ -69,6 +79,9 @@ void main() {
     testWidgets('renders Info: label', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: AlertNotification(
               type: AlertType.info,
@@ -84,6 +97,9 @@ void main() {
       bool dismissed = false;
       await tester.pumpWidget(
         MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales, 
           home: Scaffold(
             body: AlertNotification(
               type: AlertType.info,
@@ -101,6 +117,9 @@ void main() {
     testWidgets('hides close button when onDismiss is null', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales, 
           home: Scaffold(
             body: AlertNotification(
               type: AlertType.important,

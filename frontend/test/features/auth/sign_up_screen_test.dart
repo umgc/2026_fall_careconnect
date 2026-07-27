@@ -4,6 +4,7 @@
 // Multi-step registration form — no API calls in initState.
 // Tests cover all 5 steps, form validation, password visibility, and role selection.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -45,6 +46,7 @@ Widget _wrap({String? initialRole, bool lockRole = false, double width = 800}) {
   return MediaQuery(
     data: MediaQueryData(size: Size(width, 800)),
     child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'),
       routerConfig: router,
     ),
   );
@@ -955,7 +957,7 @@ void main() {
 
     testWidgets('shows Phone and Date of Birth labels', (tester) async {
       await _goToStep4(tester);
-      expect(find.text('Phone'), findsOneWidget);
+      expect(find.text('Phone Number'), findsOneWidget);
       expect(find.text('Date of Birth'), findsOneWidget);
     });
 

@@ -63,6 +63,7 @@ nano .env  # or use your preferred editor
 - `SECURITY_JWT_SECRET` - JWT secret key (256+ bits)
 
 Need Gmail OAuth for mail digests? Follow the programmer guide in `docs/google-oauth-setup.md`.
+Need form-template metadata for digital assessments? See `docs/assessment-schema.md`.
 
 **Firebase variables** (required for notifications):
 - `FIREBASE_PROJECT_ID=careconnectcapstone`
@@ -106,7 +107,7 @@ The development profile disables external services to simplify local runs. Key f
 - `careconnect.deepseek.enabled=false` — Disable DeepSeek in dev
 - `app.file.storage.use-s3=false` — Use local storage instead of S3
 
-For reference, the dev profile also sets PostgreSQL defaults and uses Flyway for migrations.
+For reference, the dev profile also sets PostgreSQL defaults; schema changes use `SchemaPatchRunner` and Hibernate `ddl-auto=update` (Flyway is not used in deploy).
 
 ## Alternative Setup (IDE Configuration)
 

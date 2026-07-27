@@ -6,6 +6,7 @@ import com.careconnect.repository.CallSummaryRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -13,11 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import com.careconnect.indexing.IndexingEventEmitter;
-import com.careconnect.indexing.SummaryCreatedPayload;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +32,8 @@ public class CallSummaryService {
   private static final String FAILED_SUMMARY_HEADLINE = "Summary unavailable";
   private static final String FAILED_SUMMARY_ASSESSMENT =
       "Automated summary could not be generated.";
+  private static final List<String> TERMINAL_SUCCESS_STATUSES =
+      List.of("SUCCESS", "NO_TRANSCRIPT");
 
   /** Repository used to persist generated call summaries. */
   private final CallSummaryRepository summaryRepository;
@@ -49,8 +47,11 @@ public class CallSummaryService {
   /** JSON mapper used to serialize and deserialize summary payloads. */
   private final ObjectMapper objectMapper;
 
-  /** Emits SUMMARY_CREATED events to the indexing outbox after successful persistence. */
-  private final IndexingEventEmitter indexingEventEmitter;
+  /** Resolves the authoritative patient entity associated with a call. */
+  private final CallPatientResolver callPatientResolver;
+
+  /** Persists summaries and their outbox events in a second atomic transaction. */
+  private final CallSummaryPersistenceService persistenceService;
 
   /**
    * Returns the latest stored summary entity for a call when available.
@@ -80,6 +81,40 @@ public class CallSummaryService {
   }
 
   /**
+   * Returns the stored summary entity by its database identifier when present.
+   *
+   * <p>Used by the read-side endpoint {@code GET /api/v3/summaries/{id}}
+   * (WBS 3.11.6). Unlike {@link #getLatestSummaryEntity(String)} this
+   * method does not resolve "latest per call" — it fetches exactly the row
+   * with the given primary key, so callers reach the specific summary
+   * emitted in a {@code SUMMARY_CREATED} event.
+   *
+   * @param id database identifier of the summary row
+   * @return matching summary when found, empty otherwise
+   */
+  public Optional<CallSummary> getSummaryEntityById(final Long id) {
+    final Optional<CallSummary> result;
+    if (id == null) {
+      result = Optional.empty();
+    } else {
+      result = summaryRepository.findById(id);
+    }
+    return result;
+  }
+
+  /**
+   * Returns the stored summary payload by its database identifier when
+   * present. Response shape matches {@link #getLatestSummary(String)} so
+   * consumers can treat the two endpoints as interchangeable read paths.
+   *
+   * @param id database identifier of the summary row
+   * @return summary response payload when found
+   */
+  public Optional<Map<String, Object>> getSummaryById(final Long id) {
+    return getSummaryEntityById(id).map(this::toResponse);
+  }
+
+  /**
    * Generates, stores, and returns a summary for the supplied call.
    *
    * @param callId call identifier
@@ -87,26 +122,41 @@ public class CallSummaryService {
    * @param latestByChannel latest channel sentiment events
    * @return stored summary response payload
    */
-  @Transactional 
   public Map<String, Object> generateAndStoreSummary(
       final String callId,
       final Long generatedByUserId,
       final Map<String, CallTelemetryEvent> latestByChannel) {
     final String normalizedCallId = requireCallId(callId);
-    final String transcript = transcriptService.buildTranscriptTextForSummary(normalizedCallId);
-    final long segmentCount = transcriptService.countSegments(normalizedCallId);
+    final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
+    final CallTranscriptService.TranscriptSnapshot snapshot =
+        transcriptService.captureSummarySnapshot(normalizedCallId);
+    final String modelConfigVersion = sentimentService.summaryModelConfigVersion();
+    final Optional<CallSummary> existing =
+        summaryRepository
+            .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+                normalizedCallId,
+                snapshot.version(),
+                modelConfigVersion,
+                TERMINAL_SUCCESS_STATUSES);
+    if (existing.isPresent()) {
+      return toResponse(existing.get());
+    }
+    final String transcript = snapshot.transcriptText();
     Map<String, Object> response = Map.of();
 
     if (transcript.isBlank()) {
-      response = buildNoTranscriptResponse(normalizedCallId, generatedByUserId, segmentCount);
+      response = buildNoTranscriptResponse(
+          normalizedCallId, patientId, generatedByUserId, snapshot, modelConfigVersion);
     } else {
       final Map<String, BedrockSentimentService.SentimentResult> channelScores =
           toChannelScores(normalizedCallId, latestByChannel);
       response = generateSummaryResponse(
           normalizedCallId,
+          patientId,
           transcript,
           generatedByUserId,
-          segmentCount,
+          snapshot,
+          modelConfigVersion,
           channelScores);
     }
     return response;
@@ -114,54 +164,74 @@ public class CallSummaryService {
 
   private Map<String, Object> buildNoTranscriptResponse(
       final String normalizedCallId,
+      final Long patientId,
       final Long generatedByUserId,
-      final long segmentCount) {
+      final CallTranscriptService.TranscriptSnapshot snapshot,
+      final String modelConfigVersion) {
     final CallSummary summary = new CallSummary();
     summary.setCallId(normalizedCallId);
+    summary.setPatientId(patientId);
     summary.setStatus("NO_TRANSCRIPT");
-    summary.setTranscriptSegmentCount((int) segmentCount);
+    summary.setTranscriptSegmentCount(Math.toIntExact(snapshot.segmentCount()));
     summary.setGeneratedByUserId(generatedByUserId);
+    summary.setTranscriptSnapshotVersion(snapshot.version());
+    summary.setModelConfigVersion(modelConfigVersion);
     summary.setErrorMessage("No transcript segments were available.");
-    summary.setGeneratedAt(LocalDateTime.now());
+    // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
+    summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
     summary.setSummaryJson(
-        toJsonSafe(emptySummaryPayload(EMPTY_SUMMARY_HEADLINE, EMPTY_SUMMARY_ASSESSMENT)));
+        toJsonSafe(withSnapshotVersion(
+            emptySummaryPayload(EMPTY_SUMMARY_HEADLINE, EMPTY_SUMMARY_ASSESSMENT),
+            snapshot.version())));
     return persistResponse(normalizedCallId, summary);
   }
 
   private Map<String, Object> generateSummaryResponse(
       final String normalizedCallId,
+      final Long patientId,
       final String transcript,
       final Long generatedByUserId,
-      final long segmentCount,
+      final CallTranscriptService.TranscriptSnapshot snapshot,
+      final String modelConfigVersion,
       final Map<String, BedrockSentimentService.SentimentResult> channelScores) {
-    Map<String, Object> response = Map.of();
+    final Map<String, Object> summaryPayload;
     try {
-      final Map<String, Object> summaryPayload =
+      summaryPayload =
           sentimentService.summarizeTranscript(normalizedCallId, transcript, channelScores);
-      final CallSummary stored = buildStoredSummary(
-          normalizedCallId,
-          generatedByUserId,
-          segmentCount,
-          "SUCCESS",
-          null,
-          summaryPayload);
-      response = persistResponse(normalizedCallId, stored);
-    } catch (Exception ex) {
+    } catch (ModelInferenceException ex) {
       logSummaryFailure(normalizedCallId, ex);
       final CallSummary failed = buildStoredSummary(
           normalizedCallId,
+          patientId,
           generatedByUserId,
-          segmentCount,
+          snapshot.segmentCount(),
           "ERROR",
           ex.getMessage(),
-          emptySummaryPayload(FAILED_SUMMARY_HEADLINE, FAILED_SUMMARY_ASSESSMENT));
-      response = persistResponse(normalizedCallId, failed);
+          withSnapshotVersion(
+              emptySummaryPayload(FAILED_SUMMARY_HEADLINE, FAILED_SUMMARY_ASSESSMENT),
+              snapshot.version()));
+      failed.setTranscriptSnapshotVersion(snapshot.version());
+      failed.setModelConfigVersion(modelConfigVersion);
+      failed.setSummarizationEngine(sentimentService.summaryEngine());
+      return persistResponse(normalizedCallId, failed);
     }
-    return response;
+    final CallSummary stored = buildStoredSummary(
+        normalizedCallId,
+        patientId,
+        generatedByUserId,
+        snapshot.segmentCount(),
+        "SUCCESS",
+        null,
+        withSnapshotVersion(summaryPayload, snapshot.version()));
+    stored.setTranscriptSnapshotVersion(snapshot.version());
+    stored.setModelConfigVersion(modelConfigVersion);
+    stored.setSummarizationEngine(sentimentService.summaryEngine());
+    return persistResponse(normalizedCallId, stored);
   }
 
   private CallSummary buildStoredSummary(
       final String normalizedCallId,
+      final Long patientId,
       final Long generatedByUserId,
       final long segmentCount,
       final String status,
@@ -169,14 +239,15 @@ public class CallSummaryService {
       final Map<String, Object> summaryPayload) {
     final CallSummary summary = new CallSummary();
     summary.setCallId(normalizedCallId);
+    summary.setPatientId(patientId);
     summary.setStatus(status);
     summary.setTranscriptSegmentCount((int) segmentCount);
     summary.setGeneratedByUserId(generatedByUserId);
-    summary.setGeneratedAt(LocalDateTime.now());
+    // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
+    summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
     summary.setErrorMessage(errorMessage);
     summary.setRiskLevel(extractStringField(summaryPayload, "riskLevel"));
     summary.setCaregiverVisibility(extractCaregiverVisibility(summaryPayload));
-    summary.setSummarizationEngine(extractStringField(summaryPayload, "summarizationEngine"));
     summary.setSummaryJson(toJsonSafe(summaryPayload));
     return summary;
   }
@@ -184,12 +255,19 @@ public class CallSummaryService {
   private Map<String, Object> persistResponse(
       final String normalizedCallId,
       final CallSummary summary) {
+    final CallSummary saved = persistenceService.persist(summary);
     transcriptService.archiveIfEligible(normalizedCallId);
-    final CallSummary saved = summaryRepository.save(summary);
     final Map<String, Object> response = toResponse(saved);
-    emitIfSuccess(saved);
     response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(normalizedCallId));
     return response;
+  }
+
+  private static Map<String, Object> withSnapshotVersion(
+      final Map<String, Object> payload,
+      final String snapshotVersion) {
+    final Map<String, Object> versioned = new LinkedHashMap<>(payload);
+    versioned.put("transcriptSnapshotVersion", snapshotVersion);
+    return versioned;
   }
 
   private static Map<String, Object> emptySummaryPayload(
@@ -265,55 +343,6 @@ public class CallSummaryService {
     return channel.trim().toUpperCase(Locale.ROOT);
   }
 
-  /**
-   * Emits SUMMARY_CREATED for a persisted summary when its status is
-   * SUCCESS. Per Ravichandra Vasireddy's 2026-07-03 indexing contract,
-   * NO_TRANSCRIPT and ERROR summaries are not indexed. patientId is
-   * read from the entity, nullable until callers populate it.
-   *
-   * @param summary persisted call summary
-   */
-  private void emitIfSuccess(final CallSummary summary) {
-    if (summary == null || !"SUCCESS".equals(summary.getStatus())) {
-      return;
-    }
-    final SummaryCreatedPayload payload = new SummaryCreatedPayload(
-        "call",
-        "call_summaries",
-        summary.getId(),
-        summary.getCallId(),
-        summary.getPatientId(),
-        summary.getStatus(),
-        summary.getGeneratedAt(),
-        summary.getTranscriptSegmentCount(),
-        summary.getCaregiverVisibility(),
-        summary.getSummarizationEngine(),
-        sha256(summary.getSummaryJson()));
-    indexingEventEmitter.emitSummaryCreated(payload);
-  }
-
-  /**
-   * Computes {@code sha256:<hex>} of the given input for the
-   * SUMMARY_CREATED payload's contentHash field. Consumers use this
-   * to skip re-embedding an unchanged summary.
-   */
-  private String sha256(final String input) {
-    if (input == null) {
-      return null;
-    }
-    try {
-      final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      final byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-      final StringBuilder hex = new StringBuilder(hash.length * 2);
-      for (final byte b : hash) {
-        hex.append(String.format("%02x", b));
-      }
-      return "sha256:" + hex;
-    } catch (final NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 not available", e);
-    }
-  }
-
   private Map<String, Object> toResponse(final CallSummary summary) {
     Map<String, Object> payload = new LinkedHashMap<>();
     if (summary.getSummaryJson() != null && !summary.getSummaryJson().isBlank()) {
@@ -372,13 +401,11 @@ public class CallSummaryService {
   }
 
   private String toJsonSafe(final Object value) {
-    String json = "{}";
     try {
-      json = objectMapper.writeValueAsString(value);
+      return objectMapper.writeValueAsString(value);
     } catch (Exception ex) {
-      json = "{}";
+      throw new IllegalStateException("Failed to serialize call summary payload", ex);
     }
-    return json;
   }
 
   private static String normalize(final String callId) {

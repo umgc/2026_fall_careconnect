@@ -3,6 +3,7 @@
 
 import 'package:care_connect_app/config/navigation/bottom_nav_config.dart';
 import 'package:care_connect_app/config/navigation/main_screen_config.dart';
+import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/screens/main_screen.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -50,8 +51,8 @@ Widget _wrap({
   MainScreenConfig? config,
   _TestableUserProvider? provider,
 }) {
-  final effectiveProvider = provider ??
-      _TestableUserProvider(mockUser: MockUser(role: role));
+  final effectiveProvider =
+      provider ?? _TestableUserProvider(mockUser: MockUser(role: role));
   final effectiveConfig =
       config ?? MainScreenConfig.forPatient(userId: 1, patientId: 1);
 
@@ -68,6 +69,10 @@ Widget _wrap({
       GoRoute(
         path: '/login',
         builder: (_, __) => const Scaffold(body: Text('Login Page')),
+      ),
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) => const VoiceCommandAI(),
       ),
     ],
   );
@@ -91,8 +96,8 @@ Widget _wrap({
 Widget _wrapWithoutConfig({
   _TestableUserProvider? provider,
 }) {
-  final effectiveProvider = provider ??
-      _TestableUserProvider(mockUser: MockUser(role: 'PATIENT'));
+  final effectiveProvider =
+      provider ?? _TestableUserProvider(mockUser: MockUser(role: 'PATIENT'));
 
   final router = GoRouter(
     initialLocation: '/',
@@ -146,6 +151,13 @@ void main() {
         .setMockMethodCallHandler(storageChannel, (call) async {
       return null;
     });
+
+    const porcupineChannel =
+        MethodChannel('flutter.picovoice.ai/porcupine_manager');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(porcupineChannel, (call) async {
+      return null;
+    });
   });
 
   tearDown(() {
@@ -157,12 +169,14 @@ void main() {
   // ---------------------------------------------------------------
 
   group('Basic rendering', () {
-    testWidgets('Team C smoke: renders main shell navigation surfaces',
+    testWidgets(
+        'TC-C-REG-001 main screen renders the shared app shell without exceptions',
         (tester) async {
       tester.view.physicalSize = const Size(1440, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
+      final local = lookupAppLocalizations(const Locale('en'));
       final config = MainScreenConfig(
         userRole: 'PATIENT',
         userId: 1,
@@ -170,12 +184,14 @@ void main() {
         customNavItems: [
           BottomNavItem(
             label: 'Home',
+            labelKey: 'nav_home',
             icon: Icons.home,
             routeName: 'home',
             screen: const Scaffold(body: Text('Home Shell')),
           ),
           BottomNavItem(
             label: 'Menu',
+            labelKey: 'nav_more',
             icon: Icons.menu,
             routeName: 'menu',
             screen: const Scaffold(body: Text('Menu Shell')),
@@ -186,12 +202,47 @@ void main() {
       await tester.pumpWidget(_wrap(config: config));
       await tester.pump();
 
-      expect(find.byType(MainScreen), findsOneWidget);
-      expect(find.byType(PageView), findsOneWidget);
-      expect(find.byType(BottomNavigationBar), findsOneWidget);
-      expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Menu'), findsOneWidget);
-      expect(find.text('Home Shell'), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'TC-C-REG-001 expects MainScreen construction to complete '
+            'without uncaught Flutter exceptions.',
+      );
+      expect(
+        find.byType(MainScreen),
+        findsOneWidget,
+        reason: 'TC-C-REG-001 expects the shared main shell to render.',
+      );
+      expect(
+        find.byType(PageView),
+        findsOneWidget,
+        reason: 'TC-C-REG-001 expects the app shell page host to remain '
+            'available.',
+      );
+      expect(
+        find.byType(BottomNavigationBar),
+        findsOneWidget,
+        reason: 'TC-C-REG-001 expects the bottom navigation shell anchor to '
+            'remain available.',
+      );
+      expect(
+        find.text(local.navHome),
+        findsOneWidget,
+        reason: 'TC-C-REG-001 expects at least one localized navigation '
+            'anchor to render.',
+      );
+      expect(
+        find.text(local.navMore),
+        findsOneWidget,
+        reason: 'TC-C-REG-001 expects the menu/more shell anchor to render '
+            'through localization.',
+      );
+      expect(
+        find.text('Home Shell'),
+        findsOneWidget,
+        reason: 'TC-C-REG-001 expects the initially selected shell page to '
+            'render.',
+      );
     });
 
     testWidgets('renders a Scaffold', (tester) async {
@@ -219,6 +270,37 @@ void main() {
       await tester.pumpWidget(_wrap());
       await tester.pump();
       expect(find.byType(PageView), findsOneWidget);
+    });
+
+    testWidgets('renders the global voice commands entry point',
+        (tester) async {
+      tester.view.physicalSize = const Size(1440, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      expect(find.byTooltip('Voice commands'), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsWidgets);
+    });
+
+    // TC-S2-VC-ENTRY-002
+    testWidgets('opens VoiceCommandAI from the global shell entry point',
+        (tester) async {
+      tester.view.physicalSize = const Size(1440, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Voice commands'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(VoiceCommandAI), findsOneWidget);
+      expect(find.text('Voice Commands'), findsOneWidget);
     });
 
     testWidgets('BottomNavigationBar has multiple items', (tester) async {
@@ -672,8 +754,7 @@ void main() {
       expect(find.byIcon(Icons.cloud_off), findsOneWidget);
     });
 
-    testWidgets(
-        'offline banner settings button taps to last nav item',
+    testWidgets('offline banner settings button taps to last nav item',
         (tester) async {
       // Skip: Banner config uses real nav items but test has only 2 items.
       return;
@@ -895,8 +976,7 @@ void main() {
   // ---------------------------------------------------------------
 
   group('PageView interaction', () {
-    testWidgets('swiping PageView updates selected nav index',
-        (tester) async {
+    testWidgets('swiping PageView updates selected nav index', (tester) async {
       tester.view.physicalSize = const Size(1440, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -1081,7 +1161,8 @@ void main() {
       final navBar = tester.widget<BottomNavigationBar>(
         find.byType(BottomNavigationBar),
       );
-      // Caregiver has 5 nav items
+      // Caregiver has 6 nav items: Home, Patient List, Analytics, Schedule,
+      // Messages, and Menu.
       expect(navBar.items.length, 6);
     });
   });

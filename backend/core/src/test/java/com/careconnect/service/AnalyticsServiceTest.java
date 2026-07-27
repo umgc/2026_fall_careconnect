@@ -57,6 +57,7 @@ class AnalyticsServiceTest {
     private AnalyticsService analyticsService;
 
     private Patient testPatient;
+    private static final Long PATIENT_USER_ID = 1L;
     private User testUser;
 
     @BeforeEach
@@ -93,12 +94,12 @@ class AnalyticsServiceTest {
             when(agg.getAvgHeartRate()).thenReturn(72.5);
 
             when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                    eq(patientId), any(Instant.class), any(Instant.class))).thenReturn(agg);
+                    eq(PATIENT_USER_ID), any(Instant.class), any(Instant.class))).thenReturn(agg);
 
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(98.2);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(120.0);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(80.0);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(170.5);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(98.2);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(120.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(80.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(170.5);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.avgMoodByPatientAndTimestampBetween(eq(testPatient), any(), any())).thenReturn(7.5);
@@ -130,15 +131,15 @@ class AnalyticsServiceTest {
             final Period period = Period.ofDays(7);
 
             when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                    eq(patientId), any(Instant.class), any(Instant.class))).thenReturn(null);
+                    eq(PATIENT_USER_ID), any(Instant.class), any(Instant.class))).thenReturn(null);
 
             when(symptomRepo.countCompleted(eq(patientId), any(), any())).thenReturn(8L);
             when(symptomRepo.countTotal(eq(patientId), any(), any())).thenReturn(10L);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(75.0);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(97.0);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(118.0);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(78.0);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(165.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(75.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(97.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(118.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(78.0);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(165.0);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.avgMoodByPatientAndTimestampBetween(eq(testPatient), any(), any())).thenReturn(null);
@@ -164,15 +165,15 @@ class AnalyticsServiceTest {
             final Period period = Period.ofDays(7);
 
             when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                    eq(patientId), any(), any())).thenReturn(null);
+                    eq(PATIENT_USER_ID), any(), any())).thenReturn(null);
 
             when(symptomRepo.countCompleted(eq(patientId), any(), any())).thenReturn(0L);
             when(symptomRepo.countTotal(eq(patientId), any(), any())).thenReturn(0L);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(null);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.avgMoodByPatientAndTimestampBetween(eq(testPatient), any(), any())).thenReturn(null);
@@ -194,7 +195,7 @@ class AnalyticsServiceTest {
             final Period period = Period.ofDays(7);
 
             when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                    eq(patientId), any(), any())).thenReturn(null);
+                    eq(PATIENT_USER_ID), any(), any())).thenReturn(null);
             when(symptomRepo.countCompleted(eq(patientId), any(), any())).thenReturn(0L);
             when(symptomRepo.countTotal(eq(patientId), any(), any())).thenReturn(0L);
             when(wearableRepo.avgForPeriod(any(), any(), any(), any())).thenReturn(null);
@@ -210,15 +211,15 @@ class AnalyticsServiceTest {
             final Period period = Period.ofDays(7);
 
             when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                    eq(patientId), any(), any())).thenReturn(null);
+                    eq(PATIENT_USER_ID), any(), any())).thenReturn(null);
 
             when(symptomRepo.countCompleted(eq(patientId), any(), any())).thenReturn(5L);
             when(symptomRepo.countTotal(eq(patientId), any(), any())).thenReturn(10L);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.SPO2), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(null);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.avgMoodByPatientAndTimestampBetween(eq(testPatient), any(), any())).thenReturn(null);
@@ -238,17 +239,17 @@ class AnalyticsServiceTest {
             final Period period = Period.ofDays(7);
 
             when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                    eq(patientId), any(), any())).thenReturn(null);
+                    eq(PATIENT_USER_ID), any(), any())).thenReturn(null);
             when(symptomRepo.countCompleted(eq(patientId), any(), any())).thenReturn(0L);
             when(symptomRepo.countTotal(eq(patientId), any(), any())).thenReturn(0L);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.HEART_RATE), any(), any())).thenReturn(null);
 
             // Make SPO2 throw an exception to test the catch block in avgOrZero
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.SPO2), any(), any()))
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.SPO2), any(), any()))
                     .thenThrow(new RuntimeException("DB error"));
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(null);
-            when(wearableRepo.avgForPeriod(eq(patientId), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_SYS), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.BLOOD_PRESSURE_DIA), any(), any())).thenReturn(null);
+            when(wearableRepo.avgForPeriod(eq(PATIENT_USER_ID), eq(WearableMetric.MetricType.WEIGHT), any(), any())).thenReturn(null);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.avgMoodByPatientAndTimestampBetween(eq(testPatient), any(), any())).thenReturn(null);
@@ -288,7 +289,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts1)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(hrMetric, spo2Metric));
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
@@ -316,7 +317,7 @@ class AnalyticsServiceTest {
             final Long patientId = 10L;
             final Period period = Period.ofDays(7);
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(Collections.emptyList());
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -334,7 +335,7 @@ class AnalyticsServiceTest {
             final Long patientId = 999L;
             final Period period = Period.ofDays(7);
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(Collections.emptyList());
             when(patientRepo.findById(patientId)).thenReturn(Optional.empty());
 
@@ -360,7 +361,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts1)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(sysMetric, diaMetric));
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -386,7 +387,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts1)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(hrMetric));
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -418,7 +419,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts1)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(hr1, hr2));
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -473,7 +474,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(hrMetric));
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -493,7 +494,7 @@ class AnalyticsServiceTest {
             final Long patientId = 10L;
             final Period period = Period.ofDays(7);
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(Collections.emptyList());
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -525,7 +526,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(hrMetric));
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -546,7 +547,7 @@ class AnalyticsServiceTest {
             final Long patientId = 10L;
             final Period period = Period.ofDays(7);
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(Collections.emptyList());
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))
@@ -572,7 +573,7 @@ class AnalyticsServiceTest {
             final Period period = Period.ofDays(7);
             final LocalDateTime logTime = LocalDateTime.of(2025, 1, 1, 10, 0);
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(Collections.emptyList());
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
 
@@ -612,7 +613,7 @@ class AnalyticsServiceTest {
                     .recordedAt(ts)
                     .build();
 
-            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(patientId), any(), any()))
+            when(wearableRepo.findByPatientIdAndRecordedAtBetween(eq(PATIENT_USER_ID), any(), any()))
                     .thenReturn(List.of(weightMetric));
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(testPatient));
             when(moodPainLogRepo.findByPatientAndTimestampBetween(eq(testPatient), any(), any()))

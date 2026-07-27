@@ -1,0 +1,5 @@
+[
+  { "ParameterKey": "Environment", "ParameterValue": "prod" },
+  { "ParameterKey": "RepositoryName", "ParameterValue": "careconnect-backend-prod" },
+  { "ParameterKey": "LogRetentionDays", "ParameterValue": "90" }
+]

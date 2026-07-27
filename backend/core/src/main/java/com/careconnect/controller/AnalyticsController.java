@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Collections;
 import org.springframework.security.core.Authentication;
 import com.careconnect.dto.ExportLinkDTO;
+import com.careconnect.dto.VitalAlertEventDTO;
 import com.careconnect.dto.VitalSampleDTO;
 import com.careconnect.dto.WearableReadingIngestionRequest;
 import com.careconnect.dto.WearableReadingIngestionResponse;
@@ -53,6 +54,7 @@ import java.time.Period;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/v1/api/analytics")
@@ -167,6 +169,9 @@ private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
 @GetMapping("/vitals")
 public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int days) {
   try {
+        if (days < 1) {
+            days = 1;
+        }
         // Get user details from JWT token
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String userEmail = auth.getName();
@@ -218,12 +223,62 @@ public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int 
             "message", "Vitals data retrieved successfully"
         ));
     } catch (Exception e) {
-        return ResponseEntity.ok(Map.of(
-            "data", Collections.emptyList(),
-            "message", "No vitals data available"
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+            "error", "Failed to retrieve vitals data"
         ));
     }
     }
+
+@GetMapping("/alerts/recent")
+public ResponseEntity<?> recentVitalAlerts(
+        @RequestParam Long patientId,
+        @RequestParam(defaultValue = "5") int limit
+) {
+    try {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String userEmail = auth.getName();
+        User currentUser = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
+        Optional<Patient> patientOpt = patientRepository.findById(patientId);
+        if (patientOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Patient not found"));
+        }
+        Patient patient = patientOpt.get();
+        User patientUser = patient.getUser();
+
+        boolean hasAccess = false;
+        if (currentUser.getRole() == Role.PATIENT) {
+            hasAccess = currentUser.getId().equals(patientUser.getId());
+        } else if (currentUser.getRole() == Role.CAREGIVER) {
+            hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
+        } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
+            hasAccess = familyMemberPatientLinkRepository.existsByFamilyMemberUserIdAndPatientId(
+                    currentUser.getId(),
+                    patientId,
+                    LocalDateTime.now()
+            );
+        } else if (currentUser.getRole() == Role.ADMIN) {
+            hasAccess = true;
+        }
+
+        if (!hasAccess) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Not authorized to access this patient's alerts"));
+        }
+
+        List<VitalAlertEventDTO> alerts = analyticsService.getRecentVitalAlertEvents(patientId, limit);
+        return ResponseEntity.ok(Map.of(
+                "data", alerts,
+                "message", "Recent vital alerts retrieved successfully"
+        ));
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "error", "Failed to retrieve recent vital alerts"
+        ));
+    }
+}
 
     /**
      * Create a new vital sample

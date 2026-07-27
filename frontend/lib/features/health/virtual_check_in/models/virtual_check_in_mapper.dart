@@ -20,5 +20,10 @@ VirtualCheckInQuestion toUiQuestion(BackendQuestionDto dto) {
     type: mapTypeToUi(dto.type),
     required: dto.required,
     text: dto.prompt,
+    formKey: dto.formKey,
+    formVersion: dto.formVersion,
+    sectionKey: dto.sectionKey,
+    fieldKey: dto.fieldKey,
+    scoreWeight: dto.scoreWeight,
   );
 }

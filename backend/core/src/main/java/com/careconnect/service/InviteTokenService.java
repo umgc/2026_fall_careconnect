@@ -96,8 +96,16 @@ public class InviteTokenService {
                                              User createdByUser,
                                              String actorIp) {
 
+        final LocalDateTime now = LocalDateTime.now();
         FamilyMemberLink link = linkRepository.findById(linkId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Care-circle link not found"));
+
+        // Production hardening: user must actually be allowed to manage this
+        // specific care-circle link (or be admin), not just be non-family role.
+        if (!canManageLink(createdByUser, link)) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                    "You do not have permission to create invites for this care-circle link.");
+        }
 
         // Only links that are currently usable should spawn invites.
         if (link.getStatus() == FamilyMemberLink.LinkStatus.REVOKED
@@ -106,26 +114,40 @@ public class InviteTokenService {
                     "Cannot create an invite for a " + link.getStatus() + " link");
         }
 
-        // One active token per link — prevents ambiguous duplicate invites.
-        if (tokenRepository.existsActivePendingToken(linkId, LocalDateTime.now())) {
-            throw new AppException(HttpStatus.CONFLICT,
-                    "An active invite already exists for this link. Revoke it before creating a new one.");
+        // Seamless UX: rotate existing active invite so users don't need to
+        // manually locate/revoke old links. Keep full audit trail per token.
+        Optional<InviteToken> existingPending = tokenRepository.findActivePendingToken(linkId, now);
+        if (existingPending.isPresent()) {
+            InviteToken prior = existingPending.get();
+            prior.setStatus(InviteToken.Status.REVOKED);
+            prior.setRevokedByUserId(createdByUser.getId());
+            prior.setRevokedAt(now);
+            prior.setRevokeReason("Automatically rotated when creating a new invite");
+            tokenRepository.save(prior);
+            auditService.record(prior.getId(), InviteTokenAudit.EVENT_REVOKED, createdByUser.getId(), actorIp,
+                    "reason=Automatically rotated when creating a new invite");
+            log.info("Rotated prior invite tokenId={} for linkId={}", prior.getId(), linkId);
         }
 
         int ttl = resolveTtl(request != null ? request.ttlHours() : null);
         String rawToken = generateRawToken();
         String lookup = rawToken.substring(0, LOOKUP_LENGTH);
 
+        // Some legacy/seeded links may have null linkType. Persist a safe
+        // default so invite creation remains robust across environments.
+        FamilyMemberLink.LinkType effectiveLinkType =
+                link.getLinkType() != null ? link.getLinkType() : FamilyMemberLink.LinkType.PERMANENT;
+
         InviteToken token = new InviteToken();
         token.setTokenLookup(lookup);
         token.setTokenHash(tokenHashService.hashToken(rawToken));
         token.setLinkId(linkId);
-        token.setLinkType(link.getLinkType());
+        token.setLinkType(effectiveLinkType);
         token.setStatus(InviteToken.Status.PENDING);
         token.setInvitedEmail(request != null ? request.invitedEmail() : null);
         token.setInviteReason(request != null ? request.inviteReason() : null);
         token.setCreatedByUserId(createdByUser.getId());
-        token.setExpiresAt(LocalDateTime.now().plusHours(ttl));
+        token.setExpiresAt(now.plusHours(ttl));
 
         try {
             // saveAndFlush forces the INSERT now so a unique-index violation
@@ -133,9 +155,19 @@ public class InviteTokenService {
             // mapped to 409, rather than leaking as a 500 at commit time.
             token = tokenRepository.saveAndFlush(token);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // A concurrent create inserted a PENDING token for this link first.
-            throw new AppException(HttpStatus.CONFLICT,
-                    "An active invite already exists for this link. Revoke it before creating a new one.");
+            // Only map to 409 when the one-pending-per-link unique index is the
+            // actual cause. Other integrity issues should surface correctly.
+            String detail = e.getMostSpecificCause() != null
+                    ? e.getMostSpecificCause().getMessage()
+                    : e.getMessage();
+            if (detail != null && detail.contains("idx_invite_token_one_pending_per_link")) {
+                throw new AppException(HttpStatus.CONFLICT,
+                        "An active invite already exists for this link. Revoke it before creating a new one.");
+            }
+            log.error("Invite creation failed due to data integrity violation for linkId={}: {}",
+                    linkId, detail, e);
+            throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Could not create invite due to invalid link data. Please contact support.");
         }
 
         auditService.record(token.getId(), InviteTokenAudit.EVENT_CREATED, createdByUser.getId(), actorIp,
@@ -150,7 +182,7 @@ public class InviteTokenService {
                 rawToken,
                 buildInviteUrl(rawToken),
                 linkId,
-                link.getLinkType().name(),
+                effectiveLinkType.name(),
                 token.getStatus().name(),
                 token.getExpiresAt(),
                 token.getCreatedAt()
@@ -162,40 +194,97 @@ public class InviteTokenService {
     // =====================================================================
 
     /**
-     * Sanitised preview of an invite for a pre-registration user. Returns the
-     * link type, status, and expiration metadata. Expired/revoked/accepted/
-     * unknown tokens are rejected with clear {@link AppException} errors.
+     * Resolve invite context for a pre-registration user ("Who Invited Me?", #59).
      *
-     * (Issue #59 layers richer "Who Invited Me?" context and non-enumerating
-     * behaviour on top of this method.)
+     * Non-enumerating (issues #59 + #81): ALWAYS returns a stable
+     * {@link InvitePreviewResponse}. Whether the token is unknown, expired,
+     * revoked, or already accepted, the caller gets the same shape; only the
+     * {@code status} field differs, and only after the token hash is verified.
+     * Unknown / malformed / hash-mismatch tokens all collapse to status INVALID
+     * with null context, so an attacker cannot probe for valid tokens or learn
+     * whether a care circle exists. Never throws for token state — the controller
+     * returns HTTP 200 in every case.
      */
     @Transactional(readOnly = true)
     public InvitePreviewResponse previewInvite(String rawToken, String actorIp) {
-        // persistExpiry=false: this runs in a read-only tx, so we must NOT write.
-        InviteToken token = resolveUsableToken(rawToken, false);
+        Optional<InviteToken> maybe = resolveTokenQuietly(rawToken);
 
-        FamilyMemberLink link = linkRepository.findById(token.getLinkId())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Care-circle link not found"));
+        if (maybe.isEmpty()) {
+            // Unknown or hash-mismatch — indistinguishable to the caller.
+            return InvitePreviewResponse.notValid("INVALID", "NONE");
+        }
+
+        InviteToken token = maybe.get();
+
+        // Terminal / non-usable states: return a safe status, no context.
+        switch (token.getStatus()) {
+            case REVOKED:
+                return InvitePreviewResponse.notValid("REVOKED", "REQUEST_NEW");
+            case ACCEPTED:
+                auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED,
+                        null, actorIp, "preview-accepted");
+                return InvitePreviewResponse.notValid("ACCEPTED", "SIGN_IN");
+            case EXPIRED:
+                return InvitePreviewResponse.notValid("EXPIRED", "REQUEST_NEW");
+            case PENDING:
+                if (token.isExpired()) {
+                    return InvitePreviewResponse.notValid("EXPIRED", "REQUEST_NEW");
+                }
+                break;
+            default:
+                return InvitePreviewResponse.notValid("INVALID", "NONE");
+        }
+
+        // Valid + usable: surface the inviter / patient / reason context.
+        FamilyMemberLink link = linkRepository.findById(token.getLinkId()).orElse(null);
+        if (link == null) {
+            // Link vanished — treat as invalid rather than leaking a 404.
+            return InvitePreviewResponse.notValid("INVALID", "NONE");
+        }
 
         String inviterName = displayNameForUserId(token.getCreatedByUserId());
         String patientName = link.getPatientUser() != null
                 ? patientDisplayName(link.getPatientUser())
                 : "the patient";
 
-        auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED, null, actorIp, "preview");
+        // Email-scoped invites should route the user through sign-in first so we
+        // can match the email at accept time.
+        boolean requiresSignIn = token.getInvitedEmail() != null && !token.getInvitedEmail().isBlank();
 
-        return new InvitePreviewResponse(
+        auditService.recordInNewTransaction(token.getId(), InviteTokenAudit.EVENT_VIEWED,
+                null, actorIp, "preview");
+
+        return InvitePreviewResponse.valid(
                 token.getLinkId(),
                 token.getLinkType().name(),
-                token.getStatus().name(),
                 inviterName,
                 patientName,
                 token.getInviteReason(),
                 token.getInvitedEmail(),
-                token.getExpiresAt()
+                token.getExpiresAt(),
+                requiresSignIn
         );
     }
 
+    /**
+     * Resolve a raw token to its entity WITHOUT throwing — used by the
+     * non-enumerating preview. Returns empty for unknown, malformed, or
+     * hash-mismatched tokens (all treated as INVALID by the caller).
+     */
+    private Optional<InviteToken> resolveTokenQuietly(String rawToken) {
+        if (rawToken == null || rawToken.length() < LOOKUP_LENGTH) {
+            return Optional.empty();
+        }
+        String lookup = rawToken.substring(0, LOOKUP_LENGTH);
+        Optional<InviteToken> maybe = tokenRepository.findByTokenLookup(lookup);
+        if (maybe.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!tokenHashService.verifyToken(rawToken, maybe.get().getTokenHash())) {
+            return Optional.empty();
+        }
+        return maybe;
+    }
     // =====================================================================
     // ACCEPT  — POST /invite/{token}/accept
     // =====================================================================
@@ -271,6 +360,13 @@ public class InviteTokenService {
         if (!token.getLinkId().equals(linkId)) {
             throw new AppException(HttpStatus.FORBIDDEN,
                     "Token " + tokenId + " does not belong to link " + linkId);
+        }
+
+        FamilyMemberLink link = linkRepository.findById(linkId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Care-circle link not found"));
+        if (!canManageLink(revokingUser, link)) {
+            throw new AppException(HttpStatus.FORBIDDEN,
+                    "You do not have permission to revoke invites for this care-circle link.");
         }
 
         if (token.getStatus() != InviteToken.Status.PENDING) {
@@ -384,5 +480,18 @@ public class InviteTokenService {
         Optional<Patient> patient = patientRepository.findByUser(patientUser);
         return patient.map(p -> p.getFirstName() + " " + p.getLastName())
                 .orElse(patientUser.getEmail());
+    }
+
+    private boolean canManageLink(User actor, FamilyMemberLink link) {
+        if (actor == null || link == null) return false;
+        if (actor.isAdmin()) return true;
+
+        Long actorId = actor.getId();
+        if (actorId == null) return false;
+
+        Long patientUserId = link.getPatientUser() != null ? link.getPatientUser().getId() : null;
+        Long grantedByUserId = link.getGrantedBy() != null ? link.getGrantedBy().getId() : null;
+
+        return actorId.equals(patientUserId) || actorId.equals(grantedByUserId);
     }
 }

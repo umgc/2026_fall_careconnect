@@ -91,10 +91,11 @@ class RetrievalScopeAuditServiceTest {
                 .contains("eventType=SCOPE_DENIED")
                 .contains("auditId=" + auditId)
                 .contains("callerUserId=5")
-                .contains("callerEmail=patient@test.com")
                 .contains("patientId=42")
                 .contains("denialReason=PATIENT_OUT_OF_SCOPE")
                 .contains("deliveryStatus=WITHHELD")
-                .contains("retrievalPerformed=false");
+                .contains("retrievalPerformed=false")
+                .doesNotContain("patient@test.com")
+                .doesNotContain("Patient 42 is out of scope");
     }
 }
