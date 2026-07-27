@@ -15,6 +15,7 @@ import com.careconnect.repository.StructuredDocumentEntryRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.service.ai.ask.AskAiDocumentOcrService;
 import com.careconnect.service.ai.indexing.RetrievalIndexService;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.util.ContentHashUtil;
@@ -57,6 +58,7 @@ public class FileManagementService {
     private final IndexingEventEmitter indexingEventEmitter;
     private final RetrievalIndexService retrievalIndexService;
     private final DocumentProcessingService documentProcessingService;
+    private final AskAiDocumentOcrService askAiDocumentOcrService;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
@@ -68,7 +70,8 @@ public class FileManagementService {
                                IndexingEventEmitter indexingEventEmitter,
                                RetrievalIndexService retrievalIndexService,
                                DocumentProcessingService documentProcessingService,
-                               @Autowired(required = false) S3StorageService s3StorageService) {
+                               @Autowired(required = false) S3StorageService s3StorageService,
+                               AskAiDocumentOcrService askAiDocumentOcrService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
         this.userRepository = userRepository;
@@ -79,6 +82,7 @@ public class FileManagementService {
         this.retrievalIndexService = retrievalIndexService;
         this.documentProcessingService = documentProcessingService;
         this.s3StorageService = s3StorageService;
+        this.askAiDocumentOcrService = askAiDocumentOcrService;
     }
     
     @Value("${app.file.storage.default:database}")
@@ -265,15 +269,27 @@ public class FileManagementService {
                     .content(base64)
                     .build();
             final String extracted = documentProcessingService.extractTextContent(dto);
-            if (isExtractFailurePlaceholder(extracted)) {
-                // Skip error/empty placeholders from DocumentProcessingService.
+            if (!isExtractFailurePlaceholder(extracted)) {
+                userFile.setExtractedText(extracted);
+                userFileRepository.save(userFile);
                 return;
             }
-            userFile.setExtractedText(extracted);
-            userFileRepository.save(userFile);
+            // Local extractors miss scanned PDFs / images — enqueue async Textract OCR
+            // after the upload transaction commits (see AskAiDocumentOcrService).
+            if (askAiDocumentOcrService != null) {
+                askAiDocumentOcrService.enqueueAfterFailedExtract(userFile);
+            }
         } catch (Exception e) {
             log.warn("Document text extraction skipped for fileId {}: {}",
                     userFile.getId(), e.getMessage());
+            try {
+                if (askAiDocumentOcrService != null) {
+                    askAiDocumentOcrService.enqueueAfterFailedExtract(userFile);
+                }
+            } catch (Exception ocrError) {
+                log.warn("Ask AI document OCR enqueue skipped for fileId {}: {}",
+                        userFile.getId(), ocrError.getMessage());
+            }
         }
     }
 

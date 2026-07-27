@@ -39,6 +39,7 @@ class FileManagementServiceTest {
     @Mock private com.careconnect.service.ai.indexing.RetrievalIndexService retrievalIndexService;
     @Mock private DocumentProcessingService documentProcessingService;
     @Mock private S3StorageService s3StorageService;
+    @Mock private com.careconnect.service.ai.ask.AskAiDocumentOcrService askAiDocumentOcrService;
     @Mock private MultipartFile multipartFile;
 
     private FileManagementService fileManagementService;
@@ -51,7 +52,7 @@ class FileManagementServiceTest {
         MockitoAnnotations.openMocks(this);
         fileManagementService = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, s3StorageService);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, s3StorageService, askAiDocumentOcrService);
         ReflectionTestUtils.setField(fileManagementService, "defaultStorageType", "database");
         ReflectionTestUtils.setField(fileManagementService, "useS3ForNewFiles", false);
 
@@ -145,7 +146,7 @@ class FileManagementServiceTest {
     void uploadFile_s3EnabledNullService_fallsBackToDatabase() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null, askAiDocumentOcrService);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", true);
 
@@ -372,7 +373,7 @@ class FileManagementServiceTest {
     void getFile_s3FileNullS3Service_returnsUnavailableUrl() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null, askAiDocumentOcrService);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -416,7 +417,7 @@ class FileManagementServiceTest {
     void downloadFile_s3FileNullS3Service_throwsRuntimeException() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
                 userFileRepository, structuredEntryRepository, userRepository, patientRepository,
-                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null);
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null, askAiDocumentOcrService);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -1072,6 +1073,122 @@ class FileManagementServiceTest {
         assertEquals(
                 "Discharge summary\n\nContinue current medications as prescribed.",
                 FileManagementService.indexableDocumentText(file));
+    }
+
+    @Test
+    @DisplayName("uploadFile - empty local extract enqueues async Ask AI OCR")
+    void uploadFile_emptyExtract_enqueuesAsyncOcr() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(2048L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("scan.pdf");
+        when(multipartFile.getBytes()).thenReturn(new byte[] {1, 2, 3, 4});
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+        when(documentProcessingService.extractTextContent(any()))
+                .thenReturn("[Unable to extract text from: scan.pdf]");
+
+        final FileUploadResponse result = fileManagementService.uploadFile(
+                multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "Scan", 1L);
+
+        assertNotNull(result);
+        verify(askAiDocumentOcrService).enqueueAfterFailedExtract(eq(userFile));
+    }
+
+    @Test
+    @DisplayName("uploadFile - local extract success does not enqueue OCR")
+    void uploadFile_localExtractSucceeds_skipsOcrEnqueue() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(1024L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("report.pdf");
+        when(multipartFile.getBytes()).thenReturn("pdf-bytes".getBytes());
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+        when(documentProcessingService.extractTextContent(any()))
+                .thenReturn("Native PDF text body");
+
+        fileManagementService.uploadFile(
+                multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "desc", 1L);
+
+        verify(askAiDocumentOcrService, never()).enqueueAfterFailedExtract(any());
+    }
+
+    @Test
+    @DisplayName("uploadFile - extract exception still enqueues OCR when bytes readable")
+    void uploadFile_extractThrows_enqueuesOcr() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(2048L);
+        when(multipartFile.getContentType()).thenReturn("image/png");
+        when(multipartFile.getOriginalFilename()).thenReturn("scan.png");
+        when(multipartFile.getBytes()).thenReturn(new byte[] {1, 2, 3});
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        userFile.setContentType("image/png");
+        userFile.setOriginalFilename("scan.png");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+        when(documentProcessingService.extractTextContent(any()))
+                .thenThrow(new RuntimeException("parser boom"));
+
+        fileManagementService.uploadFile(multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "Scan", 1L);
+
+        verify(askAiDocumentOcrService).enqueueAfterFailedExtract(eq(userFile));
+    }
+
+    @Test
+    @DisplayName("uploadFile - extract getBytes failure still enqueues OCR after commit path")
+    void uploadFile_extractAndBytesFail_stillSucceeds() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(2048L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("scan.pdf");
+        when(multipartFile.getBytes()).thenThrow(new java.io.IOException("read failed"));
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+
+        final FileUploadResponse result = fileManagementService.uploadFile(
+                multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "Scan", 1L);
+
+        assertNotNull(result);
+        // Enqueue is best-effort after extract failure; OCR worker reloads bytes from storage.
+        verify(askAiDocumentOcrService).enqueueAfterFailedExtract(eq(userFile));
+    }
+
+    @Test
+    @DisplayName("tryExtractAndPersistText - null guards are no-ops")
+    void tryExtractAndPersistText_nullGuards() {
+        ReflectionTestUtils.invokeMethod(
+                fileManagementService, "tryExtractAndPersistText", null, multipartFile);
+        ReflectionTestUtils.invokeMethod(
+                fileManagementService, "tryExtractAndPersistText", userFile, null);
+        verify(askAiDocumentOcrService, never()).enqueueAfterFailedExtract(any());
+    }
+
+    @Test
+    @DisplayName("indexableDocumentText - extracted only and description only")
+    void indexableDocumentText_singleFieldFallbacks() {
+        final UserFile extractedOnly = UserFile.builder()
+                .extractedText("Body only")
+                .build();
+        assertEquals("Body only", FileManagementService.indexableDocumentText(extractedOnly));
+
+        final UserFile descriptionOnly = UserFile.builder()
+                .description("Desc only")
+                .build();
+        assertEquals("Desc only", FileManagementService.indexableDocumentText(descriptionOnly));
+
+        assertNull(FileManagementService.indexableDocumentText(UserFile.builder().build()));
     }
 }
 
