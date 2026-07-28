@@ -68,14 +68,26 @@ class ConfirmationControllerTest {
     }
 
     @Test
-    void getItem_nullPatientId_fallsBackToAdminOrCaregiver() throws Exception {
-        User u = user(false, true, 5L);
+    void getItem_nullPatientId_fallsBackToAdminOnly() throws Exception {
+        User u = user(true, false, 5L);
         when(securityUtil.resolveCurrentUser()).thenReturn(u);
         when(confirmationService.getItem(1L)).thenReturn(item(null));
 
         controller.getItem(1L);
 
-        verify(authorizationService).requireAdminOrCaregiver(u);
+        verify(authorizationService).requireAdmin(u);
+        verify(authorizationService, never()).requireAdminOrCaregiver(any());
+    }
+
+    @Test
+    void getItem_nullPatientId_deniesCaregiver() throws Exception {
+        User u = user(false, true, 5L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(u);
+        when(confirmationService.getItem(1L)).thenReturn(item(null));
+        doThrow(new UnauthorizedException("nope")).when(authorizationService).requireAdmin(u);
+
+        assertThatThrownBy(() -> controller.getItem(1L))
+                .isInstanceOf(UnauthorizedException.class);
     }
 
     @Test

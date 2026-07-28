@@ -34,14 +34,16 @@ public class ConfirmationController {
 
     /**
      * A confirmation item is a review surface for a patient's care. Access is by patient scope:
-     * items carrying a patientId use requirePatientAccess; items without one (older callers not
-     * yet passing a patientId) are restricted to admins and caregivers.
+     * items carrying a patientId use requirePatientAccess. Items without one (older callers not
+     * yet passing a patientId) fall back to admin-only, because a null patientId carries no
+     * linkage to scope a caregiver against; allowing any caregiver through would let the whole
+     * queue be read and resolved cross-patient. This fails closed until producers pass patientId.
      */
     private void authorizeReview(User user, ConfirmationItemResponse item) throws UnauthorizedException {
         if (item.getPatientId() != null) {
             authorizationService.requirePatientAccess(user, item.getPatientId());
         } else {
-            authorizationService.requireAdminOrCaregiver(user);
+            authorizationService.requireAdmin(user);
         }
     }
 
