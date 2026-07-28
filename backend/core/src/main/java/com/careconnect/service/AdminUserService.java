@@ -19,6 +19,8 @@ public class AdminUserService {
   private final UserRepository userRepository;
 
   public List<AdminUserSummaryDTO> listUsers() {
+    // Not paginated: admin-only endpoint and user count is bounded at team scale.
+    // If user volume grows significantly, switch to Pageable.
     return userRepository.findAll().stream()
         .sorted(Comparator.comparing(User::getEmail, String.CASE_INSENSITIVE_ORDER))
         .map(this::toSummary)
