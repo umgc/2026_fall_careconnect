@@ -165,6 +165,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             // Concurrent index builds must not hold the startup advisory lock.
             // Verify only after those indexes exist — mid-lock verify would fail greenfield boots.
             ensureRetrievalConcurrentIndexes();
+            verifyRetrievalEmbeddingColumnPresent();
             verifyRequiredRetrievalSchema();
         } else {
             applyCallSessionPatches();
@@ -556,6 +557,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
             ")"
         );
+        // Repair path: Hibernate ddl-auto can create retrieval_index_chunk without embedding
+        // (entity does not map the pgvector column). CREATE TABLE IF NOT EXISTS then no-ops.
+        // A dedicated ADD COLUMN must run after the extension is available.
+        applyRequiredPatch(
+            "V2607071921a2 – ensure retrieval_index_chunk.embedding column",
+            "ALTER TABLE retrieval_index_chunk "
+                    + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
+        );
         applyRequiredPatch(
             "V2607182130 – typed retrieval replay and migration state",
             "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();" +
@@ -817,15 +826,47 @@ public class SchemaPatchRunner implements CommandLineRunner {
             stmt.execute(sql);
             log.info("Schema patch applied: {}", name);
         } catch (Exception e) {
-            // PostgreSQL raises 42703 / 42P16 when the column constraint is already absent —
-            // treat that as success; log anything else as a warning.
+            // Idempotent DROP/RENAME of already-absent legacy objects is success.
+            // Do NOT treat bare "does not exist" as applied — that hides failed CREATE/ADD
+            // (e.g. type "vector" does not exist) and leaves Ask AI without embedding.
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            if (msg.contains("42P16") || msg.contains("already") || msg.contains("does not exist")) {
+            if (isIdempotentAlreadyApplied(msg, sql)) {
                 log.debug("Schema patch skipped (already applied): {}", name);
             } else {
                 log.warn("Schema patch '{}' could not be applied: {}", name, msg);
             }
         }
+    }
+
+    /**
+     * Soft patches may skip only when the failure means the change is already present or
+     * an optional legacy object is already gone. Failed CREATE/ADD because a type, table,
+     * or dependency is missing must remain a warning (not "already applied").
+     */
+    static boolean isIdempotentAlreadyApplied(final String message, final String sql) {
+        final String msg = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        final String lowerSql = sql == null ? "" : sql.toLowerCase(Locale.ROOT);
+        if (msg.contains("42p16")
+                || msg.contains("already exists")
+                || (msg.contains("already") && msg.contains("duplicate"))) {
+            return true;
+        }
+        if (msg.contains("already") && !msg.contains("does not exist")) {
+            return true;
+        }
+        if (!msg.contains("does not exist")) {
+            return false;
+        }
+        return looksLikeOptionalDropOrRename(lowerSql);
+    }
+
+    private static boolean looksLikeOptionalDropOrRename(final String lowerSql) {
+        return lowerSql.contains("drop constraint")
+                || lowerSql.contains("drop column")
+                || lowerSql.contains("drop index")
+                || lowerSql.contains("drop not null")
+                || lowerSql.contains("rename column")
+                || (lowerSql.contains("alter column") && lowerSql.contains("drop"));
     }
 
     private void applyRequiredPatch(String name, String sql) {
@@ -1246,6 +1287,45 @@ public class SchemaPatchRunner implements CommandLineRunner {
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Required call summary idempotency schema verification failed", e);
+        }
+    }
+
+    /**
+     * Fail-closed check for the Ask AI embedding column. Other retrieval verifier mismatches
+     * stay non-fatal (Postgres reformats predicates/indexdefs), but a missing {@code embedding}
+     * column must abort startup so soft skips cannot leave a healthy API with broken Ask AI.
+     */
+    private void verifyRetrievalEmbeddingColumnPresent() {
+        final String sql = """
+                SELECT EXISTS (
+                  SELECT 1
+                  FROM pg_attribute a
+                  JOIN pg_class t ON t.oid = a.attrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = current_schema()
+                    AND t.relname = 'retrieval_index_chunk'
+                    AND a.attname = 'embedding'
+                    AND a.attnum > 0
+                    AND NOT a.attisdropped
+                    AND format_type(a.atttypid, a.atttypmod) = 'vector(1536)'
+                )
+                """;
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             var result = stmt.executeQuery(sql)) {
+            if (!result.next() || !result.getBoolean(1)) {
+                throw new IllegalStateException(
+                        "Required retrieval_index_chunk.embedding vector(1536) column is missing; "
+                                + "ensure CREATE EXTENSION vector and the embedding column repair "
+                                + "succeeded (RDS may need a reboot after attaching the pgvector "
+                                + "parameter group)");
+            }
+            log.info("Required retrieval_index_chunk.embedding column verified");
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required retrieval_index_chunk.embedding column could not be verified", e);
         }
     }
 
