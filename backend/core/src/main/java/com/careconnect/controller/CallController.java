@@ -10,6 +10,7 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
+import com.careconnect.service.CallAttendeeService;
 import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryItemConfirmService;
@@ -103,6 +104,8 @@ public class CallController {
   @Autowired
   private CallRecordingService callRecordingService;
   @Autowired
+  private CallAttendeeService callAttendeeService;
+  @Autowired
   private CaregiverPatientLinkService caregiverPatientLinkService;
   @Autowired
   private FamilyMemberService familyMemberService;
@@ -123,6 +126,19 @@ public class CallController {
     return userRepository
         .findByEmail(userEmail)
         .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
+  }
+
+  private void recordCallAttendeeJoin(
+      final String callId, final Map<String, Object> joinResponse, final User currentUser) {
+    if (joinResponse == null) {
+      return;
+    }
+    final Object attendeeIdRaw = joinResponse.get("attendeeId");
+    if (attendeeIdRaw == null || attendeeIdRaw.toString().isBlank()) {
+      return;
+    }
+    callAttendeeService.recordJoin(
+        callId, attendeeIdRaw.toString(), currentUser.getId(), currentUser.getRole().name());
   }
 
   private void ensurePatientSource(final User currentUser) {
@@ -198,6 +214,7 @@ public class CallController {
             currentUser.getId().toString(),
             currentUser.getRole().name(),
             getCallUserDisplayName(currentUser));
+        recordCallAttendeeJoin(callId, response, currentUser);
         final Object meetingIdValue = response.get("meetingId");
         if (meetingIdValue != null) {
           callSessionService.attachChimeMeetingId(callId, meetingIdValue.toString());
@@ -216,9 +233,13 @@ public class CallController {
           log.info("User {} joined call {}", currentUser.getId(), callId);
         }
         // Exactly one join transaction wins this durable threshold election across all nodes.
-        if (recordingStartOwner
-            && environment.getProperty(
-                "careconnect.recording.system-transcription-enabled", Boolean.class, false)) {
+        // Optional system transcription (Ravi gate): auto MCP + KVS on election when enabled.
+        // Default path: caregiver Record starts USER_PLAYBACK and KVS (see recording/start).
+        // Late joiners always refresh attendee→stream bindings if a pipeline already exists.
+        final boolean systemTranscriptionEnabled = Boolean.TRUE.equals(
+            environment.getProperty(
+                "careconnect.recording.system-transcription-enabled", Boolean.class, false));
+        if (recordingStartOwner && systemTranscriptionEnabled) {
           try {
             final Map<String, Object> recording =
                 callRecordingService.startRecordingTyped(callId, null, true).toMap();
@@ -228,6 +249,9 @@ public class CallController {
               log.warn("Auto-recording start failed for call {}: {}", callId, e.getMessage());
             }
           }
+          callRecordingService.startKvsPipelineAsync(callId);
+        } else {
+          callRecordingService.refreshKvsAttendeeStreamsAsync(callId);
         }
         return ResponseEntity.ok(response);
       } catch (Exception joinFailure) {
@@ -457,6 +481,8 @@ public class CallController {
       final CallSessionService.LeaveResult leave =
           callSessionService.leaveOrBeginTermination(callId, currentUser.getId());
       if (leave.ended()) {
+        // Session already ended/cancelled — still finalize this user's attendee row.
+        callAttendeeService.recordLeave(callId, currentUser.getId());
         return ResponseEntity.ok(
             Map.of(
                 "status", "ended",
@@ -465,6 +491,11 @@ public class CallController {
       }
       final boolean shouldEndMeeting = leave.terminationOwner();
       final Map<String, Object> contextMetadata = extractCallContextMetadata(body);
+      if (shouldEndMeeting) {
+        callAttendeeService.recordCallEnded(callId);
+      } else {
+        callAttendeeService.recordLeave(callId, currentUser.getId());
+      }
 
       if (shouldEndMeeting) {
         final boolean completed = callTerminationExecutor.execute(
@@ -1605,6 +1636,7 @@ public class CallController {
         ? callRecordingService.startRecording(callId, currentUser.getId())
         : typedResult.toMap();
     notifyRecordingState(callId, result);
+    maybeStartKvsForUserRecording(callId, result);
     callTelemetryService.recordCallEvent(
         callId,
         "RECORDING_START",
@@ -1625,7 +1657,25 @@ public class CallController {
     final Map<String, Object> result =
         callRecordingService.startRecording(callId, currentUser.getId());
     notifyRecordingState(callId, result);
+    maybeStartKvsForUserRecording(callId, result);
     return ResponseEntity.ok(result);
+  }
+
+  /**
+   * Caregiver Record is the consent moment for speaker-ID ingest when system transcription is off:
+   * successful USER_PLAYBACK start also kicks off KVS (no-op when KVS is disabled).
+   */
+  private void maybeStartKvsForUserRecording(
+      final String callId, final Map<String, Object> recordingStartResult) {
+    if (recordingStartResult == null) {
+      return;
+    }
+    final String status =
+        String.valueOf(recordingStartResult.getOrDefault("status", "")).toUpperCase();
+    if (!"STARTED".equals(status) && !"ALREADY_RECORDING".equals(status)) {
+      return;
+    }
+    callRecordingService.startKvsPipelineAsync(callId);
   }
 
   @PostMapping("/{callId}/recording/stop")

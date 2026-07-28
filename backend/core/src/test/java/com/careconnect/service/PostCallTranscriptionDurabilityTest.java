@@ -38,6 +38,11 @@ class PostCallTranscriptionDurabilityTest {
         recording.setGeneration(3L);
         recording.setS3Bucket("recording-bucket");
         when(jobRepository.findByRecordingId(12L)).thenReturn(Optional.empty());
+        when(jobRepository.save(any(PostCallTranscriptionJob.class))).thenAnswer(invocation -> {
+            final PostCallTranscriptionJob job = invocation.getArgument(0);
+            job.setId(55L);
+            return job;
+        });
 
         service.transcribeAndCleanup(
                 "call/12", recording, "recordings/call-12/final.mp4");
@@ -50,6 +55,7 @@ class PostCallTranscriptionDurabilityTest {
                 .isEqualTo("recordings/call-12/final.mp4");
         assertThat(captor.getValue().getOutputKey())
                 .isEqualTo("transcription-jobs/call-12/12/cc-call-12-12.json");
+        verify(jobRepository).markDueNow(55L);
         verify(recordingRepository).save(any(CallRecording.class));
         assertThat(recording.getTranscriptionStatus()).isEqualTo("READY");
     }

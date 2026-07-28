@@ -1,6 +1,10 @@
 package com.careconnect.model;
 
+import com.careconnect.config.UtcLocalDateTimeSerializer;
+import com.careconnect.config.UtcWallClockLocalDateTimeConverter;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -73,7 +77,9 @@ public class CallTranscriptSegment extends Auditable {
   @Column(name = "actor_user_id")
   private Long actorUserId;
 
-  /** Timestamp when the transcript segment occurred. */
+  /** Timestamp when the transcript segment occurred (UTC wall-clock). */
   @Column(name = "occurred_at", nullable = false)
+  @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
+  @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
   private LocalDateTime occurredAt;
 }

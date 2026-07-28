@@ -56,6 +56,7 @@ class CallTerminationExecutorTest {
     voice.setChannel("VOICE");
     voice.setSentimentScore(0.6);
     voice.setSentimentLabel("CALM");
+    voice.setTargetUserId(1L);
     final SentimentResult finalResult =
         SentimentResult.neutral("COMBINED", "call-1", "Recovered");
     when(sessionService.renewTerminationOwnership("call-1", claimId))
@@ -64,6 +65,8 @@ class CallTerminationExecutorTest {
         .thenReturn(noneDone());
     when(sessionService.advanceTerminationStep(eq("call-1"), eq(claimId), any()))
         .thenReturn(true);
+    when(sessionService.requireSession("call-1"))
+        .thenThrow(new IllegalStateException("session unavailable in unit test"));
     when(telemetryService.getTelemetryForCall("call-1")).thenReturn(List.of(voice));
     when(telemetryService.getLatestSentimentByChannel("call-1"))
         .thenReturn(Map.of("VOICE", voice));
@@ -84,7 +87,7 @@ class CallTerminationExecutorTest {
         eq("SENTIMENT_FINAL"),
         eq("COMBINED"),
         eq(null),
-        eq(null),
+        eq(1L),
         eq("END_CALL"),
         eq(finalResult),
         any(),

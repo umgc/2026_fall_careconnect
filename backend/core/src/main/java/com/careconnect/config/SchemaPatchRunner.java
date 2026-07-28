@@ -4,8 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -113,6 +111,31 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyPatch(
             "V73 – add transcription_status to call_recordings",
             "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) NULL"
+        );
+        applyPatch(
+            "V2606251137 – create call_attendees and kvs_pipeline_id",
+            "CREATE TABLE IF NOT EXISTS call_attendees ("
+                + "  id                 BIGSERIAL PRIMARY KEY,"
+                + "  call_id            VARCHAR(120) NOT NULL,"
+                + "  chime_attendee_id  VARCHAR(255) NOT NULL,"
+                + "  user_id            BIGINT NOT NULL,"
+                + "  role               VARCHAR(40) NOT NULL,"
+                + "  joined_at          TIMESTAMP NOT NULL,"
+                + "  left_at            TIMESTAMP,"
+                + "  CONSTRAINT uq_call_attendees_call_chime UNIQUE (call_id, chime_attendee_id)"
+                + ");"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_call_id ON call_attendees(call_id);"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_user_id ON call_attendees(user_id);"
+                + "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS kvs_pipeline_id VARCHAR(255) NULL"
+        );
+        applyPatch(
+            "V2606270846 – add media_stream_pipeline_id to call_recordings",
+            "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS media_stream_pipeline_id VARCHAR(255) NULL"
+        );
+        applyPatch(
+            "V76 – add kvs_stream_arn to call_attendees",
+            "ALTER TABLE call_attendees ADD COLUMN IF NOT EXISTS kvs_stream_arn VARCHAR(512) NULL;"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_kvs_stream_arn ON call_attendees(kvs_stream_arn)"
         );
         applyPatch(
             "V74 – update mock user addresses to Falls Church, VA",
@@ -514,6 +537,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
             ")"
         );
         applyRequiredPatch(
+            "V2607191700 – call_sessions recording_start_elected column",
+            "ALTER TABLE call_sessions "
+                    + "ADD COLUMN IF NOT EXISTS recording_start_elected "
+                    + "BOOLEAN NOT NULL DEFAULT FALSE"
+        );
+        applyRequiredPatch(
+            "V2607191700 – call_sessions recording_start_elected default",
+            "ALTER TABLE call_sessions "
+                    + "ALTER COLUMN recording_start_elected SET DEFAULT FALSE"
+        );
+        applyRequiredPatch(
             "V2607182230b – create call_participants",
             "CREATE TABLE IF NOT EXISTS call_participants (" +
             "  id BIGSERIAL PRIMARY KEY," +
@@ -582,9 +616,43 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "ALTER TABLE call_participants ADD CONSTRAINT ck_call_participants_status CHECK " +
                 "(status IN ('INVITED','JOINED','LEFT','DECLINED','EXPIRED'))"
             );
-            applyRequiredSqlResource(
-                    "V2607190200 – recoverable call termination",
-                    "db/migration/V2607190200__add_recoverable_call_termination.sql");
+            // JDBC Statement (not ScriptUtils) — DO $$ blocks contain internal ';'.
+            applyRequiredPatch(
+                    "V2607190200 – recoverable call termination columns",
+                    "ALTER TABLE call_sessions "
+                            + "ADD COLUMN IF NOT EXISTS termination_claim_id UUID NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_claimed_by_user_id BIGINT NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_lease_until TIMESTAMP NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_attempt_count "
+                            + "INTEGER NOT NULL DEFAULT 0, "
+                            + "ADD COLUMN IF NOT EXISTS termination_next_retry_at TIMESTAMP NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_last_error TEXT NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_notify_user_ids TEXT NULL");
+            // ADD COLUMN IF NOT EXISTS skips DEFAULT when the column already exists.
+            applyRequiredPatch(
+                    "V2607190200 – termination_attempt_count default",
+                    "ALTER TABLE call_sessions "
+                            + "ALTER COLUMN termination_attempt_count SET DEFAULT 0");
+            applyRequiredPatch(
+                    "V2607190200 – call termination claimant FK",
+                    foreignKeyIfMissing(
+                            "fk_call_sessions_termination_claimed_by",
+                            "call_sessions",
+                            "termination_claimed_by_user_id",
+                            "users",
+                            "id",
+                            ""));
+            applyRequiredPatch(
+                    "V2607190200 – termination attempt count check",
+                    "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c "
+                            + "WHERE c.conrelid = 'call_sessions'::regclass "
+                            + "AND c.contype = 'c' "
+                            + "AND pg_get_constraintdef(c.oid) "
+                            + "LIKE '%termination_attempt_count >= 0%') THEN "
+                            + "ALTER TABLE call_sessions "
+                            + "ADD CONSTRAINT ck_call_sessions_termination_attempt_count "
+                            + "CHECK (termination_attempt_count >= 0); "
+                            + "END IF; END $$");
             ensureIndex(
                     "V2607190200 – call termination retry index",
                     "idx_call_sessions_termination_retry",
@@ -654,6 +722,16 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  citation_replay_claimed_until TIMESTAMPTZ NULL," +
             "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
             ")"
+        );
+        applyRequiredPatch(
+            "V2607071921a – ensure retrieval embedding column",
+            "ALTER TABLE retrieval_index_chunk "
+                + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
+        );
+        applyRequiredPatch(
+            "V2607071921a – ensure retrieval search_vector column",
+            "ALTER TABLE retrieval_index_chunk "
+                + "ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL"
         );
         applyRequiredPatch(
             "V2607182130 – typed retrieval replay and migration state",
@@ -1078,30 +1156,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
         return normalized.replaceAll("[\\s()]+", "");
     }
 
-    private void applyRequiredSqlResource(final String name, final String path) {
-        try (Connection conn = dataSource.getConnection()) {
-            conn.setAutoCommit(false);
-            try (Statement stmt = conn.createStatement()) {
-                configureDdlTimeouts(stmt);
-            }
-            try {
-                ScriptUtils.executeSqlScript(conn, new ClassPathResource(path));
-                conn.commit();
-                log.info("Required schema patch applied: {}", name);
-            } catch (Exception e) {
-                try {
-                    conn.rollback();
-                } catch (Exception rollbackFailure) {
-                    e.addSuppressed(rollbackFailure);
-                }
-                throw e;
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    "Required schema patch could not be applied: " + name, e);
-        }
-    }
-
     static void configureDdlTimeouts(final Statement stmt) throws Exception {
         final String database = stmt.getConnection().getMetaData().getDatabaseProductName();
         if (database != null
@@ -1381,7 +1435,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 ),
                 actual_columns AS (
                   SELECT t.relname AS table_name, a.attname AS column_name,
-                         format_type(a.atttypid, a.atttypmod) AS data_type,
+                         regexp_replace(
+                           format_type(a.atttypid, a.atttypmod),
+                           'timestamp\\(\\d+\\) with time zone',
+                           'timestamp with time zone') AS data_type,
                          a.attnotnull AS not_null,
                          pg_get_expr(d.adbin, d.adrelid) AS default_expression
                   FROM pg_attribute a

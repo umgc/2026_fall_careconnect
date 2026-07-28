@@ -156,9 +156,9 @@ class _PostCallTelemetrySummaryScreenState
       return;
     }
 
-    final recordingStartedAt = DateTime.parse(recordingStartedAtRaw).toUtc();
+    final recordingStartedAt = parseCallUtcDateTime(recordingStartedAtRaw);
     final clipWindow = computeSentimentClipWindow(
-      sentimentOccurredAt: selectedAt.toUtc(),
+      sentimentOccurredAt: parseCallUtcDateTime(selectedAt),
       recordingStartedAt: recordingStartedAt,
     );
 
@@ -180,8 +180,8 @@ class _PostCallTelemetrySummaryScreenState
     }
 
     final clipWindow = computeSentimentClipWindow(
-      sentimentOccurredAt: selectedAt.toUtc(),
-      recordingStartedAt: recordingStartedAt,
+      sentimentOccurredAt: parseCallUtcDateTime(selectedAt),
+      recordingStartedAt: parseCallUtcDateTime(recordingStartedAt),
     );
 
     setState(() {
@@ -317,10 +317,7 @@ class _PostCallTelemetrySummaryScreenState
   }
 
   DateTime _safeDate(dynamic input) {
-    if (input is String) {
-      return DateTime.tryParse(input) ?? DateTime.fromMillisecondsSinceEpoch(0);
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
+    return parseCallUtcDateTime(input);
   }
 
   Map<String, dynamic>? get _summaryPayload {
@@ -1251,7 +1248,7 @@ class _PostCallTelemetrySummaryScreenState
 
     // A system-initiated recording (initiatedByUserId == null) is for transcription only —
     // the S3 file is deleted after transcription so playback is never available for it.
-    final isSystemRecording = rec['initiatedByUserId'] == null;
+    final isSystemRecording = !isUserInitiatedCallRecording(rec);
 
     String startedText = '—';
     if (!isSystemRecording && startedAt != null) {
@@ -1686,7 +1683,9 @@ class _PostCallTelemetrySummaryScreenState
                             ],
                           ),
                           SentimentClipPlayerWidget(
-                            key: ValueKey(_clipPlaybackUrl!),
+                            key: ValueKey(
+                              '${_clipPlaybackUrl!}|${_clipStartSec!}|${_clipEndSec!}',
+                            ),
                             playbackUrl: _clipPlaybackUrl!,
                             clipStartSec: _clipStartSec!,
                             clipEndSec: _clipEndSec!,
@@ -1715,10 +1714,23 @@ class _PostCallTelemetrySummaryScreenState
   Widget _buildTranscriptCard(bool isDark) {
     final segments = _transcriptSegments;
     if (segments.isEmpty) {
+      final rec = _recording ?? const <String, dynamic>{};
       final transcriptionStatus =
-          ((_recording ?? const {})['transcriptionStatus'] as String? ?? '')
-              .toUpperCase();
-      if (transcriptionStatus == 'PROCESSING') {
+          (rec['transcriptionStatus'] as String? ?? '').toUpperCase();
+      final concatenationStatus =
+          (rec['concatenationStatus'] as String? ?? '').toUpperCase();
+      final recordingStatus = (rec['status'] as String? ?? '').toUpperCase();
+      final waitingForTranscript = transcriptionStatus == 'PROCESSING' ||
+          transcriptionStatus == 'READY' ||
+          // User recording finished but transcript job not marked yet (concat still
+          // stitching, or status not refreshed to READY/PROCESSING).
+          (isUserInitiatedCallRecording(rec) &&
+              recordingStatus != 'NO_RECORDING' &&
+              recordingStatus.isNotEmpty &&
+              transcriptionStatus != 'FAILED' &&
+              transcriptionStatus != 'COMPLETE' &&
+              concatenationStatus != 'FAILED');
+      if (waitingForTranscript) {
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1957,18 +1969,21 @@ class _PostCallTelemetrySummaryScreenState
     required DateTime anchorOccurredAt,
     required DateTime? fallbackCallStart,
   }) {
+    DateTime? fromSegments;
     for (final segment in segments) {
       final startMs = _asInt(segment['startMs']);
       final occurredAt = _safeDate(segment['occurredAt']);
       if (startMs == null) continue;
       if (occurredAt.millisecondsSinceEpoch <= 0) continue;
       final offsetMs = startMs < 0 ? 0 : startMs;
-      return occurredAt.subtract(Duration(milliseconds: offsetMs));
+      fromSegments = occurredAt.subtract(Duration(milliseconds: offsetMs));
+      break;
     }
-    if (anchorOccurredAt.millisecondsSinceEpoch > 0) {
-      return anchorOccurredAt;
-    }
-    return fallbackCallStart;
+    return resolveTranscriptHighlightCallStart(
+      fromTranscriptSegments: fromSegments ??
+          (anchorOccurredAt.millisecondsSinceEpoch > 0 ? anchorOccurredAt : null),
+      callJoinStart: fallbackCallStart,
+    );
   }
 
   int? _resolveSelectedSegmentIndex({
