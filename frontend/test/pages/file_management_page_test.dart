@@ -241,9 +241,17 @@ void main() {
       await tester.pumpWidget(_wrap());
       await _pumpUntilLoaded(tester);
 
-      // The empty state Upload Files button has a cloud_upload icon
-      final button = find.widgetWithText(ElevatedButton, 'Upload Files');
+      // ElevatedButton.icon builds _ElevatedButtonWithIcon (ButtonStyleButton),
+      // not ElevatedButton — match via label, then confirm the upload icon.
+      final button = find.ancestor(
+        of: find.text('Upload Files'),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
       expect(button, findsOneWidget);
+      expect(
+        find.descendant(of: button, matching: find.byIcon(Icons.cloud_upload)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('search bar is visible in files tab', (tester) async {
