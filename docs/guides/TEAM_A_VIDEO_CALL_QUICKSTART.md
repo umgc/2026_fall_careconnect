@@ -345,6 +345,11 @@ What this does:
 - Calls backend /api/v3/calls/{callId}/join
 - Uses call sentiment panel (text + periodic combined flow)
 
+**Copy join link (deploy / dual-account testing):** The call initiator sees a **Copy join link**
+banner above the video. Use it when the other account does not get a WebSocket ring (common on
+deploy). Paste the link in a second browser while logged in as the patient/other party. If the
+ring fails, the call stays up and a snackbar offers **Copy link** as well.
+
 ## 6) API endpoints in your scope
 
 Base: /api/v3/calls
@@ -534,6 +539,10 @@ If sentiment calls fail:
 
 If Chime join fails:
 - Check backend logs for `chime:*` permissions and region mismatch.
+
+If the other account never rings (especially on deploy):
+- WebSocket invite delivery can fail while the Chime room is still fine.
+- On the initiator screen, use **Copy join link** (banner or snackbar) and open it as the other user.
 
 If recording fails with "service-linked role" error:
 - Add `iam:CreateServiceLinkedRole` to your IAM user policy (see section 7 above), or

@@ -199,8 +199,13 @@ public class CallController {
       @PathVariable final String callId,
       @RequestBody(required = false) final Map<String, Object> body) {
     final User currentUser = getCurrentUser();
-    final CallSession callSession = callSessionService.requireJoinAuthorized(
-        callId, currentUser.getId());
+    final Long patientUserId = asLong(body == null ? null : body.get("patientUserId"));
+    final Long inviteeUserId = asLong(body == null ? null : body.get("inviteeUserId"));
+    final Long scheduledVisitId = asLong(body == null ? null : body.get("scheduledVisitId"));
+    // Deploy/Amplify: ensure durable session + participant even when POST /sessions
+    // was skipped or raced; care-linked join-link callees self-enroll as INVITED.
+    final CallSession callSession = callSessionService.ensureJoinAuthorized(
+        callId, currentUser, patientUserId, inviteeUserId, scheduledVisitId);
     try {
       // Durable join first so a failed Chime call cannot leave orphan credentials.
       boolean joinedDurably = false;

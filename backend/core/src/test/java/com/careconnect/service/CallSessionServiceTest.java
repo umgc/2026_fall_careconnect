@@ -106,6 +106,59 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void ensureJoinAuthorized_createsSessionWhenMissingAndPatientProvided() {
+        final User creator = user(2L, Role.CAREGIVER);
+        final User patientUser = user(7L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(patientUser);
+        when(patientRepository.findByUserId(7L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(2L, 7L)).thenReturn(true);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(patientUser));
+        when(sessionRepository.findByCallId("call-1"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(session(10L, 42L)));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 2L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(participant(
+                        2L, CallSessionService.PARTICIPANT_INVITED)));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 7L))
+                .thenReturn(Optional.empty());
+
+        final CallSession joined = service.ensureJoinAuthorized(
+                "call-1", creator, 7L, 7L, null);
+
+        assertThat(joined.getId()).isEqualTo(10L);
+        verify(sessionRepository).save(any(CallSession.class));
+    }
+
+    @Test
+    void ensureJoinAuthorized_enrollsCareLinkedUserMissingParticipantRow() {
+        final User invitee = user(9L, Role.CAREGIVER);
+        final CallSession existing = session(10L, 42L);
+        existing.setCreatedByUserId(2L);
+        final User patientUser = user(7L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(42L);
+        patient.setUser(patientUser);
+        when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(existing));
+        when(participantRepository.findByCallSessionIdAndUserId(10L, 9L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(participant(
+                        9L, CallSessionService.PARTICIPANT_INVITED)));
+        when(patientRepository.findById(42L)).thenReturn(Optional.of(patient));
+        when(caregiverLinkService.hasAccessToPatient(9L, 7L)).thenReturn(true);
+
+        final CallSession joined = service.ensureJoinAuthorized(
+                "call-1", invitee, null, null, null);
+
+        assertThat(joined.getId()).isEqualTo(10L);
+        verify(participantRepository).insertIfAbsent(10L, 9L, 2L, "INVITED");
+    }
+
+    @Test
     void requireJoinAuthorized_rejectsUserWithoutParticipantRow() {
         final CallSession session = session(10L, 42L);
         when(sessionRepository.findByCallId("call-1")).thenReturn(Optional.of(session));
