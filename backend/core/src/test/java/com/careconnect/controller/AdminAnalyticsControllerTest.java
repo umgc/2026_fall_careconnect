@@ -6,7 +6,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.careconnect.dto.AdminAnalyticsSummaryDTO;
+import com.careconnect.dto.DailyFeatureCountDTO;
 import com.careconnect.dto.ErrorMetricsDTO;
+import com.careconnect.dto.FeatureTrendDTO;
 import com.careconnect.dto.SyncMetricsDTO;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
@@ -78,6 +80,38 @@ class AdminAnalyticsControllerTest {
 
     org.junit.jupiter.api.Assertions.assertThrows(
         UnauthorizedException.class, () -> controller.summary(7, null, null));
+  }
+
+  @Test
+  void featureTrends_asAdmin_returnsDailyCounts() throws Exception {
+    when(securityUtil.resolveCurrentUser()).thenReturn(adminUser);
+    when(adminAnalyticsService.getFeatureTrends(from, to, "dashboard"))
+        .thenReturn(
+            new FeatureTrendDTO(
+                "dashboard",
+                from.toInstant(),
+                to.toInstant(),
+                List.of(new DailyFeatureCountDTO("2026-07-01", 3L))));
+
+    final FeatureTrendDTO response = controller.featureTrends(from, to, "dashboard");
+
+    assertThat(response.feature()).isEqualTo("dashboard");
+    assertThat(response.dailyCounts()).hasSize(1);
+    verify(authorizationService).requireAdmin(adminUser);
+    verify(adminAnalyticsService).getFeatureTrends(from, to, "dashboard");
+  }
+
+  @Test
+  void featureTrends_whenNotAdmin_propagatesUnauthorized() throws Exception {
+    final User caregiver = buildUser(Role.CAREGIVER);
+    when(securityUtil.resolveCurrentUser()).thenReturn(caregiver);
+    doThrow(new UnauthorizedException("Admin access required"))
+        .when(authorizationService)
+        .requireAdmin(caregiver);
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        UnauthorizedException.class,
+        () -> controller.featureTrends(from, to, "dashboard"));
   }
 
   private AdminAnalyticsSummaryDTO sampleSummary() {
