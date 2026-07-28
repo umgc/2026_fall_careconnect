@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 /**
  * Builds {@link RetrievalRecordType#UPLOADED_DOCUMENT} chunk drafts from an uploaded
  * document's description and/or extracted plain text. Prefer extracted body text when present;
- * scanned images without OCR still fall back to description/caption only.
+ * scanned images without OCR still fall back to description/caption only
+ * (Textract/OCR-into-Ask remains a post-MVP follow-up).
  *
  * <p>Long excerpts are split into overlapping character windows so embedding / FTS
  * payloads stay bounded (full-document single-chunk indexing blows up on large PDFs).
