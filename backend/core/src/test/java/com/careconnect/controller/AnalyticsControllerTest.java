@@ -347,7 +347,7 @@ class AnalyticsControllerTest {
     class CreateVitalSample {
 
         private VitalSampleDTO sampleDto() throws Exception {
-            return new VitalSampleDTO(1L, PATIENT_ID, Instant.now(), 65.0, 98.0, 120, 80, 190.0, 8, 4);
+            return new VitalSampleDTO(1L, PATIENT_ID, Instant.now(), 65.0, 98.0, 120, 80, 190.0, null, 8, 4);
         }
 
         @Test
@@ -518,11 +518,11 @@ class AnalyticsControllerTest {
         private static final Long VITAL_ID = 55L;
 
         private VitalSampleDTO existingDto() throws Exception {
-            return new VitalSampleDTO(VITAL_ID, PATIENT_ID, null, null, null, null, null, null, null, null);
+            return new VitalSampleDTO(VITAL_ID, PATIENT_ID, null, null, null, null, null, null, null, null, null);
         }
 
         private VitalSampleDTO updateDto() throws Exception {
-            return new VitalSampleDTO(VITAL_ID, PATIENT_ID, null, null, null, null, null, null, null, null);
+            return new VitalSampleDTO(VITAL_ID, PATIENT_ID, null, null, null, null, null, null, null, null, null);
         }
 
         @Test

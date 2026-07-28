@@ -28,7 +28,8 @@ class SchemaPatchCatalogTest {
                 "2607191700-recording-state",
                 "2607191800-termination-steps",
                 "2607191900-chime-attendee-claim",
-                "2607192000-summary-replay-quarantine-reason");
+                "2607192000-summary-replay-quarantine-reason",
+                "2607271600-wearable-metric-allow-steps");
     }
 
     @Test
@@ -119,6 +120,17 @@ class SchemaPatchCatalogTest {
         assertThat(sql)
                 .contains("quarantine_reason VARCHAR(255)")
                 .contains("summary_citation_replay_source");
+    }
+
+    @Test
+    void wearableMetricAllowSteps_includesStepsInCheckConstraint() throws Exception {
+        final String sql = new ClassPathResource(
+                "db/schema-patches/2607271600_wearable_metric_allow_steps.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(sql)
+                .contains("wearable_metric_metric_check")
+                .contains("'STEPS'");
     }
 
     @Test

@@ -6,12 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:health/health.dart';
-import 'package:fitbitter/fitbitter.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/auth_service.dart' as auth_service;
 import 'package:care_connect_app/services/user_role_storage_service.dart';
+import 'package:care_connect_app/services/google_health/google_health_api_service.dart';
+import 'package:care_connect_app/services/google_health/google_health_auth_service.dart';
+import 'package:care_connect_app/services/google_health/google_health_config.dart';
 import 'package:care_connect_app/config/env_constant.dart';
 
 import 'add_devices_screen.dart';
@@ -115,7 +117,14 @@ class _IngestReading {
 }
 
 class WearablesScreen extends StatefulWidget {
-  const WearablesScreen({super.key});
+  final String? googleHealthStatus;
+  final String? googleHealthError;
+
+  const WearablesScreen({
+    super.key,
+    this.googleHealthStatus,
+    this.googleHealthError,
+  });
 
   @override
   State<WearablesScreen> createState() => _WearablesScreenState();
@@ -303,24 +312,19 @@ class _WearablesScreenState extends State<WearablesScreen> {
     ],
   };
 
-  // Fitbit configuration is required only for Fitbit OAuth-backed reads.
-  final String? fitbitClientId = _resolveFitbitClientId();
-  final String? fitbitClientSecret = _resolveFitbitClientSecret();
+  // Fitbit now connects through Google Health OAuth (not legacy Fitbit Web API).
+  GoogleHealthAuthService? _googleHealthAuth;
+  GoogleHealthApiService? _googleHealthApi;
 
-  static String? _resolveFitbitClientId() {
-    try {
-      return getFitbitClientId();
-    } catch (_) {
-      return null;
-    }
+  GoogleHealthAuthService? _tryGoogleAuth() {
+    if (!GoogleHealthConfig.isEnvironmentConfigured) return null;
+    return _googleHealthAuth ??= GoogleHealthAuthService();
   }
 
-  static String? _resolveFitbitClientSecret() {
-    try {
-      return getFitbitClientSecret();
-    } catch (_) {
-      return null;
-    }
+  GoogleHealthApiService? _tryGoogleApi() {
+    final auth = _tryGoogleAuth();
+    if (auth == null) return null;
+    return _googleHealthApi ??= GoogleHealthApiService(authService: auth);
   }
 
   @override
@@ -331,7 +335,34 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
   Future<void> _initializeWearables() async {
     await _loadConnectedDevices();
+    await _handleGoogleHealthReturnParams();
     await _fetchLatestHealthData();
+  }
+
+  Future<void> _handleGoogleHealthReturnParams() async {
+    final error = widget.googleHealthError;
+    final status = widget.googleHealthStatus;
+    if (error == null && status == null) return;
+    if (!mounted) return;
+
+    if (error != null && error.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Google Health connection failed: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (status == 'connected') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fitbit connected via Google Health'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Future<void> _loadConnectedDevices() async {
@@ -350,15 +381,16 @@ class _WearablesScreenState extends State<WearablesScreen> {
         print('✓ Loaded ${connectedDevices.length} connected devices');
       }
 
-      if (kIsWeb) {
-        await _syncWebGoogleHealthConnection(prefs);
-      }
+      // Tokens live on the backend for both web and native (Option A).
+      await _syncBackendGoogleHealthConnection(prefs);
     } catch (e) {
       print('✗ Failed to load devices: $e');
     }
   }
 
-  Future<void> _syncWebGoogleHealthConnection(SharedPreferences prefs) async {
+  Future<void> _syncBackendGoogleHealthConnection(
+    SharedPreferences prefs,
+  ) async {
     try {
       final authHeaders = await ApiService.getAuthHeaders();
       final response = await http.get(
@@ -372,37 +404,31 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
       final payload = jsonDecode(response.body) as Map<String, dynamic>;
       final connected = payload['connected'] == true;
-      const webDevicePrefix = 'google_health_web_';
-      final hasWebGoogleHealthDevice = connectedDevices.any(
-        (device) =>
-            device.platform == 'fitbit' &&
-            device.id.startsWith(webDevicePrefix),
-      );
+      const devicePrefix = 'google_health_';
+      final hasAnyFitbit =
+          connectedDevices.any((device) => device.platform == 'fitbit');
 
       bool changed = false;
-      if (connected && !hasWebGoogleHealthDevice) {
+      if (connected && !hasAnyFitbit) {
         connectedDevices.add(
           ConnectedDevice(
-            id: '${webDevicePrefix}${DateTime.now().millisecondsSinceEpoch}',
+            id: '${devicePrefix}${DateTime.now().millisecondsSinceEpoch}',
             platform: 'fitbit',
             name: 'Fitbit (Google Health)',
             connectedAt: DateTime.now(),
             permissions: const [
               'steps',
               'heart_rate',
-              'blood_pressure_diastolic',
-              'blood_pressure_systolic',
+              'sleep',
+              'activity',
             ],
           ),
         );
         changed = true;
-      } else if (!connected && hasWebGoogleHealthDevice) {
-        connectedDevices.removeWhere(
-          (device) =>
-              device.platform == 'fitbit' &&
-              device.id.startsWith(webDevicePrefix),
-        );
-        changed = true;
+      } else if (!connected) {
+        final before = connectedDevices.length;
+        connectedDevices.removeWhere((device) => device.platform == 'fitbit');
+        changed = connectedDevices.length != before;
       }
 
       if (changed) {
@@ -412,7 +438,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
         await prefs.setString('connected_devices', jsonEncode(devicesJson));
       }
     } catch (_) {
-      // Web status sync is best-effort and should not block screen rendering.
+      // Status sync is best-effort and should not block screen rendering.
     }
   }
 
@@ -456,12 +482,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
           await _ingestReadings(patientId: patientId, readings: readings);
       final hasPersistedData =
           await _loadPersistedReadings(patientId: patientId);
-      if (!hasPersistedData && acceptedReadings.isNotEmpty) {
-        _applyAcceptedIngestionSnapshot(acceptedReadings);
+      // Always merge freshly accepted readings so STEPS (wearable_metric-only)
+      // still appear even when vital_sample rows already exist.
+      if (acceptedReadings.isNotEmpty) {
+        _mergeAcceptedIngestionSnapshot(acceptedReadings);
       } else if (!hasPersistedData && readings.isEmpty) {
         setState(() {
           syncStatusMessage =
-              'No Apple Health samples were collected in the last 7 days. '
+              'No Google Health / Fitbit samples were collected in the last 7 days. '
               'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
         });
       }
@@ -542,73 +570,254 @@ class _WearablesScreenState extends State<WearablesScreen> {
     DateTime startTime,
     DateTime endTime,
   ) async {
-    bool hasFitbitDevice =
+    final hasFitbitDevice =
         connectedDevices.any((device) => device.platform == 'fitbit');
     if (!hasFitbitDevice) return;
 
-    if (fitbitClientId == null || fitbitClientSecret == null) {
-      // Fitbit OAuth client IDs are deprecated for this app flow.
-      // If Fitbit is the only connected source, fall back to Google Health /
-      // Health Connect reads so Fitbit-originated metrics can still sync.
-      final hasOtherHealthSource = connectedDevices.any((device) =>
-          device.platform == 'google_fit' || device.platform == 'apple_health');
-      if (hasOtherHealthSource) {
+    // Prefer backend-proxied Google Health (tokens stored server-side).
+    final startIso = startTime.toUtc().toIso8601String();
+    final endIso = endTime.toUtc().toIso8601String();
+    var added = 0;
+
+    added += await _appendGoogleHealthDataType(
+      readings: readings,
+      dataType: 'steps',
+      defaultMetric: 'STEPS',
+      filter:
+          'steps.interval.start_time >= "$startIso" AND steps.interval.start_time < "$endIso"',
+      fallbackRecordedAt: endTime,
+      windowStart: startTime,
+      windowEnd: endTime,
+    );
+    added += await _appendGoogleHealthDataType(
+      readings: readings,
+      dataType: 'heart-rate',
+      defaultMetric: 'HEART_RATE',
+      filter:
+          'heartRate.interval.start_time >= "$startIso" AND heartRate.interval.start_time < "$endIso"',
+      fallbackRecordedAt: endTime,
+      windowStart: startTime,
+      windowEnd: endTime,
+    );
+
+    if (added > 0) return;
+
+    // Optional local AppAuth fallback if dart-defines are configured.
+    final auth = _tryGoogleAuth();
+    final api = _tryGoogleApi();
+    if (auth != null && api != null && await auth.isConnected()) {
+      try {
+        final heartRate = await api.fetchHeartRate(pageSize: 100);
+        for (final point in _extractGoogleHealthPoints(heartRate)) {
+          final value = point.value;
+          if (value == null || value <= 0) continue;
+          readings.add(
+            _IngestReading(
+              metric: point.metric ?? 'HEART_RATE',
+              metricValue: value,
+              recordedAt: point.recordedAt ?? endTime,
+              source: 'fitbit',
+            ),
+          );
+        }
+
+        final steps = await api.fetchSteps(pageSize: 100);
+        for (final point in _extractGoogleHealthPoints(steps)) {
+          final value = point.value;
+          if (value == null || value <= 0) continue;
+          readings.add(
+            _IngestReading(
+              metric: point.metric ?? 'STEPS',
+              metricValue: value,
+              recordedAt: point.recordedAt ?? endTime,
+              source: 'fitbit',
+            ),
+          );
+        }
         return;
+      } catch (e) {
+        print('⚠ Local Google Health Fitbit reading collection failed: $e');
       }
-      await _collectHealthReadingsFromPlugin(
-        readings: readings,
-        startTime: startTime,
-        endTime: endTime,
-        source: 'fitbit',
-      );
-      return;
     }
 
-    try {
-      String? accessToken =
-          await _secureStorage.read(key: 'fitbit_access_token');
-      String? userID = await _secureStorage.read(key: 'fitbit_user_id');
+    print(
+      '⚠ No Google Health steps/heart-rate points returned for Fitbit. '
+      'Reconnect Fitbit after granting activity + health-metrics scopes.',
+    );
+  }
 
-      if (accessToken == null || accessToken.isEmpty) {
-        return;
+  Future<int> _appendGoogleHealthDataType({
+    required List<_IngestReading> readings,
+    required String dataType,
+    required String defaultMetric,
+    required String filter,
+    required DateTime fallbackRecordedAt,
+    DateTime? windowStart,
+    DateTime? windowEnd,
+  }) async {
+    var added = await _fetchGoogleHealthDataType(
+      readings: readings,
+      dataType: dataType,
+      defaultMetric: defaultMetric,
+      filter: filter,
+      fallbackRecordedAt: fallbackRecordedAt,
+      windowStart: windowStart,
+      windowEnd: windowEnd,
+    );
+    // Some Google Health responses reject/ignore filters; retry unfiltered
+    // and keep only points inside the local sync window.
+    if (added == 0) {
+      added = await _fetchGoogleHealthDataType(
+        readings: readings,
+        dataType: dataType,
+        defaultMetric: defaultMetric,
+        filter: null,
+        fallbackRecordedAt: fallbackRecordedAt,
+        windowStart: windowStart,
+        windowEnd: windowEnd,
+      );
+    }
+    return added;
+  }
+
+  Future<int> _fetchGoogleHealthDataType({
+    required List<_IngestReading> readings,
+    required String dataType,
+    required String defaultMetric,
+    required String? filter,
+    required DateTime fallbackRecordedAt,
+    DateTime? windowStart,
+    DateTime? windowEnd,
+  }) async {
+    try {
+      final authHeaders = await ApiService.getAuthHeaders();
+      final query = <String, String>{'pageSize': '100'};
+      if (filter != null && filter.isNotEmpty) {
+        query['filter'] = filter;
+      }
+      final uri = Uri.parse(
+        '${getBackendBaseUrl()}/v1/api/wearables/google-health/data-types/$dataType/data-points',
+      ).replace(queryParameters: query);
+      final response = await http.get(uri, headers: authHeaders);
+      if (response.statusCode != 200) {
+        print(
+          '⚠ Google Health $dataType fetch failed '
+          '(${response.statusCode}): ${response.body}',
+        );
+        return 0;
       }
 
-      userID ??= '-';
-
-      FitbitCredentials fitbitCredentials = FitbitCredentials(
-        userID: userID,
-        fitbitAccessToken: accessToken,
-        fitbitRefreshToken: '',
-      );
-
-      FitbitActivityTimeseriesDataManager stepsManager =
-          FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId!,
-        clientSecret: fitbitClientSecret!,
-      );
-
-      final stepsData = await stepsManager
-          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
-        date: DateTime.now(),
-        resource: Resource.steps,
-        fitbitCredentials: fitbitCredentials,
-      ));
-
-      for (final dataPoint in stepsData) {
-        final value = _extractFitbitValue(dataPoint);
-        if (value <= 0) continue;
+      final payload = jsonDecode(response.body) as Map<String, dynamic>;
+      final nested = payload['data'];
+      final map =
+          nested is Map ? Map<String, dynamic>.from(nested) : payload;
+      var added = 0;
+      for (final point in _extractGoogleHealthPoints(map)) {
+        final value = point.value;
+        if (value == null || value <= 0) continue;
+        final recordedAt = point.recordedAt ?? fallbackRecordedAt;
+        if (windowStart != null && recordedAt.isBefore(windowStart)) continue;
+        if (windowEnd != null && recordedAt.isAfter(windowEnd)) continue;
         readings.add(
           _IngestReading(
-            metric: 'STEPS',
+            metric: point.metric ?? defaultMetric,
             metricValue: value,
-            recordedAt: _extractFitbitDate(dataPoint),
+            recordedAt: recordedAt,
             source: 'fitbit',
           ),
         );
+        added++;
       }
+      return added;
     } catch (e) {
-      print('⚠ Fitbit reading collection failed: $e');
+      print('⚠ Backend Google Health $dataType fetch failed: $e');
+      return 0;
     }
+  }
+
+  List<({double? value, DateTime? recordedAt, String? metric})>
+      _extractGoogleHealthPoints(
+    Map<String, dynamic> payload,
+  ) {
+    final rawPoints = payload['dataPoints'] ?? payload['data'];
+    if (rawPoints is! List) return const [];
+
+    final results = <({double? value, DateTime? recordedAt, String? metric})>[];
+    for (final item in rawPoints) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+
+      double? value;
+      String? metric;
+      final heartRate = map['heartRate'] ?? map['heart_rate'];
+      if (heartRate is Map) {
+        final bpm = heartRate['bpm'] ?? heartRate['value'];
+        if (bpm != null) {
+          value = double.tryParse(bpm.toString());
+          metric = 'HEART_RATE';
+        }
+      }
+      final steps = map['steps'];
+      if (value == null && steps is Map) {
+        final count = steps['count'] ?? steps['value'];
+        if (count != null) {
+          value = double.tryParse(count.toString());
+          metric = 'STEPS';
+        }
+      }
+      if (value == null) {
+        final bpm = _deepFindFirstNumber(map, const ['bpm']);
+        if (bpm != null) {
+          value = bpm;
+          metric = 'HEART_RATE';
+        }
+      }
+      if (value == null) {
+        final count = _deepFindFirstNumber(map, const ['count']);
+        if (count != null) {
+          value = count;
+          metric = 'STEPS';
+        }
+      }
+      value ??= _deepFindFirstNumber(map, const [
+        'value',
+        'numericValue',
+      ]);
+
+      DateTime? recordedAt;
+      final nestedInterval = heartRate is Map
+          ? heartRate['interval']
+          : (steps is Map ? steps['interval'] : null);
+      final interval = map['interval'] ?? nestedInterval;
+      final startTime = map['startTime']?.toString() ??
+          map['start_time']?.toString() ??
+          (interval is Map
+              ? (interval['startTime'] ?? interval['start_time'])?.toString()
+              : null);
+      if (startTime != null) {
+        recordedAt = DateTime.tryParse(startTime)?.toLocal();
+      }
+
+      results.add((value: value, recordedAt: recordedAt, metric: metric));
+    }
+    return results;
+  }
+
+  double? _deepFindFirstNumber(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      if (map.containsKey(key)) {
+        final parsed = double.tryParse(map[key].toString());
+        if (parsed != null) return parsed;
+      }
+    }
+    for (final value in map.values) {
+      if (value is Map) {
+        final nested =
+            _deepFindFirstNumber(Map<String, dynamic>.from(value), keys);
+        if (nested != null) return nested;
+      }
+    }
+    return null;
   }
 
   Future<void> _collectHealthReadingsFromPlugin({
@@ -952,6 +1161,15 @@ class _WearablesScreenState extends State<WearablesScreen> {
           date: timestamp,
         );
       }
+      final steps = (vital['steps'] as num?)?.toDouble() ?? 0.0;
+      if (steps > 0 && !persisted.containsKey('steps')) {
+        persisted['steps'] = _healthDataFromDefinition(
+          key: 'steps',
+          source: 'CareConnect Backend',
+          value: steps,
+          date: timestamp,
+        );
+      }
     }
 
     setState(() {
@@ -968,8 +1186,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
     return persisted.isNotEmpty;
   }
 
-  void _applyAcceptedIngestionSnapshot(List<_IngestReading> acceptedReadings) {
-    final snapshot = <String, HealthData>{};
+  void _mergeAcceptedIngestionSnapshot(List<_IngestReading> acceptedReadings) {
+    final snapshot = Map<String, HealthData>.from(latestHealthData);
     for (final reading in acceptedReadings) {
       final metricKey = _uiMetricKeyForBackendMetric(reading.metric);
       if (metricKey == null) continue;
@@ -979,7 +1197,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
       }
       snapshot[metricKey] = _healthDataFromDefinition(
         key: metricKey,
-        source: 'CareConnect Backend',
+        source: 'Fitbit (Google Health)',
         value: reading.metricValue,
         date: reading.recordedAt,
       );
@@ -989,9 +1207,15 @@ class _WearablesScreenState extends State<WearablesScreen> {
       setState(() {
         hasSyncError = false;
         latestHealthData = snapshot;
-        syncStatusMessage = null;
+        syncStatusMessage =
+            'Synced $_lastAcceptedCount Fitbit/Google Health reading(s)'
+            '${_lastRejectedCount > 0 ? ', $_lastRejectedCount rejected' : ''}.';
       });
     }
+  }
+
+  void _applyAcceptedIngestionSnapshot(List<_IngestReading> acceptedReadings) {
+    _mergeAcceptedIngestionSnapshot(acceptedReadings);
   }
 
   String? _uiMetricKeyForBackendMetric(String backendMetric) {
@@ -1014,145 +1238,51 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Future<void> _fetchFitbitData(DateTime startTime, DateTime endTime) async {
-    bool hasFitbitDevice =
+    final hasFitbitDevice =
         connectedDevices.any((device) => device.platform == 'fitbit');
     if (!hasFitbitDevice) return;
 
-    try {
-      String? accessToken =
-          await _secureStorage.read(key: 'fitbit_access_token');
-      String? userID = await _secureStorage.read(key: 'fitbit_user_id');
-
-      if (accessToken == null) {
-        _setDefaultFitbitData();
-        return;
-      }
-
-      userID ??= '-';
-
-      FitbitCredentials fitbitCredentials = FitbitCredentials(
-        userID: userID,
-        fitbitAccessToken: accessToken,
-        fitbitRefreshToken: '',
-      );
-
-      DateTime today = DateTime.now();
-
-      // Fetch Steps
-      await _fetchFitbitSteps(fitbitCredentials, today);
-
-      // Fetch Calories
-      await _fetchFitbitCalories(fitbitCredentials, today);
-    } catch (e) {
+    final preview = <_IngestReading>[];
+    await _collectFitbitReadings(preview, startTime, endTime);
+    if (preview.isEmpty) {
       _setDefaultFitbitData();
+      return;
     }
-  }
 
-  Future<void> _fetchFitbitSteps(
-      FitbitCredentials credentials, DateTime date) async {
-    try {
-      FitbitActivityTimeseriesDataManager stepsManager =
-          FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId!,
-        clientSecret: fitbitClientSecret!,
-      );
+    final hrPoints =
+        preview.where((r) => r.metric.toUpperCase() == 'HEART_RATE');
+    final stepPoints =
+        preview.where((r) => r.metric.toUpperCase() == 'STEPS');
 
-      final stepsData = await stepsManager
-          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
-        date: date,
-        resource: Resource.steps,
-        fitbitCredentials: credentials,
-      ));
+    if (hrPoints.isNotEmpty) {
+      final point = hrPoints.last;
+      setState(() {
+        latestHealthData['heart_rate'] = _healthDataFromDefinition(
+          key: 'heart_rate',
+          source: 'Fitbit',
+          value: point.metricValue,
+          date: point.recordedAt,
+        );
+      });
+    } else {
+      _setDefaultValue('heart_rate', 'Fitbit',
+          reason: 'No Google Health heart-rate data available.');
+    }
 
-      List<dynamic> dataList = stepsData;
-      if (dataList.isNotEmpty) {
-        var latestData = dataList.last;
-        double finalValue = _extractFitbitValue(latestData);
-        DateTime dataDate = _extractFitbitDate(latestData);
-
-        setState(() {
-          latestHealthData['steps'] = _healthDataFromDefinition(
-            key: 'steps',
-            source: 'Fitbit',
-            value: finalValue,
-            date: dataDate,
-          );
-        });
-      }
-    } catch (e) {
+    if (stepPoints.isNotEmpty) {
+      final point = stepPoints.last;
+      setState(() {
+        latestHealthData['steps'] = _healthDataFromDefinition(
+          key: 'steps',
+          source: 'Fitbit',
+          value: point.metricValue,
+          date: point.recordedAt,
+        );
+      });
+    } else {
       _setDefaultValue('steps', 'Fitbit',
-          reason: 'No Fitbit steps data available.');
+          reason: 'No Google Health steps data available.');
     }
-  }
-
-  Future<void> _fetchFitbitCalories(
-      FitbitCredentials credentials, DateTime date) async {
-    try {
-      FitbitActivityTimeseriesDataManager caloriesManager =
-          FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId!,
-        clientSecret: fitbitClientSecret!,
-      );
-
-      final caloriesData = await caloriesManager
-          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
-        date: date,
-        resource: Resource.calories,
-        fitbitCredentials: credentials,
-      ));
-
-      List<dynamic> dataList = caloriesData;
-      if (dataList.isNotEmpty) {
-        var latestData = dataList.last;
-        double finalValue = _extractFitbitValue(latestData);
-        DateTime dataDate = _extractFitbitDate(latestData);
-
-        setState(() {
-          latestHealthData['calories'] = _healthDataFromDefinition(
-            key: 'calories',
-            source: 'Fitbit',
-            value: finalValue,
-            date: dataDate,
-          );
-        });
-      }
-    } catch (e) {
-      _setDefaultValue('calories', 'Fitbit',
-          reason: 'Activity is demo-only this semester.');
-    }
-  }
-
-  double _extractFitbitValue(dynamic data) {
-    dynamic value = 0;
-    if (data is FitbitActivityTimeseriesData) {
-      value = data.value;
-    } else if (data is Map) {
-      value = data['value'] ?? 0;
-    }
-
-    try {
-      if (value is String) {
-        return double.parse(value);
-      } else if (value is num) {
-        return value.toDouble();
-      }
-    } catch (e) {
-      return 0;
-    }
-    return 0;
-  }
-
-  DateTime _extractFitbitDate(dynamic data) {
-    if (data is FitbitActivityTimeseriesData) {
-      return data.dateOfMonitoring ?? DateTime.now();
-    } else if (data is Map && data['dateTime'] != null) {
-      try {
-        return DateTime.parse(data['dateTime']);
-      } catch (e) {
-        return DateTime.now();
-      }
-    }
-    return DateTime.now();
   }
 
   String _sourceLabelForPlatform(String platform) {
@@ -1497,6 +1627,25 @@ class _WearablesScreenState extends State<WearablesScreen> {
         await _saveConnectedDevicesToStorage();
         await _secureStorage.delete(key: '${device.platform}_access_token');
 
+        if (device.platform == 'fitbit') {
+          await _secureStorage.delete(key: 'fitbit_user_id');
+          try {
+            final auth = _tryGoogleAuth();
+            await auth?.disconnect();
+          } catch (_) {}
+          try {
+            final authHeaders = await ApiService.getAuthHeaders();
+            await http.delete(
+              Uri.parse(
+                '${getBackendBaseUrl()}/v1/api/wearables/google-health/disconnect',
+              ),
+              headers: authHeaders,
+            );
+          } catch (_) {
+            // Backend disconnect is best-effort for web-linked sessions.
+          }
+        }
+
         if (connectedDevices.isEmpty ||
             !connectedDevices.any((d) =>
                 d.platform == 'google_fit' ||
@@ -1730,8 +1879,6 @@ class _WearablesScreenState extends State<WearablesScreen> {
           children: [
             _buildConnectedDevicesHeader(),
             const SizedBox(height: 20),
-            _buildSemesterScopeCard(),
-            const SizedBox(height: 20),
             if (isLoadingData ||
                 latestHealthData.isNotEmpty ||
                 syncStatusMessage != null) ...[
@@ -1867,97 +2014,6 @@ class _WearablesScreenState extends State<WearablesScreen> {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildSemesterScopeCard() {
-    final connectedPlatforms = connectedDevices.map((d) => d.platform).toSet();
-    final visiblePlatforms = connectedPlatforms.isEmpty
-        ? {
-            'fitbit',
-            if (!kIsWeb && Platform.isIOS) 'apple_health',
-            if (!kIsWeb && Platform.isAndroid) 'google_fit'
-          }
-        : connectedPlatforms;
-
-    final rows = <Widget>[];
-    for (final platform in visiblePlatforms) {
-      final metrics = _semesterSourceMetricMatrix[platform] ?? const [];
-      final sourceLabel = _sourceLabelForPlatform(platform);
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                sourceLabel,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.indigo,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: metrics.map((metric) {
-                  final bool isPlaceholder =
-                      !metric.availableFromCurrentSource ||
-                          !metric.mappedToPersistedEntity;
-                  final Color chipColor =
-                      isPlaceholder ? Colors.orange : Colors.green;
-                  final String status = metric.mappedToPersistedEntity &&
-                          metric.availableFromCurrentSource
-                      ? 'Persisted'
-                      : 'Placeholder';
-                  return Chip(
-                    label: Text('${metric.type} ($status)'),
-                    backgroundColor: chipColor.withValues(alpha: 0.12),
-                    labelStyle: TextStyle(
-                      fontSize: 11,
-                      color: isPlaceholder
-                          ? Colors.orange.shade900
-                          : Colors.green.shade900,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Semester Metric Scope',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.indigo,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Persisted = mapped to backend entities. Placeholder = UI-only demo or not wired this semester.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            ...rows,
-          ],
-        ),
-      ),
     );
   }
 

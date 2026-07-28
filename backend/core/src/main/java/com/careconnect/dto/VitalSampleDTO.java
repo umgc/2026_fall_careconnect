@@ -14,6 +14,7 @@ public record VitalSampleDTO(
         Integer systolic,
         Integer diastolic,
         Double weight,
+        Double steps,              // From wearable_metric (Fitbit/Google Health)
         Integer moodValue,         // 1-10 scale
         Integer painValue          // 1-10 scale
 ) {}

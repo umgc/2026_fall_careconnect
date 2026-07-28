@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -57,6 +59,24 @@ class VitalSampleServiceTest {
     private Patient patient;
     private User caregiverUser;
 
+    private static PlatformTransactionManager passthroughTransactionManager() {
+        return new PlatformTransactionManager() {
+            @Override
+            public org.springframework.transaction.TransactionStatus getTransaction(
+                    org.springframework.transaction.TransactionDefinition definition) {
+                return new SimpleTransactionStatus();
+            }
+
+            @Override
+            public void commit(org.springframework.transaction.TransactionStatus status) {
+            }
+
+            @Override
+            public void rollback(org.springframework.transaction.TransactionStatus status) {
+            }
+        };
+    }
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -71,7 +91,8 @@ class VitalSampleServiceTest {
             patientCaregiverRepository,
             familyMemberLinkRepository,
             vitalAlertEventRepository,
-            thresholdProperties
+            thresholdProperties,
+            passthroughTransactionManager()
         );
 
         User user = User.builder().id(101L).name("John Doe").build();
@@ -158,7 +179,8 @@ class VitalSampleServiceTest {
             patientCaregiverRepository,
             familyMemberLinkRepository,
             vitalAlertEventRepository,
-            thresholdProperties
+            thresholdProperties,
+            passthroughTransactionManager()
         );
 
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(105.0).build());

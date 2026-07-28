@@ -67,6 +67,7 @@
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<string>careconnect</string>
+					<string>edu.umgc.careconnect</string>
 				</array>
 			</dict>
 		</array>

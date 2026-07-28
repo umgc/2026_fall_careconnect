@@ -263,6 +263,20 @@ class _CareConnectAppState extends State<CareConnectApp>
       print('OAuth callback detected: $link');
       // The actual OAuth handling is done in AuthService.loginWithGoogle()
       // This is just for logging and potential additional processing
+      return;
+    }
+
+    // Google Health / Fitbit OAuth return: careconnect://wearables?...
+    if (uri.scheme == 'careconnect' &&
+        (uri.host == 'wearables' ||
+            uri.path == '/wearables' ||
+            uri.pathSegments.contains('wearables'))) {
+      final query = uri.query;
+      final route = query.isEmpty ? '/wearables' : '/wearables?$query';
+      print('Wearables deep link detected → $route');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        appRouter.go(route);
+      });
     }
   }
 

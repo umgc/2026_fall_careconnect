@@ -18,13 +18,15 @@ import com.careconnect.repository.WearableMetricRepository;
 import com.careconnect.repository.PatientCaregiverRepository;
 import com.careconnect.repository.FamilyMemberLinkRepository;
 import com.careconnect.repository.VitalAlertEventRepository;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -37,7 +39,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 @Service
-@RequiredArgsConstructor
 public class VitalSampleService {
 
     private static final Logger LOG = LoggerFactory.getLogger(VitalSampleService.class);
@@ -51,6 +52,33 @@ public class VitalSampleService {
     private final FamilyMemberLinkRepository familyMemberLinkRepository;
     private final VitalAlertEventRepository vitalAlertEventRepository;
     private final VitalAlertThresholdProperties vitalAlertThresholdProperties;
+    private final TransactionTemplate requiresNewTx;
+
+    public VitalSampleService(
+            VitalSampleRepository vitalSampleRepository,
+            PatientRepository patientRepository,
+            WearableMetricRepository wearableMetricRepository,
+            CaregiverService caregiverService,
+            NotificationService notificationService,
+            PatientCaregiverRepository patientCaregiverRepository,
+            FamilyMemberLinkRepository familyMemberLinkRepository,
+            VitalAlertEventRepository vitalAlertEventRepository,
+            VitalAlertThresholdProperties vitalAlertThresholdProperties,
+            PlatformTransactionManager transactionManager
+    ) {
+        this.vitalSampleRepository = vitalSampleRepository;
+        this.patientRepository = patientRepository;
+        this.wearableMetricRepository = wearableMetricRepository;
+        this.caregiverService = caregiverService;
+        this.notificationService = notificationService;
+        this.patientCaregiverRepository = patientCaregiverRepository;
+        this.familyMemberLinkRepository = familyMemberLinkRepository;
+        this.vitalAlertEventRepository = vitalAlertEventRepository;
+        this.vitalAlertThresholdProperties = vitalAlertThresholdProperties;
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.requiresNewTx = template;
+    }
 
     /**
      * Create a new vital sample
@@ -134,7 +162,9 @@ public class VitalSampleService {
             WearableMetric metricEntity = wearableMetricsToPersist.get(i);
             WearableReadingIngestionResponse.IngestedReading acceptedReading = accepted.get(i);
             try {
-                wearableMetricRepository.save(metricEntity);
+                // REQUIRES_NEW so a single constraint failure does not mark the
+                // outer ingest transaction rollback-only (which surfaced as HTTP 500).
+                requiresNewTx.execute(status -> wearableMetricRepository.save(metricEntity));
                 persistedAccepted.add(acceptedReading);
             } catch (DataIntegrityViolationException ex) {
                 String reason = rootCauseMessage(ex);
@@ -163,10 +193,15 @@ public class VitalSampleService {
         List<VitalSample> savedVitalSamples = new ArrayList<>();
         if (!vitalSamplesToPersist.isEmpty()) {
             try {
-                savedVitalSamples = vitalSampleRepository.saveAll(vitalSamplesToPersist);
+                savedVitalSamples = requiresNewTx.execute(status ->
+                        vitalSampleRepository.saveAll(vitalSamplesToPersist));
+                if (savedVitalSamples == null) {
+                    savedVitalSamples = List.of();
+                }
             } catch (Exception ex) {
                 LOG.warn("Skipping vital_sample persistence for wearable ingestion due to error: actorUserId={}, patientId={}, reason={}",
                         currentUser.getId(), patientId, rootCauseMessage(ex));
+                savedVitalSamples = List.of();
             }
         }
 
@@ -285,6 +320,7 @@ public class VitalSampleService {
             .systolic(vitalSample.getSystolic())
             .diastolic(vitalSample.getDiastolic())
             .weight(vitalSample.getWeight())
+            .steps(null)
             .moodValue(vitalSample.getMoodValue())
             .painValue(vitalSample.getPainValue())
             .build();

@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -86,22 +87,42 @@ public class GoogleHealthWearableController {
             @RequestParam(required = false) String pageToken,
             @RequestParam(required = false) String filter
     ) {
+        return dataPoints("exercise", pageSize, pageToken, filter);
+    }
+
+    @GetMapping("/data-types/{dataType}/data-points")
+    public ResponseEntity<?> dataPoints(
+            @PathVariable String dataType,
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) String pageToken,
+            @RequestParam(required = false) String filter
+    ) {
         User currentUser = securityUtil.resolveCurrentUser();
         if (currentUser == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Authentication required"));
         }
 
-        Map<String, Object> response = googleHealthOAuthService.listExerciseDataPoints(
-                String.valueOf(currentUser.getId()),
-                pageSize,
-                pageToken,
-                filter
-        );
+        try {
+            Map<String, Object> response = googleHealthOAuthService.listDataPoints(
+                    String.valueOf(currentUser.getId()),
+                    dataType,
+                    pageSize,
+                    pageToken,
+                    filter
+            );
 
-        return ResponseEntity.ok(Map.of(
-                "data", response,
-                "message", "Google Health exercise data retrieved successfully"
-        ));
+            return ResponseEntity.ok(Map.of(
+                    "data", response,
+                    "dataType", dataType,
+                    "message", "Google Health data retrieved successfully"
+            ));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", ex.getMessage()));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", ex.getMessage()));
+        }
     }
 }

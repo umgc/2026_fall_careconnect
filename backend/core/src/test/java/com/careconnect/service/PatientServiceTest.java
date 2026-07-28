@@ -457,7 +457,7 @@ class PatientServiceTest {
         final List<AllergyDTO> allergies = List.of(AllergyDTO.builder().id(1L).allergen("Peanuts").build());
         final List<MedicationDTO> meds = List.of(MedicationDTO.builder().id(1L).medicationName("Aspirin").build());
 
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 72.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 72.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         final MoodPainLogResponse moodPain = MoodPainLogResponse.builder()
                 .id(1L).moodValue(7).painValue(3).note("Feeling okay")
@@ -569,7 +569,7 @@ class PatientServiceTest {
     void getEnhancedPatientProfile_warningHeartRate_healthStatusNeedsAttention() throws Exception {
         final Instant now = Instant.now();
         // Heart rate > 100 triggers warning
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 110.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 110.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -588,7 +588,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_lowHeartRate_healthStatusNeedsAttention")
     void getEnhancedPatientProfile_lowHeartRate_healthStatusNeedsAttention() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 50.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 50.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -606,7 +606,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_highSystolic_healthStatusNeedsAttention")
     void getEnhancedPatientProfile_highSystolic_healthStatusNeedsAttention() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 150, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 150, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -624,7 +624,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_lowSystolic_healthStatusNeedsAttention")
     void getEnhancedPatientProfile_lowSystolic_healthStatusNeedsAttention() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 85, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 85, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -642,7 +642,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_lowSpo2_healthStatusNeedsAttention")
     void getEnhancedPatientProfile_lowSpo2_healthStatusNeedsAttention() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 90.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 90.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -702,7 +702,7 @@ class PatientServiceTest {
         final Instant now = Instant.now();
         final LocalDateTime nowLocal = LocalDateTime.now();
 
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
         final MoodPainLogResponse moodPain = MoodPainLogResponse.builder()
                 .id(1L).moodValue(7).painValue(2).note("Good")
                 .timestamp(nowLocal).createdAt(nowLocal).build();
@@ -741,7 +741,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_onlyVitals_lastActivityDateFromVitals")
     void getEnhancedPatientProfile_onlyVitals_lastActivityDateFromVitals() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -780,7 +780,7 @@ class PatientServiceTest {
     @Test
     @DisplayName("getEnhancedPatientProfile_vitalTimestampNull_handledGracefully")
     void getEnhancedPatientProfile_vitalTimestampNull_handledGracefully() throws Exception {
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, null, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, null, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -820,7 +820,7 @@ class PatientServiceTest {
         final Instant vitalTime = Instant.now();
         final LocalDateTime moodTime = LocalDateTime.now().minusDays(2);
 
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, vitalTime, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, vitalTime, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
         final MoodPainLogResponse moodPain = MoodPainLogResponse.builder()
                 .id(1L).moodValue(7).painValue(2).note("Good")
                 .timestamp(moodTime).createdAt(moodTime).build();
@@ -845,7 +845,7 @@ class PatientServiceTest {
         final Instant vitalTime = Instant.now().minus(3, ChronoUnit.DAYS);
         final LocalDateTime moodTime = LocalDateTime.now();
 
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, vitalTime, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, vitalTime, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
         final MoodPainLogResponse moodPain = MoodPainLogResponse.builder()
                 .id(1L).moodValue(7).painValue(2).note("Good")
                 .timestamp(moodTime).createdAt(moodTime).build();
@@ -888,7 +888,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_vitalsWithNullHeartRateAndSystolicAndSpo2_stableStatus")
     void getEnhancedPatientProfile_vitalsWithNullHeartRateAndSystolicAndSpo2_stableStatus() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, null, null, null, null, null, null, null);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, null, null, null, null, null, null, null, null);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -928,7 +928,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_oldVitals_hasRecentVitalsFalse")
     void getEnhancedPatientProfile_oldVitals_hasRecentVitalsFalse() throws Exception {
         final Instant oldTime = Instant.now().minus(10, ChronoUnit.DAYS);
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, oldTime, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, oldTime, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
@@ -966,7 +966,7 @@ class PatientServiceTest {
     @DisplayName("getEnhancedPatientProfile_recentVitals_hasRecentVitalsTrue")
     void getEnhancedPatientProfile_recentVitals_hasRecentVitalsTrue() throws Exception {
         final Instant now = Instant.now();
-        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 120, 80, 150.0, 7, 3);
+        final VitalSampleDTO vitalSample = new VitalSampleDTO(1L, 1L, now, 75.0, 98.0, 120, 80, 150.0, null, 7, 3);
 
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(allergyService.getAllergiesForPatient(1L)).thenReturn(Collections.emptyList());
