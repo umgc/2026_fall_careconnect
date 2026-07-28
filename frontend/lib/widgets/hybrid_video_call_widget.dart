@@ -120,7 +120,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
   bool _isSendingVideoSample = false;
   bool _isEndingCall = false;
   bool _isExitingCall = false;
-  bool _inviteNotifyFailed = false;
 
   // Conference invite
   bool _isLoadingInvitees = false;
@@ -392,7 +391,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         // Deploy often cannot ring via WebSocket — keep the caller in-call and
         // offer a copyable join link for the patient/other party.
         if (!invitationSent) {
-          _inviteNotifyFailed = true;
           if (mounted) {
             _showJoinLinkSnackBar(
               message:
@@ -489,47 +487,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
           onPressed: () {
             unawaited(_copyJoinLink());
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJoinLinkBanner() {
-    final highlight = _inviteNotifyFailed;
-    return Material(
-      color: highlight
-          ? Colors.orange.shade800
-          : AppTheme.videoCallBackgroundDarkTheme.withValues(alpha: 0.95),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Icon(
-              highlight ? Icons.link_off : Icons.link,
-              color: AppTheme.videoCallText,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                highlight
-                    ? 'Ring failed — copy join link for the other account'
-                    : 'Share join link if the other account does not get a ring',
-                style: const TextStyle(
-                  color: AppTheme.videoCallText,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => unawaited(_copyJoinLink()),
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy join link'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.videoCallText,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1267,9 +1224,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       children: [
         // Recording consent banner — visible to all participants when active
         if (_isRecording) _buildRecordingConsentBanner(),
-
-        // Deploy fallback when WebSocket ring is unavailable.
-        if (widget.isInitiator) _buildJoinLinkBanner(),
 
         // Video call area — takes remaining space above sentiment panel
         Expanded(
