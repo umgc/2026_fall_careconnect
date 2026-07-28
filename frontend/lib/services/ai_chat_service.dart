@@ -992,9 +992,9 @@ class AIChatService {
 
   /// Lists Ask AI conversation shares visible to the caller for [patientId].
   ///
-  /// Caregivers only receive shares where they are a recipient (or that they
-  /// created). Patients/admins receive all shares for the patient. Each item
-  /// includes [AiAskShareListItem.transcriptJson] for caregiver review.
+  /// Admins receive all shares for the patient. Everyone else (including the
+  /// patient) only receives shares they created or where they are a recipient.
+  /// Each item includes [AiAskShareListItem.transcriptJson] for review.
   static Future<List<AiAskShareListItem>> listShares({
     required int patientId,
     Duration timeout = const Duration(seconds: 20),

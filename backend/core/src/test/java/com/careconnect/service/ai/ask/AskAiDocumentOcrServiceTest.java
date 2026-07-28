@@ -122,10 +122,20 @@ class AskAiDocumentOcrServiceTest {
     }
 
     @Test
-    @DisplayName("processUploadedDocumentAsync - delegates through proxy for @Transactional")
+    @DisplayName("processUploadedDocumentAsync - claims then delegates through proxy")
     void processUploadedDocumentAsync_usesProxy() {
+        when(selfProxy.tryClaimOutbox(10L)).thenReturn(true);
         service.processUploadedDocumentAsync(10L);
+        verify(selfProxy).tryClaimOutbox(10L);
         verify(selfProxy).processUploadedDocument(10L);
+    }
+
+    @Test
+    @DisplayName("processUploadedDocumentAsync - skips work when claim loses")
+    void processUploadedDocumentAsync_skipsWhenClaimLoses() {
+        when(selfProxy.tryClaimOutbox(10L)).thenReturn(false);
+        service.processUploadedDocumentAsync(10L);
+        verify(selfProxy, never()).processUploadedDocument(any());
     }
 
     @Test
@@ -238,6 +248,7 @@ class AskAiDocumentOcrServiceTest {
 
         verify(userFileRepository, never()).save(any(UserFile.class));
         assertEquals(AskAiOcrOutbox.STATUS_FAILED, outbox.getStatus());
+        assertEquals("RuntimeException", outbox.getLastError());
     }
 
     @Test
@@ -268,15 +279,164 @@ class AskAiDocumentOcrServiceTest {
     }
 
     @Test
-    @DisplayName("processUploadedDocumentAsync - marks outbox failed when proxy throws")
+    @DisplayName("processUploadedDocumentAsync - marks outbox failed with safe type code")
     void processUploadedDocumentAsync_marksFailedOnThrow() {
-        org.mockito.Mockito.doThrow(new RuntimeException("boom"))
+        when(selfProxy.tryClaimOutbox(10L)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new RuntimeException("boom with details"))
                 .when(selfProxy)
                 .processUploadedDocument(10L);
 
         service.processUploadedDocumentAsync(10L);
 
-        verify(selfProxy).markOutboxFailed(eq(10L), eq("boom"));
+        verify(selfProxy).markOutboxFailed(eq(10L), eq("RuntimeException"));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - null fileId returns false")
+    void tryClaimOutbox_nullFileId() {
+        assertFalse(service.tryClaimOutbox(null));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - missing or unsaved row allows processing")
+    void tryClaimOutbox_missingOrUnsavedAllows() {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.empty());
+        assertTrue(service.tryClaimOutbox(10L));
+
+        when(ocrOutboxRepository.findByFileId(11L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .fileId(11L)
+                .status(AskAiOcrOutbox.STATUS_PENDING)
+                .attempts(0)
+                .build()));
+        assertTrue(service.tryClaimOutbox(11L));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - completed row is not claimed")
+    void tryClaimOutbox_completedRejected() {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .id(1L)
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_COMPLETED)
+                .attempts(1)
+                .build()));
+        assertFalse(service.tryClaimOutbox(10L));
+        verify(ocrOutboxRepository, never()).claimForProcessing(any(), anyInt(), any(Instant.class), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - fresh IN_PROGRESS lease is not stolen")
+    void tryClaimOutbox_freshInProgressRejected() {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .id(1L)
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_IN_PROGRESS)
+                .attempts(1)
+                .updatedAt(Instant.now())
+                .build()));
+        assertFalse(service.tryClaimOutbox(10L));
+        verify(ocrOutboxRepository, never()).claimForProcessing(any(), anyInt(), any(Instant.class), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - PENDING claim wins when repository updates one row")
+    void tryClaimOutbox_pendingClaimWins() {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .id(1L)
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_PENDING)
+                .attempts(0)
+                .updatedAt(Instant.now().minusSeconds(60))
+                .build()));
+        when(ocrOutboxRepository.claimForProcessing(eq(1L), anyInt(), any(Instant.class), any(Instant.class)))
+                .thenReturn(1);
+        assertTrue(service.tryClaimOutbox(10L));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - stale IN_PROGRESS can be reclaimed")
+    void tryClaimOutbox_staleInProgressReclaimed() {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .id(1L)
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_IN_PROGRESS)
+                .attempts(1)
+                .updatedAt(Instant.now().minusSeconds(120))
+                .build()));
+        when(ocrOutboxRepository.claimForProcessing(eq(1L), anyInt(), any(Instant.class), any(Instant.class)))
+                .thenReturn(1);
+        assertTrue(service.tryClaimOutbox(10L));
+    }
+
+    @Test
+    @DisplayName("tryClaimOutbox - returns false when claim update matches zero rows")
+    void tryClaimOutbox_claimLose() {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .id(1L)
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_FAILED)
+                .attempts(1)
+                .updatedAt(Instant.now().minusSeconds(60))
+                .build()));
+        when(ocrOutboxRepository.claimForProcessing(eq(1L), anyInt(), any(Instant.class), any(Instant.class)))
+                .thenReturn(0);
+        assertFalse(service.tryClaimOutbox(10L));
+    }
+
+    @Test
+    @DisplayName("markOutboxFailed - null error code clears lastError")
+    void markOutboxFailed_nullErrorCode() {
+        final AskAiOcrOutbox row = AskAiOcrOutbox.builder()
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_IN_PROGRESS)
+                .attempts(1)
+                .lastError("old")
+                .build();
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(row));
+        when(ocrOutboxRepository.save(any(AskAiOcrOutbox.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.markOutboxFailed(10L, null);
+
+        assertEquals(AskAiOcrOutbox.STATUS_FAILED, row.getStatus());
+        assertNull(row.getLastError());
+    }
+
+    @Test
+    @DisplayName("processUploadedDocument - empty bytes marks NO_BYTES")
+    void processUploadedDocument_noBytes() {
+        userFile.setFileData(new byte[0]);
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_IN_PROGRESS)
+                .attempts(1)
+                .build()));
+        when(ocrOutboxRepository.save(any(AskAiOcrOutbox.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processUploadedDocument(10L);
+
+        verify(userFileRepository, never()).save(any(UserFile.class));
+        final ArgumentCaptor<AskAiOcrOutbox> captor = ArgumentCaptor.forClass(AskAiOcrOutbox.class);
+        verify(ocrOutboxRepository).save(captor.capture());
+        assertEquals(AskAiOcrOutbox.STATUS_FAILED, captor.getValue().getStatus());
+        assertEquals("NO_BYTES", captor.getValue().getLastError());
+    }
+
+    @Test
+    @DisplayName("enqueueAfterFailedExtract - registers afterCommit when sync active")
+    void enqueueAfterFailedExtract_afterCommit() {
+        assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.enqueueAfterFailedExtract(userFile);
+            verify(selfProxy).upsertPendingOutbox(10L);
+            verify(selfProxy, never()).processUploadedDocumentAsync(any());
+            assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
+            TransactionSynchronizationManager.getSynchronizations().get(0).afterCommit();
+            verify(selfProxy).processUploadedDocumentAsync(10L);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

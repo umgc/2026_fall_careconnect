@@ -70,20 +70,58 @@ class AiAskShareServiceTest {
                 .when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
                         any(), any(), anyString()))
                 .thenReturn(Optional.empty());
-        lenient().when(recipientRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(recipientRepository.existsById(any())).thenReturn(false);
+        lenient().when(recipientRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @Test
+    void share_rejectsNonPatientCaller() throws Exception {
+        final User caregiver = user(55L, Role.CAREGIVER);
+
+        assertThatThrownBy(() -> service.share(
+                        caregiver,
+                        new AiAskShareRequest(
+                                7L,
+                                null,
+                                null,
+                                List.of(new AiAskShareRequest.AiAskShareMessage(
+                                        "user", "hi", null)))))
+                .isInstanceOf(AskAiRejectedException.class)
+                .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
+                .isEqualTo("FORBIDDEN_ROLE");
+
+        final User patientUser = user(9L, Role.PATIENT);
+        final Patient patient = new Patient();
+        patient.setId(7L);
+        patient.setUser(patientUser);
+
+        final User otherPatient = user(99L, Role.PATIENT);
+        when(retrievalScopeService.resolveRetrievalScope(otherPatient, 7L)).thenReturn(scope(99L));
+        when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
+        assertThatThrownBy(() -> service.share(
+                        otherPatient,
+                        new AiAskShareRequest(
+                                7L,
+                                null,
+                                null,
+                                List.of(new AiAskShareRequest.AiAskShareMessage(
+                                        "user", "hi", null)))))
+                .isInstanceOf(AskAiRejectedException.class)
+                .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
+                .isEqualTo("FORBIDDEN_ROLE");
     }
 
     @Test
     void share_persistsTranscriptAndRecipients() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L))
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L))
                 .thenReturn(List.of(link(11L), link(12L)));
         when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> {
             final AiAskConversationShare share = inv.getArgument(0);
@@ -124,14 +162,14 @@ class AiAskShareServiceTest {
     @Test
     void share_rejectsUnlinkedProvider() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L))
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L))
                 .thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
@@ -150,14 +188,14 @@ class AiAskShareServiceTest {
     @Test
     void share_withSpecificLinkedProvider_usesOnlyThatRecipient() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L))
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L))
                 .thenReturn(List.of(link(11L), link(12L)));
         when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> {
             final AiAskConversationShare share = inv.getArgument(0);
@@ -209,14 +247,14 @@ class AiAskShareServiceTest {
     @Test
     void share_rejectsBlankMessagesAndMissingPatientUser() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
                         caller,
@@ -249,14 +287,14 @@ class AiAskShareServiceTest {
     @Test
     void share_rejectsWhenNoLinkedCaregivers() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of());
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.share(
                         caller,
@@ -294,14 +332,14 @@ class AiAskShareServiceTest {
     @Test
     void share_rejectsOversizedTranscript() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         final String huge = "x".repeat(200_001);
         assertThatThrownBy(() -> service.share(
@@ -319,14 +357,14 @@ class AiAskShareServiceTest {
     @Test
     void share_normalizesRolesAndContinuesWhenAuditFails() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
         when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> {
             final AiAskConversationShare share = inv.getArgument(0);
             share.setCreatedAt(java.time.Instant.parse("2026-07-27T12:00:00Z"));
@@ -376,14 +414,14 @@ class AiAskShareServiceTest {
                 null);
 
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
                         caller,
@@ -413,14 +451,14 @@ class AiAskShareServiceTest {
                 null);
 
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
                         caller,
@@ -438,7 +476,7 @@ class AiAskShareServiceTest {
     @Test
     void share_returnsExistingShareOnDuplicateTranscript() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
@@ -457,7 +495,7 @@ class AiAskShareServiceTest {
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
                         any(), any(), anyString()))
                 .thenReturn(Optional.of(existing));
@@ -476,14 +514,13 @@ class AiAskShareServiceTest {
         assertThat(response.transcriptJson()).contains("hi");
         verify(shareRepository, never()).save(any());
         verify(chatAuditService, never()).logConversationShared(any(), anyString(), any());
-        verify(recipientRepository).deleteByShareId(existingId);
-        verify(recipientRepository).saveAll(any());
+        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).save(any());
     }
 
     @Test
     void share_mergesRecipientsOnDuplicateTranscript() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
@@ -502,7 +539,7 @@ class AiAskShareServiceTest {
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L))
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L))
                 .thenReturn(List.of(link(11L), link(12L)));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
                         any(), any(), anyString()))
@@ -519,13 +556,13 @@ class AiAskShareServiceTest {
 
         assertThat(response.recipientUserIds()).containsExactly(11L, 12L);
         verify(shareRepository).save(existing);
-        verify(recipientRepository).deleteByShareId(existingId);
+        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).save(any());
     }
 
     @Test
     void share_recoversFromUniqueConstraintRaceViaRequiresNewLookup() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
@@ -544,7 +581,7 @@ class AiAskShareServiceTest {
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
         when(shareRepository.save(any(AiAskConversationShare.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_ai_ask_share_dedupe"))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -563,7 +600,7 @@ class AiAskShareServiceTest {
 
         assertThat(response.shareId()).isEqualTo(existingId);
         assertThat(response.transcriptJson()).contains("hi");
-        verify(recipientRepository).deleteByShareId(existingId);
+        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).save(any());
     }
 
     @Test
@@ -669,14 +706,14 @@ class AiAskShareServiceTest {
     @Test
     void share_whenUniqueRaceAndLookupMisses_rethrows() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
         when(shareRepository.save(any(AiAskConversationShare.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq"));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
@@ -715,8 +752,7 @@ class AiAskShareServiceTest {
         final AiAskShareResponse response = service.mergeRecipientsIfNeeded(existing, withNull);
 
         assertThat(response.recipientUserIds()).containsExactly(11L);
-        verify(recipientRepository).deleteByShareId(existingId);
-        verify(recipientRepository).saveAll(any());
+        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).save(any());
 
         // Null recipient list is a no-op union; join table still refreshed from existing JSON.
         final AiAskConversationShare existing2 = AiAskConversationShare.builder()
@@ -730,20 +766,89 @@ class AiAskShareServiceTest {
                 .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
                 .build();
         service.mergeRecipientsIfNeeded(existing2, null);
-        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).deleteByShareId(existingId);
+        verify(recipientRepository, org.mockito.Mockito.atLeastOnce()).save(any());
+    }
+
+    @Test
+    void ensureRecipientRows_skipsExistingAndSwallowsDuplicateInsert() {
+        final UUID existingId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        final AiAskConversationShare existing = AiAskConversationShare.builder()
+                .id(existingId)
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[11]")
+                .transcriptJson("[]")
+                .transcriptSha256("abc")
+                .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                .build();
+        when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(recipientRepository.existsById(any())).thenReturn(true);
+
+        service.mergeRecipientsIfNeeded(existing, List.of(11L));
+        verify(recipientRepository, never()).save(any());
+
+        when(recipientRepository.existsById(any())).thenReturn(false);
+        when(recipientRepository.save(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_recipient"));
+        // Concurrent insert race — should not bubble.
+        service.mergeRecipientsIfNeeded(existing, List.of(12L));
+    }
+
+    @Test
+    void ensureRecipientRows_handlesEmptyAndNullUserIds() throws Exception {
+        final UUID existingId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        final AiAskConversationShare emptyRecipients = AiAskConversationShare.builder()
+                .id(existingId)
+                .patientId(7L)
+                .sharedByUserId(9L)
+                .messageCount(1)
+                .recipientUserIds("[]")
+                .transcriptJson("[]")
+                .transcriptSha256("abc")
+                .createdAt(java.time.Instant.parse("2026-07-27T11:00:00Z"))
+                .build();
+        service.mergeRecipientsIfNeeded(emptyRecipients, List.of());
+        verify(recipientRepository, never()).save(any());
+
+        final var method = AiAskShareService.class.getDeclaredMethod(
+                "ensureRecipientRows", UUID.class, List.class);
+        method.setAccessible(true);
+        final List<Long> withNull = new java.util.ArrayList<>();
+        withNull.add(null);
+        withNull.add(13L);
+        when(recipientRepository.existsById(any())).thenReturn(false);
+        when(recipientRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        method.invoke(service, existingId, withNull);
+        verify(recipientRepository).save(any());
+    }
+
+    @Test
+    void constructor_usesProvidedSelfProxy() {
+        final AiAskShareService proxy = mock(AiAskShareService.class);
+        final AiAskShareService wired = new AiAskShareService(
+                retrievalScopeService,
+                patientRepository,
+                caregiverPatientLinkService,
+                shareRepository,
+                recipientRepository,
+                chatAuditService,
+                new ObjectMapper(),
+                proxy);
+        assertThat(wired).isNotNull();
     }
 
     @Test
     void share_messageCountMatchesPersistedTranscriptRows() throws Exception {
         final User caller = user(9L, Role.PATIENT);
-        final User patientUser = user(42L, Role.PATIENT);
+        final User patientUser = user(9L, Role.PATIENT);
         final Patient patient = new Patient();
         patient.setId(7L);
         patient.setUser(patientUser);
 
         when(retrievalScopeService.resolveRetrievalScope(caller, 7L)).thenReturn(scope(9L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
-        when(caregiverPatientLinkService.getCaregiversByPatient(42L)).thenReturn(List.of(link(11L)));
+        when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
         when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> {
             final AiAskConversationShare share = inv.getArgument(0);
             share.setCreatedAt(java.time.Instant.parse("2026-07-27T12:00:00Z"));

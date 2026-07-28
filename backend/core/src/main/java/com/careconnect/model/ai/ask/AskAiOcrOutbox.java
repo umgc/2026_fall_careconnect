@@ -27,6 +27,7 @@ import lombok.NoArgsConstructor;
 public class AskAiOcrOutbox {
 
     public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     public static final String STATUS_FAILED = "FAILED";
     public static final String STATUS_COMPLETED = "COMPLETED";
 

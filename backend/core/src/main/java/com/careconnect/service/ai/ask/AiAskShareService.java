@@ -78,9 +78,13 @@ public class AiAskShareService {
     }
 
     /**
-     * Creates a share receipt. Outer method is intentionally non-transactional so a unique
-     * constraint race can be recovered via {@link Propagation#REQUIRES_NEW} without leaving
-     * the caller transaction rollback-only.
+     * Creates a share receipt from a <em>client-supplied</em> conversation snapshot (MVP).
+     * The server does not bind or verify transcript text against Ask AI session history —
+     * any authenticated patient for {@code patientId} may persist the posted messages.
+     *
+     * <p>Outer method is intentionally non-transactional so a unique constraint race can be
+     * recovered via {@link Propagation#REQUIRES_NEW} without leaving the caller transaction
+     * rollback-only.
      */
     public AiAskShareResponse share(final User caller, final AiAskShareRequest request)
             throws UnauthorizedException, ForbiddenScopeException {
@@ -95,6 +99,13 @@ public class AiAskShareService {
             throw new AskAiRejectedException(
                     "INVALID_REQUEST", "messages are required", 400);
         }
+        // Product contract: only the patient may initiate a share (mirrors consent grant).
+        if (caller.getRole() != Role.PATIENT) {
+            throw new AskAiRejectedException(
+                    "FORBIDDEN_ROLE",
+                    "Only the patient may share Ask AI conversations",
+                    403);
+        }
 
         retrievalScopeService.resolveRetrievalScope(caller, request.patientId());
 
@@ -105,6 +116,12 @@ public class AiAskShareService {
         if (patient.getUser() == null || patient.getUser().getId() == null) {
             throw new AskAiRejectedException(
                     "PATIENT_NOT_FOUND", "Patient user missing", 404);
+        }
+        if (!Objects.equals(caller.getId(), patient.getUser().getId())) {
+            throw new AskAiRejectedException(
+                    "FORBIDDEN_ROLE",
+                    "Only the patient may share their own Ask AI conversations",
+                    403);
         }
 
         final List<Long> recipients =
@@ -169,7 +186,7 @@ public class AiAskShareService {
                 .transcriptSha256(transcriptSha256)
                 .build());
 
-        replaceRecipientRows(saved.getId(), recipients);
+        ensureRecipientRows(saved.getId(), recipients);
         auditShare(caller, request.sessionId(), saved.getId(), recipients);
 
         log.info(
@@ -202,8 +219,8 @@ public class AiAskShareService {
             existing.setRecipientUserIds(writeRecipientJson(mergedList));
             shareRepository.save(existing);
         }
-        // Ensure join table is populated for legacy rows / recipient unions.
-        replaceRecipientRows(existing.getId(), mergedList);
+        // Insert-only join rows (no delete-all) so concurrent merges cannot flap ACL rows.
+        ensureRecipientRows(existing.getId(), mergedList);
         return toResponse(existing);
     }
 
@@ -237,14 +254,30 @@ public class AiAskShareService {
                 .toList();
     }
 
-    private void replaceRecipientRows(final UUID shareId, final List<Long> recipients) {
-        recipientRepository.deleteByShareId(shareId);
-        final List<AiAskShareRecipient> rows = new ArrayList<>(recipients.size());
-        for (final Long userId : recipients) {
-            rows.add(AiAskShareRecipient.builder().shareId(shareId).userId(userId).build());
+    /**
+     * Idempotently inserts missing recipient rows. Avoids delete-all + re-insert under
+     * concurrent merges (recipients are union-only and never shrink here).
+     */
+    private void ensureRecipientRows(final UUID shareId, final List<Long> recipients) {
+        if (recipients == null || recipients.isEmpty()) {
+            return;
         }
-        if (!rows.isEmpty()) {
-            recipientRepository.saveAll(rows);
+        for (final Long userId : recipients) {
+            if (userId == null) {
+                continue;
+            }
+            final AiAskShareRecipient.Pk pk = new AiAskShareRecipient.Pk(shareId, userId);
+            if (recipientRepository.existsById(pk)) {
+                continue;
+            }
+            try {
+                recipientRepository.save(AiAskShareRecipient.builder()
+                        .shareId(shareId)
+                        .userId(userId)
+                        .build());
+            } catch (DataIntegrityViolationException dup) {
+                // Concurrent insert of the same (shareId, userId) won — treat as success.
+            }
         }
     }
 

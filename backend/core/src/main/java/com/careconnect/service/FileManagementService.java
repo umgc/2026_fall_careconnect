@@ -46,7 +46,9 @@ public class FileManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(FileManagementService.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String DEFAULT_CONSENT_SCOPE = "on_consent";
+    /** Consent label on DOCUMENT_INDEXED emits — keep in sync with Ask AI OCR re-emit. */
+    public static final String DEFAULT_DOCUMENT_CONSENT_SCOPE = "on_consent";
+    private static final String DEFAULT_CONSENT_SCOPE = DEFAULT_DOCUMENT_CONSENT_SCOPE;
 
     private final UserFileRepository userFileRepository;
     private final StructuredDocumentEntryRepository structuredEntryRepository;

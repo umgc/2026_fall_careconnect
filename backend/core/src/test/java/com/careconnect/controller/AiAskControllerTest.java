@@ -1,6 +1,7 @@
 package com.careconnect.controller;
 
 import com.careconnect.dto.ai.AiAskRequest;
+import com.careconnect.dto.ai.AiAskShareRequest;
 import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
 import com.careconnect.security.Permission;
@@ -263,6 +264,26 @@ class AiAskControllerTest {
     void askEndpointRequiresAiFeaturePermission() throws Exception {
         final RequirePermission requirement = AiAskController.class
                 .getMethod("ask", AiAskRequest.class)
+                .getAnnotation(RequirePermission.class);
+
+        assertThat(requirement).isNotNull();
+        assertThat(requirement.value()).isEqualTo(Permission.USE_AI_FEATURES);
+    }
+
+    @Test
+    void shareEndpointRequiresAiFeaturePermission() throws Exception {
+        final RequirePermission requirement = AiAskController.class
+                .getMethod("share", AiAskShareRequest.class)
+                .getAnnotation(RequirePermission.class);
+
+        assertThat(requirement).isNotNull();
+        assertThat(requirement.value()).isEqualTo(Permission.USE_AI_FEATURES);
+    }
+
+    @Test
+    void listSharesEndpointRequiresAiFeaturePermission() throws Exception {
+        final RequirePermission requirement = AiAskController.class
+                .getMethod("listShares", Long.class)
                 .getAnnotation(RequirePermission.class);
 
         assertThat(requirement).isNotNull();

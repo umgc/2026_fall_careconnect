@@ -48,7 +48,6 @@ public class AskAiDocumentOcrService {
     private static final Logger log = LoggerFactory.getLogger(AskAiDocumentOcrService.class);
     private static final String ASK_AI_OCR_S3_PREFIX = "ask-ai-docs/";
     private static final int MAX_OCR_TEXT_CHARS = 50_000;
-    private static final String DEFAULT_CONSENT_SCOPE = "on_consent";
     private static final int MAX_OCR_ATTEMPTS = 5;
     private static final int SWEEP_BATCH = 20;
     private static final long STALE_SECONDS = 30L;
@@ -124,16 +123,20 @@ public class AskAiDocumentOcrService {
     @Async(AskAiAsyncConfig.ASK_AI_OCR_EXECUTOR)
     public void processUploadedDocumentAsync(final Long fileId) {
         try {
+            if (!self.tryClaimOutbox(fileId)) {
+                return;
+            }
             self.processUploadedDocument(fileId);
         } catch (Exception e) {
-            log.warn("Ask AI document OCR async job failed for fileId {}: {}", fileId, e.getMessage());
-            self.markOutboxFailed(fileId, e.getMessage());
+            final String safe = safeErrorCode(e);
+            log.warn("Ask AI document OCR async job failed for fileId={} type={}", fileId, safe);
+            self.markOutboxFailed(fileId, safe);
         }
     }
 
     /**
      * Retries durable OCR work that was dropped when the executor queue was full, or that
-     * failed transiently.
+     * failed transiently. Claims PENDING/FAILED → IN_PROGRESS before scheduling.
      */
     @Scheduled(fixedDelayString = "${careconnect.ai.ask.ocr.sweep-interval-ms:30000}")
     public void sweepPendingOcrJobs() {
@@ -148,15 +151,39 @@ public class AskAiDocumentOcrService {
         }
     }
 
+    /**
+     * Atomically claims the outbox row for this file. Returns false when another worker
+     * already holds a fresh IN_PROGRESS lease or the row is COMPLETED.
+     */
+    @Transactional
+    public boolean tryClaimOutbox(final Long fileId) {
+        if (fileId == null) {
+            return false;
+        }
+        final AskAiOcrOutbox row = ocrOutboxRepository.findByFileId(fileId).orElse(null);
+        if (row == null || row.getId() == null) {
+            // Direct async path before outbox upsert flushed — allow processing.
+            return true;
+        }
+        if (AskAiOcrOutbox.STATUS_COMPLETED.equals(row.getStatus())) {
+            return false;
+        }
+        final Instant now = Instant.now();
+        final Instant staleBefore = now.minus(STALE_SECONDS, ChronoUnit.SECONDS);
+        if (AskAiOcrOutbox.STATUS_IN_PROGRESS.equals(row.getStatus())
+                && row.getUpdatedAt() != null
+                && row.getUpdatedAt().isAfter(staleBefore)) {
+            return false;
+        }
+        final int claimed = ocrOutboxRepository.claimForProcessing(
+                row.getId(), MAX_OCR_ATTEMPTS, staleBefore, now);
+        return claimed == 1;
+    }
+
     @Transactional
     public void processUploadedDocument(final Long fileId) {
         if (textractService == null || fileId == null) {
             return;
-        }
-        final AskAiOcrOutbox outbox = ocrOutboxRepository.findByFileId(fileId).orElse(null);
-        if (outbox != null) {
-            outbox.setAttempts(outbox.getAttempts() + 1);
-            ocrOutboxRepository.save(outbox);
         }
 
         final UserFile userFile = userFileRepository.findById(fileId).orElse(null);
@@ -166,8 +193,8 @@ public class AskAiDocumentOcrService {
         }
         final byte[] bytes = loadFileBytes(userFile);
         if (bytes == null || bytes.length == 0) {
-            log.warn("Ask AI document OCR skipped for fileId {}: no stored bytes", fileId);
-            markOutboxFailed(fileId, "no stored bytes");
+            log.warn("Ask AI document OCR skipped for fileId={} reason=NO_BYTES", fileId);
+            markOutboxFailed(fileId, "NO_BYTES");
             return;
         }
         try {
@@ -197,8 +224,9 @@ public class AskAiDocumentOcrService {
                     saved.getId(),
                     rawText.length());
         } catch (Exception e) {
-            log.warn("Ask AI document OCR failed for fileId {}: {}", fileId, e.getMessage());
-            markOutboxFailed(fileId, e.getMessage());
+            final String safe = safeErrorCode(e);
+            log.warn("Ask AI document OCR failed for fileId={} type={}", fileId, safe);
+            markOutboxFailed(fileId, safe);
         }
     }
 
@@ -212,12 +240,21 @@ public class AskAiDocumentOcrService {
     }
 
     @Transactional
-    public void markOutboxFailed(final Long fileId, final String error) {
+    public void markOutboxFailed(final Long fileId, final String errorCode) {
         ocrOutboxRepository.findByFileId(fileId).ifPresent(row -> {
             row.setStatus(AskAiOcrOutbox.STATUS_FAILED);
-            row.setLastError(error == null ? null : error.substring(0, Math.min(error.length(), 1000)));
+            row.setLastError(errorCode == null
+                    ? null
+                    : errorCode.substring(0, Math.min(errorCode.length(), 128)));
             ocrOutboxRepository.save(row);
         });
+    }
+
+    private static String safeErrorCode(final Throwable error) {
+        if (error == null) {
+            return "UNKNOWN";
+        }
+        return error.getClass().getSimpleName();
     }
 
     private byte[] loadFileBytes(final UserFile userFile) {
@@ -231,7 +268,10 @@ public class AskAiDocumentOcrService {
             try {
                 return s3StorageService.download(userFile.getS3Path());
             } catch (Exception e) {
-                log.warn("Ask AI OCR S3 download failed for fileId {}: {}", userFile.getId(), e.getMessage());
+                log.warn(
+                        "Ask AI OCR S3 download failed for fileId={} type={}",
+                        userFile.getId(),
+                        e.getClass().getSimpleName());
             }
         }
         return null;
@@ -273,10 +313,12 @@ public class AskAiDocumentOcrService {
                     ContentHashUtil.sha256(excerpt),
                     category,
                     excerpt,
-                    DEFAULT_CONSENT_SCOPE));
+                    FileManagementService.DEFAULT_DOCUMENT_CONSENT_SCOPE));
         } catch (Exception e) {
-            log.warn("Failed to emit DOCUMENT_INDEXED after OCR for fileId {}: {}",
-                    file.getId(), e.getMessage());
+            log.warn(
+                    "Failed to emit DOCUMENT_INDEXED after OCR for fileId={} type={}",
+                    file.getId(),
+                    e.getClass().getSimpleName());
         }
     }
 

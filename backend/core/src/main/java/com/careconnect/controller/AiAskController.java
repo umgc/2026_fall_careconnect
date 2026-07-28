@@ -149,7 +149,7 @@ public class AiAskController {
             value = "/ask/share",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> share(@Valid @RequestBody final AiAskShareRequest request)
+    public ResponseEntity<Object> share(@Valid @RequestBody final AiAskShareRequest request)
             throws UnauthorizedException {
         final User caller = securityUtil.resolveCurrentUser();
         try {
@@ -174,7 +174,7 @@ public class AiAskController {
 
     @RequirePermission(Permission.USE_AI_FEATURES)
     @GetMapping(value = "/ask/shares", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> listShares(@RequestParam("patientId") final Long patientId)
+    public ResponseEntity<Object> listShares(@RequestParam("patientId") final Long patientId)
             throws UnauthorizedException {
         final User caller = securityUtil.resolveCurrentUser();
         try {
