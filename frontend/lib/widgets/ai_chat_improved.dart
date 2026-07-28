@@ -178,6 +178,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechReady = false;
   bool _isListening = false;
+  bool _sharingWithCaregivers = false;
 
   bool get _isGrounded => widget.mode == AiChatMode.groundedRecords;
 
@@ -477,8 +478,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     );
   }
 
-  /// Share conversation with provider
-  Future<void> _shareWithProvider() async {
+  /// Share conversation with linked caregivers
+  Future<void> _shareWithCaregivers() async {
+    if (_sharingWithCaregivers) {
+      return;
+    }
     if (_messages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -489,13 +493,24 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       return;
     }
 
+    final patientId = widget.patientId;
+    if (patientId == null || patientId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select a patient before sharing with caregivers'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Share with Provider'),
+        title: const Text('Share with caregivers'),
         content: const Text(
-          'This will share your conversation with your healthcare provider for review. '
-          'The conversation will be retained for medical record purposes.\n\n'
+          'This shares your conversation with caregivers linked to this patient '
+          'for medical-record review.\n\n'
           'Do you want to continue?',
         ),
         actions: [
@@ -511,12 +526,55 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       ),
     );
 
-    if (confirmed == true) {
-      // TODO: Implement actual sharing with provider
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final payload = _messages
+        .where((m) => m.text.trim().isNotEmpty)
+        .map((m) => <String, String>{
+              'role': m.isUser ? 'user' : 'assistant',
+              'text': m.text.trim(),
+              'occurredAt': m.timestamp.toUtc().toIso8601String(),
+            })
+        .toList(growable: false);
+
+    setState(() => _sharingWithCaregivers = true);
+    late final AiAskShareResult result;
+    try {
+      result = await AIChatService.shareWithCaregivers(
+        patientId: patientId,
+        sessionId: _askSessionId,
+        messages: payload,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sharingWithCaregivers = false);
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+    if (result.success) {
+      final recipients = result.recipientCount;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Conversation shared with provider'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(
+            recipients > 0
+                ? 'Conversation shared with linked caregivers ($recipients recipient${recipients == 1 ? '' : 's'})'
+                : 'Conversation shared with linked caregivers',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.message ?? 'Could not share conversation with caregivers',
+          ),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -560,7 +618,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               ),
               SizedBox(height: 8),
               Text(
-                '• Conversations shared with providers are kept for medical records',
+                '• Conversations shared with linked caregivers are kept for medical records',
                 style: TextStyle(fontSize: 14),
               ),
               SizedBox(height: 8),
@@ -1616,7 +1674,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                         await _downloadChatTranscript();
                         break;
                       case 'share':
-                        await _shareWithProvider();
+                        await _shareWithCaregivers();
                         break;
                       case 'privacy':
                         _showPrivacyInfo();
@@ -1650,7 +1708,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                         children: [
                           Icon(Icons.share, size: 18),
                           SizedBox(width: 8),
-                          Text('Share with provider'),
+                          Text('Share with caregivers'),
                         ],
                       ),
                     ),

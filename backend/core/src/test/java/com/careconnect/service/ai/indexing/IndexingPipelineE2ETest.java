@@ -254,29 +254,40 @@ class IndexingPipelineE2ETest {
         summary.setSummaryJson("{\"headline\":\"already indexed\"}");
         when(callSummaryRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(summary));
 
-        final RetrievalIndexChunk existing = RetrievalIndexChunk.builder()
-                .patientId(42L)
-                .recordType(RetrievalRecordType.CALL_SUMMARY.name())
-                .sourceRecordId("call-summary:99")
-                .sourceKind(SummarySourceKey.CALL_KIND)
-                .chunkText("already indexed")
-                .consentScope("on_consent")
-                .chunkMetadata(
-                        "{\"contentHash\":\""
-                                + ContentHashUtil.sha256(summary.getSummaryJson())
-                                + "\",\"chunkIndex\":0,"
-                                + "\"summarizationEngine\":\"engine\","
-                                + "\"section\":\"overview\",\"title\":\"already indexed\","
-                                + "\"citationMetadataVersion\":1,\"episodeType\":\"call\","
-                                + "\"callId\":\"call-e2e\"}")
-                .build();
+        // Build "already indexed" rows from the real chunker so citation metadata stays in sync
+        // with RetrievalIndexService.chunksMatchExpected (avoids brittle hand-written JSON).
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        final List<IndexingChunkDraft> drafts = new SummaryChunker(objectMapper).chunk(
+                "call",
+                summary.getSummaryJson(),
+                contentHash,
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                summary.getCallId(),
+                null);
+        assertThat(drafts).isNotEmpty();
+        final List<RetrievalIndexChunk> existing = new java.util.ArrayList<>(drafts.size());
+        for (final IndexingChunkDraft draft : drafts) {
+            existing.add(RetrievalIndexChunk.builder()
+                    .patientId(42L)
+                    .recordType(draft.recordType().name())
+                    .sourceRecordId("call-summary:99")
+                    .sourceKind(SummarySourceKey.CALL_KIND)
+                    .chunkText(draft.chunkText())
+                    .consentScope(draft.consentScope())
+                    .chunkMetadata(objectMapper.writeValueAsString(draft.metadata()))
+                    .build());
+        }
         when(chunkRepository.findCallSummaryChunksForReplacement(
                 eq(42L),
                 eq("call-summary:99"),
                 eq("99"),
                 eq(SummarySourceKey.CALL_KIND),
                 any()))
-                .thenReturn(List.of(existing));
+                .thenReturn(existing);
+        when(chunkRepository.countMissingEmbeddingForSummarySources(
+                eq(42L), eq(List.of("call-summary:99")), any()))
+                .thenReturn(0L);
 
         final SummaryCreatedPayload payload = new SummaryCreatedPayload(
                 "call",
@@ -289,7 +300,7 @@ class IndexingPipelineE2ETest {
                 1,
                 "on_consent",
                 "engine",
-                ContentHashUtil.sha256(summary.getSummaryJson()));
+                contentHash);
         final IndexingOutboxRow row = outboxRow(
                 1003L, IndexingEventType.SUMMARY_CREATED, payload, 0);
         when(outboxRepository.claimUnprocessedForPolling(anyInt(), anyInt())).thenReturn(List.of(row));

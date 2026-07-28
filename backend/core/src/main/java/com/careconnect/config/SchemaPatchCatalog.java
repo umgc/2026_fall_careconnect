@@ -67,7 +67,13 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607251300_uq_ai_held_item_open_surface_hash.sql"),
             new SchemaPatchLedger.Patch(
                     "2607251310-user-files-extracted-text",
-                    "db/schema-patches/2607251310_user_files_extracted_text.sql"));
+                    "db/schema-patches/2607251310_user_files_extracted_text.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607271430-ai-ask-conversation-share",
+                    "db/schema-patches/2607271430_create_ai_ask_conversation_share.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607271830-ask-ai-share-recipient-ocr-outbox",
+                    "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"));
 
     private SchemaPatchCatalog() {
     }

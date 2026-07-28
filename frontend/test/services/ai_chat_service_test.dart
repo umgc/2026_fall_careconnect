@@ -1847,6 +1847,140 @@ void main() {
       expect(result.retryable, isTrue);
     });
   });
+
+  group('shareWithCaregivers()', () {
+    test('returns EMPTY when messages list is empty', () async {
+      final result = await AIChatService.shareWithCaregivers(
+        patientId: 42,
+        messages: const [],
+      );
+      expect(result.success, isFalse);
+      expect(result.errorCode, 'EMPTY');
+      expect(result.message, 'No conversation to share');
+    });
+
+    test('posts share payload and returns receipt on 200', () async {
+      final (client, captured) = _capturingClient(200, {
+        'shareId': '11111111-1111-1111-1111-111111111111',
+        'recipientUserIds': [11, 12],
+        'messageCount': 1,
+      });
+
+      final result = await http.runWithClient(
+        () => AIChatService.shareWithCaregivers(
+          patientId: 42,
+          sessionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          caregiverUserId: 11,
+          messages: const [
+            {'role': 'user', 'text': 'Hello'},
+          ],
+        ),
+        () => client,
+      );
+
+      expect(result.success, isTrue);
+      expect(result.shareId, '11111111-1111-1111-1111-111111111111');
+      expect(result.recipientCount, 2);
+      expect(captured, hasLength(1));
+      expect(captured.first.method, 'POST');
+      expect(captured.first.url.path, endsWith('/api/ai/ask/share'));
+      final body = jsonDecode(captured.first.body) as Map<String, dynamic>;
+      expect(body['patientId'], 42);
+      expect(body['caregiverUserId'], 11);
+      expect(body['sessionId'], 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    });
+
+    test('maps API error body on non-2xx', () async {
+      final client = _mockJson(400, {
+        'error': 'NO_CAREGIVER',
+        'message': 'No linked caregiver',
+      });
+
+      final result = await http.runWithClient(
+        () => AIChatService.shareWithCaregivers(
+          patientId: 42,
+          messages: const [
+            {'role': 'user', 'text': 'Hello'},
+          ],
+        ),
+        () => client,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorCode, 'NO_CAREGIVER');
+      expect(result.message, 'No linked caregiver');
+    });
+
+    test('returns NETWORK_ERROR on transport failure', () async {
+      final client = _mockThrows(Exception('offline'));
+
+      final result = await http.runWithClient(
+        () => AIChatService.shareWithCaregivers(
+          patientId: 42,
+          messages: const [
+            {'role': 'user', 'text': 'Hello'},
+          ],
+        ),
+        () => client,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorCode, 'NETWORK_ERROR');
+      expect(result.message, contains('Unable to share'));
+    });
+  });
+
+  group('listShares()', () {
+    test('gets shares and parses transcript for review', () async {
+      final (client, captured) = _capturingClient(200, [
+        {
+          'shareId': '11111111-1111-1111-1111-111111111111',
+          'patientId': 42,
+          'sessionId': null,
+          'recipientUserIds': [11],
+          'messageCount': 1,
+          'createdAt': '2026-07-27T12:00:00Z',
+          'transcriptJson': '[{"role":"user","text":"Hello"}]',
+        },
+      ]);
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, hasLength(1));
+      expect(result.first.shareId, '11111111-1111-1111-1111-111111111111');
+      expect(result.first.recipientUserIds, [11]);
+      expect(result.first.transcriptJson, contains('Hello'));
+      expect(captured, hasLength(1));
+      expect(captured.first.method, 'GET');
+      expect(captured.first.url.path, endsWith('/api/ai/ask/shares'));
+      expect(captured.first.url.queryParameters['patientId'], '42');
+    });
+
+    test('returns empty list on non-2xx', () async {
+      final client = _mockJson(403, {'error': 'FORBIDDEN_SCOPE'});
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('returns empty list on transport failure', () async {
+      final client = _mockThrows(Exception('offline'));
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, isEmpty);
+    });
+  });
 }
 
 Map<String, dynamic> _validDeliveredAskResponse() => {
