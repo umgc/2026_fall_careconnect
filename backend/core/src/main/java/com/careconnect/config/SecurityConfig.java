@@ -130,7 +130,8 @@ public class SecurityConfig {
                                 "/v1/api/address/**",
                                 "/oauth/**",
                                 "/ws/**",
-                                "/api/notifications/demo/**"
+                                "/api/notifications/demo/**",
+                                "/api/internal/chime/**"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */

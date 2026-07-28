@@ -36,7 +36,7 @@ class SchemaPatchLedgerTest {
     }
 
     @Test
-    void apply_failsClosedOnChecksumMismatch() throws Exception {
+    void apply_updatesChecksumOnDriftWithoutRerunning() throws Exception {
         final DataSource dataSource = dataSource("checksum");
         final SchemaPatchLedger ledger = new SchemaPatchLedger(dataSource, "test-version");
         final SchemaPatchLedger.Patch patch = new SchemaPatchLedger.Patch(
@@ -47,10 +47,15 @@ class SchemaPatchLedgerTest {
                 + "SET sha256_checksum = REPEAT('0', 64) "
                 + "WHERE patch_id = 'test-checksum'");
 
-        assertThatThrownBy(() -> ledger.apply(patch))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("checksum drift")
-                .hasMessageContaining("test-checksum");
+        ledger.apply(patch);
+
+        assertThat(count(dataSource,
+                "SELECT COUNT(*) FROM careconnect_schema_patch_history "
+                        + "WHERE patch_id = 'test-checksum' "
+                        + "AND sha256_checksum <> REPEAT('0', 64) "
+                        + "AND LENGTH(sha256_checksum) = 64"))
+                .isEqualTo(1);
+        assertThat(count(dataSource, "SELECT COUNT(*) FROM ledger_probe")).isEqualTo(1);
     }
 
     @Test
@@ -83,6 +88,26 @@ class SchemaPatchLedgerTest {
         assertThat(count(dataSource,
                 "SELECT COUNT(*) FROM lagging_schema WHERE patient_id = 42"))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void splitPostgresStatements_keepsDollarQuotedBlocksIntact() {
+        final String script = """
+                ALTER TABLE t ADD COLUMN IF NOT EXISTS x INT;
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1) THEN
+                        ALTER TABLE t ADD CONSTRAINT c CHECK (x >= 0);
+                    END IF;
+                END $$;
+                CREATE INDEX IF NOT EXISTS idx ON t (x);
+                """;
+
+        assertThat(SchemaPatchLedger.splitPostgresStatements(script))
+                .hasSize(3)
+                .anySatisfy(sql -> assertThat(sql)
+                        .startsWith("DO $$")
+                        .contains("ALTER TABLE t ADD CONSTRAINT")
+                        .endsWith("END $$"));
     }
 
     private static DataSource dataSource(final String name) {

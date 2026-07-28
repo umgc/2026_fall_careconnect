@@ -42,6 +42,8 @@ class NaturalLanguageMailSearchServiceTest {
     @Mock private AuthorizationService authorizationService;
     @Mock private RetrievalScopeService retrievalScopeService;
     @Mock private FullTextSearchService fullTextSearchService;
+    @Mock private com.careconnect.service.ai.retrieval.VectorSimilaritySearchService vectorSimilaritySearchService;
+    @Mock private com.careconnect.service.ai.embedding.ChunkEmbeddingService chunkEmbeddingService;
     @Mock private UspsMailpieceRepository mailpieceRepository;
 
     private NaturalLanguageMailSearchService service;
@@ -53,11 +55,14 @@ class NaturalLanguageMailSearchServiceTest {
                 authorizationService,
                 retrievalScopeService,
                 fullTextSearchService,
+                vectorSimilaritySearchService,
+                chunkEmbeddingService,
                 mailpieceRepository);
         caregiver = new User();
         caregiver.setId(9L);
         caregiver.setRole(Role.CAREGIVER);
         lenient().doNothing().when(authorizationService).requirePatientAccess(any(), anyLong());
+        lenient().when(chunkEmbeddingService.embedQuery(anyString())).thenReturn(java.util.Optional.empty());
     }
 
     @Test
@@ -130,6 +135,41 @@ class NaturalLanguageMailSearchServiceTest {
         assertThat(response.matches().get(0).mailpieceId()).isEqualTo(77L);
         assertThat(response.matches().get(0).matchSources()).contains("FTS", "TABLE");
         assertThat(response.matches().get(0).snippet()).contains("Hospital");
+    }
+
+    @Test
+    @DisplayName("vector embed failure is fail-soft and keeps table matches")
+    void search_vectorEmbedFails_keepsTableMatches() throws Exception {
+        final UspsMailpiece high = mailpiece(1L, "CVS Pharmacy", "Prescription ready", "HIGH");
+        when(mailpieceRepository.searchByPatientIdAndTerm(42L, "pharmacy"))
+                .thenReturn(List.of(high));
+        when(retrievalScopeService.resolveRetrievalScope(any(), eq(42L), any()))
+                .thenReturn(new RetrievalScope(
+                        9L, Role.CAREGIVER, Set.of(42L),
+                        Set.of(RetrievalRecordType.USPS_MAIL), Set.of(),
+                        new CaregiverVisibilityFilter(Role.CAREGIVER, true), true));
+        when(fullTextSearchService.search(eq(42L), anyString(), any(), anyInt()))
+                .thenReturn(List.of());
+        when(chunkEmbeddingService.embedQuery(anyString()))
+                .thenThrow(new RuntimeException("embedding provider down"));
+
+        final NaturalLanguageMailSearchResponse response =
+                service.search(caregiver, 42L, "pharmacy", 10);
+
+        assertThat(response.matches()).hasSize(1);
+        assertThat(response.matches().get(0).mailpieceId()).isEqualTo(1L);
+        assertThat(response.matches().get(0).matchSources()).contains("TABLE");
+        verify(vectorSimilaritySearchService, never()).search(anyLong(), any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("rankBasedVectorScore prefers similarity when provided")
+    void vectorScore_prefersSimilarityWhenPresent() {
+        assertThat(NaturalLanguageMailSearchService.vectorScore(1, 0.91d)).isEqualTo(0.91d);
+        assertThat(NaturalLanguageMailSearchService.vectorScore(1, null))
+                .isEqualTo(NaturalLanguageMailSearchService.rankBasedVectorScore(1));
+        assertThat(NaturalLanguageMailSearchService.rankBasedVectorScore(1)).isEqualTo(0.72d);
+        assertThat(NaturalLanguageMailSearchService.rankBasedVectorScore(3)).isEqualTo(0.62d);
     }
 
     private static UspsMailpiece mailpiece(

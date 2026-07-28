@@ -12,6 +12,7 @@ import '../services/auth_token_manager.dart';
 /// Service to handle real-time call notifications for caregivers
 class CallNotificationService {
   static WebSocketChannel? _channel;
+  static StreamSubscription<dynamic>? _subscription;
   static bool _isConnected = false;
   static String? _currentUserId;
   static String? _currentUserRole;
@@ -65,40 +66,67 @@ class CallNotificationService {
         dispose();
       }
 
+      final token = await AuthTokenManager.getJwtToken();
+      if (token == null || token.isEmpty) {
+        debugPrint('❌ Cannot initialize call notifications: missing JWT token');
+        return false;
+      }
+
       // Connect to backend call WebSocket endpoint
       final String wsUrl = websocketUrl ?? getCallNotificationWebSocketUrl();
       debugPrint('Connecting to notification WebSocket: $wsUrl');
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-      _isConnected = true;
+      final authCompleter = Completer<bool>();
 
-      final token = await AuthTokenManager.getJwtToken();
-      if (token == null || token.isEmpty) {
-        debugPrint('❌ Cannot initialize call notifications: missing JWT token');
-        dispose();
-        return false;
-      }
-
-      // Authenticate and join user room
-      _channel!.sink.add(_encode({'type': 'authenticate', 'token': token}));
-      _channel!.sink.add(_encode({'type': 'join-user-room'}));
-
-      // Listen for messages
-      _channel!.stream.listen(
+      // Attach listener before sending auth (required on Flutter web).
+      await _subscription?.cancel();
+      _subscription = _channel!.stream.listen(
         (message) {
           final data = _decode(message);
           if (data == null || data.isEmpty) return;
+          final type = data['type'] as String?;
+          if (type == 'authentication-success' && !authCompleter.isCompleted) {
+            authCompleter.complete(true);
+          } else if (type == 'authentication-failed' &&
+              !authCompleter.isCompleted) {
+            authCompleter.complete(false);
+          }
           _processNotificationMessage(data);
         },
         onDone: () {
           _isConnected = false;
+          if (!authCompleter.isCompleted) {
+            authCompleter.complete(false);
+          }
           debugPrint('❌ CallNotificationService WebSocket closed');
         },
         onError: (e) {
           _isConnected = false;
+          if (!authCompleter.isCompleted) {
+            authCompleter.complete(false);
+          }
           debugPrint('❌ CallNotificationService WebSocket error: $e');
         },
       );
 
+      await _channel!.ready;
+
+      // Authenticate and join user room after the socket is open.
+      _channel!.sink.add(_encode({'type': 'authenticate', 'token': token}));
+      _channel!.sink.add(_encode({'type': 'join-user-room'}));
+
+      final authed = await authCompleter.future.timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => false,
+      );
+      if (!authed) {
+        debugPrint('❌ Call notification WebSocket authentication failed');
+        dispose();
+        return false;
+      }
+
+      _isConnected = true;
+      debugPrint('✅ CallNotificationService connected and authenticated');
       return true;
     } catch (e) {
       debugPrint('❌ Error initializing CallNotificationService: $e');
@@ -755,6 +783,10 @@ class CallNotificationService {
   /// Dispose and cleanup
   static void dispose() {
     debugPrint('🧹 Disposing CallNotificationService');
+
+    final subscription = _subscription;
+    _subscription = null;
+    unawaited(subscription?.cancel());
 
     _channel?.sink.close(status.normalClosure);
     _channel = null;

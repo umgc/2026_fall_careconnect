@@ -185,6 +185,88 @@ class AiAskCitation {
   }
 }
 
+class MedicationTimelineEvent {
+  final String? itemId;
+  final String medicationName;
+  final String? medicationNameNormalized;
+  final String? eventType;
+  final String? effectiveDate;
+  final String? doseFrom;
+  final String? doseTo;
+  final String? citationRef;
+
+  const MedicationTimelineEvent({
+    this.itemId,
+    required this.medicationName,
+    this.medicationNameNormalized,
+    this.eventType,
+    this.effectiveDate,
+    this.doseFrom,
+    this.doseTo,
+    this.citationRef,
+  });
+
+  factory MedicationTimelineEvent.fromJson(Map<String, dynamic> json) {
+    String? optionalString(String key) {
+      final value = json[key];
+      if (value == null) return null;
+      if (value is! String) {
+        throw FormatException(
+          'Medication timeline event $key must be a string',
+        );
+      }
+      return value;
+    }
+
+    final medicationName = json['medicationName'];
+    if (medicationName is! String || medicationName.trim().isEmpty) {
+      throw const FormatException(
+        'Medication timeline event medicationName must be a non-empty string',
+      );
+    }
+
+    return MedicationTimelineEvent(
+      itemId: optionalString('itemId'),
+      medicationName: medicationName,
+      medicationNameNormalized: optionalString('medicationNameNormalized'),
+      eventType: optionalString('eventType'),
+      effectiveDate: optionalString('effectiveDate'),
+      doseFrom: optionalString('doseFrom'),
+      doseTo: optionalString('doseTo'),
+      citationRef: optionalString('citationRef'),
+    );
+  }
+}
+
+class MedicationTimeline {
+  final List<MedicationTimelineEvent> events;
+
+  const MedicationTimeline({this.events = const []});
+
+  factory MedicationTimeline.fromJson(Map<String, dynamic> json) {
+    final eventsJson = json['events'];
+    if (eventsJson != null && eventsJson is! List) {
+      throw const FormatException(
+        'Medication timeline events must be a list',
+      );
+    }
+    final eventListIsValid = eventsJson is List<dynamic> &&
+        eventsJson.every((item) => item is Map<String, dynamic>);
+    if (eventsJson is List && !eventListIsValid) {
+      throw const FormatException(
+        'Medication timeline events contain invalid entries',
+      );
+    }
+    final events = eventListIsValid
+        ? eventsJson
+            .cast<Map<String, dynamic>>()
+            .map(MedicationTimelineEvent.fromJson)
+            .toList(growable: false)
+        : const <MedicationTimelineEvent>[];
+    return MedicationTimeline(events: events);
+  }
+}
+
 class AiAskError {
   final String code;
   final String message;
@@ -343,6 +425,7 @@ class AiAskResult {
   final String? retryInput;
   final bool retryable;
   final bool cancelled;
+  final MedicationTimeline? medicationTimeline;
 
   const AiAskResult({
     required this.success,
@@ -363,6 +446,7 @@ class AiAskResult {
     this.retryInput,
     this.retryable = false,
     this.cancelled = false,
+    this.medicationTimeline,
   });
 
   factory AiAskResult.fromJson(
@@ -422,6 +506,13 @@ class AiAskResult {
     if (confirmationJson != null && confirmationJson is! Map<String, dynamic>) {
       throw const FormatException('Ask AI confirmation must be an object');
     }
+    final medicationTimelineJson = json['medicationTimeline'];
+    if (medicationTimelineJson != null &&
+        medicationTimelineJson is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Ask AI medicationTimeline must be an object',
+      );
+    }
 
     final answer = answerJson is Map<String, dynamic>
         ? () {
@@ -470,6 +561,12 @@ class AiAskResult {
         );
 
     // held=true is expected for HELD (Tier-2 review); only block DELIVERED.
+    // confirmation.required may be false after APPROVE_SESSION / prior terminal
+    // decision (backend suppresses the provider-confirmation prompt).
+    final confirmationOk = confirmation != null &&
+        (!confirmation.required ||
+            confirmation.text?.trim().isNotEmpty == true);
+
     final deliveredContractValid = allowDelivered &&
         json['success'] == true &&
         !held &&
@@ -484,9 +581,7 @@ class AiAskResult {
         escalation != null &&
         escalation.tier == 1 &&
         escalation.reviewRequired == false &&
-        confirmation != null &&
-        confirmation.required &&
-        confirmation.text?.trim().isNotEmpty == true;
+        confirmationOk;
 
     if (status == AiAskDeliveryStatus.delivered && !deliveredContractValid) {
       throw const FormatException(
@@ -520,6 +615,69 @@ class AiAskResult {
       disclaimer: exposeDeliveredContent ? disclaimer : null,
       escalation: exposeDeliveredContent ? escalation : null,
       confirmation: exposeDeliveredContent ? confirmation : null,
+      medicationTimeline: exposeDeliveredContent &&
+              medicationTimelineJson is Map<String, dynamic>
+          ? MedicationTimeline.fromJson(medicationTimelineJson)
+          : null,
+    );
+  }
+}
+
+class AiAskShareResult {
+  final bool success;
+  final String? shareId;
+  final int recipientCount;
+  final String? errorCode;
+  final String? message;
+
+  const AiAskShareResult({
+    required this.success,
+    this.shareId,
+    this.recipientCount = 0,
+    this.errorCode,
+    this.message,
+  });
+}
+
+class AiAskShareListItem {
+  final String shareId;
+  final int patientId;
+  final String? sessionId;
+  final List<int> recipientUserIds;
+  final int messageCount;
+  final String? createdAt;
+  final String? transcriptJson;
+
+  const AiAskShareListItem({
+    required this.shareId,
+    required this.patientId,
+    this.sessionId,
+    this.recipientUserIds = const [],
+    this.messageCount = 0,
+    this.createdAt,
+    this.transcriptJson,
+  });
+
+  factory AiAskShareListItem.fromJson(Map<String, dynamic> json) {
+    final recipients = <int>[];
+    final rawRecipients = json['recipientUserIds'];
+    if (rawRecipients is List) {
+      for (final item in rawRecipients) {
+        if (item is int) {
+          recipients.add(item);
+        } else if (item is num) {
+          recipients.add(item.toInt());
+        }
+      }
+    }
+    return AiAskShareListItem(
+      shareId: json['shareId']?.toString() ?? '',
+      patientId: (json['patientId'] as num?)?.toInt() ?? 0,
+      sessionId: json['sessionId']?.toString(),
+      recipientUserIds: recipients,
+      messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
+      createdAt: json['createdAt']?.toString(),
+      transcriptJson: json['transcriptJson']?.toString(),
     );
   }
 }
@@ -609,6 +767,7 @@ class AIChatService {
         payload.remove('disclaimer');
         payload.remove('escalation');
         payload.remove('confirmation');
+        payload.remove('medicationTimeline');
       }
 
       final parsed = AiAskResult.fromJson(
@@ -657,6 +816,7 @@ class AIChatService {
         confirmation: parsed.confirmation,
         retryInput: parsed.error != null ? retryInput : null,
         retryable: false,
+        medicationTimeline: parsed.medicationTimeline,
       );
     } on http.RequestAbortedException {
       return const AiAskResult(
@@ -751,6 +911,129 @@ class AIChatService {
     } catch (e) {
       debugPrint('Ask AI confirmation submit failed: $e');
       return false;
+    }
+  }
+
+  /// Share the current Ask AI conversation with linked caregiver(s).
+  ///
+  /// When [caregiverUserId] is null, the backend fans out to all active linked
+  /// caregivers for [patientId].
+  static Future<AiAskShareResult> shareWithCaregivers({
+    required int patientId,
+    String? sessionId,
+    int? caregiverUserId,
+    required List<Map<String, String>> messages,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    try {
+      if (messages.isEmpty) {
+        return const AiAskShareResult(
+          success: false,
+          errorCode: 'EMPTY',
+          message: 'No conversation to share',
+        );
+      }
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .post(
+            Uri.parse('${getBackendBaseUrl()}/api/ai/ask/share'),
+            headers: headers,
+            body: jsonEncode({
+              'patientId': patientId,
+              if (sessionId != null && sessionId.isNotEmpty)
+                'sessionId': sessionId,
+              if (caregiverUserId != null) 'caregiverUserId': caregiverUserId,
+              'messages': messages,
+            }),
+          )
+          .timeout(timeout);
+      final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        String? shareId;
+        int recipientCount = 0;
+        if (decoded is Map<String, dynamic>) {
+          shareId = decoded['shareId']?.toString();
+          final recipients = decoded['recipientUserIds'];
+          if (recipients is List) {
+            recipientCount = recipients.length;
+          }
+        }
+        return AiAskShareResult(
+          success: true,
+          shareId: shareId,
+          recipientCount: recipientCount,
+        );
+      }
+      String message = 'Could not share conversation with caregivers';
+      String? errorCode;
+      if (decoded is Map<String, dynamic>) {
+        errorCode = decoded['error']?.toString();
+        final apiMessage = decoded['message']?.toString();
+        if (apiMessage != null && apiMessage.isNotEmpty) {
+          message = apiMessage;
+        }
+      }
+      return AiAskShareResult(
+        success: false,
+        errorCode: errorCode,
+        message: message,
+      );
+    } catch (e) {
+      debugPrint('Ask AI share with caregivers failed: $e');
+      return const AiAskShareResult(
+        success: false,
+        errorCode: 'NETWORK_ERROR',
+        message: 'Unable to share conversation. Please try again.',
+      );
+    }
+  }
+
+  /// Lists Ask AI conversation shares visible to the caller for [patientId].
+  ///
+  /// Admins receive all shares for the patient. Everyone else (including the
+  /// patient) only receives shares they created or where they are a recipient.
+  /// Each item includes [AiAskShareListItem.transcriptJson] for review.
+  static Future<List<AiAskShareListItem>> listShares({
+    required int patientId,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .get(
+            Uri.parse(
+              '${getBackendBaseUrl()}/api/ai/ask/shares',
+            ).replace(queryParameters: {'patientId': '$patientId'}),
+            headers: headers,
+          )
+          .timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'Ask AI list shares failed: HTTP ${response.statusCode} ${response.body}',
+        );
+        return const [];
+      }
+      final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (decoded is! List) {
+        return const [];
+      }
+      final items = <AiAskShareListItem>[];
+      for (final row in decoded) {
+        if (row is Map<String, dynamic>) {
+          items.add(AiAskShareListItem.fromJson(row));
+        } else if (row is Map) {
+          items.add(
+            AiAskShareListItem.fromJson(Map<String, dynamic>.from(row)),
+          );
+        }
+      }
+      return items;
+    } catch (e) {
+      debugPrint('Ask AI list shares failed: $e');
+      return const [];
     }
   }
 

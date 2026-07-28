@@ -4,6 +4,7 @@ import com.careconnect.dto.ai.AiAskRequest;
 import com.careconnect.dto.ai.AiAskResponse;
 import com.careconnect.dto.ai.DeliveryStatus;
 import com.careconnect.dto.ai.InputModality;
+import com.careconnect.dto.ai.MedicationTimelineDto;
 import com.careconnect.model.User;
 import com.careconnect.model.ai.hitl.AiHeldItem;
 import com.careconnect.model.ai.hitl.AiHeldItemStatus;
@@ -21,6 +22,7 @@ import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
 import com.careconnect.service.ai.retrieval.ScopeDenialReason;
+import com.careconnect.service.ai.retrieval.timeline.MedicationTimelineAggregator;
 import com.careconnect.service.ai.safety.SafetyOutcome;
 import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.careconnect.service.security.InputSanitizationService;
@@ -51,6 +53,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,6 +79,8 @@ class AiAskServiceTest {
     private AiAskAuditService askAuditService;
     @Mock
     private AiAskConfirmationService askConfirmationService;
+    @Mock
+    private MedicationTimelineAggregator medicationTimelineAggregator;
 
     private AiAskService service;
 
@@ -117,7 +122,7 @@ class AiAskServiceTest {
                 retrievalQueryPlanner,
                 groundedAskLlmService,
                 new CitationAssembler(
-                        new CitationDeepLinkBuilder(),
+                        new CitationDeepLinkBuilder(new ObjectMapper()),
                         new CitationMetadataMapper(new ObjectMapper())),
                 inputSanitizationService,
                 governanceService,
@@ -125,6 +130,7 @@ class AiAskServiceTest {
                 hitlService,
                 askAuditService,
                 askConfirmationService,
+                medicationTimelineAggregator,
                 hitlEnabled);
     }
 
@@ -191,6 +197,53 @@ class AiAskServiceTest {
         assertThat(response.escalation().reason()).isEqualTo("tier1_auto_deliver");
         assertThat(response.retrievalMeta().chunksUsed()).isEqualTo(1);
         assertThat(response.retrievalMeta().model().provider()).isEqualTo("bedrock");
+        assertThat(response.medicationTimeline()).isNull();
+        verifyNoInteractions(medicationTimelineAggregator);
+    }
+
+    @Test
+    @DisplayName("ask aggregates medication timeline when plan is a medication-timeline intent")
+    void ask_deliveredAggregatesMedicationTimelineWhenPlanned() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        when(retrievalQueryPlanner.plan("metformin"))
+                .thenReturn(new RetrievalPlan(
+                        com.careconnect.service.ai.retrieval.QueryIntent.MEDICATION_TIMELINE,
+                        "metformin"));
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                "Started metformin 500mg twice daily",
+                "{\"contentHash\":\"abc\"}",
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        final HybridRetrievalResult retrieval =
+                new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1);
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenReturn(retrieval);
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Started metformin 500mg twice daily",
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Started metformin 500mg twice daily",
+                                List.of("C1"),
+                                java.util.Map.of(
+                                        "C1",
+                                        "Started metformin 500mg twice daily"))),
+                        "amazon.nova-lite-v1:0")));
+        final MedicationTimelineDto timeline = new MedicationTimelineDto(List.of());
+        when(medicationTimelineAggregator.aggregate(retrieval.chunks())).thenReturn(timeline);
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.medicationTimeline()).isSameAs(timeline);
+        verify(medicationTimelineAggregator).aggregate(retrieval.chunks());
     }
 
     @Test

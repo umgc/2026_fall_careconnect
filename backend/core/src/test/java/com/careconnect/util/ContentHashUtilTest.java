@@ -18,4 +18,18 @@ class ContentHashUtilTest {
     void sha256_nullRemainsNull() {
         assertThat(ContentHashUtil.sha256(null)).isNull();
     }
+
+    @Test
+    void clinicalNoteContentHash_includesAiSummary() {
+        final String bodyOnly = ContentHashUtil.sha256("note body\n");
+        final String withSummary = ContentHashUtil.clinicalNoteContentHash("note body", "summary");
+        assertThat(withSummary).isNotEqualTo(bodyOnly);
+        assertThat(withSummary).isEqualTo(ContentHashUtil.sha256("note body\nsummary"));
+    }
+
+    @Test
+    void clinicalNoteContentHash_nullPartsBecomeEmpty() {
+        assertThat(ContentHashUtil.clinicalNoteContentHash(null, null))
+                .isEqualTo(ContentHashUtil.sha256("\n"));
+    }
 }

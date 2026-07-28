@@ -70,6 +70,8 @@ class _PostCallTelemetrySummaryScreenState
   Timer? _dismissTimer;
   int _dismissSecondsLeft = 0;
 
+  final Set<String> _confirmingItemIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -154,9 +156,9 @@ class _PostCallTelemetrySummaryScreenState
       return;
     }
 
-    final recordingStartedAt = DateTime.parse(recordingStartedAtRaw).toUtc();
+    final recordingStartedAt = parseCallUtcDateTime(recordingStartedAtRaw);
     final clipWindow = computeSentimentClipWindow(
-      sentimentOccurredAt: selectedAt.toUtc(),
+      sentimentOccurredAt: parseCallUtcDateTime(selectedAt),
       recordingStartedAt: recordingStartedAt,
     );
 
@@ -178,8 +180,8 @@ class _PostCallTelemetrySummaryScreenState
     }
 
     final clipWindow = computeSentimentClipWindow(
-      sentimentOccurredAt: selectedAt.toUtc(),
-      recordingStartedAt: recordingStartedAt,
+      sentimentOccurredAt: parseCallUtcDateTime(selectedAt),
+      recordingStartedAt: parseCallUtcDateTime(recordingStartedAt),
     );
 
     setState(() {
@@ -315,10 +317,7 @@ class _PostCallTelemetrySummaryScreenState
   }
 
   DateTime _safeDate(dynamic input) {
-    if (input is String) {
-      return DateTime.tryParse(input) ?? DateTime.fromMillisecondsSinceEpoch(0);
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
+    return parseCallUtcDateTime(input);
   }
 
   Map<String, dynamic>? get _summaryPayload {
@@ -345,6 +344,246 @@ class _PostCallTelemetrySummaryScreenState
         .whereType<String>()
         .take(maxItems)
         .toList();
+  }
+
+  // ── Per-item summary confirmation (FR-SUM-4) ────────────────────────
+
+  List<_PendingSummaryItem> get _pendingSummaryItems {
+    final summary = _summaryPayload;
+    if (summary == null) return const [];
+    final items = <_PendingSummaryItem>[];
+
+    void collect(
+      String category,
+      String Function(Map<String, dynamic>) describe,
+    ) {
+      final raw = summary[category];
+      if (raw is! List) return;
+      for (final entry in raw) {
+        if (entry is! Map) continue;
+        final map = entry as Map<String, dynamic>;
+        final needsConfirmationRaw = map['needsConfirmation'];
+        final needsConfirmation = needsConfirmationRaw == true ||
+            (needsConfirmationRaw is String &&
+                needsConfirmationRaw.toLowerCase() == 'true');
+        if (!needsConfirmation) continue;
+        final itemId = map['itemId']?.toString();
+        if (itemId == null || itemId.isEmpty) continue;
+        items.add(
+          _PendingSummaryItem(
+            category: category,
+            itemId: itemId,
+            description: describe(map),
+            raw: map,
+          ),
+        );
+      }
+    }
+
+    collect('actionItems', _describeActionItem);
+    collect('appointments', _describeAppointment);
+    collect('careInstructions', _describeCareInstruction);
+    return items;
+  }
+
+  String _describeActionItem(Map<String, dynamic> item) {
+    final text = (item['text'] ?? '').toString().trim();
+    final dueHint = (item['dueHint'] ?? '').toString().trim();
+    if (dueHint.isEmpty) return text;
+    return '$text ($dueHint)';
+  }
+
+  String _describeAppointment(Map<String, dynamic> item) {
+    final date = (item['date'] ?? '').toString().trim();
+    final time = (item['time'] ?? '').toString().trim();
+    final withWhom = (item['with'] ?? '').toString().trim();
+    final purpose = (item['purpose'] ?? '').toString().trim();
+    final parts = <String>[
+      if (date.isNotEmpty) date,
+      if (time.isNotEmpty) time,
+      if (withWhom.isNotEmpty) 'with $withWhom',
+      if (purpose.isNotEmpty) purpose,
+    ];
+    return parts.isEmpty ? 'Appointment' : parts.join(' · ');
+  }
+
+  String _describeCareInstruction(Map<String, dynamic> item) {
+    final text = (item['text'] ?? '').toString().trim();
+    final type = (item['type'] ?? '').toString().trim();
+    if (type.isEmpty) return text;
+    return '[$type] $text';
+  }
+
+  IconData _iconForSummaryCategory(String category) {
+    switch (category) {
+      case 'actionItems':
+        return Icons.checklist_rtl;
+      case 'appointments':
+        return Icons.event_outlined;
+      case 'careInstructions':
+        return Icons.medical_information_outlined;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  String _labelForSummaryCategory(String category) {
+    switch (category) {
+      case 'actionItems':
+        return 'ACTION ITEM';
+      case 'appointments':
+        return 'APPOINTMENT';
+      case 'careInstructions':
+        return 'CARE INSTRUCTION';
+      default:
+        return category.toUpperCase();
+    }
+  }
+
+  Future<void> _decideSummaryItem(
+    _PendingSummaryItem item,
+    String decision,
+  ) async {
+    setState(() => _confirmingItemIds.add(item.itemId));
+    try {
+      final response = await ApiService.confirmCallSummaryItem(
+        widget.callId,
+        item.itemId,
+        decision: decision,
+      );
+      if (!mounted) return;
+      final held = response['held'] == true;
+      if (held) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sent for clinician review before it can be confirmed.',
+            ),
+          ),
+        );
+      } else {
+        item.raw['needsConfirmation'] = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              decision == 'approve' ? 'Item approved.' : 'Item declined.',
+            ),
+          ),
+        );
+      }
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update item: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _confirmingItemIds.remove(item.itemId));
+      }
+    }
+  }
+
+  Widget _buildPendingConfirmationsCard(bool isDark) {
+    final pending = _pendingSummaryItems;
+    if (pending.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Items to confirm', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Review these items extracted from your call.',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white54 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...pending.map((item) => _buildPendingItemTile(item, isDark)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingItemTile(_PendingSummaryItem item, bool isDark) {
+    final busy = _confirmingItemIds.contains(item.itemId);
+    return Container(
+      key: ValueKey('pending-summary-item-${item.itemId}'),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black12,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_iconForSummaryCategory(item.category), size: 16),
+              const SizedBox(width: 6),
+              Text(
+                _labelForSummaryCategory(item.category),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.description,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed:
+                      busy ? null : () => _decideSummaryItem(item, 'approve'),
+                  child: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Approve'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                  onPressed:
+                      busy ? null : () => _decideSummaryItem(item, 'decline'),
+                  child: const Text('Decline'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Sentiment sample selection ────────────────────────────────────
@@ -953,6 +1192,9 @@ class _PostCallTelemetrySummaryScreenState
                       onSendMessage: widget.onSendMessage,
                     ),
                     const SizedBox(height: 16),
+                    _buildPendingConfirmationsCard(isDark),
+                    if (_pendingSummaryItems.isNotEmpty)
+                      const SizedBox(height: 16),
                     if (_recording != null) ...[
                       _buildRecordingCard(isDark),
                       const SizedBox(height: 16),
@@ -1006,7 +1248,7 @@ class _PostCallTelemetrySummaryScreenState
 
     // A system-initiated recording (initiatedByUserId == null) is for transcription only —
     // the S3 file is deleted after transcription so playback is never available for it.
-    final isSystemRecording = rec['initiatedByUserId'] == null;
+    final isSystemRecording = !isUserInitiatedCallRecording(rec);
 
     String startedText = '—';
     if (!isSystemRecording && startedAt != null) {
@@ -1441,7 +1683,9 @@ class _PostCallTelemetrySummaryScreenState
                             ],
                           ),
                           SentimentClipPlayerWidget(
-                            key: ValueKey(_clipPlaybackUrl!),
+                            key: ValueKey(
+                              '${_clipPlaybackUrl!}|${_clipStartSec!}|${_clipEndSec!}',
+                            ),
                             playbackUrl: _clipPlaybackUrl!,
                             clipStartSec: _clipStartSec!,
                             clipEndSec: _clipEndSec!,
@@ -1470,10 +1714,23 @@ class _PostCallTelemetrySummaryScreenState
   Widget _buildTranscriptCard(bool isDark) {
     final segments = _transcriptSegments;
     if (segments.isEmpty) {
+      final rec = _recording ?? const <String, dynamic>{};
       final transcriptionStatus =
-          ((_recording ?? const {})['transcriptionStatus'] as String? ?? '')
-              .toUpperCase();
-      if (transcriptionStatus == 'PROCESSING') {
+          (rec['transcriptionStatus'] as String? ?? '').toUpperCase();
+      final concatenationStatus =
+          (rec['concatenationStatus'] as String? ?? '').toUpperCase();
+      final recordingStatus = (rec['status'] as String? ?? '').toUpperCase();
+      final waitingForTranscript = transcriptionStatus == 'PROCESSING' ||
+          transcriptionStatus == 'READY' ||
+          // User recording finished but transcript job not marked yet (concat still
+          // stitching, or status not refreshed to READY/PROCESSING).
+          (isUserInitiatedCallRecording(rec) &&
+              recordingStatus != 'NO_RECORDING' &&
+              recordingStatus.isNotEmpty &&
+              transcriptionStatus != 'FAILED' &&
+              transcriptionStatus != 'COMPLETE' &&
+              concatenationStatus != 'FAILED');
+      if (waitingForTranscript) {
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1712,18 +1969,21 @@ class _PostCallTelemetrySummaryScreenState
     required DateTime anchorOccurredAt,
     required DateTime? fallbackCallStart,
   }) {
+    DateTime? fromSegments;
     for (final segment in segments) {
       final startMs = _asInt(segment['startMs']);
       final occurredAt = _safeDate(segment['occurredAt']);
       if (startMs == null) continue;
       if (occurredAt.millisecondsSinceEpoch <= 0) continue;
       final offsetMs = startMs < 0 ? 0 : startMs;
-      return occurredAt.subtract(Duration(milliseconds: offsetMs));
+      fromSegments = occurredAt.subtract(Duration(milliseconds: offsetMs));
+      break;
     }
-    if (anchorOccurredAt.millisecondsSinceEpoch > 0) {
-      return anchorOccurredAt;
-    }
-    return fallbackCallStart;
+    return resolveTranscriptHighlightCallStart(
+      fromTranscriptSegments: fromSegments ??
+          (anchorOccurredAt.millisecondsSinceEpoch > 0 ? anchorOccurredAt : null),
+      callJoinStart: fallbackCallStart,
+    );
   }
 
   int? _resolveSelectedSegmentIndex({
@@ -1956,6 +2216,20 @@ class _PostCallTelemetrySummaryScreenState
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
+}
+
+class _PendingSummaryItem {
+  final String category;
+  final String itemId;
+  final String description;
+  final Map<String, dynamic> raw;
+
+  const _PendingSummaryItem({
+    required this.category,
+    required this.itemId,
+    required this.description,
+    required this.raw,
+  });
 }
 
 // ── Summary section ───────────────────────────────────────────────────────────

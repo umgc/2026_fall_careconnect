@@ -1,27 +1,25 @@
 package com.careconnect.service.ai.retrieval;
 
-import com.careconnect.service.CaregiverPatientLinkService;
+import com.careconnect.service.ConsentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * Temporary consent gate until ConsentGrant persistence ships (Task 6.x).
- * Treats an active care-circle link as consent for {@code on_consent} visibility
- * so caregivers with valid patient access can retrieve summary/USPS chunks.
+ * Consent gate for {@code on_consent} visibility content (Task 2.4).
+ *
+ * <p>Delegates to {@link ConsentService#isEffectiveAiRetrievalConsent}, which prefers an
+ * explicit {@link com.careconnect.model.ConsentGrant} and uses care-circle link only as a
+ * migration grandfather path when no grant history exists.
  */
 @Component
 @RequiredArgsConstructor
 public class DefaultRetrievalConsentProvider implements RetrievalConsentProvider {
 
-    private final CaregiverPatientLinkService caregiverPatientLinkService;
+    private final ConsentService consentService;
 
     @Override
     public boolean isCaregiverConsentGranted(
             final Long caregiverUserId, final Long patientUserId) {
-        if (caregiverUserId == null || patientUserId == null) {
-            return false;
-        }
-        return caregiverPatientLinkService.hasAccessToPatient(
-                caregiverUserId, patientUserId);
+        return consentService.isEffectiveAiRetrievalConsent(caregiverUserId, patientUserId);
     }
 }

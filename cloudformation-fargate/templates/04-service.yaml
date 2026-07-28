@@ -337,6 +337,17 @@ Resources:
               Value: 'false'
             - Name: SPRING_JPA_HIBERNATE_DDL_AUTO
               Value: update
+            - Name: CARECONNECT_RECORDING_ENABLED
+              Value: 'true'
+            - Name: CARECONNECT_KVS_ENABLED
+              Value: 'true'
+            - Name: CARECONNECT_KVS_STREAM_POOL_ARN
+              Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/kvs-stream-pool-arn}}'
+            - Name: CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED
+              Value: 'true'
+            # Must match ChimeKvsStreamDiscoveryConnection ApiKeyValue (X-EventBridge-Connection).
+            - Name: CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET
+              Value: !Sub 'careconnect-${Environment}-kvs-discovery'
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
@@ -367,6 +378,73 @@ Resources:
       ServiceRegistries:
         - RegistryArn: !GetAtt CloudMapService.Arn
           Port: !Ref ContainerPort
+
+  # ---------------------------------------------------------------------------
+  # EventBridge → API Gateway webhook for KVS attendee→stream discovery.
+  # Chime pushes chime:MediaPipelineKinesisVideoStreamStart; app registers mappings.
+  # ---------------------------------------------------------------------------
+
+  ChimeKvsStreamDiscoveryConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: !Sub careconnect-${Environment}-chime-kvs-discovery
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: X-EventBridge-Connection
+          ApiKeyValue: !Sub 'careconnect-${Environment}-kvs-discovery'
+
+  ChimeKvsStreamDiscoveryApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub careconnect-${Environment}-chime-kvs-discovery
+      ConnectionArn: !GetAtt ChimeKvsStreamDiscoveryConnection.Arn
+      InvocationEndpoint: !If
+        - HasCustomDomain
+        - !Sub 'https://${DomainName}/api/internal/chime/media-stream-events'
+        - !Sub
+          - '${ApiBase}/api/internal/chime/media-stream-events'
+          - ApiBase: !GetAtt HttpApi.ApiEndpoint
+      HttpMethod: POST
+      InvocationRateLimitPerSecond: 10
+
+  ChimeKvsStreamDiscoveryInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeChimeKvsApiDestination
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !GetAtt ChimeKvsStreamDiscoveryApiDestination.Arn
+
+  ChimeKvsStreamStartRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub careconnect-${Environment}-chime-kvs-stream-start
+      Description: Forward Chime per-attendee KVS stream starts to backend webhook
+      EventPattern:
+        source:
+          - aws.chime
+        detail-type:
+          - Chime Media Pipeline State Change
+        detail:
+          eventType:
+            - chime:MediaPipelineKinesisVideoStreamStart
+      State: ENABLED
+      Targets:
+        - Id: ChimeKvsStreamDiscoveryWebhook
+          Arn: !GetAtt ChimeKvsStreamDiscoveryApiDestination.Arn
+          RoleArn: !GetAtt ChimeKvsStreamDiscoveryInvokeRole.Arn
 
 Outputs:
   # API Gateway invoke URL (always available).

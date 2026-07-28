@@ -16,17 +16,22 @@ public class TierClassifier {
     private static final Pattern EMERGENCY = Pattern.compile(
             "(?i)\\b(chest\\s+pain|can'?t\\s+breathe|cannot\\s+breathe|suicidal|"
                     + "overdose|stroke\\s+symptoms?|heart\\s+attack|call\\s+911|"
-                    + "emergency\\s+room|er\\s+now)\\b");
+                    + "emergency\\s+room|er\\s+now|"
+                    + "dolor\\s+de\\s+pecho|no\\s+puedo\\s+respirar|ataque\\s+al\\s+coraz[oó]n|"
+                    + "llama(?:r)?\\s+al\\s+911|sala\\s+de\\s+emergencias?)\\b");
 
     private static final Pattern DOSAGE_CALC = Pattern.compile(
             "(?i)\\b(calculate|compute|how\\s+much\\s+(should|do)\\s+i\\s+(take|dose)|"
-                    + "mg/kg|dosage\\s+calculation|titrate\\s+dose)\\b");
+                    + "mg/kg|dosage\\s+calculation|titrate\\s+dose|"
+                    + "cu[aá]nto\\s+(debo|tengo\\s+que)\\s+(tomar|dosificar))\\b");
 
     private static final Pattern MEDICATION_CHANGE = Pattern.compile(
             "(?i)\\b(stop\\s+taking|discontinue|increase\\s+(the\\s+)?dose|"
                     + "decrease\\s+(the\\s+)?dose|change\\s+(my\\s+)?(med|medication|dose)|"
                     + "start\\s+taking|double\\s+(the\\s+)?dose|halve\\s+(the\\s+)?dose|"
-                    + "switch\\s+(to|from)\\s+\\w+)\\b");
+                    + "switch\\s+(to|from)\\s+\\w+|"
+                    + "dejar\\s+de\\s+tomar|aumentar\\s+la\\s+dosis|reducir\\s+la\\s+dosis|"
+                    + "cambiar\\s+(mi\\s+)?(medicamento|dosis))\\b");
 
     private static final Pattern GENERAL_MED = Pattern.compile(
             "(?i)\\b(medication|medicine|pill|tablet|mg|dose|prescription|metformin|"

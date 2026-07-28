@@ -8,6 +8,7 @@ import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/services/consent_api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../widgets/ai_chat_improved.dart';
 import '../../../../widgets/family_member_card.dart';
@@ -41,10 +42,15 @@ class _PatientDashboardState extends State<PatientDashboard> {
   // Real-time call notification state
   bool _callNotificationInitialized = false;
 
+  // Ask AI retrieval consent state, keyed by caregiver user id.
+  Map<String, int> _caregiverUserIdByEmail = {};
+  Map<int, bool> _consentGrantedByCaregiverUserId = {};
+  final Set<int> _consentUpdatingCaregiverUserId = {};
+
   @override
   void initState() {
     super.initState();
-    fetchPatientAndCaregivers();
+    fetchPatientAndCaregivers().then((_) => _loadCaregiverConsentState());
     _loadFamilyMembers();
     _initializeCallNotifications();
   }
@@ -205,6 +211,137 @@ class _PatientDashboardState extends State<PatientDashboard> {
         setState(() {
           error = 'Error loading family members: ${e.toString()}';
           isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Resolves the caregiver's authentication user id (distinct from the
+  /// `Caregiver` entity id returned by `/patients/{id}/caregivers`), needed
+  /// as the `granteeUserId` for Ask AI retrieval consent. Falls back to
+  /// matching by email against `getPatientLinkedCaregiverLinks`, which does
+  /// return caregiver user ids.
+  int? _resolveCaregiverUserId(
+    Map<String, dynamic> caregiver, [
+    Map<String, int>? byEmail,
+  ]) {
+    final directUserId = caregiver['userId'];
+    if (directUserId is int) return directUserId;
+    if (directUserId is String) {
+      final parsed = int.tryParse(directUserId);
+      if (parsed != null) return parsed;
+    }
+    final nestedUser = caregiver['user'];
+    if (nestedUser is Map) {
+      final nestedId = nestedUser['id'];
+      if (nestedId is int) return nestedId;
+      if (nestedId is String) {
+        final parsed = int.tryParse(nestedId);
+        if (parsed != null) return parsed;
+      }
+    }
+    final email = (caregiver['email'] ?? '').toString().trim().toLowerCase();
+    final emailMap = byEmail ?? _caregiverUserIdByEmail;
+    if (email.isNotEmpty && emailMap.containsKey(email)) {
+      return emailMap[email];
+    }
+    return null;
+  }
+
+  /// Loads the initial Ask AI retrieval consent state for each caregiver
+  /// card. The patient is always the current user for this screen.
+  Future<void> _loadCaregiverConsentState() async {
+    if (!mounted) return;
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final patientUserId = userProvider.user?.id;
+      if (patientUserId == null) return;
+
+      final links =
+          await ApiService.getPatientLinkedCaregiverLinks(patientUserId);
+      final byEmail = <String, int>{};
+      for (final link in links) {
+        final email =
+            (link['caregiverEmail'] ?? '').toString().trim().toLowerCase();
+        final rawUserId = link['caregiverUserId'];
+        final userId = rawUserId is int
+            ? rawUserId
+            : int.tryParse('$rawUserId');
+        if (email.isNotEmpty && userId != null) {
+          byEmail[email] = userId;
+        }
+      }
+
+      final granted = <int, bool>{};
+      for (final caregiver in caregivers) {
+        final caregiverUserId = _resolveCaregiverUserId(caregiver, byEmail);
+        if (caregiverUserId == null ||
+            granted.containsKey(caregiverUserId)) {
+          continue;
+        }
+        try {
+          granted[caregiverUserId] = await ConsentApiService
+              .isAiRetrievalGranted(
+            patientUserId: patientUserId,
+            granteeUserId: caregiverUserId,
+          );
+        } catch (e) {
+          print(
+            'Error checking Ask AI consent for caregiver $caregiverUserId: $e',
+          );
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _caregiverUserIdByEmail = byEmail;
+        _consentGrantedByCaregiverUserId = granted;
+      });
+    } catch (e) {
+      print('Error loading caregiver Ask AI consent state: $e');
+    }
+  }
+
+  Future<void> _onToggleAiRetrievalConsent(
+    int caregiverUserId,
+    bool value,
+  ) async {
+    final previous = _consentGrantedByCaregiverUserId[caregiverUserId];
+    setState(() {
+      _consentUpdatingCaregiverUserId.add(caregiverUserId);
+      _consentGrantedByCaregiverUserId[caregiverUserId] = value;
+    });
+    try {
+      if (value) {
+        await ConsentApiService.grantAiRetrieval(
+          granteeUserId: caregiverUserId,
+        );
+      } else {
+        await ConsentApiService.revokeAiRetrieval(
+          granteeUserId: caregiverUserId,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _consentGrantedByCaregiverUserId[caregiverUserId] =
+              previous ?? !value;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              value
+                  ? 'Could not grant Ask AI access. Please try again.'
+                  : 'Could not revoke Ask AI access. Please try again.',
+            ),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _consentUpdatingCaregiverUserId.remove(caregiverUserId);
         });
       }
     }
@@ -1032,6 +1169,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   Widget _buildCaregiverCard(Map<String, dynamic> caregiver) {
+    final caregiverUserId = _resolveCaregiverUserId(caregiver);
+    final consentGranted = caregiverUserId != null &&
+        (_consentGrantedByCaregiverUserId[caregiverUserId] ?? false);
+    final consentUpdating = caregiverUserId != null &&
+        _consentUpdatingCaregiverUserId.contains(caregiverUserId);
+
     return Card(
       elevation: 1,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -1039,81 +1182,108 @@ class _PatientDashboardState extends State<PatientDashboard> {
         side: BorderSide(color: Colors.blue.shade900),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: ListTile(
-        leading: const CircleAvatar(child: Text("D")),
-        title: Text(
-          '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}',
-          style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Status: Available', style: AppTheme.bodyMedium),
-            Text(
-              'Last Interaction: ${caregiver['lastSeen'] ?? 'Recently'}',
-              style: AppTheme.bodyMedium,
+      child: Column(
+        children: [
+          ListTile(
+            leading: const CircleAvatar(child: Text("D")),
+            title: Text(
+              '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}',
+              style: AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold),
             ),
-            if (caregiver['phone'] != null)
-              Text('Phone: ${caregiver['phone']}', style: AppTheme.bodyMedium),
-          ],
-        ),
-        trailing: PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert),
-          onSelected: (value) async {
-            final phone = caregiver['phone'];
-            final email = caregiver['email'];
-            final caregiverId = caregiver['id'];
-
-            if (value == 'call' && phone != null) {
-              // Use CommunicationService for phone call
-              CommunicationService.makePhoneCall(phone, context);
-            } else if (value == 'videocall' && caregiverId != null) {
-              // Use the enhanced video call integration
-              final user = Provider.of<UserProvider>(
-                context,
-                listen: false,
-              ).user;
-              CallIntegrationHelper.startVideoCallToCaregiver(
-                context: context,
-                currentUser: user,
-                targetCaregiver: caregiver,
-                isVideoCall: true,
-              );
-            } else if (value == 'email' && email != null) {
-              final uri = Uri(
-                scheme: 'mailto',
-                path: email,
-                queryParameters: {
-                  'subject': 'CareConnect Inquiry',
-                  'body': 'Hello...',
-                },
-              );
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri);
-              } else {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Could not launch email client.'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Status: Available', style: AppTheme.bodyMedium),
+                Text(
+                  'Last Interaction: ${caregiver['lastSeen'] ?? 'Recently'}',
+                  style: AppTheme.bodyMedium,
+                ),
+                if (caregiver['phone'] != null)
+                  Text(
+                    'Phone: ${caregiver['phone']}',
+                    style: AppTheme.bodyMedium,
                   ),
-                );
-              }
-            } else if (value == 'sms' && phone != null) {
-              // Use the enhanced SMS integration
-              final user = Provider.of<UserProvider>(
-                context,
-                listen: false,
-              ).user;
-              _showSendMessageDialog(context, caregiver, user);
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: 'call', child: Text('Call')),
-            const PopupMenuItem(value: 'videocall', child: Text('Video Call')),
-            const PopupMenuItem(value: 'email', child: Text('Email')),
-            const PopupMenuItem(value: 'sms', child: Text('Send SMS')),
-          ],
-        ),
+              ],
+            ),
+            trailing: PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) async {
+                final phone = caregiver['phone'];
+                final email = caregiver['email'];
+                final caregiverId = caregiver['id'];
+
+                if (value == 'call' && phone != null) {
+                  // Use CommunicationService for phone call
+                  CommunicationService.makePhoneCall(phone, context);
+                } else if (value == 'videocall' && caregiverId != null) {
+                  // Use the enhanced video call integration
+                  final user = Provider.of<UserProvider>(
+                    context,
+                    listen: false,
+                  ).user;
+                  CallIntegrationHelper.startVideoCallToCaregiver(
+                    context: context,
+                    currentUser: user,
+                    targetCaregiver: caregiver,
+                    isVideoCall: true,
+                  );
+                } else if (value == 'email' && email != null) {
+                  final uri = Uri(
+                    scheme: 'mailto',
+                    path: email,
+                    queryParameters: {
+                      'subject': 'CareConnect Inquiry',
+                      'body': 'Hello...',
+                    },
+                  );
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  } else {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not launch email client.'),
+                      ),
+                    );
+                  }
+                } else if (value == 'sms' && phone != null) {
+                  // Use the enhanced SMS integration
+                  final user = Provider.of<UserProvider>(
+                    context,
+                    listen: false,
+                  ).user;
+                  _showSendMessageDialog(context, caregiver, user);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'call', child: Text('Call')),
+                const PopupMenuItem(
+                  value: 'videocall',
+                  child: Text('Video Call'),
+                ),
+                const PopupMenuItem(value: 'email', child: Text('Email')),
+                const PopupMenuItem(value: 'sms', child: Text('Send SMS')),
+              ],
+            ),
+          ),
+          if (caregiverUserId != null)
+            SwitchListTile(
+              key: ValueKey('ask-ai-consent-$caregiverUserId'),
+              dense: true,
+              title: const Text('Allow Ask AI access to my records'),
+              subtitle: const Text(
+                'Lets this caregiver ask AI about your care records',
+              ),
+              value: consentGranted,
+              onChanged:
+                  consentUpdating
+                      ? null
+                      : (value) => _onToggleAiRetrievalConsent(
+                            caregiverUserId,
+                            value,
+                          ),
+            ),
+        ],
       ),
     );
   }
