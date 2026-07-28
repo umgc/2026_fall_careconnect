@@ -198,6 +198,10 @@ dev_dependencies:
     sdk: flutter
   mockito: ^5.5.1
   build_runner: ^2.4.9
+  # Test-only: override GeolocatorPlatform.instance in EVV GPS widget tests
+  # (platform-independent, avoids mocking platform-specific method channels).
+  geolocator_platform_interface: ^4.2.6
+  plugin_platform_interface: ^2.1.8
   # drift_dev: ^2.29.0  # Commented since drift is disabled for web builds
   flutter_launcher_icons: ^0.14.1
 

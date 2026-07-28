@@ -7,6 +7,7 @@ import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.ask.AiAskConfirmationService;
 import com.careconnect.service.ai.ask.AiAskService;
 import com.careconnect.service.ai.ask.AskAiGroundingException;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
@@ -42,6 +43,8 @@ class AiAskControllerTest {
     @Mock
     private AiAskService aiAskService;
     @Mock
+    private AiAskConfirmationService askConfirmationService;
+    @Mock
     private SecurityUtil securityUtil;
 
     private MockMvc mockMvc;
@@ -50,7 +53,7 @@ class AiAskControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new AiAskController(aiAskService, securityUtil))
+                        new AiAskController(aiAskService, askConfirmationService, securityUtil))
                 .setControllerAdvice(new AiAskExceptionAdvice())
                 .build();
         caller = new User();

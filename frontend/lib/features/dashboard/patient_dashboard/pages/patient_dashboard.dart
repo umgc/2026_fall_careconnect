@@ -4,6 +4,7 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/alter_notification_widget.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/models/medication_reminder_item.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/current_mood_widget.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/shared/widgets/dashboard_appheader_widget.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/services/patient_medication_reminder_service.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/medication_reminder_widget.dart';
@@ -33,12 +34,6 @@ class PatientDashboard extends StatefulWidget {
 }
 
 class _PatientDashboardState extends State<PatientDashboard> {
-  static const String _lowMoodAlertMessage =
-      'Mood score below normal range. Consider contacting your healthcare provider.';
-  static const String _pendingMedicationAlertMessage =
-      'You have medication reminders that are not marked as taken.';
-  static const String _pendingMedicationAlertId =
-      'reminder:pending_medications';
 
   // Patient data
   Map<String, dynamic>? patient;
@@ -81,9 +76,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
   List<Map<String, dynamic>> _upcomingEvvAppointments = [];
   bool _loadingEvv = false;
 
+  bool _initialized = false;
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     _loadDashboardData();
     _callNotificationInitialized = true;
     _checkConnectivity();
@@ -106,6 +104,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
   /// Load all dashboard data
   Future<void> _loadDashboardData() async {
+    final t = AppLocalizations.of(context)!;
     setState(() {
       loading = true;
       error = null;
@@ -118,7 +117,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
       if (id == null) {
         setState(() {
-          error = 'User not logged in.';
+          error = t.ptdashboard_userNotLoggedIn;
           loading = false;
         });
         return;
@@ -136,7 +135,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       });
     } catch (e) {
       setState(() {
-        error = 'Error loading dashboard: ${e.toString()}';
+        error = '${t.ptdashboard_errorLoadDash}: ${e.toString()}';
         loading = false;
       });
     }
@@ -357,9 +356,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
   /// Load medication reminders
   Future<void> _loadMedicationReminders() async {
     try {
+      final t = AppLocalizations.of(context)!;
       final user = Provider.of<UserProvider>(context, listen: false).user;
       final next = await _medicationReminderService.loadReminders(
         patientId: user?.patientId,
+        t: t,
       );
 
       if (!mounted) {
@@ -521,6 +522,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   void _syncProviderCallingPolicy() {
+    final t = AppLocalizations.of(context)!;
     // Wait until both data sources are loaded before resolving.
     // Prevents a flash of "calling disabled" when caregiver links arrive
     // before the primary care provider finishes loading.
@@ -530,7 +532,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       _callableCaregiver = null;
       _providerVideoCallsEnabled = false;
       _providerCallPolicyMessage =
-          'Video calling is unavailable until a caregiver is linked.';
+          t.ptdashboard_videoCallDisabledWithoutCaregiver;
       return;
     }
 
@@ -592,7 +594,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       _callableCaregiver = null;
       _providerVideoCallsEnabled = false;
       _providerCallPolicyMessage =
-          'Video calling is unavailable because your provider is not linked for calling.';
+          t.ptdashboard_videoCallDisabledWithoutProvider;
       return;
     }
 
@@ -610,7 +612,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
     _providerVideoCallsEnabled = enabled;
     _providerCallPolicyMessage = enabled
         ? null
-        : 'Your provider has disabled patient-initiated video calls.';
+        : t.ptdashboard_videoCallDisabledByProvider;
   }
 
   int? _parseMoodScore(dynamic value) {
@@ -686,10 +688,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
     List<AlertNotification> existing,
     double? averageMood,
   ) {
+    final t = AppLocalizations.of(context)!;
     final next = existing
         .where(
-          (alert) => !(alert.type == AlertType.important &&
-              alert.message == _lowMoodAlertMessage),
+          (alert) =>
+              !(alert.type == AlertType.important &&
+                  alert.message == t.ptdashboard_moodScoreLow),
         )
         .toList();
 
@@ -698,7 +702,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
         0,
         AlertNotification(
           type: AlertType.important,
-          message: _lowMoodAlertMessage,
+          message: t.ptdashboard_moodScoreLow,
         ),
       );
     }
@@ -711,13 +715,15 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   bool _isPendingMedicationAlert(AlertNotification alert) {
+    final t = AppLocalizations.of(context)!;
     return alert.type == AlertType.reminder &&
-        alert.message == _pendingMedicationAlertMessage;
+        alert.message == t.ptdashboard_medicationReminders;
   }
 
   String _alertId(AlertNotification alert) {
+    final t = AppLocalizations.of(context)!;
     if (_isPendingMedicationAlert(alert)) {
-      return _pendingMedicationAlertId;
+      return t.ptdashboard_medPendingReminder;
     }
     return '${alert.type.name}:${alert.message}';
   }
@@ -726,18 +732,20 @@ class _PatientDashboardState extends State<PatientDashboard> {
     List<AlertNotification> existing, {
     required bool hasPendingUntaken,
   }) {
-    final next =
-        existing.where((alert) => !_isPendingMedicationAlert(alert)).toList();
+    final t = AppLocalizations.of(context)!;
+    final next = existing
+        .where((alert) => !_isPendingMedicationAlert(alert))
+        .toList();
 
     if (!hasPendingUntaken) {
-      dismissedAlertIds.remove(_pendingMedicationAlertId);
+      dismissedAlertIds.remove(t.ptdashboard_medPendingReminder);
       return next;
     }
 
     next.add(
       AlertNotification(
         type: AlertType.reminder,
-        message: _pendingMedicationAlertMessage,
+        message: t.ptdashboard_medicationReminders,
       ),
     );
     return next;
@@ -872,13 +880,14 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
   /// Handle medication action
   Future<void> _handleMedicationAction(int medicationId, bool taken) async {
+    final t = AppLocalizations.of(context)!;
     final user = Provider.of<UserProvider>(context, listen: false).user;
     final patientId = user?.patientId;
     if (patientId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Unable to update medication right now'),
+            content: Text(t.ptdashboard_unableToUpdateMeds),
             backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 2),
           ),
@@ -923,28 +932,28 @@ class _PatientDashboardState extends State<PatientDashboard> {
           snackBar = SnackBar(
             content: Text(
               taken
-                  ? 'Medication taken update queued for sync'
-                  : 'Medication missed update queued for sync',
+                  ? t.ptdashboard_medsTakenUpdateQueued
+                  : t.ptdashboard_medsMissedUpdateQueued,
             ),
             backgroundColor: snackBarTheme.colorScheme.tertiary,
             duration: const Duration(seconds: 2),
           );
         } else if (taken) {
-          snackBar = const SnackBar(
-            content: Text('Medication marked as taken until next dose'),
+          snackBar = SnackBar(
+            content: Text(t.ptdashboard_medsMarkedTaken),
             backgroundColor: AppTheme.success,
             duration: Duration(seconds: 2),
           );
         } else {
           snackBar = SnackBar(
-            content: const Text('Medication marked as missed'),
+            content: Text(t.ptdashboard_medsMarkedMissed),
             backgroundColor: snackBarTheme.colorScheme.tertiary,
             duration: const Duration(seconds: 2),
           );
         }
       } else {
         snackBar = SnackBar(
-          content: const Text('Unable to update medication status'),
+          content: Text(t.ptdashboard_unableToUpdateMedStatus),
           backgroundColor: snackBarTheme.colorScheme.error,
           duration: const Duration(seconds: 2),
         );
@@ -958,6 +967,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
   /// Handle contacting provider
   void _handleContactProvider() {
+    final t = AppLocalizations.of(context)!;
     // Show contact options
     showModalBottomSheet(
       context: context,
@@ -969,14 +979,14 @@ class _PatientDashboardState extends State<PatientDashboard> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Contact Provider',
+            Text(
+              t.pcpwidget_contactProvider,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
             ListTile(
               leading: const Icon(Icons.phone),
-              title: const Text('Call'),
+              title: Text(t.ptdashboard_call),
               subtitle: Text(primaryCareProvider?['phone'] ?? ''),
               onTap: () {
                 Navigator.pop(context);
@@ -988,7 +998,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
             ),
             ListTile(
               leading: const Icon(Icons.email),
-              title: const Text('Email'),
+              title: Text(t.resetpassword_emailTitle),
               subtitle: Text(primaryCareProvider?['email'] ?? ''),
               onTap: () async {
                 Navigator.pop(context);
@@ -998,9 +1008,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     scheme: 'mailto',
                     path: email,
                     queryParameters: {
-                      'subject': 'Patient Inquiry',
+                      'subject': t.ptdashboard_emailSubject,
                       'body':
-                          'Hello Dr. ${primaryCareProvider?['name']?.split(' ')[1]},\n\n',
+                          '${t.ptdashboard_emailBody} ${primaryCareProvider?['name']?.split(' ')[1]},\n\n',
                     },
                   );
                   if (await canLaunchUrl(uri)) {
@@ -1011,44 +1021,42 @@ class _PatientDashboardState extends State<PatientDashboard> {
             ),
             ListTile(
               leading: const Icon(Icons.video_call),
-              title: const Text('Video Call'),
+              title: Text(t.ptdashboard_videoCall),
               subtitle: Text(
                 _providerVideoCallsEnabled
-                    ? 'Start a video call with your provider'
+                    ? t.ptdashboard_startVideoCallProvider
                     : (_providerCallPolicyMessage ??
-                        'Video call disabled by caregiver'),
+                          t.ptdashboard_disabledVideoCallProvider),
               ),
               enabled: _providerVideoCallsEnabled,
               onTap: _providerVideoCallsEnabled
                   ? () async {
                       Navigator.pop(context);
 
-                      if (primaryCareProvider == null) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Provider information is unavailable.'),
-                          ),
-                        );
-                        return;
-                      }
+                if (primaryCareProvider == null) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text(t.ptdashboard_providerInfoUnavailable),
+                    ),
+                  );
+                  return;
+                }
 
                       final user = Provider.of<UserProvider>(
                         this.context,
                         listen: false,
                       ).user;
 
-                      if (user == null) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Please log in again to place a call.'),
-                          ),
-                        );
-                        return;
-                      }
+                if (user == null) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text(t.ptdashboard_notLoggedInCall),
+                    ),
+                  );
+                  return;
+                }
 
                       final targetCaregiver = <String, dynamic>{
                         ...?primaryCareProvider,
@@ -1102,7 +1110,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                         SnackBar(
                           content: Text(
                             _providerCallPolicyMessage ??
-                                'Video calling is currently disabled.',
+                                t.ptdashboard_videoCallDisabled,
                           ),
                         ),
                       );
@@ -1121,6 +1129,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
@@ -1180,7 +1189,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Error Loading Dashboard',
+                        t.ptdashboard_errorLoadDash,
                         style: theme.textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
@@ -1199,7 +1208,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
+                        label: Text(t.ptdashboard_retryButton),
                         onPressed: _loadDashboardData,
                       ),
                     ],
@@ -1413,7 +1422,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                                 // SOS Emergency Button
                                 ElevatedButton.icon(
                                   icon: const Icon(Icons.sos),
-                                  label: const Text('SOS Emergency'),
+                                  label: Text(t.ptdashboard_sosEmergency),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: theme.colorScheme.error,
                                     foregroundColor: theme.colorScheme.onError,
@@ -1433,7 +1442,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                                 // Send SMS Notification Button
                                 OutlinedButton.icon(
                                   icon: const Icon(Icons.sms),
-                                  label: const Text('Send SMS to Caregiver'),
+                                  label: Text(t.ptdashboard_sosSmsToCaregiver),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: theme.colorScheme.primary,
                                     side: BorderSide(
@@ -1462,8 +1471,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
                                         SnackBar(
-                                          content: const Text(
-                                            'No caregiver with phone number found.',
+                                          content: Text(
+                                            t.ptdashboard_noCaregiverPhone,
                                           ),
                                           backgroundColor:
                                               theme.colorScheme.error,
@@ -1528,6 +1537,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
     Map<String, dynamic> caregiver,
     dynamic currentUser,
   ) {
+    final t = AppLocalizations.of(context)!;
     final TextEditingController messageController = TextEditingController();
     final String name = '${caregiver['firstName']} ${caregiver['lastName']}';
 
@@ -1535,15 +1545,15 @@ class _PatientDashboardState extends State<PatientDashboard> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Send message to $name'),
+          title: Text('${t.ptdashboard_sendMessageTo} $name'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: messageController,
-                decoration: const InputDecoration(
-                  labelText: 'Message',
-                  hintText: 'Write your message here...',
+                decoration: InputDecoration(
+                  labelText: t.ptdashboard_message,
+                  hintText: '${t.ptdashboard_messageLabel}...',
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
@@ -1553,7 +1563,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(t.cancel),
             ),
             ElevatedButton(
               onPressed: () {
@@ -1565,13 +1575,13 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 );
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(SnackBar(content: Text('SMS sent to $name')));
+                ).showSnackBar(SnackBar(content: Text('${t.ptdashboard_smsSent} $name')));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).primaryColor,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
-              child: const Text('Send'),
+              child: Text(t.ptdashboard_sendButton),
             ),
           ],
         );
@@ -1580,6 +1590,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   Widget _buildUpcomingEvvSection(ThemeData theme) {
+    final t = AppLocalizations.of(context)!;
     if (_loadingEvv) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1598,7 +1609,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
               Icon(Icons.event_available, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
               Text(
-                'Upcoming EVV Appointments',
+                t.ptdashboard_upcomingEVV,
                 style: theme.textTheme.titleMedium,
               ),
               const Spacer(),
@@ -1610,12 +1621,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
           ),
           const SizedBox(height: 8),
           if (_upcomingEvvAppointments.isEmpty)
-            const Text('No upcoming appointments.')
+            Text(t.ptdashboard_noUpcomingEVV)
           else
             ..._upcomingEvvAppointments.take(5).map((v) {
               final when =
                   DateTime.tryParse(v['scheduledTime'] ?? '') ?? DateTime.now();
-              final service = v['serviceType'] ?? 'Service';
+              final service = v['serviceType'] ?? t.ptdashboard_service;
               return ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -1635,6 +1646,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
   Widget _buildPastEvvSection(ThemeData theme) {
+    final t = AppLocalizations.of(context)!;
     if (_loadingEvv) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -1650,12 +1662,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
             children: [
               Icon(Icons.history, color: theme.colorScheme.tertiary),
               const SizedBox(width: 8),
-              Text('Past EVV Visits', style: theme.textTheme.titleMedium),
+              Text(t.ptdashboard_pastEVVs, style: theme.textTheme.titleMedium),
             ],
           ),
           const SizedBox(height: 8),
           if (_pastEvvVisits.isEmpty)
-            const Text('No past visits found.')
+            Text(t.ptdashboard_NoPastEVVs)
           else
             ..._pastEvvVisits.take(10).map((r) {
               final date = r.dateOfService;

@@ -1,6 +1,7 @@
 package com.careconnect.service.ai.indexing.chunker;
 
 import com.careconnect.service.ai.indexing.IndexingChunkDraft;
+import com.careconnect.service.ai.indexing.MedicationNameNormalizer;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -130,6 +131,14 @@ public class SummaryChunker {
                 caregiverVisibility,
                 summarizationEngine);
 
+        chunkIndex = appendMedicationTimelineEvents(
+                drafts,
+                root.path("careInstructions"),
+                chunkIndex,
+                contentHash,
+                caregiverVisibility,
+                summarizationEngine);
+
         chunkIndex = appendArrayItems(
                 drafts,
                 root.path("conditions"),
@@ -209,6 +218,91 @@ public class SummaryChunker {
         return chunkIndex;
     }
 
+    /**
+     * FR-AI-11 / Task 4.5 — explode medication careInstructions into derived timeline events.
+     */
+    private int appendMedicationTimelineEvents(
+            final List<IndexingChunkDraft> drafts,
+            final JsonNode array,
+            int chunkIndex,
+            final String contentHash,
+            final String caregiverVisibility,
+            final String summarizationEngine) {
+        if (array == null || !array.isArray()) {
+            return chunkIndex;
+        }
+        for (final JsonNode item : array) {
+            if (item == null || item.isNull()) {
+                continue;
+            }
+            final String type = textOrNull(item, "type");
+            if (type == null || !"medication".equalsIgnoreCase(type.trim())) {
+                continue;
+            }
+            final String medicationName = firstNonBlank(
+                    textOrNull(item, "medicationName"),
+                    textOrNull(item, "name"),
+                    textOrNull(item, "text"),
+                    textOrNull(item, "description"));
+            if (medicationName == null || medicationName.isBlank()) {
+                continue;
+            }
+            final String status = firstNonBlank(textOrNull(item, "status"), "unknown");
+            final String effectiveDate = firstNonBlank(
+                    textOrNull(item, "effectiveDate"),
+                    textOrNull(item, "date"));
+            final String doseFrom = textOrNull(item, "doseFrom");
+            final String doseTo = textOrNull(item, "doseTo");
+            final String normalized = MedicationNameNormalizer.normalize(medicationName);
+            final String chunkText = buildMedicationTimelineText(
+                    medicationName, status, effectiveDate, doseFrom, doseTo);
+            final Map<String, Object> extra = new LinkedHashMap<>();
+            extra.put("section", "medication_timeline");
+            putIfPresent(extra, "itemId", textOrNull(item, "itemId"));
+            putIfPresent(extra, "sourceTurnId", textOrNull(item, "sourceTurnId"));
+            putIfPresent(extra, "type", "medication");
+            putIfPresent(extra, "eventType", status);
+            putIfPresent(extra, "status", status);
+            putIfPresent(extra, "medicationName", medicationName.trim());
+            putIfPresent(extra, "medicationNameNormalized", normalized);
+            putIfPresent(extra, "effectiveDate", effectiveDate);
+            putIfPresent(extra, "doseFrom", doseFrom);
+            putIfPresent(extra, "doseTo", doseTo);
+            putIfPresent(extra, "caregiverVisibility", caregiverVisibility);
+            putConfidenceIfValid(extra, item.path("confidence"));
+            drafts.add(draft(
+                    RetrievalRecordType.MEDICATION_TIMELINE_EVENT,
+                    chunkText,
+                    chunkIndex++,
+                    contentHash,
+                    caregiverVisibility,
+                    summarizationEngine,
+                    extra));
+        }
+        return chunkIndex;
+    }
+
+    private static String buildMedicationTimelineText(
+            final String medicationName,
+            final String status,
+            final String effectiveDate,
+            final String doseFrom,
+            final String doseTo) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("Medication ").append(status == null ? "event" : status.trim())
+                .append(": ").append(medicationName.trim());
+        if (effectiveDate != null && !effectiveDate.isBlank()) {
+            sb.append(" effective ").append(effectiveDate.trim());
+        }
+        if (doseFrom != null && !doseFrom.isBlank()) {
+            sb.append("; from ").append(doseFrom.trim());
+        }
+        if (doseTo != null && !doseTo.isBlank()) {
+            sb.append(" to ").append(doseTo.trim());
+        }
+        return sb.toString();
+    }
+
     private int appendAppointments(
             final List<IndexingChunkDraft> drafts,
             final JsonNode array,
@@ -262,6 +356,9 @@ public class SummaryChunker {
         }
         if (extra != null) {
             metadata.putAll(extra);
+        }
+        if (caregiverVisibility != null && !caregiverVisibility.isBlank()) {
+            metadata.putIfAbsent("caregiverVisibility", caregiverVisibility);
         }
         return new IndexingChunkDraft(recordType, chunkText, metadata, caregiverVisibility);
     }

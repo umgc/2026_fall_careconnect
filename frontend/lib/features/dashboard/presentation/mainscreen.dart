@@ -1,3 +1,5 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
+
 import '../../dashboard/presentation/sosscreen.dart';
 import 'package:flutter/material.dart';
 import 'cancelscreen.dart';
@@ -23,6 +25,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   void _showEmergencyDialog() {
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth > 600;
+    final t = AppLocalizations.of(context)!;
 
     showDialog(
       context: context,
@@ -41,7 +44,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  "Emergency SOS",
+                  t.mainscreen_emergencySOS,
                   style: TextStyle(
                     color: AppTheme.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -56,7 +59,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
         content: SizedBox(
           width: isLargeScreen ? 400 : 300,
           child: Text(
-            "Are you sure you want to send an alert to your caregiver?\nThey will be notified of your location.",
+            t.mainscreen_areYouSure,
             style: TextStyle(
               fontSize: isLargeScreen ? 16 : 14,
               color: AppTheme.textPrimary,
@@ -74,7 +77,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               );
             },
             style: AppTheme.textButtonStyle,
-            child: const Text("Cancel"),
+            child: Text(t.cancel),
           ),
           TextButton(
             onPressed: () {
@@ -87,8 +90,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
             style: AppTheme.textButtonStyle.copyWith(
               foregroundColor: const WidgetStatePropertyAll(AppTheme.error),
             ),
-            child: const Text(
-              "Yes, Send SOS",
+            child: Text(
+              t.mainscreen_sendSOS,
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -102,6 +105,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth > 600;
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
@@ -126,7 +130,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                 ),
                 SizedBox(height: isLargeScreen ? 32 : 16),
                 Text(
-                  "Emergency screen loaded",
+                  t.mainscreen_sosLoaded,
                   style: isLargeScreen
                       ? theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
@@ -140,7 +144,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                 ),
                 SizedBox(height: isLargeScreen ? 16 : 8),
                 Text(
-                  "This screen will automatically show the Emergency SOS dialog.",
+                  t.mainscreen_sosAuto,
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: AppTheme.textSecondary,
                   ),

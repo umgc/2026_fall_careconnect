@@ -5,6 +5,7 @@
 // _isLoading starts true -- spinner shown immediately.
 // After the API call fails (no real backend), _isLoading becomes false and empty state shows.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +27,9 @@ Widget _wrap({String role = 'PATIENT', int id = 1}) {
     routes: {
       '/login': (_) => const Scaffold(body: Text('Login Page')),
     },
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const FileManagementPage(),
@@ -40,6 +44,9 @@ Widget _wrapNullUser() {
     routes: {
       '/login': (_) => const Scaffold(body: Text('Login Page')),
     },
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const FileManagementPage(),
@@ -1979,6 +1986,9 @@ void main() {
     testWidgets('renders with all categories', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: const FileCategoryDropdown(),
           ),
@@ -1993,6 +2003,9 @@ void main() {
     testWidgets('renders with allowed categories subset', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: FileCategoryDropdown(
               allowedCategories: [
@@ -2011,6 +2024,9 @@ void main() {
     testWidgets('renders with empty list (falls back to all categories)', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: const FileCategoryDropdown(
               allowedCategories: [],
@@ -2027,6 +2043,9 @@ void main() {
     testWidgets('can open dropdown and see items', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: FileCategoryDropdown(
               allowedCategories: [

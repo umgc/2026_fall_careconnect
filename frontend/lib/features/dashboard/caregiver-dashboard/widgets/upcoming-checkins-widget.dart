@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -76,13 +77,17 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
   bool _loading = true;
   String? _error;
 
+  bool _initialized = false;
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
     _fetchVisits();
   }
 
   Future<void> _fetchVisits() async {
+    final t = AppLocalizations.of(context)!;
     setState(() {
       _loading = true;
       _error = null;
@@ -94,7 +99,7 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
 
       if (caregiverId == null) {
         setState(() {
-          _error = 'No caregiver session found.';
+          _error = t.upcomingcheckinwidget_missingCaregiverSession;
           _loading = false;
         });
         return;
@@ -117,32 +122,34 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
         });
       } else {
         setState(() {
-          _error = 'Failed to load visits (${response.statusCode}).';
+          _error = '${t.upcomingcheckinwidget_failedToLoadVisits} (${response.statusCode}).';
           _loading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _error = 'Could not load upcoming check-ins.';
+        _error = t.upcomingcheckinwidget_failedToLoadCheckIns;
         _loading = false;
       });
     }
   }
 
   String _formatDate(DateTime dt) {
+    final t = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final visitDay = DateTime(dt.year, dt.month, dt.day);
     final diff = visitDay.difference(today).inDays;
 
     final timeLabel = DateFormat('h:mm a').format(dt);
-    if (diff == 0) return 'Today at $timeLabel';
-    if (diff == 1) return 'Tomorrow at $timeLabel';
-    return '${DateFormat('MMM d').format(dt)} at $timeLabel';
+    if (diff == 0) return '${t.upcomingcheckinwidget_todayAt} $timeLabel';
+    if (diff == 1) return '${t.upcomingcheckinwidget_tomorrowAt} $timeLabel';
+    return '${DateFormat('MMM d').format(dt)} ${t.upcomingcheckinwidget_at} $timeLabel';
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -165,7 +172,7 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
               Icon(Icons.calendar_today, color: Colors.blue[600], size: 20),
               const SizedBox(width: 8),
               Text(
-                'Upcoming Check-Ins',
+                t.upcomingcheckinwidget_upcomingCheckInTitle,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -180,7 +187,7 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
           else if (_error != null || _visits.isEmpty)
             Center(
               child: Text(
-                _error ?? 'No upcoming check-ins.',
+                _error ?? t.upcomingcheckinwidget_noCheckIns,
                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
             )
@@ -195,8 +202,8 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
           Center(
             child: TextButton(
               onPressed: () => context.push('/tasks'),
-              child: const Text(
-                'View All Patients',
+              child: Text(
+                t.upcomingcheckinwidget_viewAllPatients,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
@@ -212,13 +219,13 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
                 ),
                 elevation: 2,
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.access_time, size: 20),
                   SizedBox(width: 8),
                   Text(
-                    'Start EV Session',
+                    t.upcomingcheckinwidget_startEVSession,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -239,6 +246,7 @@ class _PatientCheckInItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -263,7 +271,7 @@ class _PatientCheckInItem extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(onPressed: () {}, child: const Text('View')),
+          TextButton(onPressed: () {}, child: Text(t.upcomingcheckinwidget_view)),
         ],
       ),
     );

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/profile_service.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
@@ -71,7 +72,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
   Future<void> _unlinkAlexaAccount() async {
     setState(() => isLoading = true);
     try {
-      final result = await AuthService.unlinkAlexaAccount();
+      final result = await AuthService.unlinkAlexaAccount(AppLocalizations.of(context)!);
 
       if (result['isSuccess'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(

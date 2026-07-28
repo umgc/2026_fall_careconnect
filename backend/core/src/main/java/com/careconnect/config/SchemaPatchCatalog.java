@@ -48,6 +48,15 @@ final class SchemaPatchCatalog {
                     "2607192000-summary-replay-quarantine-reason",
                     "db/schema-patches/2607192000_summary_replay_quarantine_reason.sql"),
             new SchemaPatchLedger.Patch(
+                    "2607211800-ai-held-item",
+                    "db/schema-patches/2607211800_create_ai_held_item.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607231600-ai-ask-audit",
+                    "db/schema-patches/2607231600_create_ai_ask_audit.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607232100-visit-summaries-ask-confirmation",
+                    "db/schema-patches/2607232100_visit_summaries_and_ask_confirmation.sql"),
+            new SchemaPatchLedger.Patch(
                     "2607271600-wearable-metric-allow-steps",
                     "db/schema-patches/2607271600_wearable_metric_allow_steps.sql"));
 

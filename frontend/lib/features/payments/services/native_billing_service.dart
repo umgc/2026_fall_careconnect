@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -14,6 +15,7 @@ class NativeBillingService {
   final int userId;
   final void Function()? onPurchaseSuccess;
   final void Function(String error)? onPurchaseError;
+  final AppLocalizations t;
 
   GooglePlayPurchaseDetails? _activePurchase;
 
@@ -21,6 +23,7 @@ class NativeBillingService {
     required this.userId,
     this.onPurchaseSuccess,
     this.onPurchaseError,
+    required this.t,
   });
 
   void init() {
@@ -38,19 +41,19 @@ class NativeBillingService {
 
   Future<void> buySubscription(String productId, {required int userId}) async {
     final available = await _iap.isAvailable();
-    if (!available) throw Exception('In-app purchases not available');
+    if (!available) throw Exception(t.billservice_inAppUnavailable);
 
     final ProductDetailsResponse response =
         await _iap.queryProductDetails({productId}.toSet());
     if (response.notFoundIDs.isNotEmpty) {
-      throw Exception('Product not found: $productId');
+      throw Exception('${t.billservice_productNotFound}: $productId');
     }
 
     final product = response.productDetails.first;
 
     if (product is GooglePlayProductDetails) {
       final offerToken = product.offerToken;
-      if (offerToken == null) throw Exception('No offer token found for $productId');
+      if (offerToken == null) throw Exception('${t.billservice_noOfferToken} $productId');
 
       GooglePlayPurchaseParam googleParam;
 
@@ -91,10 +94,10 @@ class NativeBillingService {
           }
           onPurchaseSuccess?.call();
         } else if (purchase.status == PurchaseStatus.error) {
-          onPurchaseError?.call(purchase.error?.message ?? 'Purchase failed');
+          onPurchaseError?.call(purchase.error?.message ?? t.nativebilling_purchaseFailed);
         }
       } catch (e) {
-        onPurchaseError?.call('Verify failed: $e');
+        onPurchaseError?.call('${t.billservice_verifyFailed}: $e');
       }
     }
   }
@@ -123,7 +126,7 @@ class NativeBillingService {
         await http.post(uri, headers: headers, body: jsonEncode(body));
 
     if (resp.statusCode != 200) {
-      throw Exception('Payment processing failed: ${resp.body}');
+      throw Exception('${t.billservice_paymentProcessFailed}: ${resp.body}');
     }
   }
 }

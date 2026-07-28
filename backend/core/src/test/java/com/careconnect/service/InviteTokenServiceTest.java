@@ -65,9 +65,12 @@ class InviteTokenServiceTest {
         patientUser.setEmail("patient@test.com");
         patientUser.setRole(Role.PATIENT);
 
+        creator.setRole(Role.CAREGIVER);
+
         link = new FamilyMemberLink();
         link.setId(5L);
         link.setPatientUser(patientUser);
+        link.setGrantedBy(creator);
         link.setStatus(FamilyMemberLink.LinkStatus.ACTIVE);
         link.setLinkType(FamilyMemberLink.LinkType.PERMANENT);
     }
@@ -92,7 +95,7 @@ class InviteTokenServiceTest {
     @DisplayName("createInvite: happy path returns raw token + share URL")
     void createInvite_happyPath() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         when(tokenRepository.saveAndFlush(any(InviteToken.class))).thenAnswer(inv -> {
             InviteToken t = inv.getArgument(0);
@@ -123,15 +126,27 @@ class InviteTokenServiceTest {
     }
 
     @Test
-    @DisplayName("createInvite: active token exists -> 409")
-    void createInvite_conflictActiveToken() {
+    @DisplayName("createInvite: existing pending invite is rotated and replaced")
+    void createInvite_rotatesExistingPendingToken() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(true);
+        InviteToken prior = pendingToken();
+        prior.setId(111L);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.of(prior));
+        when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
+        when(tokenRepository.saveAndFlush(any(InviteToken.class))).thenAnswer(inv -> {
+            InviteToken t = inv.getArgument(0);
+            t.setId(42L);
+            t.setCreatedAt(LocalDateTime.now());
+            return t;
+        });
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.createInvite(5L, null, creator, "1.2.3.4"));
-        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
-        verify(tokenRepository, never()).save(any());
+        CreateInviteResponse response = service.createInvite(5L, null, creator, "1.2.3.4");
+
+        assertEquals(5L, response.linkId());
+        verify(tokenRepository).save(argThat(t ->
+                t.getId().equals(111L) && t.getStatus() == InviteToken.Status.REVOKED));
+        verify(auditService).record(eq(111L), eq("REVOKED"), eq(creator.getId()), any(), any());
+        verify(auditService).record(eq(42L), eq("CREATED"), eq(creator.getId()), any(), any());
     }
 
     @Test
@@ -139,6 +154,7 @@ class InviteTokenServiceTest {
     void createInvite_revokedLink() {
         link.setStatus(FamilyMemberLink.LinkStatus.REVOKED);
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
 
         AppException ex = assertThrows(AppException.class,
                 () -> service.createInvite(5L, null, creator, "1.2.3.4"));
@@ -149,7 +165,7 @@ class InviteTokenServiceTest {
     @DisplayName("createInvite: TTL capped at max")
     void createInvite_ttlCapped() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         ArgumentCaptor<InviteToken> captor = ArgumentCaptor.forClass(InviteToken.class);
         when(tokenRepository.saveAndFlush(captor.capture())).thenAnswer(inv -> {
@@ -167,7 +183,7 @@ class InviteTokenServiceTest {
     void createInvite_duplicatePendingConflict() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
         // Application-level check passes (the racing tx hasn't committed yet)...
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         // ...but the DB unique partial index rejects the second insert.
         when(tokenRepository.saveAndFlush(any(InviteToken.class)))
@@ -402,6 +418,7 @@ class InviteTokenServiceTest {
     void revokeInvite_happyPath() {
         InviteToken token = pendingToken();
         when(tokenRepository.findById(1L)).thenReturn(Optional.of(token));
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.revokeInvite(5L, 1L, new RevokeInviteRequest("Sent to wrong person"), creator, "1.2.3.4");
@@ -430,6 +447,7 @@ class InviteTokenServiceTest {
         InviteToken token = pendingToken();
         token.setStatus(InviteToken.Status.REVOKED);
         when(tokenRepository.findById(1L)).thenReturn(Optional.of(token));
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
 
         assertDoesNotThrow(() -> service.revokeInvite(5L, 1L, null, creator, "1.2.3.4"));
         verify(tokenRepository, never()).save(any());
