@@ -3709,7 +3709,7 @@ function SettingsContent({ mode, setMode, customSettings, setCustomSettings, the
 
         <SettingRow id="s-bt" label="Bold text" subtitle="Increase font weight for easier reading" checked={boldText} onChange={setBoldText} color={c} />
 
-        <SettingRow id="s-cf" label="Colour filter" subtitle="Applies a tint to reduce colour fatigue" checked={colorFilter} onChange={setColorFilter} color={c} />
+        <SettingRow id="s-cf" label="Color filter" subtitle="Applies a tint to reduce color fatigue" checked={colorFilter} onChange={setColorFilter} color={c} />
         {colorFilter && (
           <div className="mx-4 mb-2 -mt-1 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
             style={{ background: lb, border: `1px solid ${bc}` }}>
@@ -4555,7 +4555,7 @@ function SignInScreen({
   const notSetHint = (label: string) => (
     <div className="rounded-2xl px-4 py-3 text-center" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
       <p className="text-[13px] font-semibold text-[#92400E]">
-        No {label} set yet. Create a profile to set up PIN, password, and colour sequence.
+        No {label} set yet. Create a profile to set up PIN, password, and color sequence.
       </p>
     </div>
   );
@@ -4674,7 +4674,7 @@ function SignInScreen({
                 color: method === m ? "#0F172A" : "#9CA3AF",
                 boxShadow: method === m ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}>
-              {m === "pin" ? "PIN" : m === "password" ? "Password" : "Colour"}
+              {m === "pin" ? "PIN" : m === "password" ? "Password" : "Color"}
             </button>
           ))}
         </div>
@@ -4806,18 +4806,18 @@ function SignInScreen({
 
         {method === "color" && (
           <div className="flex flex-col items-center gap-4">
-            {CORRECT_SEQ.length < MIN_COLOR_SEQ_LENGTH ? notSetHint("colour sequence") : (
+            {CORRECT_SEQ.length < MIN_COLOR_SEQ_LENGTH ? notSetHint("color sequence") : (
               <>
                 <div className="text-center">
-                  <p className="text-[13px] font-semibold text-[#595959] mb-0.5">Tap your colour sequence</p>
+                  <p className="text-[13px] font-semibold text-[#595959] mb-0.5">Tap your color sequence</p>
                   <p className="text-[11px] text-[#9CA3AF]">
-                    Enter at least {MIN_COLOR_SEQ_LENGTH} colours in order ({colorSeq.length} selected)
+                    Enter at least {MIN_COLOR_SEQ_LENGTH} colors in order ({colorSeq.length} selected)
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 justify-center max-w-full">
                   {colorSeq.length === 0 ? (
-                    <p className="text-[12px] text-[#9CA3AF]">No colours selected yet</p>
+                    <p className="text-[12px] text-[#9CA3AF]">No colors selected yet</p>
                   ) : colorSeq.map((hex, i) => (
                     <div key={`${hex}-${i}`} className="w-9 h-9 rounded-full border-2 border-white shadow-sm"
                       style={{
@@ -4864,7 +4864,7 @@ function SignInScreen({
                   <button type="button" onClick={submitColor} disabled={locked || colorSeq.length < MIN_COLOR_SEQ_LENGTH || colorStatus !== "idle"}
                     className="flex-1 py-3 rounded-xl text-[13px] font-bold text-white disabled:opacity-40"
                     style={{ background: "#00A7C8" }}>
-                    Sign in with colours
+                    Sign in with colors
                   </button>
                 </div>
               </>
@@ -9291,7 +9291,7 @@ function ProfileWizard({
             {([
               { key: "password" as SignInMethod, label: "Password" },
               { key: "pin" as SignInMethod, label: "PIN" },
-              { key: "color" as SignInMethod, label: "Colour" },
+              { key: "color" as SignInMethod, label: "Color" },
             ]).map(m => (
               <button key={m.key} type="button" onClick={() => toggleAuthMethod(m.key)}
                 className="px-3 py-1.5 rounded-full text-[12px] font-bold border transition-all"
@@ -9346,7 +9346,7 @@ function ProfileWizard({
 
           {data.authMethods.color && <div className="flex flex-col gap-2">
             <label className="text-[12px] font-bold text-[#374151] uppercase tracking-wider">
-              Colour sequence (at least {MIN_COLOR_SEQ_LENGTH})
+              Color sequence (at least {MIN_COLOR_SEQ_LENGTH})
             </label>
             <p className="text-[11px] text-[#9CA3AF] -mt-1">
               {data.colorSeq.length} selected
@@ -9356,7 +9356,7 @@ function ProfileWizard({
             </p>
             <div className="flex flex-wrap gap-2 justify-center mb-1 min-h-[40px]">
               {data.colorSeq.length === 0 ? (
-                <span className="text-[12px] text-[#CBD5E1]">Tap colours below in order</span>
+                <span className="text-[12px] text-[#CBD5E1]">Tap colors below in order</span>
               ) : data.colorSeq.map((hex, i) => (
                 <div key={`${hex}-${i}`} className="w-9 h-9 rounded-full border-2 border-white shadow-sm"
                   style={{ background: hex, outline: hex.toUpperCase() === "#FFFFFF" ? "1px solid #CBD5E1" : undefined }}
@@ -9384,7 +9384,7 @@ function ProfileWizard({
             {data.colorSeq.length > 0 && (
               <button type="button" onClick={() => set("colorSeq", [])}
                 className="text-[12px] font-semibold text-[#9CA3AF] underline underline-offset-2 self-center">
-                Clear colour sequence
+                Clear color sequence
               </button>
             )}
           </div>}

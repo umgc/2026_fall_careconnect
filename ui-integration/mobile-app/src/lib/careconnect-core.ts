@@ -180,7 +180,7 @@ export function qrImageUrl(data: string, size = 200): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
 }
 
-/** Minimum length for a colour-sequence passcode (open-ended above this). */
+/** Minimum length for a color-sequence passcode (open-ended above this). */
 export const MIN_COLOR_SEQ_LENGTH = 6;
 
 /** Failed sign-in attempts before a temporary lockout. */

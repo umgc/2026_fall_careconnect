@@ -218,7 +218,7 @@ describe("auth helpers", () => {
     expect(clearSignInAttempts(state, 1_000 + 60_001)).toEqual(emptySignInAttemptState());
   });
 
-  it("exports a colour-sequence minimum of 6", () => {
+  it("exports a color-sequence minimum of 6", () => {
     expect(MIN_COLOR_SEQ_LENGTH).toBe(6);
   });
 

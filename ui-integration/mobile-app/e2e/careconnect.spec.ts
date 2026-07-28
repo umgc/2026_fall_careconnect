@@ -49,7 +49,7 @@ test.describe("CareConnect e2e", () => {
     });
   });
 
-  test("sign-in screen exposes PIN, Password, and Colour methods", async ({ page }) => {
+  test("sign-in screen exposes PIN, Password, and Color methods", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const signIn = page.getByRole("button", { name: /log in|sign in/i }).first();
     if (await signIn.isVisible().catch(() => false)) {
@@ -57,7 +57,7 @@ test.describe("CareConnect e2e", () => {
     }
     await expect(page.getByRole("button", { name: /^PIN$/i })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: /^Password$/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Colour$/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Color$/i })).toBeVisible();
   });
 
   test("sign-in does not offer Skip for now", async ({ page }) => {
