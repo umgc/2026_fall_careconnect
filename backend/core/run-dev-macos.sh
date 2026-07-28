@@ -116,14 +116,14 @@ else
     echo "✅ PostgreSQL container is already running"
 fi
 
-# Run Flyway migrations
-echo "🔄 Running database migrations..."
-./mvnw flyway:migrate -q   -Dflyway.url=jdbc:postgresql://localhost:5432/careconnect \
-                           -Dflyway.user=postgres \
-                           -Dflyway.password=changeme || {
-    echo "⚠️  Warning: Flyway migrations failed. Continuing with application startup..."
-    echo "You may need to run migrations manually later."
-}
+# Flyway disabled — schema is applied via SchemaPatchRunner + Hibernate ddl-auto=update at startup.
+# See application-dev.properties (spring.flyway.enabled=false).
+#./mvnw flyway:migrate -q   -Dflyway.url=jdbc:postgresql://localhost:5432/careconnect \
+#                           -Dflyway.user=postgres \
+#                           -Dflyway.password=changeme || {
+#    echo "⚠️  Warning: Flyway migrations failed. Continuing with application startup..."
+#    echo "You may need to run migrations manually later."
+#}
 
 echo "----------------------------------------"
 echo "📋 Development Configuration:"
