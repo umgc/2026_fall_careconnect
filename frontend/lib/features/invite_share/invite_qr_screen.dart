@@ -259,7 +259,9 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
             ),
             child: Row(
               children: [
-                Expanded(
+                // Flexible (not Expanded) so the copy icon sits beside the
+                // URL instead of being pushed to the far right of the row.
+                Flexible(
                   child: SelectableText(
                     inviteUrl,
                     style: theme.textTheme.bodySmall,
@@ -270,6 +272,12 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
                   tooltip: 'Copy link',
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () => _copyUrl(context),
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.only(left: 4),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                 ),
               ],
             ),
