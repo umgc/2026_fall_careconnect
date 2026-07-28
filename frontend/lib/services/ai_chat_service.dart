@@ -1,12 +1,803 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'api_service.dart';
 import '../config/env_constant.dart';
 
+enum AiAskDeliveryStatus { delivered, noRecords, withheld, held }
+
+const Set<String> _aiAskRecordTypes = {
+  'TRANSCRIPT_SEGMENT',
+  'CALL_SUMMARY',
+  'VISIT_SUMMARY',
+  'UPLOADED_DOCUMENT',
+  'CLINICAL_NOTE',
+  'USPS_MAIL',
+  'SUMMARY_ACTION_ITEM',
+  'SUMMARY_APPOINTMENT',
+  'SUMMARY_CARE_INSTRUCTION',
+  'SUMMARY_CONDITION',
+  'SUMMARY_SOAP',
+  'SUMMARY_CLINICAL_OBSERVATION',
+  'MEDICATION_TIMELINE_EVENT',
+  'MEDICATION',
+  'TASK',
+  'EVV_RECORD',
+  'VITAL_SIGN',
+};
+final RegExp _aiAskCitationIdPattern = RegExp(r'^C[1-9][0-9]*$');
+final RegExp _aiAskUuidPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+const Set<String> _aiAskRetryableErrorCodes = {
+  'TIMEOUT',
+  'NETWORK_ERROR',
+  'RATE_LIMITED',
+  'SERVICE_UNAVAILABLE',
+};
+
+bool _isAiAskUuid(Object? value) {
+  if (value is! String) return false;
+  return _aiAskUuidPattern.hasMatch(value);
+}
+
+String? _optionalUuid(Map<String, dynamic> json, String key) {
+  if (!json.containsKey(key) || json[key] == null) return null;
+  final value = json[key];
+  if (!_isAiAskUuid(value)) {
+    throw FormatException('Ask AI $key must be a UUID');
+  }
+  return value as String;
+}
+
+String _requiredUuid(Map<String, dynamic> json, String key) {
+  final value = _optionalUuid(json, key);
+  if (value == null) {
+    throw FormatException('Ask AI $key is required');
+  }
+  return value;
+}
+
+bool _requiredBool(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! bool) {
+    throw FormatException('Ask AI $key must be a boolean');
+  }
+  return value;
+}
+
+String _requiredNonEmptyString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Ask AI $key must be a non-empty string');
+  }
+  return value;
+}
+
+int _requiredInt(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is int) return value;
+  if (value is num && value == value.roundToDouble()) {
+    return value.toInt();
+  }
+  throw FormatException('Ask AI $key must be an integer');
+}
+
+class AiAskDisclaimer {
+  final String text;
+  final bool aiNoticeRequired;
+  final bool recordsBasedFraming;
+  final String locale;
+
+  const AiAskDisclaimer({
+    required this.text,
+    required this.aiNoticeRequired,
+    required this.recordsBasedFraming,
+    required this.locale,
+  });
+
+  factory AiAskDisclaimer.fromJson(Map<String, dynamic> json) =>
+      AiAskDisclaimer(
+        text: _requiredNonEmptyString(json, 'text'),
+        aiNoticeRequired: _requiredBool(json, 'aiNoticeRequired'),
+        recordsBasedFraming: _requiredBool(json, 'recordsBasedFraming'),
+        locale: _requiredNonEmptyString(json, 'locale'),
+      );
+}
+
+class AiAskEscalation {
+  final int tier;
+  final String reason;
+  final bool reviewRequired;
+
+  const AiAskEscalation(this.tier, this.reason, this.reviewRequired);
+
+  factory AiAskEscalation.fromJson(Map<String, dynamic> json) =>
+      AiAskEscalation(
+        _requiredInt(json, 'tier'),
+        _requiredNonEmptyString(json, 'reason'),
+        _requiredBool(json, 'requiresClinicianReview'),
+      );
+}
+
+class AiAskConfirmation {
+  final bool required;
+  final String? text;
+
+  const AiAskConfirmation(this.required, this.text);
+
+  AiAskConfirmation copyWith({bool? required, String? text}) =>
+      AiAskConfirmation(required ?? this.required, text ?? this.text);
+
+  factory AiAskConfirmation.fromJson(Map<String, dynamic> json) =>
+      AiAskConfirmation(
+        _requiredBool(json, 'promptConfirmWithProvider'),
+        () {
+          final message = json['message'];
+          if (message == null) return null;
+          if (message is! String) {
+            throw const FormatException(
+              'Ask AI confirmation.message must be a string',
+            );
+          }
+          return message;
+        }(),
+      );
+}
+
+class AiAskCitation {
+  final String citationId;
+  final String recordType;
+  final String? title;
+  final String excerpt;
+  final String? deepLink;
+
+  const AiAskCitation({
+    required this.citationId,
+    required this.recordType,
+    required this.excerpt,
+    this.title,
+    this.deepLink,
+  });
+
+  factory AiAskCitation.fromJson(Map<String, dynamic> json) {
+    final citationId = json['citationId'];
+    final recordType = json['recordType'];
+    final excerpt = json['excerpt'];
+    final title = json['title'];
+    final deepLink = json['deepLink'];
+    if (citationId is! String ||
+        recordType is! String ||
+        excerpt is! String ||
+        (title != null && title is! String) ||
+        (deepLink != null && deepLink is! String)) {
+      throw const FormatException('Ask AI citation has invalid field types');
+    }
+    return AiAskCitation(
+      citationId: citationId,
+      recordType: recordType,
+      title: title as String?,
+      excerpt: excerpt,
+      deepLink: deepLink as String?,
+    );
+  }
+}
+
+class AiAskError {
+  final String code;
+  final String message;
+  final List<String> details;
+
+  const AiAskError(this.code, this.message, [this.details = const []]);
+
+  factory AiAskError.fromJson(Map<String, dynamic> json) {
+    final code = json['code'];
+    final message = json['message'];
+    final details = json['details'];
+    if (code is! String ||
+        message is! String ||
+        (details != null && details is! List)) {
+      throw const FormatException('Ask AI error has invalid field types');
+    }
+    return AiAskError(
+      code,
+      message,
+      (details as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(growable: false),
+    );
+  }
+}
+
+/// Permanent HITL poll failure (auth / missing item). Do not keep retrying.
+class HitlPollHttpException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const HitlPollHttpException(this.statusCode, this.message);
+
+  bool get isPermanent =>
+      statusCode == 401 || statusCode == 403 || statusCode == 404;
+
+  @override
+  String toString() => message;
+}
+
+class HitlPollResult {
+  final String status;
+  final String deliveryStatus;
+  final String? message;
+  final String? answer;
+  final List<AiAskCitation> citations;
+  final AiAskDisclaimer? disclaimer;
+  final AiAskConfirmation? confirmation;
+
+  const HitlPollResult({
+    required this.status,
+    required this.deliveryStatus,
+    this.message,
+    this.answer,
+    this.citations = const [],
+    this.disclaimer,
+    this.confirmation,
+  });
+
+  factory HitlPollResult.fromJson(Map<String, dynamic> json) {
+    final status = json['status'];
+    final deliveryStatus = json['deliveryStatus'];
+    if (status is! String || status.trim().isEmpty) {
+      throw const FormatException('HITL status must be a non-empty string');
+    }
+    if (deliveryStatus is! String || deliveryStatus.trim().isEmpty) {
+      throw const FormatException(
+        'HITL deliveryStatus must be a non-empty string',
+      );
+    }
+    final message = json['message'];
+    if (message != null && message is! String) {
+      throw const FormatException('HITL message must be a string');
+    }
+    final answerRaw = json['answer'];
+    String? answer;
+    if (answerRaw == null) {
+      answer = null;
+    } else if (answerRaw is String) {
+      answer = answerRaw.trim().isEmpty ? null : answerRaw.trim();
+    } else if (answerRaw is Map<String, dynamic>) {
+      final text = answerRaw['text'];
+      if (text != null && text is! String) {
+        throw const FormatException('HITL answer.text must be a string');
+      }
+      final trimmed = (text as String?)?.trim();
+      answer = trimmed == null || trimmed.isEmpty ? null : trimmed;
+    } else {
+      throw const FormatException('HITL answer must be a string or object');
+    }
+
+    final citationsJson = json['citations'];
+    if (citationsJson != null && citationsJson is! List) {
+      throw const FormatException('HITL citations must be a list');
+    }
+    final citationListIsValid = citationsJson is List<dynamic> &&
+        citationsJson.every((item) => item is Map<String, dynamic>);
+    if (citationsJson is List && !citationListIsValid) {
+      throw const FormatException('HITL citations contain invalid entries');
+    }
+    final citations = citationListIsValid
+        ? citationsJson
+            .cast<Map<String, dynamic>>()
+            .map(AiAskCitation.fromJson)
+            .toList(growable: false)
+        : const <AiAskCitation>[];
+
+    final exposeAnswer = deliveryStatus == 'DELIVERED';
+    AiAskDisclaimer? disclaimer;
+    AiAskConfirmation? confirmation;
+    if (exposeAnswer) {
+      final disclaimerJson = json['disclaimer'];
+      if (disclaimerJson is! Map<String, dynamic>) {
+        throw const FormatException(
+          'HITL DELIVERED response requires disclaimer object',
+        );
+      }
+      disclaimer = AiAskDisclaimer.fromJson(disclaimerJson);
+      final confirmationJson = json['confirmation'];
+      if (confirmationJson is! Map<String, dynamic>) {
+        throw const FormatException(
+          'HITL DELIVERED response requires confirmation object',
+        );
+      }
+      confirmation = AiAskConfirmation.fromJson(confirmationJson);
+    }
+
+    return HitlPollResult(
+      status: status,
+      deliveryStatus: deliveryStatus,
+      message: message as String?,
+      answer: exposeAnswer ? answer : null,
+      citations: exposeAnswer ? citations : const [],
+      disclaimer: disclaimer,
+      confirmation: confirmation,
+    );
+  }
+}
+
+class AiAskResult {
+  final bool success;
+  final AiAskDeliveryStatus deliveryStatus;
+  final String? requestId;
+  final String? auditId;
+  final String? sessionId;
+  final String? conversationId;
+  final String? answer;
+  final String? message;
+  final String? heldItemId;
+  final String? pollUrl;
+  final List<AiAskCitation> citations;
+  final AiAskError? error;
+  final AiAskDisclaimer? disclaimer;
+  final AiAskEscalation? escalation;
+  final AiAskConfirmation? confirmation;
+  final String? retryInput;
+  final bool retryable;
+  final bool cancelled;
+
+  const AiAskResult({
+    required this.success,
+    required this.deliveryStatus,
+    this.requestId,
+    this.auditId,
+    this.sessionId,
+    this.conversationId,
+    this.answer,
+    this.message,
+    this.heldItemId,
+    this.pollUrl,
+    this.citations = const [],
+    this.error,
+    this.disclaimer,
+    this.escalation,
+    this.confirmation,
+    this.retryInput,
+    this.retryable = false,
+    this.cancelled = false,
+  });
+
+  factory AiAskResult.fromJson(
+    Map<String, dynamic> json, {
+    bool allowDelivered = true,
+  }) {
+    final statusRaw = json['deliveryStatus'];
+    if (statusRaw is! String) {
+      throw const FormatException('Ask AI deliveryStatus must be a string');
+    }
+    final status = switch (statusRaw) {
+      'DELIVERED' => AiAskDeliveryStatus.delivered,
+      'NO_RECORDS' => AiAskDeliveryStatus.noRecords,
+      'WITHHELD' => AiAskDeliveryStatus.withheld,
+      'HELD' => AiAskDeliveryStatus.held,
+      _ => throw FormatException(
+          'Ask AI deliveryStatus is unknown: $statusRaw',
+        ),
+    };
+
+    final held = json.containsKey('held') ? _requiredBool(json, 'held') : false;
+    final requestId = status == AiAskDeliveryStatus.delivered
+        ? _requiredUuid(json, 'requestId')
+        : _optionalUuid(json, 'requestId');
+    final sessionId = status == AiAskDeliveryStatus.delivered
+        ? _requiredUuid(json, 'sessionId')
+        : _optionalUuid(json, 'sessionId');
+    final conversationId = _optionalUuid(json, 'conversationId');
+    final auditId = _optionalUuid(json, 'auditId');
+    final heldItemId = status == AiAskDeliveryStatus.held
+        ? _requiredUuid(json, 'heldItemId')
+        : _optionalUuid(json, 'heldItemId');
+
+    final pollUrlRaw = json['pollUrl'];
+    if (pollUrlRaw != null && pollUrlRaw is! String) {
+      throw const FormatException('Ask AI pollUrl must be a string');
+    }
+    final pollUrl = pollUrlRaw as String?;
+
+    final answerJson = json['answer'];
+    if (answerJson != null && answerJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI answer must be an object');
+    }
+    final errorJson = json['error'];
+    if (errorJson != null && errorJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI error must be an object');
+    }
+    final disclaimerJson = json['disclaimer'];
+    if (disclaimerJson != null && disclaimerJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI disclaimer must be an object');
+    }
+    final escalationJson = json['escalation'];
+    if (escalationJson != null && escalationJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI escalation must be an object');
+    }
+    final confirmationJson = json['confirmation'];
+    if (confirmationJson != null && confirmationJson is! Map<String, dynamic>) {
+      throw const FormatException('Ask AI confirmation must be an object');
+    }
+
+    final answer = answerJson is Map<String, dynamic>
+        ? () {
+            final text = answerJson['text'];
+            if (text != null && text is! String) {
+              throw const FormatException(
+                  'Ask AI answer.text must be a string');
+            }
+            return (text as String?)?.trim();
+          }()
+        : null;
+
+    final citationsJson = json['citations'];
+    if (citationsJson != null && citationsJson is! List) {
+      throw const FormatException('Ask AI citations must be a list');
+    }
+    final citationListIsValid = citationsJson is List<dynamic> &&
+        citationsJson.every((item) => item is Map<String, dynamic>);
+    if (citationsJson is List && !citationListIsValid) {
+      throw const FormatException('Ask AI citations contain invalid entries');
+    }
+    final citations = citationListIsValid
+        ? citationsJson
+            .cast<Map<String, dynamic>>()
+            .map(AiAskCitation.fromJson)
+            .toList(growable: false)
+        : const <AiAskCitation>[];
+    final disclaimer = disclaimerJson is Map<String, dynamic>
+        ? AiAskDisclaimer.fromJson(disclaimerJson)
+        : null;
+    final escalation = escalationJson is Map<String, dynamic>
+        ? AiAskEscalation.fromJson(escalationJson)
+        : null;
+    final confirmation = confirmationJson is Map<String, dynamic>
+        ? AiAskConfirmation.fromJson(confirmationJson)
+        : null;
+    final citationIds =
+        citations.map((citation) => citation.citationId).toSet();
+    final deliveredCitationsValid = citationListIsValid &&
+        citationIds.length == citations.length &&
+        citations.every(
+          (citation) =>
+              _aiAskCitationIdPattern.hasMatch(citation.citationId) &&
+              _aiAskRecordTypes.contains(citation.recordType) &&
+              citation.excerpt.trim().isNotEmpty,
+        );
+
+    // held=true is expected for HELD (Tier-2 review); only block DELIVERED.
+    final deliveredContractValid = allowDelivered &&
+        json['success'] == true &&
+        !held &&
+        answer != null &&
+        answer.isNotEmpty &&
+        citations.isNotEmpty &&
+        deliveredCitationsValid &&
+        disclaimer != null &&
+        disclaimer.aiNoticeRequired &&
+        disclaimer.recordsBasedFraming &&
+        disclaimer.text.trim().isNotEmpty &&
+        escalation != null &&
+        escalation.tier == 1 &&
+        escalation.reviewRequired == false &&
+        confirmation != null &&
+        confirmation.required &&
+        confirmation.text?.trim().isNotEmpty == true;
+
+    if (status == AiAskDeliveryStatus.delivered && !deliveredContractValid) {
+      throw const FormatException(
+        'DELIVERED response violates the Ask AI safety contract',
+      );
+    }
+
+    // Never expose held or non-delivered answer content.
+    final exposeDeliveredContent =
+        status == AiAskDeliveryStatus.delivered && !held;
+    final message = json['message'];
+    if (message != null && message is! String) {
+      throw const FormatException('Ask AI message must be a string');
+    }
+
+    return AiAskResult(
+      success: json['success'] == true,
+      deliveryStatus: status,
+      requestId: requestId,
+      auditId: auditId,
+      sessionId: sessionId,
+      conversationId: conversationId,
+      answer: exposeDeliveredContent ? answer : null,
+      message: message as String?,
+      heldItemId: heldItemId,
+      pollUrl: pollUrl,
+      citations: exposeDeliveredContent ? citations : const [],
+      error: errorJson is Map<String, dynamic>
+          ? AiAskError.fromJson(errorJson)
+          : null,
+      disclaimer: exposeDeliveredContent ? disclaimer : null,
+      escalation: exposeDeliveredContent ? escalation : null,
+      confirmation: exposeDeliveredContent ? confirmation : null,
+    );
+  }
+}
+
 /// Service for AI chat communication through Spring Boot backend
 class AIChatService {
   static String get _baseUrl => '${getBackendBaseUrl()}/v1/api/ai-chat';
+
+  /// Records-grounded Ask AI client. Identity is supplied only by the JWT.
+  ///
+  /// Pass [abortTrigger] to cancel an in-flight request (see package:http
+  /// [AbortableRequest]). Completion of the future aborts the HTTP call.
+  static Future<AiAskResult> askRecords({
+    required String query,
+    required int patientId,
+    String? sessionId,
+    String? conversationId,
+    String inputModality = 'TEXT',
+    String locale = 'en-US',
+    List<String>? sourceTypes,
+    Duration timeout = const Duration(seconds: 20),
+    Future<void>? abortTrigger,
+  }) async {
+    final retryInput = query;
+    http.Client? client;
+    try {
+      if (sourceTypes != null &&
+          (sourceTypes.length > 16 ||
+              sourceTypes.any((type) => type.trim().isEmpty))) {
+        throw const FormatException('Invalid sourceTypes');
+      }
+      final modality = inputModality.trim().toUpperCase() == 'VOICE'
+          ? 'VOICE'
+          : 'TEXT';
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+
+      final request = http.AbortableRequest(
+        'POST',
+        Uri.parse('${getBackendBaseUrl()}/api/ai/ask'),
+        abortTrigger: abortTrigger,
+      );
+      request.headers.addAll(headers);
+      request.body = jsonEncode({
+        'query': query,
+        'patientId': patientId,
+        'inputModality': modality,
+        'locale': locale,
+        if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
+        if (conversationId != null && conversationId.isNotEmpty)
+          'conversationId': conversationId,
+        if (sourceTypes != null) 'sourceTypes': sourceTypes,
+      });
+
+      client = http.Client();
+      final sendFuture = client.send(request).timeout(timeout);
+      // Keep abort races from surfacing as unhandled late errors.
+      if (abortTrigger != null) {
+        unawaited(sendFuture.then<void>((_) {}, onError: (_) {}));
+      }
+      final streamed = abortTrigger == null
+          ? await sendFuture
+          : await Future.any<http.StreamedResponse>([
+              sendFuture,
+              abortTrigger.then((_) {
+                throw http.RequestAbortedException(request.url);
+              }),
+            ]);
+      final response =
+          await http.Response.fromStream(streamed).timeout(timeout);
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Ask AI response is not an object');
+      }
+
+      final statusCode = response.statusCode;
+      final retryableByStatus = statusCode == 429 || statusCode >= 500;
+      final payload = Map<String, dynamic>.from(decoded);
+      if (retryableByStatus) {
+        // Never accept DELIVERED content from retryable transport failures.
+        payload['success'] = false;
+        payload['deliveryStatus'] = 'WITHHELD';
+        payload.remove('answer');
+        payload.remove('citations');
+        payload.remove('disclaimer');
+        payload.remove('escalation');
+        payload.remove('confirmation');
+      }
+
+      final parsed = AiAskResult.fromJson(
+        payload,
+        allowDelivered:
+            !retryableByStatus && statusCode >= 200 && statusCode < 300,
+      );
+
+      final retryableByCode = parsed.error != null &&
+          _aiAskRetryableErrorCodes.contains(parsed.error!.code);
+      if (retryableByStatus || retryableByCode) {
+        return AiAskResult(
+          success: false,
+          deliveryStatus: AiAskDeliveryStatus.withheld,
+          requestId: parsed.requestId,
+          auditId: parsed.auditId,
+          sessionId: parsed.sessionId,
+          conversationId: parsed.conversationId,
+          error: parsed.error ??
+              AiAskError(
+                statusCode == 429 ? 'RATE_LIMITED' : 'SERVICE_UNAVAILABLE',
+                statusCode == 429
+                    ? 'Ask AI is rate limited. Please try again shortly.'
+                    : 'Ask AI is temporarily unavailable. Please try again.',
+              ),
+          retryInput: retryInput,
+          retryable: true,
+        );
+      }
+
+      return AiAskResult(
+        success: parsed.success,
+        deliveryStatus: parsed.deliveryStatus,
+        requestId: parsed.requestId,
+        auditId: parsed.auditId,
+        sessionId: parsed.sessionId,
+        conversationId: parsed.conversationId,
+        answer: parsed.answer,
+        message: parsed.message,
+        heldItemId: parsed.heldItemId,
+        pollUrl: parsed.pollUrl,
+        citations: parsed.citations,
+        error: parsed.error,
+        disclaimer: parsed.disclaimer,
+        escalation: parsed.escalation,
+        confirmation: parsed.confirmation,
+        retryInput: parsed.error != null ? retryInput : null,
+        retryable: false,
+      );
+    } on http.RequestAbortedException {
+      return const AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: AiAskError('CANCELLED', 'Ask AI request was cancelled.'),
+        cancelled: true,
+      );
+    } on FormatException {
+      return AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: const AiAskError(
+          'INVALID_RESPONSE',
+          'Ask AI returned an unexpected response. Please try again.',
+        ),
+        retryInput: retryInput,
+      );
+    } on TimeoutException {
+      return AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: const AiAskError(
+          'TIMEOUT',
+          'Ask AI took too long to respond. Please try again.',
+        ),
+        retryInput: retryInput,
+        retryable: true,
+      );
+    } on http.ClientException catch (error) {
+      if (error is http.RequestAbortedException) {
+        return const AiAskResult(
+          success: false,
+          deliveryStatus: AiAskDeliveryStatus.withheld,
+          error: AiAskError('CANCELLED', 'Ask AI request was cancelled.'),
+          cancelled: true,
+        );
+      }
+      return AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: const AiAskError(
+          'NETWORK_ERROR',
+          'Unable to connect to Ask AI. Please check your connection.',
+        ),
+        retryInput: retryInput,
+        retryable: true,
+      );
+    } catch (_) {
+      return AiAskResult(
+        success: false,
+        deliveryStatus: AiAskDeliveryStatus.withheld,
+        error: const AiAskError(
+          'REQUEST_FAILED',
+          'Ask AI could not complete the request. Please try again.',
+        ),
+        retryInput: retryInput,
+      );
+    } finally {
+      client?.close();
+    }
+  }
+
+  /// Persist an Ask AI confirm-with-provider decision (Task 6.6).
+  static Future<bool> submitConfirmation({
+    required String sessionId,
+    required int patientId,
+    String? requestId,
+    String? auditId,
+    required String decision,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .post(
+            Uri.parse('${getBackendBaseUrl()}/api/ai/ask/confirmation'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'patientId': patientId,
+              'decision': decision,
+              if (requestId != null && requestId.isNotEmpty)
+                'requestId': requestId,
+              if (auditId != null && auditId.isNotEmpty) 'auditId': auditId,
+            }),
+          )
+          .timeout(timeout);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      debugPrint('Ask AI confirmation submit failed: $e');
+      return false;
+    }
+  }
+
+  /// Poll Tier-2 HITL held-item status until a clinician releases or rejects it.
+  static Future<HitlPollResult> pollHitlStatus(
+    String heldItemId, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    if (!_isAiAskUuid(heldItemId)) {
+      throw const FormatException('HITL heldItemId must be a UUID');
+    }
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Accept'] = 'application/json';
+
+      final response = await http
+          .get(
+            Uri.parse(
+              '${getBackendBaseUrl()}/v1/api/ai/hitl/$heldItemId/status',
+            ),
+            headers: headers,
+          )
+          .timeout(timeout);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HitlPollHttpException(
+          response.statusCode,
+          'HITL status request failed with HTTP ${response.statusCode}',
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('HITL status response is not an object');
+      }
+      return HitlPollResult.fromJson(decoded);
+    } on HitlPollHttpException {
+      rethrow;
+    } on FormatException {
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    } on http.ClientException {
+      rethrow;
+    } catch (error) {
+      throw FormatException('HITL status request failed: $error');
+    }
+  }
 
   /// Send a chat message to the AI through the backend
   static Future<Map<String, dynamic>> sendMessage({
@@ -69,9 +860,11 @@ class AIChatService {
             'processingTimeMs': responseData['processingTimeMs'],
           };
         } else {
+          const safeMessage =
+              'The AI service could not complete your request. Please try again.';
           return {
             'success': false,
-            'errorMessage': responseData['errorMessage'] ?? responseData['error'] ?? 'Unknown error',
+            'errorMessage': safeMessage,
             'aiResponse': 'Sorry, I encountered an error. Please try again.',
           };
         }
@@ -79,102 +872,94 @@ class AIChatService {
         return {
           'success': false,
           'error': 'Authentication failed. Please log in again.',
-          'response': 'Your session has expired. Please log in again to continue chatting.',
-          'aiResponse': 'Your session has expired. Please log in again to continue chatting.',
+          'response':
+              'Your session has expired. Please log in again to continue chatting.',
+          'aiResponse':
+              'Your session has expired. Please log in again to continue chatting.',
         };
       } else if (response.statusCode == 403) {
         return {
           'success': false,
           'error': 'Access denied.',
           'response': 'You don\'t have permission to access this chat feature.',
-          'aiResponse': 'You don\'t have permission to access this chat feature.',
+          'aiResponse':
+              'You don\'t have permission to access this chat feature.',
         };
       } else if (response.statusCode == 429) {
         return {
           'success': false,
           'error': 'Rate limit exceeded.',
-          'response': 'You\'re sending messages too quickly. Please wait a moment and try again.',
-          'aiResponse': 'You\'re sending messages too quickly. Please wait a moment and try again.',
+          'response':
+              'You\'re sending messages too quickly. Please wait a moment and try again.',
+          'aiResponse':
+              'You\'re sending messages too quickly. Please wait a moment and try again.',
         };
       } else if (response.statusCode >= 500) {
-        final serverError = _extractServerErrorMessage(response.body);
-        final unavailableMessage = kDebugMode
-            ? 'The AI service is temporarily unavailable at $_baseUrl. Please verify BACKEND_URL and try again.'
-            : 'The AI service is temporarily unavailable. Please try again in a few minutes.';
+        const unavailableMessage =
+            'The AI service is temporarily unavailable. Please try again in a few minutes.';
+        if (kDebugMode) {
+          debugPrint('AI chat request failed with HTTP ${response.statusCode}');
+        }
         return {
           'success': false,
           'error': 'Server error: ${response.statusCode}',
-          'errorMessage': serverError,
-          'response': serverError ?? unavailableMessage,
-          'aiResponse': serverError ?? unavailableMessage,
+          'errorMessage': unavailableMessage,
+          'response': unavailableMessage,
+          'aiResponse': unavailableMessage,
         };
       } else {
-        final serverError = _extractServerErrorMessage(response.body);
+        const safeMessage =
+            'The AI request could not be completed. Please check your input and try again.';
+        if (kDebugMode) {
+          debugPrint(
+              'AI chat request rejected with HTTP ${response.statusCode}');
+        }
         return {
           'success': false,
           'error': 'Unexpected error: ${response.statusCode}',
-          'errorMessage': serverError,
-          'response': serverError ?? 'An unexpected error occurred. Please try again.',
-          'aiResponse': serverError ?? 'An unexpected error occurred. Please try again.',
+          'errorMessage': safeMessage,
+          'response': safeMessage,
+          'aiResponse': safeMessage,
         };
       }
-    } on http.ClientException catch (e) {
+    } on http.ClientException {
       return {
         'success': false,
-        'error': 'Network error: $e',
-        'response': 'Unable to connect to the AI service. Please check your internet connection and try again.',
-        'aiResponse': 'Unable to connect to the AI service. Please check your internet connection and try again.',
+        'error': 'Network error',
+        'response':
+            'Unable to connect to the AI service. Please check your internet connection and try again.',
+        'aiResponse':
+            'Unable to connect to the AI service. Please check your internet connection and try again.',
       };
-    } on FormatException catch (e) {
+    } on FormatException {
       return {
         'success': false,
-        'error': 'Invalid response format: $e',
-        'response': 'Received an unexpected response from the server. Please try again.',
-        'aiResponse': 'Received an unexpected response from the server. Please try again.',
+        'error': 'Invalid response format',
+        'response':
+            'Received an unexpected response from the server. Please try again.',
+        'aiResponse':
+            'Received an unexpected response from the server. Please try again.',
       };
-    } catch (e) {
+    } catch (_) {
       return {
         'success': false,
-        'error': 'Failed to send message: $e',
+        'error': 'Failed to send message',
         'response': 'Sorry, I encountered an error. Please try again later.',
         'aiResponse': 'Sorry, I encountered an error. Please try again later.',
       };
     }
   }
 
-  static String? _extractServerErrorMessage(String responseBody) {
-    try {
-      final parsed = jsonDecode(responseBody);
-      if (parsed is Map<String, dynamic>) {
-        final fromErrorMessage = parsed['errorMessage'];
-        if (fromErrorMessage is String && fromErrorMessage.trim().isNotEmpty) {
-          return fromErrorMessage;
-        }
-        final fromError = parsed['error'];
-        if (fromError is String && fromError.trim().isNotEmpty) {
-          return fromError;
-        }
-        final fromMessage = parsed['message'];
-        if (fromMessage is String && fromMessage.trim().isNotEmpty) {
-          return fromMessage;
-        }
-      }
-    } catch (_) {
-      // Ignore non-JSON error bodies.
-    }
-    return null;
-  }
-
   /// Clear a conversation from the backend
   static Future<void> clearConversation(String conversationId) async {
     try {
       final authHeaders = await ApiService.getAuthHeaders();
-      
+
       final response = await http.post(
         Uri.parse('$_baseUrl/conversation/$conversationId/deactivate'),
         headers: authHeaders,
       );
-      
+
       if (response.statusCode != 200) {
         throw Exception('Failed to clear conversation: ${response.statusCode}');
       }
@@ -196,7 +981,8 @@ class AIChatService {
         'userId': userId,
         if (conversationId != null) 'conversationId': conversationId,
         'limit': limit.toString(),
-        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(), // Prevent caching
+        'timestamp':
+            DateTime.now().millisecondsSinceEpoch.toString(), // Prevent caching
       };
 
       final uri = Uri.parse(
@@ -242,8 +1028,10 @@ class AIChatService {
           'Failed to start new conversation: ${response.statusCode}',
         );
       }
-    } catch (e) {
-      print('❌ Error starting new conversation: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to start AI conversation');
+      }
       return null;
     }
   }
@@ -270,8 +1058,10 @@ class AIChatService {
       } else {
         throw Exception('Failed to get conversations: ${response.statusCode}');
       }
-    } catch (e) {
-      print('❌ Error getting conversations: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to load AI conversations');
+      }
       return [];
     }
   }
@@ -289,8 +1079,10 @@ class AIChatService {
       );
 
       return response.statusCode == 200;
-    } catch (e) {
-      print('❌ Error deleting conversation: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to delete AI conversation');
+      }
       return false;
     }
   }
@@ -323,12 +1115,16 @@ class AIChatService {
         request.fields['conversationId'] = conversationId;
       }
 
-      print('🤖 Uploading file for AI analysis: $filePath');
+      if (kDebugMode) {
+        debugPrint('Uploading file for AI analysis');
+      }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      print('🤖 File analysis response status: ${response.statusCode}');
+      if (kDebugMode) {
+        debugPrint('File analysis response status: ${response.statusCode}');
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -336,8 +1132,10 @@ class AIChatService {
       } else {
         throw Exception('Failed to analyze file: ${response.statusCode}');
       }
-    } catch (e) {
-      print('❌ Error analyzing file: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to analyze file');
+      }
       return 'Sorry, I encountered an error analyzing the file. Please try again later.';
     }
   }
@@ -359,8 +1157,10 @@ class AIChatService {
         // Fallback to default if endpoint doesn't exist yet
         return 30;
       }
-    } catch (e) {
-      print('⚠️ Warning: Could not fetch retention period from backend: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('Unable to fetch AI chat retention period');
+      }
       // Return default retention period
       return 30;
     }

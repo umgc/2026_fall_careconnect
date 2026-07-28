@@ -5,6 +5,7 @@
 // Provider.of<UserProvider> is accessed only inside onPressed callbacks,
 // so render-only tests work with a plain MaterialApp wrapper.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +15,7 @@ import 'package:care_connect_app/providers/user_provider.dart';
 
 import '../../mock_user_provider.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+Widget _wrap(Widget child) => MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: child);
 
 Widget _wrapWithRouter({
   bool? isRegistration,
@@ -40,7 +41,7 @@ Widget _wrapWithRouter({
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router);
 }
 
 void main() {

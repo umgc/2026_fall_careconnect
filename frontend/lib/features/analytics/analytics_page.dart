@@ -12,8 +12,7 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/widgets/responsive_container.dart';
 import 'models/vital_model.dart';
 import 'models/dashboard_analytics_model.dart';
-import 'web_utils.dart'
-    if (dart.library.html) 'web_utils_web.dart'
+import 'web_utils.dart' if (dart.library.html) 'web_utils_web.dart'
     as web_utils;
 import '../../../widgets/ai_chat_improved.dart';
 
@@ -257,8 +256,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final fallbackFileName =
         'patient_${widget.patientId}_analytics_${selectedDays}days_$timestamp.$type';
     final contentDisposition = response.headers['content-disposition'];
-    final fileName =
-        _extractFileName(contentDisposition) ?? fallbackFileName;
+    final fileName = _extractFileName(contentDisposition) ?? fallbackFileName;
 
     if (!kIsWeb) {
       throw Exception('Export download is currently supported on web builds.');
@@ -334,15 +332,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       // Calculate averages from vitals data
       double avgHeartRate =
           vitals.map((v) => v.heartRate).reduce((a, b) => a + b) /
-          vitals.length;
+              vitals.length;
       double avgSpo2 =
           vitals.map((v) => v.spo2).reduce((a, b) => a + b) / vitals.length;
       double avgSystolic =
           vitals.map((v) => v.systolic.toDouble()).reduce((a, b) => a + b) /
-          vitals.length;
+              vitals.length;
       double avgDiastolic =
           vitals.map((v) => v.diastolic.toDouble()).reduce((a, b) => a + b) /
-          vitals.length;
+              vitals.length;
       double avgWeight =
           vitals.map((v) => v.weight).reduce((a, b) => a + b) / vitals.length;
 
@@ -861,9 +859,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       title,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: MediaQuery.of(context).size.width < 400
-                            ? 14
-                            : 16,
+                        fontSize:
+                            MediaQuery.of(context).size.width < 400 ? 14 : 16,
                         color: Colors.grey.shade800,
                       ),
                     ),
@@ -871,12 +868,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   if (unit != null)
                     Container(
                       padding: EdgeInsets.symmetric(
-                        horizontal: MediaQuery.of(context).size.width < 400
-                            ? 6
-                            : 8,
-                        vertical: MediaQuery.of(context).size.width < 400
-                            ? 3
-                            : 4,
+                        horizontal:
+                            MediaQuery.of(context).size.width < 400 ? 6 : 8,
+                        vertical:
+                            MediaQuery.of(context).size.width < 400 ? 3 : 4,
                       ),
                       decoration: BoxDecoration(
                         color: themePrimary.withOpacity(0.1),
@@ -885,9 +880,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       child: Text(
                         unit,
                         style: TextStyle(
-                          fontSize: MediaQuery.of(context).size.width < 400
-                              ? 12
-                              : 14,
+                          fontSize:
+                              MediaQuery.of(context).size.width < 400 ? 12 : 14,
                           color: primaryColor ?? themePrimary,
                           fontWeight: FontWeight.w500,
                         ),
@@ -948,11 +942,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                             show: spots.length <= 10,
                             getDotPainter: (spot, percent, barData, index) =>
                                 FlDotCirclePainter(
-                                  radius: 4,
-                                  color: primaryColor ?? themePrimary,
-                                  strokeWidth: 2,
-                                  strokeColor: Colors.white,
-                                ),
+                              radius: 4,
+                              color: primaryColor ?? themePrimary,
+                              strokeWidth: 2,
+                              strokeColor: Colors.white,
+                            ),
                           ),
                           belowBarData: BarAreaData(
                             show: true,
@@ -1361,12 +1355,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     Color color,
   ) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode
-        ? color.withOpacity(0.25)
-        : color.withOpacity(0.15);
-    final borderColor = isDarkMode
-        ? color.withOpacity(0.4)
-        : color.withOpacity(0.3);
+    final backgroundColor =
+        isDarkMode ? color.withOpacity(0.25) : color.withOpacity(0.15);
+    final borderColor =
+        isDarkMode ? color.withOpacity(0.4) : color.withOpacity(0.3);
     final textColor = isDarkMode ? Colors.white : Colors.white;
     final unitTextColor = isDarkMode
         ? Colors.white.withOpacity(0.7)
@@ -1543,12 +1535,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }) {
     // Dark mode support
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode
-        ? color.withOpacity(0.2)
-        : color.withOpacity(0.15);
-    final borderColor = isDarkMode
-        ? color.withOpacity(0.4)
-        : color.withOpacity(0.3);
+    final backgroundColor =
+        isDarkMode ? color.withOpacity(0.2) : color.withOpacity(0.15);
+    final borderColor =
+        isDarkMode ? color.withOpacity(0.4) : color.withOpacity(0.3);
     final textColor = isDarkMode
         ? (hasData ? Colors.white : Colors.white60)
         : (hasData ? Colors.grey.shade900 : Colors.grey.shade600);
@@ -1673,9 +1663,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               builder: (context) => SizedBox(
                 height: sheetHeight,
                 child: AIChat(
+                  key: ValueKey(
+                    'ai-chat-${AiChatMode.groundedRecords.name}-${widget.patientId}',
+                  ),
                   role: 'caregiver',
                   healthDataContext: _getHealthDataContext(),
                   isModal: true,
+                  patientId: widget.patientId,
+                  mode: AiChatMode.groundedRecords,
                 ),
               ),
             );
@@ -1767,9 +1762,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   backgroundColor: Colors.green.shade600,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width > 500
-                        ? 12
-                        : 10,
+                    horizontal:
+                        MediaQuery.of(context).size.width > 500 ? 12 : 10,
                     vertical: 8,
                   ),
                   minimumSize: const Size(
@@ -1797,9 +1791,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   backgroundColor: Colors.red.shade600,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width > 500
-                        ? 12
-                        : 10,
+                    horizontal:
+                        MediaQuery.of(context).size.width > 500 ? 12 : 10,
                     vertical: 8,
                   ),
                   minimumSize: const Size(
@@ -1948,8 +1941,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                               'Health Summary',
                                               style: TextStyle(
                                                 color: Colors.white,
-                                                fontSize:
-                                                    MediaQuery.of(
+                                                fontSize: MediaQuery.of(
                                                           context,
                                                         ).size.width <
                                                         400
@@ -1978,8 +1970,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                                     'Last $selectedDays days overview',
                                                     style: TextStyle(
                                                       color: Colors.white70,
-                                                      fontSize:
-                                                          MediaQuery.of(
+                                                      fontSize: MediaQuery.of(
                                                                 context,
                                                               ).size.width <
                                                               400
@@ -2001,14 +1992,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                   SizedBox(
                                     height:
                                         MediaQuery.of(context).size.width < 400
-                                        ? 16
-                                        : 20,
+                                            ? 16
+                                            : 20,
                                   ),
                                   // Use constrained height to prevent overflow
                                   Container(
                                     constraints: BoxConstraints(
-                                      maxHeight:
-                                          MediaQuery.of(context).size.height *
+                                      maxHeight: MediaQuery.of(context)
+                                              .size
+                                              .height *
                                           0.4, // Maximum 40% of screen height
                                     ),
                                     child: SingleChildScrollView(
@@ -2148,6 +2140,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 role: 'caregiver',
                 healthDataContext: _getHealthDataContext(),
                 isModal: true,
+                patientId: widget.patientId,
+                mode: AiChatMode.groundedRecords,
               ),
             ),
           );

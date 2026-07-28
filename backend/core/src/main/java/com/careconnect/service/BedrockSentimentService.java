@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +61,18 @@ public class BedrockSentimentService {
   private static final String DEFAULT_RISK_LEVEL = "LOW";
   private static final String DEFAULT_SOURCE_TURN_ID = "transcript";
   private static final double DEFAULT_ITEM_CONFIDENCE = 0.5;
+
+  /**
+   * The set of {@code sourceTurnId} values the model is authorized to
+   * cite. Today the transcript is not turn-segmented (see
+   * {@link CallTranscriptService#buildTranscriptTextForSummary}); the
+   * prompt therefore instructs the model to use the literal marker
+   * {@code "transcript"}. Any other value is a fabricated citation.
+   * When per-turn markers are injected into the transcript later, this
+   * set grows and the validation logic below keeps working unchanged.
+   */
+  private static final Set<String> LEGITIMATE_SOURCE_TURN_IDS =
+      Set.of(DEFAULT_SOURCE_TURN_ID);
   /** Score rounding multiplier — two decimal places. */
   private static final double ROUND_TWO_DECIMALS = 100.0;
   /** Score rounding multiplier — three decimal places. */
@@ -104,6 +118,9 @@ public class BedrockSentimentService {
    */
   @Value("${aws.bedrock.sentiment.model-id:${careconnect.ai.model:amazon.nova-pro-v1:0}}")
   private String bedrockModelId = "amazon.nova-pro-v1:0";
+
+  /** Versioned server-side prompt/config contract used for summary idempotency. */
+  private static final String SUMMARY_CONFIG_VERSION = "call-summary-v2";
 
   /** Default temperature for Bedrock invocations. */
   private static final double DEFAULT_TEMPERATURE = 0.2;
@@ -156,6 +173,38 @@ public class BedrockSentimentService {
    */
   @Autowired(required = false)
   private MedicalDataAnonymizer medicalDataAnonymizer;
+
+  /**
+   * Counts the number of typed items rejected by
+   * {@link #extractTypedItems} because their {@code sourceTurnId} did
+   * not appear in {@link #LEGITIMATE_SOURCE_TURN_IDS}. Increments per
+   * rejected item, not per call.
+   *
+   * <p><b>Semantics — lifetime aggregate.</b> This is a
+   * monotonically-increasing counter over the lifetime of this bean
+   * instance, mirroring standard observability counter semantics
+   * (Prometheus, Micrometer, JMX). It intentionally does NOT reset
+   * between {@code summarizeTranscript} calls; rate-per-window is
+   * computed at query time via {@code rate()} / {@code increase()} on
+   * whatever metrics system polls {@link #getItemsRejectedNoCitation()},
+   * not by mutating the counter itself. Tests that need to assert on
+   * per-call behavior should capture a baseline value from
+   * {@link #getItemsRejectedNoCitation()} before the call and assert on
+   * the delta afterward.
+   *
+   * <p>Exposed for STP §10 evidence (TC-E-SUM-003a) and for tests.
+   */
+  private final AtomicLong itemsRejectedNoCitation = new AtomicLong(0);
+
+  /**
+   * Returns the running count of typed items rejected because they
+   * carried a fabricated {@code sourceTurnId} (one that does not
+   * appear in the transcript's citable turn set). Test hook and
+   * observability point for the FR-SUM-3 safety property.
+   */
+  public long getItemsRejectedNoCitation() {
+    return itemsRejectedNoCitation.get();
+  }
 
   /** Creates the sentiment service with optional AWS Bedrock support. */
   @Autowired
@@ -534,12 +583,19 @@ Respond with ONLY a JSON object in this exact format, no other text:
       if (log.isWarnEnabled()) {
         log.warn("Bedrock transcript summary failed for callId {}: {}", callId, ex.getMessage());
       }
-      return localTranscriptSummary(
-          Map.of(
-              "voiceLabel", voice.label(),
-              "videoLabel", video.label(),
-              "overallLabel", combined.label()));
+      throw new ModelInferenceException(
+          "Bedrock transcript summary failed for callId " + callId, ex);
     }
+  }
+
+  /** Authoritative model/config version stored with generated summaries. */
+  public String summaryModelConfigVersion() {
+    return bedrockModelId + ":" + SUMMARY_CONFIG_VERSION;
+  }
+
+  /** Authoritative engine label; model responses cannot override this value. */
+  public String summaryEngine() {
+    return isBedrockAvailable() ? "aws_bedrock:" + bedrockModelId : "local:" + SUMMARY_CONFIG_VERSION;
   }
 
   /**
@@ -1398,6 +1454,32 @@ Respond with ONLY a JSON object in this exact format, no other text:
       typed.putIfAbsent("confidence", DEFAULT_ITEM_CONFIDENCE);
       typed.putIfAbsent("sourceTurnId", DEFAULT_SOURCE_TURN_ID);
       typed.put("needsConfirmation", Boolean.TRUE);
+
+      // Citation validation (TC-E-SUM-003a / FR-SUM-3). Reject items
+      // whose sourceTurnId does not appear in LEGITIMATE_SOURCE_TURN_IDS.
+      // Today the only legitimate value is "transcript"; anything else
+      // is a fabricated citation from the model. Blank/missing sourceTurnId
+      // has already been defaulted to "transcript" above, so absence
+      // passes validation cleanly — only actively-supplied bogus IDs
+      // get rejected.
+      // Defensive cast: current code paths always leave a non-null String
+      // here (extraction loop's asText("") + putIfAbsent above guarantee
+      // it), but String.valueOf(null) would return the literal "null" and
+      // silently reject otherwise-valid items if a future edit ever broke
+      // that invariant. Fall back to DEFAULT_SOURCE_TURN_ID on any
+      // surprise so absence-of-value never trips the fabrication check.
+      final Object rawTurnId = typed.get("sourceTurnId");
+      final String citedTurnId =
+          rawTurnId instanceof String s ? s : DEFAULT_SOURCE_TURN_ID;
+      if (!LEGITIMATE_SOURCE_TURN_IDS.contains(citedTurnId)) {
+        itemsRejectedNoCitation.incrementAndGet();
+        if (log.isWarnEnabled()) {
+          log.warn(
+              "Rejecting summary item with fabricated sourceTurnId={}",
+              citedTurnId);
+        }
+        continue;
+      }
       out.add(typed);
       if (out.size() >= SUMMARY_LIST_LIMIT) {
         break;
