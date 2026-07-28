@@ -41,6 +41,19 @@ class SchemaPatchRunnerTest {
     }
 
     @Test
+    void applyCallSessionPatches_ensureUniqueIndexesForOnConflict() throws Exception {
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        assertThat(source).contains("idx_call_sessions_call_id_uidx");
+        assertThat(source).contains("idx_call_participants_session_user_uidx");
+    }
+
+    @Test
     void isIdempotentAlreadyApplied_doesNotSkipMissingTypeOnCreate() {
         assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
                 "ERROR: type \"vector\" does not exist",

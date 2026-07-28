@@ -537,6 +537,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  CONSTRAINT uq_call_sessions_call_id UNIQUE (call_id)" +
             ")"
         );
+        // Hibernate ddl-auto can create call_sessions before this patch runs, so
+        // CREATE TABLE IF NOT EXISTS never adds UNIQUE(call_id). Without it,
+        // INSERT ... ON CONFLICT (call_id) fails and joins return 404.
+        applyRequiredPatch(
+            "V2607182230a2 – ensure call_sessions.call_id unique for ON CONFLICT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_sessions_call_id_uidx "
+                    + "ON call_sessions (call_id)"
+        );
         applyRequiredPatch(
             "V2607191700 – call_sessions recording_start_elected column",
             "ALTER TABLE call_sessions "
@@ -562,6 +570,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
             "  CONSTRAINT uq_call_participants_session_user UNIQUE (call_session_id, user_id)" +
             ")"
+        );
+        applyRequiredPatch(
+            "V2607182230b2 – ensure call_participants session/user unique for ON CONFLICT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_participants_session_user_uidx "
+                    + "ON call_participants (call_session_id, user_id)"
         );
         applyRequiredPatch(
             "V2607182230c – call session authorization indexes",
