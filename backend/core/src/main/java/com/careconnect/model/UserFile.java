@@ -61,6 +61,14 @@ public class UserFile {
     
     @Column(name = "description")
     private String description;
+
+    /**
+     * Best-effort extracted plain text for Ask AI indexing (PDF/DOCX/etc.).
+     * Scanned images without OCR remain null — description-only indexing still applies.
+     */
+    @Lob
+    @Column(name = "extracted_text")
+    private String extractedText;
     
     @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt;

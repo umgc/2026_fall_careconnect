@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/admin_analytics_summary_model.dart';
+import 'admin_sync_metrics_help_sheet.dart';
 
 class AdminSyncMetricsCard extends StatelessWidget {
   const AdminSyncMetricsCard({super.key, required this.metrics});
@@ -34,7 +35,14 @@ class AdminSyncMetricsCard extends StatelessWidget {
               children: [
                 Icon(Icons.sync, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
-                Text('Sync Metrics', style: theme.textTheme.titleMedium),
+                Expanded(
+                  child: Text('Sync Metrics', style: theme.textTheme.titleMedium),
+                ),
+                IconButton(
+                  tooltip: 'About sync events',
+                  icon: const Icon(Icons.info_outline),
+                  onPressed: () => AdminSyncMetricsHelpSheet.show(context),
+                ),
               ],
             ),
             const SizedBox(height: 4),

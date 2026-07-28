@@ -130,7 +130,8 @@ public class SecurityConfig {
                                 "/v1/api/address/**",
                                 "/oauth/**",
                                 "/ws/**",
-                                "/api/notifications/demo/**"
+                                "/api/notifications/demo/**",
+                                "/api/internal/chime/**"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */
@@ -144,6 +145,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api/debug/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/email-test/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/admin/analytics/**").hasRole(ROLE_ADMIN)
+                        .requestMatchers("/v1/api/admin/users/**").hasRole(ROLE_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
                         .requestMatchers("/v1/api/care-circle/**").authenticated()

@@ -18,7 +18,7 @@ class CitationAssemblerTest {
 
     private final CitationAssembler assembler =
             new CitationAssembler(
-                    new CitationDeepLinkBuilder(),
+                    new CitationDeepLinkBuilder(new ObjectMapper()),
                     new CitationMetadataMapper(new ObjectMapper()));
 
     @Test

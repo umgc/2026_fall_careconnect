@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.model.TerminationStep;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
@@ -225,7 +226,7 @@ public class CallTerminationExecutor {
         FINAL_SENTIMENT_EVENT,
         "COMBINED",
         actorUserId,
-        null,
+        resolvePatientTargetUserId(callId, latestByChannel),
         "END_CALL",
         finalResult,
         Map.of(
@@ -234,5 +235,30 @@ public class CallTerminationExecutor {
             "status", "FINAL_END_CALL"),
         SUCCESS,
         null);
+  }
+
+  /**
+   * Prefer the durable call-session patient; fall back to the other-party id from live sentiment
+   * samples so history filters that key on patient actor/target still see {@code SENTIMENT_FINAL}.
+   */
+  private Long resolvePatientTargetUserId(
+      final String callId, final Map<String, CallTelemetryEvent> latestByChannel) {
+    try {
+      final CallSession session = callSessionService.requireSession(callId);
+      if (session != null) {
+        return callSessionService.requirePatientUserId(session);
+      }
+    } catch (RuntimeException ignored) {
+      // Termination must still emit FINAL when session lookup is unavailable.
+    }
+    if (latestByChannel == null || latestByChannel.isEmpty()) {
+      return null;
+    }
+    for (final CallTelemetryEvent event : latestByChannel.values()) {
+      if (event != null && event.getTargetUserId() != null) {
+        return event.getTargetUserId();
+      }
+    }
+    return null;
   }
 }

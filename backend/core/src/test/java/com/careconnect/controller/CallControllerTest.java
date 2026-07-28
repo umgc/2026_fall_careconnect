@@ -10,8 +10,10 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
+import com.careconnect.service.CallAttendeeService;
 import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
+import com.careconnect.service.CallSummaryItemConfirmService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
 import com.careconnect.service.CallTerminationExecutor;
@@ -78,7 +80,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @Import(CareconnectTestConfig.class)
 @org.springframework.test.context.ActiveProfiles("test")
-@TestPropertySource(properties = "careconnect.recording.global-purge-enabled=true")
+@TestPropertySource(properties = {
+        "careconnect.recording.global-purge-enabled=true",
+        "careconnect.recording.system-transcription-enabled=true"
+})
 @DisplayName("CallController Tests")
 class CallControllerTest {
 
@@ -90,7 +95,9 @@ class CallControllerTest {
     @MockitoBean private CallTelemetryService callTelemetryService;
     @MockitoBean private CallTranscriptService callTranscriptService;
     @MockitoBean private CallSummaryService callSummaryService;
+    @MockitoBean private CallSummaryItemConfirmService callSummaryItemConfirmService;
     @MockitoBean private CallRecordingService callRecordingService;
+    @MockitoBean private CallAttendeeService callAttendeeService;
     @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
     @MockitoBean private FamilyMemberService familyMemberService;
     @MockitoBean private UserRepository userRepository;
@@ -133,6 +140,9 @@ class CallControllerTest {
         durableSession.setCreatedByUserId(2L);
         durableSession.setStatus(CallSessionService.SESSION_CREATED);
         when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
+                .thenReturn(durableSession);
+        when(callSessionService.ensureJoinAuthorized(
+                        anyString(), any(), any(), any(), any()))
                 .thenReturn(durableSession);
         when(callSessionService.requireActiveParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
@@ -183,6 +193,8 @@ class CallControllerTest {
         when(callSummaryService.getLatestSummaryEntity(anyString())).thenReturn(Optional.empty());
         when(callSummaryService.getLatestSummary(anyString())).thenReturn(Optional.empty());
         when(callRecordingService.startRecording(anyString(), anyLong()))
+                .thenReturn(Map.of("status", "STARTED"));
+        when(callRecordingService.startKvsPipeline(anyString()))
                 .thenReturn(Map.of("status", "STARTED"));
         when(callRecordingService.stopRecording(anyString()))
                 .thenReturn(Map.of("status", "STOPPED"));
@@ -280,7 +292,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void join_rejectsBeforeCallingChimeWhenNotAuthorized() throws Exception {
             mockCurrentCaregiver();
-            when(callSessionService.requireJoinAuthorized(CALL_ID, 2L))
+            when(callSessionService.ensureJoinAuthorized(
+                            eq(CALL_ID), eq(caregiverUser), isNull(), isNull(), isNull()))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "not authorized"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
@@ -291,6 +304,23 @@ class CallControllerTest {
 
             verify(chimeService, never())
                     .joinMeeting(anyString(), anyString(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("POST /join ensures durable session from patientUserId when missing")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void join_passesPatientContextToEnsureJoinAuthorized() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"patientUserId\":1,\"inviteeUserId\":1}"))
+                    .andExpect(status().isOk());
+
+            verify(callSessionService).ensureJoinAuthorized(
+                    eq(CALL_ID), eq(caregiverUser), eq(1L), eq(1L), isNull());
+            verify(chimeService).joinMeeting(eq(CALL_ID), eq("2"), anyString(), anyString());
         }
 
         @Test
@@ -450,6 +480,135 @@ class CallControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("SPEAKER-001: POST /join upserts call_attendees via CallAttendeeService")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker001_joinUpsertsCallAttendee() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callAttendeeService)
+                    .recordJoin(eq(CALL_ID), eq("att-456"), eq(2L), eq("CAREGIVER"));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-038: POST /join first participant does not start recording or KVS")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker038_firstJoinDoesNotStartCapture() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(false);
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callRecordingService, never()).startRecording(eq(CALL_ID), isNull());
+            verify(callRecordingService, never()).startRecordingTyped(eq(CALL_ID), isNull(), eq(true));
+            verify(callRecordingService, never()).startKvsPipelineAsync(CALL_ID);
+            verify(callRecordingService).refreshKvsAttendeeStreamsAsync(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-037: POST /join election owner starts recording and KVS when system transcription on")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker037_secondJoinStartsRecordingAndKvs() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(true);
+            when(callRecordingService.startRecordingTyped(eq(CALL_ID), isNull(), eq(true)))
+                    .thenReturn(new com.careconnect.service.RecordingStartResult(
+                            com.careconnect.service.RecordingStartResult.Status.STARTED,
+                            CALL_ID,
+                            1L,
+                            1L,
+                            "pipeline-1",
+                            "bucket",
+                            "prefix",
+                            null,
+                            "started"));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callRecordingService).startRecordingTyped(CALL_ID, null, true);
+            verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
+            verify(callRecordingService, never()).refreshKvsAttendeeStreamsAsync(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-039: POST /recording/start starts KVS after successful USER_PLAYBACK")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker039_userRecordStartsKvs() throws Exception {
+            mockCurrentCaregiver();
+            when(callRecordingService.startRecordingTyped(eq(CALL_ID), eq(2L), eq(true)))
+                    .thenReturn(new com.careconnect.service.RecordingStartResult(
+                            com.careconnect.service.RecordingStartResult.Status.STARTED,
+                            CALL_ID,
+                            1L,
+                            1L,
+                            "pipeline-1",
+                            "bucket",
+                            "prefix",
+                            null,
+                            "started"));
+            CallParticipant joined = new CallParticipant();
+            joined.setUserId(2L);
+            joined.setStatus(CallSessionService.PARTICIPANT_JOINED);
+            when(callSessionService.getJoinedParticipants(CALL_ID)).thenReturn(List.of(joined));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/recording/start")
+                            .with(csrf())
+                            .param("consent", "true"))
+                    .andExpect(status().isOk());
+
+            verify(callRecordingService).startRecordingTyped(CALL_ID, 2L, true);
+            verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-002b: POST /end on already-ended session still finalizes attendee leave")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker002b_alreadyEndedLeaveStillFinalizesAttendee() throws Exception {
+            mockCurrentCaregiver();
+            when(callSessionService.leaveOrBeginTermination(anyString(), anyLong()))
+                    .thenReturn(new CallSessionService.LeaveResult(false, true, 0L));
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(callAttendeeService).recordLeave(eq(CALL_ID), eq(2L));
+            verify(callAttendeeService, never()).recordCallEnded(eq(CALL_ID));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-002: POST /end records all attendees left when meeting ends")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void speaker002_endCallRecordsAllAttendeesLeft() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(callAttendeeService).recordCallEnded(eq(CALL_ID));
+            verify(callAttendeeService, never()).recordLeave(eq(CALL_ID), eq(2L));
         }
 
         @Test
@@ -935,6 +1094,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void sent004_endCallTriggersFinalSentimentRecord() throws Exception {
             mockCurrentCaregiver();
+            when(userRepository.findById(1L)).thenReturn(Optional.of(patientUser));
+            when(userRepository.findById(2L)).thenReturn(Optional.of(caregiverUser));
             // Provide sentiment data so that maybeRecordFinalOverallSentiment has something to process
             CallTelemetryEvent voiceEvent = new CallTelemetryEvent();
             voiceEvent.setChannel("VOICE");
@@ -946,6 +1107,7 @@ class CallControllerTest {
                     .thenReturn(new SentimentResult(0.7, "CALM", "Good", "COMBINED", CALL_ID, 123L, false));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/end")
+                            .param("otherPartyId", "1")
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
@@ -1142,6 +1304,7 @@ class CallControllerTest {
                     .andExpect(status().isOk());
 
             verify(callRecordingService).startRecording(CALL_ID, 2L);
+            verify(callRecordingService).startKvsPipelineAsync(CALL_ID);
             verify(callNotificationHandler).sendNotificationToUser(eq("2"), any());
             verify(callSessionService, never()).getParticipants(CALL_ID);
         }

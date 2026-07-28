@@ -12,6 +12,7 @@ import com.careconnect.dto.ai.AiModelMeta;
 import com.careconnect.dto.ai.AiRetrievalMeta;
 import com.careconnect.dto.ai.DeliveryStatus;
 import com.careconnect.dto.ai.InputModality;
+import com.careconnect.dto.ai.MedicationTimelineDto;
 import com.careconnect.model.User;
 import com.careconnect.model.ai.hitl.AiHeldItem;
 import com.careconnect.security.UnauthorizedException;
@@ -30,6 +31,7 @@ import com.careconnect.service.ai.safety.SafetyDecision;
 import com.careconnect.service.ai.safety.SafetyInput;
 import com.careconnect.service.ai.safety.SafetyOutcome;
 import com.careconnect.service.ai.safety.SafetyPipeline;
+import com.careconnect.service.ai.retrieval.timeline.MedicationTimelineAggregator;
 import com.careconnect.service.security.InputSanitizationService;
 import com.careconnect.service.security.LangChainGovernanceService;
 import org.slf4j.Logger;
@@ -78,6 +80,7 @@ public class AiAskService {
     private final HitlService hitlService;
     private final AiAskAuditService askAuditService;
     private final AiAskConfirmationService askConfirmationService;
+    private final MedicationTimelineAggregator medicationTimelineAggregator;
     private final boolean hitlEnabled;
 
     public AiAskService(
@@ -92,6 +95,7 @@ public class AiAskService {
             final HitlService hitlService,
             final AiAskAuditService askAuditService,
             final AiAskConfirmationService askConfirmationService,
+            final MedicationTimelineAggregator medicationTimelineAggregator,
             @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
@@ -104,6 +108,7 @@ public class AiAskService {
         this.hitlService = hitlService;
         this.askAuditService = askAuditService;
         this.askConfirmationService = askConfirmationService;
+        this.medicationTimelineAggregator = medicationTimelineAggregator;
         this.hitlEnabled = hitlEnabled;
     }
 
@@ -557,6 +562,10 @@ public class AiAskService {
                         llm.modelId(),
                         elapsedMs(askStartedNanos)));
 
+        final MedicationTimelineDto medicationTimeline = plan.isMedicationTimeline()
+                ? medicationTimelineAggregator.aggregate(retrieval.chunks())
+                : null;
+
         return new AiAskResponse(
                 true,
                 requestId,
@@ -581,7 +590,8 @@ public class AiAskService {
                         new AiModelMeta("bedrock", llm.modelId())),
                 null,
                 null,
-                null);
+                null,
+                medicationTimeline);
     }
 
     private AiConfirmationHint confirmationHint(
@@ -765,6 +775,7 @@ public class AiAskService {
                         new AiModelMeta("bedrock", modelId)),
                 HitlService.REVIEWING_MESSAGE,
                 HitlService.pollUrl(held.getId()),
+                null,
                 null);
     }
 
@@ -900,6 +911,7 @@ public class AiAskService {
                         null),
                 NO_RECORDS_EN,
                 null,
+                null,
                 null);
     }
 
@@ -939,7 +951,8 @@ public class AiAskService {
                 new AiErrorBlock(
                         errorCode,
                         message,
-                        details == null ? List.of() : List.copyOf(details)));
+                        details == null ? List.of() : List.copyOf(details)),
+                null);
     }
 
     private static AiDisclaimer disclaimer(final String locale) {

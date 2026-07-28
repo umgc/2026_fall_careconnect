@@ -2134,6 +2134,78 @@ void main() {
       }
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Group 36 — confirmCallSummaryItem (FR-SUM-4)
+  // ──────────────────────────────────────────────────────────────────────────
+  group('confirmCallSummaryItem', () {
+    test('returns decoded map on 200 with decision recorded', () async {
+      final body = _okJson({
+        'itemId': 'item-1',
+        'decision': 'approve',
+        'held': false,
+        'decisionId': 42,
+      });
+      final result = await _withSpec(
+        _FakeSpec(200, body),
+        () => ApiService.confirmCallSummaryItem(
+          'call-1',
+          'item-1',
+          decision: 'approve',
+        ),
+      );
+      expect(result['itemId'], 'item-1');
+      expect(result['decision'], 'approve');
+      expect(result['held'], false);
+    });
+
+    test('returns held:true when routed to clinician review', () async {
+      final body = _okJson({
+        'itemId': 'item-2',
+        'decision': null,
+        'held': true,
+        'heldItemId': '11111111-1111-1111-1111-111111111111',
+      });
+      final result = await _withSpec(
+        _FakeSpec(200, body),
+        () => ApiService.confirmCallSummaryItem(
+          'call-1',
+          'item-2',
+          decision: 'approve',
+        ),
+      );
+      expect(result['held'], true);
+      expect(result['heldItemId'], '11111111-1111-1111-1111-111111111111');
+    });
+
+    test('throws on non-2xx status', () async {
+      await expectLater(
+        _withSpec(
+          const _FakeSpec(400, '{"message":"decision is required"}'),
+          () => ApiService.confirmCallSummaryItem(
+            'call-1',
+            'item-1',
+            decision: '',
+          ),
+        ),
+        throwsException,
+      );
+    });
+
+    test('throws on 404 when item not found', () async {
+      await expectLater(
+        _withSpec(
+          const _FakeSpec(404, '{"message":"Item not found"}'),
+          () => ApiService.confirmCallSummaryItem(
+            'call-1',
+            'missing-item',
+            decision: 'decline',
+          ),
+        ),
+        throwsException,
+      );
+    });
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

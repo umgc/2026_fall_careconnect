@@ -20,9 +20,10 @@ public interface PostCallTranscriptionJobRepository
              WHERE state IN ('READY', 'RETRYABLE', 'CLAIMED', 'RUNNING')
                AND next_attempt_at <= CURRENT_TIMESTAMP
                AND (claimed_until IS NULL OR claimed_until <= CURRENT_TIMESTAMP)
-             ORDER BY next_attempt_at, id LIMIT :limit
+             ORDER BY next_attempt_at, id
+             LIMIT 10
             """, nativeQuery = true)
-    List<Long> findDueIds(@Param("limit") int limit);
+    List<Long> findDueIds();
 
     @Modifying
     @Transactional
@@ -30,7 +31,8 @@ public interface PostCallTranscriptionJobRepository
             UPDATE post_call_transcription_jobs
                SET state = 'CLAIMED', claim_token = :token,
                    claimed_until = CURRENT_TIMESTAMP + (:leaseSeconds * INTERVAL '1 second'),
-                   attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP
+                   attempt_count = attempt_count + 1,
+                   updated_at = CURRENT_TIMESTAMP
              WHERE id = :id
                AND state IN ('READY', 'RETRYABLE', 'CLAIMED', 'RUNNING')
                AND (claimed_until IS NULL OR claimed_until <= CURRENT_TIMESTAMP)
@@ -44,10 +46,20 @@ public interface PostCallTranscriptionJobRepository
             UPDATE post_call_transcription_jobs
                SET state = :state, claim_token = NULL, claimed_until = NULL,
                    next_attempt_at = CURRENT_TIMESTAMP + (:delaySeconds * INTERVAL '1 second'),
-                   last_error = :error, updated_at = CURRENT_TIMESTAMP
+                   last_error = :error,
+                   updated_at = CURRENT_TIMESTAMP
              WHERE id = :id AND claim_token = :token
             """, nativeQuery = true)
     int release(@Param("id") Long id, @Param("token") UUID token,
                 @Param("state") String state, @Param("delaySeconds") long delaySeconds,
                 @Param("error") String error);
+
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE post_call_transcription_jobs
+               SET next_attempt_at = CURRENT_TIMESTAMP
+             WHERE id = :id
+            """, nativeQuery = true)
+    int markDueNow(@Param("id") Long id);
 }

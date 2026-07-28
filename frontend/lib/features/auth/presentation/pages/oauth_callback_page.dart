@@ -87,7 +87,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
 
         // Navigate to appropriate dashboard based on role
         if (mounted) {
-          navigateToDashboard(context);
+          navigateToDashboard(context, routePatientToDailyBrief: true);
         }
 
         // Check for invalid role

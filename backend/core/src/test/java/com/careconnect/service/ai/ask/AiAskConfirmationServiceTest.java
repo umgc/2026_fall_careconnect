@@ -45,7 +45,7 @@ class AiAskConfirmationServiceTest {
     @BeforeEach
     void setUp() {
         service = new AiAskConfirmationService(
-                decisionRepository, askAuditService, retrievalScopeService);
+                decisionRepository, askAuditService, retrievalScopeService, 12L);
     }
 
     @Test
@@ -134,6 +134,63 @@ class AiAskConfirmationServiceTest {
                         .build()));
 
         assertThat(service.hasActiveSessionApproval(sessionId, 42L, 9L)).isTrue();
+    }
+
+    @Test
+    void hasActiveSessionApproval_falseWhenOlderThanTtl() {
+        final UUID sessionId = UUID.randomUUID();
+        when(decisionRepository
+                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .thenReturn(Optional.of(AiAskConfirmationDecision.builder()
+                        .id(UUID.randomUUID())
+                        .sessionId(sessionId)
+                        .patientId(42L)
+                        .callerUserId(9L)
+                        .decision(AiAskConfirmationService.APPROVE_SESSION)
+                        .createdAt(Instant.now().minus(java.time.Duration.ofHours(13)))
+                        .build()));
+
+        assertThat(service.hasActiveSessionApproval(sessionId, 42L, 9L)).isFalse();
+    }
+
+    @Test
+    void hasCallSummarySessionApproval_ignoresAskTtl() {
+        final String callId = "call-ttl";
+        final UUID sessionId = AiAskConfirmationService.callSummarySessionId(callId);
+        when(decisionRepository
+                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .thenReturn(Optional.of(AiAskConfirmationDecision.builder()
+                        .id(UUID.randomUUID())
+                        .sessionId(sessionId)
+                        .patientId(42L)
+                        .callerUserId(9L)
+                        .decision(AiAskConfirmationService.APPROVE_SESSION)
+                        .createdAt(Instant.now().minus(java.time.Duration.ofDays(30)))
+                        .build()));
+
+        assertThat(service.hasCallSummarySessionApproval(callId, 42L, 9L)).isTrue();
+        assertThat(service.hasActiveSessionApproval(sessionId, 42L, 9L)).isFalse();
+    }
+
+    @Test
+    void installCallSummarySessionApproval_skipsAssertCanAskAndPersists() throws Exception {
+        final User caller = user(9L);
+        when(decisionRepository
+                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                                any(), eq(42L), eq(9L), eq(AiAskConfirmationService.APPROVE_SESSION)))
+                .thenReturn(Optional.empty());
+        when(decisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        final AiAskConfirmationDecision saved =
+                service.installCallSummarySessionApproval(caller, 42L, "call-42");
+
+        assertThat(saved.getDecision()).isEqualTo(AiAskConfirmationService.APPROVE_SESSION);
+        assertThat(saved.getSessionId())
+                .isEqualTo(AiAskConfirmationService.callSummarySessionId("call-42"));
+        verify(retrievalScopeService, never()).assertCanAsk(any(), any(), any());
+        verify(decisionRepository).save(any());
     }
 
     private static User user(final Long id) {

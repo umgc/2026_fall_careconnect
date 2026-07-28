@@ -16,6 +16,9 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     List<CallParticipant> findByCallSessionId(Long callSessionId);
     List<CallParticipant> findByCallSessionIdAndStatus(Long callSessionId, String status);
 
+    /** Resolves opaque Chime externalUserId → durable participant (user id). */
+    Optional<CallParticipant> findFirstByChimeExternalUserId(String chimeExternalUserId);
+
     @Modifying
     @Query(value = """
             INSERT INTO call_participants
@@ -185,4 +188,23 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
             @Param("sessionId") Long sessionId,
             @Param("userId") Long userId,
             @Param("claimToken") UUID claimToken);
+
+    /**
+     * Ensures opaque Chime {@code externalUserId} is stored for EventBridge / roster resolve when
+     * an attendee row already has credentials from an earlier join.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+            UPDATE call_participants
+               SET chime_external_user_id = :externalUserId,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE call_session_id = :sessionId
+               AND user_id = :userId
+               AND (chime_external_user_id IS NULL OR BTRIM(chime_external_user_id) = '')
+            """, nativeQuery = true)
+    int backfillChimeExternalUserIdIfBlank(
+            @Param("sessionId") Long sessionId,
+            @Param("userId") Long userId,
+            @Param("externalUserId") String externalUserId);
 }

@@ -19,7 +19,10 @@ import '../widgets/structured_entry_form.dart';
 
 /// Comprehensive file management page
 class FileManagementPage extends StatefulWidget {
-  const FileManagementPage({super.key});
+  /// Optional file id from Ask AI citation deep links (`?fileId=`).
+  final String? highlightFileId;
+
+  const FileManagementPage({super.key, this.highlightFileId});
 
   @override
   State<FileManagementPage> createState() => _FileManagementPageState();
@@ -35,6 +38,8 @@ class _FileManagementPageState extends State<FileManagementPage>
   FileCategory? _selectedCategory;
   final TextEditingController _searchController = TextEditingController();
   int? _userId;
+  String? _highlightFileId;
+  bool _didApplyHighlight = false;
 
   /// Hiring/onboarding forms are caregiver-only, so the tab is shown only for
   /// caregiver accounts.
@@ -47,7 +52,15 @@ class _FileManagementPageState extends State<FileManagementPage>
     _isCaregiver = user?.role.toUpperCase() == 'CAREGIVER';
     // 4 tabs for caregivers (incl. Hiring Forms), 3 for everyone else.
     _tabController = TabController(length: _isCaregiver ? 4 : 3, vsync: this);
+    _highlightFileId = widget.highlightFileId;
     _loadFiles();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _highlightFileId ??=
+        GoRouterState.of(context).uri.queryParameters['fileId'];
   }
 
   @override
@@ -81,6 +94,7 @@ class _FileManagementPageState extends State<FileManagementPage>
           'DEBUG: Category set as: $_selectedCategory, Files set as: $files',
         );
       });
+      _applyHighlightIfNeeded();
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -93,6 +107,39 @@ class _FileManagementPageState extends State<FileManagementPage>
         ),
       );
     }
+  }
+
+  void _applyHighlightIfNeeded() {
+    if (_didApplyHighlight) return;
+    final targetId = _highlightFileId?.trim();
+    if (targetId == null || targetId.isEmpty || _allFiles.isEmpty) return;
+    _didApplyHighlight = true;
+
+    UserFileDTO? match;
+    for (final file in _allFiles) {
+      if ('${file.id}' == targetId) {
+        match = file;
+        break;
+      }
+    }
+    if (match == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cited file $targetId was not found')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _searchQuery = match!.originalFilename;
+      _searchController.text = match.originalFilename;
+      _filterFiles();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showFileInfo(match!);
+    });
   }
 
   void _filterFiles() {

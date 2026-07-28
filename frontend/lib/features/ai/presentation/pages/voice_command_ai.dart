@@ -622,6 +622,18 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _pendingIntent = null;
       _ambiguousMatches = [];
       _resetAfterDelay();
+    } else if (intent == 'schedule') {
+      // Map schedule intent to the existing calendar surface (no telephony/scheduling API yet).
+      _setStatus(
+        status: _VoiceStatus.success,
+        detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} \u2014 ${AppLocalizations.of(context)?.voicecommand_onConfirmedCommandNavigate ?? 'navigating'}',
+      );
+      _pendingDestination = null;
+      _pendingDetail = null;
+      _pendingIntent = null;
+      _ambiguousMatches = [];
+      context.go('/calendar');
+      _reset();
     } else {
       _setStatus(
         status: _VoiceStatus.success,

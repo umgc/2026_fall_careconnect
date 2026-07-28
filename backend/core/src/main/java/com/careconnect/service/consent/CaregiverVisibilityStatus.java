@@ -12,6 +12,12 @@ package com.careconnect.service.consent;
 public enum CaregiverVisibilityStatus {
 
     /**
+     * Caregiver currently holds approved visibility for this patient.
+     * {@code canViewSummaries} is expected to be {@code true}.
+     */
+    GRANTED,
+
+    /**
      * No registered caregiver relationship for this (caregiver, patient)
      * pair. The consent gate does NOT apply to this user for this
      * patient; they either pass or fail via the surrounding four-way
