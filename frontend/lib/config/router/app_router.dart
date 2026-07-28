@@ -62,6 +62,7 @@ import '../../features/payments/presentation/pages/web_pay_page.dart';
 import '../../features/payments/presentation/pages/subscription_tier_selection_page.dart';
 import '../../features/analytics/analytics_page.dart';
 import '../../features/admin_analytics/presentation/pages/admin_analytics_dashboard_page.dart';
+import '../../features/admin_users/presentation/pages/admin_users_page.dart';
 import '../../utils/role_helper.dart';
 import '../../features/payments/presentation/pages/payment_success_page.dart';
 import '../../features/payments/presentation/pages/payment_cancel_page.dart';
@@ -722,6 +723,20 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         return null;
       },
       builder: (_, __) => const AdminAnalyticsDashboardPage(),
+    ),
+    GoRoute(
+      path: '/admin/users',
+      redirect: (context, state) async {
+        final userData = await UserRoleStorageService.instance.getUserData();
+        if (userData?.isLoggedIn != true) {
+          return '/login';
+        }
+        if (!RoleHelper.isAdmin(userData!.role)) {
+          return '/dashboard';
+        }
+        return null;
+      },
+      builder: (_, __) => const AdminUsersPage(),
     ),
     GoRoute(
       path: '/oauth/callback',

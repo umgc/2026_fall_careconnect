@@ -7,8 +7,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.careconnect.dto.AdminAnalyticsSummaryDTO;
+import com.careconnect.dto.FeatureTrendDTO;
 import com.careconnect.exception.AppException;
 import com.careconnect.repository.TelemetryEventRepository;
+import com.careconnect.repository.projection.DailyFeatureCountProjection;
 import com.careconnect.repository.projection.EndpointErrorCountProjection;
 import com.careconnect.repository.projection.EventNameCountProjection;
 import com.careconnect.repository.projection.FeatureUsageCountProjection;
@@ -131,6 +133,42 @@ class AdminAnalyticsServiceTest {
     assertThat(summary.topFeatures().get(0).feature()).isEqualTo("chat_room");
   }
 
+  @Test
+  void getFeatureTrends_zeroFillsMissingDays() {
+    when(telemetryEventRepository.countFeatureUseByDayBetween(from, to, "dashboard"))
+        .thenReturn(
+            List.of(
+                dailyRow("2026-07-01", 5L),
+                dailyRow("2026-07-03", 2L)));
+
+    final FeatureTrendDTO trend = service.getFeatureTrends(from, to, "dashboard");
+
+    assertThat(trend.feature()).isEqualTo("dashboard");
+    assertThat(trend.periodStart()).isEqualTo(from.toInstant());
+    assertThat(trend.periodEnd()).isEqualTo(to.toInstant());
+    assertThat(trend.dailyCounts()).hasSize(7);
+    assertThat(trend.dailyCounts().get(0).date()).isEqualTo("2026-07-01");
+    assertThat(trend.dailyCounts().get(0).count()).isEqualTo(5L);
+    assertThat(trend.dailyCounts().get(1).date()).isEqualTo("2026-07-02");
+    assertThat(trend.dailyCounts().get(1).count()).isZero();
+    assertThat(trend.dailyCounts().get(2).count()).isEqualTo(2L);
+    assertThat(trend.dailyCounts().get(6).date()).isEqualTo("2026-07-07");
+  }
+
+  @Test
+  void getFeatureTrends_rejectsInvalidFeatureName() {
+    assertThatThrownBy(() -> service.getFeatureTrends(from, to, "bad feature!"))
+        .isInstanceOf(AppException.class)
+        .hasMessageContaining("Invalid feature name");
+  }
+
+  @Test
+  void getFeatureTrends_rejectsInvalidRange() {
+    assertThatThrownBy(() -> service.getFeatureTrends(to, from, "dashboard"))
+        .isInstanceOf(AppException.class)
+        .hasMessageContaining("from must be before to");
+  }
+
   private void stubEmptyRepository() {
     when(telemetryEventRepository.countTotalEventsBetween(any(), any())).thenReturn(0L);
     when(telemetryEventRepository.countDistinctSessionsBetween(any(), any())).thenReturn(0L);
@@ -205,6 +243,20 @@ class AdminAnalyticsServiceTest {
       @Override
       public Number getFailed() {
         return failed;
+      }
+    };
+  }
+
+  private static DailyFeatureCountProjection dailyRow(final String day, final long count) {
+    return new DailyFeatureCountProjection() {
+      @Override
+      public String getDay() {
+        return day;
+      }
+
+      @Override
+      public Number getCount() {
+        return count;
       }
     };
   }

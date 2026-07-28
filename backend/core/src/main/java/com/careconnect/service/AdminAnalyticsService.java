@@ -1,13 +1,16 @@
 package com.careconnect.service;
 
 import com.careconnect.dto.AdminAnalyticsSummaryDTO;
+import com.careconnect.dto.DailyFeatureCountDTO;
 import com.careconnect.dto.EndpointErrorCountDTO;
 import com.careconnect.dto.ErrorMetricsDTO;
 import com.careconnect.dto.EventNameCountDTO;
+import com.careconnect.dto.FeatureTrendDTO;
 import com.careconnect.dto.FeatureUsageCountDTO;
 import com.careconnect.dto.SyncMetricsDTO;
 import com.careconnect.exception.AppException;
 import com.careconnect.repository.TelemetryEventRepository;
+import com.careconnect.repository.projection.DailyFeatureCountProjection;
 import com.careconnect.repository.projection.EndpointErrorCountProjection;
 import com.careconnect.repository.projection.EventNameCountProjection;
 import com.careconnect.repository.projection.FeatureUsageCountProjection;
@@ -15,10 +18,13 @@ import com.careconnect.repository.projection.SyncCompletedSumProjection;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -71,6 +77,39 @@ public class AdminAnalyticsService {
         topFeatures,
         syncMetrics,
         errorMetrics);
+  }
+
+  /**
+   * Returns zero-filled daily feature_use counts for one feature over [{@code from}, {@code to}).
+   */
+  public FeatureTrendDTO getFeatureTrends(
+      final OffsetDateTime from, final OffsetDateTime to, final String feature) {
+    validateRange(from, to);
+
+    final String safeFeature = sanitizeBucket(feature);
+    if (safeFeature == null) {
+      throw new AppException(HttpStatus.BAD_REQUEST, "Invalid feature name");
+    }
+
+    final Map<LocalDate, Long> countsByDay = new HashMap<>();
+    for (final DailyFeatureCountProjection row :
+        telemetryEventRepository.countFeatureUseByDayBetween(from, to, safeFeature)) {
+      if (row.getDay() == null || row.getCount() == null) {
+        continue;
+      }
+      countsByDay.put(LocalDate.parse(row.getDay()), row.getCount().longValue());
+    }
+
+    final LocalDate startDay = from.atZoneSameInstant(ZoneOffset.UTC).toLocalDate();
+    final LocalDate endDayExclusive = to.atZoneSameInstant(ZoneOffset.UTC).toLocalDate();
+    final List<DailyFeatureCountDTO> dailyCounts = new ArrayList<>();
+
+    for (LocalDate day = startDay; day.isBefore(endDayExclusive); day = day.plusDays(1)) {
+      dailyCounts.add(new DailyFeatureCountDTO(day.toString(), countsByDay.getOrDefault(day, 0L)));
+    }
+
+    return new FeatureTrendDTO(
+        safeFeature, from.toInstant(), to.toInstant(), List.copyOf(dailyCounts));
   }
 
   /**

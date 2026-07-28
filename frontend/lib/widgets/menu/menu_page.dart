@@ -222,6 +222,16 @@ class _MenuPageState extends State<MenuPage> {
         },
       ),
       _MenuItem(
+        icon: Icons.people,
+        label: 'User Management',
+        route: '/admin/users',
+        visibleFor: const {'ADMIN'},
+        onTap: () {
+          Navigator.pop(context);
+          context.go('/admin/users');
+        },
+      ),
+      _MenuItem(
         icon: Icons.settings,
         label: local.menupage_settingsItem,
         route: '/settings',

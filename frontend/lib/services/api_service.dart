@@ -65,6 +65,9 @@ class ApiConstants {
 
   // Admin analytics endpoints
   static final String adminAnalytics = '$_host/v1/api/admin/analytics';
+
+  // Admin user management endpoints
+  static final String adminUsers = '$_host/v1/api/admin/users';
 }
 
 class ApiService {
