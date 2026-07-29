@@ -24,6 +24,7 @@ import 'config/utils/web_utils.dart';
 import 'features/tasks/utils/task_type_manager.dart';
 import 'features/telemetry/telemetry.dart';
 import 'features/telemetry/telemetry_error_handler.dart';
+import 'features/telemetry/usability_tracker.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
 
@@ -74,7 +75,12 @@ Future<void> main() async {
             ChangeNotifierProvider.value(value: localeProvider),
             ChangeNotifierProvider(create: (_) => TaskTypeManager()),
           ],
-          child: CareConnectAppWithErrorBoundary(),
+          // UsabilityTapCounter is a translucent Listener that counts pointer-
+          // downs app-wide for the Team B usability instrument. It never
+          // intercepts input, so it is a no-op for normal app behavior.
+          child: UsabilityTapCounter(
+            child: CareConnectAppWithErrorBoundary(),
+          ),
         ),
       );
 
