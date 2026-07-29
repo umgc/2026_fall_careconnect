@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 /**
  * Normalizes, upserts, classifies importance, and queues indexing for USPS
  * mailpieces (Tasks 3.14.5 / #122, 3.14.6 / #123).
- * Normalizes, upserts, and queues indexing for USPS mailpieces (Task 3.14.5 / #122).
  */
 @Service
 public class UspsMailpiecePersistenceService {

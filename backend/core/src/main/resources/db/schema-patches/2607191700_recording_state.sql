@@ -18,17 +18,10 @@ UPDATE call_recordings
 SET aws_pipeline_id = pipeline_id
 WHERE aws_pipeline_id IS NULL AND pipeline_id IS NOT NULL;
 
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM call_recordings
-        WHERE status NOT IN
-            ('STARTED', 'STOP_RETRYABLE', 'FINALIZE_RETRYABLE', 'STOPPED', 'FAILED')
-    ) THEN
-        RAISE EXCEPTION
-            'Unknown legacy recording status; refusing to discard possible AWS ownership';
-    END IF;
-END $$;
+-- Safety precheck for unknown statuses runs in
+-- SchemaPatchRunner.verifyRecordingStatePreconditions() (ScriptUtils cannot
+-- execute Postgres dollar-quoted DO blocks). Duplicate active ownership is
+-- fail-closed by uq_call_recordings_active_generation below.
 
 UPDATE call_recordings
 SET owner_user_id = initiated_by_user_id,
@@ -51,22 +44,6 @@ UPDATE call_recordings recording
 SET generation = ranked.generation
 FROM ranked
 WHERE recording.id = ranked.id;
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM call_recordings
-        WHERE lifecycle_status IN
-            ('RESERVED', 'STARTING', 'ACTIVE', 'STOP_CLAIMED',
-             'STOP_RETRYABLE', 'FINALIZE_RETRYABLE', 'PURGE_PENDING')
-        GROUP BY call_id
-        HAVING COUNT(*) > 1
-    ) THEN
-        RAISE EXCEPTION
-            'Cannot enforce recording ownership: duplicate active AWS-capable rows exist';
-    END IF;
-END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_call_recordings_active_generation
     ON call_recordings (call_id)

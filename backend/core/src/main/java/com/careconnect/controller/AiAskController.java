@@ -2,12 +2,16 @@ package com.careconnect.controller;
 
 import com.careconnect.dto.ai.AiAskRequest;
 import com.careconnect.dto.ai.AiAskResponse;
+import com.careconnect.dto.ai.AiAskShareRequest;
+import com.careconnect.dto.ai.AiAskShareResponse;
 import com.careconnect.model.User;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.ask.AskAiException;
+import com.careconnect.service.ai.ask.AiAskConfirmationService;
 import com.careconnect.service.ai.ask.AiAskService;
+import com.careconnect.service.ai.ask.AiAskShareService;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.util.SecurityUtil;
@@ -18,9 +22,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -40,6 +46,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiAskController {
 
     private final AiAskService aiAskService;
+    private final AiAskConfirmationService askConfirmationService;
+    private final AiAskShareService askShareService;
     private final SecurityUtil securityUtil;
 
     @RequirePermission(Permission.USE_AI_FEATURES)
@@ -101,6 +109,90 @@ public class AiAskController {
                             "INTERNAL_ERROR",
                             "Ask AI could not complete the request",
                             null));
+        }
+    }
+
+    @RequirePermission(Permission.USE_AI_FEATURES)
+    @PostMapping(
+            value = "/ask/confirmation",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> confirm(
+            @Valid @RequestBody final com.careconnect.dto.ai.AiAskConfirmationRequest request)
+            throws UnauthorizedException {
+        final User caller = securityUtil.resolveCurrentUser();
+        try {
+            final var saved = askConfirmationService.recordDecision(caller, request);
+            return ResponseEntity.ok(java.util.Map.of(
+                    "success", true,
+                    "decision", saved.getDecision(),
+                    "sessionId", saved.getSessionId().toString(),
+                    "createdAt", saved.getCreatedAt().toString()));
+        } catch (final ForbiddenScopeException ex) {
+            log.warn(
+                    "Ask AI confirmation forbidden scope reason={} patientId={}",
+                    ex.getDenialReason(),
+                    request == null ? null : request.patientId());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "success", false,
+                    "error", ForbiddenScopeException.ERROR_CODE,
+                    "message", "Requested patient is not available for Ask AI confirmation"));
+        } catch (final IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "success", false,
+                    "error", ex.getMessage() == null ? "Invalid confirmation request" : ex.getMessage()));
+        }
+    }
+
+    @RequirePermission(Permission.USE_AI_FEATURES)
+    @PostMapping(
+            value = "/ask/share",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> share(@Valid @RequestBody final AiAskShareRequest request)
+            throws UnauthorizedException {
+        final User caller = securityUtil.resolveCurrentUser();
+        try {
+            final AiAskShareResponse response = askShareService.share(caller, request);
+            return ResponseEntity.ok(response);
+        } catch (final ForbiddenScopeException ex) {
+            log.warn(
+                    "Ask AI share forbidden scope reason={} patientId={}",
+                    ex.getDenialReason(),
+                    request == null ? null : request.patientId());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "success", false,
+                    "error", ForbiddenScopeException.ERROR_CODE,
+                    "message", "Requested patient is not available for Ask AI share"));
+        } catch (final AskAiRejectedException ex) {
+            return ResponseEntity.status(ex.getHttpStatus()).body(java.util.Map.of(
+                    "success", false,
+                    "error", ex.getErrorCode(),
+                    "message", ex.getMessage() == null ? "Share rejected" : ex.getMessage()));
+        }
+    }
+
+    @RequirePermission(Permission.USE_AI_FEATURES)
+    @GetMapping(value = "/ask/shares", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> listShares(@RequestParam("patientId") final Long patientId)
+            throws UnauthorizedException {
+        final User caller = securityUtil.resolveCurrentUser();
+        try {
+            return ResponseEntity.ok(askShareService.listShares(caller, patientId));
+        } catch (final ForbiddenScopeException ex) {
+            log.warn(
+                    "Ask AI list shares forbidden scope reason={} patientId={}",
+                    ex.getDenialReason(),
+                    patientId);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "success", false,
+                    "error", ForbiddenScopeException.ERROR_CODE,
+                    "message", "Requested patient is not available for Ask AI shares"));
+        } catch (final AskAiRejectedException ex) {
+            return ResponseEntity.status(ex.getHttpStatus()).body(java.util.Map.of(
+                    "success", false,
+                    "error", ex.getErrorCode(),
+                    "message", ex.getMessage() == null ? "Share list rejected" : ex.getMessage()));
         }
     }
 }

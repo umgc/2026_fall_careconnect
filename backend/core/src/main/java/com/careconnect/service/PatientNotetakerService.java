@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -15,13 +16,18 @@ import com.careconnect.dto.PatientNotetakerConfigDTO;
 import com.careconnect.dto.v2.TaskDtoV2;
 import com.careconnect.dto.ChatRequest;
 import com.careconnect.dto.ChatResponse;
+import com.careconnect.indexing.ClinicalNoteIndexedPayload;
+import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.PatientNote;
 import com.careconnect.model.PatientNotetakerConfig;
 import com.careconnect.model.PatientNotetakerKeyword;
 import com.careconnect.model.PatientNotetakerKeyword.EventType;
 import com.careconnect.repository.PatientNoteRepository;
 import com.careconnect.repository.PatientNotetakerConfigRepository;
+import com.careconnect.service.ai.indexing.RetrievalIndexService;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.v2.TaskServiceV2;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -30,23 +36,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class PatientNotetakerService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PatientNotetakerService.class);
+    private static final String DEFAULT_CONSENT_SCOPE = "on_consent";
     private final TaskServiceV2 taskService;
     private final AIChatService aiChatService;
     private final PatientNoteRepository patientNoteRepository;
     private final PatientNotetakerConfigRepository patientNotetakerConfigRepository;
     private final PatientService patientService;
+    private final IndexingEventEmitter indexingEventEmitter;
+    private final RetrievalIndexService retrievalIndexService;
     
     public PatientNotetakerService(PatientNoteRepository patientNoteRepository, 
         PatientNotetakerConfigRepository patientNotetakerConfigRepository, 
         PatientService patientService,
         AIChatService aiChatService,
-        TaskServiceV2 taskService
+        TaskServiceV2 taskService,
+        IndexingEventEmitter indexingEventEmitter,
+        RetrievalIndexService retrievalIndexService
         ) {
         this.patientNoteRepository = patientNoteRepository;
         this.patientNotetakerConfigRepository = patientNotetakerConfigRepository;
         this.patientService = patientService;
         this.aiChatService = aiChatService;
         this.taskService = taskService;
+        this.indexingEventEmitter = indexingEventEmitter;
+        this.retrievalIndexService = retrievalIndexService;
     }
 
     public PatientNotetakerConfigDTO getNotetakerConfigByPatientId(Long patientId) {
@@ -103,7 +116,9 @@ public class PatientNotetakerService {
         newNote.setCreatedAt(LocalDateTime.now());
         newNote.setUpdatedAt(LocalDateTime.now());
         newNote.setAiSummary(processAiSummary(noteDTO.getNote()));
-        PatientNoteDTO result = new PatientNoteDTO(patientNoteRepository.save(newNote));
+        PatientNote saved = patientNoteRepository.save(newNote);
+        emitClinicalNoteIndexed(saved);
+        PatientNoteDTO result = new PatientNoteDTO(saved);
         detectKeyWords(patientId, newNote.getNote());
        
         return result;
@@ -124,12 +139,47 @@ public class PatientNotetakerService {
             existingNote.setAiSummary(processAiSummary(noteDTO.getNote()));
         }
         existingNote.setUpdatedAt(LocalDateTime.now());
-        return new PatientNoteDTO(patientNoteRepository.save(existingNote));
+        PatientNote saved = patientNoteRepository.save(existingNote);
+        emitClinicalNoteIndexed(saved);
+        return new PatientNoteDTO(saved);
+    }
+
+    /**
+     * Emits {@code CLINICAL_NOTE_INDEXED} so {@code RetrievalIndexService} can chunk and
+     * index the note for Ask AI retrieval (Task 4.1). Best-effort: indexing failures must
+     * not fail the note create/update request.
+     */
+    private void emitClinicalNoteIndexed(PatientNote note) {
+        try {
+            indexingEventEmitter.emitClinicalNoteIndexed(new ClinicalNoteIndexedPayload(
+                    note.getId(),
+                    note.getPatientId(),
+                    ContentHashUtil.clinicalNoteContentHash(note.getNote(), note.getAiSummary()),
+                    DEFAULT_CONSENT_SCOPE));
+        } catch (Exception e) {
+            log.warn("Failed to emit CLINICAL_NOTE_INDEXED for noteId {}: {}",
+                    note.getId(), e.getMessage(), e);
+        }
     }
 
     @Transactional
     public void deleteNoteById(Long noteId) {
-        patientNoteRepository.deleteById(noteId);
+        final Optional<PatientNote> found = patientNoteRepository.findById(noteId);
+        if (found.isEmpty()) {
+            return;
+        }
+        final PatientNote note = found.get();
+        if (note.getPatientId() != null) {
+            try {
+                retrievalIndexService.removeIndexedSource(
+                        note.getPatientId(),
+                        String.valueOf(note.getId()),
+                        RetrievalRecordType.CLINICAL_NOTE);
+            } catch (Exception e) {
+                log.warn("Failed to de-index clinical note {}: {}", noteId, e.getMessage(), e);
+            }
+        }
+        patientNoteRepository.delete(note);
     }
 
     private void validatePatientId(Long patientId) {

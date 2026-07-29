@@ -4,6 +4,9 @@ import com.careconnect.dto.UserFileDTO;
 import com.careconnect.dto.FileUploadResponse;
 import com.careconnect.dto.StructuredDocumentEntryDTO;
 import com.careconnect.dto.StructuredEntryRequest;
+import com.careconnect.dto.UploadedFileDTO;
+import com.careconnect.indexing.DocumentIndexedPayload;
+import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.StructuredDocumentEntry;
 import com.careconnect.model.UserFile;
 import com.careconnect.model.Patient;
@@ -12,6 +15,10 @@ import com.careconnect.repository.StructuredDocumentEntryRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.service.ai.ask.AskAiDocumentOcrService;
+import com.careconnect.service.ai.indexing.RetrievalIndexService;
+import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +46,10 @@ public class FileManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(FileManagementService.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    /** Consent label on DOCUMENT_INDEXED emits — keep in sync with Ask AI OCR re-emit. */
+    public static final String DEFAULT_DOCUMENT_CONSENT_SCOPE = "on_consent";
+    private static final String DEFAULT_CONSENT_SCOPE = DEFAULT_DOCUMENT_CONSENT_SCOPE;
+
     private final UserFileRepository userFileRepository;
     private final StructuredDocumentEntryRepository structuredEntryRepository;
     private final UserRepository userRepository;
@@ -46,6 +57,10 @@ public class FileManagementService {
     private final DatabaseStorageService databaseStorageService;
     private final S3StorageService s3StorageService;
     private final DocumentComplianceService documentComplianceService;
+    private final IndexingEventEmitter indexingEventEmitter;
+    private final RetrievalIndexService retrievalIndexService;
+    private final DocumentProcessingService documentProcessingService;
+    private final AskAiDocumentOcrService askAiDocumentOcrService;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
@@ -54,14 +69,22 @@ public class FileManagementService {
                                PatientRepository patientRepository,
                                DatabaseStorageService databaseStorageService,
                                DocumentComplianceService documentComplianceService,
-                               @Autowired(required = false) S3StorageService s3StorageService) {
+                               IndexingEventEmitter indexingEventEmitter,
+                               RetrievalIndexService retrievalIndexService,
+                               DocumentProcessingService documentProcessingService,
+                               @Autowired(required = false) S3StorageService s3StorageService,
+                               AskAiDocumentOcrService askAiDocumentOcrService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.databaseStorageService = databaseStorageService;
         this.documentComplianceService = documentComplianceService;
+        this.indexingEventEmitter = indexingEventEmitter;
+        this.retrievalIndexService = retrievalIndexService;
+        this.documentProcessingService = documentProcessingService;
         this.s3StorageService = s3StorageService;
+        this.askAiDocumentOcrService = askAiDocumentOcrService;
     }
     
     @Value("${app.file.storage.default:database}")
@@ -128,6 +151,9 @@ public class FileManagementService {
             // checklist entry forward (MISSING -> IN_PROGRESS), audited with
             // the uploader and filename. Never fails the upload itself.
             documentComplianceService.recordDocumentUploaded(userFile, userId);
+
+            tryExtractAndPersistText(userFile, file);
+            emitDocumentIndexed(userFile);
             
             return FileUploadResponse.builder()
                     .fileId(userFile.getId())
@@ -176,7 +202,118 @@ public class FileManagementService {
         UserFile saved = userFileRepository.save(userFile);
         log.info("Stored generated document {} ({} bytes) for {} {}",
                 saved.getId(), data.length, ownerType, ownerId);
+        emitDocumentIndexed(saved);
         return saved;
+    }
+
+    /**
+     * Emits {@code DOCUMENT_INDEXED} for Ask AI when a patient-scoped file has description
+     * and/or extracted plain text. Best-effort: indexing failures must not fail the upload.
+     */
+    private void emitDocumentIndexed(final UserFile file) {
+        if (file == null || file.getId() == null || file.getPatientId() == null) {
+            return;
+        }
+        final String excerpt = indexableDocumentText(file);
+        if (excerpt == null || excerpt.isBlank()) {
+            return;
+        }
+        try {
+            final String category = file.getFileCategory() == null
+                    ? null
+                    : file.getFileCategory().name();
+            indexingEventEmitter.emitDocumentIndexed(new DocumentIndexedPayload(
+                    file.getId(),
+                    file.getPatientId(),
+                    ContentHashUtil.sha256(excerpt),
+                    category,
+                    excerpt,
+                    DEFAULT_CONSENT_SCOPE));
+        } catch (Exception e) {
+            log.warn("Failed to emit DOCUMENT_INDEXED for fileId {}: {}",
+                    file.getId(), e.getMessage(), e);
+        }
+    }
+
+    public static String indexableDocumentText(final UserFile file) {
+        if (file == null) {
+            return null;
+        }
+        final String extracted = file.getExtractedText() == null ? "" : file.getExtractedText().trim();
+        final String description = file.getDescription() == null ? "" : file.getDescription().trim();
+        if (!extracted.isBlank() && !description.isBlank()) {
+            if (extracted.contains(description)) {
+                return extracted;
+            }
+            return description + "\n\n" + extracted;
+        }
+        if (!extracted.isBlank()) {
+            return extracted;
+        }
+        return description.isBlank() ? null : description;
+    }
+
+    private void tryExtractAndPersistText(final UserFile userFile, final MultipartFile file) {
+        if (userFile == null || file == null || documentProcessingService == null) {
+            return;
+        }
+        try {
+            final byte[] bytes = file.getBytes();
+            if (bytes == null || bytes.length == 0) {
+                return;
+            }
+            final String base64 = java.util.Base64.getEncoder().encodeToString(bytes);
+            final UploadedFileDTO dto = UploadedFileDTO.builder()
+                    .filename(file.getOriginalFilename() == null
+                            ? userFile.getOriginalFilename()
+                            : file.getOriginalFilename())
+                    .contentType(file.getContentType())
+                    .content(base64)
+                    .build();
+            final String extracted = documentProcessingService.extractTextContent(dto);
+            if (!isExtractFailurePlaceholder(extracted)) {
+                userFile.setExtractedText(extracted);
+                userFileRepository.save(userFile);
+                return;
+            }
+            // Local extractors miss scanned PDFs / images — enqueue async Textract OCR
+            // after the upload transaction commits (see AskAiDocumentOcrService).
+            if (askAiDocumentOcrService != null) {
+                askAiDocumentOcrService.enqueueAfterFailedExtract(userFile);
+            }
+        } catch (Exception e) {
+            log.warn("Document text extraction skipped for fileId {}: {}",
+                    userFile.getId(), e.getMessage());
+            try {
+                if (askAiDocumentOcrService != null) {
+                    askAiDocumentOcrService.enqueueAfterFailedExtract(userFile);
+                }
+            } catch (Exception ocrError) {
+                log.warn("Ask AI document OCR enqueue skipped for fileId {}: {}",
+                        userFile.getId(), ocrError.getMessage());
+            }
+        }
+    }
+
+    /**
+     * True when {@link DocumentProcessingService} returned a bracketed failure/empty
+     * sentinel rather than real document text. Avoids the overly broad
+     * {@code startsWith("[")} check that would drop legitimate content like citations.
+     */
+    static boolean isExtractFailurePlaceholder(final String extracted) {
+        if (extracted == null || extracted.isBlank()) {
+            return true;
+        }
+        final String text = extracted.trim();
+        if (!text.startsWith("[")) {
+            return false;
+        }
+        return text.startsWith("[Error ")
+                || text.startsWith("[Unable to extract")
+                || text.startsWith("[Empty ")
+                || text.startsWith("[Binary file:")
+                || text.startsWith("[File contains no extractable")
+                || text.contains(" contains no extractable text:");
     }
 
     /**
@@ -268,6 +405,16 @@ public class FileManagementService {
         UserFile userFile = userFileRepository.findById(fileId)
                 .orElseThrow(() -> new RuntimeException("File not found: " + fileId));
 
+        if (userFile.getPatientId() != null) {
+            try {
+                retrievalIndexService.removeIndexedSource(
+                        userFile.getPatientId(),
+                        String.valueOf(userFile.getId()),
+                        RetrievalRecordType.UPLOADED_DOCUMENT);
+            } catch (Exception e) {
+                log.warn("Failed to de-index uploaded document {}: {}", fileId, e.getMessage(), e);
+            }
+        }
 
         // Soft delete
         userFile.setIsActive(false);

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
@@ -34,13 +35,14 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
   }
 
   Widget _buildHeader() {
+    final t = AppLocalizations.of(context)!;
     return Row(
       children: [
         Icon(Icons.text_fields, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Manual Text Entry',
+            t.manualentrywidget_manualTextEntry,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
@@ -48,18 +50,64 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
     );
   }
 
+String _translateCategory(String name){
+    final t = AppLocalizations.of(context)!;
+    switch(name){
+      case('Medical Report'):
+        return t.filemanage_medReport;
+      case('Lab Result'):
+        return t.filemanage_labResult;
+      case('Prescription'):
+        return t.filemanage_prescription;
+      case('Clinical Notes'): 
+        return t.filemanage_clinicNotes;
+      case('Profile Picture'): 
+        return t.filemanage_profilePic;
+      case('Emergency Contact'):
+        return t.filemanage_emgContact;
+      case('Insurance Document'):
+        return t.filemanage_insurDocument;
+      case('AI Chat File'):
+        return t.filemanage_aiChatFile;
+      case('General Document'):
+        return t.filemanage_genDocument;
+      case('Health Data Import'):
+        return t.filemanage_hlthDataImport;
+      case('Backup File'):
+        return t.filemanage_backupFile;
+      case('Employment Application'):
+        return t.filemanage_empApplication;
+      case('Onboarding Form'):
+        return t.filemanage_onboardForm;
+      case('Background Check'):
+        return t.filemanage_backgroundCheck;
+      case('Certification / License'):
+        return t.filemanage_cert;
+      case('Reference'):
+        return t.filemanage_ref;
+      case('Employment Contract'):
+        return t.filemanage_empContract;
+      case('Tax Form (W-4)'):
+        return t.filemanage_taxForm;
+      case('Work Authorization (I-9)'):
+      default:
+        return name;
+    }
+  }
+
   Widget _buildCategorySelector() {
+    final t = AppLocalizations.of(context)!;
     final categories = _availableCategories;
 
     if (categories.isEmpty) {
-      return const Text('No categories available.');
+      return Text(t.manualentrywidget_noCateAvail);
     }
 
     return DropdownButtonFormField<FileCategory>(
       items: categories.map((category) {
         return DropdownMenuItem<FileCategory>(
           value: category,
-          child: Text('${category.icon} ${category.displayName}'),
+          child: Text('${category.icon} ${_translateCategory(category.displayName)}'),
         );
       }).toList(),
       onChanged: (value) {
@@ -69,12 +117,12 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
       },
       validator: (value) {
         if (value == null) {
-          return 'Please select a file category';
+          return t.manualentrywidget_noCateSelected;
         }
         return null;
       },
       initialValue: _selectedCategory,  // Starts as null!
-      hint: const Text('Select Category'),  // This shows when value is null
+      hint: Text(t.manualentrywidget_selectCat),  // This shows when value is null
       decoration: InputDecoration(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -83,10 +131,11 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
   }
 
   Future<void> _selectCategory() async {
+    final t = AppLocalizations.of(context)!;
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a file category first'),
+        SnackBar(
+          content: Text(t.manualentrywidget_selectCatFirst),
           backgroundColor: AppTheme.warning,
         ),
       );
@@ -103,8 +152,9 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
+      final t = AppLocalizations.of(context)!;
       if (user == null) {
-        throw Exception('User not logged in');
+        throw Exception(t.manualentrywidget_userNotLogged);
       }
 
       FileUploadResponse? response;
@@ -121,7 +171,7 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'File uploaded successfully: ${response.fileName}',
+              '${t.manualentrywidget_fileUploadedSuccess}: ${response.fileName}',
             ),
             backgroundColor: AppTheme.success,
           ),
@@ -139,12 +189,13 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
           widget.onUploadSuccess!(response);
         }
       } else {
-        throw Exception('Upload failed - no response received');
+        throw Exception(t.manualentrywidget_uploadFailedNoResp);
       }
     } catch (e, stacktrace) {
       print('Upload Exception: $e');
       print('Stacktrace: $stacktrace');
-      final errorMessage = 'Upload failed: $e';
+      final t = AppLocalizations.of(context)!;
+      final errorMessage = '${t.manualentrywidget_uploadFailed}: $e';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMessage), backgroundColor: AppTheme.error),
       );
@@ -157,6 +208,7 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -166,16 +218,16 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
         const SizedBox(height: 16),
         TextFormField(
           controller: _fileNameController,
-          decoration: const InputDecoration(
-            labelText: 'File Name',
-            hintText: 'Enter file name (no extension)',
+          decoration: InputDecoration(
+            labelText: t.manualentrywidget_fileName,
+            hintText: t.manualentrywidget_enterFileName,
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'File name cannot be empty';
+              return t.manualentrywidget_fileNameEmpty;
             }
             if (!RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(value.trim())) {
-              return 'Invalid characters in file name';
+              return t.manualentrywidget_invalidCharacters;
             }
             return null;
           },
@@ -186,14 +238,14 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _fileContentController,
-              decoration: const InputDecoration(
-                labelText: 'File Content',
-                hintText: 'Enter file content...',
+              decoration: InputDecoration(
+                labelText: t.manualentrywidget_fileContent,
+                hintText: '${t.manualentrywidget_fileContentDescr}...',
               ),
               maxLines: 6,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'File content cannot be empty';
+                  return t.manualentrywidget_fileContentEmpty;
                 }
                 return null;
               },
@@ -216,7 +268,7 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
                   await _uploadManualTextFileToWeb(fileName, fileBytes);
                 },
 
-                child: const Text('Save to File'),
+                child: Text(t.manualentrywidget_saveToFile),
               ),
             ),
           ],

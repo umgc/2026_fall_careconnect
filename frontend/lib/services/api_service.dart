@@ -65,6 +65,9 @@ class ApiConstants {
 
   // Admin analytics endpoints
   static final String adminAnalytics = '$_host/v1/api/admin/analytics';
+
+  // Admin user management endpoints
+  static final String adminUsers = '$_host/v1/api/admin/users';
 }
 
 class ApiService {
@@ -1288,6 +1291,40 @@ class ApiService {
     } catch (e) {
       // Convert any errors to an error response
       return http.Response(jsonEncode({'error': e.toString()}), 500);
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getRecentVitalAlerts(
+    int patientId, {
+    int limit = 5,
+  }) async {
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
+      final response = await _httpClient
+          .get(
+            Uri.parse(
+              '${ApiConstants.baseUrl}analytics/alerts/recent?patientId=$patientId&limit=$limit',
+            ),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        return const [];
+      }
+
+      final decoded = jsonDecode(response.body);
+      final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+      if (data is! List) {
+        return const [];
+      }
+
+      return data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -2558,6 +2595,54 @@ class ApiService {
     }
   }
 
+  /// Confirms or declines a single extracted call summary item
+  /// (action item, appointment, or care instruction). Throws on non-2xx.
+  static Future<Map<String, dynamic>> confirmCallSummaryItem(
+    String callId,
+    String itemId, {
+    required String decision,
+    String? destination,
+    String? notes,
+  }) async {
+    final headers = await AuthTokenManager.getAuthHeaders();
+    final response = await _httpClient
+        .post(
+          Uri.parse(
+            '${ApiConstants.callsV3}/$callId/summary/items/$itemId/confirm',
+          ),
+          headers: headers,
+          body: jsonEncode({
+            'decision': decision,
+            if (destination != null) 'destination': destination,
+            if (notes != null) 'notes': notes,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      String details = '';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) {
+          final message =
+              (decoded['message'] ?? decoded['error'] ?? '').toString().trim();
+          if (message.isNotEmpty) {
+            details = ' - $message';
+          }
+        }
+      } catch (_) {}
+      throw Exception(
+        'Failed to confirm summary item: HTTP ${response.statusCode}$details',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw const FormatException('Confirm summary item response is not an object');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
   static Future<List<Map<String, dynamic>>> getCallTranscriptSegments(
     String callId,
   ) async {
@@ -2588,25 +2673,38 @@ class ApiService {
     }
   }
 
-  /// Returns the latest recording record for [callId], or null if none exists.
+  /// Returns the latest recording record for [callId], or null if none / not found.
+  ///
+  /// Treats HTTP 200 with `status: NO_RECORDING` as null so the summary UI omits the
+  /// Call Recording card. Logs non-200 / errors (previously swallowed → empty UI).
   static Future<Map<String, dynamic>?> getCallRecording(String callId) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
+      final uri = Uri.parse('${ApiConstants.callsV3}/$callId/recording');
       final response = await _httpClient
-          .get(
-            Uri.parse('${ApiConstants.callsV3}/$callId/recording'),
-            headers: headers,
-          )
-          // Status used to block on S3 refresh (~15–20s) and this timeout wiped the
-          // Call Recording card. Backend now returns READY metadata without S3; keep
-          // headroom for processing calls that still refresh.
+          .get(uri, headers: headers)
           .timeout(const Duration(seconds: 30));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      if (response.statusCode != 200) {
+        debugPrint(
+          'getCallRecording failed callId=$callId status=${response.statusCode} body=${response.body}',
+        );
+        return null;
       }
-    } catch (_) {}
-    return null;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        debugPrint('getCallRecording unexpected body type callId=$callId');
+        return null;
+      }
+      final map = Map<String, dynamic>.from(decoded);
+      final status = (map['status'] as String?)?.trim().toUpperCase() ?? '';
+      if (status == 'NO_RECORDING' || status == 'NOT_FOUND') {
+        return null;
+      }
+      return map;
+    } catch (e, st) {
+      debugPrint('getCallRecording error callId=$callId: $e\n$st');
+      return null;
+    }
   }
 
   static Future<Map<String, dynamic>?> getCallRecordingPlaybackData(

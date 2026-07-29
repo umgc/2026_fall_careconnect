@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -34,6 +35,7 @@ class _HiringFormsTabState extends State<HiringFormsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return FutureBuilder<List<FormDefinition>>(
       future: _future,
       builder: (context, snapshot) {
@@ -42,7 +44,7 @@ class _HiringFormsTabState extends State<HiringFormsTab> {
         }
         final forms = snapshot.data ?? const <FormDefinition>[];
         if (forms.isEmpty) {
-          return const Center(child: Text('No hiring forms available.'));
+          return Center(child: Text(t.hiringformtab_noHiringForm));
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12),
@@ -52,7 +54,7 @@ class _HiringFormsTabState extends State<HiringFormsTab> {
               return Padding(
                 padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
                 child: Text(
-                  'Required hiring & onboarding documents',
+                  t.hiringformtab_requiredDocuments,
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
@@ -145,6 +147,7 @@ class _FormDetailPageState extends State<_FormDetailPage> {
   FormDefinition get d => widget.definition;
 
   Future<void> _uploadCompletedForm() async {
+    final t = AppLocalizations.of(context)!;
     setState(() => _uploading = true);
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -161,7 +164,7 @@ class _FormDetailPageState extends State<_FormDetailPage> {
       }
 
       final bytes = result.files.single.bytes;
-      if (bytes == null) throw Exception('Could not read selected file');
+      if (bytes == null) throw Exception(t.hiringformtab_notReadableFile);
       final response = await HiringFormAssetService.uploadCompletedForm(
         definition: d,
         bytes: bytes,
@@ -173,18 +176,18 @@ class _FormDetailPageState extends State<_FormDetailPage> {
       if (response != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Filed "${d.title}" under ${d.fileCategory}'),
+            content: Text('${t.hiringformtab_filed} "${d.title}" ${t.hiringformtab_under} ${d.fileCategory}'),
             backgroundColor: AppTheme.success,
           ),
         );
         Navigator.of(context).pop(true);
       } else {
-        throw Exception('Upload failed - no response');
+        throw Exception(t.hiringformtab_uploadFailedNoResponse);
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e'), backgroundColor: AppTheme.error),
+        SnackBar(content: Text('${t.hiringformtab_uploadFailed}: $e'), backgroundColor: AppTheme.error),
       );
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -205,12 +208,13 @@ class _FormDetailPageState extends State<_FormDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
         title: Text(d.title),
         actions: [
           IconButton(
-            tooltip: 'Upload a completed copy',
+            tooltip: t.hiringformtab_uploadCopy,
             onPressed: _uploading ? null : _uploadCompletedForm,
             icon: _uploading
                 ? const SizedBox(
@@ -233,13 +237,14 @@ class _FormDetailPageState extends State<_FormDetailPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _uploading ? null : _fillOutForm,
         icon: const Icon(Icons.edit_document),
-        label: const Text('Fill out & submit'),
+        label: Text(t.hiringformtab_fillOut),
         backgroundColor: AppTheme.primary,
       ),
     );
   }
 
   Widget _metadataCard() {
+    final t = AppLocalizations.of(context)!;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -247,16 +252,16 @@ class _FormDetailPageState extends State<_FormDetailPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (d.issuingAuthority != null)
-              _metaRow('Issuing authority', d.issuingAuthority!),
+              _metaRow(t.hiringformtab_issueAuth, d.issuingAuthority!),
             if (d.sourceFormNumber != null)
               _metaRow(
-                  'Source form',
+                  t.hiringformtab_sourceForm,
                   '${d.sourceFormNumber}'
                   '${d.sourceEdition != null ? ' (${d.sourceEdition})' : ''}'),
-            _metaRow('Version', d.version),
-            if (d.effectiveDate != null) _metaRow('Effective date', d.effectiveDate!),
-            if (d.expirationDate != null) _metaRow('Expires', d.expirationDate!),
-            _metaRow('Filed as', d.fileCategory),
+            _metaRow(t.hiringformtab_version, d.version),
+            if (d.effectiveDate != null) _metaRow(t.hiringformtab_effectiveDate, d.effectiveDate!),
+            if (d.expirationDate != null) _metaRow(t.hiringformtab_expires, d.expirationDate!),
+            _metaRow(t.hiringformtab_filedAs, d.fileCategory),
             if (d.description != null) ...[
               const SizedBox(height: 8),
               Text(d.description!,
@@ -290,6 +295,7 @@ class _FormDetailPageState extends State<_FormDetailPage> {
   }
 
   Widget _sectionCard(FormSectionDef section) {
+    final t = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.only(top: 10),
       child: ExpansionTile(
@@ -300,7 +306,7 @@ class _FormDetailPageState extends State<_FormDetailPage> {
           padding: const EdgeInsets.only(top: 4),
           child: Wrap(spacing: 6, children: [
             if (section.completedBy != null)
-              _miniTag('by ${section.completedBy!.toLowerCase()}'),
+              _miniTag('${t.hiringformtab_by} ${section.completedBy!.toLowerCase()}'),
             if (!section.required) _miniTag('optional'),
             if (section.repeatable) _miniTag('repeatable'),
             _miniTag('${section.fields.length} fields'),
@@ -316,6 +322,7 @@ class _FormDetailPageState extends State<_FormDetailPage> {
   }
 
   Widget _fieldRow(FormFieldDef field) {
+    final t = AppLocalizations.of(context)!;
     final rules = field.validations
         .map((v) => v.summary)
         .where((s) => s.isNotEmpty)
@@ -376,12 +383,12 @@ class _FormDetailPageState extends State<_FormDetailPage> {
               runSpacing: 2,
               children: [
                 if (rules.isNotEmpty)
-                  Text('Rules: ${rules.join(', ')}',
+                  Text('${t.hiringformtab_rules}: ${rules.join(', ')}',
                       style: const TextStyle(
                           fontSize: 11, color: AppTheme.textSecondary)),
                 if (field.sourceMapping != null &&
                     field.sourceMapping!.label.isNotEmpty)
-                  Text('Source: ${field.sourceMapping!.label}',
+                  Text('${t.hiringformtab_source}: ${field.sourceMapping!.label}',
                       style: const TextStyle(
                           fontSize: 11,
                           color: AppTheme.textSecondary,

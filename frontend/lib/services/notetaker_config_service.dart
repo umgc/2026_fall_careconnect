@@ -222,6 +222,28 @@ class NotetakerConfigService {
     }
   }
 
+  /// Loads a single patient note by id (used by Ask AI citation deep links).
+  static Future<PatientNote?> getPatientNote(int patientId, String noteId) async {
+    try {
+      final authHeaders = await ApiService.getAuthHeaders();
+      final uri = Uri.parse('$baseUrl/$patientId/notes/$noteId');
+      final response = await http.get(uri, headers: authHeaders);
+      if (response.statusCode != 200) {
+        return null;
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return PatientNote.fromJson(decoded);
+      }
+      if (decoded is Map) {
+        return PatientNote.fromJson(Map<String, dynamic>.from(decoded));
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<PatientNote> createPatientNote(PatientNote note) async {
     try {
       final authHeaders = await ApiService.getAuthHeaders();

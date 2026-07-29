@@ -8,6 +8,11 @@ class BackendQuestionDto {
   final bool required;
   final bool active;
   final int ordinal;
+  final String formKey;
+  final int formVersion;
+  final String sectionKey;
+  final String? fieldKey;
+  final double? scoreWeight;
 
   const BackendQuestionDto({
     this.id,
@@ -16,6 +21,11 @@ class BackendQuestionDto {
     required this.required,
     required this.active,
     required this.ordinal,
+    this.formKey = 'virtual-checkin',
+    this.formVersion = 1,
+    this.sectionKey = 'general',
+    this.fieldKey,
+    this.scoreWeight,
   });
 
   factory BackendQuestionDto.fromJson(Map<String, dynamic> json) {
@@ -28,6 +38,13 @@ class BackendQuestionDto {
       ordinal: json['ordinal'] is int
           ? json['ordinal'] as int
           : (json['ordinal'] as num?)?.toInt() ?? 0,
+      formKey: (json['formKey'] as String?) ?? 'virtual-checkin',
+      formVersion: json['formVersion'] is int
+          ? json['formVersion'] as int
+          : (json['formVersion'] as num?)?.toInt() ?? 1,
+      sectionKey: (json['sectionKey'] as String?) ?? 'general',
+      fieldKey: json['fieldKey'] as String?,
+      scoreWeight: (json['scoreWeight'] as num?)?.toDouble(),
     );
   }
 
@@ -39,6 +56,11 @@ class BackendQuestionDto {
       'required': required,
       'active': active,
       'ordinal': ordinal,
+      if (formKey != 'virtual-checkin') 'formKey': formKey,
+      if (formVersion != 1) 'formVersion': formVersion,
+      if (sectionKey != 'general') 'sectionKey': sectionKey,
+      if (fieldKey != null) 'fieldKey': fieldKey,
+      if (scoreWeight != null) 'scoreWeight': scoreWeight,
     };
   }
 
@@ -49,6 +71,11 @@ class BackendQuestionDto {
     bool? required,
     bool? active,
     int? ordinal,
+    String? formKey,
+    int? formVersion,
+    String? sectionKey,
+    String? fieldKey,
+    double? scoreWeight,
   }) {
     return BackendQuestionDto(
       id: id ?? this.id,
@@ -57,6 +84,11 @@ class BackendQuestionDto {
       required: required ?? this.required,
       active: active ?? this.active,
       ordinal: ordinal ?? this.ordinal,
+      formKey: formKey ?? this.formKey,
+      formVersion: formVersion ?? this.formVersion,
+      sectionKey: sectionKey ?? this.sectionKey,
+      fieldKey: fieldKey ?? this.fieldKey,
+      scoreWeight: scoreWeight ?? this.scoreWeight,
     );
   }
 }

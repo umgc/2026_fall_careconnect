@@ -51,7 +51,8 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
             "fitbit-client-secret",
             "firebase-service-account-key",
             "aws-access-key-id",
-            "aws-secret-access-key"
+            "aws-secret-access-key",
+            "kvs-stream-pool-arn"
     );
 
     // Mapping of SSM parameter names to Spring property names
@@ -68,6 +69,7 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
         put("firebase-service-account-key", "firebase.service-account-key");
         put("aws-access-key-id", "aws.s3.access-key");
         put("aws-secret-access-key", "aws.s3.secret-key");
+        put("kvs-stream-pool-arn", "careconnect.kvs.stream-pool-arn");
     }};
 
     @Override

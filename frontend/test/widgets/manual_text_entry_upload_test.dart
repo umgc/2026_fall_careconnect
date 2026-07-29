@@ -4,6 +4,7 @@
 // Pure form widget — no Provider usage in build, no API calls in initState.
 // Tests cover initial render and form field presence.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/widgets/manual_text_entry_upload.dart';
@@ -11,6 +12,9 @@ import 'package:care_connect_app/services/comprehensive_file_service.dart';
 
 Widget _wrap({int? patientId}) =>
     MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: ManualTextEntryCard(
           patientId: patientId,
@@ -124,6 +128,9 @@ void main() {
   group('ManualTextEntryCard – with allowed categories', () {
     testWidgets('renders with restricted categories', (tester) async {
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: ManualTextEntryCard(
             allowedCategories: [FileCategory.medicalReport, FileCategory.labResult],

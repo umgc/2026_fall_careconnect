@@ -8,11 +8,13 @@ import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.FullTextSearchService;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
+import com.careconnect.service.ai.retrieval.VectorSimilaritySearchService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,8 +40,8 @@ import java.util.Set;
  *   <li>Ask AI FTS over {@code retrieval_index_chunk} ({@code USPS_MAIL}) when
  *       the caller's retrieval scope permits it</li>
  * </ul>
- * Results are ranked with token coverage, importance boost, and FTS provenance.
- * Vector similarity (Task 4.3 / 5.1) can slot in later without changing the API.
+ * Results are ranked with token coverage, importance boost, FTS, and vector
+ * provenance when embeddings are available. The HTTP API shape is unchanged.
  */
 @Service
 public class NaturalLanguageMailSearchService {
@@ -61,16 +63,22 @@ public class NaturalLanguageMailSearchService {
     private final AuthorizationService authorizationService;
     private final RetrievalScopeService retrievalScopeService;
     private final FullTextSearchService fullTextSearchService;
+    private final VectorSimilaritySearchService vectorSimilaritySearchService;
+    private final ChunkEmbeddingService chunkEmbeddingService;
     private final UspsMailpieceRepository mailpieceRepository;
 
     public NaturalLanguageMailSearchService(
             final AuthorizationService authorizationService,
             final RetrievalScopeService retrievalScopeService,
             final FullTextSearchService fullTextSearchService,
+            final VectorSimilaritySearchService vectorSimilaritySearchService,
+            final ChunkEmbeddingService chunkEmbeddingService,
             final UspsMailpieceRepository mailpieceRepository) {
         this.authorizationService = authorizationService;
         this.retrievalScopeService = retrievalScopeService;
         this.fullTextSearchService = fullTextSearchService;
+        this.vectorSimilaritySearchService = vectorSimilaritySearchService;
+        this.chunkEmbeddingService = chunkEmbeddingService;
         this.mailpieceRepository = mailpieceRepository;
     }
 
@@ -94,6 +102,7 @@ public class NaturalLanguageMailSearchService {
 
         searchDurableTable(patientId, tokens, preferImportant, scored);
         searchIndexedChunks(caller, patientId, normalizedQuery, limit, scored);
+        searchVectorChunks(caller, patientId, normalizedQuery, limit, scored);
 
         final int effectiveLimit = clampLimit(limit);
         final List<NaturalLanguageMailSearchMatch> matches = scored.values().stream()
@@ -233,6 +242,111 @@ public class NaturalLanguageMailSearchService {
                     Set.of("FTS", "TABLE"),
                     buildSnippet(piece, chunk == null ? null : chunk.getChunkText())));
         }
+    }
+
+    private void searchVectorChunks(
+            final User caller,
+            final Long patientId,
+            final String query,
+            final int limit,
+            final Map<Long, ScoredMatch> scored) {
+        try {
+            final RetrievalScope scope = retrievalScopeService.resolveRetrievalScope(
+                    caller, patientId, Set.of(RetrievalRecordType.USPS_MAIL));
+            if (!scope.allowedSourceTypes().contains(RetrievalRecordType.USPS_MAIL)) {
+                return;
+            }
+        } catch (final ForbiddenScopeException | UnauthorizedException ex) {
+            log.debug("Skipping vector USPS_MAIL leg for patientId={}: {}", patientId, ex.getMessage());
+            return;
+        } catch (final Exception ex) {
+            log.debug("Skipping vector USPS_MAIL leg for patientId={}: {}", patientId, ex.getMessage());
+            return;
+        }
+
+        try {
+            final var embedding = chunkEmbeddingService.embedQuery(query);
+            if (embedding.isEmpty()) {
+                return;
+            }
+            final List<RetrievalIndexChunk> chunks = vectorSimilaritySearchService.search(
+                    patientId,
+                    embedding.get(),
+                    Set.of(RetrievalRecordType.USPS_MAIL.name()),
+                    clampLimit(limit));
+            if (chunks == null || chunks.isEmpty()) {
+                return;
+            }
+
+            final List<Long> ids = new ArrayList<>();
+            final Map<Long, RetrievalIndexChunk> chunkById = new HashMap<>();
+            int rank = 0;
+            for (final RetrievalIndexChunk chunk : chunks) {
+                rank++;
+                final Long mailpieceId = parseLong(chunk.getSourceRecordId());
+                if (mailpieceId == null) {
+                    continue;
+                }
+                ids.add(mailpieceId);
+                chunkById.put(mailpieceId, chunk);
+                final double vectorScore = vectorScore(rank, null);
+                scored.merge(
+                        mailpieceId,
+                        new ScoredMatch(
+                                null, vectorScore, Set.of("VECTOR"), trimSnippet(chunk.getChunkText())),
+                        NaturalLanguageMailSearchService::mergeScores);
+            }
+            if (ids.isEmpty()) {
+                return;
+            }
+            for (final UspsMailpiece piece : mailpieceRepository.findByPatientIdAndIdIn(patientId, ids)) {
+                if (piece == null || piece.getId() == null) {
+                    continue;
+                }
+                final RetrievalIndexChunk chunk = chunkById.get(piece.getId());
+                final double prior = scored.containsKey(piece.getId())
+                        ? scored.get(piece.getId()).score()
+                        : 0.55d;
+                final double score = Math.min(1.0d, prior + importanceBoost(piece.getImportanceLevel()));
+                final Set<String> sources = new LinkedHashSet<>();
+                if (scored.containsKey(piece.getId())) {
+                    sources.addAll(scored.get(piece.getId()).sources());
+                }
+                sources.add("VECTOR");
+                sources.add("TABLE");
+                scored.put(piece.getId(), new ScoredMatch(
+                        piece,
+                        score,
+                        sources,
+                        buildSnippet(piece, chunk == null ? null : chunk.getChunkText())));
+            }
+        } catch (final Exception ex) {
+            log.warn(
+                    "NL mail vector leg failed for patientId={}; continuing without VECTOR: {}",
+                    patientId,
+                    ex.getMessage());
+        }
+    }
+
+    /**
+     * Prefers a real cosine similarity when the vector API projects one; otherwise a
+     * conservative rank prior so weak hits do not dominate TABLE/FTS merges.
+     */
+    static double vectorScore(final int rank, final Double cosineSimilarity) {
+        if (cosineSimilarity != null && !cosineSimilarity.isNaN()) {
+            return Math.max(0.0d, Math.min(1.0d, cosineSimilarity));
+        }
+        return rankBasedVectorScore(rank);
+    }
+
+    /**
+     * Conservative prior when the vector API returns ordered chunks without similarity.
+     */
+    static double rankBasedVectorScore(final int rank) {
+        if (rank <= 0) {
+            return 0.35d;
+        }
+        return Math.max(0.30d, 0.72d - (0.05d * (rank - 1)));
     }
 
     private NaturalLanguageMailSearchMatch toDto(final ScoredMatch scored) {
