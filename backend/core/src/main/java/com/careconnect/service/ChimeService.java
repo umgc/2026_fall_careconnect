@@ -31,6 +31,8 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.StartMeetingTransc
 import software.amazon.awssdk.services.chimesdkmeetings.model.TranscriptionConfiguration;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -405,6 +407,13 @@ public class ChimeService {
                             "User is not a durable call participant"));
             if (participant.getChimeAttendeeId() != null
                     && participant.getChimeJoinToken() != null) {
+                // Opaque EventBridge / roster resolve depends on this column surviving re-joins.
+                if (participant.getChimeExternalUserId() == null
+                        || participant.getChimeExternalUserId().isBlank()) {
+                    callParticipantRepository.backfillChimeExternalUserIdIfBlank(
+                            locked.getId(), parsedUserId, externalUserId);
+                    participant.setChimeExternalUserId(externalUserId);
+                }
                 final Meeting meeting = activeMeetings.get(callId);
                 final Map<String, Object> existing = buildPersistedCredentials(meeting, participant);
                 return new AttendeeClaim(locked.getId(), parsedUserId, null, existing);
@@ -427,6 +436,12 @@ public class ChimeService {
                     .orElseThrow(() -> new IllegalStateException(
                             "User is not a durable call participant"));
             if (refreshed.getChimeAttendeeId() != null && refreshed.getChimeJoinToken() != null) {
+                if (refreshed.getChimeExternalUserId() == null
+                        || refreshed.getChimeExternalUserId().isBlank()) {
+                    callParticipantRepository.backfillChimeExternalUserIdIfBlank(
+                            locked.getId(), parsedUserId, externalUserId);
+                    refreshed.setChimeExternalUserId(externalUserId);
+                }
                 final Meeting meeting = activeMeetings.get(callId);
                 return new AttendeeClaim(
                         locked.getId(),
@@ -678,10 +693,19 @@ public class ChimeService {
         createMeeting(callId);
         final Map<String, Object> cached = getCachedAttendeeCredentials(callId, userId);
         if (cached != null) {
-            if (log.isInfoEnabled()) {
-                log.info("Returning cached join credentials for userId: {} in callId: {}", userId, callId);
+            if (isCachedAttendeeStillLive(callId, userId, cached)) {
+                if (log.isInfoEnabled()) {
+                    log.info("Returning cached join credentials for userId: {} in callId: {}", userId, callId);
+                }
+                return cached;
             }
-            return cached;
+            invalidateCachedAttendeeCredentials(callId, userId);
+            if (log.isWarnEnabled()) {
+                log.warn(
+                        "Discarded stale cached attendee credentials for userId={} callId={}",
+                        userId,
+                        callId);
+            }
         }
         // Add user as attendee and return join credentials
         return createAttendee(callId, userId, role, displayName);
@@ -776,6 +800,94 @@ public class ChimeService {
         }
         final Meeting meeting = activeMeetings.get(callId);
         return meeting == null ? null : meeting.meetingId();
+    }
+
+    /** Media region for an active meeting (defaults to {@link #DEFAULT_MEDIA_REGION}). */
+    public final String getMediaRegion(final String callId) {
+        final Meeting meeting = activeMeetings.get(callId);
+        if (meeting != null
+                && meeting.mediaRegion() != null
+                && !meeting.mediaRegion().isBlank()) {
+            return meeting.mediaRegion();
+        }
+        return DEFAULT_MEDIA_REGION;
+    }
+
+    /**
+     * Chime SDK meeting ARN for media pipeline sources ({@code CreateMediaStreamPipeline},
+     * {@code CreateMediaCapturePipeline}).
+     */
+    public final String buildMeetingSourceArn(
+            final String callId, final String meetingId, final String accountId) {
+        return String.format(
+                "arn:aws:chime:%s:%s:meeting/%s", getMediaRegion(callId), accountId, meetingId);
+    }
+
+    /** Reverse lookup: Chime meeting ID → call ID for active meetings. */
+    public final String findCallIdByMeetingId(final String meetingId) {
+        if (meetingId == null || meetingId.isBlank()) {
+            return null;
+        }
+        for (final Map.Entry<String, Meeting> entry : activeMeetings.entrySet()) {
+            if (meetingId.equals(entry.getValue().meetingId())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns live app attendees in a meeting ({@code ListAttendees}), excluding pipeline-internal
+     * {@code aws:MediaPipeline-*} rows when possible.
+     */
+    public List<ChimeMeetingAttendee> listMeetingAttendees(final String meetingId) {
+        if (meetingId == null || meetingId.isBlank() || !isAwsChimeAvailable()) {
+            return List.of();
+        }
+        try {
+            final ListAttendeesResponse response =
+                    chimeSdkMeetingsClient.listAttendees(
+                            ListAttendeesRequest.builder().meetingId(meetingId).build());
+            if (response.attendees() == null) {
+                return List.of();
+            }
+            return response.attendees().stream()
+                    .map(
+                            attendee ->
+                                    new ChimeMeetingAttendee(
+                                            attendee.attendeeId(), attendee.externalUserId()))
+                    .toList();
+        } catch (Exception e) {
+            if (log.isWarnEnabled()) {
+                log.warn("ListAttendees failed for meetingId={}: {}", meetingId, e.getMessage());
+            }
+            return List.of();
+        }
+    }
+
+    /** Live Chime attendee id for a user in a meeting, or null when not present / unknown. */
+    public String findLiveAttendeeIdForUser(
+            final String callId, final String meetingId, final String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        final String expectedOpaque = toOpaqueChimeExternalUserId(callId, userId);
+        final Long numericUserId = parseNumericUserId(userId);
+        for (final ChimeMeetingAttendee attendee : listMeetingAttendees(meetingId)) {
+            final String externalUserId = attendee.externalUserId();
+            if (externalUserId == null || externalUserId.isBlank()) {
+                continue;
+            }
+            if (expectedOpaque.equals(externalUserId)) {
+                return attendee.attendeeId();
+            }
+            // Legacy ROLE_…_userId attendees (pre-opaque ids).
+            if (numericUserId != null
+                    && numericUserId.equals(ChimeExternalUserIdParser.parseUserId(externalUserId))) {
+                return attendee.attendeeId();
+            }
+        }
+        return null;
     }
 
     /**
@@ -934,6 +1046,52 @@ public class ChimeService {
     private void cacheAttendeeCredentials(
             final String callId, final String userId, final Map<String, Object> credentials) {
         attendeeCredentials.computeIfAbsent(callId, k -> new ConcurrentHashMap<>()).put(userId, credentials);
+    }
+
+    private void invalidateCachedAttendeeCredentials(final String callId, final String userId) {
+        final Map<String, Map<String, Object>> perCall = attendeeCredentials.get(callId);
+        if (perCall != null) {
+            perCall.remove(userId);
+        }
+    }
+
+    private boolean isCachedAttendeeStillLive(
+            final String callId, final String userId, final Map<String, Object> cached) {
+        final Meeting meeting = activeMeetings.get(callId);
+        if (meeting == null) {
+            return false;
+        }
+        final Object cachedAttendeeId = cached.get("attendeeId");
+        if (cachedAttendeeId == null || cachedAttendeeId.toString().isBlank()) {
+            return false;
+        }
+        final List<ChimeMeetingAttendee> live = listMeetingAttendees(meeting.meetingId());
+        boolean sawVerifiableAppAttendee = false;
+        for (final ChimeMeetingAttendee attendee : live) {
+            if (attendee.externalUserId() == null
+                    || attendee.externalUserId().isBlank()
+                    || ChimeExternalUserIdParser.isPipelineInternal(attendee.externalUserId())) {
+                continue;
+            }
+            sawVerifiableAppAttendee = true;
+            break;
+        }
+        // Empty / failed ListAttendees (or pipeline-only roster): cannot verify — keep cache.
+        if (!sawVerifiableAppAttendee) {
+            return true;
+        }
+        final String liveAttendeeId =
+                findLiveAttendeeIdForUser(callId, meeting.meetingId(), userId);
+        // Roster is visible but this user is absent → fail closed (stale cache).
+        return liveAttendeeId != null && liveAttendeeId.equals(cachedAttendeeId.toString());
+    }
+
+    private static Long parseNumericUserId(final String userId) {
+        try {
+            return Long.parseLong(userId.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private Map<String, Object> buildMeetingResponse(final Meeting meeting) {

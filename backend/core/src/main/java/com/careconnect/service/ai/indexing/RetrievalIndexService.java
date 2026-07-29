@@ -1,19 +1,30 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.ClinicalNoteIndexedPayload;
+import com.careconnect.indexing.DocumentIndexedPayload;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
 import com.careconnect.model.CallSummary;
 import com.careconnect.model.CallSession;
 import com.careconnect.model.CallTranscriptSegment;
+import com.careconnect.model.PatientNote;
+import com.careconnect.model.UserFile;
 import com.careconnect.model.UspsMailpiece;
+import com.careconnect.model.VisitSummary;
 import com.careconnect.model.retrieval.RetrievalIndexChunk;
 import com.careconnect.model.retrieval.RetrievalIndexSchema;
 import com.careconnect.repository.CallSummaryRepository;
 import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.repository.PatientNoteRepository;
+import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
+import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.FileManagementService;
+import com.careconnect.service.ai.indexing.chunker.ClinicalNoteChunker;
+import com.careconnect.service.ai.indexing.chunker.DocumentChunker;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
@@ -58,35 +69,50 @@ public class RetrievalIndexService {
     private static final Logger log = LoggerFactory.getLogger(RetrievalIndexService.class);
 
     private final CallSummaryRepository callSummaryRepository;
+    private final VisitSummaryRepository visitSummaryRepository;
     private final CallSessionRepository callSessionRepository;
     private final CallTranscriptService callTranscriptService;
     private final UspsMailpieceRepository uspsMailpieceRepository;
+    private final PatientNoteRepository patientNoteRepository;
+    private final UserFileRepository userFileRepository;
     private final RetrievalIndexChunkRepository chunkRepository;
     private final SummaryChunker summaryChunker;
     private final TranscriptSegmentChunker transcriptSegmentChunker;
     private final MailpieceChunker mailpieceChunker;
+    private final ClinicalNoteChunker clinicalNoteChunker;
+    private final DocumentChunker documentChunker;
     private final ObjectMapper objectMapper;
     private final ChunkEmbeddingService chunkEmbeddingService;
 
     public RetrievalIndexService(
             final CallSummaryRepository callSummaryRepository,
+            final VisitSummaryRepository visitSummaryRepository,
             final CallSessionRepository callSessionRepository,
             final CallTranscriptService callTranscriptService,
             final UspsMailpieceRepository uspsMailpieceRepository,
+            final PatientNoteRepository patientNoteRepository,
+            final UserFileRepository userFileRepository,
             final RetrievalIndexChunkRepository chunkRepository,
             final SummaryChunker summaryChunker,
             final TranscriptSegmentChunker transcriptSegmentChunker,
             final MailpieceChunker mailpieceChunker,
+            final ClinicalNoteChunker clinicalNoteChunker,
+            final DocumentChunker documentChunker,
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
+        this.visitSummaryRepository = visitSummaryRepository;
         this.callSessionRepository = callSessionRepository;
         this.callTranscriptService = callTranscriptService;
         this.uspsMailpieceRepository = uspsMailpieceRepository;
+        this.patientNoteRepository = patientNoteRepository;
+        this.userFileRepository = userFileRepository;
         this.chunkRepository = chunkRepository;
         this.summaryChunker = summaryChunker;
         this.transcriptSegmentChunker = transcriptSegmentChunker;
         this.mailpieceChunker = mailpieceChunker;
+        this.clinicalNoteChunker = clinicalNoteChunker;
+        this.documentChunker = documentChunker;
         this.objectMapper = objectMapper;
         this.chunkEmbeddingService = chunkEmbeddingService;
     }
@@ -119,12 +145,7 @@ public class RetrievalIndexService {
             return 0;
         }
         if (isVisitSummary(payload)) {
-            // Leave outbox unprocessed until visit_summaries indexing lands (Task 1.4).
-            // Do not burn attempt budget — otherwise the row dead-letters before 1.4 ships.
-            throw new IndexingDeferredException(
-                    "Visit summary indexing not implemented yet (Task 1.4) for summaryId="
-                            + payload.summaryId(),
-                    false);
+            return ingestVisitSummaryCreated(payload);
         }
 
         final String sourceRecordId = SummarySourceKey.call(payload.summaryId());
@@ -222,6 +243,103 @@ public class RetrievalIndexService {
                 RetrievalRecordType.summaryTypeNames());
         return persistDrafts(
                 patientId, sourceRecordId, drafts, SummarySourceKey.CALL_KIND);
+    }
+
+    /**
+     * Task 1.4 / 3.5 — indexes a successful visit summary using the shared SummaryChunker.
+     */
+    @Transactional
+    public int ingestVisitSummaryCreated(final SummaryCreatedPayload payload) {
+        if (payload == null || payload.summaryId() == null) {
+            throw new IllegalArgumentException("SUMMARY_CREATED payload requires summaryId");
+        }
+        final String sourceRecordId = SummarySourceKey.visit(payload.summaryId());
+        final List<String> sourceRecordIds = List.of(sourceRecordId);
+        final VisitSummary summary = visitSummaryRepository.findByIdForUpdate(payload.summaryId())
+                .orElseThrow(() -> new IndexingDeferredException(
+                        "VisitSummary not found for summaryId=" + payload.summaryId(),
+                        false));
+
+        if (!"SUCCESS".equalsIgnoreCase(
+                java.util.Objects.toString(summary.getStatus(), "").trim())) {
+            throw new IndexingDeferredException(
+                    "Authoritative VisitSummary is not successful");
+        }
+        final Long patientId = summary.getPatientId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index visit summaryId=" + payload.summaryId()
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED patient scope does not match authoritative visit summary row");
+        }
+        final String contentHash = ContentHashUtil.sha256(summary.getSummaryJson());
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED content hash does not match authoritative visit summary");
+        }
+        if (summary.getSummarizationEngine() != null
+                && !summary.getSummarizationEngine().isBlank()
+                && payload.summarizationEngine() != null
+                && !payload.summarizationEngine().isBlank()
+                && !Objects.equals(payload.summarizationEngine(), summary.getSummarizationEngine())) {
+            throw new IndexingDeferredException(
+                    "SUMMARY_CREATED engine does not match authoritative visit summary");
+        }
+
+        final List<IndexingChunkDraft> drafts = summaryChunker.chunk(
+                "visit",
+                summary.getSummaryJson(),
+                contentHash,
+                summary.getCaregiverVisibility(),
+                summary.getSummarizationEngine(),
+                summary.getVisitId(),
+                summary.getGeneratedAt() == null
+                        ? null
+                        : summary.getGeneratedAt()
+                                .atZone(ZoneOffset.UTC)
+                                .toInstant()
+                                .toString());
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findCallSummaryChunksForReplacement(
+                        patientId,
+                        sourceRecordId,
+                        sourceRecordId,
+                        SummarySourceKey.VISIT_KIND,
+                        RetrievalRecordType.summaryTypeNames());
+
+        if (drafts.isEmpty()) {
+            log.warn(
+                    "VISIT SUMMARY_CREATED produced no drafts for summaryId={}; leaving existing chunks unchanged",
+                    payload.summaryId());
+            return retryMissingEmbeddingsOrSkip(
+                    patientId,
+                    sourceRecordIds,
+                    payload.summaryId(),
+                    "no drafts; existing visit chunks left unchanged");
+        }
+
+        if (contentHash != null
+                && chunksMatchExpected(existing, drafts, contentHash, sourceRecordId)) {
+            return retryMissingEmbeddingsOrSkip(
+                    patientId,
+                    sourceRecordIds,
+                    payload.summaryId(),
+                    "visit contentHash and citation metadata unchanged");
+        }
+
+        chunkRepository.deleteCallSummaryChunksForReplacement(
+                patientId,
+                sourceRecordId,
+                sourceRecordId,
+                SummarySourceKey.VISIT_KIND,
+                RetrievalRecordType.summaryTypeNames());
+        return persistDrafts(
+                patientId, sourceRecordId, drafts, SummarySourceKey.VISIT_KIND);
     }
 
     /**
@@ -474,6 +592,212 @@ public class RetrievalIndexService {
         chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
                 patientId, sourceRecordId, RetrievalRecordType.USPS_MAIL.name());
         return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    /**
+     * Indexes a persisted patient note into {@code retrieval_index_chunk} with
+     * {@link RetrievalRecordType#CLINICAL_NOTE} (Task 4.1). Mirrors
+     * {@link #ingestMailpieceIndexed} — loads the authoritative entity, chunks it, and
+     * replaces prior chunks for the same {@code source_record_id}.
+     *
+     * @return number of chunks written (0 when skipped)
+     */
+    @Transactional
+    public int ingestClinicalNoteIndexed(final ClinicalNoteIndexedPayload payload) {
+        if (payload == null || payload.noteId() == null) {
+            throw new IllegalArgumentException("CLINICAL_NOTE_INDEXED payload requires noteId");
+        }
+        final String sourceRecordId = String.valueOf(payload.noteId());
+        final PatientNote note = patientNoteRepository.findById(payload.noteId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "PatientNote not found for noteId=" + payload.noteId()));
+        final Long patientId = note.getPatientId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index noteId=" + payload.noteId()
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "CLINICAL_NOTE_INDEXED patient scope does not match authoritative PatientNote");
+        }
+        final String contentHash = ContentHashUtil.clinicalNoteContentHash(
+                note.getNote(), note.getAiSummary());
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "CLINICAL_NOTE_INDEXED content hash does not match authoritative PatientNote");
+        }
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.CLINICAL_NOTE.name(), sourceRecordId);
+
+        if (chunkContentUnchanged(
+                patientId, sourceRecordId, RetrievalRecordType.CLINICAL_NOTE, contentHash)) {
+            log.info("Skipping CLINICAL_NOTE_INDEXED for noteId={} — contentHash unchanged",
+                    payload.noteId());
+            return 0;
+        }
+
+        final List<IndexingChunkDraft> drafts = clinicalNoteChunker.chunk(
+                note.getNote(), note.getAiSummary(), contentHash, payload.consentScope());
+
+        if (drafts.isEmpty()) {
+            log.warn(
+                    "CLINICAL_NOTE_INDEXED produced no drafts for noteId={}; "
+                            + "leaving existing chunks unchanged",
+                    payload.noteId());
+            return 0;
+        }
+
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, RetrievalRecordType.CLINICAL_NOTE.name());
+        return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    /**
+     * Removes all retrieval chunks for a source (note, document, etc.) so deleted
+     * records are no longer returned by Ask AI. Call before or as part of soft/hard delete.
+     */
+    @Transactional
+    public void removeIndexedSource(
+            final Long patientId,
+            final String sourceRecordId,
+            final RetrievalRecordType recordType) {
+        if (patientId == null
+                || sourceRecordId == null
+                || sourceRecordId.isBlank()
+                || recordType == null) {
+            throw new IllegalArgumentException(
+                    "patientId, sourceRecordId, and recordType are required to de-index");
+        }
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, recordType.name(), sourceRecordId);
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, recordType.name());
+    }
+
+    /**
+     * Indexes an uploaded document's description and/or extracted plain text into
+     * {@code retrieval_index_chunk} with {@link RetrievalRecordType#UPLOADED_DOCUMENT}.
+     * Long excerpts are window-chunked by {@link DocumentChunker}. Scanned images without
+     * OCR still fall back to description/caption only.
+     * Mirrors {@link #ingestMailpieceIndexed} — loads the authoritative {@link UserFile},
+     * chunks it, and replaces prior chunks for the same {@code source_record_id}.
+     *
+     * @return number of chunks written (0 when skipped)
+     */
+    @Transactional
+    public int ingestDocumentIndexed(final DocumentIndexedPayload payload) {
+        if (payload == null || payload.fileId() == null) {
+            throw new IllegalArgumentException("DOCUMENT_INDEXED payload requires fileId");
+        }
+        final String sourceRecordId = String.valueOf(payload.fileId());
+        final UserFile file = userFileRepository.findById(payload.fileId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "UserFile not found for fileId=" + payload.fileId()));
+        final Long patientId = file.getPatientId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index fileId=" + payload.fileId()
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "DOCUMENT_INDEXED patient scope does not match authoritative UserFile");
+        }
+
+        // Soft-deleted files must leave the retrieval index (late outbox events included).
+        if (Boolean.FALSE.equals(file.getIsActive())) {
+            removeIndexedSource(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT);
+            log.info("De-indexed soft-deleted DOCUMENT for fileId={}", payload.fileId());
+            return 0;
+        }
+
+        chunkRepository.acquireSourceReplacementLock(
+                patientId, RetrievalRecordType.UPLOADED_DOCUMENT.name(), sourceRecordId);
+
+        // Re-load after lock to close soft-delete TOCTOU with concurrent deleteFile.
+        final UserFile locked = userFileRepository.findById(payload.fileId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "UserFile not found for fileId=" + payload.fileId()));
+        if (Boolean.FALSE.equals(locked.getIsActive())) {
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT.name());
+            log.info("De-indexed soft-deleted DOCUMENT after lock for fileId={}", payload.fileId());
+            return 0;
+        }
+
+        // Authoritative description + extracted text (not stale outbox excerpt).
+        final String textExcerpt = FileManagementService.indexableDocumentText(locked);
+        if (textExcerpt == null || textExcerpt.isBlank()) {
+            chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                    patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT.name());
+            log.info(
+                    "DOCUMENT_INDEXED skipped blank text for fileId={}; chunks cleared",
+                    payload.fileId());
+            return 0;
+        }
+
+        final String contentHash = ContentHashUtil.sha256(textExcerpt);
+        if (payload.contentHash() != null
+                && !payload.contentHash().isBlank()
+                && !payload.contentHash().equals(contentHash)) {
+            throw new IndexingDeferredException(
+                    "DOCUMENT_INDEXED content hash does not match authoritative UserFile");
+        }
+
+        if (chunkContentUnchanged(
+                patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT, contentHash)) {
+            log.info("Skipping DOCUMENT_INDEXED for fileId={} — contentHash unchanged",
+                    payload.fileId());
+            return 0;
+        }
+
+        final String fileCategory = firstNonBlank(
+                payload.fileCategory(),
+                locked.getFileCategory() == null ? null : locked.getFileCategory().name());
+        final List<IndexingChunkDraft> drafts = documentChunker.chunk(
+                textExcerpt, fileCategory, contentHash, payload.consentScope());
+
+        if (drafts.isEmpty()) {
+            log.warn(
+                    "DOCUMENT_INDEXED produced no drafts for fileId={}; "
+                            + "leaving existing chunks unchanged",
+                    payload.fileId());
+            return 0;
+        }
+
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, RetrievalRecordType.UPLOADED_DOCUMENT.name());
+        return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    private boolean chunkContentUnchanged(
+            final Long patientId,
+            final String sourceRecordId,
+            final RetrievalRecordType recordType,
+            final String contentHash) {
+        if (contentHash == null || contentHash.isBlank()) {
+            return false;
+        }
+        final List<RetrievalIndexChunk> existing =
+                chunkRepository.findByPatientIdAndSourceRecordIdAndRecordType(
+                        patientId, sourceRecordId, recordType.name());
+        if (existing == null || existing.isEmpty()) {
+            return false;
+        }
+        for (final RetrievalIndexChunk chunk : existing) {
+            if (!contentHashEquals(chunk.getChunkMetadata(), contentHash)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        return a != null && !a.isBlank() ? a : b;
     }
 
     private static void assertMailpieceEventMatches(

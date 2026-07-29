@@ -1,13 +1,16 @@
 package com.careconnect.controller;
 
 import com.careconnect.dto.ai.AiAskRequest;
+import com.careconnect.dto.ai.AiAskShareRequest;
 import com.careconnect.dto.ai.InputModality;
 import com.careconnect.model.User;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.ai.ask.AiAskConfirmationService;
 import com.careconnect.service.ai.ask.AiAskService;
+import com.careconnect.service.ai.ask.AiAskShareService;
 import com.careconnect.service.ai.ask.AskAiGroundingException;
 import com.careconnect.service.ai.ask.AskAiRejectedException;
 import com.careconnect.service.ai.ask.AskAiUnavailableException;
@@ -28,10 +31,12 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,6 +47,10 @@ class AiAskControllerTest {
     @Mock
     private AiAskService aiAskService;
     @Mock
+    private AiAskConfirmationService askConfirmationService;
+    @Mock
+    private AiAskShareService askShareService;
+    @Mock
     private SecurityUtil securityUtil;
 
     private MockMvc mockMvc;
@@ -50,7 +59,8 @@ class AiAskControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new AiAskController(aiAskService, securityUtil))
+                        new AiAskController(
+                                aiAskService, askConfirmationService, askShareService, securityUtil))
                 .setControllerAdvice(new AiAskExceptionAdvice())
                 .build();
         caller = new User();
@@ -258,6 +268,219 @@ class AiAskControllerTest {
 
         assertThat(requirement).isNotNull();
         assertThat(requirement.value()).isEqualTo(Permission.USE_AI_FEATURES);
+    }
+
+    @Test
+    void shareEndpointRequiresAiFeaturePermission() throws Exception {
+        final RequirePermission requirement = AiAskController.class
+                .getMethod("share", AiAskShareRequest.class)
+                .getAnnotation(RequirePermission.class);
+
+        assertThat(requirement).isNotNull();
+        assertThat(requirement.value()).isEqualTo(Permission.USE_AI_FEATURES);
+    }
+
+    @Test
+    void listSharesEndpointRequiresAiFeaturePermission() throws Exception {
+        final RequirePermission requirement = AiAskController.class
+                .getMethod("listShares", Long.class)
+                .getAnnotation(RequirePermission.class);
+
+        assertThat(requirement).isNotNull();
+        assertThat(requirement.value()).isEqualTo(Permission.USE_AI_FEATURES);
+    }
+
+    @Test
+    @DisplayName("share endpoint returns share receipt on success")
+    void share_successReturnsReceipt() throws Exception {
+        when(askShareService.share(any(), any()))
+                .thenReturn(new com.careconnect.dto.ai.AiAskShareResponse(
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        42L,
+                        UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+                        java.util.List.of(11L, 12L),
+                        2,
+                        java.time.Instant.parse("2026-07-27T12:00:00Z"),
+                        "[{\"role\":\"user\",\"text\":\"Hello\"}]"));
+
+        mockMvc.perform(post("/api/ai/ask/share")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "patientId": 42,
+                                  "sessionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                                  "messages": [
+                                    {"role": "user", "text": "Hello", "occurredAt": "2026-07-27T12:00:00Z"}
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.shareId").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$.patientId").value(42))
+                .andExpect(jsonPath("$.recipientUserIds", hasSize(2)))
+                .andExpect(jsonPath("$.messageCount").value(2))
+                .andExpect(jsonPath("$.transcriptJson").value("[{\"role\":\"user\",\"text\":\"Hello\"}]"));
+    }
+
+    @Test
+    @DisplayName("share endpoint maps forbidden scope to 403")
+    void share_forbiddenScopeReturns403() throws Exception {
+        when(askShareService.share(any(), any()))
+                .thenThrow(ForbiddenScopeException.of(
+                        ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                        42L,
+                        7L,
+                        "no access",
+                        UUID.randomUUID()));
+
+        mockMvc.perform(post("/v1/api/ai/ask/share")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "patientId": 42,
+                                  "messages": [
+                                    {"role": "user", "text": "Hello"}
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN_SCOPE"));
+    }
+
+    @Test
+    @DisplayName("share endpoint maps AskAiRejectedException to status from exception")
+    void share_rejectedReturnsMappedStatus() throws Exception {
+        when(askShareService.share(any(), any()))
+                .thenThrow(new AskAiRejectedException("NO_CAREGIVER", "No linked caregiver", 400));
+
+        mockMvc.perform(post("/api/ai/ask/share")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "patientId": 42,
+                                  "messages": [
+                                    {"role": "user", "text": "Hello"}
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("NO_CAREGIVER"))
+                .andExpect(jsonPath("$.message").value("No linked caregiver"));
+    }
+
+    @Test
+    @DisplayName("list shares returns receipts for authorized patient")
+    void listShares_success() throws Exception {
+        when(askShareService.listShares(any(), eq(42L)))
+                .thenReturn(java.util.List.of(new com.careconnect.dto.ai.AiAskShareResponse(
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        42L,
+                        null,
+                        java.util.List.of(11L),
+                        1,
+                        java.time.Instant.parse("2026-07-27T12:00:00Z"),
+                        "[{\"role\":\"user\",\"text\":\"Hello\"}]")));
+
+        mockMvc.perform(get("/api/ai/ask/shares").param("patientId", "42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].shareId").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$[0].recipientUserIds[0]").value(11))
+                .andExpect(jsonPath("$[0].transcriptJson").value("[{\"role\":\"user\",\"text\":\"Hello\"}]"));
+    }
+
+    @Test
+    @DisplayName("list shares maps forbidden scope to 403")
+    void listShares_forbiddenScopeReturns403() throws Exception {
+        when(askShareService.listShares(any(), eq(42L)))
+                .thenThrow(ForbiddenScopeException.of(
+                        ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                        42L,
+                        7L,
+                        "no access",
+                        UUID.randomUUID()));
+
+        mockMvc.perform(get("/api/ai/ask/shares").param("patientId", "42"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN_SCOPE"));
+    }
+
+    @Test
+    @DisplayName("list shares maps AskAiRejectedException to status from exception")
+    void listShares_rejectedReturnsMappedStatus() throws Exception {
+        when(askShareService.listShares(any(), eq(42L)))
+                .thenThrow(new AskAiRejectedException("INVALID_REQUEST", "patientId is required", 400));
+
+        mockMvc.perform(get("/api/ai/ask/shares").param("patientId", "42"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("patientId is required"));
+    }
+
+    @Test
+    @DisplayName("confirmation endpoint returns saved decision")
+    void confirm_successReturnsDecision() throws Exception {
+        final var saved = new com.careconnect.model.ai.ask.AiAskConfirmationDecision();
+        saved.setDecision("CONFIRMED");
+        saved.setSessionId(UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+        saved.setCreatedAt(java.time.Instant.parse("2026-07-27T12:00:00Z"));
+        when(askConfirmationService.recordDecision(any(), any())).thenReturn(saved);
+
+        mockMvc.perform(post("/api/ai/ask/confirmation")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "sessionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                                  "patientId": 42,
+                                  "decision": "CONFIRMED"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.decision").value("CONFIRMED"));
+    }
+
+    @Test
+    @DisplayName("confirmation endpoint maps forbidden scope to 403")
+    void confirm_forbiddenScopeReturns403() throws Exception {
+        when(askConfirmationService.recordDecision(any(), any()))
+                .thenThrow(ForbiddenScopeException.of(
+                        ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                        42L,
+                        7L,
+                        "no access",
+                        UUID.randomUUID()));
+
+        mockMvc.perform(post("/api/ai/ask/confirmation")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "sessionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                                  "patientId": 42,
+                                  "decision": "CONFIRMED"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN_SCOPE"));
+    }
+
+    @Test
+    @DisplayName("confirmation endpoint maps illegal argument to 400")
+    void confirm_illegalArgumentReturns400() throws Exception {
+        when(askConfirmationService.recordDecision(any(), any()))
+                .thenThrow(new IllegalArgumentException("bad decision"));
+
+        mockMvc.perform(post("/api/ai/ask/confirmation")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "sessionId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                                  "patientId": 42,
+                                  "decision": "NOPE"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("bad decision"));
     }
 
     private static String requestJson(final UUID sessionId) {

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/features/emergency_qr/qr_screen.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +29,7 @@ class DashboardAppHeader extends StatelessWidget
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final DateTime time = DateTime.now();
     final String timeZone = time.timeZoneName;
@@ -125,8 +127,8 @@ class DashboardAppHeader extends StatelessWidget
                                     dobDate = DateTime.parse(patient.dob);
                                   } catch (e) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Invalid date of birth. Cannot generate emergency QR.'),
+                                      SnackBar(
+                                        content: Text(t.appheaderwidget_invalidDOB),
                                       ),
                                     );
                                     return;
@@ -168,8 +170,8 @@ class DashboardAppHeader extends StatelessWidget
                                 } else {
                                   // Show error if no patient data available
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Patient data not available for emergency QR'),
+                                    SnackBar(
+                                      content: Text(t.appheaderwidget_missingPtData),
                                     ),
                                   );
                                 }
@@ -263,7 +265,7 @@ class DashboardAppHeader extends StatelessWidget
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            "Welcome back $userName",
+                            "${t.appheaderwidget_welcomeBack} $userName",
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w600,
@@ -283,8 +285,8 @@ class DashboardAppHeader extends StatelessWidget
                           const SizedBox(height: 2),
                           Text(
                             role == "PATIENT"
-                                ? "How are you feeling today?"
-                                : "Your patients' health summary",
+                                ? t.appheaderwidget_greetingPt
+                                : t.appheaderwidget_greetingNonPt,
                             style: TextStyle(
                               fontSize: 13,
                               color: theme.colorScheme.onSurface.withValues(

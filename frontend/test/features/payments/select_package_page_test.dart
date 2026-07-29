@@ -3,6 +3,7 @@
 // tester.runAsync allows the connection-refused failure to propagate,
 // after which the error view is shown with the error message and Retry button.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,9 @@ Widget _wrap() {
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
     child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale('en'),
       home: SelectPackagePage(),
     ),
   );

@@ -1,6 +1,8 @@
 package com.careconnect.model;
 
+import com.careconnect.config.UtcWallClockLocalDateTimeConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -113,6 +115,15 @@ public class CallRecording extends Auditable {
     @Column(name = "concatenation_pipeline_id", length = STANDARD_ID_LENGTH)
     private String concatenationPipelineId;
 
+    /** Legacy Media Insights pipeline id (O4 — column retained; no longer written or exposed). */
+    @Deprecated
+    @Column(name = "kvs_pipeline_id", length = STANDARD_ID_LENGTH)
+    private String kvsPipelineId;
+
+    /** AWS Chime media stream pipeline that ingests meeting audio into the KVS stream pool. */
+    @Column(name = "media_stream_pipeline_id", length = STANDARD_ID_LENGTH)
+    private String mediaStreamPipelineId;
+
     /** S3 bucket where recording artifacts are written. */
     @Column(name = "s3_bucket", length = STANDARD_ID_LENGTH)
     private String s3Bucket;
@@ -140,17 +151,20 @@ public class CallRecording extends Auditable {
     private Long ownerUserId;
 
     @Column(name = "consented_at")
+    @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
     private LocalDateTime consentedAt;
 
     @Column(name = "consented_by_user_id")
     private Long consentedByUserId;
 
-    /** Timestamp when recording started. */
+    /** Timestamp when recording started (UTC wall-clock). */
     @Column(name = "started_at", nullable = false)
+    @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
     private LocalDateTime startedAt;
 
-    /** Timestamp when recording ended. */
+    /** Timestamp when recording ended (UTC wall-clock). */
     @Column(name = "ended_at")
+    @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
     private LocalDateTime endedAt;
 
     /** Duration of the recording in seconds. */

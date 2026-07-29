@@ -1,6 +1,7 @@
 package com.careconnect.controller;
 
 import com.careconnect.dto.AdminAnalyticsSummaryDTO;
+import com.careconnect.dto.FeatureTrendDTO;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
@@ -48,5 +49,29 @@ public class AdminAnalyticsController {
 
     final TimeRange range = adminAnalyticsService.resolveRange(days, from, to);
     return adminAnalyticsService.getSummary(range.from(), range.to());
+  }
+
+  /**
+   * Returns daily feature_use counts for one feature over the requested window.
+   *
+   * @param from inclusive range start (ISO-8601)
+   * @param to exclusive range end (ISO-8601)
+   * @param feature anonymous feature key from feature_use telemetry
+   * @return daily counts with zero-filled gaps
+   */
+  @GetMapping("/feature-trends")
+  public FeatureTrendDTO featureTrends(
+      @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          final OffsetDateTime from,
+      @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          final OffsetDateTime to,
+      @RequestParam final String feature)
+      throws UnauthorizedException {
+    final User currentUser = securityUtil.resolveCurrentUser();
+    authorizationService.requireAdmin(currentUser);
+
+    return adminAnalyticsService.getFeatureTrends(from, to, feature);
   }
 }

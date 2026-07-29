@@ -9,6 +9,7 @@ import com.careconnect.repository.evv.EvvOfflineQueueRepository;
 import com.careconnect.repository.evv.EvvRecordRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.model.schedule.ScheduledVisit;
+import com.careconnect.service.VisitSummaryService;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -33,6 +34,7 @@ public class EvvService {
     private final EvvLocationService locationService;
     private final AuditLogger audit;
     private final ScheduledVisitRepository scheduledVisitRepository;
+    private final VisitSummaryService visitSummaryService;
 
     /**
      * Build audit event details map with location information from EVV record
@@ -196,6 +198,13 @@ public class EvvService {
                     ScheduledVisit scheduledVisit = optionalVisit.get();
                     scheduledVisit.markCompleted();
                     scheduledVisitRepository.save(scheduledVisit);
+                    try {
+                        visitSummaryService.generateAndStoreSummary(scheduledVisit.getId(), null);
+                    } catch (Exception summaryEx) {
+                        log.warn(
+                                "Visit summary generation failed for visit {}: {}",
+                                scheduledVisit.getId(), summaryEx.getMessage(), summaryEx);
+                    }
                 } else {
                     // scheduled visit not found — ignore silently
                 }

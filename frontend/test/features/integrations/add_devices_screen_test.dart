@@ -98,7 +98,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('Connect Fitbit through Google Health API'),
+        find.textContaining('Connect Fitbit through Google Health'),
         findsOneWidget,
       );
     });

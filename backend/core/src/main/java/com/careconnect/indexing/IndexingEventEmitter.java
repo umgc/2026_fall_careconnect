@@ -93,6 +93,28 @@ public class IndexingEventEmitter {
     }
 
     /**
+     * Emit a {@code CLINICAL_NOTE_INDEXED} event after a patient note is created or
+     * updated (Task 4.1).
+     *
+     * @param payload CLINICAL_NOTE_INDEXED payload body
+     * @return the persisted outbox row
+     */
+    public IndexingOutboxRow emitClinicalNoteIndexed(final ClinicalNoteIndexedPayload payload) {
+        return emit(IndexingEventType.CLINICAL_NOTE_INDEXED, payload);
+    }
+
+    /**
+     * Emit a {@code DOCUMENT_INDEXED} event after an uploaded document's description
+     * text becomes available for indexing (Task 4.1, description-only MVP).
+     *
+     * @param payload DOCUMENT_INDEXED payload body
+     * @return the persisted outbox row
+     */
+    public IndexingOutboxRow emitDocumentIndexed(final DocumentIndexedPayload payload) {
+        return emit(IndexingEventType.DOCUMENT_INDEXED, payload);
+    }
+
+    /**
      * General-purpose emit hook. Package-private so type-specific
      * public wrappers enforce the correct payload type at compile time.
      *

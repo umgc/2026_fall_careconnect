@@ -5,6 +5,7 @@
 // PatientNotesWidget inside calls an API in initState, but the overall
 // page Scaffold renders synchronously.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -18,6 +19,9 @@ Widget _wrap({int patientId = 1, String patientName = 'Jane Doe'}) {
     mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 1),
   );
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales, 
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: PatientMedicalNotesPage(

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/theme/app_theme.dart';
@@ -80,11 +81,12 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
     );
     if (!mounted) return;
     setState(() => _submitting = false);
+    final t = AppLocalizations.of(context)!;
 
     if (result.ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Submitted "${d.title}" — a copy was saved to My Files'),
+          content: Text('${t.hiringformfill_submitted} "${d.title}" — ${t.hiringformfill_copySaved}'),
           backgroundColor: AppTheme.success,
         ),
       );
@@ -116,6 +118,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
 
   Future<bool?> _showConfirmDialog() {
     final entries = <MapEntry<String, String>>[];
+    final t = AppLocalizations.of(context)!;
     for (final section in d.sections) {
       for (final field in section.fields) {
         if (!_visible(field)) continue;
@@ -128,7 +131,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm submission'),
+        title: Text(t.hiringformfill_confirmSub),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
@@ -136,15 +139,15 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Submit "${d.title}" (v${d.version})? '
-                'Please confirm the information below is correct — '
-                'it will be saved to your records.',
+                '${t.hiringformfill_submit} "${d.title}" (v${d.version})? '
+                '${t.hiringformfill_confirmInfo} — '
+                '${t.hiringformfill_saveToRecord}',
                 style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 12),
               Flexible(
                 child: entries.isEmpty
-                    ? const Text('No information entered.')
+                    ? Text(t.hiringformfill_noInfoEntered)
                     : SingleChildScrollView(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,11 +185,11 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(t.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Confirm & submit'),
+            child: Text(t.hiringformfill_confirmAndSub),
           ),
         ],
       ),
@@ -194,6 +197,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
   }
 
   Future<void> _showErrorsDialog(String title, List<String> errors) {
+    final t = AppLocalizations.of(context)!;
     return showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -220,7 +224,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
+            child: Text(t.hiringformfill_ok),
           ),
         ],
       ),
@@ -228,7 +232,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
   }
 
   String _displayValue(FormFieldDef field, dynamic v) {
-    if (v is bool) return v ? 'Yes' : 'No';
+    final t = AppLocalizations.of(context)!;
+    if (v is bool) return v ? t.hiringformfill_yes : t.hiringformfill_no;
     if (field.options.isNotEmpty) {
       final match = field.options.where((o) => o.value == v.toString());
       if (match.isNotEmpty) return match.first.label;
@@ -240,8 +245,9 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: Text('Fill out: ${d.title}')),
+      appBar: AppBar(title: Text('${t.hiringformfill_fillOut}: ${d.title}')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -257,8 +263,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Complete the fields below. You will be asked to confirm '
-                        'before anything is submitted. * marks required fields.',
+                        '${t.hiringformfill_completeFields} '
+                        '${t.hiringformfill_completeFields2}',
                         style: const TextStyle(
                             fontSize: 12, color: AppTheme.textSecondary),
                       ),
@@ -282,14 +288,16 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               )
             : const Icon(Icons.check_circle_outline),
-        label: Text(_submitting ? 'Submitting…' : 'Review & submit'),
+        label: Text(_submitting ? '${t.hiringformfill_submitting}…' : t.hiringformfill_reviewSub),
       ),
     );
   }
 
+
   Widget _sectionCard(FormSectionDef section) {
     final fields = [...section.fields]..sort((a, b) => a.order.compareTo(b.order));
     final visible = fields.where(_visible).toList();
+    final t = AppLocalizations.of(context)!;
     if (visible.isEmpty) return const SizedBox.shrink();
     return Card(
       margin: const EdgeInsets.only(top: 10),
@@ -303,7 +311,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
             if (section.completedBy != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text('Completed by ${section.completedBy!.toLowerCase()}',
+                child: Text('${t.hiringformfill_completedBy} ${section.completedBy!.toLowerCase()}',
                     style: const TextStyle(
                         fontSize: 11, color: AppTheme.textSecondary)),
               ),
@@ -345,6 +353,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
   String _label(FormFieldDef field) => field.required ? '${field.label} *' : field.label;
 
   Widget _textField(String key, FormFieldDef field) {
+    final t = AppLocalizations.of(context)!;
     final isNumber = field.fieldType == FormFieldType.number ||
         field.fieldType == FormFieldType.currency;
     return TextFormField(
@@ -362,13 +371,14 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
       maxLines: field.fieldType == FormFieldType.textarea ? 3 : 1,
       decoration: _decoration(field),
       validator: (v) => field.required && (v == null || v.trim().isEmpty)
-          ? 'Required'
+          ? t.hiringformfill_required
           : null,
       onChanged: (v) => _values[key] = v,
     );
   }
 
   Widget _dropdown(String key, FormFieldDef field) {
+    final t = AppLocalizations.of(context)!;
     return DropdownButtonFormField<String>(
       initialValue: _values[key] as String?,
       isExpanded: true,
@@ -378,7 +388,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
           DropdownMenuItem(value: o.value, child: Text(o.label)),
       ],
       validator: (v) =>
-          field.required && (v == null || v.isEmpty) ? 'Required' : null,
+          field.required && (v == null || v.isEmpty) ? t.hiringformfill_required : null,
       onChanged: (v) => setState(() => _values[key] = v),
     );
   }
@@ -400,6 +410,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
 
   Widget _dateField(String key, FormFieldDef field) {
     final current = _values[key] as String?;
+    final t = AppLocalizations.of(context)!;
     return InkWell(
       onTap: () async {
         final now = DateTime.now();
@@ -419,7 +430,7 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
       child: InputDecorator(
         decoration: _decoration(field),
         child: Text(
-          current ?? 'Select date',
+          current ?? t.hiringformfill_selectDate,
           style: TextStyle(
             fontSize: 14,
             color: current == null ? AppTheme.textSecondary : null,
@@ -461,10 +472,11 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
   }
 
   Widget _fileRefNote(FormFieldDef field) {
+    final t = AppLocalizations.of(context)!;
     return InputDecorator(
       decoration: _decoration(field),
-      child: const Text(
-        'Attach this document from the Upload tab after submitting.',
+      child: Text(
+        t.hiringformfill_attachDocument,
         style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
       ),
     );

@@ -1,6 +1,7 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.TelemetryEvent;
+import com.careconnect.repository.projection.DailyFeatureCountProjection;
 import com.careconnect.repository.projection.EndpointErrorCountProjection;
 import com.careconnect.repository.projection.EventNameCountProjection;
 import com.careconnect.repository.projection.FeatureUsageCountProjection;
@@ -73,6 +74,24 @@ public interface TelemetryEventRepository extends JpaRepository<TelemetryEvent, 
       nativeQuery = true)
   List<FeatureUsageCountProjection> countTopFeaturesBetween(
       @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+
+  @Query(
+      value =
+          """
+          SELECT TO_CHAR(DATE(event_time AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+                 COUNT(*) AS count
+          FROM telemetry_events
+          WHERE event_time >= :from AND event_time < :to
+            AND event_name = 'feature_use'
+            AND details->>'feature' = :feature
+          GROUP BY day
+          ORDER BY day ASC
+          """,
+      nativeQuery = true)
+  List<DailyFeatureCountProjection> countFeatureUseByDayBetween(
+      @Param("from") OffsetDateTime from,
+      @Param("to") OffsetDateTime to,
+      @Param("feature") String feature);
 
   @Query(
       value =

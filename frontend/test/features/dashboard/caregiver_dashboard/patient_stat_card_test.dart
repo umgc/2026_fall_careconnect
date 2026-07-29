@@ -2,6 +2,7 @@
 // (lib/features/dashboard/caregiver-dashboard/widgets/patient-stat-card.dart).
 
 import 'package:care_connect_app/features/dashboard/caregiver-dashboard/widgets/patient-stat-card.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,6 +10,9 @@ void main() {
   testWidgets('renders Missed Check-Ins stat value 24', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -20,6 +24,9 @@ void main() {
   testWidgets('renders Active Patients stat value 32', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -33,6 +40,9 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -43,6 +53,9 @@ void main() {
   testWidgets('shows people_outline and monitor_heart icons', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -57,6 +70,9 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -71,6 +87,9 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -84,6 +103,9 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -97,6 +119,9 @@ void main() {
 
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -106,6 +131,9 @@ void main() {
   testWidgets('shows FittedBox for value text', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );
@@ -115,6 +143,9 @@ void main() {
   testWidgets('shows LayoutBuilder', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales, 
         home: Scaffold(body: PatientStatisticsCards()),
       ),
     );

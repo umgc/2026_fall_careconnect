@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 enum NotificationKind { urgent, important, reminder }
@@ -43,8 +44,19 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
     _expanded = widget.initiallyExpanded;
   }
 
+  String _translateDefaultHeader(String header){
+    final t = AppLocalizations.of(context)!;
+    switch(header){
+      case('Notifications'):
+        return t.notificationspanelwidget_notifications;
+      default:
+        return header;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final hasItems = widget.notifications.isNotEmpty;
 
@@ -60,7 +72,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Header(
-            title: widget.heading,
+            title: _translateDefaultHeader(widget.heading),
             expanded: _expanded,
             onToggle: () => setState(() => _expanded = !_expanded),
           ),
@@ -85,7 +97,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
                 : Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      'No notifications to show.',
+                      t.notificationspanelwidget_noNotifToShow,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color:
                             theme.colorScheme.onSurface.withOpacity(0.6),
@@ -113,6 +125,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     return Row(
@@ -133,7 +146,7 @@ class _Header extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Text(
-              expanded ? 'Hide' : 'Show',
+              expanded ? t.notificationspanelwidget_hideButton : t.notificationspanelwidget_showButton,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,

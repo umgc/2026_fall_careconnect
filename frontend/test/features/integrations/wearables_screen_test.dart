@@ -372,7 +372,15 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.byType(ElevatedButton), findsOneWidget);
+      // ElevatedButton.icon builds _ElevatedButtonWithIcon (ButtonStyleButton),
+      // not ElevatedButton — match the button via its label.
+      expect(
+        find.ancestor(
+          of: find.text('Add Your First Device'),
+          matching: find.bySubtype<ButtonStyleButton>(),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('shows Card for supported devices', (tester) async {

@@ -36,7 +36,7 @@ class SummaryChunkerTest {
                     { "date": "2026-07-20", "time": "10:00", "with": "Dr. Lee", "purpose": "Follow-up" }
                   ],
                   "careInstructions": [
-                    { "type": "medication", "text": "Take metformin with food", "status": "started" }
+                    { "type": "medication", "medicationName": "metformin", "text": "Take metformin with food", "status": "started" }
                   ]
                 }
                 """;
@@ -56,7 +56,8 @@ class SummaryChunkerTest {
                         RetrievalRecordType.SUMMARY_ACTION_ITEM,
                         RetrievalRecordType.SUMMARY_APPOINTMENT,
                         RetrievalRecordType.SUMMARY_CARE_INSTRUCTION,
-                        RetrievalRecordType.SUMMARY_SOAP);
+                        RetrievalRecordType.SUMMARY_SOAP,
+                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT);
 
         final IndexingChunkDraft overview = drafts.stream()
                 .filter(d -> d.recordType() == RetrievalRecordType.CALL_SUMMARY)
@@ -81,6 +82,14 @@ class SummaryChunkerTest {
                 .containsEntry("itemId", "action-1")
                 .containsEntry("confidence", 0.84d)
                 .containsEntry("callId", "call-42");
+
+        final IndexingChunkDraft timeline = drafts.stream()
+                .filter(d -> d.recordType() == RetrievalRecordType.MEDICATION_TIMELINE_EVENT)
+                .findFirst()
+                .orElseThrow();
+        assertThat(timeline.metadata())
+                .containsEntry("medicationNameNormalized", "metformin")
+                .containsEntry("status", "started");
     }
 
     @Test

@@ -4,8 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -115,6 +113,31 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) NULL"
         );
         applyPatch(
+            "V2606251137 – create call_attendees and kvs_pipeline_id",
+            "CREATE TABLE IF NOT EXISTS call_attendees ("
+                + "  id                 BIGSERIAL PRIMARY KEY,"
+                + "  call_id            VARCHAR(120) NOT NULL,"
+                + "  chime_attendee_id  VARCHAR(255) NOT NULL,"
+                + "  user_id            BIGINT NOT NULL,"
+                + "  role               VARCHAR(40) NOT NULL,"
+                + "  joined_at          TIMESTAMP NOT NULL,"
+                + "  left_at            TIMESTAMP,"
+                + "  CONSTRAINT uq_call_attendees_call_chime UNIQUE (call_id, chime_attendee_id)"
+                + ");"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_call_id ON call_attendees(call_id);"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_user_id ON call_attendees(user_id);"
+                + "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS kvs_pipeline_id VARCHAR(255) NULL"
+        );
+        applyPatch(
+            "V2606270846 – add media_stream_pipeline_id to call_recordings",
+            "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS media_stream_pipeline_id VARCHAR(255) NULL"
+        );
+        applyPatch(
+            "V76 – add kvs_stream_arn to call_attendees",
+            "ALTER TABLE call_attendees ADD COLUMN IF NOT EXISTS kvs_stream_arn VARCHAR(512) NULL;"
+                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_kvs_stream_arn ON call_attendees(kvs_stream_arn)"
+        );
+        applyPatch(
             "V74 – update mock user addresses to Falls Church, VA",
             "UPDATE patient SET city = 'Falls Church', state = 'VA', zip = '22046' " +
             "WHERE user_id = (SELECT id FROM users WHERE email = 'patient@careconnect.com') " +
@@ -165,11 +188,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
             // Concurrent index builds must not hold the startup advisory lock.
             // Verify only after those indexes exist — mid-lock verify would fail greenfield boots.
             ensureRetrievalConcurrentIndexes();
+            verifyRetrievalEmbeddingColumnPresent();
             verifyRequiredRetrievalSchema();
         } else {
             applyCallSessionPatches();
             applyRetrievalIndexChunkPatches();
             applyH2TranscriptArchiveLifecycleTables();
+            applyH2AiHeldItemTables();
+            applyH2AiAskAuditTables();
+            applyH2VisitSummariesAndAskConfirmationTables();
+            applyH2ConsentGrantsTable();
+            applyH2AiAskConversationShareTable();
         }
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
@@ -178,6 +207,264 @@ public class SchemaPatchRunner implements CommandLineRunner {
     /** Durable purge fencing and post-commit object deletion for transcript archives. */
     private void applyTranscriptArchiveStoragePatch() {
         applyCatalogPatch("2607191300-transcript-archive-purge");
+    }
+
+    /**
+     * H2/integration-test parity for Tier-2 HITL hold tables (production applies via catalog).
+     */
+    private void applyH2AiHeldItemTables() {
+        applyRequiredPatch(
+            "H2 – ai_held_item",
+            "CREATE TABLE IF NOT EXISTS ai_held_item ("
+                + "  id UUID PRIMARY KEY,"
+                + "  patient_id BIGINT NOT NULL,"
+                + "  requester_user_id BIGINT NOT NULL,"
+                + "  session_id UUID,"
+                + "  audit_id UUID NOT NULL,"
+                + "  request_id UUID,"
+                + "  source_surface VARCHAR(32) NOT NULL,"
+                + "  status VARCHAR(24) NOT NULL,"
+                + "  tier SMALLINT NOT NULL DEFAULT 2,"
+                + "  trigger_codes CLOB NOT NULL,"
+                + "  query_text CLOB,"
+                + "  query_text_hash VARCHAR(64),"
+                + "  draft_answer CLOB NOT NULL,"
+                + "  final_answer CLOB,"
+                + "  citations_json CLOB NOT NULL,"
+                + "  validation_findings_json CLOB,"
+                + "  reviewer_user_id BIGINT,"
+                + "  reviewed_at TIMESTAMP,"
+                + "  review_notes VARCHAR(500),"
+                + "  delivery_status VARCHAR(32) NOT NULL,"
+                + "  expires_at TIMESTAMP,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_held_item patient status index",
+            "CREATE INDEX IF NOT EXISTS idx_held_patient_status "
+                + "ON ai_held_item (patient_id, status)");
+        applyRequiredPatch(
+            "H2 – drop legacy ai_held_item open unique",
+            "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
+        applyRequiredPatch(
+            "H2 – ai_held_item open unique",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
+                + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
+                + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+        applyRequiredPatch(
+            "H2 – user_files.extracted_text",
+            "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
+        applyRequiredPatch(
+            "H2 – ai_safety_audit_event",
+            "CREATE TABLE IF NOT EXISTS ai_safety_audit_event ("
+                + "  id UUID PRIMARY KEY,"
+                + "  audit_id UUID NOT NULL,"
+                + "  held_item_id UUID,"
+                + "  event_type VARCHAR(40) NOT NULL,"
+                + "  actor_user_id BIGINT,"
+                + "  payload_json CLOB,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+    }
+
+    /**
+     * H2/integration-test parity for Ask AI audit ledger (production applies via catalog).
+     */
+    private void applyH2AiAskAuditTables() {
+        applyRequiredPatch(
+            "H2 – ai_ask_audit_record",
+            "CREATE TABLE IF NOT EXISTS ai_ask_audit_record ("
+                + "  audit_id UUID PRIMARY KEY,"
+                + "  request_id UUID NOT NULL UNIQUE,"
+                + "  session_id UUID,"
+                + "  client_request_id VARCHAR(64),"
+                + "  patient_id BIGINT NOT NULL,"
+                + "  caller_user_id BIGINT NOT NULL,"
+                + "  caller_role VARCHAR(32) NOT NULL,"
+                + "  input_modality VARCHAR(8) NOT NULL DEFAULT 'TEXT',"
+                + "  locale VARCHAR(10) NOT NULL DEFAULT 'en-US',"
+                + "  query_text_hash VARCHAR(64) NOT NULL,"
+                + "  query_length INT NOT NULL,"
+                + "  delivery_status VARCHAR(24) NOT NULL,"
+                + "  tier SMALLINT NOT NULL DEFAULT 0,"
+                + "  held BOOLEAN NOT NULL DEFAULT FALSE,"
+                + "  held_item_id UUID,"
+                + "  error_code VARCHAR(40),"
+                + "  answer_text_hash VARCHAR(64),"
+                + "  answer_length INT,"
+                + "  citations_json CLOB NOT NULL,"
+                + "  escalation_json CLOB NOT NULL,"
+                + "  trigger_codes CLOB NOT NULL,"
+                + "  validation_findings_json CLOB,"
+                + "  retrieval_meta_json CLOB NOT NULL,"
+                + "  scope_json CLOB NOT NULL,"
+                + "  model_provider VARCHAR(32),"
+                + "  model_id VARCHAR(128),"
+                + "  total_latency_ms INT,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_audit_event",
+            "CREATE TABLE IF NOT EXISTS ai_ask_audit_event ("
+                + "  id UUID PRIMARY KEY,"
+                + "  audit_id UUID NOT NULL,"
+                + "  event_type VARCHAR(48) NOT NULL,"
+                + "  event_sequence INT NOT NULL,"
+                + "  actor_user_id BIGINT,"
+                + "  payload_json CLOB NOT NULL,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  CONSTRAINT uq_ai_ask_audit_event_seq UNIQUE (audit_id, event_sequence)"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_audit_delivery_supplement",
+            "CREATE TABLE IF NOT EXISTS ai_ask_audit_delivery_supplement ("
+                + "  id UUID PRIMARY KEY,"
+                + "  audit_id UUID NOT NULL,"
+                + "  delivery_status VARCHAR(24) NOT NULL,"
+                + "  final_answer_hash VARCHAR(64),"
+                + "  citations_json CLOB NOT NULL,"
+                + "  reviewer_user_id BIGINT,"
+                + "  reviewed_at TIMESTAMP NOT NULL,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+    }
+
+    /**
+     * H2/integration-test parity for visit summaries + Ask AI confirmation (production via catalog).
+     */
+    private void applyH2VisitSummariesAndAskConfirmationTables() {
+        applyRequiredPatch(
+            "H2 – visit_summaries",
+            "CREATE TABLE IF NOT EXISTS visit_summaries ("
+                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                + "  visit_id VARCHAR(120) NOT NULL,"
+                + "  patient_id BIGINT,"
+                + "  summary_json CLOB NOT NULL,"
+                + "  status VARCHAR(24) NOT NULL,"
+                + "  transcript_segment_count INT NOT NULL DEFAULT 0,"
+                + "  generated_by_user_id BIGINT,"
+                + "  error_message CLOB,"
+                + "  generated_at TIMESTAMP NOT NULL,"
+                + "  risk_level VARCHAR(16),"
+                + "  caregiver_visibility VARCHAR(16) NOT NULL DEFAULT 'on_consent',"
+                + "  summary_confidence DECIMAL(3,2),"
+                + "  summarization_engine VARCHAR(128),"
+                + "  transcript_snapshot_version VARCHAR(80),"
+                + "  model_config_version VARCHAR(160),"
+                + "  transcript_available BOOLEAN NOT NULL DEFAULT TRUE,"
+                + "  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                + "  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – visit_summaries visit_id index",
+            "CREATE INDEX IF NOT EXISTS idx_visit_summary_visit_id "
+                + "ON visit_summaries (visit_id)");
+        applyRequiredPatch(
+            "H2 – visit_summaries patient_id index",
+            "CREATE INDEX IF NOT EXISTS idx_visit_summary_patient_id "
+                + "ON visit_summaries (patient_id)");
+        applyRequiredPatch(
+            "H2 – ai_ask_confirmation_decision",
+            "CREATE TABLE IF NOT EXISTS ai_ask_confirmation_decision ("
+                + "  id UUID PRIMARY KEY,"
+                + "  session_id UUID NOT NULL,"
+                + "  patient_id BIGINT NOT NULL,"
+                + "  caller_user_id BIGINT NOT NULL,"
+                + "  request_id UUID,"
+                + "  decision VARCHAR(32) NOT NULL,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_confirmation_decision session index",
+            "CREATE INDEX IF NOT EXISTS idx_ai_ask_confirmation_session "
+                + "ON ai_ask_confirmation_decision (session_id, patient_id, caller_user_id, created_at)");
+    }
+
+    /**
+     * H2/integration-test parity for consent grants (Task 2.4; production applies via catalog).
+     */
+    private void applyH2ConsentGrantsTable() {
+        applyRequiredPatch(
+            "H2 – consent_grants",
+            "CREATE TABLE IF NOT EXISTS consent_grants ("
+                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                + "  patient_user_id BIGINT NOT NULL,"
+                + "  grantee_user_id BIGINT NOT NULL,"
+                + "  grantee_role VARCHAR(32) NOT NULL,"
+                + "  scope VARCHAR(64) NOT NULL DEFAULT 'AI_RETRIEVAL',"
+                + "  status VARCHAR(24) NOT NULL,"
+                + "  granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  expires_at TIMESTAMP,"
+                + "  revoked_at TIMESTAMP,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – consent_grants lookup index",
+            "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
+                + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
+        applyRequiredPatch(
+            "H2 – consent_grants active unique",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
+                + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
+                + "WHERE status = 'ACTIVE'");
+    }
+
+    /** H2/integration-test parity for Ask AI conversation share receipts. */
+    private void applyH2AiAskConversationShareTable() {
+        applyRequiredPatch(
+            "H2 – ai_ask_conversation_share",
+            "CREATE TABLE IF NOT EXISTS ai_ask_conversation_share ("
+                + "  id UUID PRIMARY KEY,"
+                + "  patient_id BIGINT NOT NULL,"
+                + "  shared_by_user_id BIGINT NOT NULL,"
+                + "  session_id UUID,"
+                + "  recipient_user_ids CLOB NOT NULL,"
+                + "  message_count INTEGER NOT NULL,"
+                + "  transcript_json CLOB NOT NULL,"
+                + "  transcript_sha256 VARCHAR(64) NOT NULL,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_conversation_share patient index",
+            "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_patient "
+                + "ON ai_ask_conversation_share (patient_id, created_at)");
+        applyRequiredPatch(
+            "H2 – ai_ask_conversation_share shared_by index",
+            "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_shared_by "
+                + "ON ai_ask_conversation_share (shared_by_user_id, created_at)");
+        applyRequiredPatch(
+            "H2 – ai_ask_conversation_share dedupe unique",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_ask_share_dedupe "
+                + "ON ai_ask_conversation_share (patient_id, shared_by_user_id, transcript_sha256)");
+        applyRequiredPatch(
+            "H2 – ai_ask_share_recipient",
+            "CREATE TABLE IF NOT EXISTS ai_ask_share_recipient ("
+                + "  share_id UUID NOT NULL,"
+                + "  user_id BIGINT NOT NULL,"
+                + "  PRIMARY KEY (share_id, user_id)"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ai_ask_share_recipient user index",
+            "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_recipient_user "
+                + "ON ai_ask_share_recipient (user_id, share_id)");
+        applyRequiredPatch(
+            "H2 – ask_ai_ocr_outbox",
+            "CREATE TABLE IF NOT EXISTS ask_ai_ocr_outbox ("
+                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                + "  file_id BIGINT NOT NULL,"
+                + "  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',"
+                + "  attempts INTEGER NOT NULL DEFAULT 0,"
+                + "  last_error CLOB,"
+                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                + "  CONSTRAINT uq_ask_ai_ocr_outbox_file UNIQUE (file_id)"
+                + ")");
+        applyRequiredPatch(
+            "H2 – ask_ai_ocr_outbox pending index",
+            "CREATE INDEX IF NOT EXISTS idx_ask_ai_ocr_outbox_pending "
+                + "ON ask_ai_ocr_outbox (status, updated_at)");
     }
 
     /**
@@ -250,6 +537,25 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  CONSTRAINT uq_call_sessions_call_id UNIQUE (call_id)" +
             ")"
         );
+        // Hibernate ddl-auto can create call_sessions before this patch runs, so
+        // CREATE TABLE IF NOT EXISTS never adds UNIQUE(call_id). Without it,
+        // INSERT ... ON CONFLICT (call_id) fails and joins return 404.
+        applyRequiredPatch(
+            "V2607182230a2 – ensure call_sessions.call_id unique for ON CONFLICT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_sessions_call_id_uidx "
+                    + "ON call_sessions (call_id)"
+        );
+        applyRequiredPatch(
+            "V2607191700 – call_sessions recording_start_elected column",
+            "ALTER TABLE call_sessions "
+                    + "ADD COLUMN IF NOT EXISTS recording_start_elected "
+                    + "BOOLEAN NOT NULL DEFAULT FALSE"
+        );
+        applyRequiredPatch(
+            "V2607191700 – call_sessions recording_start_elected default",
+            "ALTER TABLE call_sessions "
+                    + "ALTER COLUMN recording_start_elected SET DEFAULT FALSE"
+        );
         applyRequiredPatch(
             "V2607182230b – create call_participants",
             "CREATE TABLE IF NOT EXISTS call_participants (" +
@@ -264,6 +570,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
             "  CONSTRAINT uq_call_participants_session_user UNIQUE (call_session_id, user_id)" +
             ")"
+        );
+        applyRequiredPatch(
+            "V2607182230b2 – ensure call_participants session/user unique for ON CONFLICT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_participants_session_user_uidx "
+                    + "ON call_participants (call_session_id, user_id)"
         );
         applyRequiredPatch(
             "V2607182230c – call session authorization indexes",
@@ -319,9 +630,43 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "ALTER TABLE call_participants ADD CONSTRAINT ck_call_participants_status CHECK " +
                 "(status IN ('INVITED','JOINED','LEFT','DECLINED','EXPIRED'))"
             );
-            applyRequiredSqlResource(
-                    "V2607190200 – recoverable call termination",
-                    "db/migration/V2607190200__add_recoverable_call_termination.sql");
+            // JDBC Statement (not ScriptUtils) — DO $$ blocks contain internal ';'.
+            applyRequiredPatch(
+                    "V2607190200 – recoverable call termination columns",
+                    "ALTER TABLE call_sessions "
+                            + "ADD COLUMN IF NOT EXISTS termination_claim_id UUID NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_claimed_by_user_id BIGINT NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_lease_until TIMESTAMP NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_attempt_count "
+                            + "INTEGER NOT NULL DEFAULT 0, "
+                            + "ADD COLUMN IF NOT EXISTS termination_next_retry_at TIMESTAMP NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_last_error TEXT NULL, "
+                            + "ADD COLUMN IF NOT EXISTS termination_notify_user_ids TEXT NULL");
+            // ADD COLUMN IF NOT EXISTS skips DEFAULT when the column already exists.
+            applyRequiredPatch(
+                    "V2607190200 – termination_attempt_count default",
+                    "ALTER TABLE call_sessions "
+                            + "ALTER COLUMN termination_attempt_count SET DEFAULT 0");
+            applyRequiredPatch(
+                    "V2607190200 – call termination claimant FK",
+                    foreignKeyIfMissing(
+                            "fk_call_sessions_termination_claimed_by",
+                            "call_sessions",
+                            "termination_claimed_by_user_id",
+                            "users",
+                            "id",
+                            ""));
+            applyRequiredPatch(
+                    "V2607190200 – termination attempt count check",
+                    "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c "
+                            + "WHERE c.conrelid = 'call_sessions'::regclass "
+                            + "AND c.contype = 'c' "
+                            + "AND pg_get_constraintdef(c.oid) "
+                            + "LIKE '%termination_attempt_count >= 0%') THEN "
+                            + "ALTER TABLE call_sessions "
+                            + "ADD CONSTRAINT ck_call_sessions_termination_attempt_count "
+                            + "CHECK (termination_attempt_count >= 0); "
+                            + "END IF; END $$");
             ensureIndex(
                     "V2607190200 – call termination retry index",
                     "idx_call_sessions_termination_retry",
@@ -391,6 +736,24 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "  citation_replay_claimed_until TIMESTAMPTZ NULL," +
             "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
             ")"
+        );
+        // Repair path: Hibernate ddl-auto can create retrieval_index_chunk without embedding
+        // (entity does not map the pgvector column). CREATE TABLE IF NOT EXISTS then no-ops.
+        // A dedicated ADD COLUMN must run after the extension is available.
+        applyRequiredPatch(
+            "V2607071921a2 – ensure retrieval_index_chunk.embedding column",
+            "ALTER TABLE retrieval_index_chunk "
+                    + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
+        );
+        applyRequiredPatch(
+            "V2607071921a – ensure retrieval embedding column",
+            "ALTER TABLE retrieval_index_chunk "
+                + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
+        );
+        applyRequiredPatch(
+            "V2607071921a – ensure retrieval search_vector column",
+            "ALTER TABLE retrieval_index_chunk "
+                + "ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL"
         );
         applyRequiredPatch(
             "V2607182130 – typed retrieval replay and migration state",
@@ -653,15 +1016,47 @@ public class SchemaPatchRunner implements CommandLineRunner {
             stmt.execute(sql);
             log.info("Schema patch applied: {}", name);
         } catch (Exception e) {
-            // PostgreSQL raises 42703 / 42P16 when the column constraint is already absent —
-            // treat that as success; log anything else as a warning.
+            // Idempotent DROP/RENAME of already-absent legacy objects is success.
+            // Do NOT treat bare "does not exist" as applied — that hides failed CREATE/ADD
+            // (e.g. type "vector" does not exist) and leaves Ask AI without embedding.
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            if (msg.contains("42P16") || msg.contains("already") || msg.contains("does not exist")) {
+            if (isIdempotentAlreadyApplied(msg, sql)) {
                 log.debug("Schema patch skipped (already applied): {}", name);
             } else {
                 log.warn("Schema patch '{}' could not be applied: {}", name, msg);
             }
         }
+    }
+
+    /**
+     * Soft patches may skip only when the failure means the change is already present or
+     * an optional legacy object is already gone. Failed CREATE/ADD because a type, table,
+     * or dependency is missing must remain a warning (not "already applied").
+     */
+    static boolean isIdempotentAlreadyApplied(final String message, final String sql) {
+        final String msg = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        final String lowerSql = sql == null ? "" : sql.toLowerCase(Locale.ROOT);
+        if (msg.contains("42p16")
+                || msg.contains("already exists")
+                || (msg.contains("already") && msg.contains("duplicate"))) {
+            return true;
+        }
+        if (msg.contains("already") && !msg.contains("does not exist")) {
+            return true;
+        }
+        if (!msg.contains("does not exist")) {
+            return false;
+        }
+        return looksLikeOptionalDropOrRename(lowerSql);
+    }
+
+    private static boolean looksLikeOptionalDropOrRename(final String lowerSql) {
+        return lowerSql.contains("drop constraint")
+                || lowerSql.contains("drop column")
+                || lowerSql.contains("drop index")
+                || lowerSql.contains("drop not null")
+                || lowerSql.contains("rename column")
+                || (lowerSql.contains("alter column") && lowerSql.contains("drop"));
     }
 
     private void applyRequiredPatch(String name, String sql) {
@@ -813,30 +1208,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
         normalized = POSTGRES_TEXT_CAST.matcher(normalized).replaceAll("");
         normalized = QUOTED_NUMBER.matcher(normalized).replaceAll("$1");
         return normalized.replaceAll("[\\s()]+", "");
-    }
-
-    private void applyRequiredSqlResource(final String name, final String path) {
-        try (Connection conn = dataSource.getConnection()) {
-            conn.setAutoCommit(false);
-            try (Statement stmt = conn.createStatement()) {
-                configureDdlTimeouts(stmt);
-            }
-            try {
-                ScriptUtils.executeSqlScript(conn, new ClassPathResource(path));
-                conn.commit();
-                log.info("Required schema patch applied: {}", name);
-            } catch (Exception e) {
-                try {
-                    conn.rollback();
-                } catch (Exception rollbackFailure) {
-                    e.addSuppressed(rollbackFailure);
-                }
-                throw e;
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    "Required schema patch could not be applied: " + name, e);
-        }
     }
 
     static void configureDdlTimeouts(final Statement stmt) throws Exception {
@@ -1085,6 +1456,45 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
+    /**
+     * Fail-closed check for the Ask AI embedding column. Other retrieval verifier mismatches
+     * stay non-fatal (Postgres reformats predicates/indexdefs), but a missing {@code embedding}
+     * column must abort startup so soft skips cannot leave a healthy API with broken Ask AI.
+     */
+    private void verifyRetrievalEmbeddingColumnPresent() {
+        final String sql = """
+                SELECT EXISTS (
+                  SELECT 1
+                  FROM pg_attribute a
+                  JOIN pg_class t ON t.oid = a.attrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = current_schema()
+                    AND t.relname = 'retrieval_index_chunk'
+                    AND a.attname = 'embedding'
+                    AND a.attnum > 0
+                    AND NOT a.attisdropped
+                    AND format_type(a.atttypid, a.atttypmod) = 'vector(1536)'
+                )
+                """;
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement();
+             var result = stmt.executeQuery(sql)) {
+            if (!result.next() || !result.getBoolean(1)) {
+                throw new IllegalStateException(
+                        "Required retrieval_index_chunk.embedding vector(1536) column is missing; "
+                                + "ensure CREATE EXTENSION vector and the embedding column repair "
+                                + "succeeded (RDS may need a reboot after attaching the pgvector "
+                                + "parameter group)");
+            }
+            log.info("Required retrieval_index_chunk.embedding column verified");
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Required retrieval_index_chunk.embedding column could not be verified", e);
+        }
+    }
+
     private void verifyRequiredRetrievalSchema() {
         final String sql = """
                 WITH expected_columns(table_name, column_name, data_type, not_null, default_part) AS (
@@ -1118,7 +1528,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 ),
                 actual_columns AS (
                   SELECT t.relname AS table_name, a.attname AS column_name,
-                         format_type(a.atttypid, a.atttypmod) AS data_type,
+                         regexp_replace(
+                           format_type(a.atttypid, a.atttypmod),
+                           'timestamp\\(\\d+\\) with time zone',
+                           'timestamp with time zone') AS data_type,
                          a.attnotnull AS not_null,
                          pg_get_expr(d.adbin, d.adrelid) AS default_expression
                   FROM pg_attribute a

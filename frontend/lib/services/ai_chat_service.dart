@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'api_service.dart';
 import '../config/env_constant.dart';
 
-enum AiAskDeliveryStatus { delivered, noRecords, withheld }
+enum AiAskDeliveryStatus { delivered, noRecords, withheld, held }
 
 const Set<String> _aiAskRecordTypes = {
   'TRANSCRIPT_SEGMENT',
@@ -20,6 +20,7 @@ const Set<String> _aiAskRecordTypes = {
   'SUMMARY_CONDITION',
   'SUMMARY_SOAP',
   'SUMMARY_CLINICAL_OBSERVATION',
+  'MEDICATION_TIMELINE_EVENT',
   'MEDICATION',
   'TASK',
   'EVV_RECORD',
@@ -127,6 +128,9 @@ class AiAskConfirmation {
 
   const AiAskConfirmation(this.required, this.text);
 
+  AiAskConfirmation copyWith({bool? required, String? text}) =>
+      AiAskConfirmation(required ?? this.required, text ?? this.text);
+
   factory AiAskConfirmation.fromJson(Map<String, dynamic> json) =>
       AiAskConfirmation(
         _requiredBool(json, 'promptConfirmWithProvider'),
@@ -181,6 +185,88 @@ class AiAskCitation {
   }
 }
 
+class MedicationTimelineEvent {
+  final String? itemId;
+  final String medicationName;
+  final String? medicationNameNormalized;
+  final String? eventType;
+  final String? effectiveDate;
+  final String? doseFrom;
+  final String? doseTo;
+  final String? citationRef;
+
+  const MedicationTimelineEvent({
+    this.itemId,
+    required this.medicationName,
+    this.medicationNameNormalized,
+    this.eventType,
+    this.effectiveDate,
+    this.doseFrom,
+    this.doseTo,
+    this.citationRef,
+  });
+
+  factory MedicationTimelineEvent.fromJson(Map<String, dynamic> json) {
+    String? optionalString(String key) {
+      final value = json[key];
+      if (value == null) return null;
+      if (value is! String) {
+        throw FormatException(
+          'Medication timeline event $key must be a string',
+        );
+      }
+      return value;
+    }
+
+    final medicationName = json['medicationName'];
+    if (medicationName is! String || medicationName.trim().isEmpty) {
+      throw const FormatException(
+        'Medication timeline event medicationName must be a non-empty string',
+      );
+    }
+
+    return MedicationTimelineEvent(
+      itemId: optionalString('itemId'),
+      medicationName: medicationName,
+      medicationNameNormalized: optionalString('medicationNameNormalized'),
+      eventType: optionalString('eventType'),
+      effectiveDate: optionalString('effectiveDate'),
+      doseFrom: optionalString('doseFrom'),
+      doseTo: optionalString('doseTo'),
+      citationRef: optionalString('citationRef'),
+    );
+  }
+}
+
+class MedicationTimeline {
+  final List<MedicationTimelineEvent> events;
+
+  const MedicationTimeline({this.events = const []});
+
+  factory MedicationTimeline.fromJson(Map<String, dynamic> json) {
+    final eventsJson = json['events'];
+    if (eventsJson != null && eventsJson is! List) {
+      throw const FormatException(
+        'Medication timeline events must be a list',
+      );
+    }
+    final eventListIsValid = eventsJson is List<dynamic> &&
+        eventsJson.every((item) => item is Map<String, dynamic>);
+    if (eventsJson is List && !eventListIsValid) {
+      throw const FormatException(
+        'Medication timeline events contain invalid entries',
+      );
+    }
+    final events = eventListIsValid
+        ? eventsJson
+            .cast<Map<String, dynamic>>()
+            .map(MedicationTimelineEvent.fromJson)
+            .toList(growable: false)
+        : const <MedicationTimelineEvent>[];
+    return MedicationTimeline(events: events);
+  }
+}
+
 class AiAskError {
   final String code;
   final String message;
@@ -207,14 +293,130 @@ class AiAskError {
   }
 }
 
+/// Permanent HITL poll failure (auth / missing item). Do not keep retrying.
+class HitlPollHttpException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const HitlPollHttpException(this.statusCode, this.message);
+
+  bool get isPermanent =>
+      statusCode == 401 || statusCode == 403 || statusCode == 404;
+
+  @override
+  String toString() => message;
+}
+
+class HitlPollResult {
+  final String status;
+  final String deliveryStatus;
+  final String? message;
+  final String? answer;
+  final List<AiAskCitation> citations;
+  final AiAskDisclaimer? disclaimer;
+  final AiAskConfirmation? confirmation;
+
+  const HitlPollResult({
+    required this.status,
+    required this.deliveryStatus,
+    this.message,
+    this.answer,
+    this.citations = const [],
+    this.disclaimer,
+    this.confirmation,
+  });
+
+  factory HitlPollResult.fromJson(Map<String, dynamic> json) {
+    final status = json['status'];
+    final deliveryStatus = json['deliveryStatus'];
+    if (status is! String || status.trim().isEmpty) {
+      throw const FormatException('HITL status must be a non-empty string');
+    }
+    if (deliveryStatus is! String || deliveryStatus.trim().isEmpty) {
+      throw const FormatException(
+        'HITL deliveryStatus must be a non-empty string',
+      );
+    }
+    final message = json['message'];
+    if (message != null && message is! String) {
+      throw const FormatException('HITL message must be a string');
+    }
+    final answerRaw = json['answer'];
+    String? answer;
+    if (answerRaw == null) {
+      answer = null;
+    } else if (answerRaw is String) {
+      answer = answerRaw.trim().isEmpty ? null : answerRaw.trim();
+    } else if (answerRaw is Map<String, dynamic>) {
+      final text = answerRaw['text'];
+      if (text != null && text is! String) {
+        throw const FormatException('HITL answer.text must be a string');
+      }
+      final trimmed = (text as String?)?.trim();
+      answer = trimmed == null || trimmed.isEmpty ? null : trimmed;
+    } else {
+      throw const FormatException('HITL answer must be a string or object');
+    }
+
+    final citationsJson = json['citations'];
+    if (citationsJson != null && citationsJson is! List) {
+      throw const FormatException('HITL citations must be a list');
+    }
+    final citationListIsValid = citationsJson is List<dynamic> &&
+        citationsJson.every((item) => item is Map<String, dynamic>);
+    if (citationsJson is List && !citationListIsValid) {
+      throw const FormatException('HITL citations contain invalid entries');
+    }
+    final citations = citationListIsValid
+        ? citationsJson
+            .cast<Map<String, dynamic>>()
+            .map(AiAskCitation.fromJson)
+            .toList(growable: false)
+        : const <AiAskCitation>[];
+
+    final exposeAnswer = deliveryStatus == 'DELIVERED';
+    AiAskDisclaimer? disclaimer;
+    AiAskConfirmation? confirmation;
+    if (exposeAnswer) {
+      final disclaimerJson = json['disclaimer'];
+      if (disclaimerJson is! Map<String, dynamic>) {
+        throw const FormatException(
+          'HITL DELIVERED response requires disclaimer object',
+        );
+      }
+      disclaimer = AiAskDisclaimer.fromJson(disclaimerJson);
+      final confirmationJson = json['confirmation'];
+      if (confirmationJson is! Map<String, dynamic>) {
+        throw const FormatException(
+          'HITL DELIVERED response requires confirmation object',
+        );
+      }
+      confirmation = AiAskConfirmation.fromJson(confirmationJson);
+    }
+
+    return HitlPollResult(
+      status: status,
+      deliveryStatus: deliveryStatus,
+      message: message as String?,
+      answer: exposeAnswer ? answer : null,
+      citations: exposeAnswer ? citations : const [],
+      disclaimer: disclaimer,
+      confirmation: confirmation,
+    );
+  }
+}
+
 class AiAskResult {
   final bool success;
   final AiAskDeliveryStatus deliveryStatus;
   final String? requestId;
+  final String? auditId;
   final String? sessionId;
   final String? conversationId;
   final String? answer;
   final String? message;
+  final String? heldItemId;
+  final String? pollUrl;
   final List<AiAskCitation> citations;
   final AiAskError? error;
   final AiAskDisclaimer? disclaimer;
@@ -223,15 +425,19 @@ class AiAskResult {
   final String? retryInput;
   final bool retryable;
   final bool cancelled;
+  final MedicationTimeline? medicationTimeline;
 
   const AiAskResult({
     required this.success,
     required this.deliveryStatus,
     this.requestId,
+    this.auditId,
     this.sessionId,
     this.conversationId,
     this.answer,
     this.message,
+    this.heldItemId,
+    this.pollUrl,
     this.citations = const [],
     this.error,
     this.disclaimer,
@@ -240,6 +446,7 @@ class AiAskResult {
     this.retryInput,
     this.retryable = false,
     this.cancelled = false,
+    this.medicationTimeline,
   });
 
   factory AiAskResult.fromJson(
@@ -254,6 +461,7 @@ class AiAskResult {
       'DELIVERED' => AiAskDeliveryStatus.delivered,
       'NO_RECORDS' => AiAskDeliveryStatus.noRecords,
       'WITHHELD' => AiAskDeliveryStatus.withheld,
+      'HELD' => AiAskDeliveryStatus.held,
       _ => throw FormatException(
           'Ask AI deliveryStatus is unknown: $statusRaw',
         ),
@@ -267,8 +475,16 @@ class AiAskResult {
         ? _requiredUuid(json, 'sessionId')
         : _optionalUuid(json, 'sessionId');
     final conversationId = _optionalUuid(json, 'conversationId');
-    _optionalUuid(json, 'auditId');
-    _optionalUuid(json, 'heldItemId');
+    final auditId = _optionalUuid(json, 'auditId');
+    final heldItemId = status == AiAskDeliveryStatus.held
+        ? _requiredUuid(json, 'heldItemId')
+        : _optionalUuid(json, 'heldItemId');
+
+    final pollUrlRaw = json['pollUrl'];
+    if (pollUrlRaw != null && pollUrlRaw is! String) {
+      throw const FormatException('Ask AI pollUrl must be a string');
+    }
+    final pollUrl = pollUrlRaw as String?;
 
     final answerJson = json['answer'];
     if (answerJson != null && answerJson is! Map<String, dynamic>) {
@@ -289,6 +505,13 @@ class AiAskResult {
     final confirmationJson = json['confirmation'];
     if (confirmationJson != null && confirmationJson is! Map<String, dynamic>) {
       throw const FormatException('Ask AI confirmation must be an object');
+    }
+    final medicationTimelineJson = json['medicationTimeline'];
+    if (medicationTimelineJson != null &&
+        medicationTimelineJson is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Ask AI medicationTimeline must be an object',
+      );
     }
 
     final answer = answerJson is Map<String, dynamic>
@@ -337,6 +560,13 @@ class AiAskResult {
               citation.excerpt.trim().isNotEmpty,
         );
 
+    // held=true is expected for HELD (Tier-2 review); only block DELIVERED.
+    // confirmation.required may be false after APPROVE_SESSION / prior terminal
+    // decision (backend suppresses the provider-confirmation prompt).
+    final confirmationOk = confirmation != null &&
+        (!confirmation.required ||
+            confirmation.text?.trim().isNotEmpty == true);
+
     final deliveredContractValid = allowDelivered &&
         json['success'] == true &&
         !held &&
@@ -351,9 +581,7 @@ class AiAskResult {
         escalation != null &&
         escalation.tier == 1 &&
         escalation.reviewRequired == false &&
-        confirmation != null &&
-        confirmation.required &&
-        confirmation.text?.trim().isNotEmpty == true;
+        confirmationOk;
 
     if (status == AiAskDeliveryStatus.delivered && !deliveredContractValid) {
       throw const FormatException(
@@ -373,10 +601,13 @@ class AiAskResult {
       success: json['success'] == true,
       deliveryStatus: status,
       requestId: requestId,
+      auditId: auditId,
       sessionId: sessionId,
       conversationId: conversationId,
       answer: exposeDeliveredContent ? answer : null,
       message: message as String?,
+      heldItemId: heldItemId,
+      pollUrl: pollUrl,
       citations: exposeDeliveredContent ? citations : const [],
       error: errorJson is Map<String, dynamic>
           ? AiAskError.fromJson(errorJson)
@@ -384,6 +615,69 @@ class AiAskResult {
       disclaimer: exposeDeliveredContent ? disclaimer : null,
       escalation: exposeDeliveredContent ? escalation : null,
       confirmation: exposeDeliveredContent ? confirmation : null,
+      medicationTimeline: exposeDeliveredContent &&
+              medicationTimelineJson is Map<String, dynamic>
+          ? MedicationTimeline.fromJson(medicationTimelineJson)
+          : null,
+    );
+  }
+}
+
+class AiAskShareResult {
+  final bool success;
+  final String? shareId;
+  final int recipientCount;
+  final String? errorCode;
+  final String? message;
+
+  const AiAskShareResult({
+    required this.success,
+    this.shareId,
+    this.recipientCount = 0,
+    this.errorCode,
+    this.message,
+  });
+}
+
+class AiAskShareListItem {
+  final String shareId;
+  final int patientId;
+  final String? sessionId;
+  final List<int> recipientUserIds;
+  final int messageCount;
+  final String? createdAt;
+  final String? transcriptJson;
+
+  const AiAskShareListItem({
+    required this.shareId,
+    required this.patientId,
+    this.sessionId,
+    this.recipientUserIds = const [],
+    this.messageCount = 0,
+    this.createdAt,
+    this.transcriptJson,
+  });
+
+  factory AiAskShareListItem.fromJson(Map<String, dynamic> json) {
+    final recipients = <int>[];
+    final rawRecipients = json['recipientUserIds'];
+    if (rawRecipients is List) {
+      for (final item in rawRecipients) {
+        if (item is int) {
+          recipients.add(item);
+        } else if (item is num) {
+          recipients.add(item.toInt());
+        }
+      }
+    }
+    return AiAskShareListItem(
+      shareId: json['shareId']?.toString() ?? '',
+      patientId: (json['patientId'] as num?)?.toInt() ?? 0,
+      sessionId: json['sessionId']?.toString(),
+      recipientUserIds: recipients,
+      messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
+      createdAt: json['createdAt']?.toString(),
+      transcriptJson: json['transcriptJson']?.toString(),
     );
   }
 }
@@ -401,6 +695,7 @@ class AIChatService {
     required int patientId,
     String? sessionId,
     String? conversationId,
+    String inputModality = 'TEXT',
     String locale = 'en-US',
     List<String>? sourceTypes,
     Duration timeout = const Duration(seconds: 20),
@@ -414,6 +709,9 @@ class AIChatService {
               sourceTypes.any((type) => type.trim().isEmpty))) {
         throw const FormatException('Invalid sourceTypes');
       }
+      final modality = inputModality.trim().toUpperCase() == 'VOICE'
+          ? 'VOICE'
+          : 'TEXT';
       final headers = await ApiService.getAuthHeaders();
       headers['Content-Type'] = 'application/json';
       headers['Accept'] = 'application/json';
@@ -427,7 +725,7 @@ class AIChatService {
       request.body = jsonEncode({
         'query': query,
         'patientId': patientId,
-        'inputModality': 'TEXT',
+        'inputModality': modality,
         'locale': locale,
         if (sessionId != null && sessionId.isNotEmpty) 'sessionId': sessionId,
         if (conversationId != null && conversationId.isNotEmpty)
@@ -469,6 +767,7 @@ class AIChatService {
         payload.remove('disclaimer');
         payload.remove('escalation');
         payload.remove('confirmation');
+        payload.remove('medicationTimeline');
       }
 
       final parsed = AiAskResult.fromJson(
@@ -484,6 +783,7 @@ class AIChatService {
           success: false,
           deliveryStatus: AiAskDeliveryStatus.withheld,
           requestId: parsed.requestId,
+          auditId: parsed.auditId,
           sessionId: parsed.sessionId,
           conversationId: parsed.conversationId,
           error: parsed.error ??
@@ -502,10 +802,13 @@ class AIChatService {
         success: parsed.success,
         deliveryStatus: parsed.deliveryStatus,
         requestId: parsed.requestId,
+        auditId: parsed.auditId,
         sessionId: parsed.sessionId,
         conversationId: parsed.conversationId,
         answer: parsed.answer,
         message: parsed.message,
+        heldItemId: parsed.heldItemId,
+        pollUrl: parsed.pollUrl,
         citations: parsed.citations,
         error: parsed.error,
         disclaimer: parsed.disclaimer,
@@ -513,6 +816,7 @@ class AIChatService {
         confirmation: parsed.confirmation,
         retryInput: parsed.error != null ? retryInput : null,
         retryable: false,
+        medicationTimeline: parsed.medicationTimeline,
       );
     } on http.RequestAbortedException {
       return const AiAskResult(
@@ -573,6 +877,208 @@ class AIChatService {
       );
     } finally {
       client?.close();
+    }
+  }
+
+  /// Persist an Ask AI confirm-with-provider decision (Task 6.6).
+  static Future<bool> submitConfirmation({
+    required String sessionId,
+    required int patientId,
+    String? requestId,
+    String? auditId,
+    required String decision,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .post(
+            Uri.parse('${getBackendBaseUrl()}/api/ai/ask/confirmation'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'patientId': patientId,
+              'decision': decision,
+              if (requestId != null && requestId.isNotEmpty)
+                'requestId': requestId,
+              if (auditId != null && auditId.isNotEmpty) 'auditId': auditId,
+            }),
+          )
+          .timeout(timeout);
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      debugPrint('Ask AI confirmation submit failed: $e');
+      return false;
+    }
+  }
+
+  /// Share the current Ask AI conversation with linked caregiver(s).
+  ///
+  /// When [caregiverUserId] is null, the backend fans out to all active linked
+  /// caregivers for [patientId].
+  static Future<AiAskShareResult> shareWithCaregivers({
+    required int patientId,
+    String? sessionId,
+    int? caregiverUserId,
+    required List<Map<String, String>> messages,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    try {
+      if (messages.isEmpty) {
+        return const AiAskShareResult(
+          success: false,
+          errorCode: 'EMPTY',
+          message: 'No conversation to share',
+        );
+      }
+      final headers = await ApiService.getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .post(
+            Uri.parse('${getBackendBaseUrl()}/api/ai/ask/share'),
+            headers: headers,
+            body: jsonEncode({
+              'patientId': patientId,
+              if (sessionId != null && sessionId.isNotEmpty)
+                'sessionId': sessionId,
+              if (caregiverUserId != null) 'caregiverUserId': caregiverUserId,
+              'messages': messages,
+            }),
+          )
+          .timeout(timeout);
+      final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        String? shareId;
+        int recipientCount = 0;
+        if (decoded is Map<String, dynamic>) {
+          shareId = decoded['shareId']?.toString();
+          final recipients = decoded['recipientUserIds'];
+          if (recipients is List) {
+            recipientCount = recipients.length;
+          }
+        }
+        return AiAskShareResult(
+          success: true,
+          shareId: shareId,
+          recipientCount: recipientCount,
+        );
+      }
+      String message = 'Could not share conversation with caregivers';
+      String? errorCode;
+      if (decoded is Map<String, dynamic>) {
+        errorCode = decoded['error']?.toString();
+        final apiMessage = decoded['message']?.toString();
+        if (apiMessage != null && apiMessage.isNotEmpty) {
+          message = apiMessage;
+        }
+      }
+      return AiAskShareResult(
+        success: false,
+        errorCode: errorCode,
+        message: message,
+      );
+    } catch (e) {
+      debugPrint('Ask AI share with caregivers failed: $e');
+      return const AiAskShareResult(
+        success: false,
+        errorCode: 'NETWORK_ERROR',
+        message: 'Unable to share conversation. Please try again.',
+      );
+    }
+  }
+
+  /// Lists Ask AI conversation shares visible to the caller for [patientId].
+  ///
+  /// Admins receive all shares for the patient. Everyone else (including the
+  /// patient) only receives shares they created or where they are a recipient.
+  /// Each item includes [AiAskShareListItem.transcriptJson] for review.
+  static Future<List<AiAskShareListItem>> listShares({
+    required int patientId,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Accept'] = 'application/json';
+      final response = await http
+          .get(
+            Uri.parse(
+              '${getBackendBaseUrl()}/api/ai/ask/shares',
+            ).replace(queryParameters: {'patientId': '$patientId'}),
+            headers: headers,
+          )
+          .timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'Ask AI list shares failed: HTTP ${response.statusCode} ${response.body}',
+        );
+        return const [];
+      }
+      final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+      if (decoded is! List) {
+        return const [];
+      }
+      final items = <AiAskShareListItem>[];
+      for (final row in decoded) {
+        if (row is Map<String, dynamic>) {
+          items.add(AiAskShareListItem.fromJson(row));
+        } else if (row is Map) {
+          items.add(
+            AiAskShareListItem.fromJson(Map<String, dynamic>.from(row)),
+          );
+        }
+      }
+      return items;
+    } catch (e) {
+      debugPrint('Ask AI list shares failed: $e');
+      return const [];
+    }
+  }
+
+  /// Poll Tier-2 HITL held-item status until a clinician releases or rejects it.
+  static Future<HitlPollResult> pollHitlStatus(
+    String heldItemId, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    if (!_isAiAskUuid(heldItemId)) {
+      throw const FormatException('HITL heldItemId must be a UUID');
+    }
+    try {
+      final headers = await ApiService.getAuthHeaders();
+      headers['Accept'] = 'application/json';
+
+      final response = await http
+          .get(
+            Uri.parse(
+              '${getBackendBaseUrl()}/v1/api/ai/hitl/$heldItemId/status',
+            ),
+            headers: headers,
+          )
+          .timeout(timeout);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HitlPollHttpException(
+          response.statusCode,
+          'HITL status request failed with HTTP ${response.statusCode}',
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('HITL status response is not an object');
+      }
+      return HitlPollResult.fromJson(decoded);
+    } on HitlPollHttpException {
+      rethrow;
+    } on FormatException {
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    } on http.ClientException {
+      rethrow;
+    } catch (error) {
+      throw FormatException('HITL status request failed: $error');
     }
   }
 
