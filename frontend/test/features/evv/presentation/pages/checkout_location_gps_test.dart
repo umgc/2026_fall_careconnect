@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -128,6 +129,36 @@ Widget _host() {
   );
 }
 
+/// A GoRouter-backed host so the page's context.push('/evv/visit-complete')
+/// navigation (the no-GPS alternative-location flow) resolves.
+Widget _routerHost() {
+  final provider = UserProvider()..setUser(_caregiver());
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, __) => const CheckoutLocationPage(
+          patientId: 42,
+          serviceType: 'Personal Care',
+          locationType: 'gps',
+          notes: 'Test visit',
+          duration: 3600,
+        ),
+      ),
+      GoRoute(
+        path: '/evv/visit-complete',
+        builder: (_, __) =>
+            const Scaffold(body: Text('VISIT COMPLETE SCREEN')),
+      ),
+    ],
+  );
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: provider,
+    child: MaterialApp.router(routerConfig: router),
+  );
+}
+
 /// Loads to the patient-ready state and taps the GPS capture control. Uses
 /// timed pumps so transient SnackBars are still present for assertions.
 Future<void> _loadAndTapGps(WidgetTester tester) async {
@@ -204,5 +235,46 @@ void main() {
     expect(find.byType(CheckoutLocationPage), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); // unmount: clears pending SnackBar timers
+  });
+
+  testWidgets('Use Patient Address opens the no-GPS reason dialog',
+      (tester) async {
+    ApiService.debugSetHttpClient(
+        MockClient((_) async => http.Response(_patientsJson(42), 200)));
+    await tester.pumpWidget(_routerHost());
+    await tester.pumpAndSettle();
+
+    final btn = find.widgetWithText(ElevatedButton, 'Select Patient Address');
+    await tester.ensureVisible(btn);
+    await tester.tap(btn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Why is GPS not being used?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Why is GPS not being used?'), findsNothing);
+    expect(find.text('VISIT COMPLETE SCREEN'), findsNothing);
+    tester.takeException();
+  });
+
+  testWidgets('confirming the patient-address reason navigates to visit complete',
+      (tester) async {
+    ApiService.debugSetHttpClient(
+        MockClient((_) async => http.Response(_patientsJson(42), 200)));
+    await tester.pumpWidget(_routerHost());
+    await tester.pumpAndSettle();
+
+    final btn = find.widgetWithText(ElevatedButton, 'Select Patient Address');
+    await tester.ensureVisible(btn);
+    await tester.tap(btn);
+    await tester.pumpAndSettle();
+
+    // The reason defaults to HOME_VISIT_ADDRESS_USED, so Confirm is enabled;
+    // tapping it runs _navigateToVisitComplete.
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('VISIT COMPLETE SCREEN'), findsOneWidget);
+    tester.takeException();
   });
 }
