@@ -72,13 +72,7 @@ class SchemaPatchCatalogTest {
         final String sql = new ClassPathResource(
                 "db/schema-patches/2607191700_recording_state.sql")
                 .getContentAsString(StandardCharsets.UTF_8);
-        final java.nio.file.Path runnerPath = java.nio.file.Path.of(
-                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
-        final java.nio.file.Path resolved = java.nio.file.Files.exists(runnerPath)
-                ? runnerPath
-                : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
-        final String runner = java.nio.file.Files.readString(resolved);
+        final String runner = readRunnerSource();
 
         // ScriptUtils cannot run DO $$ guards; unknown-status fail-closed check is in the
         // runner, and duplicate active ownership remains fail-closed via the unique index.
@@ -90,6 +84,20 @@ class SchemaPatchCatalogTest {
                 .contains("uq_call_recordings_active_generation")
                 .contains("recording_compensation_outbox")
                 .contains("post_call_transcription_jobs");
+    }
+
+    @Test
+    void recordingWorkerTables_repairAuditColumnsHibernateNeverCreates() throws Exception {
+        final String runner = readRunnerSource();
+
+        // Both tables are created by Hibernate ddl-auto before the runner starts, so the
+        // ledgered CREATE TABLE IF NOT EXISTS never supplies created_at/updated_at.
+        assertThat(runner)
+                .contains("applyRecordingWorkerAuditColumnPatches();")
+                .contains("ALTER TABLE IF EXISTS post_call_transcription_jobs ")
+                .contains("ALTER TABLE IF EXISTS recording_compensation_outbox ")
+                .contains("ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ ")
+                .contains("ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ ");
     }
 
     @Test
@@ -128,6 +136,16 @@ class SchemaPatchCatalogTest {
         assertThat(sql)
                 .contains("quarantine_reason VARCHAR(255)")
                 .contains("summary_citation_replay_source");
+    }
+
+    private static String readRunnerSource() throws Exception {
+        final java.nio.file.Path runnerPath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(runnerPath)
+                ? runnerPath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        return java.nio.file.Files.readString(resolved);
     }
 
     @Test

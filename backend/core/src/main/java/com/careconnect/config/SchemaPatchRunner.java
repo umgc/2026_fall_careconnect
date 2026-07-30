@@ -186,6 +186,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 applyRetrievalIndexChunkPatches();
                 // Fail-closed coverage: every catalog entry is applied exactly once via the ledger.
                 applyOutstandingCatalogPatches();
+                applyRecordingWorkerAuditColumnPatches();
             });
             // Concurrent index builds must not hold the startup advisory lock.
             // Verify only after those indexes exist — mid-lock verify would fail greenfield boots.
@@ -1680,6 +1681,34 @@ public class SchemaPatchRunner implements CommandLineRunner {
             verifyRecordingStatePreconditions();
         }
         patchLedger.apply(SchemaPatchCatalog.patch(patchId));
+    }
+
+    /**
+     * Repair path: Hibernate ddl-auto creates {@code post_call_transcription_jobs} and
+     * {@code recording_compensation_outbox} from their entities during context refresh, before
+     * this {@code CommandLineRunner} executes, and neither entity maps the audit columns. The
+     * {@code CREATE TABLE IF NOT EXISTS} in {@code 2607191700_recording_state.sql} then no-ops
+     * while the ledger still records the patch as applied, so the columns never appear. Both
+     * workers set {@code updated_at} in their native claim/release statements, so without this
+     * a post-call transcription job can never leave READY and its transcript never arrives.
+     */
+    private void applyRecordingWorkerAuditColumnPatches() {
+        applyRequiredPatch(
+            "V2607301000a – ensure post_call_transcription_jobs audit columns",
+            "ALTER TABLE IF EXISTS post_call_transcription_jobs "
+                    + "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
+                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
+                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        );
+        applyRequiredPatch(
+            "V2607301000b – ensure recording_compensation_outbox audit columns",
+            "ALTER TABLE IF EXISTS recording_compensation_outbox "
+                    + "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
+                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
+                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        );
     }
 
     /**
