@@ -173,4 +173,82 @@ void main() {
     expect(searches, 2);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('tapping a record opens the details dialog', (tester) async {
+    tester.view.physicalSize = const Size(1400, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    _wireSearch(_result(count: 1));
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    final tile = find.text('Mary Johnson').first;
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    // _showRecordDetails built the dialog (detail rows + location sections).
+    expect(find.text('Record Details'), findsOneWidget);
+    expect(find.text('Service Type'), findsWidgets);
+    expect(find.text('Check-In Location'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Record Details'), findsNothing);
+    tester.takeException();
+  });
+
+  testWidgets('Load More fetches the next page', (tester) async {
+    var searches = 0;
+    ApiServiceOffline.debugOverrideHttpClient(MockClient((req) async {
+      if (req.url.toString().contains('/records/search')) {
+        searches++;
+        // First page has more; the next page is the last.
+        return http.Response(_result(count: 1, last: searches > 1), 200);
+      }
+      return http.Response('[]', 200);
+    }));
+
+    tester.view.physicalSize = const Size(1400, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+    expect(searches, 1);
+
+    final loadMore = find.widgetWithText(ElevatedButton, 'Load More');
+    expect(loadMore, findsOneWidget);
+    await tester.ensureVisible(loadMore);
+    await tester.tap(loadMore);
+    await tester.pumpAndSettle();
+
+    expect(searches, 2); // _loadMore ran _performSearch(resetPage: false)
+    expect(find.widgetWithText(ElevatedButton, 'Load More'), findsNothing);
+    tester.takeException();
+  });
+
+  testWidgets('the Clear Filters action re-runs the search', (tester) async {
+    var searches = 0;
+    ApiServiceOffline.debugOverrideHttpClient(MockClient((req) async {
+      if (req.url.toString().contains('/records/search')) {
+        searches++;
+        return http.Response(_result(count: 1), 200);
+      }
+      return http.Response('[]', 200);
+    }));
+
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+    expect(searches, 1);
+
+    await tester.tap(find.byTooltip('Clear Filters'));
+    await tester.pumpAndSettle();
+
+    expect(searches, 2); // _clearFilters calls _performSearch
+    tester.takeException();
+  });
 }
