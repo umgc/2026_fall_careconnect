@@ -10,6 +10,13 @@ frontend:
         - flutter config --enable-web
     build:
       commands:
+        - echo "Building React UI preview into web/ui-preview"
+        - nvm install 20 || true
+        - nvm use 20 || true
+        - (cd ../ui-integration/mobile-app && npm ci && npm run build)
+        - rm -rf web/ui-preview
+        - mkdir -p web/ui-preview
+        - cp -R ../ui-integration/mobile-app/dist/. web/ui-preview/
         - echo "Building Flutter Web App..."
         - flutter pub get
         - flutter build web --release --dart-define=BACKEND_URL=$BACKEND_URL --dart-define=APP_DOMAIN=$APP_DOMAIN --dart-define=APP_PORT=$APP_PORT
@@ -21,3 +28,4 @@ frontend:
     paths:
       - .pub-cache
       - build
+      - ../ui-integration/mobile-app/node_modules

@@ -86,6 +86,7 @@ import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
 import '../../features/usps/presentation/usps_test_screen.dart';
 import '../../features/telemetry/telemetry.dart';
+import 'package:care_connect_app/features/ui_preview/ui_preview_screen.dart';
 import 'dart:async';
 
 GoRouter? _appRouterRef;
@@ -196,6 +197,10 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
+    GoRoute(
+      path: '/ui-preview',
+      builder: (_, __) => const UiPreviewScreen(),
+    ),
     GoRoute(path: '/stml/brief', builder: (_, __) => const StmlBriefPage()),
     GoRoute(path: '/stml/recall', builder: (_, __) => const StmlRecallPage()),
     GoRoute(path: '/stml/search', builder: (_, __) => const StmlSearchPage()),
