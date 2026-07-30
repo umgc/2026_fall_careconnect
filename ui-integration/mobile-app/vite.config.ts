@@ -16,6 +16,7 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  base: "/ui-preview/",
   plugins: [figmaAssetResolver(), react(), tailwindcss()],
   resolve: {
     alias: {

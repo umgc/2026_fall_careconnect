@@ -85,6 +85,12 @@ class _MenuPageState extends State<MenuPage> {
 
     final items = <_MenuItem>[
       _MenuItem(
+        icon: Icons.auto_awesome,
+        label: 'New UI (preview)',
+        route: '/ui-preview',
+        visibleFor: const {'PATIENT', 'CAREGIVER', 'ADMIN', 'FAMILY_LINK'},
+      ),
+      _MenuItem(
         icon: Icons.receipt_long,
         label: local.invoiceAssistant,
         route: '/invoice-assistant/dashboard',
