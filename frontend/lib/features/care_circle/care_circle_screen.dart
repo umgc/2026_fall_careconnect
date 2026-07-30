@@ -369,7 +369,15 @@ class _CareCircleScreenState extends State<CareCircleScreen> {
                   const SizedBox(height: 8),
                   if (isPatient) ...[
                     FilledButton.icon(
-                      onPressed: () => context.push('/profile/share'),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Limited profile share (QR/link) arrives with the mail-oauth share PR. Use invite links from Care Circle for now.',
+                            ),
+                          ),
+                        );
+                      },
                       icon: const Icon(Icons.ios_share),
                       label: const Text('Share limited profile'),
                     ),

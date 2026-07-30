@@ -658,22 +658,6 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _buildSectionHeader('Share Profile'),
-                  Card(
-                    child: ListTile(
-                      leading: Icon(
-                        Icons.qr_code_2,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      title: const Text('Share limited profile'),
-                      subtitle: const Text(
-                        'Create a QR code and link others can open — your patient ID stays private.',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/profile/share'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   _buildSectionHeader('Medical Information'),
                   _buildTextField(
                     controller: _dateOfBirthController,
