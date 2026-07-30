@@ -124,6 +124,16 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Devtools -->
         <dependency>
@@ -172,6 +182,14 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>chimesdkmediapipelines</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>kinesisvideo</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>kinesisvideoarchivedmedia</artifactId>
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>

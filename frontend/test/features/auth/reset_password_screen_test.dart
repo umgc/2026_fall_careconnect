@@ -2,15 +2,15 @@
 // No network is needed for form-rendering and validation tests.
 // tester.runAsync is used for the submit path to allow real HTTP to fail fast.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/reset_password_screen.dart';
-
 import '../../helpers/fake_http_overrides.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+Widget _wrap(Widget child) => MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales,home: child);
 
 void main() {
   group('ResetPasswordScreen', () {
@@ -26,14 +26,14 @@ void main() {
       // Verifies branding text is visible on the screen
       await tester.pumpWidget(_wrap(const ResetPasswordScreen()));
       await tester.pump();
-      expect(find.text('Care Connect'), findsOneWidget);
+      expect(find.text('CareConnect'), findsOneWidget);
     });
 
     testWidgets('shows Closer Connections tagline', (tester) async {
       // Verifies the tagline is shown below the brand name
       await tester.pumpWidget(_wrap(const ResetPasswordScreen()));
       await tester.pump();
-      expect(find.text('Closer Connections. Better Care.'), findsOneWidget);
+      expect(find.text('Connecting Care, Empowering Health'), findsOneWidget);
     });
 
     testWidgets('shows instruction text', (tester) async {

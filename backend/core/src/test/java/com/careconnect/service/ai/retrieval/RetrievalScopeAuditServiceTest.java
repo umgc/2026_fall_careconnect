@@ -6,23 +6,36 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.careconnect.model.User;
 import com.careconnect.security.Role;
+import com.careconnect.service.ai.audit.AiAskAuditService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 
+@ExtendWith(MockitoExtension.class)
 class RetrievalScopeAuditServiceTest {
 
-    private final RetrievalScopeAuditService auditService = new RetrievalScopeAuditService();
+    @Mock
+    private AiAskAuditService askAuditService;
+
+    private RetrievalScopeAuditService auditService;
     private ListAppender<ILoggingEvent> logAppender;
     private Logger logger;
 
     @BeforeEach
     void attachLogAppender() {
+        auditService = new RetrievalScopeAuditService(askAuditService);
         logger = (Logger) LoggerFactory.getLogger(RetrievalScopeAuditService.class);
         logAppender = new ListAppender<>();
         logAppender.setContext(logger.getLoggerContext());
@@ -41,7 +54,7 @@ class RetrievalScopeAuditServiceTest {
     }
 
     @Test
-    @DisplayName("logScopeDenied returns audit id and does not throw")
+    @DisplayName("logScopeDenied returns audit id and writes durable ledger event")
     void logScopeDeniedReturnsAuditId() {
         User caller = User.builder()
                 .id(5L)
@@ -57,6 +70,11 @@ class RetrievalScopeAuditServiceTest {
                     "Patient 42 is out of scope");
 
             assertThat(auditId).isNotNull();
+            verify(askAuditService).appendStandaloneEvent(
+                    eq(auditId),
+                    eq(AiAskAuditService.SCOPE_DENIED),
+                    eq(5L),
+                    anyMap());
         }).doesNotThrowAnyException();
     }
 
@@ -68,6 +86,7 @@ class RetrievalScopeAuditServiceTest {
                 99L,
                 ScopeDenialReason.PATIENT_NOT_FOUND,
                 "Patient 99 not found")).isNotNull();
+        verify(askAuditService).appendStandaloneEvent(any(), eq(AiAskAuditService.SCOPE_DENIED), eq(null), anyMap());
     }
 
     @Test
@@ -91,10 +110,11 @@ class RetrievalScopeAuditServiceTest {
                 .contains("eventType=SCOPE_DENIED")
                 .contains("auditId=" + auditId)
                 .contains("callerUserId=5")
-                .contains("callerEmail=patient@test.com")
                 .contains("patientId=42")
                 .contains("denialReason=PATIENT_OUT_OF_SCOPE")
                 .contains("deliveryStatus=WITHHELD")
-                .contains("retrievalPerformed=false");
+                .contains("retrievalPerformed=false")
+                .doesNotContain("patient@test.com")
+                .doesNotContain("Patient 42 is out of scope");
     }
 }

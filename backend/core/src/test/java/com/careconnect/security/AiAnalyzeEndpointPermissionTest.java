@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -99,8 +100,8 @@ class AiAnalyzeEndpointPermissionTest {
 
         assertThatThrownBy(() ->
                 permissionAspect.checkPermission(requirePermission(Permission.CREATE_TASKS)))
-                .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("CREATE_TASKS");
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Required permission");
     }
 
     @Test
@@ -113,8 +114,8 @@ class AiAnalyzeEndpointPermissionTest {
 
         assertThatThrownBy(() ->
                 permissionAspect.checkPermission(requirePermission(Permission.USE_AI_FEATURES)))
-                .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("USE_AI_FEATURES");
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Required permission");
     }
 
     private RequirePermission requirePermission(Permission value) {

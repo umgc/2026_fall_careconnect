@@ -1,8 +1,9 @@
 package com.careconnect.service;
 
+import com.careconnect.model.CallAttendee;
 import com.careconnect.model.CallRecording;
+import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
-import com.careconnect.service.PostCallTranscriptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,12 +21,18 @@ import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaC
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaConcatenationPipelineResponse;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineRequest;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.CreateMediaStreamPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineResponse;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaPipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineRequest;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaCapturePipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.GetMediaPipelineResponse;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaCapturePipeline;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaConcatenationPipeline;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamPipeline;
+import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaStreamType;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipeline;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.MediaPipelineStatus;
 import software.amazon.awssdk.services.iam.IamClient;
@@ -44,14 +51,23 @@ import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -78,7 +94,12 @@ class CallRecordingServiceTest {
     @Mock private IamClient iamClient;
     @Mock private ChimeService chimeService;
     @Mock private CallRecordingRepository recordingRepository;
+    @Mock private CallAttendeeRepository callAttendeeRepository;
     @Mock private PostCallTranscriptionService postCallTranscriptionService;
+    @Mock private KvsStreamPoolService kvsStreamPoolService;
+    @Mock private KvsAttendeeStreamResolver kvsAttendeeStreamResolver;
+    @Mock private KvsAttendeeStreamRegistry kvsAttendeeStreamRegistry;
+    @Mock private CallAttendeeService callAttendeeService;
 
     @InjectMocks
     private CallRecordingService service;
@@ -91,6 +112,9 @@ class CallRecordingServiceTest {
     private static final String BUCKET            = "careconnect-recordings-123456789012-us-east-1";
     private static final String S3_PREFIX         = "recordings/" + CALL_ID + "/20260312-100000/";
     private static final String ACCOUNT_ID        = "123456789012";
+    private static final String MEDIA_STREAM_PIPELINE_ID = "media-stream-pipeline-uuid-001";
+    private static final String STREAM_POOL_ARN =
+            "arn:aws:chime:us-east-1:123456789012:media-pipeline-kinesis-video-stream-pool/dev";
     private static final long   USER_ID           = 42L;
 
     @BeforeEach
@@ -177,11 +201,40 @@ class CallRecordingServiceTest {
 
             service.startRecording(CALL_ID, null); // first call registers pipeline (null userId avoids RECORDING_CLAIMED)
 
-            // Second call — should hit ALREADY_RECORDING branch (null userId skips claim logic)
+            CallRecording active = buildRecording("STARTED");
+            active.setInitiatedByUserId(null);
+            active.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
+            when(recordingRepository.findActiveByCallId(CALL_ID))
+                    .thenReturn(Optional.of(active));
+
+            // Second call observes the durable active owner.
             Map<String, Object> result = service.startRecording(CALL_ID, null);
 
             assertThat(result).containsEntry("status", "ALREADY_RECORDING");
             assertThat(result).containsKey("pipelineId");
+        }
+
+        @Test
+        @DisplayName("returns ALREADY_RECORDING when peer owns RESERVED generation")
+        void startRecording_peerReserved_doesNotDriveAws() {
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(recordingRepository.reserveActiveGeneration(anyString(), anyString(), any(), anyBoolean()))
+                    .thenReturn(0);
+            CallRecording peerReserved = buildRecording("STARTED");
+            peerReserved.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.RESERVED);
+            peerReserved.setInitiatedByUserId(null);
+            when(recordingRepository.findActiveByCallId(CALL_ID))
+                    .thenReturn(Optional.of(peerReserved));
+
+            Map<String, Object> result = service.startRecording(CALL_ID, null);
+
+            assertThat(result).containsEntry("status", "ALREADY_RECORDING");
+            assertThat(result.get("message").toString()).contains("Another node");
+            verify(pipelinesClient, never()).createMediaCapturePipeline(
+                    any(CreateMediaCapturePipelineRequest.class));
+            verify(recordingRepository, never()).saveAndFlush(any(CallRecording.class));
         }
 
         @Test
@@ -227,9 +280,57 @@ class CallRecordingServiceTest {
             assertThat(result).containsKey("s3Bucket");
             assertThat(result).containsKey("s3Prefix");
 
-            verify(recordingRepository).save(any(CallRecording.class));
+            verify(recordingRepository).saveAndFlush(any(CallRecording.class));
             verify(pipelinesClient).createMediaCapturePipeline(
                     any(CreateMediaCapturePipelineRequest.class));
+        }
+
+        @Test
+        @DisplayName(
+                "SENT-CLIP-R1: startedAt is UTC wall-clock even when JVM default zone is not UTC")
+        void startRecording_persistsStartedAtAsUtcWallClock_independentOfDefaultZone() {
+            final TimeZone previous = TimeZone.getDefault();
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+            try {
+                when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+                MediaCapturePipeline pipeline =
+                        MediaCapturePipeline.builder().mediaPipelineId(PIPELINE_ID).build();
+                when(pipelinesClient.createMediaCapturePipeline(
+                                any(CreateMediaCapturePipelineRequest.class)))
+                        .thenReturn(
+                                CreateMediaCapturePipelineResponse.builder()
+                                        .mediaCapturePipeline(pipeline)
+                                        .build());
+                when(s3Client.putBucketPolicy(
+                                any(
+                                        software.amazon.awssdk.services.s3.model
+                                                .PutBucketPolicyRequest.class)))
+                        .thenReturn(
+                                software.amazon.awssdk.services.s3.model.PutBucketPolicyResponse
+                                        .builder()
+                                        .build());
+
+                final Instant before = Instant.now().minusSeconds(2);
+                Map<String, Object> result = service.startRecording(CALL_ID, USER_ID);
+                final Instant after = Instant.now().plusSeconds(2);
+
+                assertThat(result).containsEntry("status", "STARTED");
+
+                ArgumentCaptor<CallRecording> captor = ArgumentCaptor.forClass(CallRecording.class);
+                verify(recordingRepository).saveAndFlush(captor.capture());
+                LocalDateTime startedAt = captor.getValue().getStartedAt();
+                assertThat(startedAt).isNotNull();
+
+                // Contract: LocalDateTime is UTC wall-clock. Interpreting it as UTC must land
+                // near Instant.now() even when the JVM default zone is America/New_York.
+                Instant asUtc = startedAt.atZone(ZoneOffset.UTC).toInstant();
+                assertThat(asUtc).isBetween(before, after);
+                assertThat(Duration.between(asUtc, Instant.now()).abs().toMinutes())
+                        .isLessThan(5);
+            } finally {
+                TimeZone.setDefault(previous);
+            }
         }
 
         @Test
@@ -285,6 +386,24 @@ class CallRecordingServiceTest {
         }
 
         @Test
+        @DisplayName("P5: still tears down media stream pipeline when capture already stopped")
+        void stopRecording_captureAlreadyStopped_stillStopsMediaStreamPipeline() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setInitiatedByUserId(null);
+            rec.setMediaStreamPipelineId("media-stream-pipeline-001");
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.stopRecording(CALL_ID);
+
+            assertThat(result).containsEntry("status", "NOT_RECORDING");
+            verify(kvsAttendeeStreamRegistry).clearCall(CALL_ID);
+            verify(pipelinesClient).deleteMediaPipeline(any(DeleteMediaPipelineRequest.class));
+        }
+
+        @Test
         @DisplayName("deletes pipeline and returns STOPPED when active pipeline found in DB")
         void stopRecording_whenActive_deletesPipelineAndReturnsStopped() {
             CallRecording rec = buildRecording("STARTED");
@@ -323,8 +442,10 @@ class CallRecordingServiceTest {
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
             assertThat(result).containsEntry("status", "STOPPED");
+            assertThat(rec.getStatus()).isEqualTo("STOPPED");
             verify(pipelinesClient).deleteMediaCapturePipeline(
                     any(DeleteMediaCapturePipelineRequest.class));
+            verify(kvsAttendeeStreamRegistry).clearCall(CALL_ID);
         }
     }
 
@@ -356,6 +477,10 @@ class CallRecordingServiceTest {
             rec.setS3Bucket(BUCKET);
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationStatus("NOT_REQUESTED");
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -374,6 +499,27 @@ class CallRecordingServiceTest {
             assertThat(result).containsEntry("callId", CALL_ID);
             assertThat(result).containsEntry("status", "STOPPED");
             assertThat(result).containsKey("pipelineId");
+        }
+
+        @Test
+        @DisplayName("READY recordings skip S3 refresh and still report playbackReady")
+        void getRecordingStatus_readyRecording_skipsS3AndIsPlaybackReady() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setPipelineId(PIPELINE_ID);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            rec.setConcatenationPipelineId("concat-pipe-001");
+            rec.setConcatenationStatus("READY");
+            rec.setTranscriptionStatus("COMPLETE");
+
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.getRecordingStatus(CALL_ID);
+
+            assertThat(result).containsEntry("concatenationStatus", "READY");
+            assertThat(result).containsEntry("playbackReady", true);
+            verify(s3Client, never()).listObjectsV2(any(ListObjectsV2Request.class));
         }
     }
 
@@ -448,6 +594,26 @@ class CallRecordingServiceTest {
         }
 
         @Test
+        @DisplayName("system transcription capture never returns a playback URL")
+        void generatePlaybackUrl_systemCapture_suppressesPlayback() {
+            CallRecording rec = buildRecording("STOPPED");
+            rec.setInitiatedByUserId(null);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            rec.setConcatenationStatus("READY");
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+
+            Map<String, Object> result = service.generatePlaybackUrl(CALL_ID);
+
+            assertThat(result)
+                    .containsEntry("status", "TRANSCRIPTION_ONLY")
+                    .containsEntry("playbackReady", false)
+                    .doesNotContainKey("playbackUrl");
+            verify(s3Presigner, never()).presignGetObject(any(GetObjectPresignRequest.class));
+        }
+
+        @Test
         @DisplayName("SENT-CLIP-002 returns presigned URL with recordingStartedAt when video is available")
         void generatePlaybackUrl_withRecording_returnsUrl() throws Exception {
             String stitchedKey = S3_PREFIX + "concatenated/composited-video/concat-pipe-001.mp4";
@@ -457,6 +623,8 @@ class CallRecordingServiceTest {
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationPipelineId("concat-pipe-001");
             rec.setConcatenationStatus("READY");
+            // R1: UTC wall-clock stored in LocalDateTime; emit as Instant ...Z
+            rec.setStartedAt(LocalDateTime.of(2026, 7, 7, 22, 7, 12));
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -499,15 +667,14 @@ class CallRecordingServiceTest {
 
             assertThat(result).containsKey("playbackUrl");
             assertThat(result.get("playbackUrl").toString()).contains("presigned-url");
+            // R5: success path has a resolved video key → playbackReady is always true.
             assertThat(result).containsEntry("playbackReady", true);
             assertThat(result).containsKey("recordingStartedAt");
+            // R1: UTC Instant with Z — matches Flutter DateTime.parse(...).toUtc().
+            assertThat(result.get("recordingStartedAt")).isEqualTo("2026-07-07T22:07:12Z");
             assertThat(result.get("recordingStartedAt").toString()).endsWith("Z");
-            assertThat(result.get("recordingStartedAt"))
-                    .isEqualTo(
-                            rec.getStartedAt()
-                                    .atZone(java.time.ZoneOffset.UTC)
-                                    .toInstant()
-                                    .toString());
+            assertThat(Instant.parse(result.get("recordingStartedAt").toString()))
+                    .isEqualTo(Instant.parse("2026-07-07T22:07:12Z"));
         }
     }
 
@@ -801,8 +968,8 @@ class CallRecordingServiceTest {
     class AdditionalEdgePathTests {
 
         @Test
-        @DisplayName("stopRecording returns STOPPED without AWS delete when clients are unavailable after DB recovery")
-        void stopRecording_awsUnavailableAfterDbRecovery_returnsStopped() {
+        @DisplayName("stopRecording remains retryable when AWS is unavailable after DB recovery")
+        void stopRecording_awsUnavailableAfterDbRecovery_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
 
@@ -813,13 +980,15 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "STOP_RETRYABLE");
             assertThat(result).containsEntry("pipelineId", PIPELINE_ID);
+            assertThat(rec.getStatus()).isEqualTo("STOP_RETRYABLE");
         }
 
         @Test
-        @DisplayName("stopRecording reports warning and failed concatenation when delete and ARN lookup fail")
-        void stopRecording_deleteAndArnLookupFail_reportsWarning() {
+        @DisplayName("stopRecording keeps deletion failures retryable")
+        void stopRecording_deleteFailure_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
             rec.setS3Bucket(BUCKET);
@@ -835,9 +1004,10 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
-            assertThat(result).containsEntry("concatenationStatus", "FAILED");
-            assertThat(result.get("warning").toString()).contains("delete failed");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "STOP_RETRYABLE");
+            assertThat(result.get("message").toString()).contains("delete failed");
+            assertThat(rec.getStatus()).isEqualTo("STOP_RETRYABLE");
         }
 
         @Test
@@ -848,6 +1018,8 @@ class CallRecordingServiceTest {
             rec.setS3Bucket(BUCKET);
             rec.setS3Prefix(S3_PREFIX);
             rec.setConcatenationStatus("NOT_REQUESTED");
+            rec.setLifecycleStatus(
+                    com.careconnect.model.RecordingLifecycleStatus.ACTIVE);
 
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.of(rec));
@@ -860,11 +1032,6 @@ class CallRecordingServiceTest {
                                     .status("Initializing")
                                     .build())
                             .build());
-
-            @SuppressWarnings("unchecked")
-            Map<String, String> activePipelineIds =
-                    (Map<String, String>) ReflectionTestUtils.getField(service, "activePipelineIds");
-            activePipelineIds.put(CALL_ID, PIPELINE_ID);
 
             Map<String, Object> result = service.getRecordingStatus(CALL_ID);
 
@@ -1232,7 +1399,9 @@ class CallRecordingServiceTest {
 
             service.reconcileCompletedRecordingCleanup();
 
-            verifyNoInteractions(recordingRepository);
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("STOP_RETRYABLE");
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("FINALIZE_RETRYABLE");
+            verify(recordingRepository, never()).findTop100ByStatusOrderByStartedAtDesc("STOPPED");
         }
 
         @Test
@@ -1242,7 +1411,9 @@ class CallRecordingServiceTest {
 
             service.reconcileCompletedRecordingCleanup();
 
-            verifyNoInteractions(recordingRepository);
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("STOP_RETRYABLE");
+            verify(recordingRepository).findTop100ByStatusOrderByStartedAtDesc("FINALIZE_RETRYABLE");
+            verify(recordingRepository, never()).findTop100ByStatusOrderByStartedAtDesc("STOPPED");
         }
 
         @Test
@@ -1321,14 +1492,9 @@ class CallRecordingServiceTest {
     class StopRecordingAdditionalTests {
 
         @Test
-        @DisplayName("returns NOT_RECORDING when DB lookup returns null recording after pipeline removal")
+        @DisplayName("returns NOT_RECORDING when durable ownership is absent")
         void stopRecording_dbReturnsNullAfterPipelineRemoval_returnsNotRecording() {
-            // Seed activePipelineIds with a value, then the second DB lookup returns empty
-            @SuppressWarnings("unchecked")
-            Map<String, String> activePipelineIds =
-                    (Map<String, String>) ReflectionTestUtils.getField(service, "activePipelineIds");
-            activePipelineIds.put(CALL_ID, PIPELINE_ID);
-
+            when(recordingRepository.findActiveByCallId(CALL_ID)).thenReturn(Optional.empty());
             when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
                     .thenReturn(Optional.empty());
 
@@ -1338,8 +1504,8 @@ class CallRecordingServiceTest {
         }
 
         @Test
-        @DisplayName("concatenation failure sets FAILED status when concatenation pipeline throws")
-        void stopRecording_concatenationPipelineThrows_setsFailed() {
+        @DisplayName("concatenation failure remains retryable when concatenation pipeline throws")
+        void stopRecording_concatenationPipelineThrows_remainsRetryable() {
             CallRecording rec = buildRecording("STARTED");
             rec.setPipelineId(PIPELINE_ID);
             rec.setS3Bucket(BUCKET);
@@ -1364,8 +1530,49 @@ class CallRecordingServiceTest {
 
             Map<String, Object> result = service.stopRecording(CALL_ID);
 
-            assertThat(result).containsEntry("status", "STOPPED");
-            assertThat(result).containsEntry("concatenationStatus", "FAILED");
+            assertThat(result).containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(result).containsEntry("recordingStatus", "FINALIZE_RETRYABLE");
+            assertThat(rec.getStatus()).isEqualTo("FINALIZE_RETRYABLE");
+        }
+
+        @Test
+        @DisplayName("retry after deletion failure can complete stop and finalization")
+        void stopRecording_retryAfterDeleteFailure_completes() {
+            CallRecording rec = buildRecording("STARTED");
+            rec.setPipelineId(PIPELINE_ID);
+            rec.setS3Bucket(BUCKET);
+            rec.setS3Prefix(S3_PREFIX);
+            when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(rec));
+            when(pipelinesClient.getMediaCapturePipeline(
+                    any(GetMediaCapturePipelineRequest.class)))
+                    .thenReturn(GetMediaCapturePipelineResponse.builder()
+                            .mediaCapturePipeline(MediaCapturePipeline.builder()
+                                    .mediaPipelineId(PIPELINE_ID)
+                                    .mediaPipelineArn("arn:aws:chime:us-east-1:"
+                                            + ACCOUNT_ID + ":media-pipeline/" + PIPELINE_ID)
+                                    .build())
+                            .build());
+            when(pipelinesClient.deleteMediaCapturePipeline(
+                            any(DeleteMediaCapturePipelineRequest.class)))
+                    .thenThrow(new RuntimeException("temporary delete failure"))
+                    .thenReturn(DeleteMediaCapturePipelineResponse.builder().build());
+            when(pipelinesClient.createMediaConcatenationPipeline(
+                    any(CreateMediaConcatenationPipelineRequest.class)))
+                    .thenReturn(CreateMediaConcatenationPipelineResponse.builder()
+                            .mediaConcatenationPipeline(MediaConcatenationPipeline.builder()
+                                    .mediaPipelineId("concat-retry")
+                                    .build())
+                            .build());
+
+            assertThat(service.stopRecording(CALL_ID))
+                    .containsEntry("status", "RETRYABLE_FAILURE");
+            assertThat(service.stopRecording(CALL_ID))
+                    .containsEntry("status", "STOPPED");
+
+            assertThat(rec.getStatus()).isEqualTo("STOPPED");
+            verify(pipelinesClient, times(2)).deleteMediaCapturePipeline(
+                    any(DeleteMediaCapturePipelineRequest.class));
         }
     }
 
@@ -1392,8 +1599,372 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  Private helpers
+    //  startKvsPipeline (pool ingest → assemble fragments post-call)
     // ══════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("startKvsPipeline")
+    class StartKvsPipelineTests {
+
+        @Test
+        @DisplayName("SPEAKER-032: returns DISABLED when KVS pool is not enabled")
+        void startKvsPipeline_kvsDisabled_returnsDisabled() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(false);
+
+            Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "DISABLED");
+            verifyNoInteractions(pipelinesClient);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-033: does not require Media Insights ARN for speaker ingest")
+        void startKvsPipeline_withoutInsightsArn_startsPoolIngest() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+            final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
+            final CallAttendee patient = buildCallAttendee("att-patient", 2L, "PATIENT");
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(caregiver, patient));
+            when(kvsAttendeeStreamResolver.resolve(
+                            eq(CALL_ID),
+                            anyList(),
+                            eq(MEDIA_STREAM_PIPELINE_ID),
+                            eq(MEETING_ID)))
+                    .thenReturn(
+                            Map.of(
+                                    "att-caregiver", "arn:kvs:stream-1",
+                                    "att-patient", "arn:kvs:stream-2"));
+
+            final CallRecording systemRecording = buildRecording("STARTED");
+            systemRecording.setInitiatedByUserId(null);
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            final Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            assertThat(result).containsEntry("attendeeStreamCount", 2);
+            assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+            verify(pipelinesClient).createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class));
+            verify(callAttendeeService).recordKvsStreamMapping(CALL_ID, "att-caregiver", "arn:kvs:stream-1");
+            verify(callAttendeeService).recordKvsStreamMapping(CALL_ID, "att-patient", "arn:kvs:stream-2");
+        }
+
+        @Test
+        @DisplayName("SPEAKER-034: creates media stream pipeline and persists media_stream_pipeline_id")
+        void startKvsPipeline_configured_startsPipelineAndPersistsId() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+            final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
+            final CallAttendee patient = buildCallAttendee("att-patient", 2L, "PATIENT");
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(caregiver, patient));
+            when(kvsAttendeeStreamResolver.resolve(
+                            eq(CALL_ID),
+                            anyList(),
+                            eq(MEDIA_STREAM_PIPELINE_ID),
+                            eq(MEETING_ID)))
+                    .thenReturn(
+                            Map.of(
+                                    "att-caregiver", "arn:kvs:stream-1",
+                                    "att-patient", "arn:kvs:stream-2"));
+
+            final CallRecording systemRecording = buildRecording("STARTED");
+            systemRecording.setInitiatedByUserId(null);
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            final Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+            verify(recordingRepository, atLeastOnce()).save(systemRecording);
+
+            final ArgumentCaptor<CreateMediaStreamPipelineRequest> requestCaptor =
+                    ArgumentCaptor.forClass(CreateMediaStreamPipelineRequest.class);
+            verify(pipelinesClient).createMediaStreamPipeline(requestCaptor.capture());
+            assertThat(requestCaptor.getValue().sinks()).hasSize(1);
+            assertThat(requestCaptor.getValue().sinks().get(0).mediaStreamType())
+                    .isEqualTo(MediaStreamType.INDIVIDUAL_AUDIO);
+            assertThat(requestCaptor.getValue().sinks().get(0).sinkArn()).isEqualTo(STREAM_POOL_ARN);
+            assertThat(requestCaptor.getValue().sinks().get(0).reservedStreamCapacity()).isEqualTo(4);
+            assertThat(requestCaptor.getValue().clientRequestToken())
+                    .isEqualTo(CallRecordingService.mediaStreamPipelineClientRequestToken(CALL_ID));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-039: supports more than two active attendees for pool ingest")
+        void startKvsPipeline_moreThanTwoAttendees_succeeds() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(
+                            List.of(
+                                    buildCallAttendee("att-1", 1L, "CAREGIVER"),
+                                    buildCallAttendee("att-2", 2L, "PATIENT"),
+                                    buildCallAttendee("att-3", 3L, "CAREGIVER")));
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+            when(kvsAttendeeStreamResolver.resolve(
+                            eq(CALL_ID), anyList(), eq(MEDIA_STREAM_PIPELINE_ID), eq(MEETING_ID)))
+                    .thenReturn(
+                            Map.of(
+                                    "att-1", "arn:aws:kinesisvideo:us-east-1:1:stream/a/1",
+                                    "att-2", "arn:aws:kinesisvideo:us-east-1:1:stream/b/1",
+                                    "att-3", "arn:aws:kinesisvideo:us-east-1:1:stream/c/1"));
+
+            final Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("attendeeStreamCount", 3);
+            final ArgumentCaptor<CreateMediaStreamPipelineRequest> requestCaptor =
+                    ArgumentCaptor.forClass(CreateMediaStreamPipelineRequest.class);
+            verify(pipelinesClient).createMediaStreamPipeline(requestCaptor.capture());
+            assertThat(requestCaptor.getValue().sinks().get(0).reservedStreamCapacity()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-035: second startKvsPipeline call is idempotent")
+        void startKvsPipeline_secondCall_returnsAlreadyStarted() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(buildCallAttendee("att-1", 1L, "CAREGIVER")));
+            when(kvsAttendeeStreamResolver.resolve(
+                            eq(CALL_ID), anyList(), eq(MEDIA_STREAM_PIPELINE_ID), eq(MEETING_ID)))
+                    .thenReturn(Map.of("att-1", "arn:kvs:stream-1"));
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            service.startKvsPipeline(CALL_ID);
+            final Map<String, Object> second = service.startKvsPipeline(CALL_ID);
+
+            assertThat(second).containsEntry("status", "ALREADY_STARTED");
+            assertThat(second).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            verify(pipelinesClient, times(1))
+                    .createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-040: ingest mode starts IndividualAudio media stream pipeline into pool")
+        void startKvsPipeline_ingestMode_startsMediaStreamIntoPool() {
+            when(kvsStreamPoolService.isEnabled()).thenReturn(true);
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+
+            final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
+            final CallAttendee patient = buildCallAttendee("att-patient", 2L, "PATIENT");
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(caregiver, patient));
+            when(kvsAttendeeStreamResolver.resolve(
+                            eq(CALL_ID),
+                            anyList(),
+                            eq(MEDIA_STREAM_PIPELINE_ID),
+                            eq(MEETING_ID)))
+                    .thenReturn(
+                            Map.of(
+                                    "att-caregiver",
+                                    "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-1/1",
+                                    "att-patient",
+                                    "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-2/1"));
+
+            final CallRecording systemRecording = buildRecording("STARTED");
+            systemRecording.setInitiatedByUserId(null);
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            final Map<String, Object> result = service.startKvsPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+
+            final ArgumentCaptor<CreateMediaStreamPipelineRequest> streamRequestCaptor =
+                    ArgumentCaptor.forClass(CreateMediaStreamPipelineRequest.class);
+            verify(pipelinesClient).createMediaStreamPipeline(streamRequestCaptor.capture());
+            assertThat(streamRequestCaptor.getValue().sinks()).hasSize(1);
+            assertThat(streamRequestCaptor.getValue().sinks().get(0).mediaStreamType())
+                    .isEqualTo(MediaStreamType.INDIVIDUAL_AUDIO);
+            assertThat(streamRequestCaptor.getValue().sinks().get(0).sinkArn()).isEqualTo(STREAM_POOL_ARN);
+            verify(callAttendeeService)
+                    .recordKvsStreamMapping(
+                            CALL_ID,
+                            "att-caregiver",
+                            "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-1/1");
+            verify(callAttendeeService)
+                    .recordKvsStreamMapping(
+                            CALL_ID,
+                            "att-patient",
+                            "arn:aws:kinesisvideo:us-east-1:123456789012:stream/chime-2/1");
+        }
+    }
+
+    @Nested
+    @DisplayName("startMediaStreamPipeline")
+    class StartMediaStreamPipelineTests {
+
+        @Test
+        @DisplayName("SPEAKER-041: returns SKIPPED when stream pool ARN is not configured")
+        void startMediaStreamPipeline_noPoolArn_returnsSkipped() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
+
+            final Map<String, Object> result = service.startMediaStreamPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "SKIPPED");
+            verifyNoInteractions(pipelinesClient);
+        }
+
+        @Test
+        @DisplayName("SPEAKER-042: creates IndividualAudio media stream pipeline and persists id")
+        void startMediaStreamPipeline_ingestMode_persistsPipelineId() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            when(kvsStreamPoolService.getStreamPoolArn()).thenReturn(STREAM_POOL_ARN);
+            when(chimeService.getMeetingId(CALL_ID)).thenReturn(MEETING_ID);
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(buildCallAttendee("att-1", 1L, "CAREGIVER")));
+
+            final CallRecording systemRecording = buildRecording("STARTED");
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
+                    .thenReturn(
+                            CreateMediaStreamPipelineResponse.builder()
+                                    .mediaStreamPipeline(
+                                            MediaStreamPipeline.builder()
+                                                    .mediaPipelineId(MEDIA_STREAM_PIPELINE_ID)
+                                                    .build())
+                                    .build());
+
+            final Map<String, Object> result = service.startMediaStreamPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            assertThat(systemRecording.getMediaStreamPipelineId()).isEqualTo(MEDIA_STREAM_PIPELINE_ID);
+
+            final ArgumentCaptor<CreateMediaStreamPipelineRequest> tokenCaptor =
+                    ArgumentCaptor.forClass(CreateMediaStreamPipelineRequest.class);
+            verify(pipelinesClient).createMediaStreamPipeline(tokenCaptor.capture());
+            assertThat(tokenCaptor.getValue().clientRequestToken())
+                    .isEqualTo(CallRecordingService.mediaStreamPipelineClientRequestToken(CALL_ID));
+        }
+
+        @Test
+        @DisplayName("SPEAKER-044: returns ALREADY_STARTED when DB already has media_stream_pipeline_id")
+        void startMediaStreamPipeline_dbAlreadyHasId_skipsCreate() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            final CallRecording systemRecording = buildRecording("STARTED");
+            systemRecording.setMediaStreamPipelineId(MEDIA_STREAM_PIPELINE_ID);
+            when(recordingRepository.findTopByCallIdAndInitiatedByUserIdIsNullOrderByStartedAtDesc(CALL_ID))
+                    .thenReturn(Optional.of(systemRecording));
+
+            final Map<String, Object> result = service.startMediaStreamPipeline(CALL_ID);
+
+            assertThat(result).containsEntry("status", "ALREADY_STARTED");
+            assertThat(result).containsEntry("mediaStreamPipelineId", MEDIA_STREAM_PIPELINE_ID);
+            verify(pipelinesClient, never()).createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("resolveAndPersistAttendeeStreams")
+    class ResolveAndPersistAttendeeStreamsTests {
+
+        @Test
+        @DisplayName("SPEAKER-036: requires stream pool ARN (ingest mode)")
+        void resolveAndPersistAttendeeStreams_withoutIngestMode_throws() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(false);
+
+            assertThatThrownBy(() -> service.resolveAndPersistAttendeeStreams(CALL_ID, MEETING_ID, null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("stream-pool-arn");
+        }
+
+        @Test
+        @DisplayName("SPEAKER-043: ingest mode uses Chime-assigned stream ARNs from resolver")
+        void resolveAndPersistAttendeeStreams_ingestMode_usesResolverMappings() {
+            when(kvsStreamPoolService.isIngestMode()).thenReturn(true);
+            final CallAttendee caregiver = buildCallAttendee("att-caregiver", 1L, "CAREGIVER");
+            when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
+                    .thenReturn(List.of(caregiver));
+            when(kvsAttendeeStreamResolver.resolve(
+                            CALL_ID, List.of(caregiver), MEDIA_STREAM_PIPELINE_ID, MEETING_ID))
+                    .thenReturn(Map.of("att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1"));
+
+            final Map<String, String> streams =
+                    service.resolveAndPersistAttendeeStreams(CALL_ID, MEETING_ID, MEDIA_STREAM_PIPELINE_ID);
+
+            assertThat(streams)
+                    .containsEntry("att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1");
+            verify(callAttendeeService)
+                    .recordKvsStreamMapping(
+                            CALL_ID, "att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1");
+        }
+    }
+
+    private static CallAttendee buildCallAttendee(
+            final String chimeAttendeeId, final Long userId, final String role) {
+        final CallAttendee attendee = new CallAttendee();
+        attendee.setCallId(CALL_ID);
+        attendee.setChimeAttendeeId(chimeAttendeeId);
+        attendee.setUserId(userId);
+        attendee.setRole(role);
+        attendee.setJoinedAt(LocalDateTime.now());
+        return attendee;
+    }
 
     /**
      * Builds a minimal CallRecording for use in tests.
@@ -1405,7 +1976,7 @@ class CallRecordingServiceTest {
         rec.setPipelineId(PIPELINE_ID);
         rec.setStatus(status);
         rec.setInitiatedByUserId(USER_ID);
-        rec.setStartedAt(LocalDateTime.now().minusMinutes(10));
+        rec.setStartedAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10));
         return rec;
     }
 }

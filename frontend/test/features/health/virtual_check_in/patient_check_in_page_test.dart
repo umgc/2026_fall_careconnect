@@ -1,32 +1,51 @@
 // Tests for PatientVirtualCheckIn
 // (lib/features/health/virtual_check_in/presentation/pages/patient_check_in_page.dart).
 //
-// Coverage strategy:
-//   PatientVirtualCheckIn calls availableCameras() in initState via a
-//   Flutter platform channel.  In the test environment the channel is mocked
-//   to return an empty list, so _checkCameraAvailability sets
-//   isCameraAvailable = false and isCheckingCamera = false.
-//
-//   Branches tested:
-//     isCheckingCamera = true  (initial frame before mock responds)
-//       — Scaffold and FAB render.
-//     isCheckingCamera = false, isCameraAvailable = false (after mock)
-//       — FAB uses Icons.videocam_off.
-//       — Body shows the camera-unavailable notice.
-//       — "💙 Daily Check-In" header text is present.
-//       — Mood selection emoji options are rendered.
+// Camera availability is checked lazily when the FAB is pressed (cameraHandler),
+// not in initState. Questionnaire loading uses UserProvider; a logged-out
+// provider avoids real HTTP.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
+
+import '../../../mock_user_provider.dart';
+
+/// Provider that reports no session so questionnaire load exits without HTTP.
+class _LoggedOutUserProvider extends MockUserProvider {
+  @override
+  UserSession? get user => null;
+}
+
+Widget _wrap() {
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: _LoggedOutUserProvider(),
+    child: const MaterialApp(home: PatientVirtualCheckIn()),
+  );
+}
+
+Future<void> _pumpSettled(WidgetTester tester) async {
+  await tester.pumpWidget(_wrap());
+  // Bounded pumps — avoid hanging on asset/network animations.
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
+Future<void> _triggerCameraCheck(WidgetTester tester) async {
+  await tester.tap(find.byType(FloatingActionButton));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // Mock the camera platform channel to return an empty list of cameras.
-  // This prevents the test from hanging on an unresponsive platform channel.
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -46,12 +65,8 @@ void main() {
     );
   });
 
-  // ─── camera check throws → catch branch ─────────────────────────────────
-
   group('PatientVirtualCheckIn – camera throws', () {
     setUp(() {
-      // Override: throw a PlatformException to exercise the catch block
-      // in _checkCameraAvailability.
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
         const MethodChannel('plugins.flutter.io/camera'),
@@ -70,27 +85,18 @@ void main() {
     testWidgets('renders Scaffold when availableCameras throws', (
       tester,
     ) async {
-      // Verifies the catch block sets isCameraAvailable = false and
-      // isCheckingCamera = false without crashing the widget.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
-
+      await _pumpSettled(tester);
       expect(find.byType(Scaffold), findsOneWidget);
-      // Camera-unavailable notice should appear (same UI as empty-list path).
+
+      await _triggerCameraCheck(tester);
+
       expect(find.textContaining('Camera not available'), findsWidgets);
     });
   });
 
-  // ─── normal camera (empty list) ───────────────────────────────────────────
-
   group('PatientVirtualCheckIn', () {
     testWidgets('renders Scaffold on first pump', (tester) async {
-      // Verifies the widget builds without crashing on the initial frame.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
+      await tester.pumpWidget(_wrap());
       await tester.pump();
 
       expect(find.byType(Scaffold), findsOneWidget);
@@ -100,24 +106,15 @@ void main() {
     testWidgets('shows "Daily Check-In" heading after camera check', (
       tester,
     ) async {
-      // Verifies the page header renders once the async camera check completes.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
-
+      await _pumpSettled(tester);
       expect(find.textContaining('Daily Check-In'), findsOneWidget);
     });
 
     testWidgets('shows camera-unavailable notice when no camera found', (
       tester,
     ) async {
-      // Verifies the "Camera not available" UI is shown when the mock
-      // returns an empty camera list.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
+      await _pumpSettled(tester);
+      await _triggerCameraCheck(tester);
 
       expect(
         find.textContaining('Camera not available'),
@@ -126,21 +123,17 @@ void main() {
     });
 
     testWidgets('FAB uses videocam_off icon when no camera', (tester) async {
-      // Verifies the FAB reflects the no-camera state.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
+      await _pumpSettled(tester);
+      // Before check: video_call icon (optimistic default).
+      expect(find.byIcon(Icons.video_call), findsOneWidget);
+
+      await _triggerCameraCheck(tester);
 
       expect(find.byIcon(Icons.videocam_off), findsOneWidget);
     });
 
     testWidgets('mood selection emoji options are rendered', (tester) async {
-      // Verifies that all 5 mood emoji options defined in moodOptions appear.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
+      await _pumpSettled(tester);
 
       for (final emoji in ['😢', '😞', '😐', '🙂', '😊']) {
         expect(
@@ -152,34 +145,19 @@ void main() {
     });
 
     testWidgets('shows "How are you feeling today?" question', (tester) async {
-      // Verifies the mood card heading is rendered.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
-
+      await _pumpSettled(tester);
       expect(find.text('How are you feeling today?'), findsOneWidget);
     });
 
     testWidgets('shows "Any symptoms or notes?" heading', (tester) async {
-      // Verifies the notes card heading is rendered.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
-
+      await _pumpSettled(tester);
       expect(find.text('Any symptoms or notes?'), findsOneWidget);
     });
 
     testWidgets('shows submit button and mood-required hint initially', (
       tester,
     ) async {
-      // Verifies the Submit Check-In button and the mood-required hint text
-      // appear before a mood is selected.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
+      await _pumpSettled(tester);
 
       expect(find.text('Submit Check-In'), findsOneWidget);
       expect(
@@ -191,19 +169,20 @@ void main() {
     testWidgets('tapping a mood emoji selects it and hides hint', (
       tester,
     ) async {
-      // Verifies that tapping the 😊 emoji triggers setState (selectedMood
-      // is set), which hides the "Please select your mood" hint and enables
-      // the Submit button.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-      // Tap the 😊 emoji (value = 5, "Great").
-      await tester.tap(find.text('😊'));
+      await _pumpSettled(tester);
+
+      final mood = find.text('Great');
+      await tester.ensureVisible(mood);
+      await tester.tap(mood);
       await tester.pump();
 
-      // The hint should disappear once a mood is chosen.
       expect(
         find.text('Please select your mood to submit your check-in'),
         findsNothing,
@@ -213,20 +192,21 @@ void main() {
     testWidgets('tapping Submit after mood selection shows snack bar', (
       tester,
     ) async {
-      // Verifies that pressing Submit (with mood selected) shows the
-      // mock confirmation SnackBar.
-      await tester.pumpWidget(
-        const MaterialApp(home: PatientVirtualCheckIn()),
-      );
-      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-      // Select a mood first to enable the button.
-      await tester.tap(find.text('😐'));
-      await tester.pumpAndSettle();
+      await _pumpSettled(tester);
 
-      // Scroll to and tap Submit.
-      await tester.ensureVisible(find.text('Submit Check-In'));
+      final mood = find.text('Neutral');
+      await tester.ensureVisible(mood);
+      await tester.tap(mood);
       await tester.pump();
+
+      await tester.ensureVisible(find.text('Submit Check-In'));
       await tester.tap(find.text('Submit Check-In'));
       await tester.pump();
 

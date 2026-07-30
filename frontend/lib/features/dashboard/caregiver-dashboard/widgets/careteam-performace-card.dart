@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
 
@@ -6,6 +7,7 @@ class CareTeamPerformance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -31,7 +33,7 @@ class CareTeamPerformance extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Care Team Performance',
+                t.careteamperfmcard_careTeamPerfm,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -50,7 +52,7 @@ class CareTeamPerformance extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Overall Patient Satisfaction',
+                    t.careteamperfmcard_overallPatSat,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -59,7 +61,7 @@ class CareTeamPerformance extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Based on last 30 days',
+                    t.careteamperfmcard_basedOnLast30,
                     style: TextStyle(
                       fontSize: 14,
                       color: Theme.of(context).primaryColor,
@@ -97,7 +99,7 @@ class CareTeamPerformance extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Check-in Completion Rate',
+                t.careteamperfmcard_checkInCompRate,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,

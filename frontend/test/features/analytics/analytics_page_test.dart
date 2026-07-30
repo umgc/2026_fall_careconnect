@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/analytics/analytics_page.dart';
+import 'package:care_connect_app/widgets/ai_chat_improved.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 // ---------- helpers ----------
@@ -22,8 +23,8 @@ import 'package:fl_chart/fl_chart.dart';
 /// on small viewports. We cannot modify source code per testing rules.
 void _ignoreOverflowErrors(FlutterErrorDetails details) {
   final exception = details.exception;
-  final isOverflow = exception is FlutterError &&
-      exception.message.contains('overflowed');
+  final isOverflow =
+      exception is FlutterError && exception.message.contains('overflowed');
   if (!isOverflow) {
     FlutterError.presentError(details);
   }
@@ -64,9 +65,8 @@ Future<void> _pumpN(WidgetTester tester, {int n = 15}) async {
 /// Build valid vitals JSON response.
 String _vitalsJson({int count = 3, bool withMoodPain = true}) {
   final List<Map<String, dynamic>> data = List.generate(count, (i) {
-    final ts = DateTime.now()
-        .subtract(Duration(days: count - i))
-        .toIso8601String();
+    final ts =
+        DateTime.now().subtract(Duration(days: count - i)).toIso8601String();
     final entry = <String, dynamic>{
       'patientId': 1,
       'timestamp': ts,
@@ -94,7 +94,8 @@ String _dashboardJson({bool withMoodPain = true}) {
     'avgSystolic': 121.0,
     'avgDiastolic': 81.0,
     'avgWeight': 171.0,
-    'periodStart': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(),
+    'periodStart':
+        DateTime.now().subtract(const Duration(days: 7)).toIso8601String(),
     'periodEnd': DateTime.now().toIso8601String(),
   };
   if (withMoodPain) {
@@ -380,6 +381,23 @@ void main() {
         await tester.pumpWidget(_wrap(patientId: 1));
         await _pumpN(tester);
         expect(find.byType(FloatingActionButton), findsOneWidget);
+      }, () => mockClient);
+    });
+
+    testWidgets('analytics opens grounded chat for its patient',
+        (tester) async {
+      _setLargeViewport(tester);
+      addTearDown(tester.view.reset);
+      final mockClient = _createErrorMockClient();
+      await http.runWithClient(() async {
+        await tester.pumpWidget(_wrap(patientId: 42));
+        await _pumpN(tester);
+        await tester.tap(find.byType(FloatingActionButton));
+        await tester.pumpAndSettle();
+
+        final chat = tester.widget<AIChat>(find.byType(AIChat));
+        expect(chat.patientId, 42);
+        expect(chat.mode, AiChatMode.groundedRecords);
       }, () => mockClient);
     });
   });

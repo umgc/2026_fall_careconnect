@@ -31,20 +31,27 @@ public class GoogleOAuthService {
     private final TokenCryptor tokenCryptor;
     private final EmailCredentialLifecycleService credentialLifecycle;
 
-    @Value("${google.oauth.client-id:}")
+    @Value("${google.oauth.client-id:${spring.security.oauth2.client.registration.google.client-id:}}")
     String clientId;
 
-    @Value("${google.oauth.client-secret:}")
+    @Value("${google.oauth.client-secret:${spring.security.oauth2.client.registration.google.client-secret:}}")
     String clientSecret;
 
     @Value("${google.oauth.redirect-uri:}")
     String redirectUri;
 
     public void exchange(String userId, String code) {
+        exchange(userId, code, EmailCredential.Provider.GMAIL, redirectUri);
+    }
+
+    public void exchange(String userId, String code, EmailCredential.Provider provider, String redirectUriOverride) {
+        String effectiveRedirectUri = (redirectUriOverride == null || redirectUriOverride.isBlank())
+                ? redirectUri
+                : redirectUriOverride;
 
         if (clientId == null || clientId.isBlank() ||
             clientSecret == null || clientSecret.isBlank() ||
-            redirectUri == null || redirectUri.isBlank()) {
+            effectiveRedirectUri == null || effectiveRedirectUri.isBlank()) {
 
             throw new IllegalStateException(
                 "Google OAuth not configured (missing clientId/clientSecret/redirectUri)"
@@ -54,9 +61,9 @@ public class GoogleOAuthService {
         try {
             System.out.println("[GoogleOAuth] Starting token exchange for userId: " + userId);
             System.out.println("[GoogleOAuth] Using clientId: " + safeId(clientId));
-            System.out.println("[GoogleOAuth] Using redirectUri: " + redirectUri);
+            System.out.println("[GoogleOAuth] Using redirectUri: " + effectiveRedirectUri);
 
-            GoogleTokenResponse token = postForToken(formForAuthCode(code));
+            GoogleTokenResponse token = postForToken(formForAuthCode(code, effectiveRedirectUri));
 
             System.out.println("[GoogleOAuth] Token response received: " + (token != null ? "yes" : "null"));
             if (token == null || token.accessToken() == null) {
@@ -67,7 +74,7 @@ public class GoogleOAuthService {
 
             EmailCredential ec = new EmailCredential();
             ec.setUserId(userId);
-            ec.setProvider(EmailCredential.Provider.GMAIL);
+            ec.setProvider(provider);
             ec.setAccessTokenEnc(tokenCryptor.encrypt(token.accessToken()));
 
             if (token.refreshToken() != null) {
@@ -77,7 +84,7 @@ public class GoogleOAuthService {
                 System.out.println("[GoogleOAuth] No refresh token, checking for existing one");
                 // keep last refresh token if Google omitted it on a subsequent grant
                 Optional.ofNullable(
-                        credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL)
+                        credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, provider)
                                 .map(EmailCredential::getRefreshTokenEnc)
                                 .orElse(null)
                 ).ifPresent(ec::setRefreshTokenEnc);
@@ -239,6 +246,14 @@ public class GoogleOAuthService {
         }
     }
 
+    public Optional<EmailCredential> findLatestCredential(String userId, EmailCredential.Provider provider) {
+        return credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, provider);
+    }
+
+    public void disconnect(String userId, EmailCredential.Provider provider) {
+        findLatestCredential(userId, provider).ifPresent(credRepo::delete);
+    }
+
     private GoogleTokenResponse postForToken(MultiValueMap<String, String> form) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -256,12 +271,12 @@ public class GoogleOAuthService {
         return null;
     }
 
-    private MultiValueMap<String, String> formForAuthCode(String code) {
+    private MultiValueMap<String, String> formForAuthCode(String code, String effectiveRedirectUri) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("code", code);
         form.add("client_id", clientId);
         form.add("client_secret", clientSecret);
-        form.add("redirect_uri", redirectUri);
+        form.add("redirect_uri", effectiveRedirectUri);
         form.add("grant_type", "authorization_code");
         return form;
     }

@@ -27,12 +27,17 @@ class RetrievalIndexEmbeddingCoverageTest {
                 "src/main/java/com/careconnect/repository/retrieval/RetrievalIndexChunkRepository.java"));
         assertThat(source).contains("updateEmbedding");
         assertThat(source).contains("countMissingEmbedding");
-        assertThat(source).contains("countMissingEmbeddingForSource");
-        assertThat(source).contains("findBySourceRecordIdAndEmbeddingIsNull");
+        assertThat(source).contains("countMissingEmbeddingForSummary");
+        assertThat(source).contains("findMissingEmbeddingsForSummary");
         assertThat(source).contains("findMissingEmbeddingsForBackfill");
         assertThat(source).contains("countMissingEmbeddingsForBackfill");
+        assertThat(source).contains("updateEmbeddingIfReplayClaimHeld");
         assertThat(source).contains("CAST(:embedding AS vector)");
         assertThat(source).contains("WHERE embedding IS NULL");
+        assertThat(source).contains("migration_status = 'ACTIVE'");
+        assertThat(source).doesNotContain("countMissingEmbeddingForSource");
+        assertThat(source).doesNotContain("findBySourceRecordIdAndEmbeddingIsNull");
+        assertThat(source).contains("id ASC");
     }
 
     @Test

@@ -26,10 +26,16 @@ class RetrievalIndexChunkTest {
         assertColumn(RetrievalIndexChunk.class, "patientId", "patient_id");
         assertColumn(RetrievalIndexChunk.class, "recordType", "record_type");
         assertColumn(RetrievalIndexChunk.class, "sourceRecordId", "source_record_id");
+        assertColumn(RetrievalIndexChunk.class, "sourceKind", "source_kind");
         assertColumn(RetrievalIndexChunk.class, "chunkText", "chunk_text");
         assertColumn(RetrievalIndexChunk.class, "chunkMetadata", "chunk_metadata");
         assertColumn(RetrievalIndexChunk.class, "indexedAt", "indexed_at");
         assertColumn(RetrievalIndexChunk.class, "consentScope", "consent_scope");
+        assertColumn(
+                RetrievalIndexChunk.class, "citationReplayAfter", "citation_replay_after");
+        assertColumn(
+                RetrievalIndexChunk.class, "citationReplayAttempts", "citation_replay_attempts");
+        assertColumn(RetrievalIndexChunk.class, "migrationStatus", "migration_status");
     }
 
     @Test
@@ -76,6 +82,8 @@ class RetrievalIndexChunkTest {
 
         assertThat(chunk.getIndexedAt()).isNotNull();
         assertThat(chunk.getIndexedAt()).isBeforeOrEqualTo(OffsetDateTime.now());
+        assertThat(chunk.getCitationReplayAttempts()).isZero();
+        assertThat(chunk.getMigrationStatus()).isEqualTo("ACTIVE");
     }
 
     private static void assertColumn(Class<?> type, String fieldName, String expectedColumn) throws Exception {

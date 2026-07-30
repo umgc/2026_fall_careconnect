@@ -1,15 +1,20 @@
 package com.careconnect.controller;
 
 import com.careconnect.config.CareconnectTestConfig;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallRecordingService;
+import com.careconnect.service.CallSessionService;
+import com.careconnect.service.CallSummaryItemConfirmService;
 import com.careconnect.service.CallSummaryService;
 import com.careconnect.service.CallTelemetryService;
+import com.careconnect.service.CallTerminationExecutor;
 import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.ChimeService;
@@ -27,9 +32,11 @@ import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAu
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Collections;
@@ -42,6 +49,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -59,6 +67,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @Import(CareconnectTestConfig.class)
 @org.springframework.test.context.ActiveProfiles("test")
+@TestPropertySource(properties = "careconnect.recording.global-purge-enabled=true")
 @DisplayName("CallController Extended Tests")
 class CallControllerExtendedTest {
 
@@ -76,6 +85,9 @@ class CallControllerExtendedTest {
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;
     @MockitoBean private SnsService snsService;
+    @MockitoBean private CallSessionService callSessionService;
+    @MockitoBean private CallTerminationExecutor callTerminationExecutor;
+    @MockitoBean private CallSummaryItemConfirmService callSummaryItemConfirmService;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -92,6 +104,19 @@ class CallControllerExtendedTest {
         patientUser = buildUser(1L, "patient@test.com", Role.PATIENT);
         caregiverUser = buildUser(2L, "caregiver@test.com", Role.CAREGIVER);
         adminUser = buildUser(3L, "admin@test.com", Role.ADMIN);
+        CallSession durableSession = new CallSession();
+        durableSession.setId(10L);
+        durableSession.setCallId(CALL_ID);
+        durableSession.setPatientId(42L);
+        durableSession.setCreatedByUserId(2L);
+        durableSession.setStatus(CallSessionService.SESSION_CREATED);
+        when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
+                .thenReturn(durableSession);
+        when(callSessionService.requireSession(anyString())).thenReturn(durableSession);
+        when(callSessionService.requirePatientUserId(any())).thenReturn(1L);
+        when(callSessionService.recordJoin(any(), anyLong(), any())).thenReturn(false);
+        doNothing().when(callSessionService).attachChimeMeetingId(anyString(), anyString());
+        doNothing().when(callSessionService).revertJoinAfterChimeFailure(anyString(), anyLong());
 
         // User repository stubs
         when(userRepository.findByEmail("patient@test.com")).thenReturn(Optional.of(patientUser));
@@ -121,7 +146,7 @@ class CallControllerExtendedTest {
         when(callRecordingService.stopRecording(anyString()))
                 .thenReturn(Map.of("status", "STOPPED"));
         when(callRecordingService.getRecordingStatus(anyString()))
-                .thenReturn(Map.of("status", "RECORDING"));
+                .thenReturn(Map.of("status", "RECORDING", "ownerUserId", "2"));
         when(callRecordingService.generatePlaybackUrl(anyString()))
                 .thenReturn(Map.of("url", "https://s3.example.com/recording.mp4"));
         when(callRecordingService.getAllRecordings())
@@ -278,6 +303,9 @@ class CallControllerExtendedTest {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
             when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
             when(callSummaryService.getLatestSummaryEntity(anyString())).thenReturn(Optional.empty());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call"))
+                    .when(callSessionService)
+                    .requireHistoricalParticipant(CALL_ID, patientUser.getId());
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/summary")
                             .with(csrf()))
@@ -321,6 +349,9 @@ class CallControllerExtendedTest {
         void getTranscriptSegments_nonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
             when(callTranscriptService.hasTranscriptAccess(anyString(), anyLong())).thenReturn(false);
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "User is not authorized for this call"))
+                    .when(callSessionService)
+                    .requireHistoricalParticipant(CALL_ID, patientUser.getId());
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/transcript/segments")
                             .with(csrf()))
@@ -332,6 +363,7 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "admin@test.com")
         void saveTranscriptSegments_admin_returns200() throws Exception {
             Map<String, Object> body = Map.of(
+                    "clientSegmentId", "b6814f33-12e0-4f6e-80b7-ec71197da642",
                     "speakerLabel", "patient",
                     "text", "I have been feeling better",
                     "startMs", 1000,
@@ -352,8 +384,11 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "patient@test.com")
         void saveTranscriptSegments_nonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "User must join the call"))
+                    .when(callSessionService).requireTranscriptUploadParticipant(CALL_ID, patientUser.getId());
 
             Map<String, Object> body = Map.of(
+                    "clientSegmentId", "efee89b3-8700-4677-b8a8-d2666cb58de5",
                     "speakerLabel", "patient",
                     "text", "Hello",
                     "startMs", 0,
@@ -496,6 +531,8 @@ class CallControllerExtendedTest {
         @DisplayName("POST /{callId}/recording/stop returns 200")
         @WithMockUser(username = "caregiver@test.com")
         void stopRecording_returns200() throws Exception {
+            when(callRecordingService.getRecordingStatus(anyString()))
+                    .thenReturn(Map.of("status", "RECORDING", "ownerUserId", "2"));
             when(callRecordingService.stopRecording(anyString()))
                     .thenReturn(Map.of("status", "STOPPED"));
 
@@ -523,6 +560,8 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "patient@test.com")
         void getRecordingStatus_patientNonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "Recording access denied"))
+                    .when(callSessionService).requireRecordingAccess(CALL_ID, patientUser);
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording")
                             .with(csrf()))
@@ -562,6 +601,8 @@ class CallControllerExtendedTest {
         @WithMockUser(username = "patient@test.com")
         void getRecordingPlaybackUrl_patientNonParticipant_returns403() throws Exception {
             when(callTelemetryService.getTelemetryForCall(anyString())).thenReturn(Collections.emptyList());
+            doThrow(new AppException(HttpStatus.FORBIDDEN, "Recording access denied"))
+                    .when(callSessionService).requireRecordingAccess(CALL_ID, patientUser);
 
             mockMvc.perform(get(BASE_URL + "/" + CALL_ID + "/recording/playback-url")
                             .with(csrf()))
@@ -589,6 +630,15 @@ class CallControllerExtendedTest {
             mockMvc.perform(get(BASE_URL + "/recordings")
                             .with(csrf()))
                     .andExpect(status().isOk());
+        }
+
+        @Test
+        @WithMockUser(username = "caregiver@test.com")
+        void listRecordings_caregiverCannotFilterAnotherUser() throws Exception {
+            mockMvc.perform(get(BASE_URL + "/recordings")
+                            .param("userId", "999")
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
         }
 
         @Test
@@ -624,6 +674,15 @@ class CallControllerExtendedTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk());
+        }
+
+        @Test
+        @WithMockUser(username = "caregiver@test.com")
+        void purgeAllRecordings_caregiverReturns403EvenInTestProfile() throws Exception {
+            mockMvc.perform(delete(BASE_URL + "/recordings")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isForbidden());
         }
     }
 

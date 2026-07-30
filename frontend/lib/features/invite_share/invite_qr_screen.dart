@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -102,9 +104,20 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
     }
   }
 
+  String _inviteUrlForCurrentSession(InviteResult invite) {
+    // Web/local dev: always point to the currently running app shell so hash
+    // routing works (`/#/invite/{token}`) and "Open link" doesn't jump to a
+    // different host like app.careconnect.io.
+    if (kIsWeb && invite.token.isNotEmpty) {
+      return '${Uri.base.origin}/#/invite/${invite.token}';
+    }
+    return invite.inviteUrl;
+  }
+
   Future<void> _copyUrl(BuildContext context) async {
-    final url = _invite?.inviteUrl;
-    if (url == null) return;
+    final invite = _invite;
+    if (invite == null) return;
+    final url = _inviteUrlForCurrentSession(invite);
     await Clipboard.setData(ClipboardData(text: url));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -113,8 +126,9 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
   }
 
   Future<void> _shareUrl(BuildContext context) async {
-    final url = _invite?.inviteUrl;
-    if (url == null) return;
+    final invite = _invite;
+    if (invite == null) return;
+    final url = _inviteUrlForCurrentSession(invite);
     final reason = widget.inviteReason;
     final text = reason != null && reason.isNotEmpty
         ? '$reason\n\nJoin my CareConnect care circle: $url'
@@ -123,14 +137,41 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
   }
 
   Future<void> _openDeepLink(BuildContext context) async {
-    final url = _invite?.inviteUrl;
-    if (url == null) return;
+    final invite = _invite;
+    if (invite == null) return;
+    final url = _inviteUrlForCurrentSession(invite);
     final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    final ok = await canLaunchUrl(uri);
-    if (ok) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else if (context.mounted) {
+    if (uri == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invite link is invalid.')),
+      );
+      return;
+    }
+
+    // Web/local robustness: try opening in a new browser tab first.
+    bool opened = await launchUrl(
+      uri,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
+
+    // Fallback for platforms where default mode/new-tab is unavailable.
+    if (!opened) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+
+    // Last-resort fallback: if this is a CareConnect invite URL, route directly
+    // to the local invite landing path so local dev flow still works.
+    if (!opened) {
+      final token = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : null;
+      if (token != null && token.isNotEmpty && context.mounted) {
+        context.go('/invite/$token');
+        return;
+      }
+    }
+
+    if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open the invite link')),
       );
@@ -169,6 +210,7 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
     }
 
     final invite = _invite!;
+    final inviteUrl = _inviteUrlForCurrentSession(invite);
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -187,7 +229,7 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
               ],
             ),
             child: QrImageView(
-              data: invite.inviteUrl,
+              data: inviteUrl,
               version: QrVersions.auto,
               size: 260,
               gapless: false,
@@ -219,7 +261,7 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
               children: [
                 Expanded(
                   child: SelectableText(
-                    invite.inviteUrl,
+                    inviteUrl,
                     style: theme.textTheme.bodySmall,
                     maxLines: 2,
                   ),

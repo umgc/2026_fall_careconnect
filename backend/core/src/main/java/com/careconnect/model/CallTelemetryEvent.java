@@ -1,6 +1,10 @@
 package com.careconnect.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.careconnect.config.UtcLocalDateTimeSerializer;
+import com.careconnect.config.UtcWallClockLocalDateTimeConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -107,7 +111,9 @@ public class CallTelemetryEvent extends Auditable {
   @Column(name = "error_message", columnDefinition = "TEXT")
   private String errorMessage;
 
-  /** Timestamp when the telemetry event occurred. */
+  /** Timestamp when the telemetry event occurred (UTC wall-clock). */
   @Column(name = "occurred_at", nullable = false)
+  @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
+  @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
   private LocalDateTime occurredAt;
 }

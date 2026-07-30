@@ -1,6 +1,10 @@
 package com.careconnect.model;
 
+import com.careconnect.config.UtcLocalDateTimeSerializer;
+import com.careconnect.config.UtcWallClockLocalDateTimeConverter;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -8,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -44,6 +49,10 @@ public class CallTranscriptSegment extends Auditable {
   @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
   private String callId;
 
+  /** Stable client-provided identifier used to make transcript retries idempotent. */
+  @Column(name = "client_segment_id")
+  private UUID clientSegmentId;
+
   /** Display label for the speaking participant. */
   @Column(name = "speaker_label", length = SPEAKER_LABEL_LENGTH)
   private String speakerLabel;
@@ -68,7 +77,9 @@ public class CallTranscriptSegment extends Auditable {
   @Column(name = "actor_user_id")
   private Long actorUserId;
 
-  /** Timestamp when the transcript segment occurred. */
+  /** Timestamp when the transcript segment occurred (UTC wall-clock). */
   @Column(name = "occurred_at", nullable = false)
+  @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
+  @JsonSerialize(using = UtcLocalDateTimeSerializer.class)
   private LocalDateTime occurredAt;
 }

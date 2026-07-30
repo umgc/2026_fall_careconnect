@@ -11,6 +11,7 @@
 // the source code. We consume those exceptions with tester.takeException()
 // after each pump to keep the tests green.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -49,7 +50,7 @@ Widget _wrap() {
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, routerConfig: router);
 }
 
 /// Drain the RenderFlex overflow exceptions that come from AlexaLoginPage's
@@ -227,7 +228,7 @@ void main() {
       );
       return ChangeNotifierProvider<UserProvider>(
         create: (_) => UserProvider(),
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, routerConfig: router),
       );
     }
 

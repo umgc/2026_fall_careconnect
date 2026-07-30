@@ -206,11 +206,9 @@ class _VirtualCheckInConfigSheetState extends State<VirtualCheckInConfigSheet> {
       child: Padding(
         padding:
         EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
+        child: Material(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

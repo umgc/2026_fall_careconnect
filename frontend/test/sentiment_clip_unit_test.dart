@@ -78,6 +78,95 @@ void main() {
       expect(window.clipStartSec, 5);
       expect(window.clipEndSec, 35);
     });
+
+    test('Instant Z recordingStartedAt aligns clip window with UTC sentiment', () {
+      // Mirrors backend R1 emit: LocalDateTime UTC wall-clock → Instant ...Z
+      final recordingStartedAt =
+          DateTime.parse('2026-07-07T22:07:12Z').toUtc();
+      final sentimentOccurredAt =
+          DateTime.parse('2026-07-07T22:08:12.000Z').toUtc();
+
+      final window = computeSentimentClipWindow(
+        sentimentOccurredAt: sentimentOccurredAt,
+        recordingStartedAt: recordingStartedAt,
+      );
+
+      expect(window.offsetSec, 60);
+      expect(window.clipStartSec, 45);
+      expect(window.clipEndSec, 75);
+    });
+
+    test('naive telemetry occurredAt + Z recordingStartedAt stays aligned', () {
+      // Production bug: recording emits ...Z, telemetry emits naive ISO. Flutter
+      // DateTime.parse treats naive as local and shifts the clip by UTC offset.
+      final recordingStartedAt = parseCallUtcDateTime('2026-07-25T04:29:50.103811Z');
+      final sentimentOccurredAt =
+          parseCallUtcDateTime('2026-07-25T04:30:02.299377');
+
+      final window = computeSentimentClipWindow(
+        sentimentOccurredAt: sentimentOccurredAt,
+        recordingStartedAt: recordingStartedAt,
+      );
+
+      expect(window.offsetSec, closeTo(12.195566, 0.001));
+      expect(window.clipStartSec, 0);
+      expect(window.clipEndSec, closeTo(27.195566, 0.001));
+    });
+
+    test('mis-tagged local wall-clock as Z shifts clip by hours (regression guard)',
+        () {
+      // What broke after labeling LocalDateTime.now() (Eastern) as UTC Instant.
+      final falselyUtcLabeledEasternWall =
+          DateTime.parse('2026-07-07T18:07:12Z').toUtc();
+      final trueUtcSentiment =
+          DateTime.parse('2026-07-07T22:08:12Z').toUtc();
+
+      final window = computeSentimentClipWindow(
+        sentimentOccurredAt: trueUtcSentiment,
+        recordingStartedAt: falselyUtcLabeledEasternWall,
+      );
+
+      expect(window.offsetSec, greaterThan(3 * 3600));
+    });
+  });
+
+  group('parseCallUtcDateTime', () {
+    test('treats naive ISO as UTC wall-clock', () {
+      final parsed = parseCallUtcDateTime('2026-07-25T04:29:50.103811');
+      expect(parsed.isUtc, isTrue);
+      expect(parsed.toIso8601String(), startsWith('2026-07-25T04:29:50'));
+    });
+
+    test('preserves explicit offsets', () {
+      final parsed = parseCallUtcDateTime('2026-07-25T00:29:50.103811Z');
+      expect(parsed.toUtc().hour, 0);
+    });
+  });
+
+  group('transcript highlight call-start skew', () {
+    test('prefers call-join when transcript anchor is ~4h skewed', () {
+      final join = DateTime.utc(2026, 7, 24, 20, 47, 37);
+      final skewedRecordingAnchor = DateTime.utc(2026, 7, 24, 16, 48, 14);
+      expect(
+        resolveTranscriptHighlightCallStart(
+          fromTranscriptSegments: skewedRecordingAnchor,
+          callJoinStart: join,
+        ),
+        join,
+      );
+    });
+
+    test('keeps transcript anchor when clocks agree', () {
+      final join = DateTime.utc(2026, 7, 24, 20, 47, 37);
+      final recordingAnchor = DateTime.utc(2026, 7, 24, 20, 48, 14);
+      expect(
+        resolveTranscriptHighlightCallStart(
+          fromTranscriptSegments: recordingAnchor,
+          callJoinStart: join,
+        ),
+        recordingAnchor,
+      );
+    });
   });
 
   group('SENT-CLIP-001 playback helpers', () {
@@ -131,6 +220,15 @@ void main() {
   });
 
   group('SENT-CLIP-001 recording status + tap policy', () {
+    test('isUserInitiatedCallRecording treats numeric and non-empty string ids', () {
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': 42}), isTrue);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': '2'}), isTrue);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': null}), isFalse);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': ''}), isFalse);
+      expect(isUserInitiatedCallRecording({'initiatedByUserId': 'null'}), isFalse);
+      expect(isUserInitiatedCallRecording(null), isFalse);
+    });
+
     test('status messages for available / processing / unavailable', () {
       expect(
         sentimentClipRecordingStatusMessage({

@@ -72,7 +72,7 @@ app.log
 !docs/google-oauth-setup.md
 !docs/unit-testing-guide.md
 
-# Keep .env.example
-.env.example
+# Keep .env.example for developers (do not ignore)
+!.env.example
 
 tfplan
