@@ -167,4 +167,55 @@ void main() {
         findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a failed sync surfaces an error', (tester) async {
+    _wireEvvClient(
+        queue: jsonEncode([_queueItem(1)]), status: '[]', syncStatus: 500);
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    final syncBtn = find.widgetWithText(FilledButton, 'Sync All Offline Data');
+    await tester.ensureVisible(syncBtn);
+    await tester.tap(syncBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Error syncing offline data'), findsWidgets);
+    tester.takeException();
+  });
+
+  testWidgets('the Details menu opens the item-details dialog', (tester) async {
+    _wireEvvClient(queue: jsonEncode([_queueItem(1)]), status: '[]');
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Details').last);
+    await tester.pumpAndSettle();
+
+    // _showItemDetails built the dialog with its detail rows.
+    expect(find.text('Offline Queue Item Details'), findsOneWidget);
+    expect(find.text('Record ID:'), findsWidgets);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Offline Queue Item Details'), findsNothing);
+    tester.takeException();
+  });
+
+  testWidgets('the Retry menu action runs for a FAILED item', (tester) async {
+    _wireEvvClient(
+        queue: jsonEncode(
+            [_queueItem(1, status: 'FAILED', attempts: 2, lastError: 'boom')]),
+        status: '[]');
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Retry').last);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Retry functionality'), findsWidgets);
+    tester.takeException();
+  });
 }
