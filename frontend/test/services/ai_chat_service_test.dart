@@ -17,6 +17,7 @@
 // to the real filesystem.  Its error-path (non-existent file) is covered by
 // a dedicated test group; the happy path requires an integration test.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -48,8 +49,7 @@ MockClient _mockRaw(int statusCode, String rawBody) =>
 
 /// Returns a [MockClient] that throws [error] on every request.
 /// Use for simulating network and other transport-layer exceptions.
-MockClient _mockThrows(Object error) =>
-    MockClient((_) async => throw error);
+MockClient _mockThrows(Object error) => MockClient((_) async => throw error);
 
 /// Returns a ([MockClient], capturedRequests) pair.
 /// Every outgoing request is captured in the returned list so that individual
@@ -165,7 +165,7 @@ void main() {
       expect(result['success'], isFalse);
     });
 
-    test('returns errorMessage when success:false has errorMessage', () async {
+    test('maps logical backend failure to a stable safe message', () async {
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
         () => _mockJson(200, {
@@ -173,11 +173,13 @@ void main() {
           'errorMessage': 'AI unavailable',
         }),
       );
-      expect(result['errorMessage'], 'AI unavailable');
+      expect(
+        result['errorMessage'],
+        'The AI service could not complete your request. Please try again.',
+      );
     });
 
-    test('falls back to error field when errorMessage is absent', () async {
-      // Some backend versions use "error" instead of "errorMessage".
+    test('does not surface a raw backend error field', () async {
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
         () => _mockJson(200, {
@@ -185,17 +187,19 @@ void main() {
           'error': 'Backend error',
         }),
       );
-      expect(result['errorMessage'], 'Backend error');
+      expect(result['errorMessage'], isNot(contains('Backend error')));
     });
 
-    test(
-        'falls back to "Unknown error" when both errorMessage and error are absent',
+    test('uses the same stable message when backend error fields are absent',
         () async {
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
         () => _mockJson(200, {'success': false}),
       );
-      expect(result['errorMessage'], 'Unknown error');
+      expect(
+        result['errorMessage'],
+        'The AI service could not complete your request. Please try again.',
+      );
     });
   });
 
@@ -282,7 +286,20 @@ void main() {
       expect(result['success'], isFalse);
     });
 
-    test('returns success:false on an unexpected 4xx code (e.g. 422)', () async {
+    test('never exposes a raw backend failure body', () async {
+      const sensitiveBody =
+          '{"message":"SQL failed for patient@example.com","stack":"secret"}';
+      final result = await http.runWithClient(
+        () => AIChatService.sendMessage(message: 'Hi', userId: 1),
+        () => _mockRaw(500, sensitiveBody),
+      );
+
+      expect(result.values.join(' '), isNot(contains('patient@example.com')));
+      expect(result.values.join(' '), isNot(contains('secret')));
+    });
+
+    test('returns success:false on an unexpected 4xx code (e.g. 422)',
+        () async {
       // Non-enumerated status codes fall through to the generic error branch.
       final result = await http.runWithClient(
         () => AIChatService.sendMessage(message: 'Hi', userId: 1),
@@ -656,9 +673,11 @@ void main() {
     test('returns the parsed response map on HTTP 200', () async {
       final result = await http.runWithClient(
         () => AIChatService.getConversationHistory(userId: '1'),
-        () => _mockJson(200, {'messages': [
-          {'id': 1, 'text': 'Hello'}
-        ]}),
+        () => _mockJson(200, {
+          'messages': [
+            {'id': 1, 'text': 'Hello'}
+          ]
+        }),
       );
       expect(result['messages'], hasLength(1));
     });
@@ -734,7 +753,8 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   group('startNewConversation()', () {
     test('uses POST method', () async {
-      final (client, requests) = _capturingClient(200, {'conversationId': 'id'});
+      final (client, requests) =
+          _capturingClient(200, {'conversationId': 'id'});
       await http.runWithClient(
         () => AIChatService.startNewConversation(userId: '1'),
         () => client,
@@ -743,7 +763,8 @@ void main() {
     });
 
     test('hits the /v1/api/ai-chat/conversation/new endpoint', () async {
-      final (client, requests) = _capturingClient(200, {'conversationId': 'id'});
+      final (client, requests) =
+          _capturingClient(200, {'conversationId': 'id'});
       await http.runWithClient(
         () => AIChatService.startNewConversation(userId: '1'),
         () => client,
@@ -798,7 +819,8 @@ void main() {
     test('request body includes title when provided', () async {
       final (client, requests) = _capturingClient(200, {'conversationId': 'x'});
       await http.runWithClient(
-        () => AIChatService.startNewConversation(userId: '1', title: 'My Session'),
+        () => AIChatService.startNewConversation(
+            userId: '1', title: 'My Session'),
         () => client,
       );
       final body = jsonDecode(requests.single.body) as Map;
@@ -1057,4 +1079,936 @@ void main() {
       expect(result, isNotEmpty);
     });
   });
+
+  group('askRecords() — grounded contract', () {
+    test('posts JWT-identity request without a userId', () async {
+      final (client, requests) = _capturingClient(200, {
+        'success': true,
+        'deliveryStatus': 'NO_RECORDS',
+        'citations': <Object>[],
+        'message': 'No matching records',
+      });
+
+      await http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'What medication changed?',
+          patientId: 42,
+        ),
+        () => client,
+      );
+
+      final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(requests.single.url.path, '/api/ai/ask');
+      expect(body['query'], 'What medication changed?');
+      expect(body['patientId'], 42);
+      expect(body.containsKey('userId'), isFalse);
+    });
+
+    test('models delivered answer, citations, and safety metadata', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'DELIVERED',
+          'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+          'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+          'answer': {'text': 'Metformin was started.'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Metformin was started.',
+              'deepLink': null,
+            }
+          ],
+          'disclaimer': {
+            'text': 'Records-based information; not medical advice.',
+            'aiNoticeRequired': true,
+            'recordsBasedFraming': true,
+            'locale': 'en-US',
+          },
+          'escalation': {
+            'tier': 1,
+            'reason': 'Tier1_auto_deliver',
+            'requiresClinicianReview': false,
+          },
+          'confirmation': {
+            'promptConfirmWithProvider': true,
+            'message': 'Confirm important details with your care provider.',
+          },
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.answer, 'Metformin was started.');
+      expect(result.citations.single.citationId, 'C1');
+      expect(result.citations.single.deepLink, isNull);
+      expect(result.disclaimer?.aiNoticeRequired, isTrue);
+      expect(result.escalation?.tier, 1);
+      expect(result.confirmation?.required, isTrue);
+    });
+
+    test('accepts DELIVERED when confirmation prompt is suppressed', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'DELIVERED',
+          'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+          'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+          'answer': {'text': 'Metformin was started.'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Metformin was started.',
+              'deepLink': null,
+            }
+          ],
+          'disclaimer': {
+            'text': 'Records-based information; not medical advice.',
+            'aiNoticeRequired': true,
+            'recordsBasedFraming': true,
+            'locale': 'en-US',
+          },
+          'escalation': {
+            'tier': 1,
+            'reason': 'Tier1_auto_deliver',
+            'requiresClinicianReview': false,
+          },
+          'confirmation': {
+            'promptConfirmWithProvider': false,
+            'message': null,
+          },
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.answer, 'Metformin was started.');
+      expect(result.confirmation?.required, isFalse);
+      expect(result.confirmation?.text, isNull);
+    });
+
+    test('models medicationTimeline events on a delivered response', () async {
+      final body = _validDeliveredAskResponse();
+      body['medicationTimeline'] = {
+        'events': [
+          {
+            'itemId': 'item-1',
+            'medicationName': 'Metformin',
+            'medicationNameNormalized': 'metformin',
+            'eventType': 'START',
+            'effectiveDate': '2026-01-05',
+            'doseFrom': null,
+            'doseTo': '500mg',
+            'citationRef': 'C1',
+          },
+          {
+            'medicationName': 'Lisinopril',
+            'eventType': 'DOSE_CHANGE',
+            'effectiveDate': '2026-02-10',
+            'doseFrom': '5mg',
+            'doseTo': '10mg',
+          },
+        ],
+      };
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'medications', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.medicationTimeline, isNotNull);
+      expect(result.medicationTimeline!.events, hasLength(2));
+      final first = result.medicationTimeline!.events.first;
+      expect(first.itemId, 'item-1');
+      expect(first.medicationName, 'Metformin');
+      expect(first.eventType, 'START');
+      expect(first.effectiveDate, '2026-01-05');
+      expect(first.doseFrom, isNull);
+      expect(first.doseTo, '500mg');
+      expect(first.citationRef, 'C1');
+      final second = result.medicationTimeline!.events[1];
+      expect(second.medicationName, 'Lisinopril');
+      expect(second.itemId, isNull);
+      expect(second.citationRef, isNull);
+    });
+
+    test('medicationTimeline defaults to null when absent', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, _validDeliveredAskResponse()),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.delivered);
+      expect(result.medicationTimeline, isNull);
+    });
+
+    test('rejects malformed medicationTimeline payload', () async {
+      final body = _validDeliveredAskResponse();
+      body['medicationTimeline'] = 'not-an-object';
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('never exposes medicationTimeline from a non-2xx response',
+        () async {
+      final body = _validDeliveredAskResponse();
+      body['medicationTimeline'] = {
+        'events': [
+          {'medicationName': 'Metformin'},
+        ],
+      };
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(503, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.medicationTimeline, isNull);
+    });
+
+    test('fails closed when DELIVERED omits mandatory safety metadata',
+        () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'DELIVERED',
+          'answer': {'text': 'Metformin was started.'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Metformin was started.',
+            }
+          ],
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+      expect(result.retryInput, 'metformin');
+    });
+
+    test('never accepts DELIVERED from a non-2xx response', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(503, _validDeliveredAskResponse()),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+      expect(result.retryable, isTrue);
+    });
+
+    test('fails closed for Tier2 review-required DELIVERED payloads', () async {
+      final body = _validDeliveredAskResponse();
+      body['escalation'] = {
+        'tier': 2,
+        'reason': 'Tier2_clinical_review',
+        'requiresClinicianReview': true,
+      };
+      body['held'] = true;
+      body['heldItemId'] = '11111111-1111-1111-1111-111111111111';
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+      expect(result.disclaimer, isNull);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('parses HELD Tier-2 hold without exposing draft answer', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'HELD',
+          'held': true,
+          'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+          'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+          'heldItemId': '11111111-1111-1111-1111-111111111111',
+          'pollUrl':
+              '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+          'answer': {'text': 'Draft must not appear'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Draft must not appear',
+            }
+          ],
+          'message': "We're reviewing this before showing it to you.",
+          'escalation': {
+            'tier': 2,
+            'reason': 'hitl_hold',
+            'requiresClinicianReview': true,
+          },
+        }),
+      );
+
+      expect(result.success, isTrue);
+      expect(result.deliveryStatus, AiAskDeliveryStatus.held);
+      expect(result.heldItemId, '11111111-1111-1111-1111-111111111111');
+      expect(
+        result.pollUrl,
+        '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+      );
+      expect(
+        result.message,
+        "We're reviewing this before showing it to you.",
+      );
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+      expect(result.disclaimer, isNull);
+      expect(result.escalation, isNull);
+    });
+
+    test('fails closed when HELD omits heldItemId', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'HELD',
+          'held': true,
+          'message': "We're reviewing this before showing it to you.",
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('pollHitlStatus models delivered answer and citations', () async {
+      final (client, requests) = _capturingClient(200, {
+        'heldItemId': '11111111-1111-1111-1111-111111111111',
+        'status': 'DELIVERED',
+        'deliveryStatus': 'DELIVERED',
+        'message': null,
+        'answer': 'Metformin was started after review.',
+        'citations': [
+          {
+            'citationId': 'C1',
+            'recordType': 'CALL_SUMMARY',
+            'excerpt': 'Metformin was started.',
+          }
+        ],
+        'disclaimer': {
+          'text':
+              'This answer is based on your stored health records and is not medical advice.',
+          'aiNoticeRequired': true,
+          'recordsBasedFraming': true,
+          'locale': 'en-US',
+        },
+        'confirmation': {
+          'promptConfirmWithProvider': true,
+          'message':
+              'Please confirm important details with your care provider before acting on this information.',
+        },
+      });
+
+      final result = await http.runWithClient(
+        () => AIChatService.pollHitlStatus(
+          '11111111-1111-1111-1111-111111111111',
+        ),
+        () => client,
+      );
+
+      expect(requests.single.method, 'GET');
+      expect(
+        requests.single.url.path,
+        '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+      );
+      expect(result.status, 'DELIVERED');
+      expect(result.deliveryStatus, 'DELIVERED');
+      expect(result.answer, 'Metformin was started after review.');
+      expect(result.citations.single.citationId, 'C1');
+      expect(result.disclaimer?.aiNoticeRequired, isTrue);
+      expect(result.confirmation?.required, isTrue);
+    });
+
+    test('pollHitlStatus fails closed when DELIVERED omits disclaimer',
+        () async {
+      await expectLater(
+        http.runWithClient(
+          () => AIChatService.pollHitlStatus(
+            '11111111-1111-1111-1111-111111111111',
+          ),
+          () => _mockJson(200, {
+            'heldItemId': '11111111-1111-1111-1111-111111111111',
+            'status': 'DELIVERED',
+            'deliveryStatus': 'DELIVERED',
+            'answer': 'Released without safety framing',
+            'citations': <Object>[],
+          }),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('pollHitlStatus keeps rejected content withheld', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.pollHitlStatus(
+          '11111111-1111-1111-1111-111111111111',
+        ),
+        () => _mockJson(200, {
+          'heldItemId': '11111111-1111-1111-1111-111111111111',
+          'status': 'REJECTED',
+          'deliveryStatus': 'WITHHELD_PERMANENTLY',
+          'message':
+              'A reviewer could not release this answer. Please contact your care provider.',
+          'answer': 'should not appear',
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'should not appear',
+            }
+          ],
+        }),
+      );
+
+      expect(result.status, 'REJECTED');
+      expect(result.deliveryStatus, 'WITHHELD_PERMANENTLY');
+      expect(
+        result.message,
+        'A reviewer could not release this answer. Please contact your care provider.',
+      );
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+    });
+
+    test('pollHitlStatus throws HitlPollHttpException on 403', () async {
+      await expectLater(
+        http.runWithClient(
+          () => AIChatService.pollHitlStatus(
+            '11111111-1111-1111-1111-111111111111',
+          ),
+          () => _mockJson(403, {
+            'error': 'FORBIDDEN',
+            'message': 'Not authorized to poll this held item',
+          }),
+        ),
+        throwsA(
+          isA<HitlPollHttpException>()
+              .having((e) => e.statusCode, 'statusCode', 403)
+              .having((e) => e.isPermanent, 'isPermanent', isTrue),
+        ),
+      );
+    });
+
+    test('pollHitlStatus times out stalled status requests', () async {
+      await expectLater(
+        http.runWithClient(
+          () => AIChatService.pollHitlStatus(
+            '11111111-1111-1111-1111-111111111111',
+            timeout: const Duration(milliseconds: 1),
+          ),
+          () => MockClient((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            return http.Response('{}', 200);
+          }),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('fails closed when DELIVERED identifiers are not UUIDs', () async {
+      final body = _validDeliveredAskResponse();
+      body['requestId'] = 'not-a-uuid';
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('fails closed when optional metadata UUIDs are malformed', () async {
+      final body = _validDeliveredAskResponse();
+      body['conversationId'] = 'also-not-a-uuid';
+      body['heldItemId'] = 'bad-held-id';
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('fails closed when Tier1 still requires clinician review', () async {
+      final body = _validDeliveredAskResponse();
+      body['escalation'] = {
+        'tier': 1,
+        'reason': 'Tier1_auto_deliver',
+        'requiresClinicianReview': true,
+      };
+
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, body),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('fails closed on unknown deliveryStatus', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(200, {
+          'success': true,
+          'deliveryStatus': 'PARTIAL',
+          'answer': {'text': 'Injected'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'Injected',
+            }
+          ],
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('marks 429 as retryable without exposing held content', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'retry me', patientId: 42),
+        () => _mockJson(429, {
+          'success': false,
+          'deliveryStatus': 'WITHHELD',
+          'answer': {'text': 'should not appear'},
+          'citations': [
+            {
+              'citationId': 'C1',
+              'recordType': 'CALL_SUMMARY',
+              'excerpt': 'should not appear',
+            }
+          ],
+          'error': {
+            'code': 'RATE_LIMITED',
+            'message': 'Too many requests',
+          },
+        }),
+      );
+
+      expect(result.retryable, isTrue);
+      expect(result.retryInput, 'retry me');
+      expect(result.answer, isNull);
+      expect(result.citations, isEmpty);
+    });
+
+    test('cancels in-flight ask when abortTrigger completes', () async {
+      final abort = Completer<void>();
+      final started = Completer<void>();
+      final resultFuture = http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'cancel me',
+          patientId: 42,
+          abortTrigger: abort.future,
+        ),
+        () => MockClient((request) async {
+          started.complete();
+          await Future<void>.delayed(const Duration(seconds: 5));
+          return http.Response('{}', 200);
+        }),
+      );
+
+      await started.future;
+      abort.complete();
+      final result = await resultFuture;
+      expect(result.cancelled, isTrue);
+      expect(result.error?.code, 'CANCELLED');
+      expect(result.answer, isNull);
+    });
+
+    for (final invalidCitation in <Map<String, dynamic>>[
+      {
+        'citationId': ' ',
+        'recordType': 'CALL_SUMMARY',
+        'excerpt': 'Metformin was started.',
+      },
+      {
+        'citationId': 'C1',
+        'recordType': 'UNKNOWN',
+        'excerpt': 'Metformin was started.',
+      },
+      {
+        'citationId': 'C1',
+        'recordType': 'CALL_SUMMARY',
+        'excerpt': ' ',
+      },
+    ]) {
+      test('fails closed on invalid delivered citation $invalidCitation',
+          () async {
+        final body = _validDeliveredAskResponse();
+        body['citations'] = [invalidCitation];
+
+        final result = await http.runWithClient(
+          () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+          () => _mockJson(200, body),
+        );
+
+        expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+        expect(result.answer, isNull);
+        expect(result.citations, isEmpty);
+        expect(result.error?.code, 'INVALID_RESPONSE');
+      });
+    }
+
+    for (final invalidCitations in <Object?>[
+      null,
+      {'citationId': 'C1'},
+      [
+        {
+          'citationId': 'C1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+        'not-a-citation',
+      ],
+      [
+        {
+          'citationId': 'C1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+        {
+          'citationId': 'C1',
+          'recordType': 'MEDICATION',
+          'excerpt': 'Metformin 500 mg.',
+        },
+      ],
+      [
+        {
+          'citationId': 'C0',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+      ],
+      [
+        {
+          'citationId': 'C01',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+      ],
+      [
+        {
+          'citationId': 'c1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        },
+      ],
+    ]) {
+      test('rejects malformed delivered citations payload $invalidCitations',
+          () async {
+        final body = _validDeliveredAskResponse();
+        if (invalidCitations == null) {
+          body.remove('citations');
+        } else {
+          body['citations'] = invalidCitations;
+        }
+
+        final result = await http.runWithClient(
+          () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+          () => _mockJson(200, body),
+        );
+
+        expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+        expect(result.answer, isNull);
+        expect(result.citations, isEmpty);
+        expect(result.error?.code, 'INVALID_RESPONSE');
+      });
+    }
+
+    for (final status in const ['WITHHELD', 'NO_RECORDS']) {
+      test('discards injected answer and citations for $status', () async {
+        final result = await http.runWithClient(
+          () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+          () => _mockJson(200, {
+            'success': status == 'NO_RECORDS',
+            'deliveryStatus': status,
+            'answer': {'text': 'Injected answer'},
+            'citations': [
+              {
+                'citationId': 'C1',
+                'recordType': 'CALL_SUMMARY',
+                'excerpt': 'Injected evidence',
+              }
+            ],
+          }),
+        );
+
+        expect(result.answer, isNull);
+        expect(result.citations, isEmpty);
+      });
+    }
+
+    test('preserves supplied session, conversation, and bounded source types',
+        () async {
+      final (client, requests) = _capturingClient(200, {
+        'success': true,
+        'deliveryStatus': 'NO_RECORDS',
+        'citations': <Object>[],
+      });
+
+      await http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'medication',
+          patientId: 42,
+          sessionId: '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+          conversationId: 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+          sourceTypes: const ['MEDICATION'],
+        ),
+        () => client,
+      );
+
+      final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(body['sessionId'], '8aa0d978-a8fc-48bc-ab02-1af24f32e903');
+      expect(body['conversationId'], 'fd43f38b-ac0e-4adf-af84-d25992ce7855');
+      expect(body['sourceTypes'], ['MEDICATION']);
+    });
+
+    test('models correlated withheld errors even on non-200 status', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockJson(403, {
+          'success': false,
+          'requestId': '22222222-2222-2222-2222-222222222222',
+          'deliveryStatus': 'WITHHELD',
+          'citations': <Object>[],
+          'error': {
+            'code': 'FORBIDDEN_SCOPE',
+            'message': 'Requested records are not available for Ask AI',
+          },
+        }),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.requestId, '22222222-2222-2222-2222-222222222222');
+      expect(result.error?.code, 'FORBIDDEN_SCOPE');
+    });
+
+    test('fails closed on malformed payload', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(query: 'metformin', patientId: 42),
+        () => _mockRaw(200, '<html>bad gateway</html>'),
+      );
+
+      expect(result.deliveryStatus, AiAskDeliveryStatus.withheld);
+      expect(result.error?.code, 'INVALID_RESPONSE');
+    });
+
+    test('times out with the original input available for retry', () async {
+      final result = await http.runWithClient(
+        () => AIChatService.askRecords(
+          query: 'retry this question',
+          patientId: 42,
+          timeout: const Duration(milliseconds: 1),
+        ),
+        () => MockClient((_) async {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return http.Response('{}', 200);
+        }),
+      );
+
+      expect(result.error?.code, 'TIMEOUT');
+      expect(result.retryInput, 'retry this question');
+      expect(result.retryable, isTrue);
+    });
+  });
+
+  group('shareWithCaregivers()', () {
+    test('returns EMPTY when messages list is empty', () async {
+      final result = await AIChatService.shareWithCaregivers(
+        patientId: 42,
+        messages: const [],
+      );
+      expect(result.success, isFalse);
+      expect(result.errorCode, 'EMPTY');
+      expect(result.message, 'No conversation to share');
+    });
+
+    test('posts share payload and returns receipt on 200', () async {
+      final (client, captured) = _capturingClient(200, {
+        'shareId': '11111111-1111-1111-1111-111111111111',
+        'recipientUserIds': [11, 12],
+        'messageCount': 1,
+      });
+
+      final result = await http.runWithClient(
+        () => AIChatService.shareWithCaregivers(
+          patientId: 42,
+          sessionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          caregiverUserId: 11,
+          messages: const [
+            {'role': 'user', 'text': 'Hello'},
+          ],
+        ),
+        () => client,
+      );
+
+      expect(result.success, isTrue);
+      expect(result.shareId, '11111111-1111-1111-1111-111111111111');
+      expect(result.recipientCount, 2);
+      expect(captured, hasLength(1));
+      expect(captured.first.method, 'POST');
+      expect(captured.first.url.path, endsWith('/api/ai/ask/share'));
+      final body = jsonDecode(captured.first.body) as Map<String, dynamic>;
+      expect(body['patientId'], 42);
+      expect(body['caregiverUserId'], 11);
+      expect(body['sessionId'], 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    });
+
+    test('maps API error body on non-2xx', () async {
+      final client = _mockJson(400, {
+        'error': 'NO_CAREGIVER',
+        'message': 'No linked caregiver',
+      });
+
+      final result = await http.runWithClient(
+        () => AIChatService.shareWithCaregivers(
+          patientId: 42,
+          messages: const [
+            {'role': 'user', 'text': 'Hello'},
+          ],
+        ),
+        () => client,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorCode, 'NO_CAREGIVER');
+      expect(result.message, 'No linked caregiver');
+    });
+
+    test('returns NETWORK_ERROR on transport failure', () async {
+      final client = _mockThrows(Exception('offline'));
+
+      final result = await http.runWithClient(
+        () => AIChatService.shareWithCaregivers(
+          patientId: 42,
+          messages: const [
+            {'role': 'user', 'text': 'Hello'},
+          ],
+        ),
+        () => client,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorCode, 'NETWORK_ERROR');
+      expect(result.message, contains('Unable to share'));
+    });
+  });
+
+  group('listShares()', () {
+    test('gets shares and parses transcript for review', () async {
+      final (client, captured) = _capturingClient(200, [
+        {
+          'shareId': '11111111-1111-1111-1111-111111111111',
+          'patientId': 42,
+          'sessionId': null,
+          'recipientUserIds': [11],
+          'messageCount': 1,
+          'createdAt': '2026-07-27T12:00:00Z',
+          'transcriptJson': '[{"role":"user","text":"Hello"}]',
+        },
+      ]);
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, hasLength(1));
+      expect(result.first.shareId, '11111111-1111-1111-1111-111111111111');
+      expect(result.first.recipientUserIds, [11]);
+      expect(result.first.transcriptJson, contains('Hello'));
+      expect(captured, hasLength(1));
+      expect(captured.first.method, 'GET');
+      expect(captured.first.url.path, endsWith('/api/ai/ask/shares'));
+      expect(captured.first.url.queryParameters['patientId'], '42');
+    });
+
+    test('returns empty list on non-2xx', () async {
+      final client = _mockJson(403, {'error': 'FORBIDDEN_SCOPE'});
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('returns empty list on transport failure', () async {
+      final client = _mockThrows(Exception('offline'));
+
+      final result = await http.runWithClient(
+        () => AIChatService.listShares(patientId: 42),
+        () => client,
+      );
+
+      expect(result, isEmpty);
+    });
+  });
 }
+
+Map<String, dynamic> _validDeliveredAskResponse() => {
+      'success': true,
+      'deliveryStatus': 'DELIVERED',
+      'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+      'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+      'answer': {'text': 'Metformin was started.'},
+      'citations': [
+        {
+          'citationId': 'C1',
+          'recordType': 'CALL_SUMMARY',
+          'excerpt': 'Metformin was started.',
+        }
+      ],
+      'disclaimer': {
+        'text': 'Records-based information; not medical advice.',
+        'aiNoticeRequired': true,
+        'recordsBasedFraming': true,
+        'locale': 'en-US',
+      },
+      'escalation': {
+        'tier': 1,
+        'reason': 'Tier1_auto_deliver',
+        'requiresClinicianReview': false,
+      },
+      'confirmation': {
+        'promptConfirmWithProvider': true,
+        'message': 'Confirm important details with your care provider.',
+      },
+    };

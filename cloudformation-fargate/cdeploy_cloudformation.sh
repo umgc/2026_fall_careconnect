@@ -101,6 +101,13 @@ SERVICE_PARAMETERS="$PARAMETER_DIR/${ENVIRONMENT}-service.json"
 DATA_EFFECTIVE_PARAMETERS="$DATA_PARAMETERS"
 TEMP_FILES=()
 
+# Remove parameter override temp files left by interrupted previous runs.
+shopt -s nullglob
+for _stale_param_file in "${TMPDIR:-/tmp}"/careconnect-*-data-*.json; do
+  [[ -f "$_stale_param_file" ]] && rm -f "$_stale_param_file"
+done
+shopt -u nullglob
+
 step() {
   echo
   echo "==> $1"
@@ -813,7 +820,7 @@ aws_cli ecr get-login-password --profile "$PROFILE" --region "$REGION" \
 
 step "Building Docker image"
 CURRENT_OPERATION="Building Docker image"
-docker build -t "$LOCAL_IMAGE_NAME" .
+docker build --platform linux/amd64 -t "$LOCAL_IMAGE_NAME" .
 
 step "Tagging and pushing Docker image to ECR"
 CURRENT_OPERATION="Pushing Docker image to ECR"
@@ -825,11 +832,10 @@ popd >/dev/null
 step "Deploying service stack: $SERVICE_STACK_NAME"
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "BackendImageUri=${IMAGE_URI}"
 
-# Print the final ALB endpoint so the frontend or health checks can use it.
-step "Reading final backend URL"
-CURRENT_OPERATION="Reading final backend URL"
-ALB_DNS_NAME="$(get_stack_output "$SERVICE_STACK_NAME" "LoadBalancerDnsName" | tr -d '\r')"
-ALB_URL="$(get_stack_output "$SERVICE_STACK_NAME" "LoadBalancerUrl" | tr -d '\r')"
+# Print the final API Gateway endpoint so the frontend or health checks can use it.
+step "Reading final API endpoint"
+CURRENT_OPERATION="Reading final API endpoint"
+API_ENDPOINT="$(get_stack_output "$SERVICE_STACK_NAME" "ApiEndpoint" | tr -d '\r')"
 CURRENT_STACK_NAME=""
 CURRENT_OPERATION=""
 
@@ -838,7 +844,6 @@ echo "Deployment complete."
 echo "Environment:   $ENVIRONMENT"
 echo "Repository:    $REPOSITORY_NAME"
 echo "Image URI:     $IMAGE_URI"
-echo "ALB DNS:       $ALB_DNS_NAME"
-echo "Backend URL:   $ALB_URL"
-echo "Health check:  ${ALB_URL}/v1/api/test/health"
+echo "API Endpoint:  $API_ENDPOINT"
+echo "Health check:  ${API_ENDPOINT}/v1/api/test/health"
 echo "Elapsed time:  $(elapsed_time_text)"

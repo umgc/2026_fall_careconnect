@@ -264,8 +264,8 @@ void main() {
       expect(ApiConstants.baseUrl, contains('/v1/api/'));
     });
 
-    test('familyMembers contains /v1/api/family-members', () {
-      expect(ApiConstants.familyMembers, contains('/v1/api/family-members'));
+    test('familyMembers contains /v3/api/family-members', () {
+      expect(ApiConstants.familyMembers, contains('/v3/api/family-members'));
     });
 
     test('patients contains /v1/api/patients', () {
@@ -285,12 +285,12 @@ void main() {
           contains('/v1/api/connection-requests'));
     });
 
-    test('subscriptions contains /v1/api/subscriptions', () {
-      expect(ApiConstants.subscriptions, contains('/v1/api/subscriptions'));
+    test('subscriptions contains /v3/api/subscriptions', () {
+      expect(ApiConstants.subscriptions, contains('/v3/api/subscriptions'));
     });
 
-    test('tasks contains /v1/api/tasks', () {
-      expect(ApiConstants.tasks, contains('/v1/api/tasks'));
+    test('tasks contains /v3/api/tasks', () {
+      expect(ApiConstants.tasks, contains('/v3/api/tasks'));
     });
 
     test('allergies contains /v1/api/allergies', () {
@@ -2054,7 +2054,61 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Group 34 — ApiConstants additional assertions
+  // Group 34 — Call recording playback (§3.3 F3)
+  // ──────────────────────────────────────────────────────────────────────────
+  group('SENT-CLIP-003 getCallRecordingPlaybackData', () {
+    test('returns full playback map on 200', () async {
+      final body = {
+        'callId': 'chime_call_123',
+        'playbackUrl': 'https://s3.example.com/recording.mp4',
+        'recordingStartedAt': '2026-06-29T16:57:43Z',
+        'expiresInMinutes': 15,
+        'playbackReady': true,
+        'concatenationStatus': 'READY',
+        'recordingStatus': 'STOPPED',
+      };
+
+      final result = await _withSpec(
+        _FakeSpec(200, _okJson(body)),
+        () => ApiService.getCallRecordingPlaybackData('chime_call_123'),
+      );
+
+      expect(result, isNotNull);
+      expect(result!['playbackUrl'], 'https://s3.example.com/recording.mp4');
+      expect(result['recordingStartedAt'], '2026-06-29T16:57:43Z');
+      expect(result['expiresInMinutes'], 15);
+      expect(result['playbackReady'], true);
+      expect(result['concatenationStatus'], 'READY');
+    });
+
+    test('returns null on non-200', () async {
+      final result = await _withSpec(
+        const _FakeSpec(403, '{"error":"forbidden"}'),
+        () => ApiService.getCallRecordingPlaybackData('call-1'),
+      );
+
+      expect(result, isNull);
+    });
+  });
+
+  group('getCallRecordingPlaybackUrl', () {
+    test('returns only playbackUrl from full playback map', () async {
+      final body = {
+        'playbackUrl': 'https://s3.example.com/x.mp4',
+        'recordingStartedAt': '2026-06-29T16:57:43Z',
+      };
+
+      final result = await _withSpec(
+        _FakeSpec(200, _okJson(body)),
+        () => ApiService.getCallRecordingPlaybackUrl('call-1'),
+      );
+
+      expect(result, 'https://s3.example.com/x.mp4');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Group 35 — ApiConstants additional assertions
   // ──────────────────────────────────────────────────────────────────────────
   group('ApiConstants additional', () {
     test('patient and mood share the same endpoint', () {
@@ -2078,6 +2132,78 @@ void main() {
       for (final ep in endpoints) {
         expect(ep, startsWith('http'));
       }
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Group 36 — confirmCallSummaryItem (FR-SUM-4)
+  // ──────────────────────────────────────────────────────────────────────────
+  group('confirmCallSummaryItem', () {
+    test('returns decoded map on 200 with decision recorded', () async {
+      final body = _okJson({
+        'itemId': 'item-1',
+        'decision': 'approve',
+        'held': false,
+        'decisionId': 42,
+      });
+      final result = await _withSpec(
+        _FakeSpec(200, body),
+        () => ApiService.confirmCallSummaryItem(
+          'call-1',
+          'item-1',
+          decision: 'approve',
+        ),
+      );
+      expect(result['itemId'], 'item-1');
+      expect(result['decision'], 'approve');
+      expect(result['held'], false);
+    });
+
+    test('returns held:true when routed to clinician review', () async {
+      final body = _okJson({
+        'itemId': 'item-2',
+        'decision': null,
+        'held': true,
+        'heldItemId': '11111111-1111-1111-1111-111111111111',
+      });
+      final result = await _withSpec(
+        _FakeSpec(200, body),
+        () => ApiService.confirmCallSummaryItem(
+          'call-1',
+          'item-2',
+          decision: 'approve',
+        ),
+      );
+      expect(result['held'], true);
+      expect(result['heldItemId'], '11111111-1111-1111-1111-111111111111');
+    });
+
+    test('throws on non-2xx status', () async {
+      await expectLater(
+        _withSpec(
+          const _FakeSpec(400, '{"message":"decision is required"}'),
+          () => ApiService.confirmCallSummaryItem(
+            'call-1',
+            'item-1',
+            decision: '',
+          ),
+        ),
+        throwsException,
+      );
+    });
+
+    test('throws on 404 when item not found', () async {
+      await expectLater(
+        _withSpec(
+          const _FakeSpec(404, '{"message":"Item not found"}'),
+          () => ApiService.confirmCallSummaryItem(
+            'call-1',
+            'missing-item',
+            decision: 'decline',
+          ),
+        ),
+        throwsException,
+      );
     });
   });
 }

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 class RecentPatientActivity extends StatelessWidget {
@@ -5,6 +6,7 @@ class RecentPatientActivity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final activities = [
       {
         'patient': 'Sarah Johnson',
@@ -48,7 +50,7 @@ class RecentPatientActivity extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Recent Patient Activity',
+                t.recentptactivity_recentPtActivityTitle,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,

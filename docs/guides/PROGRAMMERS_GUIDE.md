@@ -403,7 +403,7 @@ spring.jpa.properties.hibernate.show_sql=true
 ```
 
 **Critical Settings Explained**:
-- `ddl-auto=update`: Automatically creates tables when you run the app. Convenient but dangerous—doesn't handle schema changes well, can cause data loss. Use Flyway migrations in production.
+- `ddl-auto=update`: Automatically creates tables when you run the app. Used in local dev and ECS deploys. For new production DDL, also add patches to `SchemaPatchRunner`.
 - `show-sql=true`: Logs every SQL query. Essential for debugging but creates huge logs in production—disable there.
 - `jwt.secret`: Must be at least 32 characters for HS256 algorithm. In production, load from environment variable, not hardcoded.
 
@@ -4692,56 +4692,16 @@ The CareConnect AI integration provides a comprehensive, healthcare-focused AI s
 
 ### Wearable Device Integration
 
-```dart
-// services/device_integration_service.dart
-class DeviceIntegrationService {
-  final HealthDataService _healthDataService;
+Current semester implementation centers on explicit source/metric scope definition and mapping to existing persisted entities.
 
-  Future<void> syncFitbitData() async {
-    try {
-      final fitbitData = await FitbitConnector.instance.getTodaysActivitySummary();
+- Frontend entrypoint: `frontend/lib/features/integrations/presentation/pages/wearables_screen.dart`
+- Persisted wearable model: `backend/core/src/main/java/com/careconnect/model/WearableMetric.java`
+- Manual vital sample model: `backend/core/src/main/java/com/careconnect/model/VitalSample.java`
+- Wearable metric repository queries: `backend/core/src/main/java/com/careconnect/repository/WearableMetricRepository.java`
 
-      // Convert Fitbit data to our format
-      final healthData = HealthData(
-        steps: fitbitData.summary?.steps,
-        heartRate: fitbitData.summary?.restingHeartRate,
-        calories: fitbitData.summary?.caloriesOut,
-        distance: fitbitData.summary?.distances?.first.distance,
-        timestamp: DateTime.now(),
-      );
+For the semester source-by-source matrix and placeholder policy, see:
 
-      await _healthDataService.saveHealthData(healthData);
-    } catch (e) {
-      throw DeviceIntegrationException('Fitbit sync failed: $e');
-    }
-  }
-
-  Future<void> setupDeviceSync() async {
-    // Setup periodic sync
-    Timer.periodic(Duration(hours: 1), (timer) {
-      syncAllConnectedDevices();
-    });
-  }
-
-  Future<void> syncAllConnectedDevices() async {
-    final connectedDevices = await getConnectedDevices();
-
-    for (final device in connectedDevices) {
-      switch (device.type) {
-        case DeviceType.fitbit:
-          await syncFitbitData();
-          break;
-        case DeviceType.appleWatch:
-          await syncAppleHealthData();
-          break;
-        case DeviceType.bloodPressureMonitor:
-          await syncBloodPressureData();
-          break;
-      }
-    }
-  }
-}
-```
+- `docs/spring2026_guides/WEARABLE_METRICS_SOURCE_MATRIX.md`
 
 ## USPS Integration
 
@@ -7230,27 +7190,21 @@ export SPRING_PROFILES_ACTIVE=dev
 ```properties
 # application-dev.properties (Development)
 spring.jpa.hibernate.ddl-auto=update      # Auto-generate schema changes
-spring.flyway.enabled=false               # Disabled due to circular dependencies
+spring.flyway.enabled=false               # Flyway not used in deploy (optional local mvn only)
 spring.jpa.show-sql=true                  # Show SQL for debugging
 logging.level.com.careconnect=DEBUG       # Verbose logging
 
-# application-prod.properties (Production)
-spring.jpa.hibernate.ddl-auto=validate    # Never auto-modify production schema
-spring.flyway.enabled=true                # Use Flyway for controlled migrations
+# application-prod.properties + ECS env (Production)
+spring.flyway.enabled=false               # Never use Flyway in ECS/production
+# SPRING_JPA_HIBERNATE_DDL_AUTO=update    # Set by CloudFormation ECS task definition
+# SchemaPatchRunner applies idempotent JDBC patches at startup
 spring.jpa.show-sql=false                 # Don't log SQL in production
 logging.level.com.careconnect=INFO        # Production logging level
 ```
 
-4. **Fix Flyway/JPA Conflicts**: Currently, CareConnect has Flyway disabled in development due to circular dependency issues. To manually apply migrations:
+4. **Production schema changes**: ECS does not run Flyway. Add idempotent SQL to `SchemaPatchRunner.java` (mirror `db/migration/*.sql` as needed). For local-only verification:
 ```bash
-# Check current database schema
-psql -h localhost -U careconnect -d careconnect -c "\dt"
-
-# Manually apply specific migration
 psql -h localhost -U careconnect -d careconnect -f src/main/resources/db/migration/V22__create_ai_chat_tables.sql
-
-# Verify migration was applied
-psql -h localhost -U careconnect -d careconnect -c "SELECT * FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 5;"
 ```
 
 5. **Validate Profile Loading**: Add logging to confirm correct profile is loaded:
@@ -7260,7 +7214,7 @@ logging.level.org.springframework.core.env=DEBUG
 ```
 This will log which property files are being loaded and in what order.
 
-**Why This Happens**: Flyway and JPA DDL auto-generation both try to manage database schema, leading to conflicts. In CareConnect, we've temporarily disabled Flyway in development to avoid circular dependencies, but this is a technical debt that should be resolved by fixing the circular dependencies and re-enabling Flyway.
+**Why This Happens**: Flyway and JPA DDL auto-generation both try to manage database schema. CareConnect disables Flyway for all deployed environments and uses `SchemaPatchRunner` plus Hibernate `ddl-auto=update` (ECS) instead.
 
 #### Flutter Build Issues
 

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 /// Alert Notification enum
@@ -47,16 +48,16 @@ class AlertNotification extends StatelessWidget {
   }
 
   /// Gets the title based on the alert type
-  String _getTitle() {
+  String _getTitle(AppLocalizations t) {
     switch (type) {
       case AlertType.important:
-        return 'Important:';
+        return '${t.alternotifwidget_alertImportant}:';
       case AlertType.reminder:
-        return 'Reminder:';
+        return '${t.alternotifwidget_alertReminder}:';
       case AlertType.success:
-        return 'Success:';
+        return '${t.alternotifwidget_alertSuccess}:';
       case AlertType.info:
-        return 'Info:';
+        return '${t.alternotifwidget_alertInfo}:';
     }
   }
 
@@ -77,6 +78,7 @@ class AlertNotification extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -101,7 +103,7 @@ class AlertNotification extends StatelessWidget {
               text: TextSpan(
                 children: [
                   TextSpan(
-                    text: '${_getTitle()} ',
+                    text: '${_getTitle(t)} ',
                     style: TextStyle(
                       color: _getTextColor(context),
                       fontWeight: FontWeight.bold,

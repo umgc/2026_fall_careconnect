@@ -1,5 +1,5 @@
 enum CheckInType { routine, followUp, urgent }
-enum CheckInStatus { completed, missed, cancelled }
+enum CheckInStatus { draft, submitted, reviewed, completed, missed, cancelled }
 
 class VirtualCheckIn {
   final String id;
@@ -24,7 +24,6 @@ class VirtualCheckIn {
     required this.summary,
   });
 }
-
 
 
 

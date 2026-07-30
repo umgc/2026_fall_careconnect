@@ -930,4 +930,62 @@ class CallNotificationHandlerTest {
         assertThat(online).doesNotContainKey("1");
         assertThat(online).containsKey("2");
     }
+
+    @Test
+    void afterConnectionClosed_oldSessionDoesNotRemoveReplacementSession() throws Exception {
+        authenticate(session, "s1", user, 1L, "u@u.com", "tok1");
+        authenticate(recipientSession, "s2", user, 1L, "u@u.com", "tok2");
+        when(recipientSession.isOpen()).thenReturn(true);
+
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+        handler.sendNotificationToUser("1", Map.of("type", "test"));
+
+        assertThat(handler.isUserOnline("1")).isTrue();
+        verify(recipientSession, atLeast(2)).sendMessage(any(TextMessage.class));
+    }
+
+    @Test
+    void authenticate_crossAccountRebind_detachesPriorIdentityAtomically() throws Exception {
+        authenticate(session, "s1", user, 1L, "first@test.com", "first-token");
+        when(session.isOpen()).thenReturn(true);
+        assertThat(handler.isUserOnline("1")).isTrue();
+
+        authenticate(session, "s1", recipientUser, 2L, "second@test.com", "second-token");
+
+        assertThat(handler.isUserOnline("1")).isFalse();
+        assertThat(handler.isUserOnline("2")).isTrue();
+        handler.sendNotificationToUser("1", Map.of("type", "must-not-deliver"));
+        verify(session, times(2)).sendMessage(any(TextMessage.class));
+    }
+
+    @Test
+    void rebindThenCloseRace_oldSocketCannotRemoveReplacement() throws Exception {
+        authenticate(session, "s1", user, 1L, "u@u.com", "tok1");
+        authenticate(recipientSession, "s2", user, 1L, "u@u.com", "tok2");
+        when(recipientSession.isOpen()).thenReturn(true);
+
+        // Cross-account rebind on the replacement socket, then stale close of the first socket.
+        authenticate(recipientSession, "s2", recipientUser, 2L, "r@r.com", "tok3");
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+
+        assertThat(handler.isUserOnline("1")).isFalse();
+        assertThat(handler.isUserOnline("2")).isTrue();
+        handler.sendNotificationToUser("2", Map.of("type", "still-online"));
+        verify(recipientSession, atLeast(3)).sendMessage(any(TextMessage.class));
+    }
+
+    @Test
+    void handleTextMessage_exception_sendsRedactedPublicError() throws Exception {
+        when(session.getId()).thenReturn("s1");
+        ArgumentCaptor<TextMessage> errorCaptor = ArgumentCaptor.forClass(TextMessage.class);
+
+        handler.handleTextMessage(session, new TextMessage("not-valid-json{{{"));
+
+        verify(session).sendMessage(errorCaptor.capture());
+        String payload = errorCaptor.getValue().getPayload();
+        assertThat(payload).contains("\"code\":\"INTERNAL_ERROR\"");
+        assertThat(payload).contains("Unable to process message");
+        assertThat(payload).doesNotContain("JsonParseException");
+        assertThat(payload).doesNotContain("Unexpected character");
+    }
 }

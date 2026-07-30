@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -147,6 +149,7 @@ void main() {
   group('register', () {
     test('returns string body when backend returns a plain string', () async {
       // Verifies the branch where the backend responds with a raw JSON string.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/register'] = (HttpRequest request) async {
         expect(request.method, 'POST');
 
@@ -170,6 +173,7 @@ void main() {
         email: 'test@example.com',
         password: 'secret',
         verificationBaseUrl: 'https://frontend.example.com',
+        t: t,
       );
 
       expect(result, 'Registered successfully');
@@ -177,6 +181,7 @@ void main() {
 
     test('returns message field when backend returns JSON object', () async {
       // Verifies the branch where the backend responds with a JSON object.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/register'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.created;
         request.response.headers.contentType = ContentType.json;
@@ -190,6 +195,7 @@ void main() {
         email: 'test@example.com',
         password: 'secret',
         verificationBaseUrl: 'https://frontend.example.com',
+        t: t,
       );
 
       expect(result, 'Check your email');
@@ -197,6 +203,7 @@ void main() {
 
     test('throws when backend returns an error response', () async {
       // Verifies registration failures surface the backend error message.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/register'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -211,6 +218,7 @@ void main() {
           email: 'test@example.com',
           password: 'secret',
           verificationBaseUrl: 'https://frontend.example.com',
+          t: t,
         ),
         throwsA(
           isA<Exception>().having(
@@ -227,6 +235,7 @@ void main() {
     test('registers caregiver with professional and address data', () async {
       // Verifies optional professional/address blocks are included and that the
       // success payload extracts nested user and caregiver identifiers.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/caregivers'] = (HttpRequest request) async {
         expect(request.method, 'POST');
 
@@ -253,7 +262,7 @@ void main() {
           'id': 9001,
           'user': <String, dynamic>{
             'id': 42,
-            'stripeCustomerId': 'cus_123',
+            'paymentCustomerId': 'cus_123',
           },
         }));
       };
@@ -272,18 +281,20 @@ void main() {
         city: 'Albany',
         state: 'NY',
         zip: '12207',
+        t: t,
       );
 
       expect(result['message'], 'Caregiver registration successful!');
       expect(result['userId'], '42');
       expect(result['caregiverId'], '9001');
-      expect(result['stripeCustomerId'], 'cus_123');
+      expect(result['paymentCustomerId'], 'cus_123');
     });
 
     test('registers caregiver with default values when optional data is omitted',
         () async {
       // Verifies the null/default-path logic for optional fields and the branch
       // where professional/address blocks are not added.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/caregivers'] = (HttpRequest request) async {
         final String body = await utf8.decoder.bind(request).join();
         final Map<String, dynamic> payload =
@@ -302,7 +313,7 @@ void main() {
           'id': 100,
           'user': <String, dynamic>{
             'id': 5,
-            'stripeCustomerId': '',
+            'paymentCustomerId': '',
           },
         }));
       };
@@ -312,15 +323,17 @@ void main() {
         lastName: 'User',
         email: 'minimal@example.com',
         password: 'secret',
+        t: t,
       );
 
       expect(result['userId'], '5');
       expect(result['caregiverId'], '100');
-      expect(result['stripeCustomerId'], '');
+      expect(result['paymentCustomerId'], '');
     });
 
     test('throws when caregiver registration fails', () async {
       // Verifies backend errors are rethrown for caller handling.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/caregivers'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -335,6 +348,7 @@ void main() {
           lastName: 'Request',
           email: 'bad@example.com',
           password: 'secret',
+          t: t,
         ),
         throwsA(
           isA<Exception>().having(
@@ -350,6 +364,7 @@ void main() {
   group('verifyEmail', () {
     test('returns success message on 200', () async {
       // Verifies successful email verification returns the backend message.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/verify'] = (HttpRequest request) async {
         final String body = await utf8.decoder.bind(request).join();
         final Map<String, dynamic> payload =
@@ -363,11 +378,12 @@ void main() {
         }));
       };
 
-      final String result = await AuthService.verifyEmail('verify-token');
+      final String result = await AuthService.verifyEmail('verify-token', t);
       expect(result, 'Email verified successfully!');
     });
 
     test('throws on non-200 response', () async {
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       // Verifies verification failures surface backend error text.
       handlers['/v1/api/auth/verify'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
@@ -378,7 +394,7 @@ void main() {
       };
 
       await expectLater(
-        AuthService.verifyEmail('bad-token'),
+        AuthService.verifyEmail('bad-token', t),
         throwsA(
           isA<Exception>().having(
             (Exception e) => e.toString(),
@@ -393,6 +409,7 @@ void main() {
   group('requestPasswordReset', () {
     test('returns success message on 200', () async {
       // Verifies the forgot-password flow returns the backend success message.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/password/forgot'] = (HttpRequest request) async {
         final String body = await utf8.decoder.bind(request).join();
         final Map<String, dynamic> payload =
@@ -407,7 +424,7 @@ void main() {
       };
 
       final String result =
-          await AuthService.requestPasswordReset(email: 'reset@example.com');
+          await AuthService.requestPasswordReset(email: 'reset@example.com', t:t);
 
       expect(result, 'Reset link sent');
     });
@@ -415,6 +432,7 @@ void main() {
     test('wraps backend failure in Network error exception', () async {
       // Verifies the method catches exceptions and wraps them with the
       // "Network error:" prefix used by the implementation.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/password/forgot'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -424,7 +442,7 @@ void main() {
       };
 
       await expectLater(
-        AuthService.requestPasswordReset(email: 'missing@example.com'),
+        AuthService.requestPasswordReset(email: 'missing@example.com', t:t),
         throwsA(
           isA<Exception>().having(
             (Exception e) => e.toString(),
@@ -442,6 +460,7 @@ void main() {
   group('resetPassword', () {
     test('returns success message on 200', () async {
       // Verifies successful password reset returns the backend message.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/users/reset-password'] = (HttpRequest request) async {
         final String body = await utf8.decoder.bind(request).join();
         final Map<String, dynamic> payload =
@@ -462,6 +481,7 @@ void main() {
         email: 'user@example.com',
         resetToken: 'reset-token',
         newPassword: 'new-password',
+        t:t,
       );
 
       expect(result, 'Password reset successfully!');
@@ -469,6 +489,7 @@ void main() {
 
     test('maps expired-token backend error to friendly message', () async {
       // Verifies the special-case expired-token branch.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/users/reset-password'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -482,6 +503,7 @@ void main() {
           email: 'user@example.com',
           resetToken: 'expired',
           newPassword: 'new-password',
+          t: t,
         ),
         throwsA(
           isA<Exception>().having(
@@ -495,6 +517,7 @@ void main() {
 
     test('maps invalid-token backend error to friendly message', () async {
       // Verifies the special-case invalid-token branch.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/users/reset-password'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -508,6 +531,7 @@ void main() {
           email: 'user@example.com',
           resetToken: 'invalid',
           newPassword: 'new-password',
+          t:t,
         ),
         throwsA(
           isA<Exception>().having(
@@ -521,6 +545,7 @@ void main() {
 
     test('throws generic backend error when no special case matches', () async {
       // Verifies fallback error propagation for other reset failures.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/users/reset-password'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -534,6 +559,7 @@ void main() {
           email: 'user@example.com',
           resetToken: 'weak',
           newPassword: '123',
+          t: t,
         ),
         throwsA(
           isA<Exception>().having(
@@ -550,10 +576,12 @@ void main() {
     test('throws a wrapped exception when user data cannot be decoded',
         () async {
       // Verifies the catch/rethrow branch for malformed callback payloads.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       await expectLater(
         AuthService.processOAuthCallback(
           token: 'jwt-token',
           userDataString: '%7Bnot-valid-json',
+          t: t,
         ),
         throwsA(
           isA<Exception>().having(
@@ -629,6 +657,7 @@ void main() {
   group('Alexa SSO helpers', () {
     test('getAlexaAuthorizationCode returns success payload on 200', () async {
       // Verifies successful Alexa authorization-code generation.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/code'] = (HttpRequest request) async {
         expect(request.method, 'POST');
         expect(
@@ -644,7 +673,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.getAlexaAuthorizationCode(token: 'token-123');
+          await AuthService.getAlexaAuthorizationCode(token: 'token-123', t:t);
 
       expect(result['isSuccess'], isTrue);
       expect(result['code'], 'temp-code-123');
@@ -654,6 +683,7 @@ void main() {
     test('getAlexaAuthorizationCode returns unauthorized payload on 401',
         () async {
       // Verifies the explicit 401 handling branch.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/code'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.unauthorized;
         request.response.headers.contentType = ContentType.json;
@@ -663,7 +693,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.getAlexaAuthorizationCode(token: 'bad-token');
+          await AuthService.getAlexaAuthorizationCode(token: 'bad-token', t:t);
 
       expect(result['isSuccess'], isFalse);
       expect(result['code'], isNull);
@@ -673,6 +703,7 @@ void main() {
     test('getAlexaAuthorizationCode returns generic failure on other errors',
         () async {
       // Verifies non-200/non-401 responses use the generic failure branch.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/code'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.internalServerError;
         request.response.headers.contentType = ContentType.json;
@@ -682,7 +713,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.getAlexaAuthorizationCode(token: 'token-123');
+          await AuthService.getAlexaAuthorizationCode(token: 'token-123', t:t);
 
       expect(result['isSuccess'], isFalse);
       expect(result['code'], isNull);
@@ -691,6 +722,7 @@ void main() {
 
     test('unlinkAlexaAccount returns success on 200', () async {
       // Verifies successful Alexa unlink response mapping.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/unlink'] = (HttpRequest request) async {
         expect(request.method, 'POST');
 
@@ -702,7 +734,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.unlinkAlexaAccount();
+          await AuthService.unlinkAlexaAccount(t);
 
       expect(result['isSuccess'], isTrue);
       expect(result['message'], 'Alexa account unlinked successfully');
@@ -711,6 +743,7 @@ void main() {
     test('unlinkAlexaAccount returns backend error message on failure',
         () async {
       // Verifies failed unlink responses surface the backend error.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/unlink'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.json;
@@ -720,7 +753,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.unlinkAlexaAccount();
+          await AuthService.unlinkAlexaAccount(t);
 
       expect(result['isSuccess'], isFalse);
       expect(result['message'], 'Failed to unlink Alexa account');
@@ -729,6 +762,7 @@ void main() {
     test('unlinkAlexaAccount returns error payload when response body is malformed',
         () async {
       // Verifies the catch branch when jsonDecode throws on a non-JSON body.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/unlink'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.badRequest;
         request.response.headers.contentType = ContentType.text;
@@ -736,7 +770,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.unlinkAlexaAccount();
+          await AuthService.unlinkAlexaAccount(t);
 
       expect(result['isSuccess'], isFalse);
       expect(
@@ -748,6 +782,7 @@ void main() {
     test('getAlexaAuthorizationCode returns error payload when response body is malformed',
         () async {
       // Verifies the generic catch branch when jsonDecode throws.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/sso/alexa/code'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.ok;
         request.response.headers.contentType = ContentType.text;
@@ -755,7 +790,7 @@ void main() {
       };
 
       final Map<String, dynamic> result =
-          await AuthService.getAlexaAuthorizationCode(token: 'token-123');
+          await AuthService.getAlexaAuthorizationCode(token: 'token-123', t:t);
 
       expect(result['isSuccess'], isFalse);
       expect(result['message'].toString(), startsWith('Error:'));
@@ -765,6 +800,7 @@ void main() {
   group('login', () {
     test('returns UserSession on successful login', () async {
       // Verifies the success path stores auth data and returns a valid session.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/login'] = (HttpRequest request) async {
         expect(request.method, 'POST');
 
@@ -787,7 +823,7 @@ void main() {
       };
 
       final result =
-          await AuthService.login('login@example.com', 'password123');
+          await AuthService.login('login@example.com', 'password123', t);
 
       expect(result.email, 'login@example.com');
       expect(result.role, 'PATIENT');
@@ -795,6 +831,7 @@ void main() {
 
     test('throws on failed login', () async {
       // Verifies that a non-200 login response surfaces the backend error.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/auth/login'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.unauthorized;
         request.response.headers.contentType = ContentType.json;
@@ -804,7 +841,7 @@ void main() {
       };
 
       await expectLater(
-        AuthService.login('bad@example.com', 'wrongpassword'),
+        AuthService.login('bad@example.com', 'wrongpassword', t),
         throwsA(
           isA<Exception>().having(
             (Exception e) => e.toString(),
@@ -818,6 +855,7 @@ void main() {
 
   group('processOAuthCallback success', () {
     test('processes valid callback data and returns UserSession', () async {
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       // Verifies the happy path where URL-decoded JSON produces a valid session.
       final String userData = jsonEncode(<String, dynamic>{
         'id': 2,
@@ -831,6 +869,7 @@ void main() {
       final result = await AuthService.processOAuthCallback(
         token: 'oauth-jwt',
         userDataString: userData,
+        t: t,
       );
 
       expect(result.email, 'oauth@example.com');
@@ -909,6 +948,7 @@ void main() {
     test('handles response without nested user object', () async {
       // Verifies the branch where the response lacks a "user" object,
       // defaulting userId to "0".
+      final t = await AppLocalizations.delegate.load(Locale('en'));
       handlers['/v1/api/caregivers'] = (HttpRequest request) async {
         request.response.statusCode = HttpStatus.created;
         request.response.headers.contentType = ContentType.json;
@@ -922,6 +962,7 @@ void main() {
         lastName: 'UserObj',
         email: 'nouserobj@example.com',
         password: 'secret',
+        t: t,
       );
 
       expect(result['caregiverId'], '55');

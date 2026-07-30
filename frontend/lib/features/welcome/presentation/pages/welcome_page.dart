@@ -76,7 +76,7 @@ class _WelcomePageState extends State<WelcomePage> {
     final currentLocale = context.watch<LocaleProvider>().locale;
     final currentLangLabel = currentLocale == null
     ? t.systemDefault 
-    : LanguagePicker.labelFor(currentLocale);
+    : LanguagePicker.labelFor(currentLocale, t);
     return Scaffold(
       body: Container(
         width: double.infinity,

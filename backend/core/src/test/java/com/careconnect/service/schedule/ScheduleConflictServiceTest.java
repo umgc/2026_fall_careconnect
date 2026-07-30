@@ -295,6 +295,23 @@ class ScheduleConflictServiceTest {
         }
 
         @Test
+        @DisplayName("should not conflict when new visit ends exactly at existing visit start")
+        void shouldNotConflictWhenNewVisitEndsAtExistingStart() {
+            // Existing visit 10:00-11:00; new visit 9:00-10:00 ends exactly when
+            // the existing visit starts. startMinutes < visitEndMinutes is true,
+            // but endMinutes > visitStartMinutes is false — the combination the
+            // adjacent-after-only test above never exercises.
+            ScheduledVisit existing = createVisit(1L, LocalTime.of(10, 0), 60, "Scheduled");
+            when(scheduledVisitRepository.findByPatientId(PATIENT_ID))
+                    .thenReturn(List.of(existing));
+
+            List<ScheduledVisit> conflicts = conflictService.detectPatientConflicts(
+                    PATIENT_ID, TEST_DATE, LocalTime.of(9, 0), 60);
+
+            assertTrue(conflicts.isEmpty());
+        }
+
+        @Test
         @DisplayName("should exclude visits with null status")
         void shouldExcludeNullStatusVisits() {
             ScheduledVisit nullStatus = createVisit(1L, LocalTime.of(10, 0), 60, null);
@@ -759,6 +776,30 @@ class ScheduleConflictServiceTest {
             summary.setPatientConflicts(List.of(createVisit(1L, LocalTime.of(10, 0), 60, "Scheduled")));
 
             assertTrue(summary.hasConflicts());
+        }
+
+        @Test
+        @DisplayName("should report conflicts when caregiverConflicts is null but patientConflicts has entries")
+        void shouldReportConflictsWhenCaregiverConflictsNull() {
+            // Exercises the caregiverConflicts == null branch of hasConflicts(),
+            // which the default (non-null, empty-list) constructor never reaches.
+            ConflictSummary summary = new ConflictSummary();
+            summary.setCaregiverConflicts(null);
+            summary.setPatientConflicts(List.of(createVisit(1L, LocalTime.of(10, 0), 60, "Scheduled")));
+
+            assertTrue(summary.hasConflicts());
+        }
+
+        @Test
+        @DisplayName("should report no conflicts when both conflict lists are null")
+        void shouldReportNoConflictsWhenBothListsNull() {
+            // Exercises the patientConflicts == null branch as well — reached
+            // only once short-circuit evaluation gets past a null caregiverConflicts.
+            ConflictSummary summary = new ConflictSummary();
+            summary.setCaregiverConflicts(null);
+            summary.setPatientConflicts(null);
+
+            assertFalse(summary.hasConflicts());
         }
 
         @Test

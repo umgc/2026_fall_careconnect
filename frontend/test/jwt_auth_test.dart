@@ -1,3 +1,6 @@
+import 'dart:ui';
+
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/services/api_service.dart' as api_service;
 import 'package:care_connect_app/services/auth_service.dart';
@@ -52,11 +55,13 @@ void main() {
 
     test('AuthService.login should handle network errors gracefully', () async {
       // This tests error handling without making actual network calls
+      final t = await AppLocalizations.delegate.load(Locale ('en'));
       expect(() async {
         try {
           await AuthService.login(
             'test@example.com',
-            'password123'
+            'password123',
+            t
           );
         } catch (e) {
           // Expected to fail in test environment without backend

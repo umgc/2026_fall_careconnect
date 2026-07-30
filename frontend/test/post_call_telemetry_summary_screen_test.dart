@@ -1,12 +1,15 @@
 import 'dart:convert';
 
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/utils/sentiment_clip_recording_status.dart';
 import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
+import 'package:care_connect_app/widgets/sentiment_clip_player_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
 
@@ -15,6 +18,149 @@ Future<void> _pumpLoaded(WidgetTester tester) async {
   for (var i = 0; i < 6; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+Future<void> _pumpClipLoaded(WidgetTester tester) async {
+  await tester.pump();
+  for (var i = 0; i < 20; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
+Future<void> _tapTimelineNearFirstVoiceSample(WidgetTester tester) async {
+  final timeline = find.byKey(const Key('sentiment_timeline_canvas'));
+  await tester.scrollUntilVisible(
+    timeline,
+    120,
+    scrollable: find.byType(Scrollable).first,
+  );
+
+  final voiceChip = find.widgetWithText(ChoiceChip, 'Voice');
+  if (tester.any(voiceChip)) {
+    final chip = tester.widget<ChoiceChip>(voiceChip.first);
+    if (!chip.selected) {
+      await tester.tap(voiceChip.first);
+      await tester.pump();
+    }
+  }
+
+  expect(timeline, findsOneWidget);
+  final box = tester.renderObject<RenderBox>(timeline);
+  final global = box.localToGlobal(const Offset(174, 86));
+  await tester.tapAt(global);
+  await tester.pump();
+}
+
+Future<void> _tapTimelineNearSecondVoiceSample(WidgetTester tester) async {
+  final timeline = find.byKey(const Key('sentiment_timeline_canvas'));
+  await tester.scrollUntilVisible(
+    timeline,
+    120,
+    scrollable: find.byType(Scrollable).first,
+  );
+
+  expect(timeline, findsOneWidget);
+  final box = tester.renderObject<RenderBox>(timeline);
+  final global = box.localToGlobal(const Offset(275, 157));
+  await tester.tapAt(global);
+  await tester.pump();
+}
+
+class _FakeVideoPlayerPlatform extends VideoPlayerPlatform {
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<int?> create(DataSource dataSource) async => 0;
+
+  @override
+  Future<int?> createWithOptions(VideoCreationOptions options) async => 0;
+
+  @override
+  Future<void> dispose(int playerId) async {}
+
+  @override
+  Stream<VideoEvent> videoEventsFor(int playerId) {
+    return Stream<VideoEvent>.value(
+      VideoEvent(
+        eventType: VideoEventType.initialized,
+        size: const Size(1920, 1080),
+        duration: const Duration(minutes: 5),
+      ),
+    );
+  }
+
+  @override
+  Future<void> pause(int playerId) async {}
+
+  @override
+  Future<void> play(int playerId) async {}
+
+  @override
+  Future<Duration> getPosition(int playerId) async => Duration.zero;
+
+  @override
+  Future<void> seekTo(int playerId, Duration position) async {}
+
+  @override
+  Future<void> setLooping(int playerId, bool looping) async {}
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async {}
+
+  @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
+
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {}
+
+  @override
+  Widget buildView(int playerId) => Texture(textureId: playerId);
+
+  @override
+  Widget buildViewWithOptions(VideoViewOptions options) =>
+      Texture(textureId: options.playerId);
+}
+
+http.Response _richTelemetryResponse() {
+  return http.Response(
+    jsonEncode([
+      {
+        'eventType': 'CALL_STARTED',
+        'occurredAt': '2026-03-12T15:00:00Z',
+      },
+      {
+        'eventType': 'SENTIMENT_VOICE',
+        'channel': 'VOICE',
+        'sentimentScore': 0.72,
+        'sentimentLabel': 'CALM',
+        'sentimentNotes': 'steady voice',
+        'occurredAt': '2026-03-12T15:01:00Z',
+      },
+      {
+        'eventType': 'SENTIMENT_VOICE',
+        'channel': 'VOICE',
+        'sentimentScore': 0.42,
+        'sentimentLabel': 'ANXIOUS',
+        'sentimentNotes': 'mild tension',
+        'occurredAt': '2026-03-12T15:02:00Z',
+      },
+      {
+        'eventType': 'SENTIMENT_FINAL',
+        'channel': 'COMBINED',
+        'sentimentScore': 0.68,
+        'sentimentLabel': 'CALM',
+        'sentimentNotes': 'Recovered by end of call',
+        'occurredAt': '2026-03-12T15:04:00Z',
+      },
+      {
+        'eventType': 'CALL_ENDED',
+        'occurredAt': '2026-03-12T15:05:00Z',
+        'metadata': {'reason': 'completed'},
+      },
+    ]),
+    200,
+  );
 }
 
 void main() {
@@ -52,6 +198,10 @@ void main() {
 
     tearDown(() {
       ApiService.debugResetHttpClient();
+    });
+
+    setUp(() {
+      VideoPlayerPlatform.instance = _FakeVideoPlayerPlatform();
     });
 
     testWidgets('renders empty telemetry state when backend has no call data', (
@@ -232,6 +382,538 @@ void main() {
 
       expect(callAgainTapped, 1);
       expect(sendMessageTapped, 1);
+    });
+
+    testWidgets(
+        'FR-SUM-4 shows pending confirmation card and approves an action item',
+        (tester) async {
+      var confirmRequestCount = 0;
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/confirm')) {
+            confirmRequestCount += 1;
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['decision'], 'approve');
+            return http.Response(
+              jsonEncode({
+                'itemId': 'action-1',
+                'decision': 'approve',
+                'held': false,
+                'decisionId': 7,
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response(
+              jsonEncode({
+                'summary': {
+                  'headline': 'Follow-up scheduled.',
+                  'actionItems': [
+                    {
+                      'itemId': 'action-1',
+                      'text': 'Refill prescription',
+                      'dueHint': 'this week',
+                      'needsConfirmation': true,
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording')) {
+            return http.Response('', 404);
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-pending-items',
+            recipientName: 'Pat Doe',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(find.text('Items to confirm'), findsOneWidget);
+      expect(find.textContaining('Refill prescription'), findsOneWidget);
+      expect(
+        find.byKey(const Key('pending-summary-item-action-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
+      await _pumpLoaded(tester);
+
+      expect(confirmRequestCount, 1);
+      expect(find.text('Item approved.'), findsOneWidget);
+      expect(find.text('Items to confirm'), findsNothing);
+    });
+
+    testWidgets(
+        'FR-SUM-4 shows clinician-review snackbar when item is held',
+        (tester) async {
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/confirm')) {
+            return http.Response(
+              jsonEncode({
+                'itemId': 'care-1',
+                'decision': null,
+                'held': true,
+                'heldItemId': '11111111-1111-1111-1111-111111111111',
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response(
+              jsonEncode({
+                'summary': {
+                  'careInstructions': [
+                    {
+                      'itemId': 'care-1',
+                      'text': 'Increase metformin dose',
+                      'type': 'medication',
+                      'needsConfirmation': true,
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording')) {
+            return http.Response('', 404);
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-held-item',
+            recipientName: 'Pat Doe',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(
+        find.byKey(const Key('pending-summary-item-care-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
+      await _pumpLoaded(tester);
+
+      expect(
+        find.text('Sent for clinician review before it can be confirmed.'),
+        findsOneWidget,
+      );
+      // Held items keep needsConfirmation true, so the card stays visible.
+      expect(
+        find.byKey(const Key('pending-summary-item-care-1')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('SENT-CLIP-004 timeline tap loads clip when playback is ready',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      var playbackFetchCount = 0;
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'READY',
+                'durationSeconds': 305,
+                'startedAt': '2026-03-12T15:00:00Z',
+                'playbackReady': true,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          if (path.contains('/recording/playback-url')) {
+            playbackFetchCount += 1;
+            return http.Response(
+              jsonEncode({
+                'playbackUrl': 'https://example.com/recording.mp4',
+                'recordingStartedAt': '2026-03-12T15:00:00Z',
+                'expiresInMinutes': 15,
+                'playbackReady': true,
+              }),
+              200,
+            );
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-clip-ready',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(playbackFetchCount, 1);
+      expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
+      expect(find.text(kSentimentClipRecordingStatusAvailable), findsOneWidget);
+      expect(find.text(kSentimentChartDotTapHintWithVideo), findsOneWidget);
+      expect(find.textContaining('Selected sample:'), findsOneWidget);
+
+      await _tapTimelineNearSecondVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(playbackFetchCount, 1);
+      expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
+    });
+
+    testWidgets('dismiss button hides sentiment clip panel and clears selection',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'READY',
+                'playbackReady': true,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          if (path.contains('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'playbackUrl': 'https://example.com/recording.mp4',
+                'recordingStartedAt': '2026-03-12T15:00:00Z',
+                'playbackReady': true,
+              }),
+              200,
+            );
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-clip-dismiss',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
+      expect(find.textContaining('Selected sample:'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('dismiss_sentiment_clip')));
+      await tester.pump();
+
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+      expect(find.text('Sentiment clip'), findsNothing);
+      expect(find.textContaining('Selected sample:'), findsNothing);
+    });
+
+    testWidgets('selected sample dismiss clears dot without clip panel',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'PROCESSING',
+                'playbackReady': false,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-deselect-only',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.textContaining('Selected sample:'), findsOneWidget);
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+
+      await tester.tap(find.byKey(const Key('dismiss_sentiment_selection')));
+      await tester.pump();
+
+      expect(find.textContaining('Selected sample:'), findsNothing);
+    });
+
+    testWidgets('SENT-CLIP-007 playback fetch failure shows SnackBar on dot tap',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'READY',
+                'durationSeconds': 305,
+                'startedAt': '2026-03-12T15:00:00Z',
+                'playbackReady': true,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          if (path.contains('/recording/playback-url')) {
+            return http.Response('', 500);
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-clip-fail',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+      expect(find.text(kSentimentClipLoadFailedSnackBar), findsOneWidget);
+    });
+
+    testWidgets('SENT-CLIP-006 pending recording shows SnackBar on dot tap',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'PROCESSING',
+                'durationSeconds': 305,
+                'startedAt': '2026-03-12T15:00:00Z',
+                'playbackReady': false,
+                'initiatedByUserId': 42,
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/recording/playback-url')) {
+            fail('playback-url should not be fetched when playbackReady is false');
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-clip-pending',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(find.text(kSentimentClipRecordingStatusProcessing), findsOneWidget);
+      expect(find.text(kSentimentChartDotTapHintProcessing), findsOneWidget);
+
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+      expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsOneWidget);
+    });
+
+    testWidgets('SENT-CLIP-005 system-only tap is silent with unavailable status',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return _richTelemetryResponse();
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response('', 404);
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording') &&
+              !path.endsWith('/recording/playback-url')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'STOPPED',
+                'concatenationStatus': 'READY',
+                'playbackReady': false,
+                'initiatedByUserId': null,
+              }),
+              200,
+            );
+          }
+          if (path.contains('/recording/playback-url')) {
+            fail('playback-url should not be fetched for system-only recording');
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-system-only',
+            recipientName: 'Sam Patient',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(find.text(kSentimentClipRecordingStatusUnavailable), findsOneWidget);
+      expect(find.text(kSentimentChartDotTapHintTranscriptOnly), findsOneWidget);
+
+      await _tapTimelineNearFirstVoiceSample(tester);
+      await _pumpClipLoaded(tester);
+
+      expect(find.byType(SentimentClipPlayerWidget), findsNothing);
+      expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsNothing);
     });
   });
 }

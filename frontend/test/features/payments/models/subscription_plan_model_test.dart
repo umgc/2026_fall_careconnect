@@ -2,6 +2,7 @@
 // (lib/features/payments/models/subscription_plan_model.dart).
 // Pure-Dart model with fromJson, toJson, and computed getters.
 
+import 'package:care_connect_app/l10n/app_localizations_en.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/payments/models/subscription_plan_model.dart';
 
@@ -103,14 +104,16 @@ void main() {
   });
 
   group('SubscriptionPlan.description', () {
-    test('returns customDescription when set', () {
+    testWidgets('returns customDescription when set', (tester) async {
       // Verifies the customDescription takes precedence.
       final plan = SubscriptionPlan(
         id: 'p1', active: true, amount: 0, currency: 'usd',
         interval: 'month', intervalCount: 1, product: 'pr',
         nickname: 'Standard Plan', customDescription: 'My custom description',
       );
-      expect(plan.description, 'My custom description');
+      final t = AppLocalizationsEn();
+
+      expect(plan.description(t), 'My custom description');
     });
 
     test('returns standard description for standard nickname', () {
@@ -120,7 +123,9 @@ void main() {
         interval: 'month', intervalCount: 1, product: 'pr',
         nickname: 'Standard Plan',
       );
-      expect(plan.description, contains('Basic features'));
+      final t = AppLocalizationsEn();
+
+      expect(plan.description(t), contains('Basic features'));
     });
 
     test('returns premium description for premium nickname', () {
@@ -130,7 +135,9 @@ void main() {
         interval: 'month', intervalCount: 1, product: 'pr',
         nickname: 'Premium Plan',
       );
-      expect(plan.description, contains('video calls'));
+      final t = AppLocalizationsEn();
+
+      expect(plan.description(t), contains('video calls'));
     });
 
     test('returns default description for unrecognized nickname', () {
@@ -140,7 +147,9 @@ void main() {
         interval: 'month', intervalCount: 1, product: 'pr',
         nickname: 'Enterprise XL',
       );
-      expect(plan.description, contains('CareConnect services'));
+      final t = AppLocalizationsEn();
+
+      expect(plan.description(t), contains('CareConnect services'));
     });
   });
 
@@ -150,7 +159,9 @@ void main() {
         id: 'p', active: true, amount: 0, currency: 'usd',
         interval: 'year', intervalCount: 1, product: 'pr', nickname: 'N',
       );
-      expect(plan.formattedInterval, 'yearly');
+      final t = AppLocalizationsEn();
+
+      expect(plan.formattedInterval(t), 'yearly');
     });
 
     test('returns monthly for month interval', () {
@@ -158,7 +169,9 @@ void main() {
         id: 'p', active: true, amount: 0, currency: 'usd',
         interval: 'month', intervalCount: 1, product: 'pr', nickname: 'N',
       );
-      expect(plan.formattedInterval, 'monthly');
+      final t = AppLocalizationsEn();
+
+      expect(plan.formattedInterval(t), 'monthly');
     });
   });
 }

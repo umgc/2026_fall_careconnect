@@ -169,4 +169,57 @@ class EvvSubmissionServiceTest {
         verify(client1, never()).submit(any());
         verify(audit, never()).log(eq(record), any(), eq("SUBMITTED"), any());
     }
+
+    // ─── buildLocationDetails (private helper) ────────────────────────────────
+    // Existing tests above only ever exercise this with every location field
+    // null; drive every lat-only/lng-only combination directly via reflection.
+
+    private Map<String, Object> invokeBuildLocationDetails(EvvRecord record) throws Exception {
+        java.lang.reflect.Method m =
+                EvvSubmissionService.class.getDeclaredMethod("buildLocationDetails", EvvRecord.class);
+        m.setAccessible(true);
+        return (Map<String, Object>) m.invoke(service, record);
+    }
+
+    @Test
+    void buildLocationDetails_legacyLatOnly_includesLegacyFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).locationLat(38.9).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("locationLat");
+    }
+
+    @Test
+    void buildLocationDetails_legacyLngOnly_includesLegacyFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).locationLng(-77.0).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("locationLng");
+    }
+
+    @Test
+    void buildLocationDetails_checkinLatOnly_includesCheckinFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkinLocationLat(38.9).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkinLocationLat");
+    }
+
+    @Test
+    void buildLocationDetails_checkinLngOnly_includesCheckinFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkinLocationLng(-77.0).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkinLocationLng");
+    }
+
+    @Test
+    void buildLocationDetails_checkoutLatOnly_includesCheckoutFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkoutLocationLat(38.9).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkoutLocationLat");
+    }
+
+    @Test
+    void buildLocationDetails_checkoutLngOnly_includesCheckoutFields() throws Exception {
+        final EvvRecord record = EvvRecord.builder().id(1L).checkoutLocationLng(-77.0).build();
+
+        assertThat(invokeBuildLocationDetails(record)).containsKey("checkoutLocationLng");
+    }
 }

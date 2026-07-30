@@ -1,11 +1,15 @@
 package com.careconnect.service;
 
 import com.careconnect.dto.FileUploadResponse;
+import com.careconnect.dto.StructuredDocumentEntryDTO;
+import com.careconnect.dto.StructuredEntryRequest;
 import com.careconnect.dto.UserFileDTO;
 import com.careconnect.model.Patient;
+import com.careconnect.model.StructuredDocumentEntry;
 import com.careconnect.model.User;
 import com.careconnect.model.UserFile;
 import com.careconnect.repository.PatientRepository;
+import com.careconnect.repository.StructuredDocumentEntryRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +20,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,10 +30,16 @@ import static org.mockito.Mockito.*;
 class FileManagementServiceTest {
 
     @Mock private UserFileRepository userFileRepository;
+    @Mock private StructuredDocumentEntryRepository structuredEntryRepository;
     @Mock private UserRepository userRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private DatabaseStorageService databaseStorageService;
+    @Mock private DocumentComplianceService documentComplianceService;
+    @Mock private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
+    @Mock private com.careconnect.service.ai.indexing.RetrievalIndexService retrievalIndexService;
+    @Mock private DocumentProcessingService documentProcessingService;
     @Mock private S3StorageService s3StorageService;
+    @Mock private com.careconnect.service.ai.ask.AskAiDocumentOcrService askAiDocumentOcrService;
     @Mock private MultipartFile multipartFile;
 
     private FileManagementService fileManagementService;
@@ -40,8 +51,8 @@ class FileManagementServiceTest {
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
         fileManagementService = new FileManagementService(
-                userFileRepository, userRepository, patientRepository,
-                databaseStorageService, s3StorageService);
+                userFileRepository, structuredEntryRepository, userRepository, patientRepository,
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, s3StorageService, askAiDocumentOcrService);
         ReflectionTestUtils.setField(fileManagementService, "defaultStorageType", "database");
         ReflectionTestUtils.setField(fileManagementService, "useS3ForNewFiles", false);
 
@@ -134,8 +145,8 @@ class FileManagementServiceTest {
     @DisplayName("uploadFile - S3 enabled but null s3Service - falls back to database")
     void uploadFile_s3EnabledNullService_fallsBackToDatabase() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
-                userFileRepository, userRepository, patientRepository,
-                databaseStorageService, null);
+                userFileRepository, structuredEntryRepository, userRepository, patientRepository,
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null, askAiDocumentOcrService);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", true);
 
@@ -361,8 +372,8 @@ class FileManagementServiceTest {
     @DisplayName("getFile - S3 file with null s3Service - returns unavailable URL")
     void getFile_s3FileNullS3Service_returnsUnavailableUrl() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
-                userFileRepository, userRepository, patientRepository,
-                databaseStorageService, null);
+                userFileRepository, structuredEntryRepository, userRepository, patientRepository,
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null, askAiDocumentOcrService);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -405,8 +416,8 @@ class FileManagementServiceTest {
     @DisplayName("downloadFile - S3 file with null S3 service - throws RuntimeException")
     void downloadFile_s3FileNullS3Service_throwsRuntimeException() throws Exception {
         final FileManagementService serviceNoS3 = new FileManagementService(
-                userFileRepository, userRepository, patientRepository,
-                databaseStorageService, null);
+                userFileRepository, structuredEntryRepository, userRepository, patientRepository,
+                databaseStorageService, documentComplianceService, indexingEventEmitter, retrievalIndexService, documentProcessingService, null, askAiDocumentOcrService);
         ReflectionTestUtils.setField(serviceNoS3, "defaultStorageType", "database");
         ReflectionTestUtils.setField(serviceNoS3, "useS3ForNewFiles", false);
 
@@ -542,13 +553,15 @@ class FileManagementServiceTest {
     // deleteFile tests
 
     @Test
-    @DisplayName("deleteFile - existing file - soft deletes file")
+    @DisplayName("deleteFile - existing file - soft deletes file and de-indexes")
     void deleteFile_existingFile_softDeletesFile() throws Exception {
         when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
 
         fileManagementService.deleteFile(10L, 1L);
 
         assertFalse(userFile.getIsActive());
+        verify(retrievalIndexService).removeIndexedSource(
+                1L, "10", com.careconnect.service.ai.retrieval.RetrievalRecordType.UPLOADED_DOCUMENT);
         verify(userFileRepository).save(userFile);
     }
 
@@ -690,14 +703,493 @@ class FileManagementServiceTest {
     }
 
     @Test
-    @DisplayName("listUserFiles - unknown category - maps to OTHER_DOCUMENT")
-    void listUserFiles_unknownCategory_mapsToOtherDocument() throws Exception {
-        when(userFileRepository.findByOwnerIdAndOwnerTypeAndFileCategoryAndIsActiveTrue(
-                1L, UserFile.OwnerType.PATIENT, UserFile.FileCategory.OTHER_DOCUMENT))
-                .thenReturn(List.of());
+    @DisplayName("listUserFiles - unknown category - throws IllegalArgumentException")
+    void listUserFiles_unknownCategory_throwsIllegalArgument() throws Exception {
+        // Since the typed category alignment (#152), fromClientValue rejects
+        // unknown values instead of silently defaulting to OTHER_DOCUMENT.
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.listUserFiles(1L, "PATIENT", "RANDOM"));
+        assertTrue(ex.getMessage().contains("Invalid file category"));
+    }
 
-        final List<UserFileDTO> result = fileManagementService.listUserFiles(1L, "PATIENT", "RANDOM");
+    // Structured form entry tests
 
-        assertTrue(result.isEmpty());
+    private UserFile intakeFile() {
+        return UserFile.builder()
+                .id(20L)
+                .filename("caregiver_2_certification_123.pdf")
+                .originalFilename("cpr-card.pdf")
+                .contentType("application/pdf")
+                .fileSize(2048L)
+                .ownerId(2L)
+                .ownerType(UserFile.OwnerType.CAREGIVER)
+                .fileCategory(UserFile.FileCategory.CERTIFICATION)
+                .storageType(UserFile.StorageType.DATABASE)
+                .isActive(true)
+                .build();
+    }
+
+    private Map<String, String> certificationFields() {
+        return Map.of(
+                "certificationName", "CPR / First Aid",
+                "holderName", "Jane Doe",
+                "issuingAuthority", "Red Cross",
+                "issueDate", "2026-01-15");
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - valid request - saves entry linked to file")
+    void createStructuredEntry_validRequest_savesEntryLinkedToFile() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+        when(structuredEntryRepository.save(any(StructuredDocumentEntry.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        final StructuredDocumentEntryDTO result =
+                fileManagementService.createStructuredEntry(20L, request, 2L);
+
+        assertEquals(20L, result.getFileId());
+        assertEquals("CERTIFICATION", result.getDocumentType());
+        assertEquals(2L, result.getEmployeeUserId());
+        assertEquals("cpr-card.pdf", result.getOriginalFilename());
+        assertEquals("CPR / First Aid", result.getFields().get("certificationName"));
+        verify(structuredEntryRepository).save(any(StructuredDocumentEntry.class));
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - no patient or employee context - throws")
+    void createStructuredEntry_noContext_throws() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .fields(certificationFields())
+                .build();
+
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        assertTrue(ex.getMessage().contains("patient or employee context"));
+        verify(structuredEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - missing required fields - throws with field names")
+    void createStructuredEntry_missingRequiredFields_throwsWithFieldNames() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(Map.of("certificationName", "CPR", "holderName", "  "))
+                .build();
+
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        assertTrue(ex.getMessage().contains("holderName"));
+        assertTrue(ex.getMessage().contains("issueDate"));
+        assertTrue(ex.getMessage().contains("issuingAuthority"));
+        verify(structuredEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - unsupported document type - throws")
+    void createStructuredEntry_unsupportedDocumentType_throws() {
+        final UserFile file = intakeFile();
+        file.setFileCategory(UserFile.FileCategory.LAB_RESULT);
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        assertTrue(ex.getMessage().contains("does not support structured entries"));
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - entry already exists for file - throws")
+    void createStructuredEntry_entryAlreadyExists_throws() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.of(StructuredDocumentEntry.builder().id(5L).userFileId(20L).build()));
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        assertTrue(ex.getMessage().contains("already exists"));
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - uploaded file missing - throws, preventing orphan records")
+    void createStructuredEntry_fileMissing_throwsPreventingOrphans() {
+        when(userFileRepository.findById(99L)).thenReturn(Optional.empty());
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(99L, request, 2L));
+        assertTrue(ex.getMessage().contains("File not found"));
+        verify(structuredEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - uploaded file soft-deleted - throws, preventing orphan records")
+    void createStructuredEntry_inactiveFile_throwsPreventingOrphans() {
+        final UserFile file = intakeFile();
+        file.setIsActive(false);
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        verify(structuredEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateStructuredEntry - valid request - re-validates and saves")
+    void updateStructuredEntry_validRequest_revalidatesAndSaves() {
+        final UserFile file = intakeFile();
+        final StructuredDocumentEntry existing = StructuredDocumentEntry.builder()
+                .id(5L)
+                .userFileId(20L)
+                .documentType(UserFile.FileCategory.CERTIFICATION)
+                .employeeUserId(2L)
+                .fieldsJson("{}")
+                .isActive(true)
+                .build();
+        when(structuredEntryRepository.findById(5L)).thenReturn(Optional.of(existing));
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.save(any(StructuredDocumentEntry.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .fields(certificationFields())
+                .build();
+
+        final StructuredDocumentEntryDTO result =
+                fileManagementService.updateStructuredEntry(5L, request);
+
+        assertEquals(20L, result.getFileId());
+        assertEquals(2L, result.getEmployeeUserId());
+        assertEquals("Red Cross", result.getFields().get("issuingAuthority"));
+    }
+
+    @Test
+    @DisplayName("updateStructuredEntry - missing required fields - throws")
+    void updateStructuredEntry_missingRequiredFields_throws() {
+        final StructuredDocumentEntry existing = StructuredDocumentEntry.builder()
+                .id(5L)
+                .userFileId(20L)
+                .documentType(UserFile.FileCategory.CERTIFICATION)
+                .employeeUserId(2L)
+                .fieldsJson("{}")
+                .isActive(true)
+                .build();
+        when(structuredEntryRepository.findById(5L)).thenReturn(Optional.of(existing));
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(intakeFile()));
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .fields(Map.of())
+                .build();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.updateStructuredEntry(5L, request));
+        verify(structuredEntryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateStructuredEntry - keeps the original file association intact")
+    void updateStructuredEntry_preservesFileAssociation() {
+        final StructuredDocumentEntry existing = StructuredDocumentEntry.builder()
+                .id(5L)
+                .userFileId(20L)
+                .documentType(UserFile.FileCategory.CERTIFICATION)
+                .employeeUserId(2L)
+                .fieldsJson("{}")
+                .isActive(true)
+                .build();
+        when(structuredEntryRepository.findById(5L)).thenReturn(Optional.of(existing));
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(intakeFile()));
+        when(structuredEntryRepository.save(any(StructuredDocumentEntry.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .fields(certificationFields())
+                .build();
+
+        final StructuredDocumentEntryDTO result =
+                fileManagementService.updateStructuredEntry(5L, request);
+
+        final ArgumentCaptor<StructuredDocumentEntry> saved =
+                ArgumentCaptor.forClass(StructuredDocumentEntry.class);
+        verify(structuredEntryRepository).save(saved.capture());
+        assertEquals(20L, saved.getValue().getUserFileId());
+        assertEquals(20L, result.getFileId());
+        assertEquals("cpr-card.pdf", result.getOriginalFilename());
+    }
+
+    @Test
+    @DisplayName("getStructuredEntryForFile - entry exists - returns DTO with linked file")
+    void getStructuredEntryForFile_entryExists_returnsDTOWithLinkedFile() {
+        final StructuredDocumentEntry existing = StructuredDocumentEntry.builder()
+                .id(5L)
+                .userFileId(20L)
+                .documentType(UserFile.FileCategory.CERTIFICATION)
+                .employeeUserId(2L)
+                .fieldsJson("{\"certificationName\":\"CPR\"}")
+                .isActive(true)
+                .build();
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.of(existing));
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(intakeFile()));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final Optional<StructuredDocumentEntryDTO> result =
+                fileManagementService.getStructuredEntryForFile(20L);
+
+        assertTrue(result.isPresent());
+        assertEquals("cpr-card.pdf", result.get().getOriginalFilename());
+        assertEquals("CPR", result.get().getFields().get("certificationName"));
+    }
+
+    @Test
+    @DisplayName("getStructuredEntryForFile - no entry - returns empty")
+    void getStructuredEntryForFile_noEntry_returnsEmpty() {
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+
+        assertTrue(fileManagementService.getStructuredEntryForFile(20L).isEmpty());
+    }
+
+    // Compliance tracking hooks
+
+    @Test
+    @DisplayName("uploadFile - notifies compliance tracking with the saved file and uploader")
+    void uploadFile_notifiesComplianceTracking() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(1024L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("report.pdf");
+        when(databaseStorageService.uploadFile(any(), anyLong(), anyString(), anyString()))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenReturn(userFile);
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+
+        fileManagementService.uploadFile(multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "desc", 1L);
+
+        verify(documentComplianceService).recordDocumentUploaded(userFile, 1L);
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - notifies compliance tracking with the saved entry")
+    void createStructuredEntry_notifiesComplianceTracking() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+        when(structuredEntryRepository.save(any(StructuredDocumentEntry.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/20");
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(certificationFields())
+                .build();
+
+        fileManagementService.createStructuredEntry(20L, request, 2L);
+
+        verify(documentComplianceService)
+                .recordStructuredEntrySaved(any(StructuredDocumentEntry.class), eq(file), eq(2L));
+    }
+
+    @Test
+    @DisplayName("createStructuredEntry - validation failure - compliance tracking is never notified")
+    void createStructuredEntry_validationFails_complianceNotNotified() {
+        final UserFile file = intakeFile();
+        when(userFileRepository.findById(20L)).thenReturn(Optional.of(file));
+        when(structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(20L))
+                .thenReturn(Optional.empty());
+
+        final StructuredEntryRequest request = StructuredEntryRequest.builder()
+                .employeeUserId(2L)
+                .fields(Map.of())
+                .build();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> fileManagementService.createStructuredEntry(20L, request, 2L));
+        verify(documentComplianceService, never()).recordStructuredEntrySaved(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("isExtractFailurePlaceholder - keeps citation-like text starting with [")
+    void isExtractFailurePlaceholder_keepsLegitimateBracketText() {
+        assertFalse(FileManagementService.isExtractFailurePlaceholder(
+                "[1] Patient was advised to continue metformin."));
+        assertTrue(FileManagementService.isExtractFailurePlaceholder(
+                "[Error extracting PDF content: boom]"));
+        assertTrue(FileManagementService.isExtractFailurePlaceholder(
+                "[Unable to extract text from: scan.png]"));
+        assertTrue(FileManagementService.isExtractFailurePlaceholder("   "));
+    }
+
+    @Test
+    @DisplayName("indexableDocumentText - prefers extracted body and merges description")
+    void indexableDocumentText_mergesDescriptionAndExtracted() {
+        final UserFile file = UserFile.builder()
+                .description("Discharge summary")
+                .extractedText("Continue current medications as prescribed.")
+                .build();
+        assertEquals(
+                "Discharge summary\n\nContinue current medications as prescribed.",
+                FileManagementService.indexableDocumentText(file));
+    }
+
+    @Test
+    @DisplayName("uploadFile - empty local extract enqueues async Ask AI OCR")
+    void uploadFile_emptyExtract_enqueuesAsyncOcr() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(2048L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("scan.pdf");
+        when(multipartFile.getBytes()).thenReturn(new byte[] {1, 2, 3, 4});
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+        when(documentProcessingService.extractTextContent(any()))
+                .thenReturn("[Unable to extract text from: scan.pdf]");
+
+        final FileUploadResponse result = fileManagementService.uploadFile(
+                multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "Scan", 1L);
+
+        assertNotNull(result);
+        verify(askAiDocumentOcrService).enqueueAfterFailedExtract(eq(userFile));
+    }
+
+    @Test
+    @DisplayName("uploadFile - local extract success does not enqueue OCR")
+    void uploadFile_localExtractSucceeds_skipsOcrEnqueue() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(1024L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("report.pdf");
+        when(multipartFile.getBytes()).thenReturn("pdf-bytes".getBytes());
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+        when(documentProcessingService.extractTextContent(any()))
+                .thenReturn("Native PDF text body");
+
+        fileManagementService.uploadFile(
+                multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "desc", 1L);
+
+        verify(askAiDocumentOcrService, never()).enqueueAfterFailedExtract(any());
+    }
+
+    @Test
+    @DisplayName("uploadFile - extract exception still enqueues OCR when bytes readable")
+    void uploadFile_extractThrows_enqueuesOcr() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(2048L);
+        when(multipartFile.getContentType()).thenReturn("image/png");
+        when(multipartFile.getOriginalFilename()).thenReturn("scan.png");
+        when(multipartFile.getBytes()).thenReturn(new byte[] {1, 2, 3});
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        userFile.setContentType("image/png");
+        userFile.setOriginalFilename("scan.png");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+        when(documentProcessingService.extractTextContent(any()))
+                .thenThrow(new RuntimeException("parser boom"));
+
+        fileManagementService.uploadFile(multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "Scan", 1L);
+
+        verify(askAiDocumentOcrService).enqueueAfterFailedExtract(eq(userFile));
+    }
+
+    @Test
+    @DisplayName("uploadFile - extract getBytes failure still enqueues OCR after commit path")
+    void uploadFile_extractAndBytesFail_stillSucceeds() throws Exception {
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getSize()).thenReturn(2048L);
+        when(multipartFile.getContentType()).thenReturn("application/pdf");
+        when(multipartFile.getOriginalFilename()).thenReturn("scan.pdf");
+        when(multipartFile.getBytes()).thenThrow(new java.io.IOException("read failed"));
+        when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
+                .thenReturn("db://files/10");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(databaseStorageService.getFileUrl(anyString())).thenReturn("http://localhost/files/10");
+
+        final FileUploadResponse result = fileManagementService.uploadFile(
+                multipartFile, 1L, "PATIENT", "MEDICAL_RECORD", "Scan", 1L);
+
+        assertNotNull(result);
+        // Enqueue is best-effort after extract failure; OCR worker reloads bytes from storage.
+        verify(askAiDocumentOcrService).enqueueAfterFailedExtract(eq(userFile));
+    }
+
+    @Test
+    @DisplayName("tryExtractAndPersistText - null guards are no-ops")
+    void tryExtractAndPersistText_nullGuards() {
+        ReflectionTestUtils.invokeMethod(
+                fileManagementService, "tryExtractAndPersistText", null, multipartFile);
+        ReflectionTestUtils.invokeMethod(
+                fileManagementService, "tryExtractAndPersistText", userFile, null);
+        verify(askAiDocumentOcrService, never()).enqueueAfterFailedExtract(any());
+    }
+
+    @Test
+    @DisplayName("indexableDocumentText - extracted only and description only")
+    void indexableDocumentText_singleFieldFallbacks() {
+        final UserFile extractedOnly = UserFile.builder()
+                .extractedText("Body only")
+                .build();
+        assertEquals("Body only", FileManagementService.indexableDocumentText(extractedOnly));
+
+        final UserFile descriptionOnly = UserFile.builder()
+                .description("Desc only")
+                .build();
+        assertEquals("Desc only", FileManagementService.indexableDocumentText(descriptionOnly));
+
+        assertNull(FileManagementService.indexableDocumentText(UserFile.builder().build()));
     }
 }
+
+

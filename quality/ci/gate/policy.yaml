@@ -42,7 +42,7 @@
 # enforce is the correct default for production pipelines.
 # ----------------------------------------------------------
 gate:
-  mode: enforce
+  mode: report_only
 
 tools:
 

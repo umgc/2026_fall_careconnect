@@ -1,9 +1,66 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../config/environment_config.dart';
 import '../services/call_notification_service.dart';
+import 'transcript_outbox/encrypted_transcript_outbox.dart';
+import 'transcript_outbox/pending_transcript_segment.dart';
+import 'transcript_outbox/transcript_retry_worker.dart';
+import 'transcript_outbox/transcript_upload.dart';
+
+@visibleForTesting
+String truncateToUnicodeCodePoints(String value, int maxCodePoints) {
+  if (maxCodePoints < 0) {
+    throw ArgumentError.value(maxCodePoints, 'maxCodePoints');
+  }
+  final runes = value.runes;
+  if (runes.length <= maxCodePoints) {
+    return value;
+  }
+  return String.fromCharCodes(runes.take(maxCodePoints));
+}
+
+/// Resolves the one patient User ID that owns a durable outgoing call.
+String resolveCallSessionPatientUserId({
+  required String currentUserId,
+  required String currentRole,
+  required String recipientId,
+  String? recipientRole,
+  String? callKind,
+  Iterable<int>? contextPatientUserIds,
+}) {
+  final normalizedCurrentRole = currentRole.trim().toUpperCase();
+  if (normalizedCurrentRole == 'PATIENT') return currentUserId;
+
+  final normalizedRecipientRole = (recipientRole ?? '').trim().toUpperCase();
+  if (normalizedRecipientRole == 'PATIENT') return recipientId;
+
+  if (normalizedCurrentRole == 'CAREGIVER' &&
+      normalizedRecipientRole.isEmpty &&
+      (callKind ?? 'GENERAL').trim().toUpperCase() != 'CARE_TEAM') {
+    return recipientId;
+  }
+
+  final contextIds =
+      (contextPatientUserIds ?? const <int>[]).where((id) => id > 0).toSet();
+  if (contextIds.length == 1) return contextIds.single.toString();
+  throw StateError(
+    'Select one patient before starting this care-team call.',
+  );
+}
+
+@visibleForTesting
+bool isEventForActiveCall(String? activeCallId, Map<String, dynamic> event) {
+  final eventCallId = (event['callId'] ?? '').toString().trim();
+  return activeCallId != null &&
+      activeCallId.isNotEmpty &&
+      eventCallId.isNotEmpty &&
+      eventCallId == activeCallId;
+}
 
 /// VideoCallService — AWS Chime SDK video call implementation.
 ///
@@ -22,20 +79,29 @@ import '../services/call_notification_service.dart';
 /// pointing to the Chime meeting URL, which works on both mobile and web.
 class VideoCallService {
   static const Duration _sentimentStaleThreshold = Duration(seconds: 45);
-  static const int _maxBufferedTranscriptSegments = 120;
   static const int _maxTranscriptChars = 1200;
-  static const Duration _transcriptFlushInterval = Duration(seconds: 4);
   static final Set<String> _completedCallIds = <String>{};
+
+  VideoCallService({
+    TranscriptOutbox? transcriptOutbox,
+    TranscriptSegmentUploader? transcriptUploader,
+    Stream<bool>? connectivityChanges,
+  })  : _transcriptOutbox = transcriptOutbox,
+        _transcriptUploader =
+            transcriptUploader ?? HttpTranscriptSegmentUploader(),
+        _connectivityChanges = connectivityChanges;
 
   bool _isInitialized = false;
   bool _isInCall = false;
   bool _isPatientSentimentSource = false;
   String? _currentCallId;
   String? _otherPartyId;
+  final Set<String> _participantUserIds = <String>{};
   Map<String, dynamic>? _callContextMetadata;
   String? _jwtToken;
   DateTime? _callStartedAt;
   int _lastTranscriptEndMs = 0;
+  String? _currentUserId;
 
   // Chime meeting credentials returned by the backend
   Map<String, dynamic>? _meetingCredentials;
@@ -44,12 +110,16 @@ class VideoCallService {
   VoidCallback? _onCallEnded;
   Function(Map<String, dynamic>)? _onSentimentUpdate;
   Function(Map<String, dynamic>)? _onCallDeclined;
+  Function(Map<String, dynamic>)? _onRecordingState;
 
   // Sentiment posting timer — sends analysis data every 15 seconds
   Timer? _sentimentTimer;
-  Timer? _transcriptFlushTimer;
-  bool _transcriptFlushInProgress = false;
-  final List<_BufferedTranscriptSegment> _pendingTranscriptSegments = [];
+  TranscriptOutbox? _transcriptOutbox;
+  final TranscriptSegmentUploader _transcriptUploader;
+  final Stream<bool>? _connectivityChanges;
+  TranscriptRetryWorker? _transcriptRetryWorker;
+  bool _ownsTranscriptOutbox = false;
+  int _pendingTranscriptCount = 0;
 
   // Stream for sentiment updates received via WebSocket
   StreamSubscription? _wsSubscription;
@@ -68,22 +138,29 @@ class VideoCallService {
     VoidCallback? onCallEnded,
     Function(Map<String, dynamic>)? onSentimentUpdate,
     Function(Map<String, dynamic>)? onCallDeclined,
+    Function(Map<String, dynamic>)? onRecordingState,
   }) async {
+    _currentUserId = userId.trim();
     _jwtToken = jwtToken;
     _onCallEnded = onCallEnded;
     _onSentimentUpdate = onSentimentUpdate;
     _onCallDeclined = onCallDeclined;
+    _onRecordingState = onRecordingState;
     _isPatientSentimentSource = enablePatientSentimentCapture;
     _isInitialized = true;
+    await _initializeTranscriptOutbox();
 
     // Listen for sentiment updates pushed via WebSocket
     _wsSubscription = CallNotificationService.incomingCallStream.listen((data) {
       final type = data['type'] as String?;
+      final belongsToActiveCall = isEventForActiveCall(_currentCallId, data);
       if (type == 'sentiment-update' && _onSentimentUpdate != null) {
+        if (!belongsToActiveCall) return;
         final merged = _mergeSentimentUpdate(data);
         _onSentimentUpdate!(merged);
       }
       if (type == 'sentiment-channel-state' && _onSentimentUpdate != null) {
+        if (!belongsToActiveCall) return;
         final merged = _mergeChannelStateEvent(data);
         _onSentimentUpdate!(merged);
       }
@@ -94,18 +171,53 @@ class VideoCallService {
           _onCallDeclined!(data);
         }
       }
-      if (type == 'call-ended') {
-        _handleRemoteCallEnd();
+      if (type == 'call-ended' || type == 'call-ending') {
+        if (!belongsToActiveCall) return;
+        unawaited(_handleRemoteCallEnd());
+      }
+      if (type == 'recording-state') {
+        if (!belongsToActiveCall) return;
+        _onRecordingState?.call(data);
       }
     });
 
-    debugPrint('✅ VideoCallService initialized for user: $userId');
+    debugPrint('✅ VideoCallService initialized');
   }
 
   // ================================================================
   // JOIN CALL
   // Both initiator and recipient call this after call is accepted
   // ================================================================
+
+  /// Creates the durable authorization record before an initiator joins Chime.
+  Future<void> createCallSession({
+    required String callId,
+    required String patientUserId,
+    required String inviteeUserId,
+    String? scheduledVisitId,
+  }) async {
+    if (!_isInitialized) throw Exception('VideoCallService not initialized');
+    final response = await http.post(
+      Uri.parse('${EnvironmentConfig.baseUrl}/api/v3/calls/sessions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_jwtToken',
+      },
+      body: jsonEncode({
+        'callId': callId.trim(),
+        'patientUserId': patientUserId.trim(),
+        'inviteeUserId': inviteeUserId.trim(),
+        if (scheduledVisitId != null && scheduledVisitId.trim().isNotEmpty)
+          'scheduledVisitId': scheduledVisitId.trim(),
+      }),
+    );
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception(_safeCallFailure(
+        operation: 'create the call session',
+        statusCode: response.statusCode,
+      ));
+    }
+  }
 
   Future<ChimeCallSession> joinCall({
     required String callId,
@@ -122,6 +234,8 @@ class VideoCallService {
 
     _currentCallId = normalizedCallId;
     _otherPartyId = otherPartyId;
+    _participantUserIds.clear();
+    trackParticipant(otherPartyId);
     _callContextMetadata = callContextMetadata == null
         ? null
         : Map<String, dynamic>.from(callContextMetadata);
@@ -129,19 +243,18 @@ class VideoCallService {
     _callStartedAt = DateTime.now();
     _lastTranscriptEndMs = 0;
     _aggregatedSentiment.clear();
-    _pendingTranscriptSegments.clear();
     _seedAwaitingSentimentState();
-    _startTranscriptFlushTimer();
 
     debugPrint('📹 Joining Chime call: $normalizedCallId');
 
     try {
       final requestBody =
           (_callContextMetadata == null || _callContextMetadata!.isEmpty)
-          ? null
-          : jsonEncode(_callContextMetadata);
+              ? null
+              : jsonEncode(_callContextMetadata);
       final response = await http.post(
-        Uri.parse('${EnvironmentConfig.baseUrl}/api/v3/calls/$normalizedCallId/join'),
+        Uri.parse(
+            '${EnvironmentConfig.baseUrl}/api/v3/calls/$normalizedCallId/join'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_jwtToken',
@@ -150,9 +263,10 @@ class VideoCallService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to join call: ${response.statusCode} ${response.body}',
-        );
+        throw Exception(_safeCallFailure(
+          operation: 'join the call',
+          statusCode: response.statusCode,
+        ));
       }
 
       _meetingCredentials = jsonDecode(response.body) as Map<String, dynamic>;
@@ -178,7 +292,6 @@ class VideoCallService {
       _callStartedAt = null;
       _lastTranscriptEndMs = 0;
       _callContextMetadata = null;
-      _stopTranscriptFlushTimer();
       debugPrint('❌ Failed to join Chime call: $e');
       rethrow;
     }
@@ -198,14 +311,9 @@ class VideoCallService {
     debugPrint('📴 Ending call: $callId');
 
     _sentimentTimer?.cancel();
-    await _flushPendingTranscriptSegments(
-      callIdOverride: callId,
-      maxAttempts: 3,
-      respectInCallState: false,
-    );
-    _stopTranscriptFlushTimer();
+    await _wakeTranscriptWorker(force: true);
 
-    String endStatus = 'ended';
+    String? endStatus;
 
     try {
       final response = await http.post(
@@ -216,12 +324,15 @@ class VideoCallService {
         },
         body: jsonEncode({
           'otherPartyId': _otherPartyId,
+          if (_participantUserIds.isNotEmpty)
+            'participantUserIds': _participantUserIds.toList(),
           ...?_callContextMetadata,
         }),
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
-        endStatus = ((body['status'] as String?) ?? 'ended').trim().toLowerCase();
+        endStatus =
+            ((body['status'] as String?) ?? 'ended').trim().toLowerCase();
       } else {
         debugPrint(
           'Backend returned ${response.statusCode} while ending call: ${response.body}',
@@ -231,7 +342,12 @@ class VideoCallService {
       debugPrint('⚠️ Error notifying backend of call end: $e');
     }
 
-    _resetLocalCallState(callId: callId, markCompleted: endStatus == 'ended');
+    // Only fence rejoin after a successful terminal end response.
+    // 202 "processing" means termination is claimed server-side.
+    _resetLocalCallState(
+      callId: callId,
+      markCompleted: endStatus == 'ended' || endStatus == 'processing',
+    );
     _onCallEnded?.call();
   }
 
@@ -290,9 +406,7 @@ class VideoCallService {
     if (trimmed.isEmpty) {
       return false;
     }
-    if (trimmed.length > _maxTranscriptChars) {
-      trimmed = trimmed.substring(0, _maxTranscriptChars);
-    }
+    trimmed = truncateToUnicodeCodePoints(trimmed, _maxTranscriptChars);
     final resolvedEndMs = _resolveTranscriptEndMs(endMs);
     final resolvedStartMs =
         _resolveTranscriptStartMs(trimmed, startMs, resolvedEndMs);
@@ -300,20 +414,38 @@ class VideoCallService {
       _lastTranscriptEndMs = resolvedEndMs;
     }
 
-    _enqueueTranscriptSegment(
-      _BufferedTranscriptSegment(
-        callId: _currentCallId!,
-        speakerLabel: speakerLabel ?? 'PATIENT',
-        text: trimmed,
-        startMs: resolvedStartMs,
-        endMs: resolvedEndMs,
-        source: source ?? 'chime-transcript',
-      ),
+    final outbox = _transcriptOutbox;
+    if (outbox == null || _currentUserId == null) {
+      debugPrint('[CareConnect][Transcript] encrypted outbox unavailable');
+      return false;
+    }
+    final now = DateTime.now().toUtc();
+    final segment = PendingTranscriptSegment(
+      clientSegmentId: const Uuid().v4(),
+      ownerUserId: _currentUserId!,
+      callId: _currentCallId!,
+      speakerLabel: speakerLabel ?? 'PATIENT',
+      text: trimmed,
+      startMs: resolvedStartMs,
+      endMs: resolvedEndMs,
+      source: source ?? 'chime-transcript',
+      createdAt: now,
+      nextAttemptAt: now,
     );
+    try {
+      await outbox.add(segment);
+      _pendingTranscriptCount = (await outbox.all()).length;
+    } on TranscriptOutboxQuotaExceeded {
+      debugPrint('[CareConnect][Transcript] encrypted outbox quota exceeded');
+      return false;
+    } catch (_) {
+      debugPrint('[CareConnect][Transcript] encrypted outbox write failed');
+      return false;
+    }
     debugPrint(
-      '[CareConnect][Transcript] buffered len=${trimmed.length} queue=${_pendingTranscriptSegments.length}',
+      '[CareConnect][Transcript] segment persisted queue=$_pendingTranscriptCount',
     );
-    unawaited(_flushPendingTranscriptSegments());
+    unawaited(_wakeTranscriptWorker());
     return true;
   }
 
@@ -433,33 +565,12 @@ class VideoCallService {
   // PRIVATE
   // ================================================================
 
-  void _startSentimentTimer() {
-    _sentimentTimer?.cancel();
-  }
-
-  void _startTranscriptFlushTimer() {
-    _stopTranscriptFlushTimer();
-    _transcriptFlushTimer = Timer.periodic(_transcriptFlushInterval, (_) {
-      unawaited(_flushPendingTranscriptSegments());
-    });
-  }
-
-  void _stopTranscriptFlushTimer() {
-    _transcriptFlushTimer?.cancel();
-    _transcriptFlushTimer = null;
-  }
-
-  Future<void> _postCombinedSentiment() async {}
-
-  void _handleRemoteCallEnd() {
+  Future<void> _handleRemoteCallEnd() async {
     if (!_isInCall) return;
     debugPrint('📴 Remote party ended the call');
     final callId = _currentCallId;
-    unawaited(_flushPendingTranscriptSegments(
-      callIdOverride: callId,
-      maxAttempts: 2,
-      respectInCallState: false,
-    ));
+    _isInCall = false;
+    await _wakeTranscriptWorker(force: true);
     _resetLocalCallState(callId: callId, markCompleted: true);
     _onCallEnded?.call();
   }
@@ -469,105 +580,61 @@ class VideoCallService {
     required bool markCompleted,
   }) {
     _sentimentTimer?.cancel();
-    _stopTranscriptFlushTimer();
     _isInCall = false;
     _currentCallId = null;
     _otherPartyId = null;
+    _participantUserIds.clear();
     _callContextMetadata = null;
     _callStartedAt = null;
     _lastTranscriptEndMs = 0;
     _meetingCredentials = null;
     _aggregatedSentiment.clear();
-    _pendingTranscriptSegments.clear();
     final normalizedCallId = callId?.trim();
-    if (markCompleted && normalizedCallId != null && normalizedCallId.isNotEmpty) {
+    if (markCompleted &&
+        normalizedCallId != null &&
+        normalizedCallId.isNotEmpty) {
       _completedCallIds.add(normalizedCallId);
     }
     CallNotificationService.clearActiveCall(normalizedCallId);
   }
 
-  void _enqueueTranscriptSegment(_BufferedTranscriptSegment segment) {
-    _pendingTranscriptSegments.add(segment);
-    if (_pendingTranscriptSegments.length > _maxBufferedTranscriptSegments) {
-      _pendingTranscriptSegments.removeAt(0);
+  Future<void> _initializeTranscriptOutbox() async {
+    try {
+      if (_transcriptOutbox == null) {
+        // Bound init so Hive.initFlutter / path_provider hangs (e.g. in
+        // flutter_test) cannot block joining the call forever.
+        _transcriptOutbox = await EncryptedTranscriptOutbox.open(
+          ownerUserId: _currentUserId!,
+        ).timeout(const Duration(seconds: 3));
+        _ownsTranscriptOutbox = true;
+      }
+      _pendingTranscriptCount = (await _transcriptOutbox!.all()).length;
+      final connectivity = _connectivityChanges ??
+          (_ownsTranscriptOutbox
+              ? Connectivity().onConnectivityChanged.map(
+                    (results) => !results.contains(ConnectivityResult.none),
+                  )
+              : null);
+      _transcriptRetryWorker = TranscriptRetryWorker(
+        outbox: _transcriptOutbox!,
+        uploader: _transcriptUploader,
+        jwtToken: _jwtToken ?? '',
+        connectivityChanges: connectivity,
+      );
+      await _wakeTranscriptWorker();
+    } catch (_) {
+      _transcriptOutbox = null;
+      _transcriptRetryWorker = null;
+      debugPrint(
+          '[CareConnect][Transcript] encrypted outbox initialization failed');
     }
   }
 
-  Future<void> _flushPendingTranscriptSegments({
-    String? callIdOverride,
-    int maxAttempts = 1,
-    bool respectInCallState = true,
-  }) async {
-    if (_transcriptFlushInProgress) {
-      return;
-    }
-    if (_pendingTranscriptSegments.isEmpty) {
-      return;
-    }
-    if (_jwtToken == null || _jwtToken!.isEmpty) {
-      return;
-    }
-    if (respectInCallState && !_isInCall) {
-      return;
-    }
-
-    final activeCallId = callIdOverride ?? _currentCallId;
-    if (activeCallId == null || activeCallId.trim().isEmpty) {
-      return;
-    }
-
-    _transcriptFlushInProgress = true;
-    try {
-      var attempts = 0;
-      while (_pendingTranscriptSegments.isNotEmpty && attempts < maxAttempts) {
-        attempts += 1;
-        final segment = _pendingTranscriptSegments.first;
-        if (segment.callId != activeCallId) {
-          _pendingTranscriptSegments.removeAt(0);
-          continue;
-        }
-
-        try {
-          final response = await http
-              .post(
-                Uri.parse(
-                  '${EnvironmentConfig.baseUrl}/api/v3/calls/${segment.callId}/transcript/segments',
-                ),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer $_jwtToken',
-                },
-                body: jsonEncode({
-                  'speakerLabel': segment.speakerLabel,
-                  'text': segment.text,
-                  'startMs': segment.startMs,
-                  'endMs': segment.endMs,
-                  'source': segment.source,
-                }),
-              )
-              .timeout(const Duration(seconds: 8));
-
-          if (response.statusCode >= 200 && response.statusCode < 300) {
-            _pendingTranscriptSegments.removeAt(0);
-            attempts = 0;
-            continue;
-          }
-
-          debugPrint(
-            '⚠️ Transcript upload failed: status=${response.statusCode} callId=${segment.callId}',
-          );
-
-          if (response.statusCode == 400) {
-            _pendingTranscriptSegments.removeAt(0);
-            continue;
-          }
-          break;
-        } catch (_) {
-          break;
-        }
-      }
-    } finally {
-      _transcriptFlushInProgress = false;
+  Future<void> _wakeTranscriptWorker({bool force = false}) async {
+    await _transcriptRetryWorker?.wake(force: force);
+    final outbox = _transcriptOutbox;
+    if (outbox != null) {
+      _pendingTranscriptCount = (await outbox.all()).length;
     }
   }
 
@@ -586,8 +653,7 @@ class VideoCallService {
     }
 
     final channel = (payload['channel'] as String?)?.toLowerCase();
-    final hasPerChannelShape =
-        payload.containsKey('text') ||
+    final hasPerChannelShape = payload.containsKey('text') ||
         payload.containsKey('voice') ||
         payload.containsKey('video') ||
         payload.containsKey('overall');
@@ -645,9 +711,7 @@ class VideoCallService {
       score,
     );
 
-    final resolvedStatus = isQuiet
-        ? 'QUIET'
-        : (muted ? 'MUTED' : 'AWAITING');
+    final resolvedStatus = isQuiet ? 'QUIET' : (muted ? 'MUTED' : 'AWAITING');
     final resolvedNotes = (event['notes'] as String?)?.trim();
 
     _aggregatedSentiment[channel!] = {
@@ -688,8 +752,8 @@ class VideoCallService {
     for (final key in channels) {
       final channelData = _aggregatedSentiment[key];
       if (channelData is Map<String, dynamic>) {
-        final status = (channelData['status'] as String? ?? 'AWAITING')
-            .toUpperCase();
+        final status =
+            (channelData['status'] as String? ?? 'AWAITING').toUpperCase();
         if (status == 'DEGRADED') hasDegraded = true;
         if (status == 'AWAITING' || status == 'MUTED') hasAwaiting = true;
         if (status != 'COMPLETED') {
@@ -756,8 +820,8 @@ class VideoCallService {
     Map<String, dynamic> raw,
     DateTime now,
   ) {
-    final normalizedChannel = (raw['channel'] as String? ?? sectionKey)
-        .toLowerCase();
+    final normalizedChannel =
+        (raw['channel'] as String? ?? sectionKey).toLowerCase();
     final rawScore = (raw['score'] as num?)?.toDouble();
     final clampedScore = rawScore == null ? 0.5 : rawScore.clamp(0.0, 1.0);
 
@@ -767,17 +831,15 @@ class VideoCallService {
         raw['fallback'] == true || _isFallbackSentimentNotes(rawNotes);
     // If a scored sentiment sample is present, treat it as a completed update
     // even when it is marked as fallback, so the dashboard can render it.
-    final status =
-      rawStatus ?? (rawScore == null ? 'AWAITING' : 'COMPLETED');
+    final status = rawStatus ?? (rawScore == null ? 'AWAITING' : 'COMPLETED');
 
     final notes = rawNotes.isNotEmpty
         ? rawNotes
         : (status == 'AWAITING'
-              ? 'Awaiting $normalizedChannel sentiment sample.'
-              : 'Sentiment sample received.');
+            ? 'Awaiting $normalizedChannel sentiment sample.'
+            : 'Sentiment sample received.');
 
-    final updatedAt =
-        _parseEventTime(raw['updatedAt']) ??
+    final updatedAt = _parseEventTime(raw['updatedAt']) ??
         _parseEventTime(raw['timestamp']) ??
         now;
 
@@ -885,7 +947,8 @@ class VideoCallService {
     return resolved;
   }
 
-  int? _resolveTranscriptStartMs(String text, int? startMs, int? resolvedEndMs) {
+  int? _resolveTranscriptStartMs(
+      String text, int? startMs, int? resolvedEndMs) {
     if (startMs != null) {
       return startMs < 0 ? 0 : startMs;
     }
@@ -934,21 +997,51 @@ class VideoCallService {
     _isPatientSentimentSource = enabled;
   }
 
+  Future<void> updateTranscriptAuthentication(String jwtToken) async {
+    _jwtToken = jwtToken;
+    await _transcriptRetryWorker?.updateAuth(jwtToken);
+    await _wakeTranscriptWorker();
+  }
+
+  /// Records a user ID known to be in (or invited to) the active conference.
+  void trackParticipant(String userId) {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    _participantUserIds.add(normalized);
+  }
+
+  @visibleForTesting
+  Set<String> get participantUserIdsForTest =>
+      Set<String>.unmodifiable(_participantUserIds);
+
+  @visibleForTesting
+  int get pendingTranscriptSegmentCountForTest => _pendingTranscriptCount;
+
+  @visibleForTesting
+  Future<void> handleRemoteCallEndForTest() => _handleRemoteCallEnd();
+
   void dispose() {
     _sentimentTimer?.cancel();
-    _stopTranscriptFlushTimer();
+    unawaited(_transcriptRetryWorker?.dispose() ?? Future<void>.value());
+    if (_ownsTranscriptOutbox) {
+      unawaited(_transcriptOutbox?.close() ?? Future<void>.value());
+    }
     _wsSubscription?.cancel();
     _aggregatedSentiment.clear();
-    _pendingTranscriptSegments.clear();
     _onCallDeclined = null;
+    _onRecordingState = null;
     _isPatientSentimentSource = false;
     _isInitialized = false;
     _isInCall = false;
     _currentCallId = null;
     _otherPartyId = null;
+    _participantUserIds.clear();
     _callContextMetadata = null;
     _callStartedAt = null;
     _lastTranscriptEndMs = 0;
+    _currentUserId = null;
   }
 
   // ================================================================
@@ -957,27 +1050,39 @@ class VideoCallService {
 
   /// Starts server-side recording of [callId] via AWS Chime Media Capture
   /// Pipeline. Returns the full response body or throws on error.
+  ///
+  /// Passes [consent]=true because caregiver Record is an explicit capture
+  /// action required by the backend for USER_PLAYBACK.
   Future<Map<String, dynamic>> startRecording(String callId) async {
+    _requireActiveCall(callId);
     final response = await http.post(
       Uri.parse(
         '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/recording/start',
-      ),
+      ).replace(queryParameters: const {'consent': 'true'}),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $_jwtToken',
       },
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final status = (body['status'] ?? '').toString().toUpperCase();
+      if (status == 'STARTED' || status == 'ALREADY_RECORDING') {
+        return body;
+      }
+      final message = (body['message'] ?? status).toString();
+      throw Exception('Unable to start recording: $message');
     }
-    throw Exception(
-      'startRecording failed (${response.statusCode}): ${response.body}',
-    );
+    throw Exception(_safeCallFailure(
+      operation: 'start recording',
+      statusCode: response.statusCode,
+    ));
   }
 
   /// Stops an active recording for [callId]. Returns the final recording info
   /// or throws on error.
   Future<Map<String, dynamic>> stopRecording(String callId) async {
+    _requireActiveCall(callId);
     final response = await http.post(
       Uri.parse(
         '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/recording/stop',
@@ -990,13 +1095,15 @@ class VideoCallService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
-      'stopRecording failed (${response.statusCode}): ${response.body}',
-    );
+    throw Exception(_safeCallFailure(
+      operation: 'stop recording',
+      statusCode: response.statusCode,
+    ));
   }
 
   /// Returns the current recording status for [callId], or null if none.
   Future<Map<String, dynamic>?> getRecordingStatus(String callId) async {
+    if (!_isInCall || _currentCallId != callId.trim()) return null;
     try {
       final response = await http.get(
         Uri.parse(
@@ -1014,6 +1121,28 @@ class VideoCallService {
     return null;
   }
 
+  void _requireActiveCall(String callId) {
+    if (!_isInCall || _currentCallId != callId.trim()) {
+      throw StateError('Recording controls require the active call.');
+    }
+  }
+
+  String _safeCallFailure({
+    required String operation,
+    required int statusCode,
+  }) {
+    if (statusCode == 401) {
+      return 'Your session expired. Please sign in again.';
+    }
+    if (statusCode == 403) {
+      return 'You do not have permission to $operation.';
+    }
+    if (statusCode >= 500) {
+      return 'The call service is temporarily unavailable. Please try again.';
+    }
+    return 'Unable to $operation. Please check the call details and try again.';
+  }
+
   // ================================================================
   // CONFERENCE - invite participants to an active call
   // ================================================================
@@ -1023,7 +1152,8 @@ class VideoCallService {
   Future<List<Map<String, dynamic>>> getEligibleInvitees(String callId) async {
     try {
       final response = await http.get(
-        Uri.parse('${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/eligible-invitees'),
+        Uri.parse(
+            '${EnvironmentConfig.baseUrl}/api/v3/calls/$callId/eligible-invitees'),
         headers: {'Authorization': 'Bearer $_jwtToken'},
       );
       if (response.statusCode == 200) {
@@ -1053,7 +1183,8 @@ class VideoCallService {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         return (body['status'] as String?) ?? 'invited';
       }
-      debugPrint('inviteParticipant returned ${response.statusCode}: ${response.body}');
+      debugPrint(
+          'inviteParticipant returned ${response.statusCode}: ${response.body}');
     } catch (e) {
       debugPrint('inviteParticipant error: $e');
     }
@@ -1078,25 +1209,6 @@ class VideoCallService {
     }
     return null;
   }
-
-}
-
-class _BufferedTranscriptSegment {
-  final String callId;
-  final String speakerLabel;
-  final String text;
-  final int? startMs;
-  final int? endMs;
-  final String source;
-
-  const _BufferedTranscriptSegment({
-    required this.callId,
-    required this.speakerLabel,
-    required this.text,
-    required this.startMs,
-    required this.endMs,
-    required this.source,
-  });
 }
 
 // ================================================================

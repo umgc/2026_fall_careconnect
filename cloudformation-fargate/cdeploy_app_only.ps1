@@ -98,6 +98,52 @@ function Assert-LastExitCode {
     }
 }
 
+function Invoke-AwsCli {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    # PowerShell can treat AWS CLI stderr as a terminating RemoteException even when
+    # the command succeeds. Run aws.exe with SilentlyContinue and inspect ExitCode.
+    $previousEap = $ErrorActionPreference
+    $previousNativePreference = $null
+    if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+        $previousNativePreference = $global:PSNativeCommandUseErrorActionPreference
+        $global:PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    $ErrorActionPreference = "SilentlyContinue"
+    try {
+        $output = & aws.exe @Arguments 2>&1
+        return @{
+            ExitCode = $LASTEXITCODE
+            Output   = $output
+        }
+    }
+    finally {
+        $ErrorActionPreference = $previousEap
+        if ($null -ne $previousNativePreference) {
+            $global:PSNativeCommandUseErrorActionPreference = $previousNativePreference
+        }
+    }
+}
+
+function Assert-AwsCliSucceeded {
+    param(
+        [string]$Context,
+        [hashtable]$Result
+    )
+
+    if ($Result.ExitCode -ne 0) {
+        $details = ($Result.Output | Out-String).Trim()
+        if ($details) {
+            throw "$Context failed with exit code $($Result.ExitCode): $details"
+        }
+        throw "$Context failed with exit code $($Result.ExitCode)."
+    }
+}
+
 function Get-ElapsedTimeText {
     $elapsed = (Get-Date) - $script:StartTime
     return "{0:00}:{1:00}:{2:00}" -f [int]$elapsed.TotalHours, $elapsed.Minutes, $elapsed.Seconds
@@ -271,8 +317,12 @@ try {
     $credentialLabel = if ($Profile) { "profile '$Profile'" } else { "current AWS credentials" }
     Write-Step "Verifying AWS credentials for $credentialLabel"
     $script:CurrentOperation = "Verifying AWS credentials"
-    & aws sts get-caller-identity --region $Region | Out-Null
-    Assert-LastExitCode "AWS credential validation"
+    $identityArgs = @("sts", "get-caller-identity", "--region", $Region)
+    if ($Profile) {
+        $identityArgs = @("sts", "get-caller-identity", "--profile", $Profile, "--region", $Region)
+    }
+    $identityResult = Invoke-AwsCli -Arguments $identityArgs
+    Assert-AwsCliSucceeded -Context "AWS credential validation" -Result $identityResult
 
     if (-not (Test-StackExists -StackName $PlatformStackName)) {
         throw "Platform stack '$PlatformStackName' does not exist. Run the full deploy first so the ECR repository and ECS cluster are available."
@@ -312,7 +362,7 @@ try {
 
         Write-Step "Building Docker image"
         $script:CurrentOperation = "Building Docker image"
-        & docker build -t $LocalImageName .
+        & docker build --platform linux/amd64 -t $LocalImageName .
         Assert-LastExitCode "Docker build"
 
         Write-Step "Tagging and pushing Docker image to ECR"
@@ -332,10 +382,9 @@ try {
     }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 
-    Write-Step "Reading final backend URL"
-    $script:CurrentOperation = "Reading final backend URL"
-    $AlbDnsName = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "LoadBalancerDnsName").Trim()
-    $AlbUrl = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "LoadBalancerUrl").Trim()
+    Write-Step "Reading final API endpoint"
+    $script:CurrentOperation = "Reading final API endpoint"
+    $ApiEndpoint = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "ApiEndpoint").Trim()
     $script:CurrentStackName = $null
     $script:CurrentOperation = $null
 
@@ -344,15 +393,23 @@ try {
     Write-Host "Environment:   $Environment"
     Write-Host "Repository:    $RepositoryName"
     Write-Host "Image URI:     $ImageUri"
-    Write-Host "ALB DNS:       $AlbDnsName"
-    Write-Host "Backend URL:   $AlbUrl"
-    Write-Host "Health check:  $AlbUrl/v1/api/test/health"
+    Write-Host "API Endpoint:  $ApiEndpoint"
+    Write-Host "Health check:  $ApiEndpoint/v1/api/test/health"
     Write-Host "Elapsed time:  $(Get-ElapsedTimeText)"
 }
 catch {
     Write-Host ""
     Write-Host "App-only deployment failed." -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
+    $errorMessage = if ($_.Exception.Message) { $_.Exception.Message } else { $_.ToString() }
+    if ($errorMessage) {
+        Write-Host $errorMessage -ForegroundColor Red
+    }
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+        Write-Host $_.ErrorDetails.Message -ForegroundColor Red
+    }
+    if ($script:CurrentOperation) {
+        Write-Host "Last operation: $script:CurrentOperation" -ForegroundColor Yellow
+    }
     Write-Host "Elapsed time: $(Get-ElapsedTimeText)" -ForegroundColor Yellow
 
     if ($script:CurrentStackName) {

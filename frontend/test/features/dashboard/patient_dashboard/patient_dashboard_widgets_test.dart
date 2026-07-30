@@ -5,6 +5,7 @@
 //   RecentCheckInsWidget      (recent_checkin_widget.dart)
 //   CheckIn model             (recent_checkin_widget.dart)
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/alter_notification_widget.dart';
@@ -14,7 +15,7 @@ import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/re
 import 'package:care_connect_app/features/dashboard/patient_dashboard/models/medication_reminder_item.dart';
 
 Widget _wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
+    MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales,  home: Scaffold(body: SingleChildScrollView(child: child)));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AlertNotification
@@ -367,11 +368,11 @@ void main() {
       expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
-    testWidgets('shows Check In button', (tester) async {
+    testWidgets('shows Open Check-In button', (tester) async {
       await tester.pumpWidget(_wrap(
         const RecentCheckInsWidget(checkIns: []),
       ));
-      expect(find.text('Check In'), findsOneWidget);
+      expect(find.text('Open Check-In'), findsOneWidget);
     });
 
     testWidgets('shows show_chart icon', (tester) async {

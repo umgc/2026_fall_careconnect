@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../widgets/common_drawer.dart';
@@ -16,6 +17,7 @@ class PatientMedicalNotesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
     final isCaregiver =
@@ -25,7 +27,7 @@ class PatientMedicalNotesPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('$patientName - Medical Notes'),
+        title: Text('$patientName - ${t.ptmednotes_medNotes}'),
         centerTitle: true,
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
@@ -66,7 +68,7 @@ class PatientMedicalNotesPage extends StatelessWidget {
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            'Patient ID: $patientId',
+                            '${t.ptmednotes_ptID}: $patientId',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: Colors.grey.shade600),
                           ),
@@ -75,13 +77,13 @@ class PatientMedicalNotesPage extends StatelessWidget {
                     ),
                     if (isCaregiver)
                       Chip(
-                        label: const Text('Caregiver View'),
+                        label: Text(t.ptmednotes_caregiverView),
                         backgroundColor: Colors.green.shade100,
                         labelStyle: TextStyle(color: Colors.green.shade800),
                       )
                     else
                       Chip(
-                        label: const Text('Patient View'),
+                        label: Text(t.ptmednotes_ptView),
                         backgroundColor: Colors.blue.shade100,
                         labelStyle: TextStyle(color: Colors.blue.shade800),
                       ),
