@@ -9,6 +9,7 @@ import 'package:care_connect_app/features/health/caregiver-patient-list/page/pat
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 /// Main screen for caregivers to view and manage their patient list.
@@ -150,6 +151,7 @@ class _CaregiverPatientList extends State<CaregiverPatientList> {
     return Patient(
       id: patient['id']?.toString() ?? '',
       patientUserId: patientUserId,
+      linkId: _safeInt(link['id'] ?? link['linkId']),
       firstName: patient['firstName'] ?? '',
       lastName: patient['lastName'] ?? '',
       lastUpdated: DateTime.now(), // TODO: Use actual lastUpdated from API
@@ -709,6 +711,13 @@ class _CaregiverPatientList extends State<CaregiverPatientList> {
                                   ),
                                 );
                               },
+                              onInviteTap: patient.linkId == null
+                                  ? null
+                                  : () {
+                                      context.push(
+                                        '/care-circle/${patient.linkId}/invite',
+                                      );
+                                    },
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(

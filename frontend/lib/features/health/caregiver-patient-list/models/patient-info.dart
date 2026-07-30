@@ -10,6 +10,9 @@ class Patient {
   /// User identifier used for direct chat and messaging
   final int? patientUserId;
 
+  /// Care-circle link id (for invite QR / suspend / reactivate).
+  final int? linkId;
+
   /// Patient's first name
   final String firstName;
 
@@ -53,6 +56,7 @@ class Patient {
   Patient({
     required this.id,
     this.patientUserId,
+    this.linkId,
     required this.firstName,
     required this.lastName,
     required this.lastUpdated,

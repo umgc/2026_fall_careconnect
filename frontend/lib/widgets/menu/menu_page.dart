@@ -85,6 +85,12 @@ class _MenuPageState extends State<MenuPage> {
 
     final items = <_MenuItem>[
       _MenuItem(
+        icon: Icons.groups_outlined,
+        label: 'Care Circle',
+        route: '/care-circle',
+        visibleFor: const {'PATIENT', 'CAREGIVER', 'ADMIN', 'FAMILY_LINK'},
+      ),
+      _MenuItem(
         icon: Icons.receipt_long,
         label: local.invoiceAssistant,
         route: '/invoice-assistant/dashboard',
@@ -204,7 +210,9 @@ class _MenuPageState extends State<MenuPage> {
         route: '/alertpage',
       ),
       _MenuItem(
-          icon: Icons.mail, label: 'USPS ${local.menupage_mailDigestItem}', route: '/usps-test'),
+          icon: Icons.mail_outline,
+          label: 'Mail Digest',
+          route: '/usps-test'),
       _MenuItem(
         icon: Icons.person_add,
         label: local.menupage_addPatientItem,

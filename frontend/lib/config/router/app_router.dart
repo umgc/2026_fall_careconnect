@@ -13,6 +13,7 @@ import 'package:care_connect_app/features/invite_share/invite_qr_autoload_screen
 import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
 import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
+import 'package:care_connect_app/features/care_circle/care_circle_screen.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_brief_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_recall_page.dart';
@@ -460,6 +461,11 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       builder: (_, __) => const PatientRegistrationPage(),
     ),
     GoRoute(path: '/add-patient', builder: (_, __) => const AddPatientScreen()),
+    GoRoute(
+      path: '/care-circle',
+      name: 'careCircle',
+      builder: (_, __) => const CareCircleScreen(),
+    ),
     // Patient-friendly invite route: resolves the care-circle link ID
     // automatically so users do not need manual URL construction.
     GoRoute(

@@ -12,6 +12,7 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/widgets/profile_picture_widget.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
 import 'package:care_connect_app/services/profile_service.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/profile_model.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
@@ -640,6 +641,38 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                 ],
 
                 if (_isPatient) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionHeader('Care Circle'),
+                  Card(
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.groups_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      title: const Text('Manage Care Circle'),
+                      subtitle: const Text(
+                        'See linked caregivers, share your profile, and control access.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/care-circle'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSectionHeader('Share Profile'),
+                  Card(
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.qr_code_2,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      title: const Text('Share limited profile'),
+                      subtitle: const Text(
+                        'Create a QR code and link others can open — your patient ID stays private.',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/profile/share'),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   _buildSectionHeader('Medical Information'),
                   _buildTextField(

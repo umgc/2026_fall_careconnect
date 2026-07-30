@@ -22,6 +22,9 @@ class PatientCard extends StatelessWidget {
   /// Optional callback function when the message icon is tapped
   final VoidCallback? onMessageTap;
 
+  /// Optional callback to open Care Circle invite QR for this patient link.
+  final VoidCallback? onInviteTap;
+
   /// Creates a PatientCard widget.
   ///
   /// Parameters:
@@ -32,6 +35,7 @@ class PatientCard extends StatelessWidget {
     required this.patient,
     this.onTap,
     this.onMessageTap,
+    this.onInviteTap,
   });
 
   /// Builds the patient card widget.
@@ -173,25 +177,39 @@ class PatientCard extends StatelessWidget {
 
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: onTap, // reuses your existing callback
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 40), // comfy tap target
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: onTap,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 40),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const SizedBox.shrink(),
+                        label: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('View Details'),
+                            SizedBox(width: 4),
+                            Icon(Icons.chevron_right, size: 18),
+                          ],
+                        ),
                       ),
-                      icon: const SizedBox.shrink(),
-                      label: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Text('View Details'),
-                          SizedBox(width: 4),
-                          Icon(Icons.chevron_right, size: 18),
-                        ],
-                      ),
-                    ),
+                      if (onInviteTap != null) ...[
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: onInviteTap,
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 40),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: const Icon(Icons.qr_code_2, size: 18),
+                          label: const Text('Invite'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
