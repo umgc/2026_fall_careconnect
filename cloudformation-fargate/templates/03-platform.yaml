@@ -140,9 +140,15 @@ Resources:
                   - kinesisvideo:GetDataEndpoint
                   - kinesisvideo:GetMedia
                   - kinesisvideo:GetMediaForFragmentList
-                  - kinesisvideo:ListStreams
                   - kinesisvideo:ListFragments
                 Resource: !Sub arn:aws:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*
+              # ListStreams is a service-level API; AWS requires Resource '*'.
+              # Scoping it to stream/* breaks speaker-ID polling fallback discovery.
+              - Sid: KinesisVideoListStreams
+                Effect: Allow
+                Action:
+                  - kinesisvideo:ListStreams
+                Resource: '*'
               - Sid: S3CareConnectBuckets
                 Effect: Allow
                 Action:
@@ -160,6 +166,15 @@ Resources:
                   - arn:aws:s3:::careconnect-recordings-*/*
                   - arn:aws:s3:::careconnect-uploads-*
                   - arn:aws:s3:::careconnect-uploads-*/*
+              # Chime CreateMediaCapturePipeline validates the sink bucket policy as the
+              # caller. AWS requires Resource "*" for s3:GetBucketPolicy; scoping it to
+              # careconnect-recordings-* is the common way people get stuck on the same
+              # 403 "Insufficient permission to access S3 bucket".
+              - Sid: S3GetBucketPolicyForChimeCapture
+                Effect: Allow
+                Action:
+                  - s3:GetBucketPolicy
+                Resource: '*'
               - Sid: BedrockInvoke
                 Effect: Allow
                 Action:
