@@ -28,7 +28,7 @@ void main() {
   // each test sets pendingItems explicitly before pumping.
   Widget harness() => MaterialApp(
         home: Scaffold(
-          body: Provider<ConfirmationProvider>.value(
+          body: ChangeNotifierProvider<ConfirmationProvider>.value(
             value: provider,
             child: const SummaryConfirmationList(),
           ),
