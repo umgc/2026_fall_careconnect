@@ -99,6 +99,56 @@ class CitationDeepLinkBuilderTest {
                 .isEqualTo("/calls/call-42/summary?t=1500");
     }
 
+    @Test
+    void build_nullChunk_returnsNull() {
+        assertThat(builder.build(null)).isNull();
+    }
+
+    @Test
+    void build_visitSummary_usesSourceRecordIdWhenMetadataMissing() {
+        assertThat(build(
+                RetrievalRecordType.VISIT_SUMMARY,
+                null,
+                "visit-summary:77",
+                "{}"))
+                .isEqualTo("/visits/77/summary");
+    }
+
+    @Test
+    void build_transcriptWithoutStartMs_omitsQueryParam() {
+        assertThat(build(
+                RetrievalRecordType.TRANSCRIPT_SEGMENT,
+                null,
+                "seg-1",
+                "{\"callId\":\"call-42\"}"))
+                .isEqualTo("/calls/call-42/summary");
+    }
+
+    @Test
+    void build_summaryChildUnknownKind_returnsNull() {
+        assertThat(build(
+                RetrievalRecordType.SUMMARY_APPOINTMENT,
+                "OTHER",
+                "x",
+                "{}"))
+                .isNull();
+    }
+
+    @Test
+    void build_uspsMail_nonDigitId_omitted() {
+        assertThat(build(RetrievalRecordType.USPS_MAIL, "mail-abc")).isNull();
+    }
+
+    @Test
+    void build_invalidMetadataJson_stillBuildsSafeLink() {
+        assertThat(build(
+                RetrievalRecordType.CALL_SUMMARY,
+                null,
+                "call-summary:1",
+                "not-json"))
+                .isNull();
+    }
+
     private String build(final RetrievalRecordType type, final String sourceId) {
         return build(type, null, sourceId, null);
     }
