@@ -9,6 +9,7 @@ import com.careconnect.model.confirmation.ConfirmationStatus;
 import com.careconnect.model.safety.AuditSourceFeature;
 import com.careconnect.repository.confirmation.ConfirmationItemRepository;
 import com.careconnect.service.safety.AiAuditLedgerService;
+import com.careconnect.service.visibility.CaregiverVisibilityService;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
@@ -37,6 +39,12 @@ class ConfirmationServiceTest {
 
     @Mock
     private AiAuditLedgerService auditLedgerService;
+
+    @Mock
+    private ObjectProvider<CaregiverVisibilityService> visibilityServiceProvider;
+
+    @Mock
+    private CaregiverVisibilityService caregiverVisibilityService;
 
     @InjectMocks
     private ConfirmationService service;
@@ -212,6 +220,36 @@ class ConfirmationServiceTest {
                     .hasMessageContaining("not found")
                     .extracting(e -> ((AppException) e).getStatus())
                     .isEqualTo(HttpStatus.NOT_FOUND);
+        }
+
+        @Test
+        void confirmingCaregiverVisibilityItem_grantsVisibility() {
+            ConfirmationItem item = ConfirmationItem.builder()
+                    .id(7L)
+                    .sourceType(ConfirmationSourceType.CAREGIVER_VISIBILITY)
+                    .status(ConfirmationStatus.PENDING)
+                    .payload("{}")
+                    .referenceId("visibility:5:9")
+                    .requestedBy(USER_ID)
+                    .build();
+            when(repository.findById(7L)).thenReturn(Optional.of(item));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(visibilityServiceProvider.getObject()).thenReturn(caregiverVisibilityService);
+
+            service.confirm(7L, RESOLVER_ID, NOTE);
+
+            verify(caregiverVisibilityService).approveFromReview(5L, 9L, RESOLVER_ID);
+        }
+
+        @Test
+        void confirmingNonVisibilityItem_doesNotTouchVisibility() {
+            ConfirmationItem item = buildPendingItem(1L);
+            when(repository.findById(1L)).thenReturn(Optional.of(item));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.confirm(1L, RESOLVER_ID, NOTE);
+
+            verify(visibilityServiceProvider, never()).getObject();
         }
 
         /** 4.11.2

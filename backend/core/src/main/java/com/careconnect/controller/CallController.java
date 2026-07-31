@@ -8,6 +8,9 @@ import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
+import com.careconnect.service.consent.CaregiverVisibilityCheck;
+import com.careconnect.service.consent.CaregiverVisibilityService;
+import com.careconnect.service.consent.CaregiverVisibilityStatus;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallAttendeeService;
@@ -107,6 +110,8 @@ public class CallController {
   private CallAttendeeService callAttendeeService;
   @Autowired
   private CaregiverPatientLinkService caregiverPatientLinkService;
+  @Autowired
+  private CaregiverVisibilityService caregiverVisibilityService;
   @Autowired
   private FamilyMemberService familyMemberService;
   @Autowired
@@ -1010,6 +1015,20 @@ public class CallController {
     requireDurableCallAccess(callId, currentUser);
     final Optional<com.careconnect.model.CallSummary> latestEntity =
         callSummaryService.getLatestSummaryEntity(callId);
+
+    // TC-E-SUM-009 — on_consent gate on the durable summary read path, mirroring
+    // CallSummaryController. A caregiver who cleared durable access must still be blocked
+    // when the summary is caregiverVisibility='on_consent' and consent is not granted.
+    if (latestEntity.isPresent()
+        && currentUser.getRole() != Role.ADMIN
+        && latestEntity.get().getPatientId() != null
+        && "on_consent".equalsIgnoreCase(latestEntity.get().getCaregiverVisibility())) {
+      final CaregiverVisibilityCheck check =
+          caregiverVisibilityService.getStatus(currentUser.getId(), latestEntity.get().getPatientId());
+      if (check.status() != CaregiverVisibilityStatus.NONE && !check.canViewSummaries()) {
+        throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
+      }
+    }
 
     // If end-call summary ran before transcript retries landed, regenerate on read.
     if (latestEntity.isPresent()
