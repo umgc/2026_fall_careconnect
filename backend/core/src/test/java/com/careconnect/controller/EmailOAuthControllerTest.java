@@ -148,6 +148,9 @@ class EmailOAuthControllerTest {
 
         void rejectsUnsignedStartToken() {
 
+            assertThatThrownBy(() -> controller.start("not-a-valid-token"))
+
+                    .isInstanceOf(IllegalArgumentException.class);
             ResponseEntity<Void> response = controller.start("not-a-valid-token");
 
             assertThat(response.getStatusCode().value()).isEqualTo(400);

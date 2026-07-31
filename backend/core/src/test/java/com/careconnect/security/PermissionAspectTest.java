@@ -17,8 +17,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -86,7 +84,7 @@ class PermissionAspectTest {
 
         UnauthorizedException ex = assertThrows(UnauthorizedException.class,
                 () -> aspect.checkPermission(requirePermission));
-        assertFalse(ex.getMessage().contains("missing@example.com"));
+        assertEquals("Authenticated user could not be resolved", ex.getMessage());
     }
 
     @Test

@@ -31,6 +31,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   bool _isSearchActive = false;
   bool _awaitingOAuthReturn = false;
 
+  /// Patient identifier for USPS endpoints (email preferred, falls back to database id).
   String? _patientQueryValue() {
     final user = Provider.of<UserProvider>(context, listen: false).user;
     if (user == null) return null;
@@ -73,6 +74,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     final patientEmail = _patientQueryValue();
     if (patientEmail == null) {
       setState(() {
+        error = 'Please log in to view USPS mail.';
         error = 'Please log in to fetch USPS digest.';
         loading = false;
       });
@@ -82,6 +84,13 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     final base = getBackendBaseUrl();
     final dateString =
         '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+    final encodedPatient = Uri.encodeComponent(patientEmail);
+    final url =
+        '$base/v1/api/usps/latest?patientEmail=$encodedPatient&date=$dateString';
+
+    try {
+      final dio = await _authenticatedDio();
+
     final url =
         '$base/v1/api/usps/latest?patientEmail=${Uri.encodeComponent(patientEmail)}&date=$dateString';
 
@@ -160,11 +169,19 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     final patientEmail = _patientQueryValue();
     if (patientEmail == null) {
       setState(() {
+        searchError = 'Please log in to search USPS mail.';
         searchError = 'Please log in to search mail.';
         searchLoading = false;
       });
       return;
     }
+    final encodedPatient = Uri.encodeComponent(patientEmail);
+
+    final url =
+        '$base/v1/api/usps/search?patientEmail=$encodedPatient&keyword=${Uri.encodeComponent(keyword)}';
+
+    try {
+      final dio = await _authenticatedDio(
 
     final url =
         '$base/v1/api/usps/search?patientEmail=${Uri.encodeComponent(patientEmail)}&keyword=${Uri.encodeComponent(keyword)}';
@@ -302,6 +319,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     final patientEmail = _patientQueryValue();
     if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
         const SnackBar(content: Text('Please log in to clear cache')),
       );
       return;
@@ -311,6 +329,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     try {
       final dio = await _authenticatedDio();
       await dio.post(
+          '$base/v1/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
         '$base/v1/api/usps/clear-cache',
         queryParameters: {'patientEmail': patientEmail},
       );

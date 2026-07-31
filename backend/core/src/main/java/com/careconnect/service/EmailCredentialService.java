@@ -29,6 +29,7 @@ public class EmailCredentialService {
     private final AuthorizationService authorizationService;
     private final OAuthStateSigner oauthStateSigner;
     private final OAuthRedirectValidator oauthRedirectValidator;
+    private final UspsPatientResolver patientResolver;
 
     public EmailConnectionStatus getGmailConnectionStatus(String patientIdentifier)
             throws UnauthorizedException {
@@ -99,6 +100,7 @@ public class EmailCredentialService {
 
     private User resolvePatientUser(String patientIdentifier, User currentUser)
             throws UnauthorizedException {
+        return patientResolver.resolvePatient(patientIdentifier, null, currentUser);
         if (patientIdentifier == null || patientIdentifier.isBlank()
                 || "demo-user".equals(patientIdentifier)) {
             return currentUser;

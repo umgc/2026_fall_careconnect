@@ -115,6 +115,7 @@ public class GoogleOAuthService {
      * Refresh access token when near expiry. Halts sync only on auth-revocation
      * signals from the token endpoint ({@code invalid_grant}, HTTP 401). Transient
      * failures (429 / 5xx) are retried with backoff and do not set NEEDS_REAUTH.
+     * Gmail API 401/403 ΓåÆ halt remains in {@link GmailClient}.
      * Gmail API 401/403 Ã¢â€ â€™ halt remains in {@link GmailClient}.
      */
     public EmailCredential ensureFreshToken(EmailCredential current) {
