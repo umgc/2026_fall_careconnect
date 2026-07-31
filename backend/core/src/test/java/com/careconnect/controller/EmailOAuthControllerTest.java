@@ -1,7 +1,5 @@
 package com.careconnect.controller;
 
-
-
 import com.careconnect.security.OAuthRedirectValidator;
 
 import com.careconnect.security.OAuthStateSigner;
@@ -26,39 +24,23 @@ import org.springframework.http.HttpStatus;
 
 import org.springframework.http.ResponseEntity;
 
-
-
 import java.net.URI;
-
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import static org.mockito.Mockito.*;
-
-
 
 @ExtendWith(MockitoExtension.class)
 
 class EmailOAuthControllerTest {
 
-
-
     @Mock private GoogleOAuthService googleOAuthService;
-
-
 
     private OAuthStateSigner oauthStateSigner;
 
     private OAuthRedirectValidator oauthRedirectValidator;
 
-
-
     private EmailOAuthController controller;
-
-
 
     private static final String USER_ID      = "user-123";
 
@@ -71,8 +53,6 @@ class EmailOAuthControllerTest {
     private static final String FRONTEND_URL = "http://localhost:3000";
 
     private static final String AUTH_CODE    = "auth-code-abc";
-
-
 
     @BeforeEach
 
@@ -94,13 +74,9 @@ class EmailOAuthControllerTest {
 
     }
 
-
-
     @Nested
 
     class Start {
-
-
 
         @Test
 
@@ -114,8 +90,6 @@ class EmailOAuthControllerTest {
 
         }
 
-
-
         @Test
 
         void redirectsToGoogleAuthEndpoint() {
@@ -127,8 +101,6 @@ class EmailOAuthControllerTest {
             assertThat(location.toString()).contains("accounts.google.com/o/oauth2/v2/auth");
 
         }
-
-
 
         @Test
 
@@ -142,22 +114,15 @@ class EmailOAuthControllerTest {
 
         }
 
-
-
         @Test
 
         void rejectsUnsignedStartToken() {
 
-            assertThatThrownBy(() -> controller.start("not-a-valid-token"))
-
-                    .isInstanceOf(IllegalArgumentException.class);
             ResponseEntity<Void> response = controller.start("not-a-valid-token");
 
             assertThat(response.getStatusCode().value()).isEqualTo(400);
 
         }
-
-
 
         @Test
 
@@ -171,13 +136,9 @@ class EmailOAuthControllerTest {
 
     }
 
-
-
     @Nested
 
     class Callback {
-
-
 
         @Test
 
@@ -187,11 +148,7 @@ class EmailOAuthControllerTest {
 
             final String state = oauthStateSigner.sign(USER_ID, returnUrl);
 
-
-
             final URI location = controller.callback(AUTH_CODE, state).getHeaders().getLocation();
-
-
 
             assertThat(location).isNotNull();
 
@@ -200,8 +157,6 @@ class EmailOAuthControllerTest {
             verify(googleOAuthService).exchange(USER_ID, AUTH_CODE);
 
         }
-
-
 
         @Test
 
@@ -215,8 +170,6 @@ class EmailOAuthControllerTest {
 
         }
 
-
-
         @Test
 
         void redirectsWithOauthError_whenExchangeFails() {
@@ -227,19 +180,13 @@ class EmailOAuthControllerTest {
 
                     .when(googleOAuthService).exchange(USER_ID, AUTH_CODE);
 
-
-
             final URI location = controller.callback(AUTH_CODE, state).getHeaders().getLocation();
-
-
 
             assertThat(location.toString()).contains("oauthError=oauth_failed");
 
             assertThat(location.toString()).contains("/usps-test");
 
         }
-
-
 
         @Test
 
@@ -253,19 +200,13 @@ class EmailOAuthControllerTest {
 
                     .when(googleOAuthService).exchange(USER_ID, AUTH_CODE);
 
-
-
             final URI location = controller.callback(AUTH_CODE, state).getHeaders().getLocation();
-
-
 
             assertThat(location.toString()).startsWith(returnUrl);
 
             assertThat(location.toString()).contains("oauthError=oauth_failed");
 
         }
-
-
 
         @Test
 
@@ -280,8 +221,6 @@ class EmailOAuthControllerTest {
             verifyNoInteractions(googleOAuthService);
 
         }
-
-
 
         @Test
 
@@ -300,5 +239,4 @@ class EmailOAuthControllerTest {
     }
 
 }
-
 

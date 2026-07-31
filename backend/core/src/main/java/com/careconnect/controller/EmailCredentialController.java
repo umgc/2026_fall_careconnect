@@ -31,8 +31,7 @@ import java.util.Map;
 
 /**
  * Gmail credential APIs: lifecycle status/disconnect plus patient-scoped
- * JWT-authenticated Gmail status / disconnect / connect-url (PR 223).
- * Gmail credential status / disconnect / connect-url APIs.
+ * JWT-authenticated Gmail status / disconnect / connect-url.
  *
  * <p>Combines Task 3.14.9 lifecycle endpoints with HMAC connect-url and structured
  * Gmail status from the OAuth-hardening PR.
@@ -48,7 +47,7 @@ public class EmailCredentialController {
     private final EmailCredentialService emailCredentialService;
 
     /**
-     * Legacy boolean status ΓÇö true only when Gmail sync is ACTIVE.
+     * Legacy boolean status — true only when Gmail sync is ACTIVE.
      */
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
     @GetMapping("/status")
@@ -78,12 +77,6 @@ public class EmailCredentialController {
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
         AuthRequestSupport.requireAuthenticated(jwt);
-     * Structured Gmail connection status (HMAC / patient-scoped flow).
-     */
-    @GetMapping("/gmail/status")
-    public ResponseEntity<EmailConnectionStatus> getGmailConnectionStatus(
-            @RequestParam(required = false) String patientEmail,
-            @RequestParam(required = false) String userId) throws UnauthorizedException {
         String identifier = firstNonBlank(patientEmail, userId);
         return ResponseEntity.ok(emailCredentialService.getGmailConnectionStatus(identifier));
     }
@@ -108,39 +101,6 @@ public class EmailCredentialController {
 
     /**
      * Patient-scoped Gmail disconnect with best-effort token revoke (JWT required).
-     * Patient-scoped Gmail disconnect with best-effort token revoke.
-     */
-    @DeleteMapping("/gmail")
-    public ResponseEntity<Void> disconnectGmail(
-            @RequestParam(required = false) String patientEmail,
-            @RequestParam(required = false) String userId) throws UnauthorizedException {
-        String identifier = firstNonBlank(patientEmail, userId);
-        emailCredentialService.disconnectGmail(identifier);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Issues a signed start URL for external-browser OAuth.
-     */
-    @GetMapping("/gmail/connect-url")
-    public ResponseEntity<GmailConnectUrlResponse> getGmailConnectUrl(
-            HttpServletRequest request,
-            @RequestParam(required = false) String patientEmail,
-            @RequestParam(required = false) String userId,
-            @RequestParam(required = false) String returnUrl) throws UnauthorizedException {
-        String identifier = firstNonBlank(patientEmail, userId);
-        String startToken = emailCredentialService.createGmailOAuthStartToken(identifier, returnUrl);
-        String url = ServletUriComponentsBuilder.fromContextPath(request)
-                .path("/oauth/google/start")
-                .queryParam("startToken", startToken)
-                .build()
-                .toUriString();
-        return ResponseEntity.ok(new GmailConnectUrlResponse(url));
-    }
-
-    /**
-     * Caregivers may only inspect/disconnect their own Gmail credential; admins may
-     * act on any userId. Prevents cross-user lastError reads and forced disconnects.
      */
     @DeleteMapping("/gmail")
     public ResponseEntity<Void> disconnectGmail(
@@ -174,6 +134,10 @@ public class EmailCredentialController {
         return ResponseEntity.ok(new GmailConnectUrlResponse(url));
     }
 
+    /**
+     * Caregivers may only inspect/disconnect their own Gmail credential; admins may
+     * act on any userId. Prevents cross-user lastError reads and forced disconnects.
+     */
     private void requireCredentialOwnerAccess(final String userId) throws UnauthorizedException {
         final User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
