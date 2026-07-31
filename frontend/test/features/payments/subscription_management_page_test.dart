@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -37,7 +38,7 @@ Widget _wrap({MockUserProvider? userProvider}) {
   final provider = userProvider ?? MockUserProvider();
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: const MaterialApp(home: SubscriptionManagementPage()),
+    child: const MaterialApp(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: SubscriptionManagementPage()),
   );
 }
 

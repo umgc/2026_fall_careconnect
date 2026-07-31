@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,7 +84,7 @@ Widget _buildTestWidget({
 
   return ChangeNotifierProvider<UserProvider>.value(
     value: userProvider,
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, routerConfig: router),
   );
 }
 
