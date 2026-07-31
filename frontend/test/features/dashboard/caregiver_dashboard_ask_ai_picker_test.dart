@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:care_connect_app/features/dashboard/caregiver-dashboard/pages/caregiver-dashboard.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
 import 'package:flutter/material.dart';
@@ -82,7 +83,7 @@ void main() {
               patientId: 999, // must never be inferred
             ),
           ),
-          child: const MaterialApp(home: CaregiverDashboard()),
+          child: const MaterialApp(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales,home: CaregiverDashboard()),
         ),
       );
       await tester.pump();
