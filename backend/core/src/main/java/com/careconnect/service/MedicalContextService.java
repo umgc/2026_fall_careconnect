@@ -82,8 +82,9 @@ public class MedicalContextService {
             context.append("\n");
         }
         
-        // Process uploaded files if any
-        if (request.getUploadedFiles() != null && !request.getUploadedFiles().isEmpty()) {
+        // Process uploaded files if any — gated by the documents data-source flag (WBS 3.15.7)
+        if (shouldIncludeDocuments(request, aiConfig)
+                && request.getUploadedFiles() != null && !request.getUploadedFiles().isEmpty()) {
             context.append("UPLOADED FILES:\n");
             for (com.careconnect.dto.UploadedFileDTO file : request.getUploadedFiles()) {
                 context.append("File: ").append(file.getFilename()).append("\n");
@@ -120,6 +121,16 @@ public class MedicalContextService {
     
     private boolean shouldIncludeAllergies(ChatRequest request, UserAIConfig aiConfig) {
         return request.getIncludeAllergies() != null ? request.getIncludeAllergies() : aiConfig.getIncludeAllergiesByDefault();
+    }
+
+    // WBS 3.15.7: gate uploaded documents on the data-source flag.
+    // Per-request override wins; null config (older records) defaults to include.
+    boolean shouldIncludeDocuments(ChatRequest request, UserAIConfig aiConfig) {
+        if (request.getIncludeDocuments() != null) {
+            return request.getIncludeDocuments();
+        }
+        Boolean flag = aiConfig.getIncludeDocumentsByDefault();
+        return flag == null || flag;
     }
     
     private void addVitalsContext(StringBuilder context, Long patientId) {

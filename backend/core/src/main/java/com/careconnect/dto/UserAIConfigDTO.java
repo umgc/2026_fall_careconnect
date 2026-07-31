@@ -44,6 +44,8 @@ public class UserAIConfigDTO {
     @Builder.Default
     private Boolean includeAllergiesByDefault = true;
     @Builder.Default
+    private Boolean includeDocumentsByDefault = true;
+    @Builder.Default
     private Boolean isActive = true;
     private String systemPrompt;
     // Explicit getters for compatibility
@@ -61,6 +63,7 @@ public class UserAIConfigDTO {
     public Boolean getIncludeNotesByDefault() { return includeNotesByDefault; }
     public Boolean getIncludeMoodPainLogsByDefault() { return includeMoodPainLogsByDefault; }
     public Boolean getIncludeAllergiesByDefault() { return includeAllergiesByDefault; }
+    public Boolean getIncludeDocumentsByDefault() { return includeDocumentsByDefault; }
     public Boolean getIsActive() { return isActive; }
     public String getSystemPrompt() { return systemPrompt; }
 }
