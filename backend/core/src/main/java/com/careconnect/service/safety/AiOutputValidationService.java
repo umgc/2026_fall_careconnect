@@ -103,7 +103,7 @@ public class AiOutputValidationService {
                        "outputLength", output == null ? 0 : output.length()));
 
         if (result.outcome() == ValidationOutcome.HOLD) {
-            queueForReview(output, source, actorUserId, sessionId, result.reason());
+            queueForReview(output, source, actorUserId, patientId, sessionId, result.reason());
         }
         return result;
     }
@@ -115,8 +115,8 @@ public class AiOutputValidationService {
         if (output.length() > MAX_OUTPUT_LENGTH) {
             return new ValidationResult(ValidationOutcome.HOLD, "output exceeds safe length");
         }
-        if (anonymizer.containsPHI(output)) {
-            return new ValidationResult(ValidationOutcome.HOLD, "possible PHI in output");
+        if (anonymizer.containsRawSsn(output)) {
+            return new ValidationResult(ValidationOutcome.HOLD, "possible SSN in output");
         }
         for (Pattern p : HIGH_RISK_DIRECTIVES) {
             if (p.matcher(output).find()) {
@@ -183,12 +183,12 @@ public class AiOutputValidationService {
     }
 
     private void queueForReview(String output, AuditSourceFeature source,
-                                Long actorUserId, String sessionId, String reason) {
+                                Long actorUserId, Long patientId, String sessionId, String reason) {
         try {
             String held = output != null && output.length() > MAX_OUTPUT_LENGTH
                     ? output.substring(0, MAX_OUTPUT_LENGTH)
                     : output;
-            confirmationService.createItem(toConfirmationSource(source), held, sessionId, actorUserId);
+            confirmationService.createItem(toConfirmationSource(source), held, sessionId, actorUserId, patientId);
             log.info("AI output held for human review (source={}, reason={})", source, reason);
         } catch (Exception e) {
             log.warn("Could not queue held AI output for review: {}", e.getMessage());

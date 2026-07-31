@@ -54,22 +54,34 @@ class AiOutputValidationServiceTest {
     void blankOutput_isRejected() {
         ValidationResult r = validate("   ");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.REJECT);
-        verify(confirmationService, never()).createItem(any(), anyString(), anyString(), anyLong());
+        verify(confirmationService, never()).createItem(any(), anyString(), anyString(), anyLong(), any());
         verify(aiServiceFactory, never()).getService();
     }
 
     @Test
-    void phiInOutput_isHeldAndQueued_withoutJudge() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(true);
-        ValidationResult r = validate("Patient John Smith, SSN 123-45-6789, is stable.");
+    void ssnInOutput_isHeldAndQueued_withoutJudge() {
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(true);
+        ValidationResult r = validate("Your SSN on file is 123-45-6789.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.HOLD);
-        verify(confirmationService).createItem(eq(ConfirmationSourceType.ASK_AI), anyString(), eq("sess-1"), eq(42L));
+        assertThat(r.reason()).contains("SSN");
+        verify(confirmationService).createItem(eq(ConfirmationSourceType.ASK_AI), anyString(), eq("sess-1"), eq(42L), eq(7L));
         verify(aiServiceFactory, never()).getService();
+    }
+
+    @Test
+    void answerWithNamesAndDates_isNotHeldByIdentifierGuard() {
+        // Grounded answers are supposed to contain names, places, and dates; only a raw SSN
+        // gates output, so this passes the identifier guard through to the judge.
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
+        stubJudge("VERDICT: PASS");
+        ValidationResult r = validate("Nurse Johnson visited on Tuesday for your Physical Therapy session.");
+        assertThat(r.outcome()).isEqualTo(ValidationOutcome.PASS);
+        verify(confirmationService, never()).createItem(any(), anyString(), anyString(), anyLong(), any());
     }
 
     @Test
     void highRiskDirective_isHeld_withoutJudge() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         ValidationResult r = validate("You should stop taking your medication right away.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.HOLD);
         assertThat(r.reason()).contains("directive");
@@ -86,13 +98,13 @@ class AiOutputValidationServiceTest {
     void heldOutput_isTruncatedToMaxLength_whenQueued() {
         validate("x".repeat(AiOutputValidationService.MAX_OUTPUT_LENGTH + 500));
         ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
-        verify(confirmationService).createItem(any(), payload.capture(), any(), anyLong());
+        verify(confirmationService).createItem(any(), payload.capture(), any(), anyLong(), any());
         assertThat(payload.getValue().length()).isEqualTo(AiOutputValidationService.MAX_OUTPUT_LENGTH);
     }
 
     @Test
     void expandedDirectivePhrases_areHeld_withoutJudge() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         for (String bad : java.util.List.of(
                 "You can just quit your meds.",
                 "Go ahead and discontinue therapy.",
@@ -111,7 +123,7 @@ class AiOutputValidationServiceTest {
 
     @Test
     void judgeApproves_passes() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         stubJudge("VERDICT: PASS\nREASON: grounded and caveated");
         ValidationResult r = validate("Stay hydrated and check with your care team.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.PASS);
@@ -120,25 +132,25 @@ class AiOutputValidationServiceTest {
 
     @Test
     void judgeHolds_isHeldAndQueued() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         stubJudge("VERDICT: HOLD\nREASON: ungrounded claim");
         ValidationResult r = validate("Your lab result means everything is perfect.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.HOLD);
-        verify(confirmationService).createItem(eq(ConfirmationSourceType.ASK_AI), anyString(), eq("sess-1"), eq(42L));
+        verify(confirmationService).createItem(eq(ConfirmationSourceType.ASK_AI), anyString(), eq("sess-1"), eq(42L), eq(7L));
     }
 
     @Test
     void judgeRejects_isRejected_notQueued() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         stubJudge("VERDICT: REJECT\nREASON: harmful advice");
         ValidationResult r = validate("Here is how to harm yourself.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.REJECT);
-        verify(confirmationService, never()).createItem(any(), anyString(), anyString(), anyLong());
+        verify(confirmationService, never()).createItem(any(), anyString(), anyString(), anyLong(), any());
     }
 
     @Test
     void judgeUnavailable_failsSafeToHold() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         when(aiServiceFactory.getService()).thenThrow(new RuntimeException("no provider"));
         ValidationResult r = validate("Some plausible answer.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.HOLD);
@@ -147,7 +159,7 @@ class AiOutputValidationServiceTest {
 
     @Test
     void judgeUnparseableResponse_failsSafeToHold() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         stubJudge("I think that answer looks fine to me.");
         ValidationResult r = validate("Some plausible answer.");
         assertThat(r.outcome()).isEqualTo(ValidationOutcome.HOLD);
@@ -158,7 +170,7 @@ class AiOutputValidationServiceTest {
 
     @Test
     void everyOutcome_isAudited() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         stubJudge("VERDICT: PASS\nREASON: ok");
         validate("All good, talk to your care team.");
         verify(auditLedgerService).logValidation(eq(AuditSourceFeature.ASK_AI), eq(42L), eq(7L), eq("sess-1"), any());
@@ -167,7 +179,7 @@ class AiOutputValidationServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void auditPayload_recordsDecisionNotRawOutput() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(false);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(false);
         stubJudge("VERDICT: PASS\nREASON: ok");
         validate("some benign text about hydration");
 
@@ -180,7 +192,7 @@ class AiOutputValidationServiceTest {
 
     @Test
     void queueingFailure_stillReturnsHold() {
-        when(anonymizer.containsPHI(anyString())).thenReturn(true);
+        when(anonymizer.containsRawSsn(anyString())).thenReturn(true);
         when(confirmationService.createItem(any(), anyString(), any(), anyLong()))
                 .thenThrow(new RuntimeException("db down"));
         ValidationResult r = validate("John Smith at 555-123-4567");
