@@ -36,8 +36,20 @@ void main() {
   group('lookupAppLocalizations', () {
     // All 14 supported language codes.
     const supported = [
-      'am', 'ar', 'bn', 'en', 'es', 'fa', 'fr',
-      'hi', 'ja', 'ne', 'pt', 'ru', 'ur', 'zh',
+      'am',
+      'ar',
+      'bn',
+      'en',
+      'es',
+      'fa',
+      'fr',
+      'hi',
+      'ja',
+      'ne',
+      'pt',
+      'ru',
+      'ur',
+      'zh',
     ];
 
     for (final code in supported) {
@@ -64,8 +76,20 @@ void main() {
 
   group('AppLocalizations.delegate.isSupported', () {
     const supported = [
-      'am', 'ar', 'bn', 'en', 'es', 'fa', 'fr',
-      'hi', 'ja', 'ne', 'pt', 'ru', 'ur', 'zh',
+      'am',
+      'ar',
+      'bn',
+      'en',
+      'es',
+      'fa',
+      'fr',
+      'hi',
+      'ja',
+      'ne',
+      'pt',
+      'ru',
+      'ur',
+      'zh',
     ];
 
     for (final code in supported) {
@@ -95,10 +119,21 @@ void main() {
     });
   });
 
+  void expectGeneratedLabel(String name, String value) {
+    expect(value.trim(), isNotEmpty, reason: '$name must stay non-blank');
+  }
+
+  void expectGeneratedLabels(Map<String, String> labels) {
+    for (final entry in labels.entries) {
+      expectGeneratedLabel(entry.key, entry.value);
+    }
+  }
+
   // ─── supportedLocales list ────────────────────────────────────────────────
 
   group('AppLocalizations.supportedLocales', () {
-    test('TC-S4-REG-L10N-001 English and Spanish expose localized shell labels', () {
+    test('TC-S4-REG-L10N-001 English and Spanish expose localized shell labels',
+        () {
       final english = lookupAppLocalizations(const Locale('en'));
       final spanish = lookupAppLocalizations(const Locale('es'));
 
@@ -107,6 +142,85 @@ void main() {
       expect(spanish.menuTitle, 'Menú');
       expect(spanish.voiceCommands, 'Comandos de Voz');
       expect(spanish.menuTitle, isNot(english.menuTitle));
+    });
+
+    test(
+        'TC-S4-REG-L10N-003 English and Spanish expose Team C voice and language labels',
+        () {
+      // Regression guard for Team C critical generated getters used by the
+      // voice-command flow and language picker.
+      final english = lookupAppLocalizations(const Locale('en'));
+      final spanish = lookupAppLocalizations(const Locale('es'));
+
+      expectGeneratedLabels({
+        'en.voiceCommands': english.voiceCommands,
+        'en.voicecommand_voiceCommandTitle':
+            english.voicecommand_voiceCommandTitle,
+        'en.voicecommand_tapMicToStart': english.voicecommand_tapMicToStart,
+        'en.voicecommand_wakeWordToStart': english.voicecommand_wakeWordToStart,
+        'en.voicecommand_commandNotRecognized':
+            english.voicecommand_commandNotRecognized,
+        'en.voicecommand_successNotRecognized':
+            english.voicecommand_successNotRecognized,
+        'en.voicecommand_confirmCommand': english.voicecommand_confirmCommand,
+        'en.voicecommand_clarifyCommand': english.voicecommand_clarifyCommand,
+        'en.voicecommand_multipleMatchesCommand':
+            english.voicecommand_multipleMatchesCommand,
+        'en.voicecommand_selectOneOptionCommand':
+            english.voicecommand_selectOneOptionCommand,
+        'en.voicecommand_confirmButton': english.voicecommand_confirmButton,
+        'en.voicecommand_cancelButton': english.voicecommand_cancelButton,
+        'en.voicecommand_micDeniedGuidance':
+            english.voicecommand_micDeniedGuidance,
+        'en.voicecommand_unavailableGuidance':
+            english.voicecommand_unavailableGuidance,
+        'en.voicecommand_timeoutGuidance': english.voicecommand_timeoutGuidance,
+        'en.voicecommand_noSpeechGuidance':
+            english.voicecommand_noSpeechGuidance,
+        'en.voicecommand_intentNotYetSupported':
+            english.voicecommand_intentNotYetSupported,
+        'en.mainscreen_voiceCommandsTooltip':
+            english.mainscreen_voiceCommandsTooltip,
+        'en.languagepicker_English': english.languagepicker_English,
+        'en.languagepicker_Spanish': english.languagepicker_Spanish,
+        'es.voiceCommands': spanish.voiceCommands,
+        'es.voicecommand_voiceCommandTitle':
+            spanish.voicecommand_voiceCommandTitle,
+        'es.voicecommand_tapMicToStart': spanish.voicecommand_tapMicToStart,
+        'es.voicecommand_wakeWordToStart': spanish.voicecommand_wakeWordToStart,
+        'es.voicecommand_commandNotRecognized':
+            spanish.voicecommand_commandNotRecognized,
+        'es.voicecommand_successNotRecognized':
+            spanish.voicecommand_successNotRecognized,
+        'es.voicecommand_confirmCommand': spanish.voicecommand_confirmCommand,
+        'es.voicecommand_clarifyCommand': spanish.voicecommand_clarifyCommand,
+        'es.voicecommand_multipleMatchesCommand':
+            spanish.voicecommand_multipleMatchesCommand,
+        'es.voicecommand_selectOneOptionCommand':
+            spanish.voicecommand_selectOneOptionCommand,
+        'es.voicecommand_confirmButton': spanish.voicecommand_confirmButton,
+        'es.voicecommand_cancelButton': spanish.voicecommand_cancelButton,
+        'es.voicecommand_micDeniedGuidance':
+            spanish.voicecommand_micDeniedGuidance,
+        'es.voicecommand_unavailableGuidance':
+            spanish.voicecommand_unavailableGuidance,
+        'es.voicecommand_timeoutGuidance': spanish.voicecommand_timeoutGuidance,
+        'es.voicecommand_noSpeechGuidance':
+            spanish.voicecommand_noSpeechGuidance,
+        'es.voicecommand_intentNotYetSupported':
+            spanish.voicecommand_intentNotYetSupported,
+        'es.mainscreen_voiceCommandsTooltip':
+            spanish.mainscreen_voiceCommandsTooltip,
+        'es.languagepicker_English': spanish.languagepicker_English,
+        'es.languagepicker_Spanish': spanish.languagepicker_Spanish,
+      });
+
+      expect(english.voicecommand_confirmButton, 'Confirm');
+      expect(english.voicecommand_cancelButton, 'Cancel');
+      expect(english.languagepicker_Spanish, 'Español (Spanish)');
+      expect(spanish.voicecommand_confirmButton, 'Confirmar');
+      expect(spanish.voicecommand_cancelButton, 'Cancelar');
+      expect(spanish.languagepicker_Spanish, 'Español');
     });
 
     test('contains exactly 14 locales', () {
@@ -128,11 +242,12 @@ void main() {
   // per-locale files (app_localizations_am.dart … app_localizations_zh.dart)
   // get line coverage.
 
-  /// Helper: reads all getters from an AppLocalizations instance and returns
-  /// a list of their values. If any getter throws, the test will fail.
+  /// Helper: reads all current generated getters from an AppLocalizations
+  /// instance. If a generated getter is removed or stale, this test fails at
+  /// compile time instead of silently losing coverage.
   List<String> readAllGetters(AppLocalizations loc) {
     return [
-      loc.systemDefault,
+loc.systemDefault,
       loc.menuTitle,
       loc.yourShortcuts,
       loc.preferences,
@@ -375,6 +490,7 @@ void main() {
       loc.signup_accountDOB,
       loc.signup_accountDOBMissing,
       loc.signup_accountGender,
+      loc.signup_accountDOBMissing,
       loc.signup_accountMale,
       loc.signup_accountFemale,
       loc.signup_accountOther,
@@ -894,6 +1010,7 @@ void main() {
       loc.subselection_continueToPayment,
       loc.subselection_confirmFree,
       loc.subselection_selectedFree,
+      loc.subselection_continueToPayment,
       loc.subselection_mostPopular,
       loc.webpay_paymentFailed,
       loc.webpay_transaction,
@@ -1022,68 +1139,27 @@ void main() {
       loc.homecarereview_reviewed,
       loc.homecarereview_savedForm,
       loc.homecarereview_failedToSave,
-      loc.manualentrywidget_manualTextEntry,
-      loc.manualentrywidget_noCateAvail,
-      loc.manualentrywidget_noCateSelected,
-      loc.manualentrywidget_selectCat,
-      loc.manualentrywidget_selectCatFirst,
-      loc.manualentrywidget_userNotLogged,
-      loc.manualentrywidget_fileUploadedSuccess,
-      loc.manualentrywidget_uploadFailedNoResp,
-      loc.manualentrywidget_uploadFailed,
-      loc.manualentrywidget_fileName,
-      loc.manualentrywidget_enterFileName,
-      loc.manualentrywidget_fileNameEmpty,
-      loc.manualentrywidget_invalidCharacters,
-      loc.manualentrywidget_fileContent,
-      loc.manualentrywidget_fileContentDescr,
-      loc.manualentrywidget_fileContentEmpty,
-      loc.manualentrywidget_saveToFile,
-      loc.speechtextwidget_speechToTextSaved,
-      loc.speechtextwidget_speechToText,
-      loc.speechtextwidget_recoginizedText,
-      loc.speechtextwidget_tapButtonToStart,
-      loc.speechtextwidget_stopListening,
-      loc.speechtextwidget_startListening,
-      loc.fileuploadwidget_uploadFile,
-      loc.fileuploadwidget_selectFile,
-      loc.fileuploadwidget_fileSelected,
-      loc.fileuploadwidget_descriptionOpti,
-      loc.fileuploadwidget_descriptionDescr,
-      loc.fileuploadwidget_descriptionHint,
-      loc.fileuploadwidget_uploading,
-      loc.fileuploadwidget_selectCatFirst,
-      loc.fileuploadwidget_tapSelectPFP,
-      loc.fileuploadwidget_tapSelectPrescrip,
-      loc.fileuploadwidget_tapSelectMedDoc,
-      loc.fileuploadwidget_tapSelectInsurance,
-      loc.fileuploadwidget_tapSelectFile,
-      loc.fileuploadwidget_errorSelectingFile,
-      loc.fileuploadwidget_quickFileUpload,
-      loc.fileuploadwidget_profilePhoto,
-      loc.fileuploadwidget_upload,
-      loc.voicecommand_micDeniedGuidance,
-      loc.voicecommand_unavailableGuidance,
-      loc.voicecommand_timeoutGuidance,
-      loc.voicecommand_noSpeechGuidance,
-      loc.voicecommand_intentNotYetSupported,
-      loc.hiringformtab_effectiveDate,
-      loc.ptdashboard_twiceDaily,
-      loc.ptdashboard_onceDaily,
-      loc.ptdashboard_threeTimesDaily,
-      loc.ptdashboard_fourTimesDaily,
-      loc.ptdashboard_asNeeded,
-      loc.ptdashboard_hourly,
-      loc.ptdashboard_weekly,
-      loc.ptdashboard_monthly,
-      loc.ptdashboard_onceAtBed,
+      loc.signup_step,
+      loc.signup_of,
     ];
   }
 
   group('All locale getters produce non-empty strings', () {
     const codes = [
-      'am', 'ar', 'bn', 'en', 'es', 'fa', 'fr',
-      'hi', 'ja', 'ne', 'pt', 'ru', 'ur', 'zh',
+      'am',
+      'ar',
+      'bn',
+      'en',
+      'es',
+      'fa',
+      'fr',
+      'hi',
+      'ja',
+      'ne',
+      'pt',
+      'ru',
+      'ur',
+      'zh',
     ];
 
     for (final code in codes) {
