@@ -429,8 +429,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
 
   String _frontendOrigin() {
     if (kIsWeb) {
-      final origin = uh.window.location.origin;
-      if (origin.isNotEmpty) return origin;
+      // universal_html types `origin` as nullable off the web, so read it
+      // loosely instead of assuming a non-null String.
+      final dynamic origin = uh.window.location.origin;
+      if (origin is String && origin.isNotEmpty) return origin;
     }
     return getWebBaseUrl();
   }
