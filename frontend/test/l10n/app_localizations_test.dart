@@ -1139,8 +1139,15 @@ loc.systemDefault,
       loc.homecarereview_reviewed,
       loc.homecarereview_savedForm,
       loc.homecarereview_failedToSave,
-      loc.signup_step,
-      loc.signup_of,
+      loc.ptdashboard_twiceDaily,
+      loc.ptdashboard_onceDaily,
+      loc.ptdashboard_threeTimesDaily,
+      loc.ptdashboard_fourTimesDaily,
+      loc.ptdashboard_asNeeded,
+      loc.ptdashboard_hourly,
+      loc.ptdashboard_weekly,
+      loc.ptdashboard_monthly,
+      loc.ptdashboard_onceAtBed,
     ];
   }
 
