@@ -192,6 +192,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/gamification/**").authenticated()
                         .requestMatchers("/api/websocket/**").authenticated()
                         // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
+                        // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.
                         .requestMatchers("/v1/api/email-credentials/**", "/api/email-credentials/**").authenticated()
                         .requestMatchers("/api/v3/calls/**").authenticated()
                         .requestMatchers("/v1/api/**", "/v2/api/**", "/v3/api/**").authenticated()

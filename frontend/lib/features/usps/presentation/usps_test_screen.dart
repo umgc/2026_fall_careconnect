@@ -52,6 +52,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   void _handleOAuthReturnError() {
+    // oauthError is set by EmailOAuthController callback failures; error is legacy fallback.
     final oauthError = Uri.base.queryParameters['oauthError'] ??
         Uri.base.queryParameters['error'];
     if (oauthError != null && oauthError.isNotEmpty) {
@@ -69,18 +70,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       error = null;
       _isSearchActive = false;
     });
-    final base = getBackendBaseUrl();
 
     final patientEmail = _patientQueryValue();
     if (patientEmail == null) {
       setState(() {
         error = 'Please log in to view USPS mail.';
+        error = 'Please log in to fetch USPS digest.';
         loading = false;
       });
       return;
     }
 
-    // Format date as YYYY-MM-DD
+    final base = getBackendBaseUrl();
     final dateString =
         '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
     final encodedPatient = Uri.encodeComponent(patientEmail);
@@ -90,6 +91,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     try {
       final dio = await _authenticatedDio();
 
+    final url =
+        '$base/v1/api/usps/latest?patientEmail=${Uri.encodeComponent(patientEmail)}&date=$dateString';
+
+    try {
+      final dio = await _authenticatedDio();
       final resp = await dio.get(url);
       if (resp.statusCode == 200) {
         setState(() {
@@ -164,6 +170,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     if (patientEmail == null) {
       setState(() {
         searchError = 'Please log in to search USPS mail.';
+        searchError = 'Please log in to search mail.';
         searchLoading = false;
       });
       return;
@@ -175,6 +182,13 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
 
     try {
       final dio = await _authenticatedDio(
+
+    final url =
+        '$base/v1/api/usps/search?patientEmail=${Uri.encodeComponent(patientEmail)}&keyword=${Uri.encodeComponent(keyword)}';
+
+    try {
+      final dio = await _authenticatedDio(
+        connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 30),
       );
 
@@ -306,6 +320,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in first')),
+        const SnackBar(content: Text('Please log in to clear cache')),
       );
       return;
     }
@@ -315,6 +330,9 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       final dio = await _authenticatedDio();
       await dio.post(
           '$base/v1/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
+        '$base/v1/api/usps/clear-cache',
+        queryParameters: {'patientEmail': patientEmail},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Cache cleared! Try fetching digest again.')),
