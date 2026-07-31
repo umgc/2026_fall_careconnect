@@ -5,7 +5,6 @@ import com.careconnect.exception.EmailCredentialNeedsReauthException;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
 import com.careconnect.repository.EmailCredentialRepository;
-import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.OAuthRedirectValidator;
 import com.careconnect.security.OAuthStateSigner;
@@ -24,7 +23,6 @@ public class EmailCredentialService {
 
     private final EmailCredentialRepository credRepo;
     private final GoogleOAuthService googleOAuthService;
-    private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
     private final OAuthStateSigner oauthStateSigner;
@@ -101,22 +99,6 @@ public class EmailCredentialService {
     private User resolvePatientUser(String patientIdentifier, User currentUser)
             throws UnauthorizedException {
         return patientResolver.resolvePatient(patientIdentifier, null, currentUser);
-        if (patientIdentifier == null || patientIdentifier.isBlank()
-                || "demo-user".equals(patientIdentifier)) {
-            return currentUser;
-        }
-        return userRepository.findByEmail(patientIdentifier)
-                .or(() -> parseNumericUserId(patientIdentifier).flatMap(userRepository::findById))
-                .orElseThrow(() -> new UnauthorizedException(
-                        "No patient found for identifier: " + patientIdentifier));
-    }
-
-    private static Optional<Long> parseNumericUserId(String value) {
-        try {
-            return Optional.of(Long.parseLong(value));
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
     }
 
     private static boolean hasStoredAccessToken(EmailCredential credential) {
