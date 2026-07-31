@@ -1,6 +1,17 @@
 {
   "@@locale": "en",
-
+  "aiDisclaimer": "AI-generated content may be inaccurate and is not medical advice. Always confirm with your healthcare provider before acting.",
+  "@aiDisclaimer": {
+    "description": "The safety disclaimer is shown on every AI output (3.15.4). Requires review"
+  },
+  "medicationDisclaimer": "AI-assisted information is not medical advice. Verify any medications and dosages with your healthcare provider.",
+  "@medicationDisclaimer": {
+    "description": "The safety disclaimer is shown on medication / care items (3.15.4). Requires review"
+  },
+  "disclaimerLabel": "Disclaimer",
+  "@disclaimerLabel": {
+    "description": "This is an accessibility (screen reader) label announcing a disclaimer banner."
+  },
   "menuTitle": "Menu",
   "yourShortcuts": "Your shortcuts",
   "preferences": "Preferences",

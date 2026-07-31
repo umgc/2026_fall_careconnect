@@ -8,6 +8,7 @@ import 'package:care_connect_app/features/health/medication-tracker/widgets/medi
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/shared/widgets/disclaimer_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -265,6 +266,11 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
                           ),
                         ],
                       ),
+                    ),
+                    // Medication disclaimer (3.15.4)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: DisclaimerBanner.medication(),
                     ),
                     Expanded(
                       child: _buildMedicationList(),
