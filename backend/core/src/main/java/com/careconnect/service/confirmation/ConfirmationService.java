@@ -6,7 +6,9 @@ import com.careconnect.exception.AppException;
 import com.careconnect.model.confirmation.ConfirmationItem;
 import com.careconnect.model.confirmation.ConfirmationSourceType;
 import com.careconnect.model.confirmation.ConfirmationStatus;
+import com.careconnect.model.safety.AuditSourceFeature;
 import com.careconnect.repository.confirmation.ConfirmationItemRepository;
+import com.careconnect.service.safety.AiAuditLedgerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -23,6 +26,7 @@ import java.util.stream.Collectors;
 public class ConfirmationService {
 
     private final ConfirmationItemRepository repository;
+    private final AiAuditLedgerService auditLedgerService;
 
     @Transactional
     public ConfirmationItem createItem(
@@ -51,6 +55,27 @@ public class ConfirmationService {
         log.info("Confirmation item created: id={}, sourceType={}, referenceId={}, requestedBy={}, patientId={}",
                 saved.getId(), sourceType, referenceId, requestedBy, patientId);
         return saved;
+    }
+
+    /**
+     * Record a human confirm/dismiss decision in the audit ledger. Best-effort: a ledger
+     * failure is swallowed by the ledger service and never blocks the resolution.
+     */
+    private void auditResolution(ConfirmationItem item, Long resolverUserId,
+                                 ConfirmationStatus resolution, String note) {
+        AuditSourceFeature source;
+        try {
+            source = AuditSourceFeature.valueOf(item.getSourceType().name());
+        } catch (IllegalArgumentException e) {
+            log.warn("No AuditSourceFeature for confirmation source {}; defaulting to CONFIRMATION_SERVICE",
+                    item.getSourceType());
+            source = AuditSourceFeature.CONFIRMATION_SERVICE;
+        }
+        auditLedgerService.logConfirmation(source, resolverUserId, null, null,
+                Map.of("itemId", item.getId(),
+                       "referenceId", item.getReferenceId() == null ? "" : item.getReferenceId(),
+                       "resolution", resolution.name(),
+                       "note", note == null ? "" : note));
     }
 
     @Transactional
@@ -82,6 +107,7 @@ public class ConfirmationService {
         try {
             var saved = repository.save(item);
             repository.flush();
+            auditResolution(saved, resolverUserId, ConfirmationStatus.CONFIRMED, note);
             log.info("Confirmation item confirmed: id={}, resolvedBy={}", itemId, resolverUserId);
             return saved;
         } catch (OptimisticLockingFailureException ex) {
@@ -101,6 +127,7 @@ public class ConfirmationService {
         try {
             var saved = repository.save(item);
             repository.flush();
+            auditResolution(saved, resolverUserId, ConfirmationStatus.DISMISSED, note);
             log.info("Confirmation item dismissed: id={}, resolvedBy={}", itemId, resolverUserId);
             return saved;
         } catch (OptimisticLockingFailureException ex) {
