@@ -4,7 +4,6 @@ import com.careconnect.dto.EmailConnectionStatus;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
 import com.careconnect.repository.EmailCredentialRepository;
-import com.careconnect.repository.UserRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.OAuthRedirectValidator;
 import com.careconnect.security.OAuthStateSigner;
@@ -32,11 +31,11 @@ class EmailCredentialServiceTest {
 
     @Mock private EmailCredentialRepository credRepo;
     @Mock private GoogleOAuthService googleOAuthService;
-    @Mock private UserRepository userRepository;
     @Mock private SecurityUtil securityUtil;
     @Mock private AuthorizationService authorizationService;
     @Mock private OAuthStateSigner oauthStateSigner;
     @Mock private OAuthRedirectValidator oauthRedirectValidator;
+    @Mock private UspsPatientResolver patientResolver;
 
     @InjectMocks
     private EmailCredentialService service;
@@ -59,6 +58,7 @@ class EmailCredentialServiceTest {
         @DisplayName("patient can read own Gmail status without explicit patientEmail param")
         void patientCanReadOwnStatus() throws Exception {
             when(securityUtil.resolveCurrentUser()).thenReturn(patientUser);
+            when(patientResolver.resolvePatient(null, null, patientUser)).thenReturn(patientUser);
 
             EmailCredential credential = new EmailCredential();
             credential.setUserId("42");
@@ -80,6 +80,7 @@ class EmailCredentialServiceTest {
         @DisplayName("patient can request own Gmail connect URL")
         void patientCanRequestConnectUrl() throws Exception {
             when(securityUtil.resolveCurrentUser()).thenReturn(patientUser);
+            when(patientResolver.resolvePatient(null, null, patientUser)).thenReturn(patientUser);
             when(oauthRedirectValidator.sanitizeReturnUrl("http://localhost/usps-test"))
                     .thenReturn("http://localhost/usps-test");
             when(oauthStateSigner.signStartToken("42", "http://localhost/usps-test"))
@@ -95,6 +96,7 @@ class EmailCredentialServiceTest {
         @DisplayName("patient can disconnect own Gmail account")
         void patientCanDisconnectOwnGmail() throws Exception {
             when(securityUtil.resolveCurrentUser()).thenReturn(patientUser);
+            when(patientResolver.resolvePatient(null, null, patientUser)).thenReturn(patientUser);
 
             EmailCredential credential = new EmailCredential();
             credential.setUserId("42");
@@ -118,7 +120,8 @@ class EmailCredentialServiceTest {
             otherPatient.setRole(Role.PATIENT);
 
             when(securityUtil.resolveCurrentUser()).thenReturn(patientUser);
-            when(userRepository.findByEmail("other@example.com")).thenReturn(Optional.of(otherPatient));
+            when(patientResolver.resolvePatient("other@example.com", null, patientUser))
+                    .thenReturn(otherPatient);
             doThrow(new UnauthorizedException("Patients can only access their own data"))
                     .when(authorizationService).requirePatientAccess(patientUser, 99L);
 
