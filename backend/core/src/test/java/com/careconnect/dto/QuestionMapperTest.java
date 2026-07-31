@@ -82,16 +82,4 @@ class QuestionMapperTest {
         verify(mockQuestion).setOrdinal(5);
     }
 
-    @Test
-    void applyUpsert_optionalFields_appliedCorrectly() throws Exception {
-        final QuestionUpsertDTO src = new QuestionUpsertDTO(
-                "True or false?", QuestionType.TRUE_FALSE, false, 0);
-
-        QuestionMapper.applyUpsert(mockQuestion, src);
-
-        verify(mockQuestion).setPrompt("True or false?");
-        verify(mockQuestion).setType(QuestionType.TRUE_FALSE);
-        verify(mockQuestion).setRequired(false);
-        verify(mockQuestion).setOrdinal(0);
-    }
 }

@@ -22,6 +22,8 @@ import 'config/theme/app_theme.dart';
 import 'config/utils/responsive_utils.dart';
 import 'config/utils/web_utils.dart';
 import 'features/tasks/utils/task_type_manager.dart';
+import 'features/telemetry/telemetry.dart';
+import 'features/telemetry/telemetry_error_handler.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
 
@@ -30,18 +32,11 @@ Future<void> main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      installTelemetryErrorHandlers();
 
       // Load environment variables from .env file
       await dotenv.load(fileName: ".env");
 
-      // Global error handling for Flutter errors
-      FlutterError.onError = (FlutterErrorDetails details) {
-        FlutterError.presentError(details);
-        // Optionally log to a remote server
-        debugPrint(
-          'FlutterError: \\n${details.exceptionAsString()}\\n${details.stack}',
-        );
-      };
       // Performance optimization: Set preferred orientations
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
@@ -87,6 +82,7 @@ Future<void> main() async {
       _initializeServicesInBackground(userProvider);
     },
     (error, stack) {
+      recordZoneUncaughtError(error);
       // Use print() not debugPrint() — debugPrint is a no-op in release mode,
       // which silently swallows startup crashes and leaves the loading screen stuck.
       // ignore: avoid_print
@@ -209,7 +205,8 @@ class CareConnectApp extends StatefulWidget {
   State<CareConnectApp> createState() => _CareConnectAppState();
 }
 
-class _CareConnectAppState extends State<CareConnectApp> {
+class _CareConnectAppState extends State<CareConnectApp>
+    with WidgetsBindingObserver {
   StreamSubscription? _linkSubscription;
   late AppLinks _appLinks;
   Locale? _localeOverride;
@@ -217,7 +214,16 @@ class _CareConnectAppState extends State<CareConnectApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(Telemetry.event('session_start', {'source': 'cold_start'}));
     _initializeDeepLinks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      unawaited(Telemetry.event('session_end', {'reason': 'detached'}));
+    }
   }
 
   Future<void> _initializeDeepLinks() async {
@@ -262,6 +268,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_linkSubscription != null) {
       _linkSubscription!.cancel();
     }
@@ -293,7 +300,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
       theme: AppTheme.lightTheme.copyWith(
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: AppTheme.lightTheme.textTheme.apply(fontFamily: 'Roboto'),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),
@@ -313,7 +320,7 @@ class _CareConnectAppState extends State<CareConnectApp> {
       darkTheme: AppTheme.darkTheme.copyWith(
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: AppTheme.darkTheme.textTheme.apply(fontFamily: 'Roboto'),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.android: OpenUpwardsPageTransitionsBuilder(),

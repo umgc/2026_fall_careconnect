@@ -1,8 +1,14 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/enhanced_patient_notes_widget.dart';
+import 'package:care_connect_app/widgets/structured_entry_form.dart';
+import 'package:provider/provider.dart';
+import 'package:care_connect_app/features/compliance/presentation/pages/compliance_checklist_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/enhanced_file_service.dart';
+import 'package:care_connect_app/services/structured_entry_service.dart';
 
 class PatientFilesPage extends StatefulWidget {
   final int patientId;
@@ -99,13 +105,62 @@ class _PatientFilesPageState extends State<PatientFilesPage>
     }
   }
 
+  String _translateCategory(String value){
+    final t = AppLocalizations.of(context)!;
+    switch(value){
+      case('All Files'):
+        return t.ptfiles_allFilesItem;
+      case('Medical Notes'):
+        return t.ptfiles_medNotesItem;
+      case('Medical Records'):
+        return t.ptfiles_MedRecordItem;
+      case('Prescriptions'):
+        return t.ptfiles_prescripItem;
+      case('Lab Results'):
+        return t.ptfiles_labResItem;
+      case('Insurance'):
+        return t.ptfiles_insuranceItem;
+      case('Reports'):
+        return t.ptfiles_reprotItem;
+      case('Other Documents'):
+        return t.ptfiles_otherDocItem;
+      default:
+        return value;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBarHelper.createAppBar(
         context,
-        title: '${widget.patientName} - Files',
+        title: '${widget.patientName} - ${t.shortcut_files}',
         additionalActions: [
+          IconButton(
+            icon: const Icon(Icons.fact_check),
+            tooltip: 'Required documents checklist',
+            onPressed: () {
+              // Only coordinators may transition statuses (mirrors the
+              // backend's requireAdminOrCaregiver); everyone else gets a
+              // read-only checklist.
+              final role = Provider.of<UserProvider>(context, listen: false)
+                  .user
+                  ?.role
+                  .toUpperCase();
+              final canEdit = role == 'CAREGIVER' || role == 'ADMIN';
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (routeContext) => ComplianceChecklistPage(
+                    subjectType: 'CARE_CIRCLE',
+                    subjectId: widget.patientId,
+                    subjectName: widget.patientName,
+                    canEdit: canEdit,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFiles),
         ],
       ),
@@ -119,9 +174,9 @@ class _PatientFilesPageState extends State<PatientFilesPage>
               labelColor: Theme.of(context).primaryColor,
               unselectedLabelColor: Colors.grey,
               indicatorColor: Theme.of(context).primaryColor,
-              tabs: const [
-                Tab(icon: Icon(Icons.folder), text: 'All Files'),
-                Tab(icon: Icon(Icons.note_add), text: 'Quick Upload'),
+              tabs: [
+                Tab(icon: Icon(Icons.folder), text: t.ptfiles_allFilesItem),
+                Tab(icon: Icon(Icons.note_add), text: t.ptfiles_quickUploadItem),
               ],
             ),
           ),
@@ -145,6 +200,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   }
 
   Widget _buildAllFilesTab() {
+    final t = AppLocalizations.of(context)!;
     return Column(
       children: [
         // Category Filter
@@ -153,7 +209,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
           child: Row(
             children: [
               Text(
-                'Filter by Category:',
+                '${t.ptfiles_filtersCate}:',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(width: 16),
@@ -164,7 +220,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
                   items: _categoryFilters.entries.map((entry) {
                     return DropdownMenuItem(
                       value: entry.key,
-                      child: Text(entry.value),
+                      child: Text(_translateCategory(entry.value)),
                     );
                   }).toList(),
                   onChanged: _onCategoryChanged,
@@ -187,6 +243,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   }
 
   Widget _buildQuickUploadTab() {
+    final t = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -194,14 +251,14 @@ class _PatientFilesPageState extends State<PatientFilesPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Upload Patient Files',
+              t.ptfiles_uploadPtFiles,
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Upload medical records, notes, prescriptions, and other important documents for ${widget.patientName}.',
+              '${t.ptfiles_uploadFileDescr} ${widget.patientName}.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
@@ -221,6 +278,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   }
 
   Widget _buildEmptyState() {
+    final t = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -229,15 +287,15 @@ class _PatientFilesPageState extends State<PatientFilesPage>
           const SizedBox(height: 16),
           Text(
             _selectedCategory == 'ALL'
-                ? 'No files uploaded yet'
-                : 'No files in ${_categoryFilters[_selectedCategory]} category',
+                ? t.ptfiles_noFilesUploaded
+                : '${t.ptfiles_noFilesIn} ${_categoryFilters[_selectedCategory]} ${t.ptfiles_category}',
             style: Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
           ),
           const SizedBox(height: 8),
           Text(
-            'Use the Quick Upload tab to add files',
+            t.ptfiles_quickUploadDescrip,
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
@@ -246,7 +304,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
           ElevatedButton.icon(
             onPressed: () => _tabController.animateTo(1),
             icon: const Icon(Icons.add),
-            label: const Text('Upload Files'),
+            label: Text(t.ptfiles_uploadFilesButton),
           ),
         ],
       ),
@@ -265,6 +323,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   }
 
   Widget _buildFileCard(UserFileDTO file) {
+    final t = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -294,6 +353,9 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
             switch (value) {
+              case 'structured':
+                _openStructuredEntry(file);
+                break;
               case 'preview':
                 _previewFile(file);
                 break;
@@ -306,27 +368,36 @@ class _PatientFilesPageState extends State<PatientFilesPage>
             }
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(
+            if (DocumentFieldTemplates.isSupported(file.fileCategory))
+              PopupMenuItem(
+                value: 'structured',
+                child: ListTile(
+                  leading: Icon(Icons.edit_note),
+                  title: Text(t.ptfiles_structEntry),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            PopupMenuItem(
               value: 'preview',
               child: ListTile(
                 leading: Icon(Icons.visibility),
-                title: Text('Preview'),
+                title: Text(t.ptfiles_previewButton),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'download',
               child: ListTile(
                 leading: Icon(Icons.download),
-                title: Text('Download'),
+                title: Text(t.ptfiles_downloadButton),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
-            const PopupMenuItem(
+            PopupMenuItem(
               value: 'delete',
               child: ListTile(
                 leading: Icon(Icons.delete, color: Colors.red),
-                title: Text('Delete', style: TextStyle(color: Colors.red)),
+                title: Text(t.ptfiles_deleteButton, style: TextStyle(color: Colors.red)),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -337,7 +408,39 @@ class _PatientFilesPageState extends State<PatientFilesPage>
     );
   }
 
+  /// Opens the structured form-entry dialog for [file] in this patient's
+  /// context — creating a new entry, or editing the one already captured
+  /// from this document.
+  Future<void> _openStructuredEntry(UserFileDTO file) async {
+    StructuredEntryDTO? existing;
+    try {
+      existing = await StructuredEntryService.getEntryForFile(file.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load structured entry: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final saved = await StructuredEntryFormDialog.show(
+      context,
+      fileId: file.id,
+      fileName: file.originalFilename.isNotEmpty
+          ? file.originalFilename
+          : file.fileName,
+      fileCategory: file.fileCategory,
+      patientId: file.patientId ?? widget.patientId,
+      existingEntry: existing,
+    );
+    if (saved == true) {
+      await _loadFiles();
+    }
+  }
+
   void _previewFile(UserFileDTO file) {
+    final t = AppLocalizations.of(context)!;
     if (file.isPreviewable) {
       showDialog(
         context: context,
@@ -402,8 +505,8 @@ class _PatientFilesPageState extends State<PatientFilesPage>
                                   ),
                                 );
                               }
-                              return const Center(
-                                child: Text('Failed to load image'),
+                              return Center(
+                                child: Text(t.ptfiles_failedToLoadImage),
                               );
                             },
                           )
@@ -418,27 +521,27 @@ class _PatientFilesPageState extends State<PatientFilesPage>
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Document Preview',
+                                  t.ptfiles_documentPreview,
                                   style: Theme.of(
                                     context,
                                   ).textTheme.headlineSmall,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'File: ${file.originalFilename}',
+                                  '${t.ptfiles_file}: ${file.originalFilename}',
                                   style: Theme.of(context).textTheme.bodyLarge,
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Size: ${_formatFileSize(file.fileSize)}',
+                                  '${t.ptfiles_size}: ${_formatFileSize(file.fileSize)}',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                                 if (file.description != null &&
                                     file.description!.isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Description: ${file.description}',
+                                    '${t.ptfiles_descrip}: ${file.description}',
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodyMedium,
@@ -449,7 +552,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
                                 ElevatedButton.icon(
                                   onPressed: () => _downloadFile(file),
                                   icon: const Icon(Icons.download),
-                                  label: const Text('Download to View'),
+                                  label: Text(t.ptfiles_downloadViewButton),
                                 ),
                               ],
                             ),
@@ -467,6 +570,7 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   }
 
   Future<void> _downloadFile(UserFileDTO file) async {
+    final t = AppLocalizations.of(context)!;
     try {
       final fileBytes = await EnhancedFileService.downloadFile(file.id);
       if (fileBytes != null) {
@@ -474,36 +578,37 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         // For web, use the browser download
         // For mobile, save to device storage
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File downloaded successfully'),
+          SnackBar(
+            content: Text(t.ptfiles_fileDownloadSuccess),
             backgroundColor: Colors.green,
           ),
         );
       } else {
-        _showErrorSnackBar('Failed to download file');
+        _showErrorSnackBar(t.ptfiles_fileDownloadFailed);
       }
     } catch (e) {
-      _showErrorSnackBar('Error downloading file: $e');
+      _showErrorSnackBar('${t.ptfiles_fileDownloadError}: $e');
     }
   }
 
   Future<void> _deleteFile(UserFileDTO file) async {
+    final t = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete File'),
+        title: Text(t.ptfiles_deleteFile),
         content: Text(
-          'Are you sure you want to delete "${file.originalFilename}"?',
+          '${t.ptfiles_deleteFileDialog} "${file.originalFilename}"?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(t.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(t.ptfiles_deleteButton),
           ),
         ],
       ),
@@ -514,17 +619,17 @@ class _PatientFilesPageState extends State<PatientFilesPage>
         final success = await EnhancedFileService.deleteFile(file.id);
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('File deleted successfully'),
+            SnackBar(
+              content: Text(t.ptfiles_fileDeleteSuccess),
               backgroundColor: Colors.green,
             ),
           );
           await _loadFiles(); // Reload files
         } else {
-          _showErrorSnackBar('Failed to delete file');
+          _showErrorSnackBar(t.ptfiles_fileDeleteFailed);
         }
       } catch (e) {
-        _showErrorSnackBar('Error deleting file: $e');
+        _showErrorSnackBar('${t.ptfiles_fileDeleteError}: $e');
       }
     }
   }
@@ -536,15 +641,16 @@ class _PatientFilesPageState extends State<PatientFilesPage>
   }
 
   String _formatDate(DateTime date) {
+    final t = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final difference = now.difference(date);
 
     if (difference.inDays == 0) {
-      return 'Today';
+      return t.ptfiles_today;
     } else if (difference.inDays == 1) {
-      return 'Yesterday';
+      return t.ptfiles_yesterday;
     } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
+      return '${difference.inDays} ${t.ptfiles_daysAgo}';
     } else {
       return '${date.day}/${date.month}/${date.year}';
     }

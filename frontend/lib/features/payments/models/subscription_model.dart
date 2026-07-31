@@ -1,3 +1,5 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
+
 class Subscription {
   final String id; // Database ID
   final String
@@ -88,19 +90,19 @@ class Subscription {
 
   String get formattedAmount => '\$${planAmount.toStringAsFixed(2)}';
 
-  String get formattedInterval {
-    if (planInterval == 'month') return 'Monthly';
-    if (planInterval == 'year') return 'Yearly';
+  String formattedInterval(AppLocalizations t) {
+    if (planInterval == 'month') return t.subscriptionmodels_monthly;
+    if (planInterval == 'year') return t.subscriptionmodels_yearly;
     return planInterval;
   }
 
-  String get statusDisplay {
+  String statusDisplay(AppLocalizations t) {
     final lowerStatus = status.toLowerCase();
-    if (cancelAtPeriodEnd) return 'Canceling at period end';
-    if (lowerStatus == 'active') return 'Active';
-    if (lowerStatus == 'trialing') return 'Trial';
-    if (lowerStatus == 'canceled') return 'Cancelled';
-    if (lowerStatus == 'unpaid') return 'Unpaid';
+    if (cancelAtPeriodEnd) return t.subscriptionmodels_cancelOnPeriod;
+    if (lowerStatus == 'active') return t.subscriptionmodels_active;
+    if (lowerStatus == 'trialing') return t.subscriptionmodels_trial;
+    if (lowerStatus == 'canceled') return t.subscriptionmodels_cancelled;
+    if (lowerStatus == 'unpaid') return t.subscriptionmodels_unpaid;
     return status;
   }
 }
@@ -123,9 +125,9 @@ class SubscriptionPlan {
   });
 
   String get formattedAmount => '\$${amount.toStringAsFixed(2)}';
-  String get formattedInterval {
-    if (interval == 'month') return '/month';
-    if (interval == 'year') return '/year';
+  String formattedInterval(AppLocalizations t) {
+    if (interval == 'month') return t.subscriptionmodels_monthInterval;
+    if (interval == 'year') return t.subscriptionmodels_yearInterval;
     return '/$interval';
   }
 }

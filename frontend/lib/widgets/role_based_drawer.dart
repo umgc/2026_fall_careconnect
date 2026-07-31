@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 import '../services/auth_service.dart';
@@ -95,7 +96,7 @@ class RoleBasedDrawer extends StatelessWidget {
                       title: const Text('User Management'),
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.pushNamed(context, '/admin/users');
+                        context.go('/admin/users');
                       },
                     ),
                     ListTile(
@@ -104,6 +105,14 @@ class RoleBasedDrawer extends StatelessWidget {
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.pushNamed(context, '/admin/roles');
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.insights_outlined),
+                      title: const Text('Product Analytics'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.go('/admin/analytics');
                       },
                     ),
                   ],

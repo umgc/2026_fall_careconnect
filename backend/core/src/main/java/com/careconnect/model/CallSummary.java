@@ -37,6 +37,7 @@ import java.time.LocalDateTime;
                         name = "idx_call_summary_caregiver_visibility",
                         columnList = "caregiver_visibility"
                 )
+                // patient_id index is created by Flyway migration V2607032251 (PR #244)
         }
 )
 public class CallSummary extends Auditable {
@@ -82,6 +83,15 @@ public class CallSummary extends Auditable {
     @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
     private String callId;
 
+    /**
+     * Patient this summary is about. Nullable so historic rows survive;
+     * required for new summaries and resolved from the call participants before persistence.
+     * Carried on SUMMARY_CREATED events (WBS 3.11.5) as the RBAC scope key.
+     * Column added by Flyway migration V2607032251 (PR #244).
+     */
+    @Column(name = "patient_id")
+    private Long patientId;
+
     /** Serialized summary payload stored as JSON text. */
     @Column(name = "summary_json", nullable = false, columnDefinition = "TEXT")
     private String summaryJson;
@@ -106,7 +116,11 @@ public class CallSummary extends Auditable {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    /** Timestamp when the summary was generated. */
+    /**
+     * Timestamp when the summary was generated. This legacy offset-free column is written and
+     * interpreted as UTC. Migration to {@code Instant}/{@code TIMESTAMPTZ} is deferred so it can
+     * be coordinated with existing readers.
+     */
     @Column(name = "generated_at", nullable = false)
     private LocalDateTime generatedAt;
 
@@ -145,6 +159,14 @@ public class CallSummary extends Auditable {
      */
     @Column(name = "summarization_engine", length = SUMMARIZATION_ENGINE_LENGTH)
     private String summarizationEngine;
+
+    /** Deterministic version of the authoritative transcript snapshot. */
+    @Column(name = "transcript_snapshot_version", length = 80)
+    private String transcriptSnapshotVersion;
+
+    /** Version of the model and server-side summary configuration. */
+    @Column(name = "model_config_version", length = 160)
+    private String modelConfigVersion;
 
     /**
      * Whether a usable transcript was available when the summary was generated.

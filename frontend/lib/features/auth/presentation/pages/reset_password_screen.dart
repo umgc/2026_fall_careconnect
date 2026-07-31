@@ -1,5 +1,6 @@
 // Update the existing file - this should handle EMAIL INPUT for requesting reset link
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import '../../../../services/auth_service.dart';
 
@@ -35,6 +36,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     try {
       final message = await AuthService.requestPasswordReset(
         email: _emailController.text.trim(),
+        t: AppLocalizations.of(context)!,
       );
       setState(() {
         _isLoading = false;
@@ -47,7 +49,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         _isLoading = false;
         _status = errorMessage.isNotEmpty
             ? errorMessage
-            : 'Failed to send reset link. Please try again.';
+            : AppLocalizations.of(context)!.resetpassword_failedSendReset;
         _isError = true;
       });
     }
@@ -55,11 +57,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Reset Password',
+        title: Text(
+          t.resetpassword_resetPasswordTitle,
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF14366E),
@@ -75,7 +79,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    'Care Connect',
+                    'CareConnect',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -83,15 +87,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Closer Connections. Better Care.',
+                  Text(
+                    t.welcome_subtitle,
                     style: TextStyle(fontSize: 14, color: Colors.black54),
                   ),
                   const SizedBox(height: 40),
                   const Icon(Icons.email, size: 64, color: Color(0xFF14366E)),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Enter your email to receive a password reset link',
+                  Text(
+                    t.resetpassword_resetInstructions,
                     style: TextStyle(fontSize: 16, color: Colors.black87),
                     textAlign: TextAlign.center,
                   ),
@@ -99,7 +103,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   TextFormField(
                     controller: _emailController,
                     decoration: InputDecoration(
-                      labelText: 'Email',
+                      labelText: t.resetpassword_emailTitle,
                       labelStyle: const TextStyle(color: Color(0xFF14366E)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -111,10 +115,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
+                        return t.resetpassword_missingEmail;
                       }
                       if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                        return 'Please enter a valid email address';
+                        return t.resetpassword_invalidEmail;
                       }
                       return null;
                     },
@@ -147,7 +151,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 strokeWidth: 2,
                               ),
                             )
-                          : const Text('Send Reset Link'),
+                          : Text(t.resetpassword_sendLinkButton),
                     ),
                   ),
                   if (_status != null) ...[

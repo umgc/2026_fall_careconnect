@@ -1,0 +1,7 @@
+[
+  { "ParameterKey": "Environment", "ParameterValue": "staging" },
+  { "ParameterKey": "DatabaseName", "ParameterValue": "careconnect" },
+  { "ParameterKey": "DatabaseMasterUsername", "ParameterValue": "postgres" },
+  { "ParameterKey": "DatabaseMasterPassword", "ParameterValue": "REPLACE_ME_DB_PASSWORD" },
+  { "ParameterKey": "JwtSecret", "ParameterValue": "REPLACE_ME_WITH_A_LONG_RANDOM_JWT_SECRET_VALUE" }
+]

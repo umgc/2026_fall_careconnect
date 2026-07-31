@@ -123,7 +123,7 @@ class ScheduledVisitControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 500 when request fails validation")
+        @DisplayName("Returns 400 when request fails validation")
         void returns500WhenRequestInvalid() throws Exception {
             // Arrange
             final ScheduledVisitRequest invalidRequest = new ScheduledVisitRequest(
@@ -141,7 +141,7 @@ class ScheduledVisitControllerTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidRequest)))
-                    .andExpect(status().isInternalServerError());
+                    .andExpect(status().isBadRequest());
 
             // Assert
             verifyNoInteractions(scheduledVisitService);
@@ -193,12 +193,13 @@ class ScheduledVisitControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 500 when date format is invalid")
-        void returns500WhenDateFormatInvalid() throws Exception {
+        @DisplayName("Returns 400 when date format is invalid")
+        void returns400WhenDateFormatInvalid() throws Exception {
             // Act + Assert
+            // Invalid LocalDate path variable triggers MethodArgumentTypeMismatchException,
+            // which GlobalExceptionHandler now maps to 400 (was 500 before the handler was added).
             mockMvc.perform(get("/v1/api/scheduled-visits/caregiver/5/date/03-01-2026"))
-                    .andExpect(status().isInternalServerError());
-
+                    .andExpect(status().isBadRequest());
             // Assert
             verifyNoInteractions(scheduledVisitService);
         }
@@ -420,7 +421,7 @@ class ScheduledVisitControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 500 when update request fails validation")
+        @DisplayName("Returns 400 when update request fails validation")
         void returns500WhenUpdateRequestInvalid() throws Exception {
             // Arrange
             final ScheduledVisitRequest invalidUpdateRequest = new ScheduledVisitRequest(
@@ -438,7 +439,7 @@ class ScheduledVisitControllerTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidUpdateRequest)))
-                    .andExpect(status().isInternalServerError());
+                    .andExpect(status().isBadRequest());
 
             // Assert
             verifyNoInteractions(scheduledVisitService);

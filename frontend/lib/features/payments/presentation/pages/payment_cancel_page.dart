@@ -1,4 +1,5 @@
 // filepath: lib/features/payments/presentation/pages/payment_cancel_page.dart
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -14,9 +15,10 @@ class PaymentCancelPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBarHelper.createAppBar(context, title: 'Payment Cancelled'),
+      appBar: AppBarHelper.createAppBar(context, title: t.cancelpay_paymentCancel),
       drawer: const CommonDrawer(currentRoute: '/payment-cancel'),
       body: SafeArea(
         child: Center(
@@ -40,7 +42,7 @@ class PaymentCancelPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
                 Text(
-                  'Payment Cancelled',
+                  t.cancelpay_paymentCancel,
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -51,8 +53,8 @@ class PaymentCancelPage extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   isRegistration == true
-                      ? 'Your registration is not complete without payment. You can try again or contact support if you need assistance.'
-                      : 'Your payment was cancelled. No charges were made to your account.',
+                      ? t.cancelpay_regNotComplete
+                      : t.cancelpay_paymentCanceled,
                   style: TextStyle(
                     fontSize: 16,
                     color: Theme.of(
@@ -84,8 +86,8 @@ class PaymentCancelPage extends StatelessWidget {
                     },
                     child: Text(
                       isRegistration == true
-                          ? 'Try Payment Again'
-                          : 'Return to Dashboard',
+                          ? t.cancelpay_tryPayAgain
+                          : t.cancelpay_returnDash,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -112,8 +114,8 @@ class PaymentCancelPage extends StatelessWidget {
                   },
                   child: Text(
                     isRegistration == true
-                        ? 'Skip for Now (Go to Login)'
-                        : 'Go to Home',
+                        ? t.cancelpay_skipGoLogin
+                        : t.cancelpay_goHome,
                     style: TextStyle(
                       color: Theme.of(
                         context,

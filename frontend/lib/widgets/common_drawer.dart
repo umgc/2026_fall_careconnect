@@ -99,6 +99,7 @@ class _CommonDrawerState extends State<CommonDrawer> {
     final isCaregiver = user.role.toUpperCase() == 'CAREGIVER' ||
         user.role.toUpperCase() == 'FAMILY_LINK' ||
         user.role.toUpperCase() == 'ADMIN';
+    final isAdmin = user.role.toUpperCase() == 'ADMIN';
 
     return Drawer(
       child: ListView(
@@ -353,6 +354,17 @@ class _CommonDrawerState extends State<CommonDrawer> {
               title: 'Add Patient',
               route: '/add-patient',
               isActive: widget.currentRoute == '/add-patient',
+            ),
+          ],
+
+          if (isAdmin) ...[
+            const Divider(),
+            _buildDrawerItem(
+              context,
+              icon: Icons.insights_outlined,
+              title: 'Product Analytics',
+              route: '/admin/analytics',
+              isActive: widget.currentRoute == '/admin/analytics',
             ),
           ],
 

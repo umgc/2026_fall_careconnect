@@ -25,25 +25,65 @@ class _NotetakerDetailViewState extends State<NotetakerDetailView> {
   bool _hasChanges = false;
   String? _patientName;
   bool _isLoadingName = false;
+  bool _isLoadingNote = false;
+  String? _loadError;
+  bool _resolvedInitialNote = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_note == null) {
-      final extra = GoRouterState.of(context).extra;
-      if (extra is PatientNote) {
-        _note = extra;
-        _noteController.text = _note!.note;
-        _aiSummaryController.text = _note!.aiSummary;
-        _isEditing = true;
-        _fetchPatientName();
-      } else {
-        // Handle error, go back
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          context.go('/notetaker-search');
-        });
-      }
+    if (_resolvedInitialNote) return;
+    _resolvedInitialNote = true;
+
+    final extra = GoRouterState.of(context).extra;
+    if (extra is PatientNote) {
+      _applyNote(extra);
+      return;
     }
+
+    final noteId = GoRouterState.of(context).pathParameters['noteId'];
+    final patientIdParam =
+        GoRouterState.of(context).uri.queryParameters['patientId'];
+    final patientId = int.tryParse(patientIdParam ?? '');
+    if (noteId == null || noteId.isEmpty || patientId == null) {
+      _loadError = 'Invalid note ID or missing patient context';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_loadError!)),
+        );
+      });
+      return;
+    }
+    _fetchNoteById(patientId, noteId);
+  }
+
+  void _applyNote(PatientNote note) {
+    _note = note;
+    _noteController.text = note.note;
+    _aiSummaryController.text = note.aiSummary;
+    _isEditing = true;
+    _fetchPatientName();
+  }
+
+  Future<void> _fetchNoteById(int patientId, String noteId) async {
+    setState(() {
+      _isLoadingNote = true;
+      _loadError = null;
+    });
+    final note = await NotetakerConfigService.getPatientNote(patientId, noteId);
+    if (!mounted) return;
+    if (note == null) {
+      setState(() {
+        _isLoadingNote = false;
+        _loadError = 'Could not load note $noteId';
+      });
+      return;
+    }
+    setState(() {
+      _isLoadingNote = false;
+      _applyNote(note);
+    });
   }
 
   Future<void> _fetchPatientName() async {
@@ -213,8 +253,16 @@ class _NotetakerDetailViewState extends State<NotetakerDetailView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_note == null) {
+    if (_isLoadingNote) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_note == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Note Detail')),
+        body: Center(
+          child: Text(_loadError ?? 'Note not available'),
+        ),
+      );
     }
 
     final theme = Theme.of(context);

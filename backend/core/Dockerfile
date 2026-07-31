@@ -2,9 +2,9 @@
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-# Install curl for health checks
+# Install curl for health checks; ffmpeg for KVS attendee fragment → WAV (speaker ID)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

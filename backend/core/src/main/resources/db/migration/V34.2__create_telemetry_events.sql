@@ -1,4 +1,4 @@
-CREATE TABLE telemetry_events (
+CREATE TABLE IF NOT EXISTS telemetry_events (
   id BIGSERIAL PRIMARY KEY,
   event_name VARCHAR(128) NOT NULL,
   event_time TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -10,8 +10,8 @@ CREATE TABLE telemetry_events (
   details JSONB
 );
 
-CREATE INDEX idx_telemetry_events_time
+CREATE INDEX IF NOT EXISTS idx_telemetry_events_time
   ON telemetry_events (event_time DESC);
 
-CREATE INDEX idx_telemetry_events_name_time
+CREATE INDEX IF NOT EXISTS idx_telemetry_events_name_time
   ON telemetry_events (event_name, event_time DESC);

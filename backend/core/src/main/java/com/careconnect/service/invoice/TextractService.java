@@ -52,6 +52,19 @@ public class TextractService {
      * Combines, uploads, runs Textract text detection, and returns raw text and S3 key.
      */
     public AiRequest.AnalysisResult analyzeAndGetResult(List<MultipartFile> files) throws IOException, InterruptedException {
+        return analyzeAndGetResult(files, "invoices/");
+    }
+
+    /**
+     * Same pipeline with a caller-supplied S3 key prefix, so non-invoice
+     * documents (e.g. home-care onboarding forms) land in their own folder.
+     */
+    public AiRequest.AnalysisResult analyzeAndGetResult(List<MultipartFile> files, String s3KeyPrefix) throws IOException, InterruptedException {
+        if (s3KeyPrefix == null || s3KeyPrefix.isBlank()) {
+            throw new IllegalArgumentException("S3 key prefix cannot be null or blank.");
+        }
+        String normalizedPrefix = s3KeyPrefix.endsWith("/") ? s3KeyPrefix : s3KeyPrefix + "/";
+
         if (files == null || files.isEmpty() || files.stream().allMatch(MultipartFile::isEmpty)) {
             throw new IllegalArgumentException("File list cannot be null or empty.");
         }
@@ -69,7 +82,7 @@ public class TextractService {
             baseName = fileName.substring(0, fileName.length() - 4);
         }
 
-        String s3Key = "invoices/" + UUID.randomUUID() + "-" + fileName + ".pdf";
+        String s3Key = normalizedPrefix + UUID.randomUUID() + "-" + fileName + ".pdf";
 
         s3StorageService.upload(combinedPdfData, s3Key, "application/pdf");
 

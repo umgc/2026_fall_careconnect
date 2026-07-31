@@ -43,6 +43,36 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/services/evv_service.dart';
+import 'package:care_connect_app/services/api_service_offline.dart';
+
+/// Mutable HTTP handler used by the singleton OfflineQueueHttpClient.
+late Future<http.Response> Function(http.Request) _httpHandler;
+
+Future<http.Response> _defaultHandler(http.Request request) async =>
+    http.Response('{}', 200);
+
+/// Drop-in replacement for http.runWithClient that routes the MockClient's
+/// handler through the singleton's delegating client instead.
+/// Clones the request before forwarding — the outer MockClient already
+/// finalized the original, so a second send() would throw otherwise.
+T _runWithMockHandler<T>(
+  T Function() callback,
+  http.Client Function() clientFactory,
+) {
+  final client = clientFactory();
+  _httpHandler = (http.Request request) async {
+    final clone = http.Request(request.method, request.url)
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+    clone.headers.addAll(request.headers);
+    // Safe after outer MockClient.finalize() — body bytes remain readable.
+    clone.bodyBytes = request.bodyBytes;
+    final streamed = await client.send(clone);
+    return http.Response.fromStream(streamed);
+  };
+  return callback();
+}
 
 // ─── Stubs ──────────────────────────────────────────────────────────────────
 
@@ -55,8 +85,26 @@ const MethodChannel _connectivityChannel =
 void _setupStubs() {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_secureStorageChannel, (call) async {
-    if (call.method == 'readAll') return <String, String>{};
-    if (call.method == 'containsKey') return false;
+    final farFutureExpiry =
+        (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+    if (call.method == 'readAll') {
+      return <String, String>{
+        'jwt_token': 'mock-jwt-for-test',
+        'token_expiry': '$farFutureExpiry',
+      };
+    }
+    if (call.method == 'read') {
+      final key = (call.arguments as Map?)?['key'] as String?;
+      if (key == 'jwt_token') return 'mock-jwt-for-test';
+      if (key == 'token_expiry') return '$farFutureExpiry';
+      return null;
+    }
+    if (call.method == 'containsKey') {
+      final key = (call.arguments as Map?)?['key'] as String?;
+      if (key == 'jwt_token' || key == 'token_expiry') return true;
+      return false;
+    }
+    if (call.method == 'write' || call.method == 'delete') return null;
     return null;
   });
 
@@ -174,7 +222,23 @@ Map<String, dynamic> _correctionJson({int id = 1}) => {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUpAll(() {
+    _httpHandler = _defaultHandler;
+    final delegatingClient =
+        MockClient((request) => _httpHandler(request));
+    // OfflineQueueHttpClient keeps a real IOClient by default; inject a
+    // delegating MockClient so per-test _httpHandler overrides take effect.
+    ApiServiceOffline.debugSetHttpClient(delegatingClient);
+    ApiServiceOffline.configure(canQueueOfflineWrites: () => false);
+  });
+
+  tearDownAll(() {
+    ApiServiceOffline.debugResetHttpClient();
+    ApiServiceOffline.configure(canQueueOfflineWrites: () => true);
+  });
+
   setUp(() {
+    _httpHandler = _defaultHandler;
     SharedPreferences.setMockInitialValues({});
     _setupStubs();
   });
@@ -996,7 +1060,7 @@ void main() {
 
   group('EvvService.reviewRecord', () {
     test('200 returns EvvRecord', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.reviewRecord(recordId: 1, approve: true, comment: 'OK');
@@ -1014,7 +1078,7 @@ void main() {
     });
 
     test('200 with approve=false and no comment', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.reviewRecord(recordId: 5, approve: false);
@@ -1031,7 +1095,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.reviewRecord(recordId: 1, approve: true);
@@ -1045,7 +1109,7 @@ void main() {
 
   group('EvvService.getRecordsByStatus', () {
     test('200 returns list of EvvRecord', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getRecordsByStatus('APPROVED');
@@ -1064,7 +1128,7 @@ void main() {
     });
 
     test('200 returns empty list', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getRecordsByStatus('REJECTED');
@@ -1076,7 +1140,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.getRecordsByStatus('BAD');
@@ -1099,7 +1163,7 @@ void main() {
         'first': true,
         'last': true,
       };
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.searchRecords(EvvSearchRequest(
@@ -1146,7 +1210,7 @@ void main() {
         'first': true,
         'last': true,
       };
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.searchRecords(EvvSearchRequest());
@@ -1166,7 +1230,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.searchRecords(EvvSearchRequest());
@@ -1180,7 +1244,7 @@ void main() {
 
   group('EvvService.getPendingEorApprovals', () {
     test('200 returns list of EvvRecord', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getPendingEorApprovals();
@@ -1198,7 +1262,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.getPendingEorApprovals();
@@ -1212,7 +1276,7 @@ void main() {
 
   group('EvvService.approveEor', () {
     test('200 returns EvvRecord', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.approveEor(recordId: 42, comment: 'Approved');
@@ -1229,7 +1293,7 @@ void main() {
     });
 
     test('200 without comment', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.approveEor(recordId: 10);
@@ -1245,7 +1309,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.approveEor(recordId: 1);
@@ -1259,7 +1323,7 @@ void main() {
 
   group('EvvService.getPendingCorrections', () {
     test('200 returns list of EvvCorrection', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getPendingCorrections();
@@ -1279,7 +1343,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.getPendingCorrections();
@@ -1293,7 +1357,7 @@ void main() {
 
   group('EvvService.approveCorrection', () {
     test('200 with comment returns EvvCorrection', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.approveCorrection(correctionId: 5, comment: 'LGTM');
@@ -1308,7 +1372,7 @@ void main() {
     });
 
     test('200 without comment', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.approveCorrection(correctionId: 3);
@@ -1324,7 +1388,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.approveCorrection(correctionId: 1);
@@ -1338,7 +1402,7 @@ void main() {
 
   group('EvvService.getOfflineQueue', () {
     test('200 returns list of EvvOfflineQueue', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getOfflineQueue();
@@ -1357,7 +1421,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.getOfflineQueue();
@@ -1371,7 +1435,7 @@ void main() {
 
   group('EvvService.syncOfflineData', () {
     test('200 returns response body', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.syncOfflineData();
@@ -1386,7 +1450,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.syncOfflineData();
@@ -1400,7 +1464,7 @@ void main() {
 
   group('EvvService.getOfflineStatus', () {
     test('200 returns list of EvvOfflineQueue', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getOfflineStatus();
@@ -1418,7 +1482,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.getOfflineStatus();
@@ -1432,7 +1496,7 @@ void main() {
 
   group('EvvService.correctRecord', () {
     test('200 returns EvvRecord', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.correctRecord(EvvCorrectionRequest(
@@ -1458,7 +1522,7 @@ void main() {
 
     test('non-200 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.correctRecord(EvvCorrectionRequest(
@@ -1476,7 +1540,7 @@ void main() {
 
   group('EvvService.createRecord', () {
     test('201 returns EvvRecord', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.createRecord(EvvRecordRequest(
@@ -1528,7 +1592,7 @@ void main() {
     });
 
     test('200 also accepted', () async {
-      final result = await http.runWithClient(
+      final result = await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.createRecord(EvvRecordRequest(
@@ -1549,7 +1613,7 @@ void main() {
 
     test('non-200/201 throws exception', () async {
       expect(
-        () => http.runWithClient(
+        () => _runWithMockHandler(
           () {
             final service = EvvService();
             return service.createRecord(EvvRecordRequest(
@@ -1569,7 +1633,7 @@ void main() {
     });
 
     test('device ID is persisted in SharedPreferences', () async {
-      await http.runWithClient(
+      await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.createRecord(EvvRecordRequest(
@@ -1600,7 +1664,7 @@ void main() {
       // Pre-seed a device ID
       SharedPreferences.setMockInitialValues({'evv_device_id': 'my-test-id'});
 
-      await http.runWithClient(
+      await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.createRecord(EvvRecordRequest(
@@ -1623,7 +1687,7 @@ void main() {
 
   group('EvvService._getHeaders', () {
     test('headers include Content-Type', () async {
-      await http.runWithClient(
+      await _runWithMockHandler(
         () {
           final service = EvvService();
           return service.getRecordsByStatus('APPROVED');

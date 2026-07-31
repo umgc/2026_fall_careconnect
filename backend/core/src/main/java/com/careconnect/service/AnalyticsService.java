@@ -2,6 +2,7 @@ package com.careconnect.service;
 
 import com.careconnect.dto.*;
 import com.careconnect.model.SummaryMetric;
+import com.careconnect.model.VitalAlertEvent;
 import com.careconnect.model.WearableMetric;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.time.Instant;
 import java.util.stream.Collectors;
 import java.time.*;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 
 
@@ -37,6 +39,7 @@ public class AnalyticsService {
     private final PatientRepository patientRepo;
     private final UserRepository userRepo;
     private final ExportSigner exportSigner;
+    private final VitalAlertEventRepository vitalAlertEventRepository;
 
 
     /* ---------------- Dashboard ---------------- */
@@ -46,7 +49,9 @@ public class AnalyticsService {
         // Original DB-based implementation restored
         Instant to = Instant.now();
         Instant from = to.minus(period);
-        SummaryMetric agg = summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(patientId, from, to);
+        Patient patient = getPatientById(patientId);
+        Long patientUserId = patient.getUser().getId();
+        SummaryMetric agg = summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(patientUserId, from, to);
         double adherence;
         double avgHr;
         if (agg != null && agg.getGeneratedAt().isAfter(Instant.now().minus(Period.ofDays(1)))) {
@@ -56,14 +61,13 @@ public class AnalyticsService {
             long completed = symptomRepo.countCompleted(patientId, from, to);
             long total = symptomRepo.countTotal(patientId, from, to);
             adherence = total == 0 ? 0 : (completed * 100.0) / total;
-            Double hr = wearableRepo.avgForPeriod(patientId, WearableMetric.MetricType.HEART_RATE, from, to);
+            Double hr = wearableRepo.avgForPeriod(patientUserId, WearableMetric.MetricType.HEART_RATE, from, to);
             avgHr = hr == null ? 0 : hr;
         }
-        double avgSpo2 = avgOrZero(patientId, WearableMetric.MetricType.SPO2, from, to);
-        double avgSys = avgOrZero(patientId, WearableMetric.MetricType.BLOOD_PRESSURE_SYS, from, to);
-        double avgDia = avgOrZero(patientId, WearableMetric.MetricType.BLOOD_PRESSURE_DIA, from, to);
-        double avgWeight = avgOrZero(patientId, WearableMetric.MetricType.WEIGHT, from, to);
-        Patient patient = getPatientById(patientId);
+        double avgSpo2 = avgOrZero(patientUserId, WearableMetric.MetricType.SPO2, from, to);
+        double avgSys = avgOrZero(patientUserId, WearableMetric.MetricType.BLOOD_PRESSURE_SYS, from, to);
+        double avgDia = avgOrZero(patientUserId, WearableMetric.MetricType.BLOOD_PRESSURE_DIA, from, to);
+        double avgWeight = avgOrZero(patientUserId, WearableMetric.MetricType.WEIGHT, from, to);
         LocalDateTime fromLdt = LocalDateTime.ofInstant(from, ZoneOffset.UTC);
         LocalDateTime toLdt = LocalDateTime.ofInstant(to, ZoneOffset.UTC);
         Double avgMood = moodPainLogRepo.avgMoodByPatientAndTimestampBetween(patient, fromLdt, toLdt);
@@ -93,8 +97,9 @@ public class AnalyticsService {
         // Original DB-based implementation restored
         Instant to = Instant.now();
         Instant from = to.minus(period);
-        List<WearableMetric> wearableMetrics = wearableRepo.findByPatientIdAndRecordedAtBetween(patientId, from, to);
         Patient patient = getPatientById(patientId);
+        Long patientUserId = patient.getUser().getId();
+        List<WearableMetric> wearableMetrics = wearableRepo.findByPatientIdAndRecordedAtBetween(patientUserId, from, to);
         LocalDateTime fromLdt = LocalDateTime.ofInstant(from, ZoneOffset.UTC);
         LocalDateTime toLdt = LocalDateTime.ofInstant(to, ZoneOffset.UTC);
         List<com.careconnect.model.MoodPainLog> moodPainLogs = moodPainLogRepo.findByPatientAndTimestampBetween(patient, fromLdt, toLdt);
@@ -106,6 +111,36 @@ public class AnalyticsService {
         return allTimestamps.stream()
                 .map(timestamp -> toDTO(patientId, timestamp, wearableByTime.getOrDefault(timestamp, Collections.emptyList()), moodPainByTime.getOrDefault(timestamp, Collections.emptyList())))
                 .sorted(Comparator.comparing(VitalSampleDTO::timestamp))
+                .toList();
+    }
+
+    public List<VitalAlertEventDTO> getRecentVitalAlertEvents(Long patientId, int limit) {
+        if (limit < 1) {
+            limit = 1;
+        }
+        if (limit > 20) {
+            limit = 20;
+        }
+        getPatientById(patientId);
+        List<VitalAlertEvent> events = vitalAlertEventRepository.findByPatientIdOrderByOccurredAtDesc(
+                patientId,
+                PageRequest.of(0, limit)
+        );
+        return events.stream()
+                .map(event -> new VitalAlertEventDTO(
+                        event.getId(),
+                        event.getPatientId(),
+                        event.getPatientUserId(),
+                        event.getMetricType(),
+                        event.getMeasuredValue(),
+                        event.getAlertLevel(),
+                        event.getStatus(),
+                        event.getRecipientCount(),
+                        event.getSuccessCount(),
+                        event.getFailureCount(),
+                        event.getFailureReason(),
+                        event.getOccurredAt()
+                ))
                 .toList();
     }
 

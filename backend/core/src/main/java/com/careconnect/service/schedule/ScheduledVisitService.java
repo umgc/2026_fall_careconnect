@@ -10,6 +10,7 @@ import com.careconnect.model.schedule.ScheduledVisitAudit;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.repository.schedule.ScheduledVisitAuditRepository;
+import com.careconnect.service.VisitSummaryService;
 import com.careconnect.service.schedule.ScheduleConflictService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class ScheduledVisitService {
     private final PatientRepository patientRepository;
     private final ScheduleConflictService conflictService;
     private final ObjectMapper objectMapper;
+    private final VisitSummaryService visitSummaryService;
 
     @Transactional
     public ScheduledVisitResponse createScheduledVisit(Long caregiverId, ScheduledVisitRequest request) {
@@ -325,6 +327,17 @@ public class ScheduledVisitService {
 
         visit.setStatus(status);
         ScheduledVisit updatedVisit = scheduledVisitRepository.save(visit);
+
+        if ("Completed".equalsIgnoreCase(status)) {
+            try {
+                visitSummaryService.generateAndStoreSummary(
+                        updatedVisit.getId(), updatedVisit.getCaregiverId());
+            } catch (Exception e) {
+                log.warn(
+                        "Visit summary generation failed for visit {}: {}",
+                        updatedVisit.getId(), e.getMessage(), e);
+            }
+        }
 
         String patientName = getPatientName(updatedVisit.getPatientId());
         return new ScheduledVisitResponse(updatedVisit, patientName);
