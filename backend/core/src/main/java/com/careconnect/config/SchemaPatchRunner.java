@@ -240,6 +240,31 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "V300626c – index confirmation_items(requested_by)",
             "CREATE INDEX IF NOT EXISTS idx_confirmation_items_requested_by ON confirmation_items (requested_by)"
         );
+        applyPatch(
+            "V2607131000 – create caregiver_summary_visibility table",
+            "CREATE TABLE IF NOT EXISTS caregiver_summary_visibility (" +
+            "  id                BIGSERIAL PRIMARY KEY," +
+            "  caregiver_user_id BIGINT       NOT NULL," +
+            "  patient_user_id   BIGINT       NOT NULL," +
+            "  status            VARCHAR(16)  NOT NULL DEFAULT 'PENDING_REVIEW'," +
+            "  requested_by      BIGINT," +
+            "  reviewed_by       BIGINT," +
+            "  reviewed_at       TIMESTAMP," +
+            "  version           BIGINT       NOT NULL DEFAULT 0," +
+            "  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+            "  updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+            "  CONSTRAINT uq_caregiver_summary_visibility_pair UNIQUE (caregiver_user_id, patient_user_id))"
+        );
+        applyPatch(
+            "V2607131000a – index caregiver_summary_visibility(caregiver_user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_caregiver_summary_visibility_caregiver " +
+            "ON caregiver_summary_visibility (caregiver_user_id)"
+        );
+        applyPatch(
+            "V2607131000b – index caregiver_summary_visibility(patient_user_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_caregiver_summary_visibility_patient_status " +
+            "ON caregiver_summary_visibility (patient_user_id, status)"
+        );
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();

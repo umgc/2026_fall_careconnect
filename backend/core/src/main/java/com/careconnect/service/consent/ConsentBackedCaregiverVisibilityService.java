@@ -15,6 +15,11 @@ import org.springframework.stereotype.Service;
  *
  * <p>Replaces the permissive {@link NoOpCaregiverVisibilityService} so demos no longer
  * treat all caregivers as consented for {@code on_consent} summaries.
+ *
+ * <p>Access is granted only when both gates pass: effective Ask AI retrieval consent
+ * (this service) and a patient-approved caregiver-visibility record (WBS 3.15.5). Either
+ * one absent holds the summary back, so the patient's explicit review is required in
+ * addition to retrieval consent.
  */
 @Service
 @Primary
@@ -24,6 +29,7 @@ public class ConsentBackedCaregiverVisibilityService implements CaregiverVisibil
     private final ConsentService consentService;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
     private final PatientRepository patientRepository;
+    private final com.careconnect.service.visibility.CaregiverVisibilityService summaryVisibilityStore;
 
     @Override
     public boolean canViewSummaries(final Long caregiverUserId, final Long patientEntityId) {
@@ -44,7 +50,13 @@ public class ConsentBackedCaregiverVisibilityService implements CaregiverVisibil
             // No care-circle relationship — surrounding durable access checks apply alone.
             return CaregiverVisibilityCheck.none();
         }
-        if (consentService.isEffectiveAiRetrievalConsent(caregiverUserId, patientUserId)) {
+        // Both gates must pass: effective retrieval consent AND a patient-approved
+        // caregiver-visibility record. Either absent holds the summary back.
+        final boolean consentEffective =
+                consentService.isEffectiveAiRetrievalConsent(caregiverUserId, patientUserId);
+        final boolean visibilityGranted =
+                summaryVisibilityStore.canViewSummaries(caregiverUserId, patientUserId);
+        if (consentEffective && visibilityGranted) {
             return new CaregiverVisibilityCheck(CaregiverVisibilityStatus.GRANTED, true);
         }
         if (consentService.hasAnyAiRetrievalGrantHistory(caregiverUserId, patientUserId)) {

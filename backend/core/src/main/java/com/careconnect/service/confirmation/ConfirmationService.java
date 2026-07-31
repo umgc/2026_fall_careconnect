@@ -9,8 +9,10 @@ import com.careconnect.model.confirmation.ConfirmationStatus;
 import com.careconnect.model.safety.AuditSourceFeature;
 import com.careconnect.repository.confirmation.ConfirmationItemRepository;
 import com.careconnect.service.safety.AiAuditLedgerService;
+import com.careconnect.service.visibility.CaregiverVisibilityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,12 @@ public class ConfirmationService {
 
     private final ConfirmationItemRepository repository;
     private final AiAuditLedgerService auditLedgerService;
+
+    /**
+     * Lazily resolved to break the cycle: the visibility store depends on this service to
+     * queue review items, and confirming a CAREGIVER_VISIBILITY item grants that visibility.
+     */
+    private final ObjectProvider<CaregiverVisibilityService> visibilityServiceProvider;
 
     @Transactional
     public ConfirmationItem createItem(
@@ -109,11 +117,28 @@ public class ConfirmationService {
             repository.flush();
             auditResolution(saved, resolverUserId, ConfirmationStatus.CONFIRMED, note);
             log.info("Confirmation item confirmed: id={}, resolvedBy={}", itemId, resolverUserId);
+            applyConfirmationSideEffect(saved, resolverUserId);
             return saved;
         } catch (OptimisticLockingFailureException ex) {
             throw new AppException(HttpStatus.CONFLICT,
                     "Confirmation item was concurrently modified: " + itemId);
         }
+    }
+
+    /**
+     * Wire a confirmed CAREGIVER_VISIBILITY item through to the visibility grant. The grant is
+     * tolerant (no-op if the record is no longer PENDING_REVIEW), so a stale confirmation cannot
+     * roll back a reviewer decision. Non-visibility items have no side effect.
+     */
+    private void applyConfirmationSideEffect(ConfirmationItem item, Long resolverUserId) {
+        if (item.getSourceType() != ConfirmationSourceType.CAREGIVER_VISIBILITY) {
+            return;
+        }
+        Long[] ids = CaregiverVisibilityService.parseVisibilityReference(item.getReferenceId());
+        if (ids == null) {
+            return;
+        }
+        visibilityServiceProvider.getObject().approveFromReview(ids[0], ids[1], resolverUserId);
     }
 
     @Transactional
