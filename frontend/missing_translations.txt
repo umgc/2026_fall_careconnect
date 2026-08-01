@@ -1,5 +1,8 @@
 {
   "am": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -824,6 +827,9 @@
   ],
 
   "ar": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -1648,6 +1654,9 @@
   ],
 
   "bn": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -2472,6 +2481,9 @@
   ],
 
   "fa": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -3296,6 +3308,9 @@
   ],
 
   "fr": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -4120,6 +4135,9 @@
   ],
 
   "hi": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -4944,6 +4962,9 @@
   ],
 
   "ja": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -5768,6 +5789,9 @@
   ],
 
   "ne": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -6592,6 +6616,9 @@
   ],
 
   "pt": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -7416,6 +7443,9 @@
   ],
 
   "ru": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -8240,6 +8270,9 @@
   ],
 
   "ur": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
@@ -9064,6 +9097,9 @@
   ],
 
   "zh": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
     "voiceCommands",
     "dailyBrief",
     "stmlSearch",
