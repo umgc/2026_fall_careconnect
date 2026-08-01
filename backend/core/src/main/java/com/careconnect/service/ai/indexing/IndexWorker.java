@@ -1,5 +1,7 @@
 package com.careconnect.service.ai.indexing;
 
+import com.careconnect.indexing.ClinicalNoteIndexedPayload;
+import com.careconnect.indexing.DocumentIndexedPayload;
 import com.careconnect.indexing.IndexingEventType;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
@@ -148,10 +150,11 @@ public class IndexWorker {
     }
 
     /**
-     * Known-unimplemented work (e.g. visit summaries until Task 1.4): leave unprocessed
-     * without burning attempt budget. Sets {@code claimed_at} into the future so the
-     * claim query skips the row for {@code no-burn-park-hours} (default 6h) instead of
-     * reclaiming every poll (~15s) or every short lease window.
+     * Known-unimplemented or temporarily unblockable work: leave unprocessed without burning
+     * attempt budget. Sets {@code claimed_at} into the future so the claim query skips the row
+     * for {@code no-burn-park-hours} (default 6h) instead of reclaiming every poll (~15s) or
+     * every short lease window. Examples: missing authoritative patient scope / hash mismatch
+     * that should wait for a republish rather than dead-letter immediately.
      */
     private void releaseClaimWithoutBurn(final IndexingOutboxRow row, final String message) {
         row.setClaimedAt(LocalDateTime.now().plusHours(noBurnParkHours));
@@ -247,6 +250,16 @@ public class IndexWorker {
                 final MailpieceIndexedPayload payload =
                         objectMapper.treeToValue(payloadNode, MailpieceIndexedPayload.class);
                 return retrievalIndexService.ingestMailpieceIndexed(payload);
+            }
+            if (IndexingEventType.CLINICAL_NOTE_INDEXED.equals(eventType)) {
+                final ClinicalNoteIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, ClinicalNoteIndexedPayload.class);
+                return retrievalIndexService.ingestClinicalNoteIndexed(payload);
+            }
+            if (IndexingEventType.DOCUMENT_INDEXED.equals(eventType)) {
+                final DocumentIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, DocumentIndexedPayload.class);
+                return retrievalIndexService.ingestDocumentIndexed(payload);
             }
         } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
             throw ex;

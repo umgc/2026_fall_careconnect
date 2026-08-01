@@ -122,12 +122,22 @@ public class CallSessionService {
         validateScheduledVisit(scheduledVisitId, patient.getId(), creator);
 
         final String normalizedCallId = callId.trim();
-        final int inserted = callSessionRepository.insertIfAbsent(
-                normalizedCallId,
-                patient.getId(),
-                creator.getId(),
-                scheduledVisitId,
-                SESSION_CREATED);
+        int inserted;
+        try {
+            inserted = callSessionRepository.insertIfAbsent(
+                    normalizedCallId,
+                    patient.getId(),
+                    creator.getId(),
+                    scheduledVisitId,
+                    SESSION_CREATED);
+        } catch (RuntimeException ex) {
+            // Deploy DBs where Hibernate created call_sessions without UNIQUE(call_id)
+            // reject ON CONFLICT; fall through to JPA save / find path.
+            if (!isMissingConflictTarget(ex)) {
+                throw ex;
+            }
+            inserted = 0;
+        }
         final var stored = callSessionRepository.findByCallId(normalizedCallId);
         final CallSession session;
         final boolean newlyCreated;
@@ -166,6 +176,55 @@ public class CallSessionService {
     public CallSession requireSession(final String callId) {
         return callSessionRepository.findByCallId(callId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Call session not found"));
+    }
+
+    /**
+     * Ensures a durable joinable session exists for deploy/Amplify paths where
+     * {@code POST /sessions} was skipped, raced, or failed, and enrolls care-linked
+     * join-link callees who were not seeded as INVITED.
+     */
+    public CallSession ensureJoinAuthorized(
+            final String callId,
+            final User user,
+            final Long patientUserId,
+            final Long inviteeUserId,
+            final Long scheduledVisitId) {
+        if (user == null || user.getId() == null) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        }
+        validateCallId(callId);
+        final String normalizedCallId = callId.trim();
+        final var existing = callSessionRepository.findByCallId(normalizedCallId);
+        if (existing.isEmpty()) {
+            if (patientUserId == null) {
+                throw new AppException(
+                        HttpStatus.NOT_FOUND,
+                        "Call session not found");
+            }
+            createSession(
+                    normalizedCallId, patientUserId, inviteeUserId, scheduledVisitId, user);
+        } else {
+            final CallSession session = existing.get();
+            if (!SESSION_CREATED.equals(session.getStatus())
+                    && !SESSION_ACTIVE.equals(session.getStatus())) {
+                throw new AppException(HttpStatus.GONE, "Call is no longer active");
+            }
+            final boolean joinable = callParticipantRepository
+                    .findByCallSessionIdAndUserId(session.getId(), user.getId())
+                    .filter(participant -> PARTICIPANT_INVITED.equals(participant.getStatus())
+                            || PARTICIPANT_JOINED.equals(participant.getStatus()))
+                    .isPresent();
+            if (!joinable) {
+                final Long ownedPatientUserId = requirePatientUserId(session);
+                authorizeForPatient(user, ownedPatientUserId);
+                upsertParticipant(
+                        session,
+                        user.getId(),
+                        session.getCreatedByUserId(),
+                        PARTICIPANT_INVITED);
+            }
+        }
+        return requireJoinAuthorized(normalizedCallId, user.getId());
     }
 
     @Transactional(readOnly = true)
@@ -812,6 +871,22 @@ public class CallSessionService {
                     participant.setStatus(initialStatus);
                     return callParticipantRepository.save(participant);
                 });
+    }
+
+    private static boolean isMissingConflictTarget(final Throwable error) {
+        Throwable cursor = error;
+        while (cursor != null) {
+            final String message = cursor.getMessage();
+            if (message != null) {
+                final String lower = message.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("no unique or exclusion constraint matching the on conflict")
+                        || lower.contains("there is no unique or exclusion constraint matching")) {
+                    return true;
+                }
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
     }
 
     private void authorizeForPatient(final User user, final Long patientUserId) {

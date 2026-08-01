@@ -9,6 +9,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.chimesdkmeetings.ChimeSdkMeetingsClient;
 import software.amazon.awssdk.services.chimesdkmediapipelines.ChimeSdkMediaPipelinesClient;
 import software.amazon.awssdk.services.iam.IamClient;
+import software.amazon.awssdk.services.kinesisvideo.KinesisVideoClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.ssm.SsmClient;
@@ -78,6 +79,14 @@ public class AwsAccessConfig {
     @Bean
     public ChimeSdkMediaPipelinesClient chimeSdkMediaPipelinesClient() {
         return ChimeSdkMediaPipelinesClient.builder()
+                .region(defaultAwsRegion())
+                .credentialsProvider(awsCredentialsProvider())
+                .build();
+    }
+
+    @Bean
+    public KinesisVideoClient kinesisVideoClient() {
+        return KinesisVideoClient.builder()
                 .region(defaultAwsRegion())
                 .credentialsProvider(awsCredentialsProvider())
                 .build();

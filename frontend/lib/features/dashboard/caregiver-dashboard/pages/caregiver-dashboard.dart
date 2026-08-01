@@ -10,6 +10,7 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/shared/widgets/dashboard_appheader_widget.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
+import 'package:care_connect_app/features/ui_preview/new_ui_preview_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -44,6 +45,7 @@ class CaregiverDashboard extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
+              const NewUiPreviewCard(),
               const SizedBox(height: 20),
 
               // Statistics Cards

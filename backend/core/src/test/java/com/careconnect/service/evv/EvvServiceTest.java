@@ -21,6 +21,7 @@ import com.careconnect.repository.evv.EvvCorrectionRepository;
 import com.careconnect.repository.evv.EvvOfflineQueueRepository;
 import com.careconnect.repository.evv.EvvRecordRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
+import com.careconnect.service.VisitSummaryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -58,6 +59,7 @@ class EvvServiceTest {
     @Mock private EvvLocationService locationService;
     @Mock private AuditLogger audit;
     @Mock private ScheduledVisitRepository scheduledVisitRepository;
+    @Mock private VisitSummaryService visitSummaryService;
 
     @InjectMocks
     private EvvService evvService;
@@ -181,6 +183,57 @@ class EvvServiceTest {
         assertThatThrownBy(() -> evvService.createRecord(req, 1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("GPS");
+    }
+
+    @Test
+    void createRecord_withGpsAccuracyOverThreshold_throwsIllegalArgument() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("GPS")
+                .checkinLocationLat(38.9)
+                .checkinLocationLng(-77.0)
+                .checkinAccuracyM(600.0) // exceeds the 500m EVV compliance threshold
+                .build();
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("500m");
+    }
+
+    @Test
+    void createRecord_withPatientAddressAndNoGpsReason_throwsIllegalArgument() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("PATIENT_ADDRESS")
+                // checkinNoGpsReason intentionally omitted — federal EVV rules require a reason
+                .build();
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reason");
+    }
+
+    @Test
+    void createRecord_withManualLocationAndNoAddress_throwsIllegalArgument() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("MANUAL")
+                .checkinNoGpsReason("COMMUNITY_VISIT")
+                // checkinManualAddress intentionally omitted — MANUAL requires an address
+                .build();
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("address");
     }
 
     @Test

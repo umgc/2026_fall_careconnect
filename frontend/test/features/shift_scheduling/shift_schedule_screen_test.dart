@@ -5,11 +5,39 @@
 // Contains a SwitchListTile for recurring toggle, Start/End time pickers,
 // ChoiceChips for days of the week, and a Save ElevatedButton.
 
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/shift_scheduling/presentation/shift_schedule_screen.dart';
+import 'package:care_connect_app/features/shift_scheduling/presentation/widgets/calendar_view.dart';
+import 'package:care_connect_app/features/shift_scheduling/presentation/widgets/schedule_visit_dialog.dart';
+import 'package:care_connect_app/services/api_client.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
+
+/// Returns an empty calendar for any request — keeps CalendarView off the network.
+class _EmptyCalendarAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    return ResponseBody.fromString(jsonEncode({'days': {}}), 200, headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    });
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+const MethodChannel _secureStorageChannel =
+    MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+const MethodChannel _connectivityChannel =
+    MethodChannel('dev.fluttercommunity.plus/connectivity');
 
 void main() {
   group('CaregiverShiftSchedulingScreen', () {
@@ -255,6 +283,62 @@ void main() {
       await tester.pumpWidget(
           _wrap(const CaregiverShiftSchedulingScreen()));
       expect(find.byType(Card), findsNWidgets(2));
+    });
+  });
+
+  group('ShiftScheduleScreen', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(_secureStorageChannel, (call) async {
+        if (call.method == 'readAll') return <String, String>{};
+        return null;
+      });
+      messenger.setMockMethodCallHandler(_connectivityChannel, (call) async {
+        if (call.method == 'check') return ['wifi'];
+        return null;
+      });
+      ApiClient.instance.debugSetHttpClientAdapter(_EmptyCalendarAdapter());
+    });
+
+    tearDown(() {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(_secureStorageChannel, null);
+      messenger.setMockMethodCallHandler(_connectivityChannel, null);
+    });
+
+    testWidgets('renders a FAB over the calendar', (tester) async {
+      await tester.pumpWidget(_wrap(const ShiftScheduleScreen(caregiverId: 1)));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.add), findsOneWidget);
+      expect(find.byType(CalendarView), findsOneWidget);
+    });
+
+    testWidgets('tapping the FAB opens the schedule dialog', (tester) async {
+      await tester.pumpWidget(_wrap(const ShiftScheduleScreen(caregiverId: 1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      expect(find.byType(ScheduleVisitDialog), findsOneWidget);
+    });
+
+    testWidgets('saving a visit shows a confirmation snackbar', (tester) async {
+      await tester.pumpWidget(_wrap(const ShiftScheduleScreen(caregiverId: 1)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'John Doe');
+      await tester.enterText(fields.at(1), 'Nursing');
+      final createBtn = find.widgetWithText(ElevatedButton, 'Create');
+      await tester.ensureVisible(createBtn);
+      await tester.tap(createBtn);
+      await tester.pump(); // surface the SnackBar
+
+      expect(find.textContaining('Visit saved: John Doe'), findsOneWidget);
     });
   });
 }

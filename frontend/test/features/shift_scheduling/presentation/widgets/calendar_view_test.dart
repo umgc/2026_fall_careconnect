@@ -183,4 +183,46 @@ void main() {
       expect(find.byType(MonthCalendarView), findsOneWidget);
     });
   });
+
+  group('CalendarView date selection reloads the schedule', () {
+    Future<void> openMenuAndSelect(WidgetTester tester, String label) async {
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tapping a day in month view triggers a reload', (tester) async {
+      await tester.pumpWidget(_wrap(const CalendarView(caregiverId: 1)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('15').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(MonthCalendarView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('navigating weeks in week view triggers a reload',
+        (tester) async {
+      await tester.pumpWidget(_wrap(const CalendarView(caregiverId: 1)));
+      await tester.pumpAndSettle();
+      await openMenuAndSelect(tester, 'Week View');
+
+      await tester.tap(find.byIcon(Icons.chevron_right).last);
+      await tester.pumpAndSettle();
+      expect(find.byType(WeekCalendarView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('navigating days in day view triggers a reload', (tester) async {
+      await tester.pumpWidget(_wrap(const CalendarView(caregiverId: 1)));
+      await tester.pumpAndSettle();
+      await openMenuAndSelect(tester, 'Day View');
+
+      await tester.tap(find.byIcon(Icons.chevron_right).last);
+      await tester.pumpAndSettle();
+      expect(find.byType(DayScheduleView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

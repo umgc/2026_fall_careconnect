@@ -85,6 +85,12 @@ class _MenuPageState extends State<MenuPage> {
 
     final items = <_MenuItem>[
       _MenuItem(
+        icon: Icons.auto_awesome,
+        label: 'New UI (preview)',
+        route: '/ui-preview',
+        visibleFor: const {'PATIENT', 'CAREGIVER', 'ADMIN', 'FAMILY_LINK'},
+      ),
+      _MenuItem(
         icon: Icons.receipt_long,
         label: local.invoiceAssistant,
         route: '/invoice-assistant/dashboard',
@@ -181,6 +187,24 @@ class _MenuPageState extends State<MenuPage> {
         route: '/voice',
       ),
       _MenuItem(
+        icon: Icons.wb_sunny_outlined,
+        label: local.dailyBrief,
+        route: '/stml/brief',
+        visibleFor: const {'PATIENT'},
+      ),
+      _MenuItem(
+        icon: Icons.manage_search,
+        label: local.stmlSearch,
+        route: '/stml/search',
+        visibleFor: const {'PATIENT'},
+      ),
+      _MenuItem(
+        icon: Icons.fact_check_outlined,
+        label: local.stmlCheckIn,
+        route: '/stml/checkin',
+        visibleFor: const {'CAREGIVER'},
+      ),
+      _MenuItem(
         icon: Icons.sensors,
         label: local.fallDetection,
         route: '/alertpage',
@@ -201,6 +225,16 @@ class _MenuPageState extends State<MenuPage> {
         onTap: () {
           Navigator.pop(context);
           context.go('/admin/analytics');
+        },
+      ),
+      _MenuItem(
+        icon: Icons.people,
+        label: 'User Management',
+        route: '/admin/users',
+        visibleFor: const {'ADMIN'},
+        onTap: () {
+          Navigator.pop(context);
+          context.go('/admin/users');
         },
       ),
       _MenuItem(

@@ -1,6 +1,9 @@
 {
   "am": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -822,6 +825,9 @@
 
   "ar": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -1643,6 +1649,9 @@
 
   "bn": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -2464,6 +2473,9 @@
 
   "fa": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -3285,6 +3297,9 @@
 
   "fr": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -4106,6 +4121,9 @@
 
   "hi": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -4927,6 +4945,9 @@
 
   "ja": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -5748,6 +5769,9 @@
 
   "ne": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -6569,6 +6593,9 @@
 
   "pt": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -7390,6 +7417,9 @@
 
   "ru": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -8211,6 +8241,9 @@
 
   "ur": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",
@@ -9032,6 +9065,9 @@
 
   "zh": [
     "voiceCommands",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn",
     "roles_Patient",
     "roles_Caregiver",
     "roles_Admin",

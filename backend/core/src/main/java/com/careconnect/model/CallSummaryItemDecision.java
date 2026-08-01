@@ -64,6 +64,9 @@ public class CallSummaryItemDecision {
      * Decision recorded by the acting user. Permitted values match the team
      * TDD section 6.2.2 contract: {@code approve}, {@code approve-for-session},
      * or {@code decline}.
+     *
+     * <p>{@code approve-for-session} also installs Ask-style {@code APPROVE_SESSION}
+     * suppression via {@code AiAskConfirmationService} for the call's confirmation session.
      */
     @Column(name = "decision", nullable = false, length = 24)
     private String decision;

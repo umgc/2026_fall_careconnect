@@ -30,9 +30,11 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             INSERT INTO call_sessions
-              (call_id, patient_id, created_by_user_id, scheduled_visit_id, status, created_at, updated_at)
+              (call_id, patient_id, created_by_user_id, scheduled_visit_id, status,
+               recording_start_elected, created_at, updated_at)
             VALUES
-              (:callId, :patientId, :creatorId, :scheduledVisitId, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              (:callId, :patientId, :creatorId, :scheduledVisitId, :status,
+               FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT (call_id) DO NOTHING
             """, nativeQuery = true)
     int insertIfAbsent(

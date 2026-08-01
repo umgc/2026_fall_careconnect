@@ -1,11 +1,12 @@
 // Tests for CancelScreen from lib/features/dashboard/presentation/cancelscreen.dart.
 // Pure StatelessWidget — no HTTP, no Provider.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/dashboard/presentation/cancelscreen.dart';
 
-Widget _wrap() => const MaterialApp(home: CancelScreen());
+Widget _wrap() => const MaterialApp(locale: Locale('en'),localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales,home: CancelScreen());
 
 void main() {
   group('CancelScreen – initial render', () {

@@ -25,4 +25,14 @@ public final class ContentHashUtil {
             throw new IllegalStateException("SHA-256 is unavailable", ex);
         }
     }
+
+    /**
+     * Idempotency hash for clinical-note indexing. Includes both the note body and
+     * {@code aiSummary} so regenerating the summary alone triggers re-ingest.
+     */
+    public static String clinicalNoteContentHash(final String noteBody, final String aiSummary) {
+        final String body = noteBody == null ? "" : noteBody;
+        final String summary = aiSummary == null ? "" : aiSummary;
+        return sha256(body + "\n" + summary);
+    }
 }

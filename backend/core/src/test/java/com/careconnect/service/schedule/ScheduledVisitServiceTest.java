@@ -43,6 +43,7 @@ import com.careconnect.model.schedule.ScheduledVisitAudit;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.schedule.ScheduledVisitAuditRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
+import com.careconnect.service.VisitSummaryService;
 import com.careconnect.service.schedule.ScheduleConflictService.ConflictSummary;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -68,6 +69,9 @@ class ScheduledVisitServiceTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private VisitSummaryService visitSummaryService;
 
     @InjectMocks
     private ScheduledVisitService visitService;
@@ -985,6 +989,26 @@ class ScheduledVisitServiceTest {
             // Should still delete and create audit with fallback value
             verify(scheduledVisitRepository).deleteById(VISIT_ID);
             verify(scheduledVisitAuditRepository).save(any(ScheduledVisitAudit.class));
+        }
+
+        @Test
+        @DisplayName("should fall back to a plain audit entry when the first audit save fails")
+        void shouldFallBackWhenFirstAuditSaveFailsDuringDelete() throws Exception {
+            ScheduledVisit visit = createVisit();
+            when(scheduledVisitRepository.findById(VISIT_ID))
+                    .thenReturn(Optional.of(visit));
+            when(objectMapper.writeValueAsString(any())).thenReturn("{\"id\":100}");
+            // First audit save (inside the try) fails; the catch retries with a
+            // plain "Unable to serialize" entry, which succeeds.
+            when(scheduledVisitAuditRepository.save(any(ScheduledVisitAudit.class)))
+                    .thenThrow(new RuntimeException("audit db unavailable"))
+                    .thenReturn(new ScheduledVisitAudit());
+
+            visitService.deleteScheduledVisit(VISIT_ID);
+
+            verify(scheduledVisitAuditRepository, times(2))
+                    .save(any(ScheduledVisitAudit.class));
+            verify(scheduledVisitRepository).deleteById(VISIT_ID);
         }
     }
 

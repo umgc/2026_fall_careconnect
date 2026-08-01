@@ -4,19 +4,46 @@
 //   PatientMoreFeaturesBottomDrawerWidget
 //     (lib/config/navigation/patient_more_features_bottom_drawer.dart)
 //
-// Both are pure StatelessWidgets — no Provider, no API calls on render.
+// Both are StatelessWidgets with no API calls on render. The caregiver drawer
+// reads the signed-in role from UserProvider to gate the "AI review queue"
+// entry, so both are pumped under a ChangeNotifierProvider<UserProvider>.
 // They pass a list of FeatureItems to MoreFeaturesBottomDrawer.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/config/navigation/caregiver_more_features_bottom_drawer.dart';
 import 'package:care_connect_app/config/navigation/patient_more_features_bottom_drawer.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:provider/provider.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
-      home: Scaffold(body: SizedBox(height: 800, child: child)),
+import '../../mock_user_provider.dart';
+
+const MethodChannel _connectivityChannel =
+    MethodChannel('dev.fluttercommunity.plus/connectivity');
+
+Widget _wrap(Widget child, {String role = 'CAREGIVER'}) =>
+    ChangeNotifierProvider<UserProvider>(
+      create: (_) => MockUserProvider(mockUser: MockUser(role: role)),
+      child: MaterialApp(
+        home: Scaffold(body: SizedBox(height: 800, child: child)),
+      ),
     );
 
 void main() {
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_connectivityChannel, (call) async {
+      if (call.method == 'check') return ['wifi'];
+      return null;
+    });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_connectivityChannel, null);
+  });
+
   group('CaregiverMoreFeaturesBottomDrawerWidget', () {
     testWidgets('renders without crashing', (tester) async {
       await tester.pumpWidget(

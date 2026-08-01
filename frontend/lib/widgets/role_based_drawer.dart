@@ -96,7 +96,7 @@ class RoleBasedDrawer extends StatelessWidget {
                       title: const Text('User Management'),
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.pushNamed(context, '/admin/users');
+                        context.go('/admin/users');
                       },
                     ),
                     ListTile(

@@ -25,8 +25,11 @@ public final class MedicationNameNormalizer {
             Map.entry("glucophage", "metformin"),
             Map.entry("fortamet", "metformin"),
             Map.entry("glumetza", "metformin"),
+            Map.entry("riomet", "metformin"),
             Map.entry("lipitor", "atorvastatin"),
             Map.entry("zocor", "simvastatin"),
+            Map.entry("crestor", "rosuvastatin"),
+            Map.entry("pravachol", "pravastatin"),
             Map.entry("norvasc", "amlodipine"),
             Map.entry("prinivil", "lisinopril"),
             Map.entry("zestril", "lisinopril"),
@@ -35,7 +38,10 @@ public final class MedicationNameNormalizer {
             Map.entry("tylenol", "acetaminophen"),
             Map.entry("paracetamol", "acetaminophen"),
             Map.entry("advil", "ibuprofen"),
-            Map.entry("motrin", "ibuprofen"));
+            Map.entry("motrin", "ibuprofen"),
+            Map.entry("coumadin", "warfarin"),
+            Map.entry("lantus", "insulin glargine"),
+            Map.entry("humalog", "insulin lispro"));
 
     private MedicationNameNormalizer() {
     }

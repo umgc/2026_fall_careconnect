@@ -87,8 +87,8 @@ Resources:
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/careconnect/${Environment}/*
 
-  # Task role: runtime permissions for Chime, recording, Bedrock, S3, Transcribe,
-  # SSM (prod profile), and related AWS SDK clients.
+  # Task role: runtime permissions for Chime, recording, KVS stream-pool speaker capture,
+  # Bedrock, S3, Transcribe, SSM (prod profile), and related AWS SDK clients.
   # See cloudformation-fargate/README.md — ECS task role permissions.
   EcsTaskRole:
     Type: AWS::IAM::Role
@@ -132,26 +132,23 @@ Resources:
                   - chime:GetMediaCapturePipeline
                   - chime:GetMediaPipeline
                   - chime:CreateMediaStreamPipeline
-                  - chime:CreateMediaInsightsPipeline
-                  - chime:DeleteMediaInsightsPipeline
-                  - chime:GetMediaInsightsPipeline
-                  - chime:CreateMediaInsightsPipelineConfiguration
-                  - chime:GetMediaInsightsPipelineConfiguration
-                  - chime:ListMediaInsightsPipelineConfigurations
                 Resource: '*'
               - Sid: KinesisVideoStreams
                 Effect: Allow
                 Action:
-                  - kinesisvideo:CreateStream
                   - kinesisvideo:DescribeStream
                   - kinesisvideo:GetDataEndpoint
                   - kinesisvideo:GetMedia
                   - kinesisvideo:GetMediaForFragmentList
-                  - kinesisvideo:PutMedia
-                  - kinesisvideo:TagStream
-                  - kinesisvideo:ListStreams
                   - kinesisvideo:ListFragments
                 Resource: !Sub arn:aws:kinesisvideo:${AWS::Region}:${AWS::AccountId}:stream/*
+              # ListStreams is a service-level API; AWS requires Resource '*'.
+              # Scoping it to stream/* breaks speaker-ID polling fallback discovery.
+              - Sid: KinesisVideoListStreams
+                Effect: Allow
+                Action:
+                  - kinesisvideo:ListStreams
+                Resource: '*'
               - Sid: S3CareConnectBuckets
                 Effect: Allow
                 Action:
@@ -169,25 +166,21 @@ Resources:
                   - arn:aws:s3:::careconnect-recordings-*/*
                   - arn:aws:s3:::careconnect-uploads-*
                   - arn:aws:s3:::careconnect-uploads-*/*
+              # Chime CreateMediaCapturePipeline validates the sink bucket policy as the
+              # caller. AWS requires Resource "*" for s3:GetBucketPolicy; scoping it to
+              # careconnect-recordings-* is the common way people get stuck on the same
+              # 403 "Insufficient permission to access S3 bucket".
+              - Sid: S3GetBucketPolicyForChimeCapture
+                Effect: Allow
+                Action:
+                  - s3:GetBucketPolicy
+                Resource: '*'
               - Sid: BedrockInvoke
                 Effect: Allow
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
-                Resource:
-                  # Named allow-list (Task 4.3 Titan v1 + chat/summary models); prefer least privilege
-                  # over foundation-model/* from deploy-permissions merge into develop.
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v1
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/mistral.voxtral-small-24b-2507
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0
-                  - !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-6
-                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*
+                Resource: '*'
               - Sid: TranscribeJobs
                 Effect: Allow
                 Action:
@@ -210,6 +203,7 @@ Resources:
                   - ses:SendRawEmail
                   - sns:Publish
                 Resource: '*'
+              # Covers kvs-stream-pool-arn and other env-scoped SSM params.
               - Sid: SsmParameters
                 Effect: Allow
                 Action:
@@ -239,6 +233,18 @@ Resources:
                 Action:
                   - sts:GetCallerIdentity
                 Resource: '*'
+
+  # Chime KVS Stream Pool for media stream pipeline ingest (create once via CLI/console).
+  # aws chime-sdk-media-pipelines create-media-pipeline-kinesis-video-stream-pool ...
+  KvsStreamPoolArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /careconnect/${Environment}/kvs-stream-pool-arn
+      Type: String
+      Description: >-
+        Chime media-pipeline-kinesis-video-stream-pool ARN for CreateMediaStreamPipeline ingest.
+        Set manually after creating the pool (not provisioned by this stack).
+      Value: REPLACE_WITH_CHIME_KVS_STREAM_POOL_ARN
 
 Outputs:
   # Exported outputs are consumed by the service stack.
@@ -276,3 +282,8 @@ Outputs:
     Value: !Ref BackendLogGroup
     Export:
       Name: !Sub careconnect-${Environment}-BackendLogGroupName
+
+  KvsStreamPoolArnParameterName:
+    Value: !Ref KvsStreamPoolArnParameter
+    Export:
+      Name: !Sub careconnect-${Environment}-KvsStreamPoolArnParameterName

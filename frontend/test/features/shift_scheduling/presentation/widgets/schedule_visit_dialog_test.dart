@@ -251,4 +251,108 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('ScheduleVisitDialog - validation & inputs', () {
+    testWidgets('warns when service type is empty', (tester) async {
+      await tester.pumpWidget(_host(const ScheduleVisitDialog(caregiverId: 1)));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).at(0), 'John Doe');
+      final createBtn = find.widgetWithText(ElevatedButton, 'Create');
+      await tester.ensureVisible(createBtn);
+      await tester.tap(createBtn);
+      await tester.pump();
+
+      expect(find.text('Please enter service type'), findsOneWidget);
+    });
+
+    testWidgets('opening the date field shows a date picker', (tester) async {
+      await tester.pumpWidget(_host(const ScheduleVisitDialog(caregiverId: 1)));
+      await tester.pump();
+
+      final dateField =
+          find.ancestor(of: find.text('Date'), matching: find.byType(InkWell));
+      await tester.ensureVisible(dateField.first);
+      await tester.tap(dateField.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('OK'), findsOneWidget); // date picker is open
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('opening the time field shows a time picker', (tester) async {
+      await tester.pumpWidget(_host(const ScheduleVisitDialog(caregiverId: 1)));
+      await tester.pump();
+
+      final timeField =
+          find.ancestor(of: find.text('Time'), matching: find.byType(InkWell));
+      await tester.ensureVisible(timeField.first);
+      await tester.tap(timeField.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('OK'), findsOneWidget); // time picker is open
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('selecting a duration updates the dropdown', (tester) async {
+      await tester.pumpWidget(_host(const ScheduleVisitDialog(caregiverId: 1)));
+      await tester.pump();
+
+      final dd = find.byType(DropdownButtonFormField<int>);
+      await tester.ensureVisible(dd);
+      await tester.tap(dd);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('90 minutes').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('90 minutes'), findsOneWidget);
+    });
+
+    testWidgets('selecting a priority updates the dropdown', (tester) async {
+      await tester.pumpWidget(_host(const ScheduleVisitDialog(caregiverId: 1)));
+      await tester.pump();
+
+      final dd = find.byType(DropdownButtonFormField<String>);
+      await tester.ensureVisible(dd);
+      await tester.tap(dd);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('High').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('High'), findsOneWidget);
+    });
+
+    testWidgets('blocks save until a detected conflict is resolved',
+        (tester) async {
+      // Reinstall the adapter so the conflict check reports a conflict.
+      ApiClient.instance.debugSetHttpClientAdapter(_FakeAdapter(jsonEncode({
+        'hasConflicts': true,
+        'conflictingVisits': [],
+        'conflictType': 'overlap',
+        'conflictMessages': ['Overlaps an existing visit'],
+      })));
+
+      await tester.pumpWidget(_host(const ScheduleVisitDialog(caregiverId: 1)));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).at(0), 'John Doe');
+      await tester.enterText(find.byType(TextField).at(1), 'Nursing');
+
+      final checkBtn = find.text('Check for Conflicts');
+      await tester.ensureVisible(checkBtn);
+      await tester.tap(checkBtn);
+      await tester.pumpAndSettle();
+
+      final createBtn = find.widgetWithText(ElevatedButton, 'Create');
+      await tester.ensureVisible(createBtn);
+      await tester.tap(createBtn);
+      await tester.pump();
+
+      expect(find.text('Please resolve conflicts before saving'), findsOneWidget);
+    });
+  });
 }
