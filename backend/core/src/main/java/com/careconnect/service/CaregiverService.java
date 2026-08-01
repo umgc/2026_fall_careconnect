@@ -503,4 +503,33 @@ public PatientWithLinkDto getPatientWithLinkById(Long caregiverId, Long patientI
         .toList();
     return new PatientWithLinkDto(summary, linkOpt.get(), risks);
 }
+/**
+     * Grant feature access for a caregiver across all active patient links (WBS 3.10.1 / Ticket 505)
+     */
+    public void grantPermission(Long caregiverId, String permission) {
+        Caregiver caregiver = caregiverRepository.findById(caregiverId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Caregiver not found"));
+
+        List<CaregiverPatientLinkResponse> activeLinks = 
+                caregiverPatientLinkService.getPatientsByCaregiver(caregiver.getUser().getId());
+
+        for (CaregiverPatientLinkResponse link : activeLinks) {
+            caregiverPatientLinkService.grantPermission(link.id(), permission, caregiver.getUser().getId());
+        }
+    }
+
+    /**
+     * Revoke feature access for a caregiver across all active patient links (WBS 3.10.1 / Ticket 505)
+     */
+    public void revokePermission(Long caregiverId, String permission) {
+        Caregiver caregiver = caregiverRepository.findById(caregiverId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Caregiver not found"));
+
+        List<CaregiverPatientLinkResponse> activeLinks = 
+                caregiverPatientLinkService.getPatientsByCaregiver(caregiver.getUser().getId());
+
+        for (CaregiverPatientLinkResponse link : activeLinks) {
+            caregiverPatientLinkService.revokePermission(link.id(), permission, caregiver.getUser().getId());
+        }
+    }
 }

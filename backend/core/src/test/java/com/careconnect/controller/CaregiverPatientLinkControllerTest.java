@@ -434,4 +434,33 @@ class CaregiverPatientLinkControllerTest {
         mockMvc.perform(post("/v1/api/caregiver-patient-links/cleanup-expired"))
                 .andExpect(status().isForbidden());
     }
+    // ============================================================
+    // TEST: Feature Toggle - Video Calls
+    // WHY: Ensures caregivers/admins can toggle patient video access
+    // ============================================================
+    @Test
+    void caregiverCanToggleVideoCalls() throws Exception {
+        final User caregiver = buildUser(2L, Role.CAREGIVER, "cg@test.com");
+        mockSecurityContext("cg@test.com", caregiver);
+
+        mockMvc.perform(post("/v1/api/caregiver-patient-links/1/patient-video-calls")
+                        .contentType("application/json")
+                        .content("{\"enabled\": true}"))
+                .andExpect(status().isOk());
+    }
+
+    // ============================================================
+    // TEST: Feature Toggle - Messaging
+    // WHY: Ensures caregivers/admins can toggle patient messaging access
+    // ============================================================
+    @Test
+    void caregiverCanToggleMessaging() throws Exception {
+        final User caregiver = buildUser(2L, Role.CAREGIVER, "cg@test.com");
+        mockSecurityContext("cg@test.com", caregiver);
+
+        mockMvc.perform(post("/v1/api/caregiver-patient-links/1/patient-messaging")
+                        .contentType("application/json")
+                        .content("{\"enabled\": false}"))
+                .andExpect(status().isOk());
+    }
 }

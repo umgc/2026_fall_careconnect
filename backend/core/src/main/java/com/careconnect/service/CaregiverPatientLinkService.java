@@ -420,4 +420,29 @@ public class CaregiverPatientLinkService {
         return caregiverPatientLinkRepository.existsByCaregiverUserAndPatientUserAndStatus(
                 caregiverUser, patientUser, CaregiverPatientLink.LinkStatus.ACTIVE);
     }
+    public CaregiverPatientLinkResponse grantPermission(Long linkId, String feature, Long userId) {
+        CaregiverPatientLink link = caregiverPatientLinkRepository.findById(linkId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Link not found"));
+
+        String token = "[" + feature.trim().toUpperCase() + "=OFF]";
+        String base = link.getNotes() == null ? "" : link.getNotes();
+        base = base.replace(token, "").trim();
+        link.setNotes(base.isBlank() ? null : base);
+
+        caregiverPatientLinkRepository.save(link);
+        return toCaregiverPatientLinkResponse(link);
+    }
+
+    public CaregiverPatientLinkResponse revokePermission(Long linkId, String feature, Long userId) {
+        CaregiverPatientLink link = caregiverPatientLinkRepository.findById(linkId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Link not found"));
+
+        String token = "[" + feature.trim().toUpperCase() + "=OFF]";
+        String base = link.getNotes() == null ? "" : link.getNotes();
+        base = base.replace(token, "").trim();
+        link.setNotes(base.isBlank() ? token : base + " " + token);
+
+        caregiverPatientLinkRepository.save(link);
+        return toCaregiverPatientLinkResponse(link);
+    }
 }

@@ -330,7 +330,71 @@ class CaregiverControllerTest {
             assertThat(response.getBody()).isSameAs(dto);
         }
     }
+// ── POST /{caregiverId}/permissions/grant ──────────────────────────────────
 
+    @Nested
+    class GrantPermission {
+
+        @Test
+        void throwsBadRequestWhenPermissionKeyIsMissing() {
+            assertThatThrownBy(() -> controller.grantPermission(CAREGIVER_ID, Collections.emptyMap()))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage("Permission name is required");
+        }
+
+        @Test
+        void throwsNotFoundWhenCaregiverDoesNotExist() {
+            when(caregiverRepository.findById(CAREGIVER_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> controller.grantPermission(CAREGIVER_ID, Map.of("permission", "EDIT_NOTES")))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage("Caregiver not found");
+        }
+
+        @Test
+        void grantsPermissionSuccessfully() throws Exception {
+            final Caregiver caregiver = makeCaregiver(CAREGIVER_ID, makeUser(CG_USER_ID, Role.CAREGIVER));
+            when(caregiverRepository.findById(CAREGIVER_ID)).thenReturn(Optional.of(caregiver));
+
+            final ResponseEntity<?> response = controller.grantPermission(CAREGIVER_ID, Map.of("permission", "EDIT_NOTES"));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            verify(caregiverService).grantPermission(CAREGIVER_ID, "EDIT_NOTES");
+        }
+    }
+
+    // ── POST /{caregiverId}/permissions/revoke ─────────────────────────────────
+
+    @Nested
+    class RevokePermission {
+
+        @Test
+        void throwsBadRequestWhenPermissionKeyIsMissing() {
+            assertThatThrownBy(() -> controller.revokePermission(CAREGIVER_ID, Collections.emptyMap()))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage("Permission name is required");
+        }
+
+        @Test
+        void throwsNotFoundWhenCaregiverDoesNotExist() {
+            when(caregiverRepository.findById(CAREGIVER_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> controller.revokePermission(CAREGIVER_ID, Map.of("permission", "EDIT_NOTES")))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage("Caregiver not found");
+        }
+
+        @Test
+        void revokesPermissionSuccessfully() throws Exception {
+            final Caregiver caregiver = makeCaregiver(CAREGIVER_ID, makeUser(CG_USER_ID, Role.CAREGIVER));
+            when(caregiverRepository.findById(CAREGIVER_ID)).thenReturn(Optional.of(caregiver));
+
+            final ResponseEntity<?> response = controller.revokePermission(CAREGIVER_ID, Map.of("permission", "EDIT_NOTES"));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            verify(caregiverService).revokePermission(CAREGIVER_ID, "EDIT_NOTES");
+        }
+    }
     // ── helpers ───────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")

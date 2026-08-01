@@ -221,8 +221,8 @@ class SsmPropertySourceInitializerTest {
         // Verifies that loadParametersFromSsm() iterates every entry in SSM_PARAMETERS
         // and populates the map with the matching Spring property key from
         // PARAMETER_MAPPING. JWT and DB credentials are excluded (ECS Secrets Manager).
-        // With 12 parameters defined and all calls succeeding, the result must contain
-        // exactly 12 entries.
+        // With 13 parameters defined and all calls succeeding, the result must contain
+        // exactly 13 entries.
 
         final SsmClient ssmClient = Mockito.mock(SsmClient.class);
 
@@ -244,8 +244,8 @@ class SsmPropertySourceInitializerTest {
         final Map<String, Object> result =
                 (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
-        // All 12 SSM_PARAMETERS entries are in PARAMETER_MAPPING, so all should load.
-        assertEquals(12, result.size());
+        // All 13 SSM_PARAMETERS entries are in PARAMETER_MAPPING, so all should load.
+        assertEquals(13, result.size());
 
         // Spot-check a representative sample of the PARAMETER_MAPPING entries.
         assertEquals("mock-value", result.get("stripe.secret-key"));

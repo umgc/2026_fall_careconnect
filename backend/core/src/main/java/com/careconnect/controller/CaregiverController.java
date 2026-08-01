@@ -227,4 +227,75 @@ public class CaregiverController {
         
         return ResponseEntity.ok(patientDto);
     }
+    // ==============================
+    // Feature Access / Grant & Revoke (WBS 3.10.1 / Ticket 505)
+    // ==============================
+
+    @PostMapping("/{caregiverId}/permissions/grant")
+    @Operation(summary = "Grant feature access or permission to caregiver",
+               description = "Grants specific feature access permissions to a caregiver or care circle member.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Permission successfully granted"),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload or missing permission"),
+            @ApiResponse(responseCode = "404", description = "Caregiver not found")
+    })
+    public ResponseEntity<?> grantPermission(
+            @PathVariable Long caregiverId,
+            @RequestBody Map<String, String> request) throws UnauthorizedException {
+
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+
+        String permissionName = request.get("permission");
+        if (permissionName == null || permissionName.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Permission name is required");
+        }
+
+        // Verify caregiver exists
+        Caregiver caregiver = caregiverRepository.findById(caregiverId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Caregiver not found"));
+
+        // Implement business logic via caregiverService / permissionService
+        caregiverService.grantPermission(caregiver.getId(), permissionName);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Permission '" + permissionName + "' granted successfully",
+                "caregiverId", caregiverId,
+                "permission", permissionName
+        ));
+    }
+
+    @PostMapping("/{caregiverId}/permissions/revoke")
+    @Operation(summary = "Revoke feature access or permission from caregiver",
+               description = "Revokes specific feature access permissions from a caregiver or care circle member.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Permission successfully revoked"),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload or missing permission"),
+            @ApiResponse(responseCode = "404", description = "Caregiver not found")
+    })
+    public ResponseEntity<?> revokePermission(
+            @PathVariable Long caregiverId,
+            @RequestBody Map<String, String> request) throws UnauthorizedException {
+
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+
+        String permissionName = request.get("permission");
+        if (permissionName == null || permissionName.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Permission name is required");
+        }
+
+        // Verify caregiver exists
+        Caregiver caregiver = caregiverRepository.findById(caregiverId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Caregiver not found"));
+
+        // Implement business logic via caregiverService / permissionService
+        caregiverService.revokePermission(caregiver.getId(), permissionName);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Permission '" + permissionName + "' revoked successfully",
+                "caregiverId", caregiverId,
+                "permission", permissionName
+        ));
+    }
 }

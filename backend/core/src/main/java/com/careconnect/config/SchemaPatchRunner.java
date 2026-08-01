@@ -170,9 +170,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyPatch(
             "V75b - index session_id on telemetry_events",
             "CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id_time " +
-            "ON telemetry_events (session_id, event_time DESC) " +
-            "WHERE session_id IS NOT NULL"
-        );
+            "ON telemetry_events (session_id, event_time DESC) " );
+        
         applyEmailCredentialPatches();
         if (isPostgreSql()) {
             withProductionSchemaMigrationLock(() -> {
@@ -251,8 +250,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyRequiredPatch(
             "H2 – ai_held_item open unique",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
-                + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
-                + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+                + "ON ai_held_item (patient_id, source_surface, query_text_hash) ");
+                
         applyRequiredPatch(
             "H2 – user_files.extracted_text",
             "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
@@ -408,8 +407,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyRequiredPatch(
             "H2 – consent_grants active unique",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
-                + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
-                + "WHERE status = 'ACTIVE'");
+                + "ON consent_grants (patient_user_id, grantee_user_id, scope) ");
+             
     }
 
     /** H2/integration-test parity for Ask AI conversation share receipts. */
@@ -510,7 +509,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "CREATE UNIQUE INDEX uq_call_summary_generation_snapshot "
                         + "ON call_summaries "
                         + "(call_id, transcript_snapshot_version, model_config_version) "
-                        + "WHERE transcript_snapshot_version IS NOT NULL "
+                        //+ "WHERE transcript_snapshot_version IS NOT NULL "
                         + "AND model_config_version IS NOT NULL",
                 "CREATE UNIQUE INDEX uq_call_summary_generation_snapshot "
                         + "ON call_summaries "

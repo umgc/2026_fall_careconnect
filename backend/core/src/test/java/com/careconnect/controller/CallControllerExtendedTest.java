@@ -9,6 +9,7 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
+import com.careconnect.service.CallAttendeeService;
 import com.careconnect.service.CallRecordingService;
 import com.careconnect.service.CallSessionService;
 import com.careconnect.service.CallSummaryItemConfirmService;
@@ -88,6 +89,7 @@ class CallControllerExtendedTest {
     @MockitoBean private CallSessionService callSessionService;
     @MockitoBean private CallTerminationExecutor callTerminationExecutor;
     @MockitoBean private CallSummaryItemConfirmService callSummaryItemConfirmService;
+    @MockitoBean private CallAttendeeService callAttendeeService;
 
     private ObjectMapper objectMapper;
     private User patientUser;
@@ -188,7 +190,7 @@ class CallControllerExtendedTest {
         User u = new User();
         u.setId(id);
         u.setEmail(email);
-        u.setRole(role);
+        u.setRoles(Set.of(role));
         return u;
     }
 

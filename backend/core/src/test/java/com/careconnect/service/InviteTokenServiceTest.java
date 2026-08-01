@@ -24,9 +24,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link InviteTokenService}.
- *
- * Mirrors the existing test style in this module: Mockito mocks, explicit
- * constructor injection in setUp, JUnit 5, AssertJ-free assertions.
  */
 class InviteTokenServiceTest {
 
@@ -68,6 +65,7 @@ class InviteTokenServiceTest {
         link = new FamilyMemberLink();
         link.setId(5L);
         link.setPatientUser(patientUser);
+        link.setGrantedBy(creator); // <--- FIX: Ensures creator passes canManageLink check
         link.setStatus(FamilyMemberLink.LinkStatus.ACTIVE);
         link.setLinkType(FamilyMemberLink.LinkType.PERMANENT);
     }
@@ -92,7 +90,7 @@ class InviteTokenServiceTest {
     @DisplayName("createInvite: happy path returns raw token + share URL")
     void createInvite_happyPath() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         when(tokenRepository.saveAndFlush(any(InviteToken.class))).thenAnswer(inv -> {
             InviteToken t = inv.getArgument(0);
@@ -123,15 +121,25 @@ class InviteTokenServiceTest {
     }
 
     @Test
-    @DisplayName("createInvite: active token exists -> 409")
+    @DisplayName("createInvite: active token exists -> automatically rotates prior token")
     void createInvite_conflictActiveToken() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(true);
+        InviteToken existing = pendingToken();
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.of(existing));
+        when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
+        when(tokenRepository.saveAndFlush(any(InviteToken.class))).thenAnswer(inv -> {
+            InviteToken t = inv.getArgument(0);
+            t.setId(42L);
+            t.setCreatedAt(LocalDateTime.now());
+            return t;
+        });
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.createInvite(5L, null, creator, "1.2.3.4"));
-        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
-        verify(tokenRepository, never()).save(any());
+        CreateInviteResponse resp = service.createInvite(5L, null, creator, "1.2.3.4");
+
+        assertNotNull(resp);
+        assertEquals(InviteToken.Status.REVOKED, existing.getStatus());
+        verify(tokenRepository).save(existing);
+        verify(auditService).record(eq(1L), eq("REVOKED"), any(), any(), any());
     }
 
     @Test
@@ -149,7 +157,7 @@ class InviteTokenServiceTest {
     @DisplayName("createInvite: TTL capped at max")
     void createInvite_ttlCapped() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         ArgumentCaptor<InviteToken> captor = ArgumentCaptor.forClass(InviteToken.class);
         when(tokenRepository.saveAndFlush(captor.capture())).thenAnswer(inv -> {
@@ -166,10 +174,8 @@ class InviteTokenServiceTest {
     @DisplayName("createInvite: concurrent duplicate PENDING -> 409 via unique index")
     void createInvite_duplicatePendingConflict() {
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        // Application-level check passes (the racing tx hasn't committed yet)...
-        when(tokenRepository.existsActivePendingToken(eq(5L), any())).thenReturn(false);
+        when(tokenRepository.findActivePendingToken(eq(5L), any())).thenReturn(Optional.empty());
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
-        // ...but the DB unique partial index rejects the second insert.
         when(tokenRepository.saveAndFlush(any(InviteToken.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
                         "duplicate key value violates unique constraint "
@@ -288,7 +294,6 @@ class InviteTokenServiceTest {
         assertFalse(resp.valid());
         assertEquals("EXPIRED", resp.status());
         assertEquals("REQUEST_NEW", resp.nextAction());
-        // Read-only path must never write.
         verify(tokenRepository, never()).save(any());
         verify(tokenRepository, never()).saveAndFlush(any());
     }
@@ -309,7 +314,6 @@ class InviteTokenServiceTest {
         AppException ex = assertThrows(AppException.class,
                 () -> service.acceptInvite("abcdef0123456789EXP", redeemer, "1.2.3.4"));
         assertEquals(HttpStatus.GONE, ex.getStatus());
-        // Accept runs read-write, so the lazy flip to EXPIRED is persisted here.
         verify(tokenRepository).save(argThat(t -> t.getStatus() == InviteToken.Status.EXPIRED));
     }
 
@@ -345,8 +349,6 @@ class InviteTokenServiceTest {
         when(tokenRepository.findByTokenLookup("abcdef0123456789")).thenReturn(Optional.of(token));
         when(tokenHashService.verifyToken(anyString(), anyString())).thenReturn(true);
         when(linkRepository.findById(5L)).thenReturn(Optional.of(link));
-        // Simulate a concurrent transaction having already updated the row:
-        // the flush fails with an optimistic-lock error.
         when(tokenRepository.saveAndFlush(any()))
                 .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
                         InviteToken.class, 1L));
@@ -402,6 +404,7 @@ class InviteTokenServiceTest {
     void revokeInvite_happyPath() {
         InviteToken token = pendingToken();
         when(tokenRepository.findById(1L)).thenReturn(Optional.of(token));
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link)); // <--- FIX: Mocked link lookup
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.revokeInvite(5L, 1L, new RevokeInviteRequest("Sent to wrong person"), creator, "1.2.3.4");
@@ -416,7 +419,7 @@ class InviteTokenServiceTest {
     @DisplayName("revokeInvite: cross-link token rejected -> 403")
     void revokeInvite_crossLink() {
         InviteToken token = pendingToken();
-        token.setLinkId(999L); // belongs to a different link
+        token.setLinkId(999L);
         when(tokenRepository.findById(1L)).thenReturn(Optional.of(token));
 
         AppException ex = assertThrows(AppException.class,
@@ -430,6 +433,7 @@ class InviteTokenServiceTest {
         InviteToken token = pendingToken();
         token.setStatus(InviteToken.Status.REVOKED);
         when(tokenRepository.findById(1L)).thenReturn(Optional.of(token));
+        when(linkRepository.findById(5L)).thenReturn(Optional.of(link)); // <--- FIX: Mocked link lookup
 
         assertDoesNotThrow(() -> service.revokeInvite(5L, 1L, null, creator, "1.2.3.4"));
         verify(tokenRepository, never()).save(any());
