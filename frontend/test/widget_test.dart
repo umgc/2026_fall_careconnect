@@ -2,6 +2,7 @@
 // This test suite covers all major components under lib/
 
 import 'package:care_connect_app/features/dashboard/patient_dashboard/pages/patient_dashboard.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/shared/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -109,7 +110,11 @@ void main() {
     testWidgets('PasswordResetPage renders correctly', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(const MaterialApp(home: PasswordResetPage()));
+      await tester.pumpWidget(const MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PasswordResetPage()));
       await tester.pump();
 
       expect(find.byType(PasswordResetPage), findsOneWidget);
@@ -164,7 +169,11 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider<UserProvider>.value(
           value: provider,
-          child: MaterialApp.router(routerConfig: router),
+          child: MaterialApp.router(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router),
         ),
       );
       await tester.pump();
@@ -209,6 +218,9 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp.router(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: GoRouter(
             initialLocation: '/payment-success',
             routes: [
@@ -241,7 +253,11 @@ void main() {
     testWidgets('PaymentCancelPage renders correctly', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(const MaterialApp(home: PaymentCancelPage()));
+      await tester.pumpWidget(const MaterialApp(
+        locale: Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PaymentCancelPage()));
 
       expect(find.byType(PaymentCancelPage), findsOneWidget);
       expect(find.byType(Scaffold), findsOneWidget);
