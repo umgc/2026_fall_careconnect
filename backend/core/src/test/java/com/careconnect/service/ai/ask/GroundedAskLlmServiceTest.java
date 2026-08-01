@@ -161,4 +161,85 @@ class GroundedAskLlmServiceTest {
         return new GroundedAskLlmService(
                 client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
     }
+
+    @Test
+    @DisplayName("generate unwraps markdown-fenced JSON claims")
+    void generate_unwrapsMarkdownFencedJson() {
+        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+        final GroundedAskLlmService service = new GroundedAskLlmService(
+                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
+        final String fenced = "```json\\n{\\\"claims\\\":[{\\\"text\\\":\\\"Started metformin.\\\",\\\"citations\\\":[{\\\"ref\\\":\\\"C1\\\",\\\"evidence\\\":\\\"Started metformin\\\"}]}],\\\"unused\\\":null}\\n```";
+        final String body = "{\"output\":{\"message\":{\"content\":[{\"text\":\"" + fenced + "\"}]}}}";
+        when(client.invokeModel(any(InvokeModelRequest.class)))
+                .thenReturn(InvokeModelResponse.builder()
+                        .body(SdkBytes.fromUtf8String(body))
+                        .build());
+
+        final Optional<GroundedAskLlmService.GroundedLlmResult> result =
+                service.generate("system", "user");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().answerText()).contains("metformin");
+    }
+
+    @Test
+    @DisplayName("generate rejects empty claims array")
+    void generate_emptyClaims_throwsValidation() {
+        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+        final GroundedAskLlmService service = new GroundedAskLlmService(
+                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
+        final String body = """
+                {"output":{"message":{"content":[{"text":"{\\"claims\\":[]}"}]}}}
+                """;
+        when(client.invokeModel(any(InvokeModelRequest.class)))
+                .thenReturn(InvokeModelResponse.builder()
+                        .body(SdkBytes.fromUtf8String(body))
+                        .build());
+
+        assertThatThrownBy(() -> service.generate("system", "user"))
+                .isInstanceOf(GroundedOutputValidationException.class);
+    }
+
+    @Test
+    @DisplayName("IllegalArgumentException from invoke is configuration failure")
+    void generate_illegalArgument_isConfigurationFailure() {
+        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+        when(client.invokeModel(any(InvokeModelRequest.class)))
+                .thenThrow(new IllegalArgumentException("bad model id"));
+        final GroundedAskLlmService service = new GroundedAskLlmService(
+                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
+
+        assertThatThrownBy(() -> service.generate("system", "user"))
+                .isInstanceOfSatisfying(GroundedProviderException.class, ex ->
+                        assertThat(ex.getKind()).isEqualTo(GroundedProviderException.Kind.CONFIGURATION));
+    }
+
+    @Test
+    @DisplayName("unexpected RuntimeException is provider failure")
+    void generate_unexpectedRuntime_isProviderFailure() {
+        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+        when(client.invokeModel(any(InvokeModelRequest.class)))
+                .thenThrow(new RuntimeException("boom"));
+        final GroundedAskLlmService service = new GroundedAskLlmService(
+                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
+
+        assertThatThrownBy(() -> service.generate("system", "user"))
+                .isInstanceOfSatisfying(GroundedProviderException.class, ex ->
+                        assertThat(ex.getKind()).isEqualTo(GroundedProviderException.Kind.PROVIDER));
+    }
+
+    @Test
+    @DisplayName("isAvailable reflects aws flag and client")
+    void isAvailable_reflectsAwsAndClient() {
+        assertThat(new GroundedAskLlmService(
+                        mock(BedrockRuntimeClient.class), new ObjectMapper(), "m", true)
+                .isAvailable())
+                .isTrue();
+        assertThat(new GroundedAskLlmService(null, new ObjectMapper(), "m", true).isAvailable())
+                .isFalse();
+        assertThat(new GroundedAskLlmService(
+                        mock(BedrockRuntimeClient.class), new ObjectMapper(), "m", false)
+                .isAvailable())
+                .isFalse();
+    }
 }

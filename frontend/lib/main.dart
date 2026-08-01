@@ -34,8 +34,13 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
 
-      // Load environment variables from .env file
-      await dotenv.load(fileName: ".env");
+      // Load env from committed .env.example so clean checkouts can build
+      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      try {
+        await dotenv.load(fileName: ".env");
+      } catch (_) {
+        await dotenv.load(fileName: ".env.example");
+      }
 
       // Performance optimization: Set preferred orientations
       await SystemChrome.setPreferredOrientations([

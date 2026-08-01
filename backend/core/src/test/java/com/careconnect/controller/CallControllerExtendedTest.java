@@ -82,6 +82,8 @@ class CallControllerExtendedTest {
     @MockitoBean private CallSummaryService callSummaryService;
     @MockitoBean private CallRecordingService callRecordingService;
     @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
+    @MockitoBean private com.careconnect.service.consent.CaregiverVisibilityService caregiverVisibilityService;
+    @MockitoBean private com.careconnect.service.CallAttendeeService callAttendeeService;
     @MockitoBean private FamilyMemberService familyMemberService;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;

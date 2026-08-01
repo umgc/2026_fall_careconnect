@@ -170,7 +170,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             // Privacy Policy footer
             GestureDetector(
               onTap: () async {
-                final uri = Uri.parse('https://www.freeprivacypolicy.com/live/9a586bf1-2869-40aa-993a-c8f80200209c');
+                final uri = Uri.parse('https://www.freeprivacypolicy.com/live/');
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 } else {

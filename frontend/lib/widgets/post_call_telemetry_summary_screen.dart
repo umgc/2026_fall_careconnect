@@ -10,6 +10,7 @@ import '../services/api_service.dart';
 import '../utils/sentiment_clip_recording_status.dart';
 import '../utils/sentiment_clip_window.dart';
 import 'sentiment_clip_player_widget.dart';
+import '../shared/widgets/disclaimer_banner.dart';
 
 class PostCallTelemetrySummaryScreen extends StatefulWidget {
   final String callId;
@@ -1156,6 +1157,10 @@ class _PostCallTelemetrySummaryScreenState
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: DisclaimerBanner.ai(),
+                    ),
                     if (widget.recipientName != null &&
                         widget.recipientName!.trim().isNotEmpty)
                       Padding(

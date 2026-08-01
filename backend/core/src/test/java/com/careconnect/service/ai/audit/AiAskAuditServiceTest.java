@@ -293,4 +293,150 @@ class AiAskAuditServiceTest {
         service.appendStandaloneEvent(null, AiAskAuditService.HITL_EXPIRED, null, Map.of());
         verify(eventRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("appendStandaloneEvent exhausts unique-violation retries")
+    void appendStandaloneEvent_exhaustsRetriesOnUniqueViolation() {
+        final UUID auditId = UUID.randomUUID();
+        when(eventRepository.findMaxSequence(auditId)).thenReturn(1);
+        when(eventRepository.save(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq"));
+
+        service.appendStandaloneEvent(
+                auditId, AiAskAuditService.HITL_EXPIRED, 9L, Map.of("k", "v"));
+
+        verify(eventRepository, org.mockito.Mockito.times(3)).save(any());
+    }
+
+    @Test
+    @DisplayName("appendEvent and finalize fail soft on repository errors")
+    void appendEvent_and_finalize_failSoftOnRepositoryErrors() {
+        final AiAskAuditService.AuditSession session = service.startRequest(
+                new AiAskAuditService.StartRequestCommand(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        42L,
+                        7L,
+                        "PATIENT",
+                        "TEXT",
+                        "en-US",
+                        "metformin",
+                        null));
+        when(eventRepository.save(any())).thenThrow(new RuntimeException("event down"));
+        when(recordRepository.existsById(session.auditId())).thenReturn(false);
+        when(recordRepository.save(any())).thenThrow(new RuntimeException("record down"));
+
+        service.appendEvent(session, AiAskAuditService.GOVERNANCE_BLOCKED, 7L, Map.of());
+        service.finalizeRecord(
+                session,
+                AiAskAuditService.FinalizeCommand.error("RATE_LIMITED", Map.of("patientId", 42L), 5));
+    }
+
+    @Test
+    @DisplayName("terminalEventType covers held/error defaults")
+    void terminalEventType_heldAndErrorDefaults() {
+        assertThat(AiAskAuditService.terminalEventType(null)).isEqualTo(AiAskAuditService.ERROR);
+        assertThat(AiAskAuditService.terminalEventType(
+                        AiAskAuditService.FinalizeCommand.held(
+                                UUID.randomUUID(),
+                                "draft",
+                                List.of(),
+                                List.of(),
+                                "[]",
+                                Map.of(),
+                                Map.of(),
+                                "model",
+                                1)))
+                .isEqualTo(AiAskAuditService.HELD);
+        assertThat(AiAskAuditService.terminalEventType(
+                        AiAskAuditService.FinalizeCommand.error("X", Map.of(), 1)))
+                .isEqualTo(AiAskAuditService.ERROR);
+    }
+
+    @Test
+    @DisplayName("recordHitlDeliverySupplement keeps precomputed excerptHash")
+    void recordHitlDeliverySupplement_preservesExistingExcerptHash() {
+        final UUID auditId = UUID.randomUUID();
+        service.recordHitlDeliverySupplement(
+                auditId,
+                "DELIVERED",
+                "final",
+                42L,
+                List.of(Map.of(
+                        "citationId", "C1",
+                        "excerptHash", "abc123",
+                        "excerptLength", 12)),
+                99L);
+
+        final ArgumentCaptor<AiAskAuditDeliverySupplement> captor =
+                ArgumentCaptor.forClass(AiAskAuditDeliverySupplement.class);
+        verify(deliveryRepository).save(captor.capture());
+        assertThat(captor.getValue().getCitationsJson()).contains("abc123");
+        assertThat(captor.getValue().getCitationsJson()).doesNotContain("\"excerpt\"");
+    }
+
+    @Test
+    @DisplayName("recordHitlDeliverySupplement null audit id is a no-op")
+    void recordHitlDeliverySupplement_nullAuditId_noop() {
+        service.recordHitlDeliverySupplement(null, "DELIVERED", "x", 1L, List.of(), 2L);
+        verify(deliveryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("appendEvent null session is a no-op")
+    void appendEvent_nullSession_noop() {
+        service.appendEvent(null, AiAskAuditService.GOVERNANCE_BLOCKED, 1L, Map.of());
+        verify(eventRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("finalizeRecord null args is a no-op")
+    void finalizeRecord_nullArgs_noop() {
+        service.finalizeRecord(null, null);
+        verify(recordRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("appendStandaloneEvent fails soft on non-unique errors")
+    void appendStandaloneEvent_nonUniqueFailure_failsSoft() {
+        final UUID auditId = UUID.randomUUID();
+        when(eventRepository.findMaxSequence(auditId)).thenReturn(0);
+        when(eventRepository.save(any())).thenThrow(new RuntimeException("db down"));
+
+        service.appendStandaloneEvent(auditId, AiAskAuditService.HITL_EXPIRED, null, Map.of());
+
+        verify(eventRepository, org.mockito.Mockito.times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("terminalEventType unknown status without error defaults to DELIVERED")
+    void terminalEventType_unknownWithoutError_delivered() {
+        assertThat(AiAskAuditService.terminalEventType(
+                        new AiAskAuditService.FinalizeCommand(
+                                "WEIRD",
+                                1,
+                                false,
+                                null,
+                                null,
+                                null,
+                                List.of(),
+                                Map.of(),
+                                List.of(),
+                                null,
+                                Map.of(),
+                                Map.of(),
+                                null,
+                                null,
+                                1)))
+                .isEqualTo(AiAskAuditService.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("recordHitlDeliverySupplement fails soft on save error")
+    void recordHitlDeliverySupplement_saveFailsSoft() {
+        when(deliveryRepository.save(any())).thenThrow(new RuntimeException("down"));
+        service.recordHitlDeliverySupplement(
+                UUID.randomUUID(), "DELIVERED", "ans", 42L, List.of(), 1L);
+    }
 }

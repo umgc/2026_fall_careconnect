@@ -11,7 +11,7 @@ import com.careconnect.dto.UploadedFileDTO;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 public class ChatRequest {
     
     @Size(max = 5000, message = "Message content cannot exceed 5000 characters")
@@ -50,6 +50,7 @@ public class ChatRequest {
     private Boolean includeNotes;
     private Boolean includeMoodPainLogs;
     private Boolean includeAllergies;
+    private Boolean includeDocuments;
     
     // AI Configuration overrides
     private Double temperature;

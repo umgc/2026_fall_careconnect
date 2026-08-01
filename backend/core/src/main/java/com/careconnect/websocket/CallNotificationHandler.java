@@ -97,6 +97,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     if (user.getName() != null && !user.getName().isEmpty()) {
       return user.getName();
     }
+    
+    // Fallback using the safe single-role fallback getter from the model updates
     if (user.getRole() != null) {
       final String roleName = user.getRole().name().toLowerCase(Locale.ROOT);
       return Character.toUpperCase(roleName.charAt(0)) + roleName.substring(1);
@@ -306,7 +308,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
             "type", "authentication-success",
             "userId", user.getId(),
             "userEmail", user.getEmail(),
-            "userRole", user.getRole().name()));
+            "userRole", user.getRole() != null ? user.getRole().name() : "NONE"));
 
     log.debug("User authenticated userId={} role={}", user.getId(), user.getRole());
   }
@@ -320,7 +322,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     }
 
     final String userId = user.getId().toString();
-    final String userRole = user.getRole().name();
+    final String userRole = user.getRole() != null ? user.getRole().name() : "NONE";
 
     identities.bind(session, user);
 
@@ -362,8 +364,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
       return;
     }
 
-    if (sender.getRole() == com.careconnect.security.Role.PATIENT
-        && recipient.getRole() == com.careconnect.security.Role.PATIENT) {
+    if (sender.isPatient() && recipient.isPatient()) {
       sendJsonMessage(
           session,
           Map.of(
@@ -371,13 +372,12 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "callId", callId,
               "reason", "Patient-to-patient calls are not permitted",
               "recipientId", recipientId,
-              "recipientRole", recipient.getRole().name(),
+              "recipientRole", recipient.getRole() != null ? recipient.getRole().name() : "NONE",
               "recipientName", getUserDisplayName(recipient)));
       return;
     }
 
-    if (sender.getRole() == com.careconnect.security.Role.PATIENT
-        && recipient.getRole() == com.careconnect.security.Role.CAREGIVER) {
+    if (sender.isPatient() && recipient.isCaregiver()) {
       final boolean linked =
           caregiverPatientLinkService.hasAccessToPatient(recipient.getId(), sender.getId());
       if (!linked) {
@@ -388,7 +388,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
                 "callId", callId,
                 "reason", "No active caregiver-patient link",
                 "recipientId", recipientId,
-                "recipientRole", recipient.getRole().name(),
+                "recipientRole", recipient.getRole() != null ? recipient.getRole().name() : "NONE",
                 "recipientName", getUserDisplayName(recipient)));
         return;
       }
@@ -404,7 +404,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
                 "callId", callId,
                 "reason", "Caregiver disabled patient-initiated calls",
                 "recipientId", recipientId,
-                "recipientRole", recipient.getRole().name(),
+                "recipientRole", recipient.getRole() != null ? recipient.getRole().name() : "NONE",
                 "recipientName", getUserDisplayName(recipient)));
         return;
       }
@@ -412,12 +412,13 @@ public class CallNotificationHandler extends TextWebSocketHandler {
 
     final WebSocketSession recipientSession = identities.getSession(recipientId);
 
-    if (recipientSession != null && recipientSession.isOpen()) {
+if (recipientSession != null && recipientSession.isOpen()) {
       final Map<String, Object> callNotification = new HashMap<>();
       callNotification.put("type", "incoming-video-call");
       callNotification.put("senderId", sender.getId());
       callNotification.put("senderName", getUserDisplayName(sender, callerName));
-      callNotification.put("senderRole", sender.getRole().name());
+      callNotification.put("senderEmail", sender.getEmail());
+      callNotification.put("senderRole", sender.getRole() != null ? sender.getRole().name() : "NONE");
       callNotification.put("callId", callId);
       callNotification.put("isVideoCall", isVideoCall);
       callNotification.put("callType", callType);
@@ -445,7 +446,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "type", "call-invitation-sent",
               "callId", callId,
               "recipientId", recipientId,
-              "recipientRole", recipient.getRole().name(),
+              "recipientRole", recipient.getRole() != null ? recipient.getRole().name() : "NONE",
               "recipientName", getUserDisplayName(recipient),
               "status", "delivered"));
 
@@ -458,7 +459,7 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "callId", callId,
               "reason", "Recipient not online",
               "recipientId", recipientId,
-              "recipientRole", recipient.getRole().name(),
+              "recipientRole", recipient.getRole() != null ? recipient.getRole().name() : "NONE",
               "recipientName", getUserDisplayName(recipient)));
 
       log.debug("Call invitation failed recipientId={} not online", recipient.getId());
@@ -491,7 +492,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
               "type", "incoming-sms",
               "senderId", sender.getId(),
               "senderName", getUserDisplayName(sender),
-              "senderRole", sender.getRole().name(),
+              "senderEmail", sender.getEmail(),
+              "senderRole", sender.getRole() != null ? sender.getRole().name() : "NONE",
               "message", message,
               "messageType", messageType,
               "timestamp", System.currentTimeMillis());

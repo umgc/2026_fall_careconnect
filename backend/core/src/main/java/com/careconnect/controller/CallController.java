@@ -8,6 +8,9 @@ import com.careconnect.model.CallSession;
 import com.careconnect.model.User;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
+import com.careconnect.service.consent.CaregiverVisibilityCheck;
+import com.careconnect.service.consent.CaregiverVisibilityService;
+import com.careconnect.service.consent.CaregiverVisibilityStatus;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallAttendeeService;
@@ -52,6 +55,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+
 
 @RestController
 @RequestMapping("/api/v3/calls")
@@ -107,6 +112,8 @@ public class CallController {
   private CallAttendeeService callAttendeeService;
   @Autowired
   private CaregiverPatientLinkService caregiverPatientLinkService;
+  @Autowired
+  private CaregiverVisibilityService caregiverVisibilityService;
   @Autowired
   private FamilyMemberService familyMemberService;
   @Autowired
@@ -1000,7 +1007,7 @@ public class CallController {
             "savedSegments", saved,
             "status", "saved"));
   }
-
+  @PreAuthorize("@careCircleSecurity.isCaregiverForCall(authentication, #callId)")
   @GetMapping("/{callId}/summary")
   @Operation(summary = "Get latest stored call summary")
   /** Returns the latest stored call summary for the given call. */
@@ -1010,6 +1017,20 @@ public class CallController {
     requireDurableCallAccess(callId, currentUser);
     final Optional<com.careconnect.model.CallSummary> latestEntity =
         callSummaryService.getLatestSummaryEntity(callId);
+
+    // TC-E-SUM-009 — on_consent gate on the durable summary read path, mirroring
+    // CallSummaryController. A caregiver who cleared durable access must still be blocked
+    // when the summary is caregiverVisibility='on_consent' and consent is not granted.
+    if (latestEntity.isPresent()
+        && currentUser.getRole() != Role.ADMIN
+        && latestEntity.get().getPatientId() != null
+        && "on_consent".equalsIgnoreCase(latestEntity.get().getCaregiverVisibility())) {
+      final CaregiverVisibilityCheck check =
+          caregiverVisibilityService.getStatus(currentUser.getId(), latestEntity.get().getPatientId());
+      if (check.status() != CaregiverVisibilityStatus.NONE && !check.canViewSummaries()) {
+        throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
+      }
+    }
 
     // If end-call summary ran before transcript retries landed, regenerate on read.
     if (latestEntity.isPresent()
@@ -1057,6 +1078,8 @@ public class CallController {
     }
   }
 
+
+  @PreAuthorize("@careCircleSecurity.isCaregiverForCall(authentication, #callId)")
   @GetMapping("/{callId}/transcript/segments")
   @Operation(summary = "Get stored transcript segments for a call")
   /** Returns stored transcript segments for the given call. */

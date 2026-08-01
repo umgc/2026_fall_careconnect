@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.security.Key;
 import java.time.Instant;
-
 import java.util.Date;
 
 @Component
@@ -23,25 +22,9 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(@Value("${security.jwt.secret}") String secretBase64,
                            @Value("${jwt.expiration.ms:10800000}") long expirationMs) {
-        // decode once;  256-bit (32-byte) secret recommended
-        this.key = Keys.hmacShaKeyFor(java.util.Base64.getDecoder().decode(secretBase64));
+        this.key = Keys.hmacShaKeyFor(java.util.Base64.getUrlDecoder().decode(secretBase64.trim()));
         this.accessTtl = Duration.ofMillis(expirationMs);
     }
-
-    // public String createToken(String email, Role role) {
-    //     Claims claims = Jwts.claims().setSubject(email);
-    //     claims.put("role", role.name());
-
-    //     Date now = new Date();
-    //     Date validity = new Date(now.getTime() + validityMillis);
-
-    //     return Jwts.builder()
-    //             .setClaims(claims)
-    //             .setIssuedAt(now)
-    //             .setExpiration(validity)
-    //             .signWith(key, SignatureAlgorithm.HS256) 
-    //             .compact();
-    // }
 
     public String createToken(String email, Role role) {
         return buildToken(email, role, accessTtl);
@@ -86,7 +69,7 @@ public class JwtTokenProvider {
         return exp.minus(RENEW_THRESHOLD).isBefore(now)        
                 && claims.getIssuedAt().toInstant()
                          .plus(SLIDING_WINDOW)
-                         .isAfter(now);                       
+                         .isAfter(now);                               
     }
 
     private Jws<Claims> parse(String token) {
@@ -104,6 +87,6 @@ public class JwtTokenProvider {
     }
 
     public String getEmailFromToken(String token) {
-        return getUsername(token); // getUsername already returns the subject (email)
+        return getUsername(token); 
     }
 }

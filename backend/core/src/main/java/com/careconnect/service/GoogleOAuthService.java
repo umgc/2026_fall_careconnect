@@ -115,7 +115,8 @@ public class GoogleOAuthService {
      * Refresh access token when near expiry. Halts sync only on auth-revocation
      * signals from the token endpoint ({@code invalid_grant}, HTTP 401). Transient
      * failures (429 / 5xx) are retried with backoff and do not set NEEDS_REAUTH.
-     * Gmail API 401/403 → halt remains in {@link GmailClient}.
+     * Gmail API 401/403 ΓåÆ halt remains in {@link GmailClient}.
+     * Gmail API 401/403 Ã¢â€ â€™ halt remains in {@link GmailClient}.
      */
     public EmailCredential ensureFreshToken(EmailCredential current) {
         if (current == null) {
@@ -293,5 +294,33 @@ public class GoogleOAuthService {
     private String safeId(String id) {
         if (id == null) return "null";
         return id.length() <= 12 ? id : id.substring(0, 12) + "...";
+    }
+
+    /**
+     * Best-effort Google token revoke used when the user explicitly disconnects.
+     * Local credential deletion still proceeds even if revoke fails.
+     */
+    public void revokeIfPossible(EmailCredential credential) {
+        if (credential == null) {
+            return;
+        }
+        try {
+            String refreshEnc = credential.getRefreshTokenEnc();
+            if (refreshEnc != null && !refreshEnc.isBlank()) {
+                String refresh = tokenCryptor.decrypt(refreshEnc);
+                if (refresh != null && !refresh.isBlank()) {
+                    MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                    form.add("token", refresh);
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+                    http.postForEntity(
+                            "https://oauth2.googleapis.com/revoke",
+                            new HttpEntity<>(form, headers),
+                            String.class);
+                }
+            }
+        } catch (Exception ignored) {
+            // Best-effort revoke; local deletion still removes app access.
+        }
     }
 }

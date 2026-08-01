@@ -1,0 +1,9 @@
+[allowlist]
+description = "Ignore mock test secrets and documentation examples"
+paths = [
+  '''backend/core/src/test/''',
+  '''frontend/test/''',
+  '''docs/''',
+  '''quality/analysis/''',
+  '''backend/core/src/main/resources/db/migration/'''
+]

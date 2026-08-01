@@ -53,7 +53,7 @@ public class User {
     // --- REFACTORED SECURE DB-DRIVEN RBAC INFRASTRUCTURE ---
     // Swapped direct enum column mapping for a collection table to support future multi-role architectures
    
-    @Singular("role")
+   @Singular("role") // <--- Replaced @Singular("role") with @Singular("role")
     @ElementCollection(targetClass = Role.class, fetch = FetchType.EAGER)
     @CollectionTable(
         name = "user_roles",
