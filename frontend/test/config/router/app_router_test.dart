@@ -6,6 +6,7 @@
 // navigate to individual routes, verifying parameter parsing, validation
 // error handling, and conditional rendering.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -130,6 +131,9 @@ Future<void> _pumpRouterApp(
     ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: MaterialApp.router(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: router,
       ),
     ),
