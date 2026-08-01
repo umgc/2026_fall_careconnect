@@ -19,6 +19,7 @@ import 'package:care_connect_app/features/stml/presentation/pages/stml_recall_pa
 import 'package:care_connect_app/features/stml/presentation/pages/stml_search_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
+import 'package:care_connect_app/features/summary/summary_confirmation_list.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
@@ -197,6 +198,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
     GoRoute(path: '/stml/brief', builder: (_, __) => const StmlBriefPage()),
+    GoRoute(path: '/summaries', builder: (_, __) => const SummaryConfirmationList()),
     GoRoute(path: '/stml/recall', builder: (_, __) => const StmlRecallPage()),
     GoRoute(path: '/stml/search', builder: (_, __) => const StmlSearchPage()),
     GoRoute(
