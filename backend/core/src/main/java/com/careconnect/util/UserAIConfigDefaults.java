@@ -46,6 +46,7 @@ public class UserAIConfigDefaults {
             .includeNotesByDefault(true)
             .includeMoodPainByDefault(true)
             .includeAllergiesByDefault(true)
+            .includeDocumentsByDefault(true)
             .isActive(true)
             .build();
     }

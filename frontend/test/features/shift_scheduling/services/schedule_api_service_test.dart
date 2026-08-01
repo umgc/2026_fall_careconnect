@@ -35,6 +35,10 @@ class _ImmediateFailAdapter implements HttpClientAdapter {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUpAll(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('ScheduleApiService', () {
     late ScheduleApiService service;
     late HttpClientAdapter originalAdapter;

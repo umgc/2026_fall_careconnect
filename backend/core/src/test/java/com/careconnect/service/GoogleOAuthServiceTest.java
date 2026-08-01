@@ -413,7 +413,7 @@ class GoogleOAuthServiceTest {
         }
 
         @Test
-        @DisplayName("does not halt on transient 429 — retries then surfaces without NEEDS_REAUTH")
+        @DisplayName("does not halt on transient 429 ΓÇö retries then surfaces without NEEDS_REAUTH")
         void doesNotHaltOnTooManyRequests() throws Exception {
             final EmailCredential credential = expiredCredential("44");
 
@@ -438,7 +438,7 @@ class GoogleOAuthServiceTest {
         }
 
         @Test
-        @DisplayName("does not halt on 5xx — retries then surfaces without NEEDS_REAUTH")
+        @DisplayName("does not halt on 5xx ΓÇö retries then surfaces without NEEDS_REAUTH")
         void doesNotHaltOnServerError() throws Exception {
             final EmailCredential credential = expiredCredential("45");
 

@@ -6,9 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
-import 'package:care_connect_app/features/usps/domain/models/mail_image_availability.dart';
-import 'package:care_connect_app/features/usps/presentation/widgets/mail_envelope_read_aloud_button.dart';
-import 'package:care_connect_app/features/usps/presentation/widgets/mail_piece_image.dart';
+import 'package:care_connect_app/services/auth_token_manager.dart';
+
+enum _GmailConnectionState { disconnected, connected, needsReconnect, checking }
 
 class UspsTestScreen extends StatefulWidget {
   const UspsTestScreen({super.key});
@@ -16,19 +16,53 @@ class UspsTestScreen extends StatefulWidget {
   State<UspsTestScreen> createState() => _UspsTestScreenState();
 }
 
-class _UspsTestScreenState extends State<UspsTestScreen> {
+class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? digest;
   bool loading = false;
   String? error;
   bool isGoogleConnected = false;
-  bool needsGoogleReconnect = false;
-  String? reconnectMessage;
+  _GmailConnectionState gmailState = _GmailConnectionState.checking;
+  String? gmailStatusMessage;
   DateTime selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> searchResults = [];
   bool searchLoading = false;
   String? searchError;
   bool _isSearchActive = false;
+  bool _awaitingOAuthReturn = false;
+
+  /// Patient identifier for USPS endpoints (email preferred, falls back to database id).
+  String? _patientQueryValue() {
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    if (user == null) return null;
+    if (user.email.isNotEmpty) return user.email;
+    return user.id.toString();
+  }
+
+  Future<Dio> _authenticatedDio({
+    Duration connectTimeout = const Duration(seconds: 10),
+    Duration receiveTimeout = const Duration(seconds: 20),
+  }) async {
+    final headers = await AuthTokenManager.getAuthHeaders();
+    return Dio(BaseOptions(
+      connectTimeout: connectTimeout,
+      receiveTimeout: receiveTimeout,
+      headers: headers,
+    ));
+  }
+
+  void _handleOAuthReturnError() {
+    // oauthError is set by EmailOAuthController callback failures; error is legacy fallback.
+    final oauthError = Uri.base.queryParameters['oauthError'] ??
+        Uri.base.queryParameters['error'];
+    if (oauthError != null && oauthError.isNotEmpty) {
+      _awaitingOAuthReturn = false;
+      setState(() {
+        gmailState = _GmailConnectionState.needsReconnect;
+        gmailStatusMessage = Uri.decodeComponent(oauthError);
+      });
+    }
+  }
 
   Future<void> _fetchDigest() async {
     setState(() {
@@ -36,26 +70,32 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
       error = null;
       _isSearchActive = false;
     });
+
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      setState(() {
+        error = 'Please log in to view USPS mail.';
+        error = 'Please log in to fetch USPS digest.';
+        loading = false;
+      });
+      return;
+    }
+
     final base = getBackendBaseUrl();
-
-    // Get user ID to pass as parameter
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    final dynamic userIdRaw = user?.id;
-    final userId = userIdRaw?.toString() ?? 'demo-user';
-
-    // Format date as YYYY-MM-DD
     final dateString =
         '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
-    final encodedUser = Uri.encodeComponent(userId);
-    final url = '$base/api/usps/latest?userId=$encodedUser&date=$dateString';
+    final encodedPatient = Uri.encodeComponent(patientEmail);
+    final url =
+        '$base/v1/api/usps/latest?patientEmail=$encodedPatient&date=$dateString';
 
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 20),
-      ));
+      final dio = await _authenticatedDio();
 
+    final url =
+        '$base/v1/api/usps/latest?patientEmail=${Uri.encodeComponent(patientEmail)}&date=$dateString';
+
+    try {
+      final dio = await _authenticatedDio();
       final resp = await dio.get(url);
       if (resp.statusCode == 200) {
         setState(() {
@@ -64,8 +104,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
               : json.decode(json.encode(resp.data)) as Map<String, dynamic>;
           searchResults = [];
           searchError = null;
-          needsGoogleReconnect = false;
-          reconnectMessage = null;
           _searchController.clear();
         });
       } else if (resp.statusCode == 204) {
@@ -73,39 +111,14 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
           digest = null;
           error = 'No USPS digest found for $dateString.';
         });
-      } else if (resp.statusCode == 409) {
-        _handleNeedsReauth(resp.data);
       } else {
         setState(() => error = 'HTTP ${resp.statusCode}');
       }
     } catch (e) {
-      if (e is DioException && e.response?.statusCode == 409) {
-        _handleNeedsReauth(e.response?.data);
-      } else {
-        setState(() => error = e.toString());
-      }
+      setState(() => error = e.toString());
     } finally {
       setState(() => loading = false);
     }
-  }
-
-  void _handleNeedsReauth(dynamic data) {
-    String message =
-        'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.';
-    if (data is Map) {
-      final map = Map<String, dynamic>.from(data);
-      final apiMessage = map['message']?.toString();
-      if (apiMessage != null && apiMessage.isNotEmpty) {
-        message = apiMessage;
-      }
-    }
-    setState(() {
-      needsGoogleReconnect = true;
-      isGoogleConnected = false;
-      reconnectMessage = message;
-      error = message;
-      digest = null;
-    });
   }
 
   Future<void> _selectDate() async {
@@ -153,20 +166,31 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     });
 
     final base = getBackendBaseUrl();
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    final dynamic userIdRaw = user?.id;
-    final userId = userIdRaw?.toString() ?? 'demo-user';
-    final encodedUser = Uri.encodeComponent(userId);
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      setState(() {
+        searchError = 'Please log in to search USPS mail.';
+        searchError = 'Please log in to search mail.';
+        searchLoading = false;
+      });
+      return;
+    }
+    final encodedPatient = Uri.encodeComponent(patientEmail);
 
     final url =
-        '$base/api/usps/search?userId=$encodedUser&keyword=${Uri.encodeComponent(keyword)}';
+        '$base/v1/api/usps/search?patientEmail=$encodedPatient&keyword=${Uri.encodeComponent(keyword)}';
 
     try {
-      final dio = Dio(BaseOptions(
+      final dio = await _authenticatedDio(
+
+    final url =
+        '$base/v1/api/usps/search?patientEmail=${Uri.encodeComponent(patientEmail)}&keyword=${Uri.encodeComponent(keyword)}';
+
+    try {
+      final dio = await _authenticatedDio(
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 30),
-      ));
+      );
 
       final resp = await dio.get(url);
       if (resp.statusCode == 200) {
@@ -196,63 +220,80 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _checkGoogleConnection() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    if (user == null) return;
-    final encodedUser = Uri.encodeComponent(user.id.toString());
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      setState(() {
+        gmailState = _GmailConnectionState.disconnected;
+        isGoogleConnected = false;
+        gmailStatusMessage = 'Please log in to connect Gmail.';
+      });
+      return;
+    }
 
     final base = getBackendBaseUrl();
+    setState(() => gmailState = _GmailConnectionState.checking);
     try {
-      final dio = Dio();
-      // Prefer rich connection status so revoked tokens surface as reconnect.
-      try {
-        final details = await dio.get(
-            '$base/api/email-credentials/connection?userId=$encodedUser');
-        if (details.statusCode == 200 && details.data is Map) {
-          final map = Map<String, dynamic>.from(details.data as Map);
-          final connected = map['connected'] == true;
-          final needsReconnect = map['needsReconnect'] == true;
-          setState(() {
-            isGoogleConnected = connected;
-            needsGoogleReconnect = needsReconnect;
-            reconnectMessage = needsReconnect
-                ? ((map['lastError'] as String?)?.trim().isNotEmpty == true
-                    ? map['lastError'] as String
-                    : 'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
-                : null;
-          });
-          return;
-        }
-      } catch (_) {
-        // Fall back to legacy boolean status endpoint.
-      }
-
-      final resp = await dio
-          .get('$base/api/email-credentials/status?userId=$encodedUser');
-      if (resp.statusCode == 200 && resp.data == true) {
+      final dio = await _authenticatedDio();
+      final resp = await dio.get(
+          '$base/v1/api/email-credentials/status?patientEmail=${Uri.encodeComponent(patientEmail)}');
+      if (resp.statusCode == 200 && resp.data is Map<String, dynamic>) {
+        final data = resp.data as Map<String, dynamic>;
+        final connected = data['connected'] == true;
+        final status = data['status']?.toString() ?? '';
+        final message = data['message']?.toString();
         setState(() {
-          isGoogleConnected = true;
-          needsGoogleReconnect = false;
-          reconnectMessage = null;
+          isGoogleConnected = connected;
+          gmailStatusMessage = message;
+          gmailState = connected
+              ? _GmailConnectionState.connected
+              : (status == 'NEEDS_RECONNECT'
+                  ? _GmailConnectionState.needsReconnect
+                  : _GmailConnectionState.disconnected);
         });
       } else {
         setState(() {
           isGoogleConnected = false;
+          gmailState = _GmailConnectionState.disconnected;
         });
       }
     } catch (e) {
-      // Connection check failed, assume not connected
       setState(() {
         isGoogleConnected = false;
+        gmailState = _GmailConnectionState.disconnected;
+        gmailStatusMessage = 'Unable to check Gmail connection status.';
       });
+    }
+  }
+
+  Future<void> _disconnectGoogleAccount() async {
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) return;
+    final base = getBackendBaseUrl();
+    try {
+      final dio = await _authenticatedDio();
+      await dio.delete(
+          '$base/v1/api/email-credentials/gmail?patientEmail=${Uri.encodeComponent(patientEmail)}');
+      await _checkGoogleConnection();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gmail disconnected.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to disconnect Gmail')),
+        );
+      }
     }
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _handleOAuthReturnError();
     _checkGoogleConnection().then((_) {
-      // Auto-fetch today's digest after checking connection
       if (isGoogleConnected) {
         _fetchDigest();
       }
@@ -260,25 +301,38 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh connection status when coming back from OAuth
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingOAuthReturn) {
+      _awaitingOAuthReturn = false;
       _checkGoogleConnection();
-    });
+    }
   }
 
   Future<void> _clearCache() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-    final dynamic userIdRaw = user?.id;
-    final userId = userIdRaw?.toString() ?? 'demo-user';
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
+        const SnackBar(content: Text('Please log in to clear cache')),
+      );
+      return;
+    }
 
     final base = getBackendBaseUrl();
     try {
-      final dio = Dio();
+      final dio = await _authenticatedDio();
       await dio.post(
-          '$base/api/usps/clear-cache?userId=${Uri.encodeComponent(userId)}');
+          '$base/v1/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
+        '$base/v1/api/usps/clear-cache',
+        queryParameters: {'patientEmail': patientEmail},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Cache cleared! Try fetching digest again.')),
@@ -304,10 +358,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
   }
 
   Future<void> _connectGoogleAccount() async {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final user = userProvider.user;
-
-    if (user == null) {
+    final patientEmail = _patientQueryValue();
+    if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in first')),
       );
@@ -315,17 +367,41 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     }
 
     final base = getBackendBaseUrl();
-
-    // Use a platform-safe return URL; Uri.base works on web and mobile.
     final currentUrl = kIsWeb ? Uri.base.toString() : getWebBaseUrl();
-    final authUrl =
-        '$base/oauth/google/start?userId=${Uri.encodeComponent(user.id.toString())}&returnUrl=${Uri.encodeComponent(currentUrl)}';
 
-    final uri = Uri.parse(authUrl);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+    try {
+      final dio = await _authenticatedDio();
+      final resp = await dio.get(
+        '$base/v1/api/email-credentials/gmail/connect-url',
+        queryParameters: {
+          'patientEmail': patientEmail,
+          'returnUrl': currentUrl,
+        },
+      );
+      final connectUrl = resp.data is Map<String, dynamic>
+          ? resp.data['url'] as String?
+          : null;
+      if (connectUrl == null || connectUrl.isEmpty) {
+        throw StateError('Missing Gmail connect URL');
+      }
+
+      _awaitingOAuthReturn = true;
+      final uri = connectUrl.startsWith('http')
+          ? Uri.parse(connectUrl)
+          : Uri.parse('$base$connectUrl');
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        _awaitingOAuthReturn = false;
+        if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open Google authentication')),
+          );
+        }
+      }
+    } catch (e) {
+      _awaitingOAuthReturn = false;
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Google authentication')),
+          const SnackBar(content: Text('Could not start Gmail connection')),
         );
       }
     }
@@ -336,26 +412,88 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     double width = 48,
     double height = 32,
     BoxFit fit = BoxFit.cover,
-    bool expanded = false,
-    String? sender,
-    String? summary,
   }) {
-    return MailPieceImage(
-      imageRef: imageDataUrl,
-      sender: sender,
-      summary: summary,
-      width: width,
-      height: height,
-      fit: fit,
-      expanded: expanded,
-    );
+    final iconSize = height.clamp(16, 48).toDouble();
+    Widget placeholder(IconData icon) => SizedBox(
+          width: width,
+          height: height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Icon(
+                icon,
+                color: Colors.grey.shade600,
+                size: iconSize,
+              ),
+            ),
+          ),
+        );
+
+    if (imageDataUrl == null || imageDataUrl.isEmpty) {
+      return placeholder(Icons.mail_outline);
+    }
+
+    if (imageDataUrl.startsWith('cid:')) {
+      return placeholder(Icons.mail_outline);
+    }
+
+    if (imageDataUrl.startsWith('data:')) {
+      try {
+        final uri = Uri.parse(imageDataUrl);
+        final data = uri.data;
+        if (data != null) {
+          final bytes = data.contentAsBytes();
+          return Image.memory(
+            bytes,
+            width: width,
+            height: height,
+            fit: fit,
+            errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
+          );
+        }
+      } catch (_) {
+        // fall through to manual base64 decode
+      }
+
+      try {
+        final base64Data = imageDataUrl.split(',').last;
+        final bytes = const Base64Decoder().convert(base64Data);
+        return Image.memory(
+          bytes,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
+        );
+      } catch (_) {
+        return placeholder(Icons.mail_outline);
+      }
+    }
+
+    if (imageDataUrl.startsWith('http')) {
+      return Image.network(
+        imageDataUrl,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (_, __, ___) => placeholder(Icons.mail_outline),
+      );
+    }
+
+    return placeholder(Icons.mail_outline);
   }
 
-  bool _hasAttachment(String? imageDataUrl, {String? summary}) {
-    return MailImageClassifier.hasDisplayableImage(
-      imageDataUrl,
-      summary: summary,
-    );
+  bool _hasAttachment(String? imageDataUrl) {
+    if (imageDataUrl == null || imageDataUrl.isEmpty) {
+      return false;
+    }
+    if (imageDataUrl.startsWith('cid:')) {
+      return false;
+    }
+    return true;
   }
 
   void _showMailItemDetails(Map<String, dynamic> item) {
@@ -364,6 +502,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
 
     final imageSource =
         (item['imageDataUrl'] as String?) ?? (item['thumbnailUrl'] as String?);
+    final hasAttachment = !isPackage && _hasAttachment(imageSource);
     final actions = item['actions'];
     final Map<String, dynamic> actionsMap = actions is Map<String, dynamic>
         ? Map<String, dynamic>.from(actions as Map)
@@ -374,24 +513,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
     final sender = (rawSender != null && rawSender.isNotEmpty)
         ? rawSender
         : (isPackage ? 'USPS Package' : 'Unknown sender');
-    final rawSubject = (item['summary'] as String?) ??
-        (item['subject'] as String?);
-    final subject = rawSubject ??
+    final subject = (item['summary'] as String?) ??
+        (item['subject'] as String?) ??
         (isPackage && item['trackingNumber'] != null
             ? 'Tracking ${item['trackingNumber']}'
             : 'No subject available');
-    final hasAttachment =
-        !isPackage && _hasAttachment(imageSource, summary: rawSubject);
-    final missingImageNormal = !isPackage &&
-        MailImageClassifier.classify(imageSource, summary: rawSubject)
-            .isMissingNormalState;
-    final displaySubject =
-        missingImageNormal &&
-                (rawSubject == null ||
-                    rawSubject.trim().isEmpty ||
-                    rawSubject.trim().toLowerCase() == 'image not available')
-            ? 'Details from mail metadata'
-            : subject;
     final trackingNumber = item['trackingNumber'] as String?;
     final delivered =
         (item['deliveryDate'] as String?) ?? (item['receivedAt'] as String?);
@@ -427,12 +553,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (!isPackage)
-                        MailEnvelopeReadAloudButton(
-                          sender: rawSender,
-                          summary: rawSubject,
-                          includeMissingImageNote: missingImageNormal,
-                        ),
                       const SizedBox(width: 8),
                       Chip(
                         label: Text(typeLabel),
@@ -459,21 +579,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                       child: _buildMailImage(
                         imageSource,
                         width: 260,
-                        height: missingImageNormal ? 168 : 180,
+                        height: 180,
                         fit: BoxFit.contain,
-                        expanded: missingImageNormal,
-                        sender: rawSender,
-                        summary: rawSubject,
                       ),
                     ),
                   ),
-                  if (missingImageNormal) ...[
-                    const SizedBox(height: 12),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: MailMetadataOnlyBadge(),
-                    ),
-                  ],
                   const SizedBox(height: 16),
                   Text(
                     isPackage ? 'Details' : 'Subject',
@@ -488,7 +598,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          displaySubject,
+                          subject,
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
                       ),
@@ -636,89 +746,47 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      needsGoogleReconnect
-                          ? (reconnectMessage ??
-                              'Gmail access was revoked or expired. Reconnect to resume USPS mail sync.')
-                          : isGoogleConnected
-                              ? '✅ Google account connected! You can now fetch USPS digests automatically.'
-                              : 'Connect your Google account to automatically fetch USPS digests from Gmail.',
+                      'CareConnect reads USPS Informed Delivery emails from Gmail using read-only access. We never send, delete, or modify your email.',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      gmailStatusMessage ??
+                          (gmailState == _GmailConnectionState.connected
+                              ? 'Google account connected. You can fetch USPS digests automatically.'
+                              : gmailState == _GmailConnectionState.needsReconnect
+                                  ? 'Gmail access expired. Reconnect to continue syncing mail.'
+                                  : 'Connect your Google account to automatically fetch USPS digests from Gmail.'),
                       style: TextStyle(
-                        color: needsGoogleReconnect
-                            ? Colors.orange.shade800
-                            : isGoogleConnected
-                                ? Colors.green
+                        color: gmailState == _GmailConnectionState.connected
+                            ? Colors.green
+                            : gmailState == _GmailConnectionState.needsReconnect
+                                ? Colors.orange
                                 : Colors.grey,
                       ),
                     ),
-                    if (needsGoogleReconnect) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        key: const Key('gmailReauthBanner'),
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade300),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mail sync paused',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.orange.shade900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Reconnect Gmail to restore Informed Delivery sync.',
-                              style: TextStyle(color: Colors.orange.shade900),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                key: const Key('gmailReconnectButton'),
-                                onPressed: _connectGoogleAccount,
-                                icon: const Icon(Icons.link),
-                                label: const Text('Reconnect Gmail'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange.shade800,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 12),
-                    if (!isGoogleConnected && !needsGoogleReconnect)
+                    if (gmailState != _GmailConnectionState.connected)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.link),
-                          label: const Text('Connect Google Account'),
+                          label: Text(gmailState ==
+                                  _GmailConnectionState.needsReconnect
+                              ? 'Reconnect Google Account'
+                              : 'Connect Google Account'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
                           ),
                         ),
                       )
-                    else if (isGoogleConnected)
+                    else ...[
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              isGoogleConnected = false;
-                              needsGoogleReconnect = false;
-                            });
-                            _connectGoogleAccount();
-                          },
+                          onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.refresh),
                           label: const Text('Reconnect Google Account'),
                           style: OutlinedButton.styleFrom(
@@ -726,6 +794,16 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: _disconnectGoogleAccount,
+                          icon: const Icon(Icons.link_off),
+                          label: const Text('Disconnect Gmail'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -977,20 +1055,15 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           final trailingIcon = isPackage
                               ? Icons.local_shipping
                               : Icons.open_in_new;
-                          final summaryText = (result['summary'] as String?) ??
-                              (result['subject'] as String?);
-                          final summary = summaryText ?? 'No summary';
+                          final summary = result['summary'] ??
+                              result['subject'] ??
+                              'No summary';
                           final from = result['sender'] as String?;
                           final attachmentSource =
                               (result['imageDataUrl'] as String?) ??
                                   (result['thumbnailUrl'] as String?);
-                          final hasAttachment = !isPackage &&
-                              _hasAttachment(attachmentSource,
-                                  summary: summaryText);
-                          final missingImageNormal = !isPackage &&
-                              MailImageClassifier.classify(attachmentSource,
-                                      summary: summaryText)
-                                  .isMissingNormalState;
+                          final hasAttachment =
+                              !isPackage && _hasAttachment(attachmentSource);
                           final deliveryLabel = isPackage
                               ? (result['expectedDate'] as String?) ??
                                   (result['deliveryDate'] as String?)
@@ -1003,9 +1076,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               onTap: () => _showMailItemDetails(
                                   Map<String, dynamic>.from(result)),
                               leading: _buildMailImage(
-                                attachmentSource,
-                                sender: from,
-                                summary: summaryText,
+                                (result['imageDataUrl'] as String?) ??
+                                    (result['thumbnailUrl'] as String?),
                               ),
                               title: Row(
                                 children: [
@@ -1016,10 +1088,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.attachment, size: 16),
-                                  ],
-                                  if (missingImageNormal) ...[
-                                    const SizedBox(width: 6),
-                                    const MailMetadataOnlyBadge(),
                                   ],
                                   const SizedBox(width: 8),
                                   Container(
@@ -1074,24 +1142,12 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   ],
                                 ],
                               ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (!isPackage)
-                                    MailEnvelopeReadAloudButton(
-                                      sender: from,
-                                      summary: summaryText,
-                                      includeMissingImageNote:
-                                          missingImageNormal,
-                                    ),
-                                  IconButton(
-                                    icon: Icon(trailingIcon),
-                                    onPressed: trailingUrl == null ||
-                                            trailingUrl.isEmpty
+                              trailing: IconButton(
+                                icon: Icon(trailingIcon),
+                                onPressed:
+                                    trailingUrl == null || trailingUrl.isEmpty
                                         ? null
                                         : () => _openUri(trailingUrl),
-                                  ),
-                                ],
                               ),
                             ),
                           );
@@ -1319,26 +1375,17 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                           final imageSource =
                               (mailPiece['imageDataUrl'] as String?) ??
                                   (mailPiece['thumbnailUrl'] as String?);
+                          final hasAttachment = _hasAttachment(imageSource);
                           final summary = ((mailPiece['summary'] as String?) ??
                                   (mailPiece['subject'] as String?) ??
                                   '')
                               .trim();
-                          final hasAttachment =
-                              _hasAttachment(imageSource, summary: summary);
-                          final missingImageNormal =
-                              MailImageClassifier.classify(imageSource,
-                                      summary: summary)
-                                  .isMissingNormalState;
                           final senderName =
                               (mailPiece['sender'] as String?)?.trim();
                           final displayTitle =
                               (senderName != null && senderName.isNotEmpty)
                                   ? senderName
-                                  : (summary.isNotEmpty &&
-                                          summary.toLowerCase() !=
-                                              'image not available'
-                                      ? summary
-                                      : 'Mail');
+                                  : (summary.isNotEmpty ? summary : 'Mail');
                           mailPiece['type'] ??= 'mail';
                           final actions = mailPiece['actions'];
                           final actionsMap = actions is Map<String, dynamic>
@@ -1348,24 +1395,12 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                               actionsMap['dashboard'] as String?;
                           final trackUrl = actionsMap['track'] as String?;
                           final trailingUrl = dashboardUrl ?? trackUrl;
-                          final subtitleText = summary.isNotEmpty &&
-                                  summary != displayTitle &&
-                                  summary.toLowerCase() !=
-                                      'image not available'
-                              ? summary
-                              : (missingImageNormal
-                                  ? 'Details from mail metadata'
-                                  : null);
 
                           return Card(
                             child: ListTile(
                               onTap: () => _showMailItemDetails(
                                   Map<String, dynamic>.from(mailPiece)),
-                              leading: _buildMailImage(
-                                imageSource,
-                                sender: senderName,
-                                summary: summary,
-                              ),
+                              leading: _buildMailImage(imageSource),
                               title: Row(
                                 children: [
                                   Expanded(
@@ -1374,10 +1409,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.attachment, size: 16),
-                                  ],
-                                  if (missingImageNormal) ...[
-                                    const SizedBox(width: 6),
-                                    const MailMetadataOnlyBadge(),
                                   ],
                                   const SizedBox(width: 8),
                                   Container(
@@ -1398,26 +1429,16 @@ class _UspsTestScreenState extends State<UspsTestScreen> {
                                   ),
                                 ],
                               ),
-                              subtitle: subtitleText != null
-                                  ? Text(subtitleText)
-                                  : const SizedBox.shrink(),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  MailEnvelopeReadAloudButton(
-                                    sender: senderName,
-                                    summary: summary,
-                                    includeMissingImageNote:
-                                        missingImageNormal,
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.open_in_new),
-                                    onPressed: trailingUrl == null ||
-                                            trailingUrl.isEmpty
+                              subtitle:
+                                  summary.isNotEmpty && summary != displayTitle
+                                      ? Text(summary)
+                                      : const SizedBox.shrink(),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.open_in_new),
+                                onPressed:
+                                    trailingUrl == null || trailingUrl.isEmpty
                                         ? null
                                         : () => _openUri(trailingUrl),
-                                  ),
-                                ],
                               ),
                             ),
                           );

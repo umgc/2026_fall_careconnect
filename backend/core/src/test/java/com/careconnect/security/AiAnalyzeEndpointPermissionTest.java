@@ -5,6 +5,8 @@ import com.careconnect.controller.AiSymptomController;
 import com.careconnect.dto.AiAllergyDTO;
 import com.careconnect.dto.AiSymptomDTO;
 import com.careconnect.model.User;
+import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
 import com.careconnect.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -41,7 +44,10 @@ class AiAnalyzeEndpointPermissionTest {
     @BeforeEach
     void setUp() throws Exception {
         permissionAspect = new PermissionAspect();
-        setField(permissionAspect, "authorizationService", new AuthorizationService());
+        setField(permissionAspect, "authorizationService",
+                new AuthorizationService(
+                        mock(CaregiverPatientLinkRepository.class),
+                        mock(FamilyMemberLinkRepository.class)));
         setField(permissionAspect, "userRepository", userRepository);
 
         SecurityContextHolder.getContext().setAuthentication(

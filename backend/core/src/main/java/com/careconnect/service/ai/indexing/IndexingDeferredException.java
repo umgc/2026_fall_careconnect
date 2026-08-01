@@ -6,7 +6,8 @@ package com.careconnect.service.ai.indexing;
  * <p>When {@link #burnsAttempt()} is {@code true} (default), {@code IndexWorker}
  * increments {@code attempt_count} so the row eventually dead-letters.
  * When {@code false}, the row is left unprocessed without burning budget
- * (e.g. visit summaries waiting on Task 1.4). {@code IndexWorker} stamps a
+ * (e.g. missing authoritative patientId or content-hash mismatch awaiting republish).
+ * {@code IndexWorker} stamps a
  * future {@code claimed_at} (no-burn park hours) so the row is not reclaimed
  * every poll.
  */

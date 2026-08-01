@@ -130,7 +130,8 @@ public class SecurityConfig {
                                 "/v1/api/address/**",
                                 "/oauth/**",
                                 "/ws/**",
-                                "/api/notifications/demo/**"
+                                "/api/notifications/demo/**",
+                                "/api/internal/chime/**"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */
@@ -144,6 +145,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api/debug/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/email-test/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/admin/analytics/**").hasRole(ROLE_ADMIN)
+                        .requestMatchers("/v1/api/admin/users/**").hasRole(ROLE_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
                         .requestMatchers("/v1/api/care-circle/**").authenticated()
@@ -189,7 +191,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/patient/**").authenticated()
                         .requestMatchers("/api/gamification/**").authenticated()
                         .requestMatchers("/api/websocket/**").authenticated()
-                        .requestMatchers("/api/email-credentials/**").authenticated()
+                        // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
+                        // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.
+                        .requestMatchers("/v1/api/email-credentials/**", "/api/email-credentials/**").authenticated()
                         .requestMatchers("/api/v3/calls/**").authenticated()
                         .requestMatchers("/v1/api/**", "/v2/api/**", "/v3/api/**").authenticated()
                         .requestMatchers("/api/**").authenticated()

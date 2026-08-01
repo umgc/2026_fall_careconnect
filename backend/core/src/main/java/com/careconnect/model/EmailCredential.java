@@ -6,7 +6,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "email_credentials")
 public class EmailCredential {
-    public enum Provider { GMAIL, OUTLOOK }
+    public enum Provider { GMAIL, OUTLOOK, GOOGLE_HEALTH }
 
     /**
      * Connection lifecycle for OAuth mail providers (Task 3.14.9).

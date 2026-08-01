@@ -94,6 +94,7 @@ public class UserAIConfigService {
                 .includeNotesByDefault(dto.getIncludeNotesByDefault())
                 .includeMoodPainByDefault(dto.getIncludeMoodPainLogsByDefault())
                 .includeAllergiesByDefault(dto.getIncludeAllergiesByDefault())
+                .includeDocumentsByDefault(dto.getIncludeDocumentsByDefault())
                 .isActive(dto.getIsActive())
                 .build();
     }
@@ -120,6 +121,7 @@ public class UserAIConfigService {
         dto.setIncludeNotesByDefault(config.getIncludeNotesByDefault());
         dto.setIncludeMoodPainLogsByDefault(config.getIncludeMoodPainByDefault());
         dto.setIncludeAllergiesByDefault(config.getIncludeAllergiesByDefault());
+        dto.setIncludeDocumentsByDefault(config.getIncludeDocumentsByDefault());
         dto.setIsActive(config.getIsActive());
         return dto;
     }

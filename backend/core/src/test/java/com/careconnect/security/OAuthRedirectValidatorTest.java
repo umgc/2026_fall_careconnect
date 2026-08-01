@@ -1,0 +1,29 @@
+package com.careconnect.security;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class OAuthRedirectValidatorTest {
+
+    @Test
+    void allowsConfiguredFrontendHost() {
+        OAuthRedirectValidator validator =
+                new OAuthRedirectValidator("http://localhost:65241", "http://localhost:3000", "");
+        assertEquals(
+                "http://localhost:3000/usps-test",
+                validator.resolveRedirect(null, "http://localhost:3000"));
+        assertEquals(
+                "http://localhost:3000/settings",
+                validator.sanitizeReturnUrl("http://localhost:3000/settings"));
+    }
+
+    @Test
+    void rejectsUnknownHost() {
+        OAuthRedirectValidator validator =
+                new OAuthRedirectValidator("http://localhost:3000", "http://localhost:3000", "");
+        assertThrows(IllegalArgumentException.class,
+                () -> validator.sanitizeReturnUrl("https://evil.example/phish"));
+    }
+}
+

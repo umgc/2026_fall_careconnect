@@ -384,6 +384,160 @@ void main() {
       expect(sendMessageTapped, 1);
     });
 
+    testWidgets(
+        'FR-SUM-4 shows pending confirmation card and approves an action item',
+        (tester) async {
+      var confirmRequestCount = 0;
+
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/confirm')) {
+            confirmRequestCount += 1;
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['decision'], 'approve');
+            return http.Response(
+              jsonEncode({
+                'itemId': 'action-1',
+                'decision': 'approve',
+                'held': false,
+                'decisionId': 7,
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response(
+              jsonEncode({
+                'summary': {
+                  'headline': 'Follow-up scheduled.',
+                  'actionItems': [
+                    {
+                      'itemId': 'action-1',
+                      'text': 'Refill prescription',
+                      'dueHint': 'this week',
+                      'needsConfirmation': true,
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording')) {
+            return http.Response('', 404);
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-pending-items',
+            recipientName: 'Pat Doe',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(find.text('Items to confirm'), findsOneWidget);
+      expect(find.textContaining('Refill prescription'), findsOneWidget);
+      expect(
+        find.byKey(const Key('pending-summary-item-action-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
+      await _pumpLoaded(tester);
+
+      expect(confirmRequestCount, 1);
+      expect(find.text('Item approved.'), findsOneWidget);
+      expect(find.text('Items to confirm'), findsNothing);
+    });
+
+    testWidgets(
+        'FR-SUM-4 shows clinician-review snackbar when item is held',
+        (tester) async {
+      ApiService.debugSetHttpClient(
+        MockClient((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/telemetry')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/confirm')) {
+            return http.Response(
+              jsonEncode({
+                'itemId': 'care-1',
+                'decision': null,
+                'held': true,
+                'heldItemId': '11111111-1111-1111-1111-111111111111',
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/summary')) {
+            return http.Response(
+              jsonEncode({
+                'summary': {
+                  'careInstructions': [
+                    {
+                      'itemId': 'care-1',
+                      'text': 'Increase metformin dose',
+                      'type': 'medication',
+                      'needsConfirmation': true,
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }
+          if (path.endsWith('/transcript/segments')) {
+            return http.Response(jsonEncode(<Map<String, dynamic>>[]), 200);
+          }
+          if (path.endsWith('/recording')) {
+            return http.Response('', 404);
+          }
+          return http.Response('', 404);
+        }),
+      );
+
+      await tester.pumpWidget(
+        _wrap(
+          const PostCallTelemetrySummaryScreen(
+            callId: 'call-held-item',
+            recipientName: 'Pat Doe',
+          ),
+        ),
+      );
+      await _pumpLoaded(tester);
+
+      expect(
+        find.byKey(const Key('pending-summary-item-care-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
+      await _pumpLoaded(tester);
+
+      expect(
+        find.text('Sent for clinician review before it can be confirmed.'),
+        findsOneWidget,
+      );
+      // Held items keep needsConfirmation true, so the card stays visible.
+      expect(
+        find.byKey(const Key('pending-summary-item-care-1')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('SENT-CLIP-004 timeline tap loads clip when playback is ready',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);

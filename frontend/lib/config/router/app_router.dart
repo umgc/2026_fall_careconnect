@@ -9,10 +9,16 @@ import 'package:care_connect_app/features/notetaker/models/patient_note_model.da
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_detail_view.dart';
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_search.dart';
 import 'package:care_connect_app/features/informed_delivery/informed_delivery_screen.dart';
+import 'package:care_connect_app/features/invite_share/invite_qr_autoload_screen.dart';
 import 'package:care_connect_app/features/invite_share/invite_qr_screen.dart';
 import 'package:care_connect_app/features/invite_accept/invite_landing_screen.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_brief_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_recall_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_search_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_page.dart';
+import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
@@ -28,6 +34,7 @@ import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/widgets/menu/menu_page.dart';
+import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
 import 'package:care_connect_app/widgets/search/route_search_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -55,6 +62,7 @@ import '../../features/payments/presentation/pages/web_pay_page.dart';
 import '../../features/payments/presentation/pages/subscription_tier_selection_page.dart';
 import '../../features/analytics/analytics_page.dart';
 import '../../features/admin_analytics/presentation/pages/admin_analytics_dashboard_page.dart';
+import '../../features/admin_users/presentation/pages/admin_users_page.dart';
 import '../../utils/role_helper.dart';
 import '../../features/payments/presentation/pages/payment_success_page.dart';
 import '../../features/payments/presentation/pages/payment_cancel_page.dart';
@@ -72,6 +80,7 @@ import '../../features/evv/presentation/pages/checkout_location_page.dart';
 import '../../features/evv/presentation/pages/visit_complete_page.dart';
 import '../../features/evv/presentation/pages/visit_completed_success_page.dart';
 import '../../providers/user_provider.dart';
+import '../../services/daily_brief_gate_service.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.dart';
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
@@ -139,7 +148,11 @@ class TelemetryGoRouterObserver extends NavigatorObserver {
 final _telemetryGoRouterObserver = TelemetryGoRouterObserver();
 
 /// Helper function to navigate to the appropriate dashboard based on stored user role
-Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
+Future<void> navigateToDashboard(
+  BuildContext context, {
+  int? tabIndex,
+  bool routePatientToDailyBrief = false,
+}) async {
   // Issue #75: if the user authenticated in the middle of accepting an invite,
   // route them back to the invite landing screen to complete the join instead
   // of going straight to the dashboard. The landing screen accepts the invite
@@ -151,6 +164,25 @@ Future<void> navigateToDashboard(BuildContext context, {int? tabIndex}) async {
       return;
     }
   }
+
+  // STML-2 / WBS 3.13.2: care recipients see the Daily Memory Brief on their
+  // first login of the day, no earlier than 7am (SRS §6, "surfaces ... when
+  // the app is opened"). Caregivers, other roles, and logins after the brief
+  // has already been shown today go straight to the dashboard.
+  if (routePatientToDailyBrief) {
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    final patientId = user?.patientId;
+    if (user?.role.toUpperCase() == 'PATIENT' && patientId != null) {
+      final shouldShowBrief = await DailyBriefGateService.shouldShow(patientId);
+      if (shouldShowBrief) {
+        if (context.mounted) {
+          context.go('/stml/brief');
+        }
+        return;
+      }
+    }
+  }
+
   await NavigationHelper.navigateToMainScreen(
     context,
     tabIndex: tabIndex,
@@ -164,8 +196,26 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
+    GoRoute(path: '/stml/brief', builder: (_, __) => const StmlBriefPage()),
+    GoRoute(path: '/stml/recall', builder: (_, __) => const StmlRecallPage()),
+    GoRoute(path: '/stml/search', builder: (_, __) => const StmlSearchPage()),
     GoRoute(
-        path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
+      path: '/stml/checkin',
+      builder: (_, __) => const StmlCheckInPatientSelectionPage(),
+    ),
+    GoRoute(
+      path: '/stml/checkin/:patientId',
+      builder: (_, state) {
+        final patientId = int.tryParse(state.pathParameters['patientId'] ?? '');
+        if (patientId == null) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid patient id')),
+          );
+        }
+        return StmlCheckInPage(patientId: patientId);
+      },
+    ),
+    GoRoute(path: '/symptoms', builder: (_, __) => const SymptomsAllergiesPage()),
     GoRoute(
       path: '/login',
       builder: (context, state) {
@@ -410,6 +460,19 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       builder: (_, __) => const PatientRegistrationPage(),
     ),
     GoRoute(path: '/add-patient', builder: (_, __) => const AddPatientScreen()),
+    // Patient-friendly invite route: resolves the care-circle link ID
+    // automatically so users do not need manual URL construction.
+    GoRoute(
+      path: '/care-circle/invite',
+      name: 'inviteShareAuto',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return InviteQrAutoloadScreen(
+          invitedEmail: extra?['invitedEmail'] as String?,
+          inviteReason: extra?['inviteReason'] as String?,
+        );
+      },
+    ),
     // Issue #69: QR-based invite share for caregivers. Scoped to a care-circle
     // link id in the path; optional invitedEmail / inviteReason via `extra`.
     GoRoute(
@@ -660,6 +723,20 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         return null;
       },
       builder: (_, __) => const AdminAnalyticsDashboardPage(),
+    ),
+    GoRoute(
+      path: '/admin/users',
+      redirect: (context, state) async {
+        final userData = await UserRoleStorageService.instance.getUserData();
+        if (userData?.isLoggedIn != true) {
+          return '/login';
+        }
+        if (!RoleHelper.isAdmin(userData!.role)) {
+          return '/dashboard';
+        }
+        return null;
+      },
+      builder: (_, __) => const AdminUsersPage(),
     ),
     GoRoute(
       path: '/oauth/callback',
@@ -943,7 +1020,53 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
     GoRoute(
       path: '/file-management',
-      builder: (_, __) => const FileManagementPage(),
+      builder: (context, state) => FileManagementPage(
+        highlightFileId: state.uri.queryParameters['fileId'],
+      ),
+    ),
+    GoRoute(
+      path: '/calls/:callId/summary',
+      builder: (context, state) {
+        final callId = state.pathParameters['callId'];
+        if (callId == null || callId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text('Missing call id')),
+          );
+        }
+        return PostCallTelemetrySummaryScreen(callId: callId);
+      },
+    ),
+    GoRoute(
+      path: '/visits/:visitId/summary',
+      builder: (context, state) {
+        final visitId = state.pathParameters['visitId'] ?? '';
+        return Scaffold(
+          appBar: AppBar(title: const Text('Visit summary')),
+          body: Center(
+            child: Text(
+              visitId.isEmpty
+                  ? 'Missing visit id'
+                  : 'Visit $visitId summary is available in EVV visit history.',
+            ),
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/mail/:mailId',
+      builder: (context, state) {
+        final mailId = state.pathParameters['mailId'] ?? '';
+        return Scaffold(
+          appBar: AppBar(title: const Text('Mail piece')),
+          body: Center(
+            child: Text(
+              mailId.isEmpty
+                  ? 'Missing mail id'
+                  : 'Open Informed Delivery for mail piece $mailId.',
+            ),
+          ),
+        );
+      },
     ),
     GoRoute(
       path: '/ai-configuration',
@@ -960,14 +1083,9 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(
       path: "/notetaker/detail/:noteId",
       builder: (context, state) {
-        final noteId = state.pathParameters['noteId'];
-        final extra = state.extra;
-        if (noteId == null || extra == null || extra is! PatientNote) {
-          return const Scaffold(
-            body: Center(child: Text('Invalid note ID or missing note data')),
-          );
-        }
-        return NotetakerDetailView();
+        // Accept either a PatientNote via `extra` (list → detail) or
+        // noteId + optional ?patientId= (Ask AI citation deep link).
+        return const NotetakerDetailView();
       },
     ),
 

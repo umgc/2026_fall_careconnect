@@ -43,7 +43,8 @@ class EmailCredentialTest {
     void providerEnum_containsAllValues() throws Exception {
         assertThat(EmailCredential.Provider.values()).containsExactly(
                 EmailCredential.Provider.GMAIL,
-                EmailCredential.Provider.OUTLOOK
+                EmailCredential.Provider.OUTLOOK,
+                EmailCredential.Provider.GOOGLE_HEALTH
         );
     }
 

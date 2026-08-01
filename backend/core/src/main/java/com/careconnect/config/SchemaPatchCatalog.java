@@ -55,7 +55,25 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607231600_create_ai_ask_audit.sql"),
             new SchemaPatchLedger.Patch(
                     "2607232100-visit-summaries-ask-confirmation",
-                    "db/schema-patches/2607232100_visit_summaries_and_ask_confirmation.sql"));
+                    "db/schema-patches/2607232100_visit_summaries_and_ask_confirmation.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607241000-consent-grants",
+                    "db/schema-patches/2607241000_create_consent_grants.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607250100-consent-grants-active-unique",
+                    "db/schema-patches/2607250100_uq_consent_grants_active.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607251300-ai-held-item-open-unique",
+                    "db/schema-patches/2607251300_uq_ai_held_item_open_surface_hash.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607251310-user-files-extracted-text",
+                    "db/schema-patches/2607251310_user_files_extracted_text.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607271430-ai-ask-conversation-share",
+                    "db/schema-patches/2607271430_create_ai_ask_conversation_share.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2607271830-ask-ai-share-recipient-ocr-outbox",
+                    "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"));
 
     private SchemaPatchCatalog() {
     }

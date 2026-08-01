@@ -10,6 +10,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -60,11 +61,43 @@ Widget _wrap() {
   provider.userSession = provider.user;
 
   return MaterialApp(
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    supportedLocales: const [Locale('en')],
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const AdminAnalyticsDashboardPage(),
     ),
   );
+}
+
+Future<void> _openDateRangePicker(WidgetTester tester) async {
+  await tester.tap(find.byIcon(Icons.date_range));
+  await tester.pumpAndSettle();
+  expect(find.byType(DateRangePickerDialog), findsOneWidget);
+}
+
+Future<void> _selectCalendarDay(WidgetTester tester, String day) async {
+  final dayCells = find.descendant(
+    of: find.byType(DateRangePickerDialog),
+    matching: find.text(day, skipOffstage: false),
+  );
+  expect(dayCells, findsWidgets);
+  await tester.tap(dayCells.first);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _confirmDateRangePicker(WidgetTester tester) async {
+  final saveButton = find.widgetWithText(TextButton, 'Save');
+  if (saveButton.evaluate().isNotEmpty) {
+    await tester.tap(saveButton);
+  } else {
+    await tester.tap(find.widgetWithText(TextButton, 'OK'));
+  }
+  await tester.pumpAndSettle();
+  expect(find.byType(DateRangePickerDialog), findsNothing);
 }
 
 Future<void> _pumpN(WidgetTester tester, {int n = 15}) async {
@@ -124,9 +157,25 @@ String _summaryJson({
   });
 }
 
+String _featureTrendJson({String feature = 'dashboard'}) {
+  return jsonEncode({
+    'feature': feature,
+    'periodStart': '2026-07-01T00:00:00Z',
+    'periodEnd': '2026-07-08T00:00:00Z',
+    'dailyCounts': [
+      {'date': '2026-07-01', 'count': 4},
+      {'date': '2026-07-02', 'count': 2},
+    ],
+  });
+}
+
 MockClient _createSuccessMockClient({String Function(Uri url)? bodyForUrl}) {
   return MockClient((request) async {
     final url = request.url.toString();
+    if (url.contains('admin/analytics/feature-trends')) {
+      final feature = request.url.queryParameters['feature'] ?? 'dashboard';
+      return http.Response(_featureTrendJson(feature: feature), 200);
+    }
     if (url.contains('admin/analytics/summary')) {
       final body = bodyForUrl?.call(request.url) ?? _summaryJson();
       return http.Response(body, 200);
@@ -260,6 +309,7 @@ void main() {
         await _pumpN(tester);
         expect(find.text('Event Counts'), findsOneWidget);
         expect(find.text('Top Features'), findsOneWidget);
+        expect(find.text('Feature Trend'), findsOneWidget);
         expect(find.text('Sync Metrics'), findsOneWidget);
         expect(find.text('Error Metrics'), findsOneWidget);
         expect(find.byType(BarChart), findsWidgets);
@@ -267,7 +317,7 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('renders filter chips for 7, 14, 21, 30 days', (tester) async {
+    testWidgets('renders date range selector button', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
 
@@ -275,45 +325,77 @@ void main() {
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrap());
         await _pumpN(tester);
-        expect(find.text('7 days'), findsOneWidget);
-        expect(find.text('14 days'), findsOneWidget);
-        expect(find.text('21 days'), findsOneWidget);
-        expect(find.text('30 days'), findsOneWidget);
+        expect(find.byIcon(Icons.date_range), findsOneWidget);
+        expect(find.byType(OutlinedButton), findsOneWidget);
       }, () => mockClient);
     });
 
-    testWidgets('7 days filter chip is selected by default', (tester) async {
+    testWidgets('initial fetch uses from and to query params', (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
 
-      final mockClient = _createSuccessMockClient();
+      final requestedUrls = <Uri>[];
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('admin/analytics/summary')) {
+          requestedUrls.add(request.url);
+          return http.Response(_summaryJson(), 200);
+        }
+        if (request.url.path.contains('admin/analytics/feature-trends')) {
+          return http.Response(_featureTrendJson(), 200);
+        }
+        return http.Response('{}', 200);
+      });
+
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrap());
-        await _pumpN(tester);
-        final chip7 = tester.widget<FilterChip>(
-          find.widgetWithText(FilterChip, '7 days'),
-        );
-        expect(chip7.selected, isTrue);
+        await _pumpN(tester, n: 20);
+
+        expect(requestedUrls, isNotEmpty);
+        final params = requestedUrls.first.queryParameters;
+        expect(params.containsKey('from'), isTrue);
+        expect(params.containsKey('to'), isTrue);
+        expect(params.containsKey('days'), isFalse);
+      }, () => mockClient);
+    });
+
+    testWidgets('loads feature trend after summary', (tester) async {
+      _setLargeViewport(tester);
+      addTearDown(tester.view.reset);
+
+      final requestedPaths = <String>[];
+      final mockClient = MockClient((request) async {
+        requestedPaths.add(request.url.path);
+        if (request.url.path.contains('admin/analytics/feature-trends')) {
+          return http.Response(_featureTrendJson(), 200);
+        }
+        if (request.url.path.contains('admin/analytics/summary')) {
+          return http.Response(_summaryJson(), 200);
+        }
+        return http.Response('{}', 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(_wrap());
+        await _pumpN(tester, n: 20);
+        expect(requestedPaths.any((path) => path.contains('feature-trends')),
+            isTrue);
+        expect(find.byType(LineChart), findsWidgets);
       }, () => mockClient);
     });
   });
 
-  // ─── Filter chip interactions ─────────────────────────────────────────────
+  // ─── Date range picker interactions ───────────────────────────────────────
 
-  group('AdminAnalyticsDashboardPage - filter chip interactions', () {
-    testWidgets('tapping 14 days chip reloads with days=14', (tester) async {
+  group('AdminAnalyticsDashboardPage - date range picker interactions', () {
+    testWidgets('selecting a new range reloads with updated from/to',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
 
-      final requestedDays = <int>[];
+      final requestedUrls = <Uri>[];
       final mockClient = MockClient((request) async {
-        final url = request.url.toString();
-        if (url.contains('admin/analytics/summary')) {
-          final days = int.tryParse(
-                Uri.parse(url).queryParameters['days'] ?? '',
-              ) ??
-              0;
-          requestedDays.add(days);
+        if (request.url.path.contains('admin/analytics/summary')) {
+          requestedUrls.add(request.url);
           return http.Response(_summaryJson(), 200);
         }
         return http.Response('{}', 200);
@@ -322,16 +404,24 @@ void main() {
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrap());
         await _pumpN(tester);
-        expect(requestedDays, contains(7));
+        expect(requestedUrls.length, 1);
+        final initialFrom = requestedUrls.first.queryParameters['from'];
 
-        await tester.tap(find.text('14 days'));
+        await _openDateRangePicker(tester);
+
+        // Pick a fixed range earlier in the current month (differs from default last-7-days).
+        await _selectCalendarDay(tester, '1');
+        await _selectCalendarDay(tester, '7');
+        await _confirmDateRangePicker(tester);
         await _pumpN(tester);
 
-        expect(requestedDays, contains(14));
-        final chip14 = tester.widget<FilterChip>(
-          find.widgetWithText(FilterChip, '14 days'),
+        expect(requestedUrls.length, greaterThan(1));
+        expect(requestedUrls.last.queryParameters['from'], isNotNull);
+        expect(requestedUrls.last.queryParameters['to'], isNotNull);
+        expect(
+          requestedUrls.last.queryParameters['from'],
+          isNot(equals(initialFrom)),
         );
-        expect(chip14.selected, isTrue);
       }, () => mockClient);
     });
   });
@@ -404,6 +494,28 @@ void main() {
         await _pumpN(tester);
 
         expect(callCount, greaterThan(initialCount));
+      }, () => mockClient);
+    });
+  });
+
+  group('AdminAnalyticsDashboardPage - sync help', () {
+    testWidgets('info icon opens sync events explanation sheet', (tester) async {
+      _setLargeViewport(tester);
+      addTearDown(tester.view.reset);
+
+      final mockClient = _createSuccessMockClient();
+      await http.runWithClient(() async {
+        await tester.pumpWidget(_wrap());
+        await _pumpN(tester);
+
+        expect(find.text('Sync Metrics'), findsOneWidget);
+        await tester.tap(find.byTooltip('About sync events'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('About sync events'), findsOneWidget);
+        expect(find.text('What are sync events?'), findsOneWidget);
+        expect(find.text('Why might everything be zero?'), findsOneWidget);
+        expect(find.text('How to trigger sync events'), findsOneWidget);
       }, () => mockClient);
     });
   });

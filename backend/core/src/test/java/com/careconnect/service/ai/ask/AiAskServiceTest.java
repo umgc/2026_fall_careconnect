@@ -4,6 +4,7 @@ import com.careconnect.dto.ai.AiAskRequest;
 import com.careconnect.dto.ai.AiAskResponse;
 import com.careconnect.dto.ai.DeliveryStatus;
 import com.careconnect.dto.ai.InputModality;
+import com.careconnect.dto.ai.MedicationTimelineDto;
 import com.careconnect.model.User;
 import com.careconnect.model.ai.hitl.AiHeldItem;
 import com.careconnect.model.ai.hitl.AiHeldItemStatus;
@@ -21,6 +22,7 @@ import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
 import com.careconnect.service.ai.retrieval.ScopeDenialReason;
+import com.careconnect.service.ai.retrieval.timeline.MedicationTimelineAggregator;
 import com.careconnect.service.ai.safety.SafetyOutcome;
 import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.careconnect.service.security.InputSanitizationService;
@@ -51,6 +53,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,6 +79,8 @@ class AiAskServiceTest {
     private AiAskAuditService askAuditService;
     @Mock
     private AiAskConfirmationService askConfirmationService;
+    @Mock
+    private MedicationTimelineAggregator medicationTimelineAggregator;
 
     private AiAskService service;
 
@@ -117,7 +122,7 @@ class AiAskServiceTest {
                 retrievalQueryPlanner,
                 groundedAskLlmService,
                 new CitationAssembler(
-                        new CitationDeepLinkBuilder(),
+                        new CitationDeepLinkBuilder(new ObjectMapper()),
                         new CitationMetadataMapper(new ObjectMapper())),
                 inputSanitizationService,
                 governanceService,
@@ -125,6 +130,7 @@ class AiAskServiceTest {
                 hitlService,
                 askAuditService,
                 askConfirmationService,
+                medicationTimelineAggregator,
                 hitlEnabled);
     }
 
@@ -191,6 +197,53 @@ class AiAskServiceTest {
         assertThat(response.escalation().reason()).isEqualTo("tier1_auto_deliver");
         assertThat(response.retrievalMeta().chunksUsed()).isEqualTo(1);
         assertThat(response.retrievalMeta().model().provider()).isEqualTo("bedrock");
+        assertThat(response.medicationTimeline()).isNull();
+        verifyNoInteractions(medicationTimelineAggregator);
+    }
+
+    @Test
+    @DisplayName("ask aggregates medication timeline when plan is a medication-timeline intent")
+    void ask_deliveredAggregatesMedicationTimelineWhenPlanned() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        when(retrievalQueryPlanner.plan("metformin"))
+                .thenReturn(new RetrievalPlan(
+                        com.careconnect.service.ai.retrieval.QueryIntent.MEDICATION_TIMELINE,
+                        "metformin"));
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                "Started metformin 500mg twice daily",
+                "{\"contentHash\":\"abc\"}",
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        final HybridRetrievalResult retrieval =
+                new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1);
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenReturn(retrieval);
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Started metformin 500mg twice daily",
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Started metformin 500mg twice daily",
+                                List.of("C1"),
+                                java.util.Map.of(
+                                        "C1",
+                                        "Started metformin 500mg twice daily"))),
+                        "amazon.nova-lite-v1:0")));
+        final MedicationTimelineDto timeline = new MedicationTimelineDto(List.of());
+        when(medicationTimelineAggregator.aggregate(retrieval.chunks())).thenReturn(timeline);
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.medicationTimeline()).isSameAs(timeline);
+        verify(medicationTimelineAggregator).aggregate(retrieval.chunks());
     }
 
     @Test
@@ -795,6 +848,209 @@ class AiAskServiceTest {
                 .isInstanceOf(AskAiGroundingException.class)
                 .hasMessageContaining("HITL is disabled");
         verify(hitlService, never()).createHold(any(), any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("null caller is unauthorized")
+    void ask_nullCaller_unauthorized() {
+        assertThatThrownBy(() -> service.ask(null, request("metformin")))
+                .isInstanceOf(com.careconnect.security.UnauthorizedException.class);
+    }
+
+    @Test
+    @DisplayName("missing patientId is rejected")
+    void ask_missingPatientId_rejected() {
+        final AiAskRequest bad = new AiAskRequest(
+                "metformin", null, null, null, InputModality.TEXT, "en-US", null);
+        assertThatThrownBy(() -> service.ask(caller(), bad))
+                .isInstanceOf(AskAiRejectedException.class)
+                .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
+                .isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    @DisplayName("governance RATE_LIMIT maps to 429")
+    void ask_governanceRateLimited_rejects429() throws Exception {
+        when(governanceService.validateRequest(anyLong(), anyString(), anyString()))
+                .thenReturn(new LangChainGovernanceService.GovernanceResult(
+                        false, "too many", "RATE_LIMIT"));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiRejectedException.class)
+                .satisfies(ex -> {
+                    final AskAiRejectedException rejected = (AskAiRejectedException) ex;
+                    assertThat(rejected.getErrorCode()).isEqualTo("RATE_LIMITED");
+                    assertThat(rejected.getHttpStatus()).isEqualTo(429);
+                });
+        verify(askAuditService).appendEvent(any(), eq(AiAskAuditService.GOVERNANCE_BLOCKED), any(), any());
+    }
+
+    @Test
+    @DisplayName("governance non-rate deny maps to 400")
+    void ask_governanceBlocked_rejects400() throws Exception {
+        when(governanceService.validateRequest(anyLong(), anyString(), anyString()))
+                .thenReturn(new LangChainGovernanceService.GovernanceResult(
+                        false, "blocked", "REJECT_MESSAGE_LENGTH"));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiRejectedException.class)
+                .satisfies(ex -> {
+                    final AskAiRejectedException rejected = (AskAiRejectedException) ex;
+                    assertThat(rejected.getErrorCode()).isEqualTo("INVALID_REQUEST");
+                    assertThat(rejected.getHttpStatus()).isEqualTo(400);
+                });
+    }
+
+    @Test
+    @DisplayName("blank query after sanitize is rejected")
+    void ask_blankAfterSanitize_rejected() throws Exception {
+        when(governanceService.validateRequest(anyLong(), anyString(), anyString()))
+                .thenReturn(new LangChainGovernanceService.GovernanceResult(true, "ok", "ALLOW"));
+        when(inputSanitizationService.sanitizeUserInput(anyString(), anyLong(), anyString()))
+                .thenReturn(new InputSanitizationService.SanitizationResult("   ", false, List.of()));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiRejectedException.class)
+                .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
+                .isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    @DisplayName("provider configuration failure maps to MODEL_CONFIGURATION_UNAVAILABLE")
+    void ask_providerConfigurationUnavailable() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
+                "Started metformin 500mg twice daily", null, "auto", 0.03d, 1, 1, "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenThrow(new GroundedProviderException(
+                        GroundedProviderException.Kind.CONFIGURATION, "bad config", null));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiUnavailableException.class)
+                .extracting(ex -> ((AskAiUnavailableException) ex).getErrorCode())
+                .isEqualTo("MODEL_CONFIGURATION_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("provider transient failure maps to MODEL_PROVIDER_UNAVAILABLE")
+    void ask_providerTransientUnavailable() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
+                "Started metformin 500mg twice daily", null, "auto", 0.03d, 1, 1, "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenThrow(new GroundedProviderException(
+                        GroundedProviderException.Kind.PROVIDER, "down", null));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiUnavailableException.class)
+                .extracting(ex -> ((AskAiUnavailableException) ex).getErrorCode())
+                .isEqualTo("MODEL_PROVIDER_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("retrieval runtime failure is unavailable")
+    void ask_retrievalThrows_unavailable() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenThrow(new RuntimeException("db down"));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("sourceTypes containing null is rejected")
+    void ask_sourceTypesContainsNull_rejected() throws Exception {
+        when(governanceService.validateRequest(anyLong(), anyString(), anyString()))
+                .thenReturn(new LangChainGovernanceService.GovernanceResult(true, "ok", "ALLOW"));
+        when(inputSanitizationService.sanitizeUserInput(anyString(), anyLong(), anyString()))
+                .thenReturn(new InputSanitizationService.SanitizationResult(
+                        "metformin", false, List.of()));
+        final AiAskRequest bad = new AiAskRequest(
+                "metformin",
+                42L,
+                null,
+                null,
+                InputModality.TEXT,
+                "en-US",
+                java.util.Arrays.asList((RetrievalRecordType) null));
+
+        assertThatThrownBy(() -> service.ask(caller(), bad))
+                .isInstanceOf(AskAiRejectedException.class)
+                .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
+                .isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    @DisplayName("session approval suppresses confirmation prompt")
+    void ask_delivered_skipsConfirmationWhenSessionApproved() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        when(askConfirmationService.hasActiveSessionApproval(any(), anyLong(), anyLong()))
+                .thenReturn(true);
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
+                "Started metformin 500mg twice daily", "{\"contentHash\":\"abc\"}",
+                "auto", 0.03d, 1, 1, "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Started metformin 500mg twice daily",
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Started metformin 500mg twice daily",
+                                List.of("C1"),
+                                java.util.Map.of("C1", "Started metformin 500mg twice daily"))),
+                        "amazon.nova-lite-v1:0")));
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.confirmation().promptConfirmWithProvider()).isFalse();
+    }
+
+    @Test
+    @DisplayName("grounding failure without HOLD_TIER2 throws when HITL enabled")
+    void ask_groundingFailure_safetyDoesNotHold_throws() throws Exception {
+        stubExtractiveResult(
+                "Started metformin 500mg twice daily",
+                "Unsupported claim without evidence",
+                "totally unrelated");
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+        verify(hitlService, never()).createHold(any(), any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("safety BLOCK on delivered draft becomes grounding failure")
+    void ask_safetyBlock_groundingFailure() throws Exception {
+        stubHappyPathPreRetrieval("metformin");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 42L, RetrievalRecordType.CALL_SUMMARY, "99",
+                "Started metformin 500mg twice daily", null, "auto", 0.03d, 1, 1, "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("metformin"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "metformin", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Started metformin 500mg twice daily",
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Started metformin 500mg twice daily",
+                                List.of("C1"),
+                                java.util.Map.of("C1", "Started metformin 500mg twice daily"))),
+                        "amazon.nova-lite-v1:0")));
+        when(safetyPipeline.process(any()))
+                .thenReturn(SafetyOutcome.block(List.of("EMPTY_DRAFT"), List.of()));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
     }
 
     private void stubHappyPathPreRetrieval(final String query) throws Exception {

@@ -5,6 +5,7 @@
 // with pump(4s) to prevent "Timer still pending" assertion failures.
 // GoRouter is required because _redirectToLogin() calls context.go('/login').
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -28,7 +29,7 @@ Widget _wrap(Widget child) {
   );
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), routerConfig: router),
   );
 }
 

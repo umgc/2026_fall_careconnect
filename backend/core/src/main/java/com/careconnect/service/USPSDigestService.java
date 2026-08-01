@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
 import java.util.ArrayList;
@@ -43,7 +44,7 @@ public class USPSDigestService {
     private final ObjectMapper om = new ObjectMapper();
 
     public Optional<USPSDigest> latestForUser(String userId) {
-        // 1) cache — still retry durable persist (idempotent) so a prior failure
+        // 1) cache ΓÇö still retry durable persist (idempotent) so a prior failure
         //    during TTL cannot leave the Ask AI index permanently empty.
         var cached = cacheRepo.findFirstByUserIdAndExpiresAtAfterOrderByDigestDateDesc(userId, Instant.now());
         if (cached.isPresent()) {
@@ -248,17 +249,9 @@ public class USPSDigestService {
         }
     }
 
+    @Transactional
     public void clearCacheForUser(String userId) {
-        // Delete all cache entries for the user by setting their expiration to the past
-        var userCacheEntries = cacheRepo.findAll()
-                .stream()
-                .filter(cache -> userId.equals(cache.getUserId()))
-                .toList();
-
-        for (var entry : userCacheEntries) {
-            entry.setExpiresAt(Instant.now().minus(Duration.ofHours(1))); // Expire 1 hour ago
-            cacheRepo.save(entry);
-        }
+        cacheRepo.deleteByUserId(userId);
     }
 
     private String decrypt(String s) {

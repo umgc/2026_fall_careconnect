@@ -5,6 +5,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,10 @@ import 'package:care_connect_app/services/api_service_offline.dart';
 import '../../../mock_user_provider.dart';
 
 Widget _wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
+    MaterialApp(locale: const Locale('en'), 
+    localizationsDelegates: AppLocalizations.localizationsDelegates, 
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Scaffold(body: SingleChildScrollView(child: child)));
 
 /// Mutable HTTP handler for ApiServiceOffline.httpClient (UpcomingCheckins).
 late Future<http.Response> Function(http.Request) _upcomingHttpHandler;
@@ -121,6 +125,9 @@ Widget _wrapUpcoming(Widget child) {
       mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 42),
     ),
     child: MaterialApp(
+      locale: const Locale('en'), 
+      localizationsDelegates: AppLocalizations.localizationsDelegates, 
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(body: SingleChildScrollView(child: child)),
     ),
   );
