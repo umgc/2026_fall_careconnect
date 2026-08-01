@@ -367,6 +367,8 @@
   "signup_backLoginButton": "Back to Login",
   "signup_signUpButton": "Sign Up",
   "signup_nextButton": "Next",
+  "signup_step": "Step",
+  "signup_of": "of",
 
   "oauthcallback_initilizeAuth": "Processing authentication",
   "oauthcallback_missingAuthData": "Missing authentication data. Please try signing in again.",
