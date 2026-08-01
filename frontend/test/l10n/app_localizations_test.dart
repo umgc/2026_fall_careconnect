@@ -247,7 +247,7 @@ void main() {
   /// compile time instead of silently losing coverage.
   List<String> readAllGetters(AppLocalizations loc) {
     return [
-loc.systemDefault,
+      loc.systemDefault,
       loc.menuTitle,
       loc.yourShortcuts,
       loc.preferences,
@@ -1148,6 +1148,8 @@ loc.systemDefault,
       loc.ptdashboard_weekly,
       loc.ptdashboard_monthly,
       loc.ptdashboard_onceAtBed,
+      loc.signup_step,
+      loc.signup_of,
     ];
   }
 
