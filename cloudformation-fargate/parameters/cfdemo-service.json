@@ -7,7 +7,7 @@
   { "ParameterKey": "FromEmail", "ParameterValue": "noreply@careconnect.com" },
   { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "" },
   { "ParameterKey": "FrontendBaseUrl", "ParameterValue": "http://localhost:3000" },
-  { "ParameterKey": "CorsAllowedList", "ParameterValue": "http://localhost:*,http://127.0.0.1:*" },
+  { "ParameterKey": "CorsAllowedList", "ParameterValue": "http://localhost:*,http://127.0.0.1:*,https://main.ds3yhlzh31yi9.amplifyapp.com" },
   { "ParameterKey": "ContainerPort", "ParameterValue": "8081" },
   { "ParameterKey": "DesiredCount", "ParameterValue": "1" },
   { "ParameterKey": "TaskCpu", "ParameterValue": "1024" },
