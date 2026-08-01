@@ -57,6 +57,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 
 @RestController
 @RequestMapping("/api/v3/calls")
@@ -1052,6 +1054,7 @@ public class CallController {
                         "message", "No stored summary found for this call")));
   }
 
+  @PreAuthorize("@careCircleSecurity.isCaregiverForCall(authentication, #callId)")
   @PostMapping("/{callId}/summary/items/{itemId}/confirm")
   @Operation(summary = "Confirm or decline a single extracted call summary item (FR-SUM-4)")
   /**

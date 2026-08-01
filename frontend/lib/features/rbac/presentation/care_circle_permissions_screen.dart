@@ -19,7 +19,7 @@ class CareCirclePermissionsScreen extends StatefulWidget {
 }
 
 class _CareCirclePermissionsScreenState extends State<CareCirclePermissionsScreen> {
-  Map<String, bool> _featuresState = {
+  final Map<String, bool> _featuresState = {
     'MEDICATIONS': false,
     'INVOICES': false,
     'TRANSCRIPTS': false,
@@ -36,19 +36,26 @@ class _CareCirclePermissionsScreenState extends State<CareCirclePermissionsScree
   Future<void> _loadPermissions() async {
     try {
       final data = await widget.rbacService.getCareCirclePermissions(widget.patientId);
-      if (data['permissions'] != null) {
+      if (mounted && data['permissions'] != null) {
         final List dynamicPermissions = data['permissions'];
         setState(() {
           for (var feature in _featuresState.keys) {
             _featuresState[feature] = dynamicPermissions.contains(feature);
           }
-          _isLoading = false;
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load permission states.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load permission states.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -62,15 +69,21 @@ class _CareCirclePermissionsScreenState extends State<CareCirclePermissionsScree
       } else {
         await widget.rbacService.revokeFeatureAccess(widget.patientId, request);
       }
-      setState(() {
-        _featuresState[feature] = newValue;
-      });
+      if (mounted) {
+        setState(() {
+          _featuresState[feature] = newValue;
+        });
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update access control status for $feature')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update access control status for $feature')),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

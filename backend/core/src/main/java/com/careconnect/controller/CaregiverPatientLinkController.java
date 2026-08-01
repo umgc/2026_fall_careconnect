@@ -244,4 +244,47 @@ public class CaregiverPatientLinkController {
         );
         return ResponseEntity.ok(response);
     }
+    // 13. Grant feature access for a care circle link (WBS 3.10.1 / Ticket 505)
+    @RequirePermission(Permission.UPDATE_TASKS)
+    @PostMapping("/{linkId}/permissions/grant")
+    public ResponseEntity<CaregiverPatientLinkResponse> grantFeatureAccess(
+            @PathVariable Long linkId,
+            @RequestBody Map<String, Object> request
+    ) {
+        User currentUser = getCurrentUser();
+        String feature = (String) request.get("permission");
+
+        if (feature == null || feature.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Permission/feature name is required");
+        }
+
+        CaregiverPatientLinkResponse response = linkService.grantPermission(
+                linkId,
+                feature,
+                currentUser.getId()
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    // 14. Revoke feature access for a care circle link (WBS 3.10.1 / Ticket 505)
+    @RequirePermission(Permission.UPDATE_TASKS)
+    @PostMapping("/{linkId}/permissions/revoke")
+    public ResponseEntity<CaregiverPatientLinkResponse> revokeFeatureAccess(
+            @PathVariable Long linkId,
+            @RequestBody Map<String, Object> request
+    ) {
+        User currentUser = getCurrentUser();
+        String feature = (String) request.get("permission");
+
+        if (feature == null || feature.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Permission/feature name is required");
+        }
+
+        CaregiverPatientLinkResponse response = linkService.revokePermission(
+                linkId,
+                feature,
+                currentUser.getId()
+        );
+        return ResponseEntity.ok(response);
+    }
 }

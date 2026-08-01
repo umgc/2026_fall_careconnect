@@ -1,0 +1,10 @@
+docs/
+backend/core/README.md
+backend/core/.env.example
+backend/core/sampleDotEnv.txt
+quality/analysis/
+backend/core/src/test/
+frontend/test/
+backend/core/run.sh
+backend/core/run-dev.sh
+backend/core/run-dev-macos.sh

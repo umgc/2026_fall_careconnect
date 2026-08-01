@@ -99,6 +99,8 @@ public class CallNotificationHandler extends TextWebSocketHandler {
     }
     
     // Fallback using the safe single-role fallback getter from the model updates
+    
+    // Fallback using the safe single-role fallback getter from the model updates
     if (user.getRole() != null) {
       final String roleName = user.getRole().name().toLowerCase(Locale.ROOT);
       return Character.toUpperCase(roleName.charAt(0)) + roleName.substring(1);
