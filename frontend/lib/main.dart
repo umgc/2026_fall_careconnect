@@ -26,6 +26,7 @@ import 'features/telemetry/telemetry.dart';
 import 'features/telemetry/telemetry_error_handler.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
+import 'providers/confirmation_provider.dart';
 
 Future<void> main() async {
   // Global error handling for unhandled Dart errors
@@ -78,6 +79,7 @@ Future<void> main() async {
             ChangeNotifierProvider.value(value: shortcutProvider),
             ChangeNotifierProvider.value(value: localeProvider),
             ChangeNotifierProvider(create: (_) => TaskTypeManager()),
+            ChangeNotifierProvider(create: (_) => ConfirmationProvider()),
           ],
           child: CareConnectAppWithErrorBoundary(),
         ),
