@@ -749,6 +749,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
 
+
                   const SizedBox(height: 24),
 
                   // Subscription (hide for patient/family member)

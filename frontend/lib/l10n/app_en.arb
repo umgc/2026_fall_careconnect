@@ -370,6 +370,8 @@
   "signup_backLoginButton": "Back to Login",
   "signup_signUpButton": "Sign Up",
   "signup_nextButton": "Next",
+  "signup_step": "Step",
+  "signup_of": "of",
 
   "oauthcallback_initilizeAuth": "Processing authentication",
   "oauthcallback_missingAuthData": "Missing authentication data. Please try signing in again.",
@@ -563,6 +565,15 @@
   "ptdashboard_moodScoreLow": "Mood score below normal range. Consider contacting your healthcare provider.",
   "ptdashboard_medicationReminders": "You have medication reminders that are not marked as taken.",
   "ptdashboard_medPendingReminder": "reminder:pending_medications",
+  "ptdashboard_twiceDaily": "Twice daily",
+  "ptdashboard_onceDaily": "Once daily",
+  "ptdashboard_threeTimesDaily": "Three times daily",
+  "ptdashboard_fourTimesDaily": "Four times daily",
+  "ptdashboard_asNeeded": "As needed",
+  "ptdashboard_hourly": "Hourly",
+  "ptdashboard_weekly": "Weekly",
+  "ptdashboard_monthly": "Monthly",
+  "ptdashboard_onceAtBed": "Once daily at bedtime",
 
   "sosscreen_sosSent": "SOS Sent",
   "sosscreen_caregiverNotified": "Your caregiver has been notified.",
@@ -824,7 +835,6 @@
   "subselection_continueToPayment": "Continue to Payment",
   "subselection_confirmFree": "Confirm Free Plan",
   "subselection_selectedFree": "You have selected the Free Plan. You can upgrade at any time.",
-  "subselection_continueToPayment": "Continue to Payment",
   "subselection_mostPopular": "Most Popular",
 
   "webpay_paymentFailed": "Payment failed",
