@@ -125,6 +125,17 @@
   "login_badgeAccessible": "Доступно",
   "login_e2eEncrypted": "Сквозное шифрование",
   "login_wcagAACompliant": "Соответствует WCAG AA",
+
+  "ptdashboard_twiceDaily": "Дважды в день",
+  "ptdashboard_onceDaily": "Один раз в день",
+  "ptdashboard_threeTimesDaily": "Три раза в день",
+  "ptdashboard_fourTimesDaily": "Четыре раза в день",
+  "ptdashboard_asNeeded": "По мере необходимости",
+  "ptdashboard_hourly": "Почасовая оплата",
+  "ptdashboard_weekly": "Еженедельно",
+  "ptdashboard_monthly": "Ежемесячно",
+  "ptdashboard_onceAtBed": "Один раз в день перед сном",
+  
   "login_loginFailedError": "Ошибка входа",
 
   "settings_telemetryDefaultDialogTitle": "Телеметрия включена",

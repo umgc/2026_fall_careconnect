@@ -143,6 +143,17 @@
   "login_badgeAccessible": "قابل دسترسی",
   "login_e2eEncrypted": "رمزگذاری سرتاسری",
   "login_wcagAACompliant": "سازگار با WCAG AA",
+
+  "ptdashboard_twiceDaily": "دو بار در روز",
+  "ptdashboard_onceDaily": "دو بار در روز",
+  "ptdashboard_threeTimesDaily": "سه بار در روز",
+  "ptdashboard_fourTimesDaily": "چهار بار در روز",
+  "ptdashboard_asNeeded": "در صورت نیاز",
+  "ptdashboard_hourly": "ساعتی",
+  "ptdashboard_weekly": "هفتگی",
+  "ptdashboard_monthly": "ماهانه",
+  "ptdashboard_onceAtBed": "یک بار در روز قبل از خواب",
+  
   "login_loginFailedError": "ورود ناموفق بود",
 
   "settings_telemetryDefaultDialogTitle": "تله‌متری فعال است",

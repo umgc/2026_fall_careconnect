@@ -141,6 +141,17 @@
   "login_badgeAccessible": "पहुँच योग्य",
   "login_e2eEncrypted": "एन्ड-टु-एन्ड इन्क्रिप्टेड",
   "login_wcagAACompliant": "WCAG AA अनुरूप",
+
+  "ptdashboard_twiceDaily": "दैनिक दुई पटक",
+  "ptdashboard_onceDaily": "दिनमा एक पटक",
+  "ptdashboard_threeTimesDaily": "दिनको तीन पटक",
+  "ptdashboard_fourTimesDaily": "दिनको चार पटक",
+  "ptdashboard_asNeeded": "आवश्यकता अनुसार",
+  "ptdashboard_hourly": "घण्टा",
+  "ptdashboard_weekly": "साप्ताहिक",
+  "ptdashboard_monthly": "मासिक",
+  "ptdashboard_onceAtBed": "सुत्ने समयमा दैनिक एक पटक",
+  
   "login_loginFailedError": "लगइन असफल भयो",
 
   "settings_telemetryDefaultDialogTitle": "टेलीमेट्री सक्षम पारिएको छ",

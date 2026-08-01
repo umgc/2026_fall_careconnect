@@ -136,6 +136,17 @@
   "login_badgeAccessible": "እንደገና የሚደርስ",
   "login_e2eEncrypted": "ከመጀመሪያ እስከ መጨረሻ የተመሰጠረ",
   "login_wcagAACompliant": "ከWCAG AA ጋር የተስማማ",
+
+  "ptdashboard_twiceDaily": "በቀን ሁለት ጊዜ",
+  "ptdashboard_onceDaily": "በየቀኑ አንድ ጊዜ",
+  "ptdashboard_threeTimesDaily": "በየቀኑ አንድ ጊዜ",
+  "ptdashboard_fourTimesDaily": "በቀን አራት ጊዜ",
+  "ptdashboard_asNeeded": "እንደአስፈላጊነቱ",
+  "ptdashboard_hourly": "በየሰዓቱ",
+  "ptdashboard_weekly": "ሳምንታዊ",
+  "ptdashboard_monthly": "ወርሃዊ",
+  "ptdashboard_onceAtBed": "በየቀኑ አንድ ጊዜ በመኝታ ሰዓት",
+  
   "login_loginFailedError": "መግባት አልተሳካም",
 
   "roles_Patient": "ታካሚ",

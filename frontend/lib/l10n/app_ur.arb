@@ -142,6 +142,17 @@
   "login_badgeAccessible": "قابل رسائی",
   "login_e2eEncrypted": "اینڈ ٹو اینڈ خفیہ",
   "login_wcagAACompliant": "WCAG AA کے مطابق",
+
+  "ptdashboard_twiceDaily": "روزانہ دو بار",
+  "ptdashboard_onceDaily": "روزانہ ایک بار",
+  "ptdashboard_threeTimesDaily": "روزانہ تین بار",
+  "ptdashboard_fourTimesDaily": "دن میں چار بار",
+  "ptdashboard_asNeeded": "ضرورت کے مطابق",
+  "ptdashboard_hourly": "گھنٹہ",
+  "ptdashboard_weekly": "ہفتہ وار",
+  "ptdashboard_monthly": "ماہانہ",
+  "ptdashboard_onceAtBed": "روزانہ ایک بار سونے کے وقت",
+  
   "login_loginFailedError": "لاگ ان ناکام",
 
   "settings_telemetryDefaultDialogTitle": "ٹیلی میٹری فعال ہے",

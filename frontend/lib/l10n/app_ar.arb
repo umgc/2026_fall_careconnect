@@ -153,6 +153,17 @@
   "login_badgeAccessible": "سهل الوصول",
   "login_e2eEncrypted": "مشفّر من الطرف إلى الطرف",
   "login_wcagAACompliant": "متوافق مع WCAG AA",
+
+  "ptdashboard_twiceDaily": "مرتين يوميًا",
+  "ptdashboard_onceDaily": "مرة واحدة يوميًا",
+  "ptdashboard_threeTimesDaily": "ثلاث مرات يوميًا",
+  "ptdashboard_fourTimesDaily": "أربع مرات يوميًا",
+  "ptdashboard_asNeeded": "حسب الحاجة",
+  "ptdashboard_hourly": "كل ساعة",
+  "ptdashboard_weekly": "أسبوعي",
+  "ptdashboard_monthly": "شهري",
+  "ptdashboard_onceAtBed": "مرة واحدة يوميًا عند وقت النوم",
+  
   "login_loginFailedError": "فشل تسجيل الدخول",
 
   "roles_Patient": "مريض",

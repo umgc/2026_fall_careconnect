@@ -141,6 +141,17 @@
   "login_badgeAccessible": "Accessible",
   "login_e2eEncrypted": "Chiffré de bout en bout",
   "login_wcagAACompliant": "Conforme à WCAG AA",
+
+  "ptdashboard_twiceDaily": "Deux fois par jour",
+  "ptdashboard_onceDaily": "Deux fois par jour",
+  "ptdashboard_threeTimesDaily": "Trois fois par jour",
+  "ptdashboard_fourTimesDaily": "Quatre fois par jour",
+  "ptdashboard_asNeeded": "Au besoin",
+  "ptdashboard_hourly": "Horaire",
+  "ptdashboard_weekly": "Hebdomadaire",
+  "ptdashboard_monthly": "Mensuel",
+  "ptdashboard_onceAtBed": "Une fois par jour au coucher",
+  
   "login_loginFailedError": "Échec de la connexion",
 
   "settings_telemetryDefaultDialogTitle": "La télémétrie est activée",
