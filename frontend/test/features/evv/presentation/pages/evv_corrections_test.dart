@@ -91,6 +91,31 @@ void _wireEvvClient({
   }));
 }
 
+/// Like [_wireEvvClient] but also answers the approve endpoints so the
+/// approval actions run end to end. Set [approveStatus] to force a failure.
+void _wireWithApprovals({
+  String? corrections,
+  String? eor,
+  int approveStatus = 200,
+}) {
+  ApiServiceOffline.debugOverrideHttpClient(MockClient((req) async {
+    final url = req.url.toString();
+    if (url.contains('/corrections/pending')) {
+      return http.Response(corrections ?? jsonEncode([_corr(1)]), 200);
+    }
+    if (url.contains('/records/pending-eor-approvals')) {
+      return http.Response(eor ?? jsonEncode([_rec(5)]), 200);
+    }
+    if (url.contains('/corrections/') && url.contains('/approve')) {
+      return http.Response(jsonEncode(_corr(1)), approveStatus);
+    }
+    if (url.contains('/records/eor-approve')) {
+      return http.Response(jsonEncode(_rec(5)), approveStatus);
+    }
+    return http.Response('[]', 200);
+  }));
+}
+
 Widget _host() => const MaterialApp(home: EvvCorrectionsPage());
 
 void main() {
@@ -174,5 +199,54 @@ void main() {
     expect(find.text('Approve Correction'), findsOneWidget);
     expect(find.widgetWithText(ElevatedButton, 'Approve'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
+  });
+
+  testWidgets('approving a correction removes it and confirms', (tester) async {
+    _wireWithApprovals(eor: '[]');
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Approve'));
+    await tester.pumpAndSettle();
+
+    // _approveCorrection ran: success snackbar, correction removed from the tab.
+    expect(find.textContaining('Correction approved successfully'), findsWidgets);
+    expect(find.text('No pending corrections'), findsOneWidget);
+    tester.takeException();
+  });
+
+  testWidgets('a failed correction approval surfaces an error', (tester) async {
+    _wireWithApprovals(eor: '[]', approveStatus: 500);
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Approve'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Error approving correction'), findsWidgets);
+    tester.takeException();
+  });
+
+  testWidgets('approving an EOR record completes successfully', (tester) async {
+    _wireWithApprovals(corrections: '[]');
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('EOR Approvals (1)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Approve EOR'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Approve'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('EOR approval completed successfully'),
+        findsWidgets);
+    tester.takeException();
   });
 }

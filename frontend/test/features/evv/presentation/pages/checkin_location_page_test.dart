@@ -13,6 +13,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
@@ -76,6 +77,32 @@ Widget _host({UserSession? user}) {
     child: const MaterialApp(
       home: CheckinLocationPage(patientId: 42, serviceType: 'Personal Care'),
     ),
+  );
+}
+
+/// A GoRouter-backed host so the page's context.push('/evv/visit-progress')
+/// navigation (used by the no-GPS alternative-location flows) resolves.
+Widget _routerHost({UserSession? user}) {
+  final provider = UserProvider();
+  if (user != null) provider.setUser(user);
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, __) => const CheckinLocationPage(
+            patientId: 42, serviceType: 'Personal Care'),
+      ),
+      GoRoute(
+        path: '/evv/visit-progress',
+        builder: (_, __) =>
+            const Scaffold(body: Text('VISIT PROGRESS SCREEN')),
+      ),
+    ],
+  );
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: provider,
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -159,5 +186,48 @@ void main() {
     await tester.pumpWidget(_host(user: _caregiver()));
     await tester.pumpAndSettle();
     expect(find.text('Cancel'), findsOneWidget);
+  });
+
+  testWidgets('Use Patient Address opens the no-GPS reason dialog',
+      (tester) async {
+    ApiService.debugSetHttpClient(
+        MockClient((_) async => http.Response(_patientListJson(42), 200)));
+    await tester.pumpWidget(_routerHost(user: _caregiver()));
+    await tester.pumpAndSettle();
+
+    final btn = find.widgetWithText(ElevatedButton, 'Select Patient Address');
+    await tester.ensureVisible(btn);
+    await tester.tap(btn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Location Reason Required'), findsOneWidget);
+    // Cancel dismisses without navigating (the app bar also has a Cancel, so
+    // target the dialog's, which is last in the tree).
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Location Reason Required'), findsNothing);
+    expect(find.text('VISIT PROGRESS SCREEN'), findsNothing);
+    tester.takeException();
+  });
+
+  testWidgets('confirming the patient-address reason navigates to visit progress',
+      (tester) async {
+    ApiService.debugSetHttpClient(
+        MockClient((_) async => http.Response(_patientListJson(42), 200)));
+    await tester.pumpWidget(_routerHost(user: _caregiver()));
+    await tester.pumpAndSettle();
+
+    final btn = find.widgetWithText(ElevatedButton, 'Select Patient Address');
+    await tester.ensureVisible(btn);
+    await tester.tap(btn);
+    await tester.pumpAndSettle();
+
+    // The dialog defaults the reason to HOME_VISIT_ADDRESS_USED, so Continue
+    // is enabled immediately; tapping it runs _navigateToVisitProgress.
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Continue'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('VISIT PROGRESS SCREEN'), findsOneWidget);
+    tester.takeException();
   });
 }

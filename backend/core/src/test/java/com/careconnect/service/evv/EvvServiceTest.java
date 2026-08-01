@@ -384,6 +384,75 @@ class EvvServiceTest {
     }
 
     @Test
+    void createRecord_withManualBlankAddress_throwsIllegalArgument() throws Exception {
+        // A whitespace-only address must be rejected the same as a missing one;
+        // this drives the isBlank() branch of the MANUAL address guardrail that
+        // a null address short-circuits past.
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("MANUAL")
+                .checkinNoGpsReason("COMMUNITY_VISIT")
+                .checkinManualAddress("   ") // blank, not null
+                .build();
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+
+        assertThatThrownBy(() -> evvService.createRecord(req, 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("address");
+    }
+
+    @Test
+    void createRecord_whenCheckinLocationSaveFails_stillCreatesRecord() throws Exception {
+        // Location persistence is best-effort: a saveLocation failure must be
+        // caught and logged, not propagated — the EVV record still saves.
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkinLocationSource("GPS")
+                .checkinLocationLat(38.9072)
+                .checkinLocationLng(-77.0369)
+                .build();
+
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any()))
+                .thenThrow(new RuntimeException("location store unavailable"));
+
+        // Must not throw despite the location-save failure.
+        evvService.createRecord(req, 1L);
+
+        verify(recordRepository, atLeastOnce()).save(any(EvvRecord.class));
+    }
+
+    @Test
+    void createRecord_whenCheckoutLocationSaveFails_stillCreatesRecord() throws Exception {
+        final Patient patient = buildPatient(5L);
+        final EvvRecordRequestDto req = baseReqBuilder()
+                .checkoutLocationSource("GPS")
+                .checkoutLocationLat(38.91)
+                .checkoutLocationLng(-77.04)
+                .build();
+
+        final EvvRecord saved = buildSavedRecord(1L, patient);
+
+        when(patientRepository.findById(5L)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(User.builder().id(10L).name("Test Caregiver").build()));
+        when(recordRepository.save(any(EvvRecord.class))).thenReturn(saved);
+        doNothing().when(audit).log(any(), any(), any(), any());
+        when(locationService.saveLocation(any()))
+                .thenThrow(new RuntimeException("location store unavailable"));
+
+        evvService.createRecord(req, 1L);
+
+        verify(recordRepository, atLeastOnce()).save(any(EvvRecord.class));
+    }
+
+    @Test
     void createRecord_withScheduledVisit_marksCompleted() throws Exception {
         final Patient patient = buildPatient(5L);
         final EvvRecordRequestDto req = baseReqBuilder()
