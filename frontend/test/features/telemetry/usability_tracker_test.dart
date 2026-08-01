@@ -129,4 +129,93 @@ void main() {
       expect(UsabilityTracker.globalTaps, 2);
     });
   });
+
+  group('UsabilityTracker - switchTask / currentTask', () {
+    test('currentTask is null when idle and set while tracking', () {
+      expect(UsabilityTracker.currentTask, isNull);
+      UsabilityTracker.startTask('a');
+      expect(UsabilityTracker.currentTask, 'a');
+      UsabilityTracker.endTask();
+      expect(UsabilityTracker.currentTask, isNull);
+    });
+
+    test('switchTask starts measuring when idle and returns null', () {
+      final prior = UsabilityTracker.switchTask('screen_a', optimalTaps: 3);
+      expect(prior, isNull);
+      expect(UsabilityTracker.isTracking, isTrue);
+      expect(UsabilityTracker.currentTask, 'screen_a');
+    });
+
+    test('switchTask ends the prior task and starts the next with a fresh count',
+        () {
+      UsabilityTracker.switchTask('screen_a', optimalTaps: 2);
+      UsabilityTracker.registerTap();
+      UsabilityTracker.registerTap(); // 2 taps on screen_a
+      final prior = UsabilityTracker.switchTask('screen_b', optimalTaps: 5);
+      expect(prior, isNotNull);
+      expect(prior!.task, 'screen_a');
+      expect(prior.taps, 2);
+      expect(prior.difficulty, TaskDifficulty.easy); // 2 <= optimal(2)+1
+      expect(UsabilityTracker.currentTask, 'screen_b');
+      // Taps now accrue to screen_b only.
+      UsabilityTracker.registerTap();
+      final b = UsabilityTracker.endTask();
+      expect(b!.task, 'screen_b');
+      expect(b.taps, 1);
+    });
+
+    test('switchTask to the same task is a no-op and keeps measuring', () {
+      UsabilityTracker.switchTask('screen_a');
+      UsabilityTracker.registerTap();
+      final noop = UsabilityTracker.switchTask('screen_a'); // same route again
+      expect(noop, isNull);
+      UsabilityTracker.registerTap();
+      final res = UsabilityTracker.endTask();
+      expect(res!.task, 'screen_a');
+      expect(res.taps, 2); // both taps counted; the no-op didn't reset the start
+    });
+  });
+
+  group('UsabilityTracker - flow mode', () {
+    test('startFlow suppresses per-route switchTask so taps span screens', () {
+      UsabilityTracker.startFlow('flow_x', optimalTaps: 6);
+      expect(UsabilityTracker.isInFlow, isTrue);
+      UsabilityTracker.registerTap(); // screen 1
+      UsabilityTracker.switchTask('/step2'); // navigation within flow -> no-op
+      expect(UsabilityTracker.currentTask, 'flow_x');
+      UsabilityTracker.registerTap(); // screen 2
+      UsabilityTracker.switchTask('/step3'); // no-op
+      UsabilityTracker.registerTap(); // screen 3
+      final res = UsabilityTracker.endFlow();
+      expect(UsabilityTracker.isInFlow, isFalse);
+      expect(res!.task, 'flow_x');
+      expect(res.taps, 3); // taps across all three screens
+      expect(res.success, isTrue);
+      expect(res.difficulty, TaskDifficulty.easy); // 3 <= optimal(6)+1
+    });
+
+    test('endFlow(success:false) marks the flow failed', () {
+      UsabilityTracker.startFlow('flow_y', optimalTaps: 2);
+      UsabilityTracker.registerTap();
+      final res = UsabilityTracker.endFlow(success: false);
+      expect(res!.success, isFalse);
+      expect(res.difficulty, TaskDifficulty.hard); // failure -> hard
+    });
+
+    test('cancelFlow discards without a result and resumes auto tracking', () {
+      UsabilityTracker.startFlow('flow_z');
+      UsabilityTracker.registerTap();
+      UsabilityTracker.cancelFlow();
+      expect(UsabilityTracker.isInFlow, isFalse);
+      // Auto per-route tracking works again once the flow is cancelled.
+      final prior = UsabilityTracker.switchTask('/after', optimalTaps: 1);
+      expect(prior, isNull);
+      expect(UsabilityTracker.currentTask, '/after');
+    });
+
+    test('endFlow returns null when no flow is active', () {
+      expect(UsabilityTracker.endFlow(), isNull);
+      expect(UsabilityTracker.isInFlow, isFalse);
+    });
+  });
 }

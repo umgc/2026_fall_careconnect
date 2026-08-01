@@ -78,6 +78,7 @@ import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/AlexaLoginPage.dart';
 import '../../features/usps/presentation/usps_test_screen.dart';
 import '../../features/telemetry/telemetry.dart';
+import '../../features/telemetry/usability_tracker.dart';
 import 'dart:async';
 
 GoRouter? _appRouterRef;
@@ -92,18 +93,60 @@ class TelemetryGoRouterObserver extends NavigatorObserver {
   GoRouter? get _activeRouter =>
       _routerProvider != null ? _routerProvider() : _appRouterRef;
 
+  /// The multi-screen usability flow currently being measured, if any.
+  UsabilityFlow? _activeFlow;
+
+  /// Drives the Team B usability instrument on each navigation. Measures
+  /// multi-screen flows from [kUsabilityFlows] end-to-end, and otherwise
+  /// auto-brackets each route as its own task via [UsabilityTracker.switchTask]
+  /// — no per-screen wiring. A flow ends successfully on reaching its `end`
+  /// route, or is marked abandoned (success:false) if navigation leaves its
+  /// `screens` set first.
+  void _trackUsability(String taskKey) {
+    final active = _activeFlow;
+    if (active != null) {
+      if (taskKey == active.end) {
+        UsabilityTracker.endFlow(success: true);
+        _activeFlow = null;
+      } else if (taskKey == active.start || active.screens.contains(taskKey)) {
+        return; // still inside the flow; keep counting its taps
+      } else {
+        UsabilityTracker.endFlow(success: false); // left the flow -> abandoned
+        _activeFlow = null;
+      }
+    }
+    for (final flow in kUsabilityFlows) {
+      if (flow.start == taskKey) {
+        UsabilityTracker.startFlow(flow.name, optimalTaps: flow.optimalTaps);
+        _activeFlow = flow;
+        return;
+      }
+    }
+    UsabilityTracker.switchTask(taskKey, optimalTaps: kUsabilityOptimalTaps[taskKey]);
+  }
+
   Future<void> _logScreenView() async {
     final router = _activeRouter;
     if (router == null) return;
 
     final Uri uri;
+    String? fullPath;
     try {
       uri = router.state.uri;
+      fullPath = router.state.fullPath;
     } on StateError {
       return;
     }
 
     final screen = uri.path.isEmpty ? '/' : uri.path;
+
+    // Team B usability instrument (Milestone 4): capture taps-per-task across
+    // the ENTIRE app with no per-screen wiring. Multi-screen flows declared in
+    // kUsabilityFlows are measured end-to-end; every other route is auto-
+    // bracketed as its own task. The task key is the route pattern (e.g.
+    // /patient/:id) so dynamic ids don't fragment the data.
+    final taskKey = (fullPath != null && fullPath.isNotEmpty) ? fullPath : screen;
+    _trackUsability(taskKey);
 
     try {
       await Telemetry.event('screen_view', {'screen': screen});
