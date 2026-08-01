@@ -15,6 +15,39 @@ class MedicationRemindersWidget extends StatelessWidget {
     this.onMarkMissed,
   });
 
+  String _translateFrequency(String frequency, AppLocalizations t) {
+    final text = frequency.toLowerCase();
+
+    if (text.contains('twice') || text.contains(t.ptmedreminderservice_twice) || text.contains('2x') || text.contains('two') || text.contains(t.ptmedreminderservice_two)) {
+      return t.ptdashboard_twiceDaily;
+    }
+    if (text.contains('three') || text.contains(t.ptmedreminderservice_three) || text.contains('3x')) {
+      return t.ptdashboard_threeTimesDaily;
+    }
+    if (text.contains('four') || text.contains('4x')) {
+      return t.ptdashboard_fourTimesDaily;
+    }
+    if ((text.contains('every') && text.contains('hour')) || (text.contains(t.ptmedreminderservice_every) && text.contains(t.ptmedreminderservice_hour))) {
+      return t.ptdashboard_hourly;
+    }
+    if (text.contains('week') || text.contains(t.ptmedreminderservice_week)) {
+      return t.ptdashboard_weekly;
+    }
+    if (text.contains('month') || text.contains(t.ptmedreminderservice_month)) {
+      return t.ptdashboard_monthly;
+    }
+    if (text.contains('day') || text.contains(t.ptmedreminderservice_day) || text.contains('daily') || text.contains(t.ptmedreminderservice_daily)) {
+      if(text.contains('at bedtime')){
+        return t.ptdashboard_onceAtBed;
+      }
+      return t.ptdashboard_onceDaily;
+    }
+    if (text.contains('as needed')){
+      return t.ptdashboard_asNeeded;
+    }
+    return frequency;
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -143,7 +176,7 @@ class MedicationRemindersWidget extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${reminder.dosage} • ${reminder.frequency}',
+                      '${reminder.dosage} • ${_translateFrequency(reminder.frequency, t)}',
                       style: TextStyle(
                         fontSize: 14,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
