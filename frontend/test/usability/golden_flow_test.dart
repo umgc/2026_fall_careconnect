@@ -21,7 +21,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/login_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/checkin_location_page.dart';
+import 'package:care_connect_app/features/evv/presentation/pages/checkout_location_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/incident_report_screens.dart';
+import 'package:care_connect_app/features/evv/presentation/pages/patient_selection_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/visit_complete_page.dart';
 import 'package:care_connect_app/features/evv/schedule/pages/schedule_page.dart';
 import 'package:care_connect_app/features/dashboard/models/patient_model.dart';
@@ -175,6 +177,67 @@ Widget _checkinApp() {
           path: '/evv/visit-progress',
           builder: (_, __) =>
               const Scaffold(body: Text('Visit In Progress Page'))),
+      GoRoute(path: '/evv/select-patient', builder: (_, __) => const Scaffold()),
+      GoRoute(path: '/dashboard', builder: (_, __) => const Scaffold()),
+    ],
+  );
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: MockUserProvider(
+        mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 1)),
+    child: MaterialApp.router(
+      routerConfig: router,
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+    ),
+  );
+}
+
+/// PatientSelectionPage plus the start-visit route it pushes to on selection.
+Widget _selectPatientApp() {
+  final router = GoRouter(
+    initialLocation: '/evv/select-patient',
+    routes: [
+      GoRoute(
+          path: '/evv/select-patient',
+          builder: (_, __) => const PatientSelectionPage()),
+      GoRoute(
+          path: '/evv/start-visit',
+          builder: (_, __) => const Scaffold(body: Text('Start Visit Page'))),
+      GoRoute(path: '/add-patient', builder: (_, __) => const Scaffold()),
+      GoRoute(path: '/dashboard', builder: (_, __) => const Scaffold()),
+    ],
+  );
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: MockUserProvider(
+        mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 1)),
+    child: MaterialApp.router(
+      routerConfig: router,
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+    ),
+  );
+}
+
+/// CheckoutLocationPage plus the visit-complete route it pushes to on checkout.
+Widget _checkoutApp() {
+  final router = GoRouter(
+    initialLocation: '/evv/checkout-location',
+    routes: [
+      GoRoute(
+        path: '/evv/checkout-location',
+        builder: (_, __) => CheckoutLocationPage(
+          patientId: 1,
+          serviceType: 'Personal Care',
+          locationType: 'gps',
+          notes: 'Visit notes',
+          duration: 3600,
+        ),
+      ),
+      GoRoute(
+          path: '/evv/visit-complete',
+          builder: (_, __) => const Scaffold(body: Text('Visit Complete Page'))),
       GoRoute(path: '/evv/select-patient', builder: (_, __) => const Scaffold()),
       GoRoute(path: '/dashboard', builder: (_, __) => const Scaffold()),
     ],
@@ -737,5 +800,145 @@ void main() {
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(seconds: 3));
     }
+  });
+
+  testWidgets('golden path — EVV check-out (patient address, minimum taps)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (call) async {
+        if (call.method == 'readAll') return <String, String>{};
+        if (call.method == 'read') return 'mock_token';
+        return null;
+      },
+    );
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('dev.fluttercommunity.plus/connectivity'),
+      (call) async => call.method == 'check' ? ['wifi'] : null,
+    );
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(
+          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+          null);
+      messenger.setMockMethodCallHandler(
+          const MethodChannel('dev.fluttercommunity.plus/connectivity'), null);
+    });
+    ApiService.debugSetHttpClient(MockClient((_) async => http.Response(
+        jsonEncode([
+          {
+            'id': 1,
+            'firstName': 'Jane',
+            'lastName': 'Doe',
+            'email': 'jane@example.com',
+            'phone': '555-0100',
+            'dob': '1990-01-01',
+            'relationship': 'CHILD',
+            'address': {
+              'line1': '123 Main St',
+              'city': 'Anytown',
+              'state': 'MD',
+              'zip': '21000',
+            },
+          }
+        ]),
+        200)));
+    addTearDown(ApiService.debugResetHttpClient);
+
+    final result = await measureGoldenFlow(
+      tester,
+      name: 'flow_evv_checkout_patient_address',
+      optimalTaps: 2,
+      app: _checkoutApp(),
+      drive: (t) async {
+        for (var i = 0; i < 8; i++) {
+          await t.pump(const Duration(milliseconds: 500));
+        }
+        final selectBtn = find.text('Select Patient Address');
+        await t.ensureVisible(selectBtn);
+        await t.tap(selectBtn); // tap 1: use patient address -> reason dialog
+        await t.pump(const Duration(milliseconds: 300));
+        await t.tap(find.widgetWithText(ElevatedButton, 'Confirm')); // tap 2
+        await t.pump();
+        await t.pump();
+      },
+    );
+
+    // ignore: avoid_print
+    print('GOLDEN flow_evv_checkout_patient_address -> minimum taps = ${result.taps}');
+    expect(result.task, 'flow_evv_checkout_patient_address');
+    expect(result.taps, 2);
+    expect(find.text('Visit Complete Page'), findsOneWidget);
+  });
+
+  testWidgets('golden path — EVV select patient (minimum taps)', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (call) async {
+        if (call.method == 'readAll') return <String, String>{};
+        if (call.method == 'read') return 'mock_token';
+        return null;
+      },
+    );
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('dev.fluttercommunity.plus/connectivity'),
+      (call) async => call.method == 'check' ? ['wifi'] : null,
+    );
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(
+          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+          null);
+      messenger.setMockMethodCallHandler(
+          const MethodChannel('dev.fluttercommunity.plus/connectivity'), null);
+    });
+    ApiService.debugSetHttpClient(MockClient((_) async => http.Response(
+        jsonEncode([
+          {
+            'id': 1,
+            'firstName': 'Jane',
+            'lastName': 'Doe',
+            'email': 'jane@example.com',
+            'phone': '555-0100',
+            'dob': '1990-01-01',
+            'relationship': 'CHILD',
+          }
+        ]),
+        200)));
+    addTearDown(ApiService.debugResetHttpClient);
+
+    final result = await measureGoldenFlow(
+      tester,
+      name: 'flow_evv_select_patient',
+      optimalTaps: 1,
+      app: _selectPatientApp(),
+      drive: (t) async {
+        for (var i = 0; i < 8; i++) {
+          await t.pump(const Duration(milliseconds: 500));
+        }
+        final patientCard = find.text('Jane Doe').first;
+        await t.ensureVisible(patientCard);
+        await t.tap(patientCard); // tap 1: select patient -> start visit
+        await t.pumpAndSettle();
+      },
+    );
+
+    // ignore: avoid_print
+    print('GOLDEN flow_evv_select_patient -> minimum taps = ${result.taps}');
+    expect(result.task, 'flow_evv_select_patient');
+    expect(result.taps, 1);
+    expect(find.text('Start Visit Page'), findsOneWidget);
   });
 }
