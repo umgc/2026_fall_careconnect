@@ -8,6 +8,7 @@
 // kUsabilityOptimalTaps / kUsabilityFlows).
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,10 +21,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/login_page.dart';
+import 'package:care_connect_app/features/auth/presentation/pages/password_reset_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/checkin_location_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/checkout_location_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/incident_report_screens.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/patient_selection_page.dart';
+import 'package:care_connect_app/features/evv/presentation/pages/start_visit_page.dart';
+import 'package:care_connect_app/features/evv/presentation/pages/visit_in_progress_page.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/visit_complete_page.dart';
 import 'package:care_connect_app/features/evv/schedule/pages/schedule_page.dart';
 import 'package:care_connect_app/features/dashboard/models/patient_model.dart';
@@ -34,6 +38,7 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/api_service_offline.dart';
 import 'package:care_connect_app/services/voice_intent_service.dart';
 
+import '../helpers/fake_http_overrides.dart';
 import '../mock_user_provider.dart';
 import 'golden_flow.dart';
 
@@ -192,6 +197,99 @@ Widget _checkinApp() {
     ),
   );
 }
+
+/// Common EVV mocks: secure storage, online connectivity, and a one-patient
+/// caregiver-patients response (id 1). Registers its own teardowns.
+void _setupEvvPatientMocks() {
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(
+    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+    (call) async {
+      if (call.method == 'readAll') return <String, String>{};
+      if (call.method == 'read') return 'mock_token';
+      return null;
+    },
+  );
+  messenger.setMockMethodCallHandler(
+    const MethodChannel('dev.fluttercommunity.plus/connectivity'),
+    (call) async => call.method == 'check' ? ['wifi'] : null,
+  );
+  ApiService.debugSetHttpClient(MockClient((_) async => http.Response(
+      jsonEncode([
+        {
+          'id': 1,
+          'firstName': 'Jane',
+          'lastName': 'Doe',
+          'email': 'jane@example.com',
+          'phone': '555-0100',
+          'dob': '1990-01-01',
+          'relationship': 'CHILD',
+          'address': {
+            'line1': '123 Main St',
+            'city': 'Anytown',
+            'state': 'MD',
+            'zip': '21000',
+          },
+        }
+      ]),
+      200)));
+  addTearDown(() {
+    messenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        null);
+    messenger.setMockMethodCallHandler(
+        const MethodChannel('dev.fluttercommunity.plus/connectivity'), null);
+    ApiService.debugResetHttpClient();
+  });
+}
+
+/// Wraps [router] in the caregiver provider + a localized MaterialApp.router.
+Widget _caregiverRouterApp(GoRouter router) =>
+    ChangeNotifierProvider<UserProvider>.value(
+      value: MockUserProvider(
+          mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 1)),
+      child: MaterialApp.router(
+        routerConfig: router,
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+    );
+
+/// VisitInProgressPage + the checkout route it pushes to.
+Widget _visitInProgressApp() => _caregiverRouterApp(GoRouter(
+      initialLocation: '/evv/visit-progress',
+      routes: [
+        GoRoute(
+          path: '/evv/visit-progress',
+          builder: (_, __) => const VisitInProgressPage(
+              patientId: 1, serviceType: 'Personal Care', locationType: 'gps'),
+        ),
+        GoRoute(
+            path: '/evv/checkout-location',
+            builder: (_, __) => const Scaffold(body: Text('Checkout Page'))),
+        GoRoute(path: '/dashboard', builder: (_, __) => const Scaffold()),
+        GoRoute(
+            path: '/evv/select-patient', builder: (_, __) => const Scaffold()),
+      ],
+    ));
+
+/// StartVisitPage + the check-in route it pushes to.
+Widget _startVisitApp() => _caregiverRouterApp(GoRouter(
+      initialLocation: '/evv/start-visit',
+      routes: [
+        GoRoute(
+            path: '/evv/start-visit',
+            builder: (_, __) => const StartVisitPage(patientId: 1)),
+        GoRoute(
+            path: '/evv/checkin-location',
+            builder: (_, __) => const Scaffold(body: Text('Checkin Page'))),
+        GoRoute(path: '/dashboard', builder: (_, __) => const Scaffold()),
+        GoRoute(
+            path: '/evv/select-patient', builder: (_, __) => const Scaffold()),
+      ],
+    ));
 
 /// PatientSelectionPage plus the start-visit route it pushes to on selection.
 Widget _selectPatientApp() {
@@ -940,5 +1038,126 @@ void main() {
     expect(result.task, 'flow_evv_select_patient');
     expect(result.taps, 1);
     expect(find.text('Start Visit Page'), findsOneWidget);
+  });
+
+  testWidgets('golden path — EVV ready to check out (minimum taps)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    _setupEvvPatientMocks();
+
+    final result = await measureGoldenFlow(
+      tester,
+      name: 'flow_evv_ready_to_checkout',
+      optimalTaps: 1,
+      app: _visitInProgressApp(),
+      drive: (t) async {
+        for (var i = 0; i < 8; i++) {
+          await t.pump(const Duration(milliseconds: 500));
+        }
+        final btn = find.text('Ready to Check Out');
+        await t.ensureVisible(btn);
+        await t.tap(btn); // tap 1: proceed to check-out
+        await t.pumpAndSettle();
+      },
+    );
+
+    // ignore: avoid_print
+    print('GOLDEN flow_evv_ready_to_checkout -> minimum taps = ${result.taps}');
+    expect(result.task, 'flow_evv_ready_to_checkout');
+    expect(result.taps, 1);
+    expect(find.text('Checkout Page'), findsOneWidget);
+  });
+
+  testWidgets('golden path — EVV start visit (minimum taps)', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    _setupEvvPatientMocks();
+
+    final result = await measureGoldenFlow(
+      tester,
+      name: 'flow_evv_start_visit',
+      optimalTaps: 3,
+      app: _startVisitApp(),
+      drive: (t) async {
+        for (var i = 0; i < 8; i++) {
+          await t.pump(const Duration(milliseconds: 500));
+        }
+        // Select a service type, then continue to check-in.
+        await t.tap(find.byType(DropdownButtonFormField<String>)); // tap 1
+        await t.pumpAndSettle();
+        await t.tap(find.text('Personal Care').last); // tap 2
+        await t.pumpAndSettle();
+        final cont = find.text('Continue to Check-In');
+        await t.ensureVisible(cont);
+        await t.tap(cont); // tap 3
+        await t.pumpAndSettle();
+      },
+    );
+
+    // ignore: avoid_print
+    print('GOLDEN flow_evv_start_visit -> minimum taps = ${result.taps}');
+    expect(result.task, 'flow_evv_start_visit');
+    expect(result.taps, 3);
+    expect(find.text('Checkin Page'), findsOneWidget);
+  });
+
+  testWidgets('golden path — Set new password (minimum taps)', (tester) async {
+    // AuthService.resetPassword uses a direct http.post, so intercept dart:io.
+    HttpOverrides.global =
+        FakeHttpOverrides((method, uri) => FakeResponse(200, '{"message":"ok"}'));
+    addTearDown(() => HttpOverrides.global = null);
+
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, __) => const PasswordResetPage()),
+        GoRoute(
+            path: '/login',
+            builder: (_, __) => const Scaffold(body: Text('Login Page'))),
+      ],
+    );
+
+    final result = await measureGoldenFlow(
+      tester,
+      name: 'flow_set_new_password',
+      optimalTaps: 4,
+      app: MaterialApp.router(
+        routerConfig: router,
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
+      drive: (t) async {
+        // Designed minimal path: focus + fill the 3 fields, then submit.
+        final fields = find.byType(TextFormField);
+        await t.tap(fields.at(0)); // tap 1: email
+        await t.enterText(fields.at(0), 'user@example.com');
+        await t.tap(fields.at(1)); // tap 2: new password
+        await t.enterText(fields.at(1), 'password123');
+        await t.tap(fields.at(2)); // tap 3: confirm password
+        await t.enterText(fields.at(2), 'password123');
+        await t.pump();
+        final submit = find.byType(ElevatedButton).first;
+        await t.ensureVisible(submit);
+        // The submit does real async I/O (via the fake) then a 2s delayed
+        // context.go('/login'); let both complete under runAsync.
+        await t.runAsync(() async {
+          await t.tap(submit); // tap 4: submit
+          await Future<void>.delayed(const Duration(seconds: 3));
+        });
+        await t.pumpAndSettle();
+      },
+    );
+
+    // ignore: avoid_print
+    print('GOLDEN flow_set_new_password -> minimum taps = ${result.taps}');
+    expect(result.task, 'flow_set_new_password');
+    expect(result.taps, 4);
+    expect(find.text('Login Page'), findsOneWidget); // navigated on success
   });
 }
