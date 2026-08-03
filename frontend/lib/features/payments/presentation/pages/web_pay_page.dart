@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -98,6 +99,7 @@ class _WebPayPageState extends State<WebPayPage> {
     setState(() => _isProcessing = true);
 
     try {
+      final t = AppLocalizations.of(context)!;
       final uri = Uri.parse('$backendBase/v1/api/billing/pay/$platform');
       final token = '${platform.toUpperCase()}_PAY_TOKEN_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -116,7 +118,7 @@ class _WebPayPageState extends State<WebPayPage> {
 
       final responseBody = jsonDecode(resp.body) as Map<String, dynamic>;
       if (responseBody['success'] != true) {
-        throw Exception(responseBody['message'] ?? 'Payment failed');
+        throw Exception(responseBody['message'] ?? t.webpay_paymentFailed);
       }
 
       if (mounted) {
@@ -128,8 +130,9 @@ class _WebPayPageState extends State<WebPayPage> {
       }
     } catch (e) {
       if (mounted) {
+        final t = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Payment failed: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 4)),
+          SnackBar(content: Text('${t.webpay_paymentFailed}: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 4)),
         );
       }
     } finally {
@@ -139,9 +142,10 @@ class _WebPayPageState extends State<WebPayPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Complete Your Purchase'),
+        title: Text(t.nativebilling_completeYourPurchase),
         backgroundColor: const Color(0xFF00A7C8),
         foregroundColor: Colors.white,
       ),
@@ -150,6 +154,7 @@ class _WebPayPageState extends State<WebPayPage> {
   }
 
   Widget _buildSuccessView() {
+    final t = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -158,10 +163,10 @@ class _WebPayPageState extends State<WebPayPage> {
           children: [
             const Icon(Icons.check_circle, color: Colors.green, size: 80),
             const SizedBox(height: 24),
-            const Text('Payment Successful!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+            Text(t.paysuccess_paymentSuccess, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
             const SizedBox(height: 12),
             if (_transactionId != null)
-              Text('Transaction: $_transactionId', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text('${t.webpay_transaction}: $_transactionId', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
             const SizedBox(height: 32),
           ],
         ),
@@ -170,6 +175,7 @@ class _WebPayPageState extends State<WebPayPage> {
   }
 
   Widget _buildBody() {
+    final t = AppLocalizations.of(context)!;
     if (_loadingQuote) return const Center(child: CircularProgressIndicator());
 
     if (_quoteError != null) {
@@ -181,16 +187,16 @@ class _WebPayPageState extends State<WebPayPage> {
             children: [
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 16),
-              Text('Error loading quote: $_quoteError', textAlign: TextAlign.center),
+              Text('${t.webpay_errorLoadingQuote}: $_quoteError', textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _fetchBillingQuote, child: const Text('Retry')),
+              ElevatedButton(onPressed: _fetchBillingQuote, child: Text(t.nativebilling_retry)),
             ],
           ),
         ),
       );
     }
 
-    if (_billingQuote == null) return const Center(child: Text('No quote available'));
+    if (_billingQuote == null) return Center(child: Text(t.webpay_noQuote));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -201,12 +207,12 @@ class _WebPayPageState extends State<WebPayPage> {
           const SizedBox(height: 24),
           _buildOrderSummary(),
           const SizedBox(height: 32),
-          const Text('Select Payment Method',
+          Text(t.webpay_selectPaymentMethod,
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
           const SizedBox(height: 16),
           if (_showApplePay) ...[
             _buildPaymentButton(
-              label: 'Pay with Apple Pay',
+              label: t.webpay_payApple,
               icon: Icons.apple,
               backgroundColor: Colors.black,
               onPressed: () => _processPayment('apple'),
@@ -215,7 +221,7 @@ class _WebPayPageState extends State<WebPayPage> {
           ],
           if (_showGooglePay)
             _buildPaymentButton(
-              label: 'Pay with Google Pay',
+              label: t.webpay_payGoogle,
               icon: Icons.payment,
               onPressed: () => _processPayment('google'),
             ),
@@ -251,9 +257,10 @@ class _WebPayPageState extends State<WebPayPage> {
   }
 
   Widget _buildStatePicker() {
+    final t = AppLocalizations.of(context)!;
     return Row(
       children: [
-        const Text('Tax State: ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text('${t.webpay_taxState}: ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
         const SizedBox(width: 8),
         DropdownButton<String>(
           value: _selectedState,
@@ -270,6 +277,7 @@ class _WebPayPageState extends State<WebPayPage> {
   }
 
   Widget _buildOrderSummary() {
+    final t = AppLocalizations.of(context)!;
     final quote = _billingQuote!;
     return Container(
       decoration: BoxDecoration(
@@ -281,7 +289,7 @@ class _WebPayPageState extends State<WebPayPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Order Summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+          Text(t.nativebilling_orderSummary, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
           const SizedBox(height: 16),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text(quote.tierName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
@@ -290,18 +298,18 @@ class _WebPayPageState extends State<WebPayPage> {
           Container(height: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(vertical: 12)),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Taxes (${quote.taxPercentageDisplay})', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text('${t.nativebilling_taxes} (${quote.taxPercentageDisplay})', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               Text(quote.taxJurisdiction, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
             ]),
             Text(quote.taxDisplay, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
           ]),
           Container(height: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(vertical: 12)),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+            Text(t.nativebilling_total, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
             Text(quote.totalDisplay, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
           ]),
           const SizedBox(height: 8),
-          Text('Currency: ${quote.currency}', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          Text('${t.webpay_currency}: ${quote.currency}', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
         ],
       ),
     );

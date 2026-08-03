@@ -29,12 +29,20 @@ public class WearableMetric extends Auditable {
     @Column(name = "recorded_at", nullable = false)
     private Instant recordedAt;
 
+    @Column(name = "source", length = 64)
+    private String source;
+
+    /**
+     * Supported persisted metric types in the wearable_metric table.
+     * Blood pressure is persisted as two rows (systolic/diastolic).
+     */
     public enum MetricType {
         HEART_RATE,
         SPO2,
         TEMPERATURE,
         BLOOD_PRESSURE_SYS,
         BLOOD_PRESSURE_DIA,
-        WEIGHT
+        WEIGHT,
+        STEPS
     }
 }

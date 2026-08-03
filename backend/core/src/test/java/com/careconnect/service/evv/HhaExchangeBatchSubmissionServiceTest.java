@@ -27,6 +27,107 @@ class HhaExchangeBatchSubmissionServiceTest {
 
     @InjectMocks private HhaExchangeBatchSubmissionService service;
 
+    // ─── buildPayload() ───────────────────────────────────────────────────────
+
+    @Test
+    void buildPayload_eligibleRecord_returnsHhaClientRequest() throws Exception {
+        EvvRecord rec = approvedVaRecord(20L, false);
+        com.careconnect.dto.evv.hhaexchange.HhaExchangeVisitRequest expectedRequest =
+                new com.careconnect.dto.evv.hhaexchange.HhaExchangeVisitRequest();
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(20L))).thenReturn(List.of(rec));
+        when(hhaClient.buildRequest(List.of(rec))).thenReturn(expectedRequest);
+
+        Object result = service.buildPayload(List.of(20L));
+
+        assertThat(result).isSameAs(expectedRequest);
+    }
+
+    @Test
+    void buildPayload_noEligibleRecords_throwsIllegalArgument() {
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(21L))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.buildPayload(List.of(21L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No eligible VA/APPROVED records");
+    }
+
+    @Test
+    void buildPayload_nonVaRecord_isExcluded() {
+        EvvRecord mdRecord = approvedVaRecord(22L, false);
+        mdRecord.setStateCode("MD");
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(22L))).thenReturn(List.of(mdRecord));
+
+        assertThatThrownBy(() -> service.buildPayload(List.of(22L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No eligible VA/APPROVED records");
+    }
+
+    @Test
+    void buildPayload_notApprovedRecord_isExcluded() {
+        EvvRecord rec = approvedVaRecord(23L, false);
+        rec.setStatus("UNDER_REVIEW");
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(23L))).thenReturn(List.of(rec));
+
+        assertThatThrownBy(() -> service.buildPayload(List.of(23L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No eligible VA/APPROVED records");
+    }
+
+    @Test
+    void buildPayload_hhaClientThrows_propagatesException() throws Exception {
+        EvvRecord rec = approvedVaRecord(24L, false);
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(24L))).thenReturn(List.of(rec));
+        when(hhaClient.buildRequest(List.of(rec))).thenThrow(new RuntimeException("bad payload"));
+
+        assertThatThrownBy(() -> service.buildPayload(List.of(24L)))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("bad payload");
+    }
+
+    // ─── getPayloadJson() ─────────────────────────────────────────────────────
+
+    @Test
+    void getPayloadJson_eligibleRecord_returnsClientJson() throws Exception {
+        EvvRecord rec = approvedVaRecord(25L, false);
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(25L))).thenReturn(List.of(rec));
+        when(hhaClient.getPayloadJson(List.of(rec))).thenReturn("{\"json\":true}");
+
+        String json = service.getPayloadJson(List.of(25L));
+
+        assertThat(json).isEqualTo("{\"json\":true}");
+    }
+
+    @Test
+    void getPayloadJson_noEligibleRecords_throwsIllegalArgument() {
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(26L))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.getPayloadJson(List.of(26L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No eligible VA/APPROVED records");
+    }
+
+    @Test
+    void getPayloadJson_nonVaRecord_isExcluded() {
+        EvvRecord mdRecord = approvedVaRecord(27L, false);
+        mdRecord.setStateCode("MD");
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(27L))).thenReturn(List.of(mdRecord));
+
+        assertThatThrownBy(() -> service.getPayloadJson(List.of(27L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No eligible VA/APPROVED records");
+    }
+
+    @Test
+    void getPayloadJson_notApprovedRecord_isExcluded() {
+        EvvRecord rec = approvedVaRecord(28L, false);
+        rec.setStatus("UNDER_REVIEW");
+        when(evvRecordRepository.findAllByIdWithPatient(List.of(28L))).thenReturn(List.of(rec));
+
+        assertThatThrownBy(() -> service.getPayloadJson(List.of(28L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No eligible VA/APPROVED records");
+    }
+
     // ─── submitBatch() ────────────────────────────────────────────────────────
 
     @Test
@@ -124,6 +225,19 @@ class HhaExchangeBatchSubmissionServiceTest {
         assertThatThrownBy(() -> service.resubmitCorrected(7L, 1L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("only applicable to Virginia");
+    }
+
+    @Test
+    void resubmitCorrected_nullCorrectionReasonCode_auditsWithEmptyString() throws Exception {
+        EvvRecord rec = approvedVaRecord(9L, true);
+        rec.setCorrectionReasonCode(null);
+        when(evvRecordRepository.findByIdWithPatient(9L)).thenReturn(Optional.of(rec));
+
+        service.resubmitCorrected(9L, 99L);
+
+        org.mockito.ArgumentCaptor<java.util.Map> captor = org.mockito.ArgumentCaptor.forClass(java.util.Map.class);
+        verify(audit).log(eq(rec), eq(99L), eq("HHAEXCHANGE_RESUBMITTED"), captor.capture());
+        assertThat(captor.getValue()).containsEntry("correctionReasonCode", "");
     }
 
     @Test

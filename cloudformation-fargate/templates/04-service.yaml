@@ -1,5 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CareConnect ECS Fargate service and ALB stack.
+Description: >-
+  CareConnect ECS Fargate service with API Gateway HTTP API, VPC Link,
+  Cloud Map service discovery, ACM certificate, and Route 53 custom domain.
 
 Parameters:
   # Environment name must match the networking, data, and platform stacks.
@@ -18,10 +20,39 @@ Parameters:
     Type: String
     Description: Full ECR image URI including tag
 
-  # Current application convention is to run the cloud deployment with the dev profile.
+  # Spring profile: use prod for cfdemo/staging/prod (SSM, SendGrid, AI); dev for local cloud experiments.
   SpringProfile:
     Type: String
-    Default: dev
+    Default: prod
+    AllowedValues:
+      - dev
+      - prod
+
+  # Enables AIChatController and Bedrock chat beans (maps to CARECONNECT_AI_ENABLED).
+  # Default true matches SpringProfile default prod; dev-service.json sets false explicitly.
+  CareConnectAiEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  # Bedrock provider flag passed through to AI_PROVIDER.
+  AiProvider:
+    Type: String
+    Default: bedrock
+
+  # SendGrid from-address for prod profile email (API key loaded from SSM when SpringProfile=prod).
+  FromEmail:
+    Type: String
+    Default: noreply@careconnect.com
+
+  # Optional. Leave empty until a real WebSocket API Gateway endpoint is available.
+  # A placeholder string would be treated as a fake URL by the app/AWS client.
+  WebSocketApiGatewayEndpoint:
+    Type: String
+    Default: ''
+    Description: API Gateway WebSocket API endpoint URL (wss://...). Leave empty if not provisioned yet.
 
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
@@ -59,56 +90,178 @@ Parameters:
     Type: String
     Default: '3072'
 
-  # Public health endpoint used by the ALB target group.
+  # Public health endpoint used by Cloud Map health checks.
   HealthCheckPath:
     Type: String
     Default: /v1/api/test/health
 
-  # Gives Spring enough time to start before ALB health checks count as failures.
-  HealthCheckGracePeriodSeconds:
-    Type: Number
-    Default: 180
+  # Custom domain name for API Gateway (e.g., api.careconnect.example.com).
+  # Leave empty to skip Route 53 and ACM resources (API Gateway will still
+  # provide its default execute-api endpoint).
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name for the API (leave empty to use default API Gateway URL)
+
+  # Route 53 hosted zone ID for the custom domain.
+  # Required only when DomainName is provided.
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route 53 Hosted Zone ID (required if DomainName is set)
+
+Conditions:
+  # Only create custom domain resources when a domain name is provided.
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
 
 Resources:
-  # Public Application Load Balancer.
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  # ---------------------------------------------------------------------------
+  # Cloud Map namespace and service for ECS service discovery.
+  # API Gateway VPC Link routes traffic through Cloud Map to ECS tasks.
+  # ---------------------------------------------------------------------------
+
+  # Private DNS namespace used by Cloud Map for service discovery within the VPC.
+  CloudMapNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: !Sub careconnect-${Environment}-alb
-      Scheme: internet-facing
-      Type: application
-      SecurityGroups:
-        - Fn::ImportValue: !Sub careconnect-${Environment}-AlbSecurityGroupId
-      Subnets:
+      Name: !Sub careconnect-${Environment}.local
+      Vpc:
+        Fn::ImportValue: !Sub careconnect-${Environment}-VpcId
+      Description: !Sub CareConnect ${Environment} service discovery namespace
+
+  # Cloud Map service registered by ECS for task instance discovery.
+  CloudMapService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: backend
+      NamespaceId: !Ref CloudMapNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: SRV
+            TTL: 15
+        RoutingPolicy: MULTIVALUE
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # ---------------------------------------------------------------------------
+  # API Gateway HTTP API with VPC Link integration.
+  # ---------------------------------------------------------------------------
+
+  # VPC Link allows API Gateway to reach resources in the VPC (ECS tasks).
+  VpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub careconnect-${Environment}-vpc-link
+      SubnetIds:
         - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetAId
         - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetBId
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub careconnect-${Environment}-VpcLinkSecurityGroupId
 
-  # ALB target group for ECS tasks.
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  # HTTP API (cheaper and simpler than REST API, supports JWT authorizers natively).
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: !Sub careconnect-${Environment}-tg
-      Port: !Ref ContainerPort
-      Protocol: HTTP
-      TargetType: ip
-      VpcId:
-        Fn::ImportValue: !Sub careconnect-${Environment}-VpcId
-      HealthCheckEnabled: true
-      HealthCheckPath: !Ref HealthCheckPath
-      HealthCheckProtocol: HTTP
-      Matcher:
-        HttpCode: 200
+      Name: !Sub careconnect-${Environment}-api
+      ProtocolType: HTTP
+      Description: !Sub CareConnect ${Environment} backend API
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - PATCH
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+        MaxAge: 86400
 
-  # Port 80 HTTP listener forwarding to the target group.
-  Listener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
+  # Default integration pointing to the Cloud Map service via VPC Link.
+  HttpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
     Properties:
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+      ApiId: !Ref HttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref VpcLink
+      IntegrationUri: !GetAtt CloudMapService.Arn
+      PayloadFormatVersion: '1.0'
+
+  # Catch-all route that forwards every request to the backend.
+  HttpApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: '$default'
+      Target: !Sub integrations/${HttpApiIntegration}
+
+  # Auto-deploy stage so changes are live immediately.
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  # ---------------------------------------------------------------------------
+  # ACM Certificate + Custom Domain + Route 53 (conditional on DomainName).
+  # ---------------------------------------------------------------------------
+
+  # ACM certificate for HTTPS on the custom domain. DNS validation is used.
+  AcmCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub careconnect-${Environment}-api-cert
+
+  # API Gateway custom domain name bound to the ACM certificate.
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - EndpointType: REGIONAL
+          CertificateArn: !Ref AcmCertificate
+
+  # Maps the custom domain to the HTTP API default stage.
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName
+      Stage: !Ref HttpApiStage
+
+  # Route 53 alias record pointing the custom domain to the API Gateway.
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomainName.RegionalHostedZoneId
+
+  # ---------------------------------------------------------------------------
+  # ECS Task Definition and Service.
+  # ---------------------------------------------------------------------------
 
   # ECS task definition tied to the runtime contract used by the backend code.
   TaskDefinition:
@@ -136,6 +289,7 @@ Resources:
               HostPort: !Ref ContainerPort
               Protocol: tcp
               AppProtocol: http
+              Name: backend-port
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -147,6 +301,10 @@ Resources:
             # Non-secret runtime configuration.
             - Name: SPRING_PROFILES_ACTIVE
               Value: !Ref SpringProfile
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
             - Name: SERVER_PORT
               Value: !Sub '${ContainerPort}'
             - Name: JDBC_URI
@@ -159,10 +317,37 @@ Resources:
               Value: !Ref FrontendBaseUrl
             - Name: CORS_ALLOWED_LIST
               Value: !Ref CorsAllowedList
+            # Ask AI / Bedrock (Task 0.1 P0 deploy unblock)
+            - Name: CARECONNECT_AI_ENABLED
+              Value: !Ref CareConnectAiEnabled
+            - Name: AI_PROVIDER
+              Value: !Ref AiProvider
+            # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
+            - Name: EMAIL_PROVIDER
+              Value: !If [IsProdProfile, 'sendgrid', 'console']
+            - Name: FROM_EMAIL
+              Value: !If [IsProdProfile, !Ref FromEmail, 'dev@localhost']
+            # Prod profile WebSocket (application-prod.properties AWS mode)
+            - Name: WEBSOCKET_ENABLED
+              Value: !If [IsProdProfile, 'true', 'false']
+            - Name: AWS_WEBSOCKET_API_GATEWAY_ENDPOINT
+              Value: !Ref WebSocketApiGatewayEndpoint
+            # Production schema: Flyway off; SchemaPatchRunner + Hibernate ddl-auto=update at startup.
             - Name: SPRING_FLYWAY_ENABLED
               Value: 'false'
             - Name: SPRING_JPA_HIBERNATE_DDL_AUTO
               Value: update
+            - Name: CARECONNECT_RECORDING_ENABLED
+              Value: 'true'
+            - Name: CARECONNECT_KVS_ENABLED
+              Value: 'true'
+            - Name: CARECONNECT_KVS_STREAM_POOL_ARN
+              Value: !Sub '{{resolve:ssm:/careconnect/${Environment}/kvs-stream-pool-arn}}'
+            - Name: CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED
+              Value: 'true'
+            # Must match ChimeKvsStreamDiscoveryConnection ApiKeyValue (X-EventBridge-Connection).
+            - Name: CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET
+              Value: !Sub 'careconnect-${Environment}-kvs-discovery'
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
@@ -172,11 +357,9 @@ Resources:
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
 
-  # Long-running Fargate service fronted by the ALB.
+  # ECS Fargate service registered with Cloud Map for API Gateway discovery.
   EcsService:
     Type: AWS::ECS::Service
-    DependsOn:
-      - Listener
     Properties:
       ServiceName: !Sub careconnect-${Environment}-backend
       Cluster:
@@ -184,7 +367,6 @@ Resources:
       LaunchType: FARGATE
       DesiredCount: !Ref DesiredCount
       TaskDefinition: !Ref TaskDefinition
-      HealthCheckGracePeriodSeconds: !Ref HealthCheckGracePeriodSeconds
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
@@ -193,29 +375,107 @@ Resources:
           Subnets:
             - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetAId
             - Fn::ImportValue: !Sub careconnect-${Environment}-PublicSubnetBId
-      LoadBalancers:
-        - ContainerName: cc-backend
-          ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt CloudMapService.Arn
+          Port: !Ref ContainerPort
+
+  # ---------------------------------------------------------------------------
+  # EventBridge → API Gateway webhook for KVS attendee→stream discovery.
+  # Chime pushes chime:MediaPipelineKinesisVideoStreamStart; app registers mappings.
+  # ---------------------------------------------------------------------------
+
+  ChimeKvsStreamDiscoveryConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: !Sub careconnect-${Environment}-chime-kvs-discovery
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: X-EventBridge-Connection
+          ApiKeyValue: !Sub 'careconnect-${Environment}-kvs-discovery'
+
+  ChimeKvsStreamDiscoveryApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub careconnect-${Environment}-chime-kvs-discovery
+      ConnectionArn: !GetAtt ChimeKvsStreamDiscoveryConnection.Arn
+      InvocationEndpoint: !If
+        - HasCustomDomain
+        - !Sub 'https://${DomainName}/api/internal/chime/media-stream-events'
+        - !Sub
+          - '${ApiBase}/api/internal/chime/media-stream-events'
+          - ApiBase: !GetAtt HttpApi.ApiEndpoint
+      HttpMethod: POST
+      InvocationRateLimitPerSecond: 10
+
+  ChimeKvsStreamDiscoveryInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeChimeKvsApiDestination
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !GetAtt ChimeKvsStreamDiscoveryApiDestination.Arn
+
+  ChimeKvsStreamStartRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub careconnect-${Environment}-chime-kvs-stream-start
+      Description: Forward Chime per-attendee KVS stream starts to backend webhook
+      EventPattern:
+        source:
+          - aws.chime
+        detail-type:
+          - Chime Media Pipeline State Change
+        detail:
+          eventType:
+            - chime:MediaPipelineKinesisVideoStreamStart
+      State: ENABLED
+      Targets:
+        - Id: ChimeKvsStreamDiscoveryWebhook
+          Arn: !GetAtt ChimeKvsStreamDiscoveryApiDestination.Arn
+          RoleArn: !GetAtt ChimeKvsStreamDiscoveryInvokeRole.Arn
 
 Outputs:
-  # Public endpoint used by testers and the Flutter app.
-  LoadBalancerDnsName:
-    Value: !GetAtt LoadBalancer.DNSName
+  # API Gateway invoke URL (always available).
+  ApiEndpoint:
+    Description: API Gateway HTTP API default endpoint
+    Value: !GetAtt HttpApi.ApiEndpoint
     Export:
-      Name: !Sub careconnect-${Environment}-LoadBalancerDnsName
+      Name: !Sub careconnect-${Environment}-ApiEndpoint
 
-  LoadBalancerUrl:
-    Value: !Sub http://${LoadBalancer.DNSName}
+  # Custom domain URL (only when custom domain is configured).
+  CustomDomainUrl:
+    Condition: HasCustomDomain
+    Description: Custom domain HTTPS URL
+    Value: !Sub https://${DomainName}
     Export:
-      Name: !Sub careconnect-${Environment}-LoadBalancerUrl
+      Name: !Sub careconnect-${Environment}-CustomDomainUrl
 
-  TargetGroupArn:
-    Value: !Ref TargetGroup
-    Export:
-      Name: !Sub careconnect-${Environment}-TargetGroupArn
-
+  # Service name for CI/CD to force new deployments.
   ServiceName:
     Value: !Ref EcsService
     Export:
       Name: !Sub careconnect-${Environment}-ServiceName
+
+  # VPC Link ID for reference by other stacks.
+  VpcLinkId:
+    Value: !Ref VpcLink
+    Export:
+      Name: !Sub careconnect-${Environment}-VpcLinkId
+
+  # API ID for reference.
+  HttpApiId:
+    Value: !Ref HttpApi
+    Export:
+      Name: !Sub careconnect-${Environment}-HttpApiId

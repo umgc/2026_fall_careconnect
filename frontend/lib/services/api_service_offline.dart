@@ -1,6 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
 import 'package:http/http.dart' as http;
 
+import '../features/telemetry/telemetry.dart';
 import 'local_db/offline_sync_service.dart';
+import 'telemetry_http_client.dart';
 
 export 'local_db/offline_sync_service.dart'
     show OfflineSyncQueueItem, OfflineSyncRunSummary;
@@ -24,11 +30,41 @@ class ApiServiceOffline {
   static bool Function()? _canQueueOfflineWrites;
 
   /// HTTP client that automatically routes requests through the offline queue.
-  static final http.Client httpClient = OfflineQueueHttpClient(
-    inner: http.Client(),
+  /// Tests may replace this via [debugOverrideHttpClient] to bypass the
+  /// offline-queue and telemetry wrappers, which otherwise swallow mock
+  /// clients and return synthetic responses.
+  static http.Client get httpClient => _testHttpClient ?? _defaultHttpClient;
+
+  static http.Client? _testHttpClient;
+
+  static final http.Client _defaultHttpClient = OfflineQueueHttpClient(
+    inner: TelemetryHttpClient(http.Client()),
     offlineSyncService: _offlineSyncService,
     canQueueWrites: () => _canQueueOfflineWrites?.call() ?? true,
   );
+
+  @visibleForTesting
+  static void debugOverrideHttpClient(http.Client? client) {
+    _testHttpClient = client;
+  }
+
+  /// Swap the underlying transport on [httpClient] (tests only).
+  @visibleForTesting
+  static void debugSetHttpClient(http.Client client) {
+    final current = httpClient;
+    if (current is OfflineQueueHttpClient) {
+      current.debugSetInnerClient(client);
+    }
+  }
+
+  /// Restore the default underlying transport (tests only).
+  @visibleForTesting
+  static void debugResetHttpClient() {
+    final current = httpClient;
+    if (current is OfflineQueueHttpClient) {
+      current.debugResetInnerClient();
+    }
+  }
 
   /// Configures whether offline writes are allowed.
   static void configure({
@@ -81,7 +117,40 @@ class ApiServiceOffline {
       return true;
     }());
 
-    return _offlineSyncService.syncQueuedRequestById(id);
+    final pendingCount = await getPendingCount();
+
+    unawaited(Telemetry.event('sync_started', {
+      'scope': 'single',
+      'pendingCount': pendingCount,
+    }));
+
+    try {
+      final ok = await _offlineSyncService.syncQueuedRequestById(id);
+
+      if (ok) {
+        unawaited(Telemetry.event('sync_completed', {
+          'scope': 'single',
+          'attempted': 1,
+          'succeeded': 1,
+          'failed': 0,
+        }));
+      } else {
+        unawaited(Telemetry.event('sync_failed', {
+          'scope': 'single',
+          'attempted': 1,
+          'failed': 1,
+        }));
+      }
+
+      return ok;
+    } catch (_) {
+      unawaited(Telemetry.event('sync_failed', {
+        'scope': 'single',
+        'attempted': 1,
+        'failed': 1,
+      }));
+      rethrow;
+    }
   }
 
   /// Deletes a queued request by ID.
@@ -103,7 +172,48 @@ class ApiServiceOffline {
       return true;
     }());
 
-    return _offlineSyncService.syncPendingQueue(limit: limit);
+    final pendingCount = await getPendingCount();
+
+    if (pendingCount == 0) {
+      return const OfflineSyncRunSummary(
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+      );
+    }
+
+    unawaited(Telemetry.event('sync_started', {
+      'scope': 'batch',
+      'pendingCount': pendingCount,
+    }));
+
+    try {
+      final summary = await _offlineSyncService.syncPendingQueue(limit: limit);
+
+      unawaited(Telemetry.event('sync_completed', {
+        'scope': 'batch',
+        'attempted': summary.attempted,
+        'succeeded': summary.succeeded,
+        'failed': summary.failed,
+      }));
+
+      if (summary.failed > 0) {
+        unawaited(Telemetry.event('sync_failed', {
+          'scope': 'batch',
+          'attempted': summary.attempted,
+          'failed': summary.failed,
+        }));
+      }
+
+      return summary;
+    } catch (_) {
+      unawaited(Telemetry.event('sync_failed', {
+        'scope': 'batch',
+        'attempted': pendingCount,
+        'failed': pendingCount,
+      }));
+      rethrow;
+    }
   }
 
   /// Checks whether a response was queued offline.

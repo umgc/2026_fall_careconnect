@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:care_connect_app/features/payments/presentation/pages/subscription_management_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/services/api_service.dart';
 
 import '../../mock_user_provider.dart';
 
@@ -36,7 +38,7 @@ Widget _wrap({MockUserProvider? userProvider}) {
   final provider = userProvider ?? MockUserProvider();
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: const MaterialApp(home: SubscriptionManagementPage()),
+    child: const MaterialApp(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: SubscriptionManagementPage()),
   );
 }
 
@@ -139,8 +141,8 @@ final _defaultPlans = [
 final _defaultActiveSubscription = [
   {
     'id': '1',
-    'stripeSubscriptionId': 'sub_123',
-    'stripeCustomerId': 'cus_123',
+    'paymentSubscriptionId': 'sub_123',
+    'paymentCustomerId': 'cus_123',
     'status': 'active',
     'startedAt': '1700000000',
     'currentPeriodEnd': '1702592000',
@@ -181,9 +183,10 @@ void _setMockResponses({
   };
 }
 
-/// Pump widget inside runWithClient to ensure the static _httpClient
-/// initializes with our global mock (only needed for the very first test).
+/// Pump widget with ApiService HTTP client overridden + runWithClient for
+/// any direct http.* calls.
 Future<void> _pumpInZone(WidgetTester tester, Widget widget) async {
+  ApiService.debugSetHttpClient(_globalMockClient);
   await http.runWithClient(() async {
     await tester.pumpWidget(widget);
   }, () => _globalMockClient);
@@ -200,6 +203,10 @@ Future<void> _pumpNInZone(WidgetTester tester, int n) async {
 // Tests
 // ---------------------------------------------------------------------------
 void main() {
+  tearDown(() {
+    ApiService.debugResetHttpClient();
+  });
+
   // =========================================================================
   // Group 1: Initial render / loading state
   // =========================================================================
@@ -289,7 +296,7 @@ void main() {
       expect(tryAgainButton, findsOneWidget);
 
       // Tap the button - it calls _loadSubscriptionData again
-      await tester.tap(tryAgainButton);
+      tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Try Again')).onPressed!();
       // After pumping, error state re-appears (still no session)
       await _pumpNInZone(tester, 20);
       expect(find.text('Error Loading Subscription'), findsOneWidget);
@@ -544,8 +551,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_1',
-            'stripeCustomerId': 'cus_1',
+            'paymentSubscriptionId': 'sub_1',
+            'paymentCustomerId': 'cus_1',
             'status': 'canceled',
             'startedAt': '1700000000',
             'currentPeriodEnd': '1702592000',
@@ -640,7 +647,7 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      await tester.tap(find.text('Cancel Subscription'));
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Cancel Subscription')).onPressed!();
       await tester.pump();
 
       expect(find.text('Cancel Subscription'), findsWidgets);
@@ -657,10 +664,10 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      await tester.tap(find.text('Cancel Subscription'));
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Cancel Subscription')).onPressed!();
       await tester.pump();
 
-      await tester.tap(find.text('NO, KEEP MY PLAN'));
+      tester.widget<TextButton>(find.widgetWithText(TextButton, 'NO, KEEP MY PLAN')).onPressed!();
       await tester.pump();
 
       expect(find.text('ACTIVE'), findsOneWidget);
@@ -672,10 +679,10 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      await tester.tap(find.text('Cancel Subscription'));
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Cancel Subscription')).onPressed!();
       await tester.pump();
 
-      await tester.tap(find.text('YES, CANCEL'));
+      tester.widget<TextButton>(find.widgetWithText(TextButton, 'YES, CANCEL')).onPressed!();
       await tester.pump();
 
       expect(find.text('Final Confirmation'), findsOneWidget);
@@ -692,13 +699,13 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      await tester.tap(find.text('Cancel Subscription'));
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Cancel Subscription')).onPressed!();
       await tester.pump();
 
-      await tester.tap(find.text('YES, CANCEL'));
+      tester.widget<TextButton>(find.widgetWithText(TextButton, 'YES, CANCEL')).onPressed!();
       await tester.pump();
 
-      await tester.tap(find.text('NO, GO BACK'));
+      tester.widget<TextButton>(find.widgetWithText(TextButton, 'NO, GO BACK')).onPressed!();
       await tester.pump();
 
       expect(find.text('ACTIVE'), findsOneWidget);
@@ -708,7 +715,7 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      await tester.tap(find.text('Cancel Subscription'));
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Cancel Subscription')).onPressed!();
       await tester.pump();
 
       expect(
@@ -742,12 +749,12 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      final switchButtons = find.text('Switch to This Plan');
+      final switchButtons = find.widgetWithText(ElevatedButton, 'Switch to This Plan');
       expect(switchButtons, findsWidgets);
       // Scroll the first Switch button into view before tapping
       await tester.ensureVisible(switchButtons.first);
       await tester.pump();
-      await tester.tap(switchButtons.first);
+      tester.widget<ElevatedButton>(switchButtons.first).onPressed!();
       await _pumpN(tester, 5);
 
       expect(find.text('Confirm Plan Change'), findsOneWidget);
@@ -769,13 +776,13 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      final switchButtons = find.text('Switch to This Plan');
+      final switchButtons = find.widgetWithText(ElevatedButton, 'Switch to This Plan');
       await tester.ensureVisible(switchButtons.first);
       await tester.pump();
-      await tester.tap(switchButtons.first);
+      tester.widget<ElevatedButton>(switchButtons.first).onPressed!();
       await _pumpN(tester, 5);
 
-      await tester.tap(find.text('CANCEL'));
+      tester.widget<TextButton>(find.widgetWithText(TextButton, 'CANCEL')).onPressed!();
       await tester.pump();
 
       expect(find.text('ACTIVE'), findsOneWidget);
@@ -785,10 +792,10 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      final switchButtons = find.text('Switch to This Plan');
+      final switchButtons = find.widgetWithText(ElevatedButton, 'Switch to This Plan');
       await tester.ensureVisible(switchButtons.first);
       await tester.pump();
-      await tester.tap(switchButtons.first);
+      tester.widget<ElevatedButton>(switchButtons.first).onPressed!();
       await _pumpN(tester, 5);
 
       expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
@@ -798,10 +805,10 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      final switchButtons = find.text('Switch to This Plan');
+      final switchButtons = find.widgetWithText(ElevatedButton, 'Switch to This Plan');
       await tester.ensureVisible(switchButtons.first);
       await tester.pump();
-      await tester.tap(switchButtons.first);
+      tester.widget<ElevatedButton>(switchButtons.first).onPressed!();
       await _pumpN(tester, 5);
 
       expect(
@@ -819,10 +826,10 @@ void main() {
       await _pumpInZone(tester, _wrap());
       await _pumpNInZone(tester, 20);
 
-      final switchButtons = find.text('Switch to This Plan');
+      final switchButtons = find.widgetWithText(ElevatedButton, 'Switch to This Plan');
       await tester.ensureVisible(switchButtons.first);
       await tester.pump();
-      await tester.tap(switchButtons.first);
+      tester.widget<ElevatedButton>(switchButtons.first).onPressed!();
       await _pumpN(tester, 5);
 
       expect(find.byIcon(Icons.remove_circle_outline), findsOneWidget);
@@ -846,7 +853,8 @@ void main() {
 
       final premiumPlan = find.text('Premium Plan');
       expect(premiumPlan, findsWidgets);
-      await tester.tap(premiumPlan.last);
+      await tester.ensureVisible(premiumPlan.first);
+      await tester.tap(premiumPlan.first);
       await tester.pump();
 
       expect(find.byType(Radio<String>), findsWidgets);
@@ -986,8 +994,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_empty',
-            'stripeCustomerId': 'cus_123',
+            'paymentSubscriptionId': 'sub_empty',
+            'paymentCustomerId': 'cus_123',
             'status': 'active',
             'startedAt': '',
             'currentPeriodEnd': '',
@@ -1007,8 +1015,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_bad',
-            'stripeCustomerId': 'cus_123',
+            'paymentSubscriptionId': 'sub_bad',
+            'paymentCustomerId': 'cus_123',
             'status': 'active',
             'startedAt': 'not_a_number',
             'currentPeriodEnd': 'also_not_a_number',
@@ -1028,8 +1036,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_date',
-            'stripeCustomerId': 'cus_123',
+            'paymentSubscriptionId': 'sub_date',
+            'paymentCustomerId': 'cus_123',
             'status': 'active',
             'startedAt': '1700000000',
             'currentPeriodEnd': '1702592000',
@@ -1055,13 +1063,13 @@ void main() {
       _setupPlatformChannelsWithSession();
     });
 
-    testWidgets('extracts from stripeCustomerId', (tester) async {
+    testWidgets('extracts from paymentCustomerId', (tester) async {
       _setMockResponses(
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_s',
-            'stripeCustomerId': 'cus_stripe',
+            'paymentSubscriptionId': 'sub_s',
+            'paymentCustomerId': 'cus_stripe',
             'status': 'active',
             'startedAt': '1700000000',
             'currentPeriodEnd': '1702592000',
@@ -1081,7 +1089,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_c',
+            'paymentSubscriptionId': 'sub_c',
             'customer': 'cus_from_customer',
             'status': 'active',
             'startedAt': '1700000000',
@@ -1102,7 +1110,7 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_ci',
+            'paymentSubscriptionId': 'sub_ci',
             'customerId': 'cus_from_customerId',
             'status': 'active',
             'startedAt': '1700000000',
@@ -1124,8 +1132,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_inactive',
-            'stripeCustomerId': 'cus_first',
+            'paymentSubscriptionId': 'sub_inactive',
+            'paymentCustomerId': 'cus_first',
             'status': 'canceled',
             'startedAt': '1700000000',
             'currentPeriodEnd': '1702592000',
@@ -1161,8 +1169,8 @@ void main() {
         subscriptionBody: [
           {
             'id': '1',
-            'stripeSubscriptionId': 'sub_pm',
-            'stripeCustomerId': 'cus_123',
+            'paymentSubscriptionId': 'sub_pm',
+            'paymentCustomerId': 'cus_123',
             'status': 'active',
             'startedAt': '1700000000',
             'currentPeriodEnd': '1702592000',

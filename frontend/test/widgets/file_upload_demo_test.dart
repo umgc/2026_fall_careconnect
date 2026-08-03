@@ -1,12 +1,13 @@
 // Tests for FileUploadDemo from lib/widgets/file_upload_demo.dart.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/widgets/file_upload_demo.dart';
 
-Widget _wrap() => const MaterialApp(home: FileUploadDemo());
+Widget _wrap() => const MaterialApp(locale: Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: FileUploadDemo());
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

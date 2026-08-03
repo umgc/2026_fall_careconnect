@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -236,6 +237,9 @@ void main() {
       bool isModal = false,
       int? patientId,
       String? healthDataContext,
+      AiChatMode mode = AiChatMode.legacyGeneral,
+      int hitlMaxPollAttempts = 60,
+      Duration hitlPollInterval = const Duration(seconds: 5),
     }) {
       final provider = MockUserProvider(mockUser: MockUser(id: 1, role: role));
       return ChangeNotifierProvider<UserProvider>.value(
@@ -248,6 +252,9 @@ void main() {
               isModal: isModal,
               patientId: patientId,
               healthDataContext: healthDataContext,
+              mode: mode,
+              hitlMaxPollAttempts: hitlMaxPollAttempts,
+              hitlPollInterval: hitlPollInterval,
             ),
           ),
         ),
@@ -273,7 +280,7 @@ void main() {
       final label = {
         'clear': 'Delete this conversation',
         'download': 'Download transcript',
-        'share': 'Share with provider',
+        'share': 'Share with caregivers',
         'privacy': 'Privacy info',
       }[value]!;
       await tester.tap(find.text(label), warnIfMissed: false);
@@ -344,7 +351,7 @@ void main() {
 
       expect(find.text('Delete this conversation'), findsOneWidget);
       expect(find.text('Download transcript'), findsOneWidget);
-      expect(find.text('Share with provider'), findsOneWidget);
+      expect(find.text('Share with caregivers'), findsOneWidget);
       expect(find.text('Privacy info'), findsOneWidget);
     });
 
@@ -408,7 +415,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining('shared with providers'),
+        find.textContaining('shared with linked caregivers'),
         findsOneWidget,
       );
       expect(
@@ -416,8 +423,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining(
-            'not a substitute for professional medical advice'),
+        find.textContaining('not a substitute for professional medical advice'),
         findsOneWidget,
       );
     });
@@ -433,8 +439,7 @@ void main() {
       expect(find.text('No conversation to download'), findsOneWidget);
     });
 
-    testWidgets(
-        'download transcript shows dialog when messages exist',
+    testWidgets('download transcript shows dialog when messages exist',
         (tester) async {
       suppressOverflow();
       // Use userId=1; the history load will fail and add an error message,
@@ -499,7 +504,7 @@ void main() {
     testWidgets('share with provider shows confirmation dialog',
         (tester) async {
       suppressOverflow();
-      await tester.pumpWidget(buildWidget(userId: 1));
+      await tester.pumpWidget(buildWidget(userId: 1, patientId: 42));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -507,19 +512,19 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Share with Provider'), findsOneWidget);
+      expect(find.text('Share with caregivers'), findsOneWidget);
       expect(
-        find.textContaining('share your conversation with your healthcare provider'),
+        find.textContaining(
+            'shares your conversation with caregivers linked to this patient'),
         findsOneWidget,
       );
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Share'), findsOneWidget);
     });
 
-    testWidgets('share with provider cancel dismisses dialog',
-        (tester) async {
+    testWidgets('share with provider cancel dismisses dialog', (tester) async {
       suppressOverflow();
-      await tester.pumpWidget(buildWidget(userId: 1));
+      await tester.pumpWidget(buildWidget(userId: 1, patientId: 42));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -527,34 +532,67 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Share with Provider'), findsOneWidget);
+      expect(find.text('Share with caregivers'), findsOneWidget);
 
       await tester.tap(find.text('Cancel'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Share with Provider'), findsNothing);
+      expect(find.text('Share with caregivers'), findsNothing);
     });
 
-    testWidgets('share with provider confirm shows snackbar',
-        (tester) async {
+    testWidgets('share with provider confirm shows snackbar', (tester) async {
       suppressOverflow();
-      await tester.pumpWidget(buildWidget(userId: 1));
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/ask/share')) {
+          return http.Response(
+            jsonEncode({
+              'shareId': '11111111-1111-1111-1111-111111111111',
+              'patientId': 42,
+              'recipientUserIds': [7],
+              'messageCount': 1,
+              'createdAt': '2026-07-27T12:00:00Z',
+            }),
+            200,
+          );
+        }
+        if (request.url.path.contains('/history')) {
+          return http.Response(
+            jsonEncode({
+              'messages': [
+                {
+                  'role': 'user',
+                  'content': 'hello',
+                  'timestamp': '2026-07-27T12:00:00Z',
+                }
+              ],
+              'conversationId': 'conv-share',
+            }),
+            200,
+          );
+        }
+        return http.Response('{}', 200);
+      });
 
-      await selectPopupItem(tester, 'share');
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(userId: 1, patientId: 42));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
 
-      await tester.tap(find.text('Share'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        await selectPopupItem(tester, 'share');
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      expect(
-        find.text('Conversation shared with provider'),
-        findsOneWidget,
-      );
+        await tester.tap(find.text('Share'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(
+          find.textContaining('Conversation shared with linked caregivers'),
+          findsOneWidget,
+        );
+      }, () => mockClient);
     });
 
     // === DELETE CONVERSATION ===
@@ -729,7 +767,11 @@ void main() {
           value: provider,
           child: MaterialApp(
             home: Scaffold(
-              body: AIChat(role: 'PATIENT', userId: null),
+              body: AIChat(
+                role: 'PATIENT',
+                userId: null,
+                mode: AiChatMode.legacyGeneral,
+              ),
             ),
           ),
         ),
@@ -792,8 +834,7 @@ void main() {
     });
 
     // === SHARED PREFERENCES ===
-    testWidgets(
-        'chat cleared flag in SharedPreferences starts empty chat',
+    testWidgets('chat cleared flag in SharedPreferences starts empty chat',
         (tester) async {
       SharedPreferences.setMockInitialValues({'chat_cleared_1': true});
       await tester.pumpWidget(buildWidget(userId: 1));
@@ -802,8 +843,8 @@ void main() {
       expect(find.text('AI Chat'), findsOneWidget);
     });
 
-    testWidgets(
-        'chat cleared flag false loads history normally', (tester) async {
+    testWidgets('chat cleared flag false loads history normally',
+        (tester) async {
       SharedPreferences.setMockInitialValues({'chat_cleared_1': false});
       await tester.pumpWidget(buildWidget(userId: 1));
       await tester.pump();
@@ -860,8 +901,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.descendant(
-            of: find.byType(AIChat), matching: find.byType(Column)),
+        find.descendant(of: find.byType(AIChat), matching: find.byType(Column)),
         findsWidgets,
       );
     });
@@ -883,20 +923,23 @@ void main() {
         isModal: true,
         patientId: 42,
         userId: 7,
+        mode: AiChatMode.groundedRecords,
       );
       expect(chat.role, 'PATIENT');
       expect(chat.healthDataContext, 'test context');
       expect(chat.isModal, true);
       expect(chat.patientId, 42);
       expect(chat.userId, 7);
+      expect(chat.mode, AiChatMode.groundedRecords);
     });
 
-    testWidgets('AIChat defaults isModal to false', (tester) async {
-      const chat = AIChat(role: 'CAREGIVER');
+    testWidgets('AIChat requires explicit mode', (tester) async {
+      const chat = AIChat(role: 'CAREGIVER', mode: AiChatMode.legacyGeneral);
       expect(chat.isModal, false);
       expect(chat.healthDataContext, isNull);
       expect(chat.patientId, isNull);
       expect(chat.userId, isNull);
+      expect(chat.mode, AiChatMode.legacyGeneral);
     });
 
     // === MESSAGE COUNT DISPLAY ===
@@ -992,6 +1035,177 @@ void main() {
       }, () => mockClient);
     });
 
+    testWidgets('patient Ask AI renders delivered citation and safety contract',
+        (tester) async {
+      suppressOverflow();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body.containsKey('userId'), isFalse);
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Metformin was started.'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'title': 'Call summary',
+                  'excerpt': 'Metformin was started.',
+                  'deepLink': null,
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'What changed?');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+
+        expect(find.text('Metformin was started.'), findsWidgets);
+        expect(find.textContaining('C1 — Call summary'), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-disclaimer')), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-escalation')), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-confirmation')), findsOneWidget);
+      }, () => mockClient);
+    });
+
+    testWidgets(
+        'patient Ask AI renders medication timeline events in chat bubble',
+        (tester) async {
+      suppressOverflow();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Here is the medication history.'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'MEDICATION_TIMELINE_EVENT',
+                  'title': 'Medication timeline',
+                  'excerpt': 'Metformin started.',
+                  'deepLink': null,
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+              'medicationTimeline': {
+                'events': [
+                  {
+                    'itemId': 'item-1',
+                    'medicationName': 'Metformin',
+                    'eventType': 'START',
+                    'effectiveDate': '2026-01-05',
+                    'doseTo': '500mg',
+                    'citationRef': 'C1',
+                  },
+                ],
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'What changed?');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+
+        expect(
+          find.byKey(const Key('ask-ai-medication-timeline')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Metformin'), findsWidgets);
+        expect(find.textContaining('START'), findsOneWidget);
+        expect(find.text('C1'), findsOneWidget);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded mode fails closed without patientId', (tester) async {
+      suppressOverflow();
+      var askRequests = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          askRequests++;
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'What changed?');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+
+        expect(
+          find.textContaining('without a selected patient'),
+          findsOneWidget,
+        );
+        expect(askRequests, 0);
+      }, () => mockClient);
+    });
+
     testWidgets('sendMessage with failed API response shows error',
         (tester) async {
       suppressOverflow();
@@ -1045,8 +1259,7 @@ void main() {
     });
 
     // === CONVERSATION HISTORY ===
-    testWidgets('conversation history loads messages from API',
-        (tester) async {
+    testWidgets('conversation history loads messages from API', (tester) async {
       suppressOverflow();
       final mockClient = MockClient((request) async {
         if (request.url.path.contains('/history')) {
@@ -1083,8 +1296,7 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('conversation history skips SYSTEM messages',
-        (tester) async {
+    testWidgets('conversation history skips SYSTEM messages', (tester) async {
       suppressOverflow();
       final mockClient = MockClient((request) async {
         if (request.url.path.contains('/history')) {
@@ -1144,7 +1356,8 @@ void main() {
         await tester.pump(const Duration(seconds: 1));
 
         // Should show the "no history" message with emoji
-        expect(find.textContaining('No conversation history found'), findsOneWidget);
+        expect(find.textContaining('No conversation history found'),
+            findsOneWidget);
       }, () => mockClient);
     });
 
@@ -1219,6 +1432,72 @@ void main() {
 
       // No errors = success
       expect(true, isTrue);
+    });
+
+    testWidgets('dispose cancels grounded ask and blocks late completion',
+        (tester) async {
+      suppressOverflow();
+      final release = Completer<void>();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          await release.future;
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Disposed answer must not appear'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Disposed excerpt',
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Will dispose');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: SizedBox())),
+        );
+        await tester.pump();
+        release.complete();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Disposed answer must not appear'), findsNothing);
+        expect(find.text('Will dispose'), findsNothing);
+      }, () => mockClient);
     });
 
     // === OVERFLOW HANDLING ===
@@ -1660,6 +1939,579 @@ void main() {
 
       // The user message should appear
       expect(find.text('Patient context test'), findsOneWidget);
+    });
+
+    testWidgets('grounded mode never loads legacy history', (tester) async {
+      suppressOverflow();
+      var historyHits = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/history')) {
+          historyHits++;
+          return http.Response(
+            jsonEncode({
+              'messages': [
+                {
+                  'content': 'Legacy history must not appear',
+                  'messageType': 'USER',
+                  'createdAt': DateTime.now().toIso8601String(),
+                }
+              ],
+              'conversationId': 'legacy-conv',
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(historyHits, 0);
+        expect(find.text('Legacy history must not appear'), findsNothing);
+        expect(find.byIcon(Icons.attach_file), findsNothing);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded mode ignores stale completion after clear',
+        (tester) async {
+      suppressOverflow();
+      final release = Completer<void>();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          await release.future;
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Stale answer must not appear'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Stale excerpt',
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        if (request.url.path.contains('/retention-period')) {
+          return http.Response(jsonEncode({'retentionDays': 30}), 200);
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Will be cleared');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+
+        await selectPopupItem(tester, 'clear');
+        await tester.pump();
+        await tester.tap(find.text('Delete'));
+        await tester.pump();
+        release.complete();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Stale answer must not appear'), findsNothing);
+      }, () => mockClient);
+    });
+
+    testWidgets('patient switch resets grounded chat and disables retry',
+        (tester) async {
+      suppressOverflow();
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': false,
+              'deliveryStatus': 'WITHHELD',
+              'error': {
+                'code': 'TIMEOUT',
+                'message': 'Ask AI took too long to respond. Please try again.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Original question');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.byKey(const Key('ask-ai-retry')), findsOneWidget);
+
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 99,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump();
+
+        expect(find.text('Original question'), findsNothing);
+        expect(find.byKey(const Key('ask-ai-retry')), findsNothing);
+      }, () => mockClient);
+    });
+
+    testWidgets('retry UI reuses original query without duplicate user bubble',
+        (tester) async {
+      suppressOverflow();
+      var askCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          askCount++;
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['query'], 'Stable retry question');
+          if (askCount == 1) {
+            return http.Response(
+              jsonEncode({
+                'success': false,
+                'deliveryStatus': 'WITHHELD',
+                'error': {
+                  'code': 'NETWORK_ERROR',
+                  'message': 'Unable to connect to Ask AI.',
+                },
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'DELIVERED',
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'answer': {'text': 'Retry succeeded'},
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Retry succeeded',
+                }
+              ],
+              'disclaimer': {
+                'text': 'Records-based information; not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'escalation': {
+                'tier': 1,
+                'reason': 'Tier1_auto_deliver',
+                'requiresClinicianReview': false,
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message': 'Confirm important details with your care provider.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Stable retry question');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Stable retry question'), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-retry')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('ask-ai-retry')));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.text('Stable retry question'), findsOneWidget);
+        expect(find.text('Retry succeeded'), findsWidgets);
+        expect(askCount, 2);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded HELD shows reviewing then delivered answer',
+        (tester) async {
+      suppressOverflow();
+      var pollCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'HELD',
+              'held': true,
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'pollUrl':
+                  '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+              'answer': {'text': 'Draft must not appear'},
+              'citations': <Object>[],
+              'message': "We're reviewing this before showing it to you.",
+            }),
+            200,
+          );
+        }
+        if (request.url.path ==
+            '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status') {
+          pollCount++;
+          if (pollCount < 2) {
+            return http.Response(
+              jsonEncode({
+                'heldItemId': '11111111-1111-1111-1111-111111111111',
+                'status': 'PENDING_REVIEW',
+                'deliveryStatus': 'HELD',
+                'message': "We're reviewing this before showing it to you.",
+                'answer': null,
+                'citations': <Object>[],
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'status': 'DELIVERED',
+              'deliveryStatus': 'DELIVERED',
+              'message': null,
+              'answer': 'Released after review.',
+              'citations': [
+                {
+                  'citationId': 'C1',
+                  'recordType': 'CALL_SUMMARY',
+                  'excerpt': 'Released after review.',
+                }
+              ],
+              'disclaimer': {
+                'text':
+                    'This answer is based on your stored health records and is not medical advice.',
+                'aiNoticeRequired': true,
+                'recordsBasedFraming': true,
+                'locale': 'en-US',
+              },
+              'confirmation': {
+                'promptConfirmWithProvider': true,
+                'message':
+                    'Please confirm important details with your care provider before acting on this information.',
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Needs review');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(
+          find.text("We're reviewing this before showing it to you."),
+          findsOneWidget,
+        );
+        expect(find.text('Draft must not appear'), findsNothing);
+        expect(find.text('Released after review.'), findsNothing);
+        // Sends stay blocked while the HITL poll is in flight (spinner replaces send).
+        expect(find.byIcon(Icons.send), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsWidgets);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(find.text('Released after review.'), findsNothing);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(find.text('Released after review.'), findsOneWidget);
+        expect(find.textContaining('C1'), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-disclaimer')), findsOneWidget);
+        expect(find.byKey(const Key('ask-ai-confirmation')), findsOneWidget);
+        expect(pollCount, greaterThanOrEqualTo(2));
+        expect(find.byIcon(Icons.send), findsOneWidget);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded HELD stops polling on permanent 403', (tester) async {
+      suppressOverflow();
+      var pollCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'HELD',
+              'held': true,
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'pollUrl':
+                  '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+              'answer': {'text': 'Draft must not appear'},
+              'citations': <Object>[],
+              'message': "We're reviewing this before showing it to you.",
+            }),
+            200,
+          );
+        }
+        if (request.url.path ==
+            '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status') {
+          pollCount++;
+          return http.Response(
+            jsonEncode({
+              'error': 'FORBIDDEN',
+              'message': 'Not authorized to poll this held item',
+            }),
+            403,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Needs review');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(
+          find.text("We're reviewing this before showing it to you."),
+          findsOneWidget,
+        );
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+
+        expect(
+          find.text(
+            'Unable to check review status for this answer. Please ask again or contact your care provider.',
+          ),
+          findsOneWidget,
+        );
+        expect(pollCount, 1);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(pollCount, 1);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded HELD stops polling on DELIVERED parse failure',
+        (tester) async {
+      suppressOverflow();
+      var pollCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'HELD',
+              'held': true,
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'pollUrl':
+                  '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+              'answer': {'text': 'Draft must not appear'},
+              'citations': <Object>[],
+              'message': "We're reviewing this before showing it to you.",
+            }),
+            200,
+          );
+        }
+        if (request.url.path ==
+            '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status') {
+          pollCount++;
+          // DELIVERED without required disclaimer/confirmation → FormatException.
+          return http.Response(
+            jsonEncode({
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'status': 'DELIVERED',
+              'deliveryStatus': 'DELIVERED',
+              'answer': 'Released but malformed envelope',
+              'citations': <Object>[],
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Needs review');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(
+          find.text("We're reviewing this before showing it to you."),
+          findsOneWidget,
+        );
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+
+        expect(
+          find.text(
+            'This answer is no longer available. Please ask again or contact your care provider.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Released but malformed envelope'), findsNothing);
+        expect(pollCount, 1);
+
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump();
+        expect(pollCount, 1);
+      }, () => mockClient);
+    });
+
+    testWidgets('grounded HELD client timeout offers resume check control',
+        (tester) async {
+      suppressOverflow();
+      var pollCount = 0;
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/ai/ask') {
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'deliveryStatus': 'HELD',
+              'held': true,
+              'requestId': '8aa0d978-a8fc-48bc-ab02-1af24f32e903',
+              'sessionId': 'fd43f38b-ac0e-4adf-af84-d25992ce7855',
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'pollUrl':
+                  '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status',
+              'answer': {'text': 'Draft must not appear'},
+              'citations': <Object>[],
+              'message': "We're reviewing this before showing it to you.",
+            }),
+            200,
+          );
+        }
+        if (request.url.path ==
+            '/v1/api/ai/hitl/11111111-1111-1111-1111-111111111111/status') {
+          pollCount++;
+          return http.Response(
+            jsonEncode({
+              'heldItemId': '11111111-1111-1111-1111-111111111111',
+              'status': 'PENDING_REVIEW',
+              'deliveryStatus': 'HELD',
+              'message': "We're reviewing this before showing it to you.",
+              'answer': null,
+              'citations': <Object>[],
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'messages': []}), 200);
+      });
+
+      await http.runWithClient(() async {
+        await tester.pumpWidget(buildWidget(
+          userId: 1,
+          patientId: 42,
+          mode: AiChatMode.groundedRecords,
+          hitlMaxPollAttempts: 1,
+          hitlPollInterval: const Duration(milliseconds: 100),
+        ));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.enterText(find.byType(TextField), 'Needs review');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump();
+
+        expect(
+          find.text(
+            'Still under review. Check back later or contact your care provider.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('ask-ai-hitl-resume')), findsOneWidget);
+        expect(find.text('Check review status'), findsOneWidget);
+        expect(pollCount, 1);
+      }, () => mockClient);
+    });
+
+    testWidgets('explicit mode is required on constructed chat widgets',
+        (tester) async {
+      const grounded = AIChat(
+        role: 'patient',
+        mode: AiChatMode.groundedRecords,
+        patientId: 7,
+      );
+      const legacy = AIChat(
+        role: 'patient',
+        mode: AiChatMode.legacyGeneral,
+      );
+      expect(grounded.mode, AiChatMode.groundedRecords);
+      expect(legacy.mode, AiChatMode.legacyGeneral);
     });
   });
 }

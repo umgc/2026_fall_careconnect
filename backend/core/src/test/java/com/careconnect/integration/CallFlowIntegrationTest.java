@@ -1,10 +1,19 @@
 package com.careconnect.integration;
 
 import com.careconnect.model.CallTelemetryEvent;
+import com.careconnect.model.CallAttendee;
+import com.careconnect.model.CallParticipant;
+import com.careconnect.model.CallSession;
+import com.careconnect.model.FamilyMemberLink;
+import com.careconnect.model.Patient;
 import com.careconnect.model.User;
+import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallTelemetryEventRepository;
+import com.careconnect.repository.CallParticipantRepository;
+import com.careconnect.repository.CallSessionRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.security.Role;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,10 +24,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
@@ -35,8 +46,8 @@ import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingRequest;
 import software.amazon.awssdk.services.chimesdkmeetings.model.GetMeetingResponse;
 import software.amazon.awssdk.services.chimesdkmeetings.model.MediaPlacement;
 import software.amazon.awssdk.services.chimesdkmeetings.model.Meeting;
-import software.amazon.awssdk.services.chimesdkmeetings.model.NotFoundException;
 import software.amazon.awssdk.services.chimesdkmediapipelines.ChimeSdkMediaPipelinesClient;
+import com.careconnect.service.ChimeService;
 import com.careconnect.service.OpenRouterService;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -46,7 +57,12 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -172,6 +188,9 @@ class CallFlowIntegrationTest {
 
     // ── Spring-managed beans ─────────────────────────────────────────────────────
 
+    @MockitoSpyBean
+    private ChimeService chimeService;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -180,6 +199,24 @@ class CallFlowIntegrationTest {
 
     @Autowired
     private CallTelemetryEventRepository callTelemetryEventRepository;
+
+    @Autowired
+    private CallAttendeeRepository callAttendeeRepository;
+
+    @Autowired
+    private FamilyMemberLinkRepository familyMemberLinkRepository;
+
+    @Autowired
+    private CallParticipantRepository callParticipantRepository;
+
+    @Autowired
+    private CallSessionRepository callSessionRepository;
+
+    @Autowired
+    private PatientRepository patientRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -197,6 +234,7 @@ class CallFlowIntegrationTest {
     void setUp() {
         // Clean telemetry between tests
         callTelemetryEventRepository.deleteAll();
+        callAttendeeRepository.deleteAll();
 
         // Ensure test users exist (idempotent)
         patientUser = userRepository.findByEmail("patient@integration.test")
@@ -218,6 +256,9 @@ class CallFlowIntegrationTest {
                     u.setName("Integration Caregiver");
                     return userRepository.save(u);
                 });
+        callParticipantRepository.deleteAll();
+        callSessionRepository.deleteAll();
+        authorizeCall(CALL_ID, patientUser, caregiverUser);
 
         // Mock Chime SDK — returns realistic meeting credentials
         Meeting mockMeeting = Meeting.builder()
@@ -262,6 +303,36 @@ class CallFlowIntegrationTest {
         // Mock Bedrock — return exception so fallback heuristic is used (SENT-007)
         when(bedrockRuntimeClient.invokeModel(any(InvokeModelRequest.class)))
                 .thenThrow(new RuntimeException("Bedrock unavailable in test"));
+    }
+
+    private void authorizeCall(final String callId, final User... users) {
+        if (patientRepository.findByUserId(patientUser.getId()).isEmpty()) {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO patient (first_name, last_name, email, user_id)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    "Integration",
+                    "Patient",
+                    patientUser.getEmail(),
+                    patientUser.getId());
+        }
+        final Patient patient = patientRepository.findByUserId(patientUser.getId())
+                .orElseThrow();
+        final CallSession session = new CallSession();
+        session.setCallId(callId);
+        session.setPatientId(patient.getId());
+        session.setCreatedByUserId(users[0].getId());
+        session.setStatus("CREATED");
+        final CallSession saved = callSessionRepository.save(session);
+        for (final User participantUser : users) {
+            final CallParticipant participant = new CallParticipant();
+            participant.setCallSessionId(saved.getId());
+            participant.setUserId(participantUser.getId());
+            participant.setInvitedByUserId(users[0].getId());
+            participant.setStatus("INVITED");
+            callParticipantRepository.save(participant);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -318,6 +389,25 @@ class CallFlowIntegrationTest {
         }
 
         @Test
+        @DisplayName("SPEAKER-011: POST /join persists call_attendees row in database")
+        void joinCall_persistsCallAttendeeRow() throws Exception {
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", CALL_ID)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            final List<CallAttendee> attendees = callAttendeeRepository.findByCallId(CALL_ID);
+            assertThat(attendees).hasSize(1);
+            assertThat(attendees.get(0).getUserId()).isEqualTo(caregiverUser.getId());
+            assertThat(attendees.get(0).getRole()).isEqualTo("CAREGIVER");
+            assertThat(attendees.get(0).getChimeAttendeeId()).isNotBlank();
+            assertThat(attendees.get(0).getJoinedAt()).isNotNull();
+            assertThat(attendees.get(0).getLeftAt()).isNull();
+        }
+
+        @Test
         @DisplayName("CHIME-002: JOIN response contains meetingId, attendeeId, joinToken, mediaRegion")
         void joinCall_responseContainsAllChimeCredentials() throws Exception {
             MvcResult result = mockMvc.perform(post("/api/v3/calls/{callId}/join", CALL_ID)
@@ -356,6 +446,33 @@ class CallFlowIntegrationTest {
         }
 
         @Test
+        @DisplayName("CHIME-013: double POST /join same user is idempotent — single createAttendee (L5a)")
+        void joinCall_doubleJoinSameUser_idempotent() throws Exception {
+            String callId = "double-join-" + System.currentTimeMillis();
+            authorizeCall(callId, caregiverUser);
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(chimeService, times(1)).createAttendee(
+                    eq(callId),
+                    eq(caregiverUser.getId().toString()),
+                    anyString(),
+                    anyString());
+        }
+
+        @Test
         @DisplayName("CHIME-003: Unauthenticated join → 401 or 403")
         void joinCall_unauthenticated_rejected() throws Exception {
             mockMvc.perform(post("/api/v3/calls/{callId}/join", CALL_ID)
@@ -365,6 +482,233 @@ class CallFlowIntegrationTest {
                     .andExpect(result ->
                             assertThat(result.getResponse().getStatus())
                                     .isIn(401, 403));
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CHIME-012: CONFERENCE INVITE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Conference Invite (CHIME-012)")
+    class ConferenceInviteTests {
+
+        @Test
+        @DisplayName("CHIME-012: invite then join creates attendee only on join, not on invite")
+        void inviteThenJoin_singleCreateAttendeeForInvitee() throws Exception {
+            String conferenceCallId = "conference-pattern-a-" + System.currentTimeMillis();
+
+            User familyUser = userRepository.findByEmail("family@integration.test")
+                    .orElseGet(() -> {
+                        User u = new User();
+                        u.setEmail("family@integration.test");
+                        u.setPassword("test-password-hash");
+                        u.setRole(Role.FAMILY_MEMBER);
+                        u.setName("Integration Family");
+                        return userRepository.save(u);
+                    });
+
+            if (!familyMemberLinkRepository.existsByFamilyUserAndPatientUserAndStatus(
+                    familyUser, patientUser, FamilyMemberLink.LinkStatus.ACTIVE)) {
+                FamilyMemberLink link = new FamilyMemberLink(
+                        familyUser, patientUser, caregiverUser, "Daughter");
+                link.setPatientId(patientUser.getId());
+                familyMemberLinkRepository.save(link);
+            }
+            authorizeCall(conferenceCallId, patientUser, caregiverUser, familyUser);
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", conferenceCallId)
+                            .with(user(patientUser.getEmail()).roles("PATIENT"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", conferenceCallId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            clearInvocations(chimeService);
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/invite", conferenceCallId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("targetUserId", familyUser.getId()))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").exists());
+
+            verify(chimeService, never()).createAttendee(
+                    eq(conferenceCallId), anyString(), anyString(), anyString());
+
+            List<CallTelemetryEvent> afterInvite = callTelemetryEventRepository
+                    .findByCallIdOrderByOccurredAtDesc(conferenceCallId);
+            assertThat(afterInvite).anyMatch(e ->
+                    "CONFERENCE_INVITE".equals(e.getEventType())
+                            && familyUser.getId().equals(e.getTargetUserId()));
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", conferenceCallId)
+                            .with(user(familyUser.getEmail()).roles("FAMILY_MEMBER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            verify(chimeService, times(1)).createAttendee(
+                    eq(conferenceCallId),
+                    eq(familyUser.getId().toString()),
+                    anyString(),
+                    anyString());
+        }
+
+        @Test
+        @DisplayName("CHIME-013: end while invitee ringing notifies pending invitee")
+        void endWhileRinging_notifiesPendingInvitee() throws Exception {
+            String callId = "end-while-ringing-" + System.currentTimeMillis();
+
+            User familyUser = userRepository.findByEmail("family@integration.test")
+                    .orElseGet(() -> {
+                        User u = new User();
+                        u.setEmail("family@integration.test");
+                        u.setPassword("test-password-hash");
+                        u.setRole(Role.FAMILY_MEMBER);
+                        u.setName("Integration Family");
+                        return userRepository.save(u);
+                    });
+
+            if (!familyMemberLinkRepository.existsByFamilyUserAndPatientUserAndStatus(
+                    familyUser, patientUser, FamilyMemberLink.LinkStatus.ACTIVE)) {
+                FamilyMemberLink link = new FamilyMemberLink(
+                        familyUser, patientUser, caregiverUser, "Daughter");
+                link.setPatientId(patientUser.getId());
+                familyMemberLinkRepository.save(link);
+            }
+            authorizeCall(callId, patientUser, caregiverUser, familyUser);
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(patientUser.getEmail()).roles("PATIENT"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/invite", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("targetUserId", familyUser.getId()))))
+                    .andExpect(status().isOk());
+
+            String endBody = objectMapper.writeValueAsString(Map.of(
+                    "otherPartyId", patientUser.getId().toString()));
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/end", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(endBody))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(chimeService).endMeeting(callId);
+
+            List<CallTelemetryEvent> events = callTelemetryEventRepository
+                    .findByCallIdOrderByOccurredAtDesc(callId);
+            assertThat(events).anyMatch(e -> "CALL_END".equals(e.getEventType()));
+            assertThat(events).anyMatch(e ->
+                    "CONFERENCE_INVITE".equals(e.getEventType())
+                            && familyUser.getId().equals(e.getTargetUserId()));
+            assertThat(events).noneMatch(e ->
+                    "CALL_JOIN".equals(e.getEventType())
+                            && familyUser.getId().equals(e.getActorUserId()));
+        }
+
+        @Test
+        @DisplayName("CHIME-014: three-party conference end notifies remaining participant")
+        void threeParty_endNotifiesAllRemaining() throws Exception {
+            String callId = "three-party-end-" + System.currentTimeMillis();
+
+            User familyUser = userRepository.findByEmail("family@integration.test")
+                    .orElseGet(() -> {
+                        User u = new User();
+                        u.setEmail("family@integration.test");
+                        u.setPassword("test-password-hash");
+                        u.setRole(Role.FAMILY_MEMBER);
+                        u.setName("Integration Family");
+                        return userRepository.save(u);
+                    });
+
+            if (!familyMemberLinkRepository.existsByFamilyUserAndPatientUserAndStatus(
+                    familyUser, patientUser, FamilyMemberLink.LinkStatus.ACTIVE)) {
+                FamilyMemberLink link = new FamilyMemberLink(
+                        familyUser, patientUser, caregiverUser, "Daughter");
+                link.setPatientId(patientUser.getId());
+                familyMemberLinkRepository.save(link);
+            }
+            authorizeCall(callId, patientUser, caregiverUser, familyUser);
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(patientUser.getEmail()).roles("PATIENT"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                            .with(user(familyUser.getEmail()).roles("FAMILY_MEMBER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/end", callId)
+                            .with(user(caregiverUser.getEmail()).roles("CAREGIVER"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("otherPartyId", patientUser.getId().toString()))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("left"));
+
+            clearInvocations(chimeService);
+
+            mockMvc.perform(post("/api/v3/calls/{callId}/end", callId)
+                            .with(user(patientUser.getEmail()).roles("PATIENT"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ended"));
+
+            verify(chimeService).endMeeting(callId);
+
+            List<CallTelemetryEvent> events = callTelemetryEventRepository
+                    .findByCallIdOrderByOccurredAtDesc(callId);
+            assertThat(events).anyMatch(e ->
+                    "CALL_LEAVE".equals(e.getEventType())
+                            && caregiverUser.getId().equals(e.getActorUserId()));
+            assertThat(events).anyMatch(e ->
+                    "CALL_END".equals(e.getEventType())
+                            && patientUser.getId().equals(e.getActorUserId()));
         }
     }
 
@@ -379,6 +723,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001: Patient submits text sentiment — 200 with SentimentResult (heuristic fallback, SENT-007)")
         void patient_submitTextSentiment_returns200WithResult() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "text", "I feel a lot better today, thank you for checking in",
                     "captureMode", "balanced",
@@ -438,6 +783,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001b: Patient voice sentiment — 200 OK (SENT-007: heuristic when Bedrock down)")
         void patient_submitVoiceSentiment_returns200() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "averageLevel", "0.7",
                     "speechRatio", "0.8",
@@ -459,6 +805,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001: Text sentiment missing 'text' field → 400 Bad Request")
         void textSentiment_missingTextField_returns400() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "captureMode", "balanced"
             ));
@@ -474,6 +821,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-001: Text sentiment recorded in telemetry database")
         void textSentiment_isRecordedInTelemetryDatabase() throws Exception {
+            joinCall(CALL_ID, patientUser);
             String body = objectMapper.writeValueAsString(Map.of(
                     "text", "I am feeling much better today",
                     "captureMode", "balanced",
@@ -538,6 +886,7 @@ class CallFlowIntegrationTest {
         @Test
         @DisplayName("SENT-004: POST /end records CALL_END telemetry in database")
         void endCall_recordsCallEndTelemetry() throws Exception {
+            joinCall(CALL_ID, caregiverUser);
             String endBody = objectMapper.writeValueAsString(Map.of(
                     "otherPartyId", patientUser.getId().toString()
             ));
@@ -567,6 +916,7 @@ class CallFlowIntegrationTest {
         @DisplayName("Full flow: patient joins, submits text + voice sentiment, call ends — telemetry persisted for all events")
         void fullCallFlow_joinsSubmitsSentimentEnds_allEventsInDatabase() throws Exception {
             String flowCallId = "full-flow-call-" + System.currentTimeMillis();
+            authorizeCall(flowCallId, patientUser, caregiverUser);
 
             // 1. Patient joins
             mockMvc.perform(post("/api/v3/calls/{callId}/join", flowCallId)
@@ -575,6 +925,7 @@ class CallFlowIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isOk());
+            joinCall(flowCallId, caregiverUser);
 
             // 2. Patient submits text sentiment
             String textBody = objectMapper.writeValueAsString(Map.of(
@@ -631,6 +982,8 @@ class CallFlowIntegrationTest {
         @DisplayName("SENT-005 / GET /{callId}/sentiment: patient participant can read sentiment after submitting")
         void getSentiment_participantCanRead_returnsSentimentByChannel() throws Exception {
             String flowCallId = "sentiment-read-call-" + System.currentTimeMillis();
+            authorizeCall(flowCallId, patientUser, caregiverUser);
+            joinCall(flowCallId, patientUser);
 
             // Submit sentiment first
             String textBody = objectMapper.writeValueAsString(Map.of(
@@ -650,6 +1003,15 @@ class CallFlowIntegrationTest {
                             .with(user(patientUser.getEmail()).roles("PATIENT")))
                     .andExpect(status().isOk());
         }
+    }
+
+    private void joinCall(final String callId, final User joiningUser) throws Exception {
+        mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                        .with(user(joiningUser.getEmail()).roles(joiningUser.getRole().name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

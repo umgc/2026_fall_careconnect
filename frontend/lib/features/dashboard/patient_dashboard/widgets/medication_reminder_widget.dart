@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/models/medication_reminder_item.dart';
 
@@ -14,8 +15,42 @@ class MedicationRemindersWidget extends StatelessWidget {
     this.onMarkMissed,
   });
 
+  String _translateFrequency(String frequency, AppLocalizations t) {
+    final text = frequency.toLowerCase();
+
+    if (text.contains('twice') || text.contains(t.ptmedreminderservice_twice) || text.contains('2x') || text.contains('two') || text.contains(t.ptmedreminderservice_two)) {
+      return t.ptdashboard_twiceDaily;
+    }
+    if (text.contains('three') || text.contains(t.ptmedreminderservice_three) || text.contains('3x')) {
+      return t.ptdashboard_threeTimesDaily;
+    }
+    if (text.contains('four') || text.contains('4x')) {
+      return t.ptdashboard_fourTimesDaily;
+    }
+    if ((text.contains('every') && text.contains('hour')) || (text.contains(t.ptmedreminderservice_every) && text.contains(t.ptmedreminderservice_hour))) {
+      return t.ptdashboard_hourly;
+    }
+    if (text.contains('week') || text.contains(t.ptmedreminderservice_week)) {
+      return t.ptdashboard_weekly;
+    }
+    if (text.contains('month') || text.contains(t.ptmedreminderservice_month)) {
+      return t.ptdashboard_monthly;
+    }
+    if (text.contains('day') || text.contains(t.ptmedreminderservice_day) || text.contains('daily') || text.contains(t.ptmedreminderservice_daily)) {
+      if(text.contains('at bedtime')){
+        return t.ptdashboard_onceAtBed;
+      }
+      return t.ptdashboard_onceDaily;
+    }
+    if (text.contains('as needed')){
+      return t.ptdashboard_asNeeded;
+    }
+    return frequency;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     if (reminders.isEmpty) {
@@ -36,7 +71,7 @@ class MedicationRemindersWidget extends StatelessWidget {
         ),
         child: Center(
           child: Text(
-            'No active medication reminders',
+            t.medicationreminderwidget_noMedReminders,
             style: TextStyle(
               fontSize: 16,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -76,7 +111,7 @@ class MedicationRemindersWidget extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Medication Reminders',
+                t.medicationreminderwidget_medRemindersTitle,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -129,7 +164,7 @@ class MedicationRemindersWidget extends StatelessWidget {
                               borderRadius: BorderRadius.circular(99),
                             ),
                             child: Text(
-                              'Taken',
+                              t.medicationreminderwidget_taken,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -141,7 +176,7 @@ class MedicationRemindersWidget extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${reminder.dosage} • ${reminder.frequency}',
+                      '${reminder.dosage} • ${_translateFrequency(reminder.frequency, t)}',
                       style: TextStyle(
                         fontSize: 14,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
@@ -150,8 +185,8 @@ class MedicationRemindersWidget extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       reminder.isTakenForCurrentWindow
-                          ? 'Next dose ${_formatScheduledTime(reminder.nextDueAt)}'
-                          : 'Due ${_formatScheduledTime(reminder.nextDueAt)}',
+                          ? '${t.medicationreminderwidget_nextDose} ${_formatScheduledTime(reminder.nextDueAt, t)}'
+                          : '${t.medicationreminderwidget_due} ${_formatScheduledTime(reminder.nextDueAt, t)}',
                       style: TextStyle(
                         fontSize: 13,
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
@@ -173,7 +208,7 @@ class MedicationRemindersWidget extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: const Text('Mark Taken'),
+                              child: Text(t.medicationreminderwidget_markTaken),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -189,7 +224,7 @@ class MedicationRemindersWidget extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: const Text('Mark Missed'),
+                              child: Text(t.medicationreminderwidget_markMissed),
                             ),
                           ),
                         ],
@@ -202,7 +237,7 @@ class MedicationRemindersWidget extends StatelessWidget {
           ),
           if (reminders.length > visibleReminders.length)
             Text(
-              '+${reminders.length - visibleReminders.length} more medications',
+              '+${reminders.length - visibleReminders.length} ${t.medicationreminderwidget_moreMedications}',
               style: TextStyle(
                 fontSize: 12,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
@@ -214,15 +249,15 @@ class MedicationRemindersWidget extends StatelessWidget {
   }
 
   /// Formats the scheduled time into a more readable format
-  String _formatScheduledTime(DateTime time) {
+  String _formatScheduledTime(DateTime time, AppLocalizations t) {
     final now = DateTime.now();
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
 
     String dayStr;
     if (time.day == now.day) {
-      dayStr = 'Today';
+      dayStr = t.medicationreminderwidget_today;
     } else if (time.day == tomorrow.day) {
-      dayStr = 'Tomorrow';
+      dayStr = t.medicationreminderwidget_tomorrow;
     } else {
       dayStr = '${time.month}/${time.day}';
     }

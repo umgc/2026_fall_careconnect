@@ -366,7 +366,7 @@ public class CallTelemetryService {
     event.setTargetUserId(targetUserId);
     event.setStatus(defaultStatus(status));
     event.setErrorMessage(trim(errorMessage));
-    event.setOccurredAt(LocalDateTime.now());
+    event.setOccurredAt(LocalDateTime.now(java.time.ZoneOffset.UTC));
     return event;
   }
 

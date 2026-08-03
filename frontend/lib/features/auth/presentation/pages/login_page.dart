@@ -8,7 +8,6 @@ import '../../../../config/theme/app_theme.dart';
 import '../../../../providers/user_provider.dart';
 import '../../../../services/enhanced_auth_service.dart';
 import '../../../../widgets/email_verification_dialog.dart';
-import '../../../../widgets/role_mismatch_dialog.dart';
 
 class LoginPage extends StatefulWidget {
   final String? userType;
@@ -46,6 +45,7 @@ class _LoginPageState extends State<LoginPage> {
       final authResult = await EnhancedAuthService.loginWithRoleValidation(
         email: _email.text.trim(),
         password: _pwd.text,
+        t: AppLocalizations.of(context)!,
       );
 
       if (authResult.isSuccess) {
@@ -63,25 +63,17 @@ class _LoginPageState extends State<LoginPage> {
         Provider.of<UserProvider>(context, listen: false).setUser(user);
         await Provider.of<UserProvider>(context, listen: false).fetchUserDetails();
         await Future.delayed(const Duration(milliseconds: 100));
-        navigateToDashboard(context);
+        navigateToDashboard(context, routePatientToDailyBrief: true);
       } else {
-        if (authResult.errorType == AuthErrorType.roleValidation) {
-          await RoleMismatchDialog.show(
-            context: context,
-            actualRole: authResult.actualRole!,
-            expectedRole: authResult.expectedRole!,
-            correctLoginRoute: authResult.correctLoginRoute!,
-            message: authResult.errorMessage!,
-          );
-        } else {
-          setState(() {
-            _error = authResult.errorMessage;
-          });
-        }
+        // loginWithRoleValidation only ever returns success or an authentication
+        // failure (role validation is not performed here), so surface the error.
+        setState(() {
+          _error = authResult.errorMessage;
+        });
       }
     } catch (e) {
       setState(() {
-        _error = 'Login failed: $e';
+        _error = '${AppLocalizations.of(context)?.login_loginFailedError ?? 'Login failed'}: $e';
       });
     } finally {
       setState(() => _busy = false);

@@ -2,16 +2,35 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:universal_html/html.dart' as uh;
 import 'package:go_router/go_router.dart';
 import '../services/video_call_service.dart';
 import '../services/auth_token_manager.dart';
 import '../services/call_notification_service.dart';
 import '../services/user_role_storage_service.dart';
+import '../config/env_constant.dart';
 import '../config/theme/app_theme.dart';
+import '../features/telemetry/telemetry.dart';
 import '../widgets/sentiment_dashboard_widget.dart';
 import '../widgets/chime_meeting_embed.dart';
 import '../features/health/caregiver-patient-list/page/patient_details_page.dart';
+
+@visibleForTesting
+String safeCallSessionError(Object error) {
+  final message = error.toString();
+  if (message.contains('Select one patient')) {
+    return 'Select one patient before starting this care-team call.';
+  }
+  if (message.contains('authentication token') ||
+      message.contains('session expired')) {
+    return 'Your session expired. Please sign in again.';
+  }
+  if (message.contains('permission')) {
+    return 'You do not have permission to start or join this call.';
+  }
+  return 'Unable to start the call. Please check the call details and try again.';
+}
 
 /// HybridVideoCallWidget — video call screen with live sentiment monitoring.
 ///
@@ -38,6 +57,7 @@ class HybridVideoCallWidget extends StatefulWidget {
   final String? recipientName;
   final String? callKind;
   final List<int>? contextPatientUserIds;
+  final String? scheduledVisitId;
   final String? returnPatientDetailsId;
   final bool forcePatientDetailsOnExit;
   final bool returnAsCaregiver;
@@ -60,6 +80,7 @@ class HybridVideoCallWidget extends StatefulWidget {
     this.recipientName,
     this.callKind,
     this.contextPatientUserIds,
+    this.scheduledVisitId,
     this.returnPatientDetailsId,
     this.forcePatientDetailsOnExit = false,
     this.returnAsCaregiver = false,
@@ -106,7 +127,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
   // Recording
   bool _isRecording = false;
   bool _isTogglingRecording = false;
-  DateTime? _recordingStartedAt;
   Timer? _recordingElapsedTimer;
   Duration _recordingElapsed = Duration.zero;
   DateTime? _lastAudioSampleSentAt;
@@ -193,8 +213,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     super.initState();
     _adaptiveActiveIntervalMs =
         (_isAdaptiveSentimentMode || _isRealtimeSentimentMode)
-        ? _realtimeIntervalMs
-        : _balancedIntervalMs;
+            ? _realtimeIntervalMs
+            : _balancedIntervalMs;
     _loadCurrentRole();
     _initializeCall();
   }
@@ -204,8 +224,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       final role = await _resolveCurrentRole();
       final isCaregiver = role?.toUpperCase() == 'CAREGIVER';
       final isPatient = role?.toUpperCase() == 'PATIENT';
-      _isCareTeamCall = (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
-      _videoCallService.setPatientSentimentSourceEnabled(isPatient && !_isCareTeamCall);
+      _isCareTeamCall =
+          (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
+      _videoCallService
+          .setPatientSentimentSourceEnabled(isPatient && !_isCareTeamCall);
       if (!mounted) return;
       setState(() {
         _isCaregiverView = isCaregiver;
@@ -230,7 +252,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       final role = await _resolveCurrentRole();
       final isCaregiverRole = role?.toUpperCase() == 'CAREGIVER';
       final isPatientRole = role?.toUpperCase() == 'PATIENT';
-      _isCareTeamCall = (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
+      _isCareTeamCall =
+          (widget.callKind ?? '').trim().toUpperCase() == 'CARE_TEAM';
 
       if (mounted) {
         setState(() {
@@ -274,13 +297,62 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                 '$declinedBy declined the call$reasonSuffix.';
           });
         },
+        onRecordingState: (event) {
+          if (!mounted) return;
+          final status = (event['status'] ?? '').toString().toUpperCase();
+          final active = status == 'STARTED' || status == 'ALREADY_RECORDING';
+          setState(() {
+            _isRecording = active;
+            if (!active) {
+              _recordingElapsed = Duration.zero;
+              _recordingElapsedTimer?.cancel();
+            }
+          });
+        },
       );
+
+      final recipientId = widget.recipientId?.trim();
+      String? sessionPatientUserId;
+      try {
+        sessionPatientUserId = resolveCallSessionPatientUserId(
+          currentUserId: widget.userId,
+          currentRole: role ?? '',
+          recipientId: recipientId ?? '',
+          recipientRole: widget.recipientRole,
+          callKind: widget.callKind,
+          contextPatientUserIds: widget.contextPatientUserIds,
+        );
+      } catch (_) {
+        // Care-team without a single patient context: join still works when the
+        // durable session already exists from the initiator.
+        sessionPatientUserId = null;
+      }
+
+      if (widget.isInitiator) {
+        if (recipientId == null || recipientId.isEmpty) {
+          throw Exception('Missing recipient ID for outgoing call.');
+        }
+        if (sessionPatientUserId == null || sessionPatientUserId.isEmpty) {
+          throw Exception(
+            'Select one patient before starting this care-team call.',
+          );
+        }
+        await _videoCallService.createCallSession(
+          callId: widget.callId,
+          patientUserId: sessionPatientUserId,
+          inviteeUserId: recipientId,
+          scheduledVisitId: widget.scheduledVisitId,
+        );
+      }
 
       final session = await _videoCallService.joinCall(
         callId: widget.callId,
         otherPartyId: widget.recipientId ?? '',
         isVideoEnabled: widget.isVideoEnabled,
         isAudioEnabled: widget.isAudioEnabled,
+        patientUserId: sessionPatientUserId,
+        inviteeUserId: widget.isInitiator ? recipientId : widget.userId,
+        scheduledVisitId: widget.scheduledVisitId,
         callContextMetadata: {
           'callKind': (widget.callKind ?? 'general').trim().toUpperCase(),
           if (widget.contextPatientUserIds != null &&
@@ -300,11 +372,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         }
 
         final currentRole = (role ?? '').toUpperCase();
-        String recipientRole = (widget.recipientRole ?? '').trim().toUpperCase();
+        String recipientRole =
+            (widget.recipientRole ?? '').trim().toUpperCase();
         if (recipientRole != 'PATIENT' && recipientRole != 'CAREGIVER') {
-          recipientRole = currentRole == 'CAREGIVER'
-            ? 'PATIENT'
-            : 'CAREGIVER';
+          recipientRole = currentRole == 'CAREGIVER' ? 'PATIENT' : 'CAREGIVER';
         }
 
         final invitationSent = await CallNotificationService.sendCallInvitation(
@@ -313,13 +384,19 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
           callId: widget.callId,
           isVideoCall: widget.isVideoEnabled,
           callType: _isCareTeamCall ? 'care-team' : 'general',
+          callKind: _isCareTeamCall ? 'CARE_TEAM' : 'GENERAL',
+          contextPatientUserIds: widget.contextPatientUserIds,
         );
 
+        // Deploy often cannot ring via WebSocket — keep the caller in-call and
+        // offer a copyable join link for the patient/other party.
         if (!invitationSent) {
-          await _videoCallService.endCall();
-          throw Exception(
-            'Unable to notify callee after joining the call room.',
-          );
+          if (mounted) {
+            _showJoinLinkSnackBar(
+              message:
+                  'Could not ring the other account. Copy the join link and open it while logged in as them.',
+            );
+          }
         }
 
         _hasSentInitialInvitation = true;
@@ -331,9 +408,12 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         _localAudioEnabled = session.isAudioEnabled;
         _localVideoEnabled = session.isVideoEnabled;
       });
+      unawaited(
+        Telemetry.event('feature_use', {'feature': 'video_call'}),
+      );
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = safeCallSessionError(e);
         _isLoading = false;
       });
     }
@@ -345,6 +425,73 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       throw Exception('No authentication token found. Please log in again.');
     }
     return token;
+  }
+
+  String _frontendOrigin() {
+    if (kIsWeb) {
+      // universal_html types `origin` as nullable off the web, so read it
+      // loosely instead of assuming a non-null String.
+      final dynamic origin = uh.window.location.origin;
+      if (origin is String && origin.isNotEmpty) return origin;
+    }
+    return getWebBaseUrl();
+  }
+
+  /// Deep link for the callee (patient / other party) to join this callId.
+  String buildCalleeJoinUrl() {
+    final calleeId = (widget.recipientId ?? '').trim();
+    final params = <String, String>{
+      'userId': calleeId,
+      'callId': widget.callId,
+      'recipientId': widget.userId,
+      'userRole': (widget.recipientRole ?? 'PATIENT').trim().toUpperCase(),
+      'userName': widget.recipientName ?? 'Participant',
+      'recipientName': widget.userName ?? 'Caller',
+      'recipientRole': (widget.userRole ?? 'CAREGIVER').trim().toUpperCase(),
+      'initiator': 'false',
+      'video': widget.isVideoEnabled ? 'true' : 'false',
+      'audio': widget.isAudioEnabled ? 'true' : 'false',
+      'callKind': (widget.callKind ?? 'GENERAL').trim().toUpperCase(),
+      if (widget.scheduledVisitId != null &&
+          widget.scheduledVisitId!.trim().isNotEmpty)
+        'scheduledVisitId': widget.scheduledVisitId!.trim(),
+      if (widget.contextPatientUserIds != null &&
+          widget.contextPatientUserIds!.isNotEmpty)
+        'contextPatientUserIds': widget.contextPatientUserIds!.join(','),
+    };
+    final relative =
+        Uri(path: '/video-call-chime', queryParameters: params).toString();
+    // Web uses HashUrlStrategy (see main.dart).
+    return '${_frontendOrigin()}/#$relative';
+  }
+
+  Future<void> _copyJoinLink() async {
+    final url = buildCalleeJoinUrl();
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Join link copied. Open it while logged in as the other user.'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showJoinLinkSnackBar({required String message}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'Copy link',
+          onPressed: () {
+            unawaited(_copyJoinLink());
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -367,14 +514,14 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         _recordingElapsedTimer?.cancel();
         setState(() {
           _isRecording = false;
-          _recordingStartedAt = null;
           _recordingElapsed = Duration.zero;
         });
       } else {
         await _videoCallService.startRecording(widget.callId);
         final started = DateTime.now();
         _recordingElapsedTimer?.cancel();
-        _recordingElapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _recordingElapsedTimer =
+            Timer.periodic(const Duration(seconds: 1), (_) {
           if (!mounted) return;
           setState(() {
             _recordingElapsed = DateTime.now().difference(started);
@@ -382,7 +529,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         });
         setState(() {
           _isRecording = true;
-          _recordingStartedAt = started;
           _recordingElapsed = Duration.zero;
         });
       }
@@ -524,7 +670,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     }
 
     // Fall back to role label
-    if (roleCandidate.startsWith('CAREGIVER') || roleCandidate.startsWith('ADMIN')) {
+    if (roleCandidate.startsWith('CAREGIVER') ||
+        roleCandidate.startsWith('ADMIN')) {
       return 'CAREGIVER';
     }
     if (roleCandidate.startsWith('PATIENT')) return 'PATIENT';
@@ -538,7 +685,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     if (hyphenParts.length == 1) {
       // Only first name
       final n = hyphenParts[0];
-      return n.isEmpty ? nameSeg : n[0].toUpperCase() + n.substring(1).toLowerCase();
+      return n.isEmpty
+          ? nameSeg
+          : n[0].toUpperCase() + n.substring(1).toLowerCase();
     }
     final first = hyphenParts[0];
     final last = hyphenParts.sublist(1).join(' ');
@@ -622,8 +771,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     if (!_isAdaptiveSentimentMode) return;
 
     final now = DateTime.now();
-    final switchedRecently =
-        _lastAdaptiveSwitchAt != null &&
+    final switchedRecently = _lastAdaptiveSwitchAt != null &&
         now.difference(_lastAdaptiveSwitchAt!) < _adaptiveSwitchCooldown;
 
     final isSlowSuccess =
@@ -901,7 +1049,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                         ? Colors.teal.shade100
                         : Colors.blue.shade100,
                     child: Icon(
-                      role == 'FAMILY_MEMBER' ? Icons.people : Icons.medical_services,
+                      role == 'FAMILY_MEMBER'
+                          ? Icons.people
+                          : Icons.medical_services,
                       size: 18,
                       color: role == 'FAMILY_MEMBER'
                           ? Colors.teal.shade700
@@ -909,7 +1059,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                     ),
                   ),
                   title: Text(name, style: const TextStyle(fontSize: 14)),
-                  subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+                  subtitle:
+                      Text(subtitle, style: const TextStyle(fontSize: 12)),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _inviteParticipant(
@@ -943,18 +1094,21 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     required String userId,
     required String name,
   }) async {
-    final status = await _videoCallService.inviteParticipant(widget.callId, userId);
+    final status =
+        await _videoCallService.inviteParticipant(widget.callId, userId);
     if (!mounted) return;
     final String message;
     final Color bgColor;
     switch (status) {
       case 'invited':
-        message = 'Invitation sent to $name.';
-        bgColor = Colors.green.shade700;
-        break;
       case 'offline':
-        message = '$name is not available right now.';
-        bgColor = Colors.orange.shade700;
+        _videoCallService.trackParticipant(userId);
+        message = status == 'invited'
+            ? 'Invitation sent to $name.'
+            : '$name is not available right now.';
+        bgColor = status == 'invited'
+            ? Colors.green.shade700
+            : Colors.orange.shade700;
         break;
       default:
         message = 'Could not invite $name. Please try again.';
@@ -974,8 +1128,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     _isExitingCall = true;
 
     final returnPatientId = widget.returnPatientDetailsId?.trim();
-    final shouldForcePatientDetails =
-        widget.forcePatientDetailsOnExit &&
+    final shouldForcePatientDetails = widget.forcePatientDetailsOnExit &&
         returnPatientId != null &&
         returnPatientId.isNotEmpty;
 
@@ -1192,9 +1345,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _isRetryingRejectedCall
-                            ? null
-                            : _retryRejectedCall,
+                        onPressed:
+                            _isRetryingRejectedCall ? null : _retryRejectedCall,
                         icon: _isRetryingRejectedCall
                             ? const SizedBox(
                                 width: 16,
@@ -1245,6 +1397,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       final userName = Uri.encodeComponent(widget.userName ?? '');
       final recipientName = Uri.encodeComponent(widget.recipientName ?? '');
       final recipientIdValue = Uri.encodeComponent(widget.recipientId ?? '');
+      final callKind = Uri.encodeComponent(
+        (widget.callKind ?? 'GENERAL').trim().toUpperCase(),
+      );
+      final contextIds = widget.contextPatientUserIds ?? const <int>[];
 
       context.pushReplacement(
         '/video-call-chime'
@@ -1256,7 +1412,10 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         '&recipientName=$recipientName'
         '&initiator=true'
         '&video=${widget.isVideoEnabled ? 'true' : 'false'}'
-        '&audio=${widget.isAudioEnabled ? 'true' : 'false'}',
+        '&audio=${widget.isAudioEnabled ? 'true' : 'false'}'
+        '&callKind=$callKind'
+        '${widget.scheduledVisitId == null ? '' : '&scheduledVisitId=${Uri.encodeComponent(widget.scheduledVisitId!)}'}'
+        '${contextIds.isEmpty ? '' : '&contextPatientUserIds=${Uri.encodeComponent(contextIds.join(','))}'}',
       );
     } catch (_) {
       if (!mounted) return;
@@ -1280,12 +1439,12 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
 
     // Keep transcript capture always enabled once meeting is active so it does
     // not depend on async role-resolution timing during screen init.
-    final shouldEnableSentimentCapture = true;
+    final shouldEnableSentimentCapture = !_isCareTeamCall;
 
     final mediaPlacement = _callSession!.mediaPlacement;
     final hasMediaEndpoints = mediaPlacement.values.whereType<String>().any(
-      (value) => value.trim().isNotEmpty,
-    );
+          (value) => value.trim().isNotEmpty,
+        );
     final isLocalMockSession = _callSession!.joinToken.startsWith(
       'local-join-token-',
     );
@@ -1363,7 +1522,6 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     );
   }
 
-
   Widget _buildRecordingConsentBanner() {
     return Container(
       width: double.infinity,
@@ -1398,9 +1556,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         mainAxisSize: MainAxisSize.max,
         children: [
           IconButton(
-            tooltip: _localAudioEnabled
-                ? 'Mute microphone'
-                : 'Unmute microphone',
+            tooltip:
+                _localAudioEnabled ? 'Mute microphone' : 'Unmute microphone',
             onPressed: _toggleLocalAudio,
             icon: Icon(
               _localAudioEnabled ? Icons.mic : Icons.mic_off,
@@ -1453,7 +1610,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
                     ),
                   )
                 : IconButton(
-                    tooltip: _isRecording ? 'Stop recording' : 'Start recording',
+                    tooltip:
+                        _isRecording ? 'Stop recording' : 'Start recording',
                     onPressed: _toggleRecording,
                     icon: Icon(
                       _isRecording
@@ -1576,14 +1734,10 @@ class _CallDurationTimerState extends State<_CallDurationTimer> {
       stream: _ticker,
       builder: (context, snapshot) {
         final elapsed = DateTime.now().difference(widget.startTime);
-        final minutes = elapsed.inMinutes
-            .remainder(60)
-            .toString()
-            .padLeft(2, '0');
-        final seconds = elapsed.inSeconds
-            .remainder(60)
-            .toString()
-            .padLeft(2, '0');
+        final minutes =
+            elapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
+        final seconds =
+            elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
         return Text(
           '$minutes:$seconds',
           style: const TextStyle(
@@ -1629,9 +1783,8 @@ class _BlinkingDotState extends State<_BlinkingDot>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _ctrl,
-      child: const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
+      child:
+          const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
     );
   }
 }
-
-

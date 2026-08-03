@@ -1,5 +1,6 @@
 // Tests for DashboardAppHeader (lib/shared/widgets/dashboard_appheader_widget.dart).
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/shared/widgets/dashboard_appheader_widget.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +11,7 @@ import '../../mock_user_provider.dart';
 Widget _wrap(Widget child) {
   return ChangeNotifierProvider<UserProvider>.value(
     value: MockUserProvider(mockUser: MockUser(role: 'PATIENT')),
-    child: MaterialApp(home: Scaffold(appBar: child as PreferredSizeWidget)),
+    child: MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(appBar: child as PreferredSizeWidget)),
   );
 }
 

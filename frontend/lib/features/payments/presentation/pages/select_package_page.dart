@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -81,6 +82,7 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
 
   // Build plan information section (title, description, features)
   Widget _buildPlanInfo(SubscriptionPlan plan, ThemeData theme) {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -93,7 +95,7 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
         ),
         const SizedBox(height: 8),
         Text(
-          plan.description,
+          plan.description(t),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha:0.7),
           ),

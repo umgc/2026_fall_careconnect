@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -40,15 +41,17 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
       return;
     }
     _billing = NativeBillingService(
+      t: AppLocalizations.of(context)!,
       userId: widget.userId ?? 0,
       onPurchaseSuccess: () {
         if (mounted) context.go('/subscription');
       },
       onPurchaseError: (error) {
         if (mounted) {
+          final t = AppLocalizations.of(context)!;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Purchase failed: $error'),
+              content: Text('${t.nativebilling_purchaseFailed}: $error'),
               backgroundColor: Colors.red,
             ),
           );
@@ -109,9 +112,10 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
       );
     } catch (e) {
       if (mounted) {
+        final t = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Purchase error: $e'),
+            content: Text('${t.nativebilling_purchaseError}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -122,9 +126,10 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Complete Your Purchase'),
+        title: Text(t.nativebilling_completeYourPurchase),
         backgroundColor: const Color(0xFF00A7C8),
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
@@ -134,6 +139,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
   }
 
   Widget _buildBody() {
+    final t = AppLocalizations.of(context)!;
     if (_loadingQuote) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -149,7 +155,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
               const SizedBox(height: 16),
               Text('Error: $_quoteError', textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _fetchBillingQuote, child: const Text('Retry')),
+              ElevatedButton(onPressed: _fetchBillingQuote, child: Text(t.nativebilling_retry)),
             ],
           ),
         ),
@@ -168,10 +174,10 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
           ],
           Text(
             kIsWeb
-                ? 'Complete Your Purchase'
+                ? t.nativebilling_completeYourPurchase
                 : Platform.isIOS
-                    ? 'Purchase via App Store'
-                    : 'Purchase via Google Play',
+                    ? t.nativebilling_viaAppStore
+                    : t.nativebilling_viaGooglePlay,
             style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -180,10 +186,10 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
           const SizedBox(height: 8),
           Text(
             kIsWeb
-                ? 'Your payment will be securely processed.'
+                ? t.nativebilling_processingWeb
                 : Platform.isIOS
-                    ? 'Your subscription will be managed through your Apple ID.'
-                    : 'Your subscription will be managed through your Google Play account.',
+                    ? t.nativebilling_processingAppStore
+                    : t.nativebilling_processingGooglePlay,
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
           const SizedBox(height: 24),
@@ -205,7 +211,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('Subscribe Now',
+                  : Text(t.nativebilling_subscribeNow,
                       style: TextStyle(fontSize: 16)),
             ),
           ),
@@ -214,7 +220,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
             width: double.infinity,
             child: TextButton(
               onPressed: () => context.go('/subscription'),
-              child: const Text('Cancel',
+              child: Text(t.cancel,
                   style: TextStyle(fontSize: 16, color: Colors.grey)),
             ),
           ),
@@ -224,6 +230,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
   }
 
   Widget _buildOrderSummary(BillingQuote quote) {
+    final t = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey[300]!),
@@ -234,7 +241,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Order Summary',
+          Text(t.nativebilling_orderSummary,
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -258,7 +265,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Taxes (${quote.taxPercentageDisplay})',
+              Text('${t.nativebilling_taxes} (${quote.taxPercentageDisplay})',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               Text(quote.taxDisplay,
                   style: TextStyle(fontSize: 14, color: Colors.grey[600])),
@@ -271,7 +278,7 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total',
+              Text(t.nativebilling_total,
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

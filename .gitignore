@@ -1,3 +1,16 @@
+# SWEN 670 Summer 2026
+
+.cursor
+
+# React UI Integration prototype
+node_modules/
+ui-integration/**/node_modules/
+ui-integration/**/dist/
+ui-integration/**/coverage/
+ui-integration/**/playwright-report/
+ui-integration/**/test-results/
+ui-integration/**/.vite/
+
 # macOS system files
 .DS_Store
 **/.DS_Store
@@ -7,6 +20,7 @@
 # macOS system files
 .DS_Store
 **/.DS_Store
+
 
 # Files and directories created by pub
 .dart_tool/
@@ -21,6 +35,16 @@ doc/api/
 
 # dotenv environment variables file
 .env*
+!.env.example
+!**/.env.example
+!**/.env.template
+!**/sampleDotEnv.txt
+
+# AWS local credential/config files
+.aws/
+**/.aws/
+**/aws-credentials
+**/aws-credentials.txt
 
 # Avoid committing generated Javascript files:
 *.dart.js
@@ -30,6 +54,8 @@ doc/api/
 # project includes source files written in JavaScript.
 *.js
 !frontend/web/amazon-chime-sdk.min.js
+!frontend/web/ui-preview/
+!frontend/web/ui-preview/**
 *.js_
 *.js.deps
 *.js.map
@@ -47,3 +73,7 @@ web-deploy.zip
 frontend-build.zip
 .vscode/
 frontend/web-build.zip
+ui-integration/mobile-app/dist/
+ui-integration/mobile-app/coverage/
+ui-integration/mobile-app/playwright-report/
+ui-integration/mobile-app/test-results/

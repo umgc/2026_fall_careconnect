@@ -9,6 +9,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,7 +102,9 @@ Widget _wrap(Widget child) {
   ));
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: MaterialApp(home: child),
+    child: MaterialApp(locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales, home: child),
   );
 }
 
@@ -117,6 +120,9 @@ Widget _wrapSized(Widget child) {
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
     child: MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: MediaQuery(
         data: const MediaQueryData(size: Size(800, 2000)),
         child: child,

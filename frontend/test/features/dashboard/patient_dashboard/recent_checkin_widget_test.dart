@@ -1,23 +1,60 @@
 // Tests for RecentCheckInsWidget from
 // lib/features/dashboard/patient_dashboard/widgets/recent_checkin_widget.dart.
 // Pure StatelessWidget with checkIns list param.
-// Provider.of<UserProvider> only used in button onPressed — not in build().
+// "Open Check-In" navigates to /virtual-checkin via GoRouter.
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/recent_checkin_widget.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 
 import '../../../mock_user_provider.dart';
 
-Widget _wrap({List<CheckIn> checkIns = const []}) {
+Widget _wrap({
+  List<CheckIn> checkIns = const [],
+  List<String>? pushedRoutes,
+}) {
   final provider = MockUserProvider(
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: 1),
   );
+  final routes = pushedRoutes;
+
+  if (routes != null) {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: RecentCheckInsWidget(checkIns: checkIns),
+          ),
+        ),
+        GoRoute(
+          path: '/virtual-checkin',
+          builder: (context, state) {
+            routes.add('/virtual-checkin');
+            return const Scaffold(body: Text('Virtual Check-In Page'));
+          },
+        ),
+      ],
+    );
+    return ChangeNotifierProvider<UserProvider>.value(
+      value: provider,
+      child: MaterialApp.router(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router),
+    );
+  }
+
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: Scaffold(
@@ -39,9 +76,9 @@ void main() {
       expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
-    testWidgets('shows Check In button', (tester) async {
+    testWidgets('shows Open Check-In button', (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.text('Check In'), findsOneWidget);
+      expect(find.text('Open Check-In'), findsOneWidget);
     });
 
     testWidgets('renders with empty list without crashing', (tester) async {
@@ -186,29 +223,15 @@ void main() {
     });
   });
 
-  group('RecentCheckInsWidget – Check In button onPressed', () {
-    testWidgets('shows success snackbar when API returns 200', (tester) async {
-      await http.runWithClient(
-        () async {
-          await tester.pumpWidget(_wrap());
-          await tester.tap(find.text('Check In'));
-          await tester.pumpAndSettle();
-          expect(find.text('Check-In successful!'), findsOneWidget);
-        },
-        () => MockClient((_) async => http.Response('', 200)),
-      );
-    });
-
-    testWidgets('shows failure snackbar when API returns 500', (tester) async {
-      await http.runWithClient(
-        () async {
-          await tester.pumpWidget(_wrap());
-          await tester.tap(find.text('Check In'));
-          await tester.pumpAndSettle();
-          expect(find.text('Check-In failed. Try again.'), findsOneWidget);
-        },
-        () => MockClient((_) async => http.Response('Server Error', 500)),
-      );
+  group('RecentCheckInsWidget – Open Check-In navigation', () {
+    testWidgets('tapping Open Check-In navigates to /virtual-checkin',
+        (tester) async {
+      final pushed = <String>[];
+      await tester.pumpWidget(_wrap(pushedRoutes: pushed));
+      await tester.tap(find.text('Open Check-In'));
+      await tester.pumpAndSettle();
+      expect(pushed, contains('/virtual-checkin'));
+      expect(find.text('Virtual Check-In Page'), findsOneWidget);
     });
   });
 }

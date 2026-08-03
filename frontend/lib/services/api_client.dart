@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../config/env_constant.dart';
+import '../features/telemetry/telemetry_error_handler.dart';
 import 'auth_token_manager.dart';
 import 'auth_service.dart';
 
@@ -86,6 +87,8 @@ class ApiClient {
             }
           }
 
+          _recordDioErrorTelemetry(err);
+
           // Normalize to a DioException that wraps ApiException for consistency
           handler.reject(_normalizeDioError(err));
         },
@@ -95,6 +98,36 @@ class ApiClient {
 
   static final ApiClient instance = ApiClient._internal();
   late final Dio _dio;
+
+  /// Replaces the underlying Dio HTTP adapter so tests can return canned
+  /// responses without touching the network. Also clears the connect/send/
+  /// receive timeouts so Dio does not schedule timeout timers, which would
+  /// otherwise remain pending under flutter_test's fake-async clock and fail
+  /// the "no pending timers" invariant. Tests that need a timeout to fire can
+  /// re-arm one via [debugSetTimeouts] afterward. Intended for tests only.
+  @visibleForTesting
+  void debugSetHttpClientAdapter(HttpClientAdapter adapter) {
+    _dio.httpClientAdapter = adapter;
+    _dio.options.connectTimeout = null;
+    _dio.options.receiveTimeout = null;
+    _dio.options.sendTimeout = null;
+  }
+
+  /// Current Dio HTTP adapter (tests only — for restore after overrides).
+  @visibleForTesting
+  HttpClientAdapter get debugHttpClientAdapter => _dio.httpClientAdapter;
+
+  /// Apply very short Dio timeouts (tests only).
+  @visibleForTesting
+  void debugSetTimeouts({
+    Duration connect = const Duration(milliseconds: 50),
+    Duration receive = const Duration(milliseconds: 50),
+    Duration send = const Duration(milliseconds: 50),
+  }) {
+    _dio.options.connectTimeout = connect;
+    _dio.options.receiveTimeout = receive;
+    _dio.options.sendTimeout = send;
+  }
 
   // --------------- Public generic methods ---------------
 
@@ -232,6 +265,55 @@ class ApiClient {
   }
 
   // --------------- Helpers ---------------
+
+  void _recordDioErrorTelemetry(DioException err) {
+    final endpoint = bucketEndpoint(err.requestOptions.path);
+    if (isTelemetryEndpoint(endpoint)) return;
+
+    final method = err.requestOptions.method.toUpperCase();
+
+    if (err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.receiveTimeout) {
+      recordHttpTimeout(
+        source: 'dio',
+        method: method,
+        endpoint: endpoint,
+        timeoutMs: _dioTimeoutMs(err),
+      );
+      return;
+    }
+
+    if (err.type == DioExceptionType.connectionError ||
+        err.error is SocketException) {
+      recordHttpNetworkError(
+        source: 'dio',
+        method: method,
+        endpoint: endpoint,
+        statusCode: err.response?.statusCode ?? 0,
+        errorType: err.error is SocketException ? 'socket' : 'connection',
+      );
+      return;
+    }
+
+    if (err.response == null &&
+        err.type == DioExceptionType.unknown &&
+        isNetworkError(err.error ?? err)) {
+      recordHttpNetworkError(
+        source: 'dio',
+        method: method,
+        endpoint: endpoint,
+        errorType: networkErrorType(err.error ?? err),
+      );
+    }
+  }
+
+  int? _dioTimeoutMs(DioException err) {
+    final timeout = err.requestOptions.connectTimeout ??
+        err.requestOptions.sendTimeout ??
+        err.requestOptions.receiveTimeout;
+    return timeout?.inMilliseconds;
+  }
 
   T _parse<T>(Response resp, T Function(dynamic json)? parser) {
     final code = resp.statusCode ?? 0;

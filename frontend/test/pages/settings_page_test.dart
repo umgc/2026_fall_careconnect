@@ -1457,6 +1457,25 @@ void main() {
   // 20. Widget structure verification
   // =========================================================================
   group('SettingsPage - Widget structure', () {
+    testWidgets(
+        'uses constrained responsive body without overflow on wider compact viewport',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(720, 480));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_buildApp(provider: _NullUserProvider()));
+      await _pumpReady(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SettingsPage), findsOneWidget);
+
+      final hasResponsiveBodyConstraint =
+          tester.widgetList<ConstrainedBox>(find.byType(ConstrainedBox)).any(
+                (widget) => widget.constraints.maxWidth == 700,
+              );
+      expect(hasResponsiveBodyConstraint, isTrue);
+    });
+
     testWidgets('has exactly one Padding wrapping ListView', (tester) async {
       await tester.pumpWidget(_buildApp(provider: _NullUserProvider()));
       await tester.pump();

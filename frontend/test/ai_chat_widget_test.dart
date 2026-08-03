@@ -14,7 +14,11 @@ void main() {
     ) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AIChat(role: 'patient', isModal: true)),
+          home: Scaffold(
+              body: AIChat(
+                  role: 'patient',
+                  isModal: true,
+                  mode: AiChatMode.legacyGeneral)),
         ),
       );
 
@@ -32,7 +36,11 @@ void main() {
     ) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AIChat(role: 'caregiver', isModal: true)),
+          home: Scaffold(
+              body: AIChat(
+                  role: 'caregiver',
+                  isModal: true,
+                  mode: AiChatMode.legacyGeneral)),
         ),
       );
 
@@ -48,17 +56,26 @@ void main() {
     testWidgets('Modal AI Chat shows Scaffold', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AIChat(role: 'patient', isModal: true)),
+          home: Scaffold(
+              body: AIChat(
+                  role: 'patient',
+                  isModal: true,
+                  mode: AiChatMode.legacyGeneral)),
         ),
       );
       await tester.pumpAndSettle();
       expect(find.byType(Scaffold), findsWidgets);
     });
 
-    testWidgets('Modal AI Chat shows Column layout', (WidgetTester tester) async {
+    testWidgets('Modal AI Chat shows Column layout',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AIChat(role: 'patient', isModal: true)),
+          home: Scaffold(
+              body: AIChat(
+                  role: 'patient',
+                  isModal: true,
+                  mode: AiChatMode.legacyGeneral)),
         ),
       );
       await tester.pumpAndSettle();
@@ -68,7 +85,11 @@ void main() {
     testWidgets('Modal AI Chat shows send icon', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AIChat(role: 'patient', isModal: true)),
+          home: Scaffold(
+              body: AIChat(
+                  role: 'patient',
+                  isModal: true,
+                  mode: AiChatMode.legacyGeneral)),
         ),
       );
       await tester.pumpAndSettle();
@@ -78,7 +99,11 @@ void main() {
     testWidgets('Modal AI Chat shows Row layout', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AIChat(role: 'caregiver', isModal: true)),
+          home: Scaffold(
+              body: AIChat(
+                  role: 'caregiver',
+                  isModal: true,
+                  mode: AiChatMode.legacyGeneral)),
         ),
       );
       await tester.pumpAndSettle();

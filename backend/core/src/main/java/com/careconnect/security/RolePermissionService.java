@@ -194,7 +194,7 @@ public class RolePermissionService {
 
     /**
      * Defines all permissions for the ADMIN role.
-     * Admins have FULL ACCESS - all 26 permissions.
+     * Admins have FULL ACCESS - all permissions.
      *
      * @return Set containing all possible permissions
      */
@@ -207,15 +207,13 @@ public class RolePermissionService {
      * Defines all permissions for the CAREGIVER role.
      * Caregivers can manage assigned patients but not system settings.
      *
-     * Total: 18 permissions (FINAL - correct count)
-     *
      * Can do:
      * - Create, view, and update assigned patients
      * - Create and manage tasks
      * - View and record health data
      * - View billing (but not manage subscriptions)
      * - View and export analytics/reports
-     * - Use AI features
+     * - Use AI features and review held Ask AI answers
      * - Manage devices
      *
      * Cannot do:
@@ -263,6 +261,7 @@ public class RolePermissionService {
 
             // AI and Devices
             Permission.USE_AI_FEATURES,
+            Permission.REVIEW_AI_HOLDS,
             Permission.MANAGE_DEVICES
         ));
     }
@@ -271,18 +270,20 @@ public class RolePermissionService {
      * Defines all permissions for the PATIENT role.
      * Patients can view and interact with their OWN data only.
      *
-     * Total: 6 permissions
+     * Total: 7 permissions
      *
      * Can do:
      * - View and complete own tasks
      * - View and record own health data
      * - Communicate with caregivers
+     * - Use Ask AI features on own records (USE_AI_FEATURES; scope enforced elsewhere)
      *
      * Cannot do:
      * - Create or delete tasks
      * - View other patients
      * - Access billing
      * - View analytics
+     * - Manage devices (caregiver/admin only)
      *
      * @return Set of patient permissions
      */
@@ -298,7 +299,10 @@ public class RolePermissionService {
 
             // Communication
             Permission.SEND_MESSAGES,
-            Permission.VIEW_MESSAGES
+            Permission.VIEW_MESSAGES,
+
+            // Ask AI (own patient scope enforced by RetrievalScopeService / gateway)
+            Permission.USE_AI_FEATURES
         ));
     }
 

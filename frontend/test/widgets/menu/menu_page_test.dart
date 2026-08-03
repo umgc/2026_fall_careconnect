@@ -13,9 +13,6 @@
 //     logged-in build    — menu scaffold renders with the Tools section header
 //                          and at least one tool tile.
 //
-//   Note: interactive callbacks (context.push, context.go) are NOT triggered
-//   in these tests, so GoRouter is only needed for the logged-in tree.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -34,7 +31,11 @@ import 'package:care_connect_app/widgets/menu/menu_page.dart';
 
 /// Wraps [child] with all providers and localization needed by MenuPage.
 /// [session] is set on the UserProvider when provided.
-Widget _buildApp({UserSession? session, Widget? child}) {
+Widget _buildApp({
+  UserSession? session,
+  Widget? child,
+  String locale = 'en',
+}) {
   final userProvider = UserProvider();
   if (session != null) userProvider.setUser(session);
 
@@ -48,6 +49,11 @@ Widget _buildApp({UserSession? session, Widget? child}) {
       GoRoute(path: '/login', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/profile', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/subscription', builder: (_, __) => const SizedBox()),
+      GoRoute(
+        path: '/voice',
+        builder: (_, __) =>
+            const Scaffold(body: Text('Voice Commands Entry Route')),
+      ),
     ],
   );
 
@@ -61,8 +67,22 @@ Widget _buildApp({UserSession? session, Widget? child}) {
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      locale: Locale(locale),
     ),
   );
+}
+
+AppLocalizations _localizationsFor(String locale) {
+  return lookupAppLocalizations(Locale(locale));
+}
+
+Future<void> _scrollUntilTextVisible(WidgetTester tester, String label) async {
+  await tester.scrollUntilVisible(
+    find.text(label, skipOffstage: false),
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pump();
 }
 
 // ---------------------------------------------------------------------------
@@ -113,6 +133,96 @@ void main() {
       );
     });
 
+    testWidgets('TC-S4-REG-SHELL-001 renders logged-in shell integration surfaces',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(session: caregiverSession));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Menu'), findsOneWidget);
+      expect(find.text('Care Giver'), findsOneWidget);
+      expect(find.text('Caregiver'), findsOneWidget);
+      expect(find.text('Tools'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
+      expect(find.text('Preferences', skipOffstage: false), findsOneWidget);
+    });
+
+    testWidgets(
+        'Team C smoke: renders logged-in menu integration surfaces - Spanish',
+        (tester) async {
+      await tester.pumpWidget(
+        _buildApp(session: caregiverSession, locale: 'es'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Menú'), findsOneWidget);
+      expect(find.text('Care Giver'), findsOneWidget);
+      expect(find.text('Cuidador'), findsOneWidget);
+      expect(find.text('Herramientas'), findsOneWidget);
+      expect(find.byType(Card), findsWidgets);
+      expect(find.byIcon(Icons.logout, skipOffstage: false), findsOneWidget);
+      expect(find.text('Preferencias', skipOffstage: false), findsOneWidget);
+    });
+
+    testWidgets('TC-C-REG-002 menu preserves localized Team C entries',
+        (tester) async {
+      for (final locale in const ['en', 'es']) {
+        final local = _localizationsFor(locale);
+
+        await tester.pumpWidget(
+          _buildApp(session: caregiverSession, locale: locale),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(local.menuTitle),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 expects the menu shell title to remain '
+              'available for locale "$locale".',
+        );
+        expect(
+          find.text(local.tools),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 expects the localized tools section to '
+              'remain available for locale "$locale".',
+        );
+
+        await _scrollUntilTextVisible(tester, local.voiceCommands);
+        expect(
+          find.text(local.voiceCommands),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 protects the localized voice command menu '
+              'entry for locale "$locale".',
+        );
+        expect(
+          find.byIcon(Icons.mic),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 expects the voice entry to keep its stable '
+              'microphone affordance for locale "$locale".',
+        );
+
+        await _scrollUntilTextVisible(tester, local.language);
+        expect(
+          find.text(local.preferences, skipOffstage: false),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 expects localized preferences to remain '
+              'reachable for locale "$locale".',
+        );
+        expect(
+          find.text(local.language, skipOffstage: false),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 protects the localized language control '
+              'for locale "$locale".',
+        );
+        expect(
+          find.byIcon(Icons.language, skipOffstage: false),
+          findsOneWidget,
+          reason: 'TC-C-REG-002 expects the language control to keep its '
+              'stable language icon for locale "$locale".',
+        );
+      }
+    });
+
     testWidgets('renders the Tools section header', (tester) async {
       // Verifies that the grid section header for Tools is present.
       await tester.pumpWidget(_buildApp(session: caregiverSession));
@@ -138,6 +248,30 @@ void main() {
 
       // Each tool tile is a Card inside an InkWell.
       expect(find.byType(Card), findsWidgets);
+    });
+
+    testWidgets('TC-S4-REG-SHELL-002 voice tile navigates to the voice route',
+        (tester) async {
+      final local = _localizationsFor('en');
+
+      await tester.pumpWidget(_buildApp(session: caregiverSession));
+      await tester.pumpAndSettle();
+
+      // Scroll until the Voice Commands tile is visible.
+      await tester.scrollUntilVisible(
+        find.text(local.voiceCommands, skipOffstage: false),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(local.voiceCommands), findsOneWidget);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+
+      await tester.tap(find.text(local.voiceCommands));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Voice Commands Entry Route'), findsOneWidget);
     });
   });
 }

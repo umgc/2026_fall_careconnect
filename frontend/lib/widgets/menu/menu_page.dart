@@ -46,6 +46,19 @@ class _MenuPageState extends State<MenuPage> {
     }
   }
 
+  String _translateRole(String role, AppLocalizations t) {
+    switch(role){
+      case('PATIENT'):
+        return t.roles_Patient;
+      case('CAREGIVER'):
+        return t.roles_Caregiver;
+      case('ADMIN'):
+        return t.roles_Admin;
+      default:
+        return role;
+    }
+  }
+
   void _trackMenuTap(_MenuItem item) {
     Telemetry.event('button_tap', {
       'screen': 'menu_page',
@@ -72,6 +85,12 @@ class _MenuPageState extends State<MenuPage> {
 
     final items = <_MenuItem>[
       _MenuItem(
+        icon: Icons.auto_awesome,
+        label: 'New UI (preview)',
+        route: '/ui-preview',
+        visibleFor: const {'PATIENT', 'CAREGIVER', 'ADMIN', 'FAMILY_LINK'},
+      ),
+      _MenuItem(
         icon: Icons.receipt_long,
         label: local.invoiceAssistant,
         route: '/invoice-assistant/dashboard',
@@ -86,7 +105,7 @@ class _MenuPageState extends State<MenuPage> {
       ),
       _MenuItem(
           icon: Icons.report,
-          label: 'Patient Report',
+          label: local.menupage_patientReportItem,
           route: '/patient-report',
           visibleFor: const {'PATIENT'},
           onTap: () {
@@ -109,7 +128,7 @@ class _MenuPageState extends State<MenuPage> {
       ),
       _MenuItem(
           icon: Icons.medication,
-          label: 'Medication Tracker',
+          label: local.menupage_medicationTrackerItem,
           onTap: () {
             Navigator.pop(context);
             Navigator.push(
@@ -163,21 +182,64 @@ class _MenuPageState extends State<MenuPage> {
         route: '/file-management',
       ),
       _MenuItem(
+        icon: Icons.mic,
+        label: local.voiceCommands,
+        route: '/voice',
+      ),
+      _MenuItem(
+        icon: Icons.wb_sunny_outlined,
+        label: local.dailyBrief,
+        route: '/stml/brief',
+        visibleFor: const {'PATIENT'},
+      ),
+      _MenuItem(
+        icon: Icons.manage_search,
+        label: local.stmlSearch,
+        route: '/stml/search',
+        visibleFor: const {'PATIENT'},
+      ),
+      _MenuItem(
+        icon: Icons.fact_check_outlined,
+        label: local.stmlCheckIn,
+        route: '/stml/checkin',
+        visibleFor: const {'CAREGIVER'},
+      ),
+      _MenuItem(
         icon: Icons.sensors,
         label: local.fallDetection,
         route: '/alertpage',
       ),
       _MenuItem(
-          icon: Icons.mail, label: 'USPS Mail Digest', route: '/usps-test'),
+          icon: Icons.mail, label: 'USPS ${local.menupage_mailDigestItem}', route: '/usps-test'),
       _MenuItem(
         icon: Icons.person_add,
-        label: 'Add Patient',
+        label: local.menupage_addPatientItem,
         route: '/add-patient',
         visibleFor: const {'CAREGIVER', 'ADMIN'},
       ),
       _MenuItem(
+        icon: Icons.insights_outlined,
+        label: 'Product Analytics',
+        route: '/admin/analytics',
+        visibleFor: const {'ADMIN'},
+        onTap: () {
+          Navigator.pop(context);
+          context.go('/admin/analytics');
+        },
+      ),
+      _MenuItem(
+        icon: Icons.people,
+        label: 'User Management',
+        route: '/admin/users',
+        visibleFor: const {'ADMIN'},
+        onTap: () {
+          Navigator.pop(context);
+          context.go('/admin/users');
+        },
+      ),
+      _MenuItem(
         icon: Icons.settings,
-        label: 'Settings',
+        label: local.menupage_settingsItem,
         route: '/settings',
         section: _Section.settings,
       ),
@@ -209,7 +271,7 @@ class _MenuPageState extends State<MenuPage> {
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                role,
+                _translateRole(role, local),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -273,7 +335,7 @@ class _MenuPageState extends State<MenuPage> {
                   final localeProvider = context.watch<LocaleProvider>();
                   final currentLabel = localeProvider.locale == null
                       ? local.systemDefault
-                      : LanguagePicker.labelFor(localeProvider.locale!);
+                      : LanguagePicker.labelFor(localeProvider.locale!, local);
 
                   final darkTile = ListTile(
                     leading: const Icon(Icons.brightness_6),

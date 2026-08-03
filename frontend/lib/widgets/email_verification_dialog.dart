@@ -17,6 +17,13 @@ class EmailVerificationDialog extends StatefulWidget {
     required this.email,
   });
 
+  /// Test seam: when true, [initState] skips the live WebSocket connection and
+  /// verification-poll timer so callers that show this dialog can be exercised
+  /// in widget tests without a real backend connection or a pending timer.
+  /// Defaults to false (production behavior is unchanged).
+  @visibleForTesting
+  static bool debugDisableRealtime = false;
+
   @override
   State<EmailVerificationDialog> createState() =>
       _EmailVerificationDialogState();
@@ -35,8 +42,10 @@ class _EmailVerificationDialogState extends State<EmailVerificationDialog> {
   @override
   void initState() {
     super.initState();
-    _connectWebSocket();
-    _startVerificationPolling();
+    if (!EmailVerificationDialog.debugDisableRealtime) {
+      _connectWebSocket();
+      _startVerificationPolling();
+    }
   }
 
   @override

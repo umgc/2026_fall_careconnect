@@ -166,6 +166,42 @@ public class NotificationService {
     }
 
     /**
+     * Send a vital alert to a specific care-circle recipient.
+     */
+    @Transactional(readOnly = true)
+    public List<NotificationResponse> sendVitalAlertToRecipient(
+            Long recipientUserId,
+            String patientDisplayName,
+            String vitalType,
+            String vitalValue,
+            String alertLevel
+    ) {
+        String normalizedPatientName = (patientDisplayName == null || patientDisplayName.isBlank())
+                ? "A patient"
+                : patientDisplayName.trim();
+        String title = "Wearable Vital Alert";
+        String body = String.format(
+                "%s reported %s at %s (%s severity).",
+                normalizedPatientName,
+                vitalType,
+                vitalValue,
+                alertLevel
+        );
+        return sendNotificationToUser(
+                recipientUserId,
+                title,
+                body,
+                "VITAL_ALERT",
+                Map.of(
+                        "patientName", normalizedPatientName,
+                        "metricType", vitalType,
+                        "measuredValue", vitalValue,
+                        "alertLevel", alertLevel
+                )
+        );
+    }
+
+    /**
      * Send medication reminder
      */
     public CompletableFuture<List<NotificationResponse>> sendMedicationReminder(Long patientId, String medicationName, String dosage, String scheduledTime) {

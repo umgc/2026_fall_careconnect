@@ -9,6 +9,11 @@ import com.careconnect.repository.evv.EvvOfflineQueueRepository;
 import com.careconnect.repository.evv.EvvRecordRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.model.schedule.ScheduledVisit;
+import com.careconnect.service.VisitSummaryService;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,13 +22,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
-
 @Service @RequiredArgsConstructor
 public class EvvService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EvvService.class);
+
     private final EvvRecordRepository recordRepository;
     private final EvvCorrectionRepository correctionRepository;
     private final EvvOfflineQueueRepository offlineQueueRepository;
@@ -32,6 +34,7 @@ public class EvvService {
     private final EvvLocationService locationService;
     private final AuditLogger audit;
     private final ScheduledVisitRepository scheduledVisitRepository;
+    private final VisitSummaryService visitSummaryService;
 
     /**
      * Build audit event details map with location information from EVV record
@@ -63,6 +66,62 @@ public class EvvService {
         return details;
     }
 
+    /**
+    *Validates EVV location fields per federal EVV quality guardrails (Issue #62).
+    *Enforces:
+    * - GPS coordinates present when locationType is GPS
+    * - GPS accuracy within acceptable threshold (<500 meters)
+    * - noGpsReason required when locationType is not GPS
+    * - Manual address required when locationType is MANUAL
+    */
+    private void validateLocationGuardrails(
+        String locationSource,
+        Double lat,
+        Double lng,
+        Double accuracyM,
+        String noGpsReason,
+        String manualAddress,
+        String role ) 
+        {
+
+            if (locationSource == null) return;
+
+            switch (locationSource.toUpperCase()) {
+                case "GPS" -> {
+                    if (lat == null || lng == null) {
+                        throw new IllegalArgumentException(
+                            role + " location type is GPS but coordinates are missing. " + "latitude and longitude are required when using GPS."
+                        );
+                    }
+
+                    if (accuracyM != null && accuracyM > 500.0) {
+                        throw new IllegalArgumentException(
+                            role + " GPS accuracy is " + accuracyM + "m which exceeds the 500m threshold required for EVV compliance. Please retry GPS or use patient address."
+                        );
+                    }
+                }
+
+                case "PATIENT_ADDRESS", "MANUAL" -> {
+                    if (noGpsReason == null || noGpsReason.isBlank()) {
+                        throw new IllegalArgumentException(
+                            role + " location type is " + locationSource + " but no GPS reason was provided. Federal EVV regulations require a reason when GPS is not used."
+                        );
+                    }
+
+                    if ("MANUAL".equalsIgnoreCase(locationSource) && (manualAddress == null || manualAddress.isBlank())) {
+                        throw new IllegalArgumentException(
+                            role + " location type is MANUAL but no address was provided. A manual address is required when using manual location entry."
+                        );   
+                    }
+                }
+
+                default -> throw new IllegalArgumentException(
+                    "Unknown " + role + " location source: " + locationSource + ". Valid values are: GPS, PATIENT_ADDRESS, MANUAL."
+                );
+            }
+        }
+
+
     @Transactional
     public EvvRecord createRecord(EvvRecordRequestDto req, Long actorId) {
         var patient = patientRepository.findById(req.getPatientId())
@@ -75,6 +134,27 @@ public class EvvService {
         String caregiverName = userRepository.findById(req.getCaregiverId())
                 .map(u -> u.getName() != null ? u.getName() : "Caregiver #" + req.getCaregiverId())
                 .orElse("Caregiver #" + req.getCaregiverId());
+        
+        // EVV Quality Guardrail (Issue #62) - validate location fields before persisting
+        validateLocationGuardrails(
+            req.getCheckinLocationSource(),
+            req.getCheckinLocationLat(),
+            req.getCheckinLocationLng(),
+            req.getCheckinAccuracyM(),
+            req.getCheckinNoGpsReason(),
+            req.getCheckinManualAddress(),
+            "Check-in"
+        );
+
+        validateLocationGuardrails(
+            req.getCheckoutLocationSource(),
+            req.getCheckoutLocationLat(),
+            req.getCheckoutLocationLng(),
+            req.getCheckoutAccuracyM(),
+            req.getCheckoutNoGpsReason(),
+            req.getCheckoutManualAddress(),
+            "Check-out"
+        );
         
         var rec = EvvRecord.builder()
                 .patient(patient)
@@ -118,6 +198,13 @@ public class EvvService {
                     ScheduledVisit scheduledVisit = optionalVisit.get();
                     scheduledVisit.markCompleted();
                     scheduledVisitRepository.save(scheduledVisit);
+                    try {
+                        visitSummaryService.generateAndStoreSummary(scheduledVisit.getId(), null);
+                    } catch (Exception summaryEx) {
+                        log.warn(
+                                "Visit summary generation failed for visit {}: {}",
+                                scheduledVisit.getId(), summaryEx.getMessage(), summaryEx);
+                    }
                 } else {
                     // scheduled visit not found — ignore silently
                 }
@@ -186,14 +273,14 @@ public class EvvService {
                         checkinLocationReq.setCoords(coords);
                         locationService.saveLocation(checkinLocationReq);
                     } else {
-                        System.err.println("Warning: GPS check-in location requested but coordinates not provided");
+                        log.warn("[EVV] GPS check-in location requested but coordinates not provided for record {}", record.getId());
                     }
                 } else {
                     // PATIENT_ADDRESS or MANUAL - no GPS coords needed
                     locationService.saveLocation(checkinLocationReq);
                 }
             } catch (Exception e) {
-                System.err.println("Warning: Failed to save check-in location: " + e.getMessage());
+                log.error("[EVV] Failed to save check-in location for record {}: {}", record.getId(), e.getMessage());
             }
         }
         
@@ -221,14 +308,14 @@ public class EvvService {
                         checkoutLocationReq.setCoords(coords);
                         locationService.saveLocation(checkoutLocationReq);
                     } else {
-                        System.err.println("Warning: GPS check-out location requested but coordinates not provided");
+                        log.warn("[EVV] GPS check-out location requested but coordinates not provided for record {}", record.getId());
                     }
                 } else {
                     // PATIENT_ADDRESS or MANUAL
                     locationService.saveLocation(checkoutLocationReq);
                 }
             } catch (Exception e) {
-                System.err.println("Warning: Failed to save check-out location: " + e.getMessage());
+                log.error("[EVV] Failed to save check-out location for record {}: {}", record.getId(), e.getMessage());
             }
         }
     }
@@ -270,6 +357,27 @@ public class EvvService {
         
         // Build individual name from patient data
         String individualName = patient.getFirstName() + " " + patient.getLastName();
+
+        // EVV Quality Guardrail (Issue #62) - validate location fields before persisting
+        validateLocationGuardrails(
+            req.getCheckinLocationSource(),
+            req.getCheckinLocationLat(),
+            req.getCheckinLocationLng(),
+            req.getCheckinAccuracyM(),
+            req.getCheckinNoGpsReason(),
+            req.getCheckinManualAddress(),
+            "Check-in"
+        );
+
+        validateLocationGuardrails(
+            req.getCheckoutLocationSource(),
+            req.getCheckoutLocationLat(),
+            req.getCheckoutLocationLng(),
+            req.getCheckoutAccuracyM(),
+            req.getCheckoutNoGpsReason(),
+            req.getCheckoutManualAddress(),
+            "Check-out"
+        );
         
         var rec = EvvRecord.builder()
                 .patient(patient)
