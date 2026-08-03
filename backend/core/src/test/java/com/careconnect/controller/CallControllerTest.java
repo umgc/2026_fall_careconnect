@@ -99,6 +99,7 @@ class CallControllerTest {
     @MockitoBean private CallRecordingService callRecordingService;
     @MockitoBean private CallAttendeeService callAttendeeService;
     @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
+    @MockitoBean private com.careconnect.service.consent.CaregiverVisibilityService caregiverVisibilityService;
     @MockitoBean private FamilyMemberService familyMemberService;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private CallNotificationHandler callNotificationHandler;
@@ -2048,6 +2049,10 @@ class CallControllerTest {
             summaryEntity.setStatus("GENERATED");
             when(callSummaryService.getLatestSummaryEntity(CALL_ID))
                     .thenReturn(Optional.of(summaryEntity));
+            // Summaries default to caregiverVisibility='on_consent'; this test exercises the
+            // durable-access path, so let the consent gate pass through (NONE bypasses it).
+            when(caregiverVisibilityService.getStatus(anyLong(), anyLong()))
+                    .thenReturn(com.careconnect.service.consent.CaregiverVisibilityCheck.none());
             doNothing().when(callSessionService)
                     .requirePatientEntityAccess(caregiverUser, 77L);
             when(callSummaryService.getLatestSummary(CALL_ID))

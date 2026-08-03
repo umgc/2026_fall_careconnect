@@ -16,4 +16,6 @@ public interface USPSDigestCacheRepo extends JpaRepository<USPSDigestCache, Long
             Instant now);
 
     List<USPSDigestCache> findByUserIdOrderByDigestDateDesc(String userId);
+
+    void deleteByUserId(String userId);
 }

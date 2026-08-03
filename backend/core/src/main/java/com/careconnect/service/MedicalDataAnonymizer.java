@@ -206,11 +206,18 @@ public class MedicalDataAnonymizer {
      */
     public boolean containsPHI(String content) {
         if (content == null) return false;
-        
+
         return NAME_PATTERN.matcher(content).find() ||
                SSN_PATTERN.matcher(content).find() ||
                PHONE_PATTERN.matcher(content).find() ||
                EMAIL_PATTERN.matcher(content).find() ||
                ADDRESS_PATTERN.matcher(content).find();
+    }
+
+    /** True for a raw SSN (NNN-NN-NNNN) — the one identifier regex catches cleanly enough to gate
+     *  generated output on. Broad PHI matching for anonymisation lives in {@link #containsPHI}. */
+    public boolean containsRawSsn(String content) {
+        if (content == null) return false;
+        return SSN_PATTERN.matcher(content).find();
     }
 }

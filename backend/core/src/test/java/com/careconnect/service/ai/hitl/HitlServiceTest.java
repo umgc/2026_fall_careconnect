@@ -667,4 +667,383 @@ class HitlServiceTest {
         user.setRole(Role.CAREGIVER);
         return user;
     }
+
+    @Test
+    @DisplayName("findOpenHold returns match and rejects blank args")
+    void findOpenHold_returnsMatchAndRejectsBlankArgs() {
+        assertThat(service.findOpenHold(null, "ASK_AI", "key")).isEmpty();
+        assertThat(service.findOpenHold(42L, " ", "key")).isEmpty();
+        assertThat(service.findOpenHold(42L, "ASK_AI", "")).isEmpty();
+
+        final AiHeldItem existing = pendingItem();
+        when(heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                eq(42L), eq("ASK_AI"), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .thenReturn(Optional.of(existing));
+
+        assertThat(service.findOpenHold(42L, "ASK_AI", "stable-key")).contains(existing);
+    }
+
+    @Test
+    @DisplayName("createHold reuses an existing open hold")
+    void createHold_reusesExistingOpenHold() {
+        final AiHeldItem existing = pendingItem();
+        when(heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .thenReturn(Optional.of(existing));
+
+        final AiHeldItem result = service.createHold(
+                new SafetyInput(
+                        "q",
+                        "draft",
+                        List.of(),
+                        42L,
+                        7L,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "ASK_AI",
+                        "en-US",
+                        true,
+                        List.of("X")),
+                SafetyOutcome.holdTier2(List.of("X"), List.of()),
+                List.of());
+
+        assertThat(result).isSameAs(existing);
+        verify(openHoldWriter, never()).insertOpenHold(any());
+    }
+
+    @Test
+    @DisplayName("createHold rejects null patientId")
+    void createHold_nullPatientId_throws() {
+        assertThatThrownBy(() -> service.createHold(
+                        new SafetyInput(
+                                "q",
+                                "draft",
+                                List.of(),
+                                null,
+                                7L,
+                                null,
+                                null,
+                                null,
+                                "ASK_AI",
+                                "en-US",
+                                true,
+                                List.of()),
+                        SafetyOutcome.holdTier2(List.of(), List.of()),
+                        List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("patientId");
+    }
+
+    @Test
+    @DisplayName("getStatus returns withheld message for REJECTED")
+    void getStatus_rejected_withholdsMessage() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setStatus(AiHeldItemStatus.REJECTED);
+        item.setDeliveryStatus("WITHHELD_PERMANENTLY");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), requester());
+
+        assertThat(status.status()).isEqualTo(AiHeldItemStatus.REJECTED.name());
+        assertThat(status.deliveryStatus()).isEqualTo("WITHHELD_PERMANENTLY");
+        assertThat(status.message()).isEqualTo(HitlService.REJECTED_MESSAGE);
+        assertThat(status.answer()).isNull();
+    }
+
+    @Test
+    @DisplayName("getStatus allows admin without patient link")
+    void getStatus_adminBypassesLinkCheck() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        final User admin = new User();
+        admin.setId(1L);
+        admin.setRole(Role.ADMIN);
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), admin);
+
+        assertThat(status.status()).isEqualTo(AiHeldItemStatus.PENDING_REVIEW.name());
+        verify(caregiverPatientLinkService, never()).hasAccessToPatient(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("getStatus allows family member with access")
+    void getStatus_familyMemberWithAccess_allowed() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        final User family = new User();
+        family.setId(88L);
+        family.setRole(Role.FAMILY_MEMBER);
+        when(familyMemberService.hasAccessToPatient(eq(88L), eq(7L))).thenReturn(true);
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), family);
+
+        assertThat(status.status()).isEqualTo(AiHeldItemStatus.PENDING_REVIEW.name());
+    }
+
+    @Test
+    @DisplayName("listQueue for admin returns all pending holds")
+    void listQueue_adminSeesAllPending() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW))
+                .thenReturn(List.of(item));
+        final User admin = new User();
+        admin.setId(1L);
+        admin.setRole(Role.ADMIN);
+
+        final List<HitlQueueItem> queue = service.listQueue(admin);
+
+        assertThat(queue).hasSize(1);
+        assertThat(queue.get(0).heldItemId()).isEqualTo(item.getId());
+    }
+
+    @Test
+    @DisplayName("reject with blank reason uses UNSPECIFIED")
+    void reject_blankReason_usesUnspecified() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(heldItemRepository.updateOutcomeIfStatus(
+                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                .thenReturn(1);
+
+        service.reject(item.getId(), reviewer(), "  ");
+
+        verify(askAuditService).appendStandaloneEvent(
+                eq(item.getAuditId()),
+                eq(AiAskAuditService.HITL_REJECTED),
+                eq(99L),
+                argThat(payload -> "UNSPECIFIED".equals(payload.get("reasonCode"))));
+    }
+
+    @Test
+    @DisplayName("getStatus for delivered returns answer and empty citations on bad JSON")
+    void getStatus_delivered_withBadCitationsJson() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setStatus(AiHeldItemStatus.DELIVERED);
+        item.setDeliveryStatus("DELIVERED");
+        item.setFinalAnswer("Released answer");
+        item.setCitationsJson("not-json");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), requester());
+
+        assertThat(status.deliveryStatus()).isEqualTo("DELIVERED");
+        assertThat(status.answer()).isEqualTo("Released answer");
+        assertThat(status.citations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getStatus rejects null caller")
+    void getStatus_nullCaller_unauthorized() {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.getStatus(item.getId(), null))
+                .isInstanceOf(UnauthorizedException.class);
+    }
+
+    @Test
+    @DisplayName("listQueue returns empty when caregiver has no linked patients")
+    void listQueue_caregiverWithNoLinks_empty() throws Exception {
+        when(patientRepository.findIdsLinkedToCaregiver(eq(99L), any()))
+                .thenReturn(List.of());
+
+        assertThat(service.listQueue(reviewer())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("createHold truncates long query and defaults null draft/citations")
+    void createHold_truncatesLongQueryAndDefaults() {
+        when(heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .thenReturn(Optional.empty());
+        when(openHoldWriter.insertOpenHold(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        final String longQuery = "Q".repeat(2500);
+        final AiHeldItem saved = service.createHold(
+                new SafetyInput(
+                        longQuery,
+                        null,
+                        null,
+                        42L,
+                        7L,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        null,
+                        "en-US",
+                        true,
+                        List.of("X")),
+                SafetyOutcome.holdTier2(List.of("X"), List.of()),
+                null);
+
+        assertThat(saved.getQueryText()).hasSize(2000);
+        assertThat(saved.getDraftAnswer()).isEmpty();
+        assertThat(saved.getSourceSurface()).isEqualTo("ASK_AI");
+        assertThat(saved.getCitationsJson()).isEqualTo("[]");
+    }
+
+    @Test
+    @DisplayName("expire skips Ask AI ledger when auditId is null")
+    void getStatus_expireWithNullAuditId_skipsLedger() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setAuditId(null);
+        item.setExpiresAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(heldItemRepository.expireIfPending(eq(item.getId()), any())).thenReturn(1);
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), requester());
+
+        assertThat(status.status()).isEqualTo(AiHeldItemStatus.EXPIRED.name());
+        verify(askAuditService, never()).appendStandaloneEvent(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("reject on non-pending item conflicts")
+    void reject_nonPending_conflicts() {
+        final AiHeldItem item = pendingItem();
+        item.setStatus(AiHeldItemStatus.REJECTED);
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.reject(item.getId(), reviewer(), "late"))
+                .isInstanceOf(HitlConflictException.class);
+    }
+
+    @Test
+    @DisplayName("reject rejects non-reviewer roles")
+    void reject_patientRole_unauthorized() {
+        assertThatThrownBy(() -> service.reject(UUID.randomUUID(), requester(), "nope"))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("Reviewer");
+    }
+
+    @Test
+    @DisplayName("getStatus APPROVED_AS_IS falls back to draft answer")
+    void getStatus_approvedAsIs_usesDraft() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setStatus(AiHeldItemStatus.APPROVED_AS_IS);
+        item.setDeliveryStatus("DELIVERED");
+        item.setFinalAnswer(null);
+        item.setDraftAnswer("Draft kept");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), requester());
+
+        assertThat(status.deliveryStatus()).isEqualTo("DELIVERED");
+        assertThat(status.answer()).isEqualTo("Draft kept");
+    }
+
+    @Test
+    @DisplayName("createHold blank query stores null query text")
+    void createHold_blankQuery_nullQueryText() {
+        when(heldItemRepository
+                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .thenReturn(Optional.empty());
+        when(openHoldWriter.insertOpenHold(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        final AiHeldItem saved = service.createHold(
+                new SafetyInput(
+                        "   ",
+                        "draft",
+                        List.of(),
+                        42L,
+                        7L,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "ASK_AI",
+                        "en-US",
+                        true,
+                        List.of()),
+                SafetyOutcome.holdTier2(List.of(), List.of()),
+                List.of());
+
+        assertThat(saved.getQueryText()).isNull();
+    }
+
+    @Test
+    @DisplayName("listQueue truncates long query previews")
+    void listQueue_longQuery_previewTruncated() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setQueryText("P".repeat(200));
+        when(heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW))
+                .thenReturn(List.of(item));
+        final User admin = new User();
+        admin.setId(1L);
+        admin.setRole(Role.ADMIN);
+
+        final List<HitlQueueItem> queue = service.listQueue(admin);
+
+        assertThat(queue.get(0).queryPreview()).hasSize(120);
+    }
+
+    @Test
+    @DisplayName("reject truncates very long review notes")
+    void reject_longReason_truncatesNotes() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(heldItemRepository.updateOutcomeIfStatus(
+                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                .thenReturn(1);
+
+        service.reject(item.getId(), reviewer(), "N".repeat(600));
+
+        final ArgumentCaptor<String> notes = ArgumentCaptor.forClass(String.class);
+        verify(heldItemRepository).updateOutcomeIfStatus(
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), notes.capture(), any());
+        assertThat(notes.getValue()).hasSize(500);
+    }
+
+    @Test
+    @DisplayName("getStatus blank citations JSON returns empty list")
+    void getStatus_blankCitationsJson_emptyList() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setStatus(AiHeldItemStatus.DELIVERED);
+        item.setDeliveryStatus("DELIVERED");
+        item.setFinalAnswer("ok");
+        item.setCitationsJson("   ");
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        final HitlStatusResponse status = service.getStatus(item.getId(), requester());
+
+        assertThat(status.citations()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("listQueue blank query preview is null")
+    void listQueue_blankQuery_previewNull() throws Exception {
+        final AiHeldItem item = pendingItem();
+        item.setQueryText("  ");
+        when(heldItemRepository.findByStatusOrderByCreatedAtAsc(AiHeldItemStatus.PENDING_REVIEW))
+                .thenReturn(List.of(item));
+        final User admin = new User();
+        admin.setId(1L);
+        admin.setRole(Role.ADMIN);
+
+        final List<HitlQueueItem> queue = service.listQueue(admin);
+
+        assertThat(queue.get(0).queryPreview()).isNull();
+    }
+
+    @Test
+    @DisplayName("release by admin bypasses caregiver link check")
+    void release_adminBypassesPatientLink() throws Exception {
+        final AiHeldItem item = pendingItem();
+        when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(heldItemRepository.updateOutcomeIfStatus(
+                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                .thenReturn(1);
+        final User admin = new User();
+        admin.setId(1L);
+        admin.setRole(Role.ADMIN);
+
+        final HitlDetailResponse detail = service.release(item.getId(), admin, null, null);
+
+        assertThat(detail.deliveryStatus()).isEqualTo("DELIVERED");
+        verify(caregiverPatientLinkService, never()).hasAccessToPatient(anyLong(), anyLong());
+    }
 }

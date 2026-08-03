@@ -2,6 +2,8 @@ package com.careconnect.service.ai.retrieval;
 
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
+import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.FamilyMemberLinkRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Permission;
@@ -44,6 +46,12 @@ class RetrievalScopeServiceTest {
     private static final Long OTHER_PATIENT_ENTITY_ID = 99L;
 
     @Mock
+    private CaregiverPatientLinkRepository caregiverPatientLinkRepository;
+
+    @Mock
+    private FamilyMemberLinkRepository familyMemberLinkRepository;
+
+    @Mock
     private PatientRepository patientRepository;
 
     @Mock
@@ -72,7 +80,7 @@ class RetrievalScopeServiceTest {
     @BeforeEach
     void setUp() {
         service = new RetrievalScopeService(
-                new AuthorizationService(),
+                new AuthorizationService(caregiverPatientLinkRepository, familyMemberLinkRepository),
                 patientRepository,
                 caregiverPatientLinkService,
                 familyMemberService,

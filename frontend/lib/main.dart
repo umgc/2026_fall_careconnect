@@ -26,6 +26,7 @@ import 'features/telemetry/telemetry.dart';
 import 'features/telemetry/telemetry_error_handler.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
+import 'providers/confirmation_provider.dart';
 
 Future<void> main() async {
   // Global error handling for unhandled Dart errors
@@ -34,8 +35,13 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
 
-      // Load environment variables from .env file
-      await dotenv.load(fileName: ".env");
+      // Load env from committed .env.example so clean checkouts can build
+      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      try {
+        await dotenv.load(fileName: ".env");
+      } catch (_) {
+        await dotenv.load(fileName: ".env.example");
+      }
 
       // Performance optimization: Set preferred orientations
       await SystemChrome.setPreferredOrientations([
@@ -73,6 +79,7 @@ Future<void> main() async {
             ChangeNotifierProvider.value(value: shortcutProvider),
             ChangeNotifierProvider.value(value: localeProvider),
             ChangeNotifierProvider(create: (_) => TaskTypeManager()),
+            ChangeNotifierProvider(create: (_) => ConfirmationProvider()),
           ],
           child: CareConnectAppWithErrorBoundary(),
         ),

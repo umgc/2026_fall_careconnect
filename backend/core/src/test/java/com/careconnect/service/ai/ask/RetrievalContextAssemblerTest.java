@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -207,5 +208,77 @@ class RetrievalContextAssemblerTest {
         assertThat(RetrievalContextAssembler.selectNewestDated(List.of(left, right)))
                 .extracting(RankedChunk::citationRef)
                 .containsExactly("C1");
+    }
+
+    @Test
+    void assemble_shrinksOversizedQuestionToFitBudget() {
+        final String hugeQuery = "Q".repeat(5000);
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "Started metformin", null, "auto", 0.1d, 1, 1, "C1");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble(hugeQuery, List.of(chunk), 200, 800);
+
+        assertThat(ctx.usedChunks()).hasSize(1);
+        assertThat(ctx.userPrompt().length()).isLessThan(hugeQuery.length() + 400);
+    }
+
+    @Test
+    void assemble_parsesOffsetLocalDateAndDateOnlyOccurredAt() {
+        final RankedChunk offset = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "BP 120/80",
+                "{\"occurredAt\":\"2026-07-10T08:00:00-04:00\"}",
+                "auto", 0.1d, 1, 1, "C1");
+        final RankedChunk local = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "10",
+                "BP 118/76",
+                "{\"generatedAt\":\"2026-07-11T12:00:00\"}",
+                "auto", 0.1d, 1, 1, "C2");
+        final RankedChunk dateOnly = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.USPS_MAIL, "11",
+                "Pharmacy mail",
+                "{\"digestDate\":\"2026-07-12\"}",
+                "auto", 0.1d, 1, 1, "C3");
+        final RankedChunk bad = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "12",
+                "ignored",
+                "{\"occurredAt\":\"not-a-date\"}",
+                "auto", 0.1d, 1, 1, "C4");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble(
+                        "latest bp", List.of(offset, local, dateOnly, bad));
+
+        assertThat(ctx.userPrompt()).contains("2026-07");
+        assertThat(RetrievalContextAssembler.selectNewestDated(
+                        List.of(offset, local, dateOnly, bad)))
+                .extracting(RankedChunk::citationRef)
+                .containsExactly("C3");
+    }
+
+    @Test
+    void assemble_zeroBudgetYieldsNoRecords() {
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(), 1L, RetrievalRecordType.CALL_SUMMARY, "9",
+                "Started metformin", null, "auto", 0.1d, 1, 1, "C1");
+
+        final RetrievalContextAssembler.GroundedContext ctx =
+                RetrievalContextAssembler.assemble("What meds?", List.of(chunk), 120, 0);
+
+        assertThat(ctx.usedChunks()).isEmpty();
+    }
+
+    @Test
+    void groundedContext_fiveArgConstructor_defaultsRequiresDatedFalse() {
+        final RetrievalContextAssembler.GroundedContext ctx =
+                new RetrievalContextAssembler.GroundedContext(
+                        "sys",
+                        "user",
+                        List.of(),
+                        Map.of(),
+                        Map.of());
+        assertThat(ctx.requiresDatedEvidence()).isFalse();
     }
 }
