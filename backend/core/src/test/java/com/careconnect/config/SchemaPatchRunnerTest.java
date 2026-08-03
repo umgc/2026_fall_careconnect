@@ -41,6 +41,73 @@ class SchemaPatchRunnerTest {
     }
 
     @Test
+    void applyCallSessionPatches_ensureUniqueIndexesForOnConflict() throws Exception {
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        assertThat(source).contains("idx_call_sessions_call_id_uidx");
+        assertThat(source).contains("idx_call_participants_session_user_uidx");
+    }
+
+    @Test
+    void isIdempotentAlreadyApplied_doesNotSkipMissingTypeOnCreate() {
+        assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
+                "ERROR: type \"vector\" does not exist",
+                "CREATE EXTENSION IF NOT EXISTS vector"))
+                .isFalse();
+        assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
+                "ERROR: type \"vector\" does not exist",
+                "CREATE TABLE IF NOT EXISTS retrieval_index_chunk (embedding vector(1536))"))
+                .isFalse();
+        assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
+                "ERROR: column \"embedding\" does not exist",
+                "CREATE INDEX idx_retrieval_chunk_embedding ON retrieval_index_chunk (embedding)"))
+                .isFalse();
+    }
+
+    @Test
+    void isIdempotentAlreadyApplied_skipsOptionalDropOrRenameOfMissingObject() {
+        assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
+                "ERROR: column \"stripe_customer_id\" does not exist",
+                "ALTER TABLE users RENAME COLUMN stripe_customer_id TO payment_customer_id"))
+                .isTrue();
+        assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
+                "ERROR: constraint \"user_files_file_category_check\" does not exist",
+                "ALTER TABLE user_files DROP CONSTRAINT user_files_file_category_check"))
+                .isTrue();
+        assertThat(SchemaPatchRunner.isIdempotentAlreadyApplied(
+                "ERROR: relation \"foo\" already exists",
+                "CREATE TABLE foo (id INT)"))
+                .isTrue();
+    }
+
+    @Test
+    void applyRetrieval_includesDedicatedEmbeddingColumnRepair() throws Exception {
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        final String applyRetrievalBody = source.substring(
+                source.indexOf("private void applyRetrievalIndexChunkPatches()"),
+                source.indexOf("private void applyUspsMailpiecePatches()"));
+        assertThat(applyRetrievalBody).contains(
+                "V2607071921a2 – ensure retrieval_index_chunk.embedding column");
+        assertThat(applyRetrievalBody).contains(
+                "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL");
+        assertThat(source).contains("verifyRetrievalEmbeddingColumnPresent();");
+        assertThat(source).contains("isIdempotentAlreadyApplied");
+        assertThat(source).doesNotContain(
+                "msg.contains(\"42P16\") || msg.contains(\"already\") || msg.contains(\"does not exist\")");
+    }
+
+    @Test
     void run_appliesConcurrentRetrievalIndexesBeforeRequiredSchemaVerify() throws Exception {
         // Contract: verifyRequiredRetrievalSchema expects GIN/ivfflat/source-identity indexes
         // that are only created in ensureRetrievalConcurrentIndexes after the migration unlock.
@@ -53,14 +120,18 @@ class SchemaPatchRunnerTest {
                         "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final int unlockIndexes = source.indexOf("ensureRetrievalConcurrentIndexes();");
+        final int embeddingVerify = source.indexOf(
+                "verifyRetrievalEmbeddingColumnPresent();", unlockIndexes);
         final int postUnlockVerify = source.indexOf(
                 "verifyRequiredRetrievalSchema();", unlockIndexes);
         final String applyRetrievalBody = source.substring(
                 source.indexOf("private void applyRetrievalIndexChunkPatches()"),
                 source.indexOf("private void applyUspsMailpiecePatches()"));
         assertThat(unlockIndexes).isGreaterThan(0);
-        assertThat(postUnlockVerify).isGreaterThan(unlockIndexes);
+        assertThat(embeddingVerify).isGreaterThan(unlockIndexes);
+        assertThat(postUnlockVerify).isGreaterThan(embeddingVerify);
         assertThat(applyRetrievalBody).doesNotContain("verifyRequiredRetrievalSchema();");
+        assertThat(applyRetrievalBody).doesNotContain("verifyRetrievalEmbeddingColumnPresent();");
     }
 
     @Test

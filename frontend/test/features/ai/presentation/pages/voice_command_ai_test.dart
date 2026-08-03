@@ -2980,5 +2980,70 @@ void main() {
       VoiceIntentService.testOverride = null;
       await _tearDown(tester);
     });
+
+    testWidgets('AI navigate with an unresolved but explicit destination still confirms',
+        (tester) async {
+      // Registry can't resolve the route and there is no destination entity,
+      // but result.destination is set — the page should still confirm it.
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'navigate',
+          entities: const {},
+          confidence: 0.9,
+          destination: '/unknown-route-xyz',
+          displayLabel: 'Mystery Page',
+          requiresConfirmation: true,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'take me somewhere');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Confirm'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('AI navigate with no destination falls back', (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return VoiceIntentResult(
+          intent: 'navigate',
+          entities: const {},
+          confidence: 0.9,
+          destination: null,
+          displayLabel: null,
+          requiresConfirmation: false,
+          success: true,
+        );
+      };
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'navigate to nowhere');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // No destination could be resolved -> fallback / not recognized.
+      expect(find.textContaining('Command not recognized'), findsWidgets);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
   });
 }

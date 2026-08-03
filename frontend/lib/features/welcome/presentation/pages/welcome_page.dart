@@ -1,10 +1,12 @@
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/locale_provider.dart';
 import 'package:care_connect_app/widgets/language/language_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert'; 
+import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/env_constant.dart';
 import 'package:provider/provider.dart';
 
@@ -33,7 +35,7 @@ class _WelcomePageState extends State<WelcomePage> {
     print('BASE URL: $baseUrl');
 
     final response = await http
-        .get(Uri.parse('$baseUrl/v1/api/test/health'))
+        .get(Uri.parse('$baseUrl/api/test/health'))
         .timeout(const Duration(seconds: 5));
 
     print('STATUS CODE: ${response.statusCode}');
@@ -278,11 +280,10 @@ class _WelcomePageState extends State<WelcomePage> {
                     ),
                   ],
 
-                  // Continue button
+                  // New React UI — full sign-in experience (does not replace
+                  // the existing Flutter Continue path yet).
                   ElevatedButton(
-                    onPressed: () {
-                      context.go('/dashboard');
-                    },
+                    onPressed: _openNewUiPreview,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF4A5FBF),
@@ -294,6 +295,50 @@ class _WelcomePageState extends State<WelcomePage> {
                         borderRadius: BorderRadius.circular(30),
                       ),
                       elevation: 2,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.auto_awesome, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Try new CareConnect UI',
+                          style: TextStyle(
+                            fontSize: isMobile ? 16 : 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: isMobile ? 10 : 12),
+                  Text(
+                    'Opens the new sign-in & Care Circle experience',
+                    style: TextStyle(
+                      fontSize: isMobile ? 13 : 14,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: isMobile ? 20 : 24),
+
+                  // Existing Flutter continue path
+                  OutlinedButton(
+                    onPressed: () {
+                      context.go('/dashboard');
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 32 : 40,
+                        vertical: isMobile ? 16 : 20,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -337,6 +382,20 @@ class _WelcomePageState extends State<WelcomePage> {
         ),
       ),
     );
+  }
+
+  /// Full-page React preview (landing + sign-in), not the post-login Flutter shell.
+  Future<void> _openNewUiPreview() async {
+    final uri = Uri.base.resolve('/ui-preview/index.html');
+    if (kIsWeb) {
+      final ok = await launchUrl(uri, webOnlyWindowName: '_self');
+      if (!ok && mounted) {
+        context.go('/ui-preview');
+      }
+      return;
+    }
+    if (!mounted) return;
+    context.go('/ui-preview');
   }
 
   Widget _buildComplianceBadge(String text, bool isMobile) {

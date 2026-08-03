@@ -54,6 +54,8 @@ doc/api/
 # project includes source files written in JavaScript.
 *.js
 !frontend/web/amazon-chime-sdk.min.js
+!frontend/web/ui-preview/
+!frontend/web/ui-preview/**
 *.js_
 *.js.deps
 *.js.map

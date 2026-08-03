@@ -14,6 +14,7 @@ import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/re
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/communication_service.dart';
+import 'package:care_connect_app/features/ui_preview/new_ui_preview_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1223,6 +1224,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 8),
+                          const NewUiPreviewCard(),
 
                           // Responsive layout for tablets
                           if (isTablet) ...[

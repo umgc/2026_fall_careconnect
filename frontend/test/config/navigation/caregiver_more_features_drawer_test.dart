@@ -1,13 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/config/navigation/caregiver_more_features_bottom_drawer.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/shared/widgets/more_features_bottom_drawer.dart';
+import 'package:provider/provider.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
-      home: Scaffold(body: SizedBox(height: 800, child: child)),
+import '../../mock_user_provider.dart';
+
+const MethodChannel _connectivityChannel =
+    MethodChannel('dev.fluttercommunity.plus/connectivity');
+
+/// The drawer reads the signed-in role from [UserProvider] to decide whether
+/// the permission-gated "AI review queue" entry is shown, so every pump needs a
+/// provider above it. FAMILY_MEMBER lacks REVIEW_AI_HOLDS and therefore sees
+/// only the four unconditional features.
+Widget _wrap(Widget child, {String role = 'FAMILY_MEMBER'}) =>
+    ChangeNotifierProvider<UserProvider>(
+      create: (_) => MockUserProvider(mockUser: MockUser(role: role)),
+      child: MaterialApp(
+        home: Scaffold(body: SizedBox(height: 800, child: child)),
+      ),
     );
 
 void main() {
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_connectivityChannel, (call) async {
+      if (call.method == 'check') return ['wifi'];
+      return null;
+    });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_connectivityChannel, null);
+  });
+
   group('CaregiverMoreFeaturesBottomDrawerWidget', () {
     testWidgets('renders without crashing', (tester) async {
       await tester.pumpWidget(
@@ -111,6 +140,23 @@ void main() {
       final blueIcons = iconWidgets.where((icon) => icon.color == Colors.blue);
       // 4 feature icons are blue (trailing arrows have no color set)
       expect(blueIcons.length, 4);
+    });
+
+    testWidgets('hides AI review queue for roles without REVIEW_AI_HOLDS',
+        (tester) async {
+      await tester.pumpWidget(
+          _wrap(const CaregiverMoreFeaturesBottomDrawerWidget()));
+      expect(find.text('AI review queue'), findsNothing);
+    });
+
+    testWidgets('shows AI review queue for a caregiver', (tester) async {
+      await tester.pumpWidget(
+        _wrap(const CaregiverMoreFeaturesBottomDrawerWidget(),
+            role: 'CAREGIVER'),
+      );
+      expect(find.text('AI review queue'), findsOneWidget);
+      expect(find.text('Release or reject held Ask AI answers'), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_forward_ios), findsNWidgets(5));
     });
   });
 }

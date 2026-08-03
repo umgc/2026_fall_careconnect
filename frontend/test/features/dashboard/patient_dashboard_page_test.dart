@@ -14,6 +14,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,9 @@ Widget _wrap({MockUserProvider? provider}) {
             MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
       );
   return MaterialApp(
+    locale: Locale('en'), 
+    localizationsDelegates: AppLocalizations.localizationsDelegates, 
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: p,
       child: const PatientDashboard(),
@@ -852,6 +856,9 @@ void main() {
         mockUser: MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
       );
       final widget = MaterialApp(
+        locale: Locale('en'), 
+        localizationsDelegates: AppLocalizations.localizationsDelegates, 
+        supportedLocales: AppLocalizations.supportedLocales,
         home: ChangeNotifierProvider<UserProvider>.value(
           value: p,
           child: const PatientDashboard(userId: 42),

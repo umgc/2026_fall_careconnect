@@ -1414,7 +1414,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Step ${_currentStep + 1} of $_totalSteps',
+                              '${t.signup_step} ${_currentStep + 1} ${t.signup_of} $_totalSteps',
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,

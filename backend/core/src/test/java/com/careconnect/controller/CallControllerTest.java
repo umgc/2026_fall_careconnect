@@ -142,6 +142,9 @@ class CallControllerTest {
         durableSession.setStatus(CallSessionService.SESSION_CREATED);
         when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
                 .thenReturn(durableSession);
+        when(callSessionService.ensureJoinAuthorized(
+                        anyString(), any(), any(), any(), any()))
+                .thenReturn(durableSession);
         when(callSessionService.requireActiveParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
         when(callSessionService.requireTranscriptUploadParticipant(anyString(), anyLong()))
@@ -290,7 +293,8 @@ class CallControllerTest {
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
         void join_rejectsBeforeCallingChimeWhenNotAuthorized() throws Exception {
             mockCurrentCaregiver();
-            when(callSessionService.requireJoinAuthorized(CALL_ID, 2L))
+            when(callSessionService.ensureJoinAuthorized(
+                            eq(CALL_ID), eq(caregiverUser), isNull(), isNull(), isNull()))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "not authorized"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
@@ -301,6 +305,23 @@ class CallControllerTest {
 
             verify(chimeService, never())
                     .joinMeeting(anyString(), anyString(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("POST /join ensures durable session from patientUserId when missing")
+        @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})
+        void join_passesPatientContextToEnsureJoinAuthorized() throws Exception {
+            mockCurrentCaregiver();
+
+            mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"patientUserId\":1,\"inviteeUserId\":1}"))
+                    .andExpect(status().isOk());
+
+            verify(callSessionService).ensureJoinAuthorized(
+                    eq(CALL_ID), eq(caregiverUser), eq(1L), eq(1L), isNull());
+            verify(chimeService).joinMeeting(eq(CALL_ID), eq("2"), anyString(), anyString());
         }
 
         @Test

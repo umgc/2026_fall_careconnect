@@ -225,6 +225,9 @@ class VideoCallService {
     required bool isVideoEnabled,
     required bool isAudioEnabled,
     Map<String, dynamic>? callContextMetadata,
+    String? patientUserId,
+    String? inviteeUserId,
+    String? scheduledVisitId,
   }) async {
     if (!_isInitialized) throw Exception('VideoCallService not initialized');
     final normalizedCallId = callId.trim();
@@ -248,10 +251,15 @@ class VideoCallService {
     debugPrint('📹 Joining Chime call: $normalizedCallId');
 
     try {
-      final requestBody =
-          (_callContextMetadata == null || _callContextMetadata!.isEmpty)
-              ? null
-              : jsonEncode(_callContextMetadata);
+      final payload = <String, dynamic>{
+        if (_callContextMetadata != null) ..._callContextMetadata!,
+        if (patientUserId != null && patientUserId.trim().isNotEmpty)
+          'patientUserId': patientUserId.trim(),
+        if (inviteeUserId != null && inviteeUserId.trim().isNotEmpty)
+          'inviteeUserId': inviteeUserId.trim(),
+        if (scheduledVisitId != null && scheduledVisitId.trim().isNotEmpty)
+          'scheduledVisitId': scheduledVisitId.trim(),
+      };
       final response = await http.post(
         Uri.parse(
             '${EnvironmentConfig.baseUrl}/api/v3/calls/$normalizedCallId/join'),
@@ -259,13 +267,14 @@ class VideoCallService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_jwtToken',
         },
-        body: requestBody,
+        body: payload.isEmpty ? null : jsonEncode(payload),
       );
 
       if (response.statusCode != 200) {
         throw Exception(_safeCallFailure(
           operation: 'join the call',
           statusCode: response.statusCode,
+          responseBody: response.body,
         ));
       }
 
@@ -1130,6 +1139,7 @@ class VideoCallService {
   String _safeCallFailure({
     required String operation,
     required int statusCode,
+    String? responseBody,
   }) {
     if (statusCode == 401) {
       return 'Your session expired. Please sign in again.';
@@ -1137,10 +1147,31 @@ class VideoCallService {
     if (statusCode == 403) {
       return 'You do not have permission to $operation.';
     }
+    if (statusCode == 404) {
+      final detail = _extractApiError(responseBody);
+      if (detail != null && detail.isNotEmpty) {
+        return 'Unable to $operation: $detail';
+      }
+      return 'Unable to $operation. The call session was not found — '
+          'ask the caller to restart the call, then open their join link again.';
+    }
     if (statusCode >= 500) {
       return 'The call service is temporarily unavailable. Please try again.';
     }
     return 'Unable to $operation. Please check the call details and try again.';
+  }
+
+  String? _extractApiError(String? responseBody) {
+    if (responseBody == null || responseBody.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(responseBody);
+      if (decoded is Map && decoded['error'] != null) {
+        return decoded['error'].toString();
+      }
+    } catch (_) {
+      // Ignore non-JSON bodies.
+    }
+    return null;
   }
 
   // ================================================================

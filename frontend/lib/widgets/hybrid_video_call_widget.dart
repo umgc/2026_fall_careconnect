@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:universal_html/html.dart' as uh;
 import 'package:go_router/go_router.dart';
 import '../services/video_call_service.dart';
 import '../services/auth_token_manager.dart';
 import '../services/call_notification_service.dart';
 import '../services/user_role_storage_service.dart';
+import '../config/env_constant.dart';
 import '../config/theme/app_theme.dart';
 import '../features/telemetry/telemetry.dart';
 import '../widgets/sentiment_dashboard_widget.dart';
@@ -309,22 +311,35 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         },
       );
 
-      if (widget.isInitiator) {
-        final recipientId = widget.recipientId?.trim();
-        if (recipientId == null || recipientId.isEmpty) {
-          throw Exception('Missing recipient ID for outgoing call.');
-        }
-        final patientUserId = resolveCallSessionPatientUserId(
+      final recipientId = widget.recipientId?.trim();
+      String? sessionPatientUserId;
+      try {
+        sessionPatientUserId = resolveCallSessionPatientUserId(
           currentUserId: widget.userId,
           currentRole: role ?? '',
-          recipientId: recipientId,
+          recipientId: recipientId ?? '',
           recipientRole: widget.recipientRole,
           callKind: widget.callKind,
           contextPatientUserIds: widget.contextPatientUserIds,
         );
+      } catch (_) {
+        // Care-team without a single patient context: join still works when the
+        // durable session already exists from the initiator.
+        sessionPatientUserId = null;
+      }
+
+      if (widget.isInitiator) {
+        if (recipientId == null || recipientId.isEmpty) {
+          throw Exception('Missing recipient ID for outgoing call.');
+        }
+        if (sessionPatientUserId == null || sessionPatientUserId.isEmpty) {
+          throw Exception(
+            'Select one patient before starting this care-team call.',
+          );
+        }
         await _videoCallService.createCallSession(
           callId: widget.callId,
-          patientUserId: patientUserId,
+          patientUserId: sessionPatientUserId,
           inviteeUserId: recipientId,
           scheduledVisitId: widget.scheduledVisitId,
         );
@@ -335,6 +350,9 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
         otherPartyId: widget.recipientId ?? '',
         isVideoEnabled: widget.isVideoEnabled,
         isAudioEnabled: widget.isAudioEnabled,
+        patientUserId: sessionPatientUserId,
+        inviteeUserId: widget.isInitiator ? recipientId : widget.userId,
+        scheduledVisitId: widget.scheduledVisitId,
         callContextMetadata: {
           'callKind': (widget.callKind ?? 'general').trim().toUpperCase(),
           if (widget.contextPatientUserIds != null &&
@@ -370,11 +388,15 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
           contextPatientUserIds: widget.contextPatientUserIds,
         );
 
+        // Deploy often cannot ring via WebSocket — keep the caller in-call and
+        // offer a copyable join link for the patient/other party.
         if (!invitationSent) {
-          await _videoCallService.endCall();
-          throw Exception(
-            'Unable to notify callee after joining the call room.',
-          );
+          if (mounted) {
+            _showJoinLinkSnackBar(
+              message:
+                  'Could not ring the other account. Copy the join link and open it while logged in as them.',
+            );
+          }
         }
 
         _hasSentInitialInvitation = true;
@@ -403,6 +425,73 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
       throw Exception('No authentication token found. Please log in again.');
     }
     return token;
+  }
+
+  String _frontendOrigin() {
+    if (kIsWeb) {
+      // universal_html types `origin` as nullable off the web, so read it
+      // loosely instead of assuming a non-null String.
+      final dynamic origin = uh.window.location.origin;
+      if (origin is String && origin.isNotEmpty) return origin;
+    }
+    return getWebBaseUrl();
+  }
+
+  /// Deep link for the callee (patient / other party) to join this callId.
+  String buildCalleeJoinUrl() {
+    final calleeId = (widget.recipientId ?? '').trim();
+    final params = <String, String>{
+      'userId': calleeId,
+      'callId': widget.callId,
+      'recipientId': widget.userId,
+      'userRole': (widget.recipientRole ?? 'PATIENT').trim().toUpperCase(),
+      'userName': widget.recipientName ?? 'Participant',
+      'recipientName': widget.userName ?? 'Caller',
+      'recipientRole': (widget.userRole ?? 'CAREGIVER').trim().toUpperCase(),
+      'initiator': 'false',
+      'video': widget.isVideoEnabled ? 'true' : 'false',
+      'audio': widget.isAudioEnabled ? 'true' : 'false',
+      'callKind': (widget.callKind ?? 'GENERAL').trim().toUpperCase(),
+      if (widget.scheduledVisitId != null &&
+          widget.scheduledVisitId!.trim().isNotEmpty)
+        'scheduledVisitId': widget.scheduledVisitId!.trim(),
+      if (widget.contextPatientUserIds != null &&
+          widget.contextPatientUserIds!.isNotEmpty)
+        'contextPatientUserIds': widget.contextPatientUserIds!.join(','),
+    };
+    final relative =
+        Uri(path: '/video-call-chime', queryParameters: params).toString();
+    // Web uses HashUrlStrategy (see main.dart).
+    return '${_frontendOrigin()}/#$relative';
+  }
+
+  Future<void> _copyJoinLink() async {
+    final url = buildCalleeJoinUrl();
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Join link copied. Open it while logged in as the other user.'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showJoinLinkSnackBar({required String message}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'Copy link',
+          onPressed: () {
+            unawaited(_copyJoinLink());
+          },
+        ),
+      ),
+    );
   }
 
   @override
