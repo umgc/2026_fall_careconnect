@@ -495,4 +495,99 @@ class AskAiDocumentOcrServiceTest {
         file.transferTo(dest);
         assertEquals(3, dest.length());
     }
+
+    @Test
+    @DisplayName("processUploadedDocument - null fileId is a no-op")
+    void processUploadedDocument_nullFileId() {
+        service.processUploadedDocument(null);
+        verify(userFileRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("processUploadedDocument - S3 download failure marks NO_BYTES")
+    void processUploadedDocument_s3DownloadFails_marksNoBytes() throws Exception {
+        userFile.setStorageType(UserFile.StorageType.S3);
+        userFile.setFileData(null);
+        userFile.setS3Path("ask-ai-docs/scan.pdf");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(s3StorageService.download("ask-ai-docs/scan.pdf"))
+                .thenThrow(new RuntimeException("s3 down"));
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_IN_PROGRESS)
+                .attempts(1)
+                .build()));
+        when(ocrOutboxRepository.save(any(AskAiOcrOutbox.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processUploadedDocument(10L);
+
+        verify(textractService, never()).analyzeAndGetResult(anyList(), any());
+        final ArgumentCaptor<AskAiOcrOutbox> captor = ArgumentCaptor.forClass(AskAiOcrOutbox.class);
+        verify(ocrOutboxRepository).save(captor.capture());
+        assertEquals("NO_BYTES", captor.getValue().getLastError());
+    }
+
+    @Test
+    @DisplayName("processUploadedDocument - defaults filename and content type")
+    void processUploadedDocument_nullFilenameAndContentType_defaults() throws Exception {
+        userFile.setOriginalFilename(null);
+        userFile.setContentType("image/png");
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.empty());
+        when(textractService.analyzeAndGetResult(anyList(), eq("ask-ai-docs/")))
+                .thenReturn(new com.careconnect.dto.chat.AiRequest.AnalysisResult(
+                        "OCR text", "ask-ai-docs/x.png"));
+
+        service.processUploadedDocument(10L);
+
+        final ArgumentCaptor<java.util.List> files = ArgumentCaptor.forClass(java.util.List.class);
+        verify(textractService).analyzeAndGetResult(files.capture(), eq("ask-ai-docs/"));
+        final org.springframework.web.multipart.MultipartFile mp =
+                (org.springframework.web.multipart.MultipartFile) files.getValue().get(0);
+        assertEquals("document.bin", mp.getOriginalFilename());
+    }
+
+    @Test
+    @DisplayName("processUploadedDocument - emit failure still completes outbox")
+    void processUploadedDocument_emitFails_stillCompletesOutbox() throws Exception {
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.of(AskAiOcrOutbox.builder()
+                .fileId(10L)
+                .status(AskAiOcrOutbox.STATUS_IN_PROGRESS)
+                .attempts(1)
+                .build()));
+        when(ocrOutboxRepository.save(any(AskAiOcrOutbox.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(textractService.analyzeAndGetResult(anyList(), eq("ask-ai-docs/")))
+                .thenReturn(new com.careconnect.dto.chat.AiRequest.AnalysisResult(
+                        "Patient continues metformin 500mg.", "ask-ai-docs/x.pdf"));
+        org.mockito.Mockito.doThrow(new RuntimeException("emit down"))
+                .when(indexingEventEmitter)
+                .emitDocumentIndexed(any());
+
+        service.processUploadedDocument(10L);
+
+        verify(userFileRepository).save(any(UserFile.class));
+        final ArgumentCaptor<AskAiOcrOutbox> captor = ArgumentCaptor.forClass(AskAiOcrOutbox.class);
+        verify(ocrOutboxRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        assertEquals(AskAiOcrOutbox.STATUS_COMPLETED, captor.getValue().getStatus());
+    }
+
+    @Test
+    @DisplayName("processUploadedDocument - null patientId skips emit")
+    void processUploadedDocument_nullPatientId_skipsEmit() throws Exception {
+        userFile.setPatientId(null);
+        when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.empty());
+        when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
+        when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(textractService.analyzeAndGetResult(anyList(), eq("ask-ai-docs/")))
+                .thenReturn(new com.careconnect.dto.chat.AiRequest.AnalysisResult(
+                        "OCR text here", "ask-ai-docs/x.pdf"));
+
+        service.processUploadedDocument(10L);
+
+        verify(indexingEventEmitter, never()).emitDocumentIndexed(any());
+        verify(userFileRepository).save(any(UserFile.class));
+    }
 }

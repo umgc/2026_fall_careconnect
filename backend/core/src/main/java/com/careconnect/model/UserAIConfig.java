@@ -76,6 +76,9 @@ public class UserAIConfig {
     @Column(name = "include_allergies_by_default")
     private Boolean includeAllergiesByDefault;
 
+    @Column(name = "include_documents_by_default")
+    private Boolean includeDocumentsByDefault;
+
     // Explicit getters and setters for compatibility
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
@@ -105,7 +108,9 @@ public class UserAIConfig {
     public void setIncludeMoodPainByDefault(Boolean includeMoodPainByDefault) { this.includeMoodPainByDefault = includeMoodPainByDefault; }
     public Boolean getIncludeAllergiesByDefault() { return includeAllergiesByDefault; }
     public void setIncludeAllergiesByDefault(Boolean includeAllergiesByDefault) { this.includeAllergiesByDefault = includeAllergiesByDefault; }
-    
+    public Boolean getIncludeDocumentsByDefault() { return includeDocumentsByDefault; }
+    public void setIncludeDocumentsByDefault(Boolean includeDocumentsByDefault) { this.includeDocumentsByDefault = includeDocumentsByDefault; }
+
     // Add isActive field for builder compatibility
     @Column(name = "is_active")
     private Boolean isActive;

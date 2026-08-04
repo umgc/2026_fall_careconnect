@@ -1,5 +1,8 @@
 {
   "@@locale": "es",
+  "aiDisclaimer": "El contenido generado por IA puede ser inexacto y no constituye asesoramiento médico. Confirme siempre con su proveedor de atención médica antes de actuar.",
+  "medicationDisclaimer": "La información asistida por IA no constituye asesoramiento médico. Verifique los medicamentos y las dosis con su proveedor de atención médica.",
+  "disclaimerLabel": "Aviso",
   "menuTitle": "Menú",
   "yourShortcuts": "Tus accesos directos",
   "preferences": "Preferencias",
