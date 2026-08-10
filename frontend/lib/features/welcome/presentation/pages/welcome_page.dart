@@ -35,7 +35,7 @@ class _WelcomePageState extends State<WelcomePage> {
     print('BASE URL: $baseUrl');
 
     final response = await http
-        .get(Uri.parse('$baseUrl/api/test/health'))
+        .get(Uri.parse('$baseUrl/v1/api/test/health'))
         .timeout(const Duration(seconds: 5));
 
     print('STATUS CODE: ${response.statusCode}');

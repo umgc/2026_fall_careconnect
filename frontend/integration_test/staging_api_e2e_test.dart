@@ -49,8 +49,8 @@ void main() {
   // ─── Health ───────────────────────────────────────────────────────────────
 
   group('Health check', () {
-    test('GET /api/test/health returns healthy', () async {
-      final resp = await http.get(_uri('/api/test/health'));
+    test('GET /v1/api/test/health returns healthy', () async {
+      final resp = await http.get(_uri('/v1/api/test/health'));
       expect(resp.statusCode, 200);
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(body['status'], 'healthy');
@@ -58,7 +58,7 @@ void main() {
     });
 
     test('health response includes version and timestamp', () async {
-      final resp = await http.get(_uri('/api/test/health'));
+      final resp = await http.get(_uri('/v1/api/test/health'));
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(body.containsKey('version'), isTrue);
       expect(body.containsKey('timestamp'), isTrue);
