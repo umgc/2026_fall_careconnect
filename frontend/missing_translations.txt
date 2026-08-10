@@ -1,0 +1,109 @@
+{
+  "am": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "ar": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "bn": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "fa": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "fr": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "hi": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "ja": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "ne": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "pt": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "ru": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "ur": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ],
+
+  "zh": [
+    "aiDisclaimer",
+    "medicationDisclaimer",
+    "disclaimerLabel",
+    "dailyBrief",
+    "stmlSearch",
+    "stmlCheckIn"
+  ]
+}
