@@ -63,7 +63,6 @@ class Telemetry {
       // Best-effort sync, but only once per app run.
       if (!_forcedBackendOffThisRun) {
         _forcedBackendOffThisRun = true;
-        await setBackendEnabled(false);
       }
       return false;
     }
@@ -96,39 +95,6 @@ class Telemetry {
 
     // fallback (non-200 response, etc.)
     return true;
-  }
-
-  static Future<bool> setBackendEnabled(bool enabled) async {
-    try {
-      final resp = await http.put(
-        Uri.parse('$_devEndpoint/enabled?enabled=$enabled'),
-      );
-
-      if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        final decoded = jsonDecode(resp.body);
-        final value = decoded is Map ? decoded['enabled'] : null;
-        final result = value == true;
-
-        // Update cache immediately.
-        _backendEnabledCache = result;
-        _backendEnabledCacheTime = DateTime.now();
-
-        return result;
-      }
-
-      if (kDebugMode) {
-        debugPrint('[telemetry] setBackendEnabled status=${resp.statusCode}');
-        debugPrint('[telemetry] body=${resp.body}');
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[telemetry] setBackendEnabled failed: $e');
-    }
-
-    // Best-effort cache update.
-    _backendEnabledCache = enabled;
-    _backendEnabledCacheTime = DateTime.now();
-
-    return enabled;
   }
 
   // ---------------------------

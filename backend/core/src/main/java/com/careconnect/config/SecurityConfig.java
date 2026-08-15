@@ -26,39 +26,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public class SecurityConfig {
 
     private static final String ROLE_ADMIN = "ADMIN";
-
     @Bean
     @Order(0)
-    @Profile("dev")
-    SecurityFilterChain devChain(
-            HttpSecurity http,
-            CorsConfigurationSource corsConfigurationSource
-    ) throws Exception {
-
-        return http
-                .securityMatcher("/v1/api/dev/**")
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((req, res, e) ->
-                                res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
-                        .accessDeniedHandler((req, res, e) ->
-                                res.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden"))
-                )
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/recent").hasRole(ROLE_ADMIN)
-                        .anyRequest().denyAll()
-                )
-                .build();
-    }
-
-    @Bean
-    @Order(1)
     SecurityFilterChain apiChain(
             HttpSecurity http,
             JwtTokenProvider jwt,
@@ -146,6 +115,10 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api/email-test/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/admin/analytics/**").hasRole(ROLE_ADMIN)
                         .requestMatchers("/v1/api/admin/users/**").hasRole(ROLE_ADMIN)
+                        /* ---------- Telemetry Admin Endpoints ------------------ */
+                        .requestMatchers(HttpMethod.PUT, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/recent").hasRole(ROLE_ADMIN)
+
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
                         .requestMatchers("/v1/api/care-circle/**").authenticated()
@@ -191,6 +164,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/patient/**").authenticated()
                         .requestMatchers("/api/gamification/**").authenticated()
                         .requestMatchers("/api/websocket/**").authenticated()
+
+                        /* ----- Public Telemetry Endpoints ----- */
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").permitAll()
+
+
+
                         // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
                         // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.
                         .requestMatchers("/v1/api/email-credentials/**", "/api/email-credentials/**").authenticated()

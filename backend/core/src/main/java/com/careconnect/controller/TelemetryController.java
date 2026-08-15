@@ -1,4 +1,4 @@
-package com.careconnect.controller.dev;
+package com.careconnect.controller;
 
 import com.careconnect.model.TelemetryEvent;
 import com.careconnect.service.TelemetryService;
@@ -17,12 +17,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Development-only endpoints for manually emitting and inspecting telemetry. */
+/** Endpoints for emitting and inspecting telemetry. */
 @RestController
 @RequestMapping("/v1/api/dev/telemetry")
-@Profile("dev")
 @RequiredArgsConstructor
-public class DevTelemetryController {
+public class TelemetryController {
 
   /** Service used to persist and query telemetry events. */
   private final TelemetryService telemetry;

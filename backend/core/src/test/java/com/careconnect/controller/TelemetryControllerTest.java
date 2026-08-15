@@ -1,4 +1,4 @@
-package com.careconnect.controller.dev;
+package com.careconnect.controller;
 
 import com.careconnect.model.TelemetryEvent;
 import com.careconnect.service.TelemetryService;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class DevTelemetryControllerTest {
+class TelemetryControllerTest {
 
     @Mock
     private TelemetryService telemetryService;
@@ -31,11 +31,11 @@ class DevTelemetryControllerTest {
     @Mock
     private TelemetryToggleService toggleService;
 
-    private DevTelemetryController controller;
+    private TelemetryController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new DevTelemetryController(telemetryService, toggleService);
+        controller = new TelemetryController(telemetryService, toggleService);
     }
 
     @Test

@@ -174,7 +174,7 @@ echo - Docker: Docker Desktop
 echo ----------------------------------------
 
 echo Starting Spring Boot application...
-set SPRING_PROFILES_ACTIVE=dev
+set SPRING_PROFILES_ACTIVE=prod
 
 REM Use Maven wrapper for Windows
 call mvnw.cmd spring-boot:run 
