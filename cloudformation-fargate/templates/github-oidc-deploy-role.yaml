@@ -1,0 +1,183 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: GitHub Actions OIDC provider and deployment role for CareConnect CI/CD.
+
+# Replaces the console click-by-click in GITHUB_ACTIONS_SETUP.md sections 2a-2c.
+# Deploy once per AWS account that CI needs to deploy into. Under per-user LEO
+# accounts that means each environment owner runs this in their own account and
+# hands the resulting role ARN to whoever administers the repository.
+#
+# No long-lived access keys are created. GitHub exchanges a short-lived OIDC
+# token for temporary credentials on each workflow run.
+#
+# IMPORTANT -- the subject claim changes when a workflow job declares an
+# `environment:`. A job without one presents:
+#     repo:ORG/REPO:ref:refs/heads/BRANCH
+# A job with `environment: prod` presents:
+#     repo:ORG/REPO:environment:prod
+# Adding `environment:` to the deploy workflow without allowing the environment
+# subject here will break the deploy with an AssumeRoleWithWebIdentity failure.
+# Both forms are permitted below so the workflow can adopt GitHub Environments
+# without a second IAM change.
+
+Parameters:
+  # Organization that owns the repository. The prior cohort's documented trust
+  # policy still pointed at a personal fork -- verify this matches the repo the
+  # workflow actually runs from.
+  GitHubOrg:
+    Type: String
+    Default: umgc
+
+  GitHubRepo:
+    Type: String
+    Default: 2026_fall_careconnect
+
+  # Branch allowed to deploy without going through a GitHub Environment.
+  PrimaryBranch:
+    Type: String
+    Default: main
+
+  # Optional extra subject, e.g. a release branch or a second repository.
+  # Leave empty to allow only the primary branch and environment deployments.
+  AdditionalSubject:
+    Type: String
+    Default: ''
+
+  # Only one GitHub OIDC provider may exist per account. Set to No if the
+  # account already has one, or this stack will fail with EntityAlreadyExists.
+  CreateOidcProvider:
+    Type: String
+    Default: 'Yes'
+    AllowedValues: ['Yes', 'No']
+
+  RoleName:
+    Type: String
+    Default: careconnect-github-actions-deploy
+
+  # PowerUserAccess cannot create IAM roles, so it is sufficient for app-only
+  # deploys (04-service.yaml) but not for the full four-stack deploy, which
+  # creates the ECS task roles in 03-platform.yaml. Set to Yes only in the
+  # account that runs backend-full-deploy.yml.
+  AllowInfrastructureDeploy:
+    Type: String
+    Default: 'No'
+    AllowedValues: ['Yes', 'No']
+
+  # GitHub's OIDC endpoint certificate thumbprints. AWS no longer validates
+  # these for well-known providers, but the property is still required.
+  OidcThumbprints:
+    Type: CommaDelimitedList
+    Default: 6938fd4d98bab03faadb97b34396831e3780aea1,1c58a3a8518e8759bf075b76b750d4f2df264fce
+
+Conditions:
+  ShouldCreateProvider: !Equals [!Ref CreateOidcProvider, 'Yes']
+  HasAdditionalSubject: !Not [!Equals [!Ref AdditionalSubject, '']]
+  AllowsInfrastructure: !Equals [!Ref AllowInfrastructureDeploy, 'Yes']
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList: !Ref OidcThumbprints
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Assumed by GitHub Actions via OIDC to deploy CareConnect stacks.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateProvider
+                - !Ref GitHubOidcProvider
+                - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !If
+                  - HasAdditionalSubject
+                  - - !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${PrimaryBranch}
+                    # Any GitHub Environment in this repo. The gate is the
+                    # environment's own protection rules (required reviewers),
+                    # which is a stronger control than an IAM string match.
+                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:*
+                    - !Ref AdditionalSubject
+                  - - !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${PrimaryBranch}
+                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:*
+
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+
+      Policies:
+        # ECS needs to hand the task roles to the running task. Scoped by name
+        # prefix rather than granted account-wide -- 03-platform.yaml names its
+        # roles careconnect-${Environment}-ecsTask*Role.
+        - PolicyName: PassCareConnectTaskRoles
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/careconnect-*
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+
+        # Only attached when this account runs the full four-stack deploy.
+        # Still prefix-scoped, so CI cannot touch unrelated roles in the account.
+        - !If
+          - AllowsInfrastructure
+          - PolicyName: ManageCareConnectRoles
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - iam:CreateRole
+                    - iam:DeleteRole
+                    - iam:GetRole
+                    - iam:TagRole
+                    - iam:UntagRole
+                    - iam:AttachRolePolicy
+                    - iam:DetachRolePolicy
+                    - iam:PutRolePolicy
+                    - iam:DeleteRolePolicy
+                    - iam:GetRolePolicy
+                    - iam:ListRolePolicies
+                    - iam:ListAttachedRolePolicies
+                    - iam:UpdateAssumeRolePolicy
+                  Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/careconnect-*
+                - Effect: Allow
+                  Action: iam:CreateServiceLinkedRole
+                  Resource: '*'
+                  Condition:
+                    StringEquals:
+                      iam:AWSServiceName:
+                        - ecs.amazonaws.com
+                        - rds.amazonaws.com
+          - !Ref AWS::NoValue
+
+Outputs:
+  DeployRoleArn:
+    Description: Paste this into the GitHub Environment variable AWS_GITHUB_ACTIONS_ROLE_ARN.
+    Value: !GetAtt DeployRole.Arn
+
+  DeployRoleName:
+    Description: Name of the CI deployment role.
+    Value: !Ref DeployRole
+
+  OidcProviderArn:
+    Description: OIDC provider used by the trust policy.
+    Value: !If
+      - ShouldCreateProvider
+      - !Ref GitHubOidcProvider
+      - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
