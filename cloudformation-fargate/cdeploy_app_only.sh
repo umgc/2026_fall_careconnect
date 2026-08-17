@@ -158,6 +158,17 @@ cleanup() {
 trap 'on_error $? $LINENO' ERR
 trap cleanup EXIT
 
+# Read newline-separated stdin into the named array. macOS ships bash 3.2,
+# which has no `mapfile`/`readarray`, so this stands in for both.
+read_lines_into() {
+  local __array_name="$1"
+  local __line
+  eval "$__array_name=()"
+  while IFS= read -r __line; do
+    eval "$__array_name+=(\"\$__line\")"
+  done
+}
+
 require_command() {
   local name="$1"
   if ! command -v "$name" >/dev/null 2>&1; then
@@ -322,7 +333,7 @@ build_parameter_overrides() {
   # `aws cloudformation deploy` expects. Extra overrides are appended last so
   # the CLI receives the final image URI from the current build.
   local -a overrides=()
-  mapfile -t overrides < <(run_python_helper "$parameter_file")
+  read_lines_into overrides < <(run_python_helper "$parameter_file")
 
   local extra
   for extra in "$@"; do
@@ -375,7 +386,7 @@ deploy_stack() {
   echo "${operation} stack '$stack_name'..."
 
   local -a parameter_overrides
-  mapfile -t parameter_overrides < <(build_parameter_overrides "$parameter_file" "$@")
+  read_lines_into parameter_overrides < <(build_parameter_overrides "$parameter_file" "$@")
   local aws_template_path
   aws_template_path="$(to_aws_path "$template_path")"
 
