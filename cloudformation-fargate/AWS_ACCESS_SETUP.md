@@ -59,9 +59,24 @@ shown.
 > on makes `aws configure sso` fail during `RegisterClient` with an error that
 > does not mention the fragment.
 
+> **If the wizard fails partway, clean up before retrying.** A failed run can
+> leave a half-built `[sso-session careconnect]` block behind, and the next
+> attempt will behave oddly because the session name already exists. Check what
+> is there and remove any partial block first:
+>
+> ```bash
+> grep -n 'sso' ~/.aws/config
+> ```
+>
+> ```powershell
+> Select-String -Pattern 'sso' -Path $HOME\.aws\config
+> ```
+
 A browser window opens for you to authorize. After that the CLI lists the
 account(s) you have access to — **pick yours**. Each of us has a different
 account, so this is the step that differs person to person; the URL above is not.
+School access typically grants a single account and a single role
+(`StudentAdminAccess`), so expect one obvious choice rather than a long list.
 Then:
 
 | Prompt | Value |
