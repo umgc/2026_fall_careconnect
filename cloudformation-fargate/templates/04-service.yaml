@@ -315,6 +315,15 @@ Resources:
                 Fn::ImportValue: !Sub careconnect-${Environment}-DatabaseUsername
             - Name: APP_FRONTEND_BASE_URL
               Value: !Ref FrontendBaseUrl
+            # Public base URL of this backend (`careconnect.baseurl`).
+            # AuthService builds email verification links and the Google SSO
+            # redirect_uri from it; without this it falls back to
+            # http://localhost:8080 and both break on ECS.
+            - Name: BASE_URL
+              Value: !If
+                - HasCustomDomain
+                - !Sub 'https://${DomainName}'
+                - !GetAtt HttpApi.ApiEndpoint
             - Name: CORS_ALLOWED_LIST
               Value: !Ref CorsAllowedList
             # Ask AI / Bedrock (Task 0.1 P0 deploy unblock)
