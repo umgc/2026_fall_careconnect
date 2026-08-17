@@ -31,6 +31,9 @@ three consequences worth knowing before you start:
 
 ## 1. Create the CLI profile
 
+Plain `aws ...` commands are identical in PowerShell, bash, and zsh — type them
+as shown. Where a command differs by shell, both versions are given.
+
 You need the AWS CLI v2 (`aws --version`). Then:
 
 ```bash
