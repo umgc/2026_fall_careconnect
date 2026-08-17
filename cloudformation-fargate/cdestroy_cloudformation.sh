@@ -114,6 +114,17 @@ on_error() {
 
 trap 'on_error $? $LINENO' ERR
 
+# Read newline-separated stdin into the named array. macOS ships bash 3.2,
+# which has no `mapfile`/`readarray`, so this stands in for both.
+read_lines_into() {
+  local __array_name="$1"
+  local __line
+  eval "$__array_name=()"
+  while IFS= read -r __line; do
+    eval "$__array_name+=(\"\$__line\")"
+  done
+}
+
 require_command() {
   local name="$1"
   if ! command -v "$name" >/dev/null 2>&1; then
@@ -339,7 +350,7 @@ clear_ecr_repository_images() {
     local image_ids=()
     case "$JSON_HELPER_KIND" in
       python|py)
-        mapfile -t image_ids < <(run_python_helper "$image_json" <<'PY'
+        read_lines_into image_ids < <(run_python_helper "$image_json" <<'PY'
 import json
 import sys
 
@@ -353,7 +364,7 @@ PY
 )
         ;;
       node)
-        mapfile -t image_ids < <(node - "$image_json" <<'NODE'
+        read_lines_into image_ids < <(node - "$image_json" <<'NODE'
 const payload = JSON.parse(process.argv[2]);
 for (const image of payload.imageIds || []) {
   if (image.imageTag) {
@@ -366,10 +377,10 @@ NODE
 )
         ;;
       jq)
-        mapfile -t image_ids < <(printf '%s' "$image_json" | jq -r '.imageIds[]? | if .imageTag then "imageTag=\(.imageTag)" else "imageDigest=\(.imageDigest)" end')
+        read_lines_into image_ids < <(printf '%s' "$image_json" | jq -r '.imageIds[]? | if .imageTag then "imageTag=\(.imageTag)" else "imageDigest=\(.imageDigest)" end')
         ;;
       powershell)
-        mapfile -t image_ids < <(
+        read_lines_into image_ids < <(
           {
             printf '%s\n' 'param([string]$JsonPayload)'
             printf '%s\n' '$payload = $JsonPayload | ConvertFrom-Json'
