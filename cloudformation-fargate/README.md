@@ -736,16 +736,40 @@ created.
 
 | Requirement | Check | Why it matters |
 | ----------- | ----- | -------------- |
-| AWS CLI v2, authenticated | `aws sts get-caller-identity --profile careconnect-sso` | An expired SSO token fails with `ExpiredToken` partway through |
-| Docker running, **several GB free disk** | `docker info` and `df -h` | A full disk fails the image export with an opaque `input/output error` during "exporting layers", not an out-of-space message |
-| **Java 17** | `java -version` | The backend targets 17. A newer default JDK breaks the Maven build. If your default is not 17, pin it for the session (below) |
-| `bash` | `bash --version` | Any version, including the stock macOS 3.2 |
+| AWS CLI v2, authenticated | `aws sts get-caller-identity --profile careconnect-sso` | An expired SSO token fails with `ExpiredToken` partway through. See [AWS_ACCESS_SETUP.md](./AWS_ACCESS_SETUP.md) if you do not have this profile yet |
+| Docker running | `docker info` | The build produces a `linux/amd64` image |
+| **Several GB free disk** | see below | A full disk fails the image export with an opaque `input/output error` during "exporting layers", not an out-of-space message |
+| **Java 17** | `java -version` | The backend targets 17. A newer default JDK breaks the Maven build; pin it for the session if yours is newer |
+| Shell | — | Windows uses the `.ps1` scripts; macOS / Linux use the `.sh` scripts, which run on any bash including the stock macOS 3.2 |
 
-If your default JDK is not 17:
+Check free disk:
+
+```powershell
+Get-PSDrive C
+```
+
+macOS / Linux:
 
 ```bash
-export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+df -h .
+```
+
+If your default JDK is not 17, pin it for this session:
+
+```powershell
+# Adjust the path to your installed JDK 17.
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot"
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+java -version
+```
+
+macOS / Linux:
+
+```bash
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)"   # macOS
+# Linux: export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 export PATH="$JAVA_HOME/bin:$PATH"
+java -version
 ```
 
 **Time and cost:** a first deploy takes roughly 20 minutes, most of it waiting
@@ -796,6 +820,13 @@ for you, and leaving the committed files untouched is the safer habit:
   value committed in `cfdemo-service.json` is ignored
 
 Set the secrets for the session before deploying:
+
+```powershell
+$env:CARECONNECT_DATABASE_MASTER_PASSWORD = "<strong-postgres-password>"
+$env:CARECONNECT_JWT_SECRET = "<random-string-at-least-32-chars>"
+```
+
+macOS / Linux:
 
 ```bash
 export CARECONNECT_DATABASE_MASTER_PASSWORD="<strong-postgres-password>"
@@ -1269,6 +1300,12 @@ aws cloudformation describe-stack-events \
 ### Teardown: `cfdemo`
 
 **Use the teardown script unless you have a reason not to:**
+
+```powershell
+.\cloudformation-fargate\cdestroy_cloudformation.ps1 -Environment cfdemo -Profile careconnect-sso
+```
+
+macOS / Linux:
 
 ```bash
 ./cloudformation-fargate/cdestroy_cloudformation.sh --environment cfdemo --profile careconnect-sso

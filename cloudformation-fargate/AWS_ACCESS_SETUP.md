@@ -93,6 +93,15 @@ token expired. Expect to run this at the start of each working session.
 
 If stale environment variables are interfering, clear them first:
 
+```powershell
+Remove-Item Env:AWS_ACCESS_KEY_ID -ErrorAction SilentlyContinue
+Remove-Item Env:AWS_SECRET_ACCESS_KEY -ErrorAction SilentlyContinue
+Remove-Item Env:AWS_SESSION_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:AWS_PROFILE -ErrorAction SilentlyContinue
+```
+
+macOS / Linux:
+
 ```bash
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE
 ```
@@ -126,6 +135,12 @@ most of it is RDS.
 
 When you are finished, tear it down:
 
+```powershell
+.\cloudformation-fargate\cdestroy_cloudformation.ps1 -Environment cfdemo -Profile careconnect-sso
+```
+
+macOS / Linux:
+
 ```bash
 ./cloudformation-fargate/cdestroy_cloudformation.sh --environment cfdemo --profile careconnect-sso
 ```
@@ -146,6 +161,12 @@ prod-profile fix in either direction**.
 To get a prod-profile environment, set `SpringProfile` to `prod` in
 `parameters/cfdemo-service.json` and redeploy the service stack:
 
+```powershell
+.\cloudformation-fargate\cdeploy_app_only.ps1 -Environment cfdemo -Profile careconnect-sso
+```
+
+macOS / Linux:
+
 ```bash
 ./cloudformation-fargate/cdeploy_app_only.sh --environment cfdemo --profile careconnect-sso
 ```
@@ -160,6 +181,18 @@ resolve some configuration before it comes up cleanly, and add what you learn to
 this section.
 
 ---
+
+## A note on Windows
+
+The `.ps1` and `.sh` scripts are equivalent: both read the same
+`CARECONNECT_DATABASE_MASTER_PASSWORD` / `CARECONNECT_JWT_SECRET` environment
+variables, both overwrite `BackendImageUri` with the image they just pushed, and
+both empty the ECR repository before deleting the platform stack. Use whichever
+matches your shell.
+
+One gap: `scripts/smoke-test.sh` has no PowerShell equivalent. On Windows, run it
+from Git Bash or WSL, or run its checks by hand — the script's comments say what
+each one asserts.
 
 ## When something fails
 
