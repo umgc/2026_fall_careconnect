@@ -49,8 +49,20 @@ Answer the prompts:
 | SSO region | `us-east-1` |
 | SSO registration scopes | `sso:account:access` (accept the default) |
 
+The start URL is the same for everyone — `d-90679e4644` identifies the school's
+Identity Center instance, not you and not your account. Type it exactly as
+shown.
+
+> **Do not copy it from your browser's address bar.** The portal is a
+> single-page app, so the bar shows `https://d-90679e4644.awsapps.com/start/#/`.
+> That trailing `/#/` is a client-side route, not part of the URL, and leaving it
+> on makes `aws configure sso` fail during `RegisterClient` with an error that
+> does not mention the fragment.
+
 A browser window opens for you to authorize. After that the CLI lists the
-account(s) you have access to — pick yours. Then:
+account(s) you have access to — **pick yours**. Each of us has a different
+account, so this is the step that differs person to person; the URL above is not.
+Then:
 
 | Prompt | Value |
 | ------ | ----- |
