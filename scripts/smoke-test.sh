@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+#
+# Post-deploy smoke test for a CareConnect backend.
+#
+# Checks the things that only break once the app is deployed — configuration,
+# routing, CORS, and the public base URL baked into outbound links. Unit and
+# integration tests cannot catch these, because locally every one of them is
+# trivially correct.
+#
+# Written for bash 3.2 so it runs on stock macOS as well as CI. That means no
+# `mapfile`, no `${var,,}`, and no associative arrays.
+#
+# Usage:
+#   ./scripts/smoke-test.sh --backend-url https://abc123.execute-api.us-east-1.amazonaws.com
+#   ./scripts/smoke-test.sh -u "$BACKEND_URL" --log-group /ecs/careconnect-backend-cfdemo
+#
+# Exit codes: 0 = all hard checks passed, 1 = at least one hard check failed.
+
+set -uo pipefail
+
+# Seed from the environment so `BACKEND_URL=... ./smoke-test.sh` works; flags
+# below take precedence.
+BACKEND_URL="${BACKEND_URL:-}"
+LOG_GROUP="${LOG_GROUP:-}"
+PROFILE="${AWS_PROFILE:-}"
+REGION="${AWS_REGION:-us-east-1}"
+FRONTEND_ORIGIN="http://localhost:3000"
+LOG_WAIT_SECONDS=90
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -u|--backend-url)   BACKEND_URL="$2"; shift 2 ;;
+    -g|--log-group)     LOG_GROUP="$2"; shift 2 ;;
+    -p|--profile)       PROFILE="$2"; shift 2 ;;
+    -r|--region)        REGION="$2"; shift 2 ;;
+    -o|--origin)        FRONTEND_ORIGIN="$2"; shift 2 ;;
+    -w|--log-wait)      LOG_WAIT_SECONDS="$2"; shift 2 ;;
+    -h|--help)
+      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "Unknown argument: $1" >&2; exit 1 ;;
+  esac
+done
+
+if [[ -z "$BACKEND_URL" ]]; then
+  echo "Missing --backend-url (or set BACKEND_URL)." >&2
+  exit 1
+fi
+
+# Normalise: no trailing slash, and never a /v1 suffix — the app builds those
+# paths itself, so a doubled prefix produces confusing 404s.
+BACKEND_URL="$(printf '%s' "$BACKEND_URL" | sed -e 's#/*$##' -e 's#/v1$##')"
+
+PASS_COUNT=0
+FAIL_COUNT=0
+WARN_COUNT=0
+SKIP_COUNT=0
+
+pass() { echo "  PASS  $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
+fail() { echo "  FAIL  $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
+warn() { echo "  WARN  $1"; WARN_COUNT=$((WARN_COUNT + 1)); }
+skip() { echo "  SKIP  $1"; SKIP_COUNT=$((SKIP_COUNT + 1)); }
+step() { echo; echo "==> $1"; }
+
+aws_cli() {
+  if [[ -n "$PROFILE" ]]; then
+    aws --profile "$PROFILE" --region "$REGION" "$@"
+  else
+    aws --region "$REGION" "$@"
+  fi
+}
+
+# Scheme + host + port, which is what has to match between the backend we asked
+# and the links it hands out.
+url_origin() {
+  printf '%s' "$1" | sed -e 's#\(https\{0,1\}://[^/]*\).*#\1#'
+}
+
+echo "CareConnect smoke test"
+echo "  backend:  $BACKEND_URL"
+echo "  origin:   $FRONTEND_ORIGIN"
+[[ -n "$LOG_GROUP" ]] && echo "  logs:     $LOG_GROUP"
+
+# ---------------------------------------------------------------------------
+step "1. Health"
+
+HEALTH_BODY="$(curl -s --max-time 30 "$BACKEND_URL/v1/api/test/health")"
+HEALTH_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$BACKEND_URL/v1/api/test/health")"
+
+if [[ "$HEALTH_CODE" == "200" ]]; then
+  pass "GET /v1/api/test/health -> 200"
+else
+  fail "GET /v1/api/test/health -> $HEALTH_CODE (expected 200)"
+fi
+
+if printf '%s' "$HEALTH_BODY" | grep -q '"status":"healthy"'; then
+  pass "health body reports status=healthy"
+else
+  fail "health body did not report status=healthy: $(printf '%s' "$HEALTH_BODY" | head -c 200)"
+fi
+
+# ---------------------------------------------------------------------------
+step "2. CORS"
+# Plain curl sends no Origin, so it passes even when a browser would be blocked.
+# Spring enforces CORS_ALLOWED_LIST on the container, and an app-only redeploy
+# can silently reset it from the checked-in parameter file.
+
+CORS_HEADERS="$(curl -s -D - -o /dev/null --max-time 30 \
+  -X OPTIONS "$BACKEND_URL/v1/api/test/health" \
+  -H "Origin: $FRONTEND_ORIGIN" \
+  -H "Access-Control-Request-Method: GET")"
+
+if printf '%s' "$CORS_HEADERS" | grep -qi '^access-control-allow-origin'; then
+  pass "preflight from $FRONTEND_ORIGIN returns access-control-allow-origin"
+else
+  fail "preflight from $FRONTEND_ORIGIN has no access-control-allow-origin header"
+fi
+
+# ---------------------------------------------------------------------------
+step "3. Registration"
+
+STAMP="$(date +%Y%m%d%H%M%S)"
+TEST_EMAIL="smoke-${STAMP}@awstest1.com"
+START_MS=$(( ( $(date +%s) - 30 ) * 1000 ))
+
+# Deliberately omits `verificationBaseUrl`. That field lets a client override
+# the link host, which would mask a misconfigured server-side base URL — the
+# precise failure this test exists to detect.
+REGISTER_BODY="$(cat <<JSON
+{
+  "role": "PATIENT",
+  "name": "Smoke Test",
+  "email": "$TEST_EMAIL",
+  "password": "SmokeTest!2026",
+  "firstName": "Smoke",
+  "lastName": "Test",
+  "phone": "555-0100",
+  "dob": "1990-01-01",
+  "gender": "MALE",
+  "address": {
+    "line1": "1 Test St", "line2": "", "city": "Adelphi",
+    "state": "MD", "zip": "20783", "phone": "555-0100"
+  }
+}
+JSON
+)"
+
+REG_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 \
+  -X POST "$BACKEND_URL/v1/api/auth/register" \
+  -H "Content-Type: application/json" -d "$REGISTER_BODY")"
+
+if [[ "$REG_CODE" == "200" ]]; then
+  pass "POST /v1/api/auth/register -> 200 ($TEST_EMAIL)"
+else
+  fail "POST /v1/api/auth/register -> $REG_CODE (expected 200)"
+fi
+
+# ---------------------------------------------------------------------------
+step "4. Verification link"
+# The dev profile logs email to the container instead of sending it, so the
+# link is only observable in CloudWatch.
+
+VERIFY_LINK=""
+
+if [[ "$REG_CODE" != "200" ]]; then
+  skip "registration failed, cannot check the verification link"
+elif [[ -z "$LOG_GROUP" ]]; then
+  skip "no --log-group given, cannot read the emailed link"
+  echo "        (pass --log-group /ecs/careconnect-backend-<env> to enable this check)"
+else
+  WAITED=0
+  while [[ $WAITED -lt $LOG_WAIT_SECONDS ]]; do
+    VERIFY_LINK="$(aws_cli logs filter-log-events \
+      --log-group-name "$LOG_GROUP" \
+      --start-time "$START_MS" \
+      --filter-pattern '"auth/verify/"' \
+      --query 'events[-1].message' --output text 2>/dev/null \
+      | grep -o 'https\{0,1\}://[^[:space:]]*/v1/api/auth/verify/[A-Za-z0-9-]*' | tail -1)"
+    [[ -n "$VERIFY_LINK" ]] && break
+    sleep 5
+    WAITED=$((WAITED + 5))
+  done
+
+  if [[ -z "$VERIFY_LINK" ]]; then
+    fail "no verification link found in $LOG_GROUP within ${LOG_WAIT_SECONDS}s"
+  else
+    pass "verification link found in logs"
+
+    # The assertion that matters. A link pointing anywhere other than the
+    # backend we just called means the server's public base URL is wrong, and
+    # every verification email it sends is unusable.
+    LINK_ORIGIN="$(url_origin "$VERIFY_LINK")"
+    BACKEND_ORIGIN="$(url_origin "$BACKEND_URL")"
+
+    if [[ "$LINK_ORIGIN" == "$BACKEND_ORIGIN" ]]; then
+      pass "link origin matches backend ($LINK_ORIGIN)"
+    else
+      fail "link origin is $LINK_ORIGIN but backend is $BACKEND_ORIGIN"
+      echo "        careconnect.baseurl is not set to this environment's public URL."
+      echo "        Check BASE_URL in the ECS task definition."
+    fi
+
+    case "$BACKEND_ORIGIN" in
+      https://*)
+        case "$LINK_ORIGIN" in
+          https://*) pass "link uses https" ;;
+          *)         fail "backend is https but the link is not: $LINK_ORIGIN" ;;
+        esac ;;
+      *) skip "backend is not https, no scheme assertion" ;;
+    esac
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+step "5. Verification round trip"
+
+if [[ -z "$VERIFY_LINK" ]]; then
+  skip "no link to follow"
+else
+  VERIFY_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$VERIFY_LINK")"
+  if [[ "$VERIFY_CODE" == "200" ]]; then
+    pass "following the emailed link -> 200"
+  else
+    fail "following the emailed link -> $VERIFY_CODE (expected 200)"
+  fi
+
+  CHECK="$(curl -s --max-time 30 \
+    "$BACKEND_URL/v1/api/auth/check-verification?email=$TEST_EMAIL")"
+  if printf '%s' "$CHECK" | grep -qi 'true'; then
+    pass "check-verification reports the account verified"
+  else
+    fail "check-verification did not report verified: $(printf '%s' "$CHECK" | head -c 200)"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+step "6. Validation failure modes"
+# Smoke tests that only exercise the happy path miss the case where a bad
+# request takes the server down a crash path instead of a validation path.
+
+BAD_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 \
+  -X POST "$BACKEND_URL/v1/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"role\":\"PATIENT\",\"name\":\"No Address\",\"email\":\"smoke-noaddr-${STAMP}@awstest1.com\",\"password\":\"SmokeTest!2026\",\"firstName\":\"No\",\"lastName\":\"Address\"}")"
+
+case "$BAD_CODE" in
+  400)
+    pass "register without address -> 400" ;;
+  500)
+    warn "register without address -> 500, expected 400 (known issue #12)"
+    echo "        Promote this to a hard failure once #12 is fixed." ;;
+  *)
+    fail "register without address -> $BAD_CODE (expected 400)" ;;
+esac
+
+# ---------------------------------------------------------------------------
+echo
+echo "-----------------------------------------------"
+printf 'passed %d   failed %d   warned %d   skipped %d\n' \
+  "$PASS_COUNT" "$FAIL_COUNT" "$WARN_COUNT" "$SKIP_COUNT"
+
+if [[ $FAIL_COUNT -gt 0 ]]; then
+  echo "SMOKE TEST FAILED"
+  exit 1
+fi
+
+echo "SMOKE TEST PASSED"
+[[ $SKIP_COUNT -gt 0 ]] && echo "(some checks were skipped — see above)"
+exit 0
