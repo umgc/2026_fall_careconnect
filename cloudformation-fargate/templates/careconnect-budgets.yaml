@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CareConnect account-level cost budget with tiered actual and forecasted alerts.
+
+# Deployed once per AWS account -- NOT per environment, and deliberately outside the
+# numbered 01-04 chain. Those stacks are instantiated per environment; this one is not.
+# Deploying it per environment would create duplicate account-wide budgets that all
+# alert on the same spend.
+#
+# Per-environment budgets are not possible yet: no billable resource in templates
+# 01-04 carries a cost-allocation tag, and cost allocation tags must additionally be
+# activated in the Billing console and do not backfill. See the infrastructure gap
+# list in the WBS 1.2.3 inventory.
+
+Parameters:
+  # Monthly ceiling in USD. Default sized for one continuously running environment:
+  # Fargate 1 vCPU / 3 GB (~$39) + RDS db.t4g.micro with 20 GB (~$14) + public IPv4
+  # (~$4) + Secrets Manager, ECR, and CloudWatch (~$3) = ~$60/month. $75 leaves
+  # headroom without masking a runaway.
+  BudgetLimitAmount:
+    Type: Number
+    Default: 75
+    MinValue: 1
+
+  # Address that receives the alerts. NoEcho keeps it out of console parameter
+  # displays and stack events; pass it at deploy time rather than committing it.
+  NotificationEmail:
+    Type: String
+    NoEcho: true
+    MinLength: 5
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    ConstraintDescription: Must be a valid email address.
+
+  # Named so it is obviously deliberate rather than an experiment.
+  BudgetName:
+    Type: String
+    Default: careconnect-monthly-cost
+
+Resources:
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Ref BudgetName
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimitAmount
+          Unit: USD
+        # No CostFilters: this intentionally covers the entire account. Filtering by
+        # tag would match nothing until cost-allocation tags exist on the 01-04 stacks.
+        CostTypes:
+          # Track gross spend. Student accounts may carry credits; leaving credits
+          # included would report near-zero cost and the alerts would never fire
+          # even while real resources are running.
+          IncludeCredit: false
+          IncludeRefund: false
+          IncludeDiscount: true
+          IncludeTax: true
+          IncludeSubscription: true
+          UseBlended: false
+
+      NotificationsWithSubscribers:
+        # Early warning. On a continuously running environment this lands around
+        # day 14 -- enough time to tear down before the month is spent.
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+
+        # The one that actually saves money: fires on projected month-end spend
+        # rather than money already gone.
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+
+Outputs:
+  BudgetName:
+    Description: Name of the account-level monthly cost budget.
+    Value: !Ref BudgetName
+    Export:
+      Name: careconnect-BudgetName
+
+  BudgetLimit:
+    Description: Monthly cost ceiling in USD.
+    Value: !Ref BudgetLimitAmount
