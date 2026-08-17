@@ -728,6 +728,32 @@ live), use [DEPLOY_2026_SUMMER.md](./DEPLOY_2026_SUMMER.md) — especially
 Set `APP_ROOT` to your local clone before running the commands below (see
 [Repository root](#repository-root-app_root)).
 
+#### 0. Check your toolchain first
+
+Every item below has actually blocked a first deploy. Confirming them takes a
+minute and saves you from failing 15 minutes in, after RDS has already been
+created.
+
+| Requirement | Check | Why it matters |
+| ----------- | ----- | -------------- |
+| AWS CLI v2, authenticated | `aws sts get-caller-identity --profile careconnect-sso` | An expired SSO token fails with `ExpiredToken` partway through |
+| Docker running, **several GB free disk** | `docker info` and `df -h` | A full disk fails the image export with an opaque `input/output error` during "exporting layers", not an out-of-space message |
+| **Java 17** | `java -version` | The backend targets 17. A newer default JDK breaks the Maven build. If your default is not 17, pin it for the session (below) |
+| `bash` | `bash --version` | Any version, including the stock macOS 3.2 |
+
+If your default JDK is not 17:
+
+```bash
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+**Time and cost:** a first deploy takes roughly 20 minutes, most of it waiting
+on RDS. Teardown takes about 10. A full deploy-verify-destroy cycle costs
+well under a dollar; leaving the environment running costs roughly **$50–60 per
+month**, so tear it down when you are finished (see
+[Teardown](#teardown-cfdemo)).
+
 #### 1. Log in to AWS CLI
 
 ```powershell
@@ -758,6 +784,30 @@ At minimum, set:
 - a real PostgreSQL password
 - a real JWT secret
 - the final ECR image URI after the image push step
+
+**If you use the one-command deploy script, skip this step entirely.**
+`cdeploy_cloudformation.sh` and `cdeploy_cloudformation.ps1` handle all three
+for you, and leaving the committed files untouched is the safer habit:
+
+- the database password and JWT secret are read from
+  `CARECONNECT_DATABASE_MASTER_PASSWORD` and `CARECONNECT_JWT_SECRET` and merged
+  into a temporary parameter file, so real secrets never land in a tracked file
+- `BackendImageUri` is overwritten with the image the script just pushed, so the
+  value committed in `cfdemo-service.json` is ignored
+
+Set the secrets for the session before deploying:
+
+```bash
+export CARECONNECT_DATABASE_MASTER_PASSWORD="<strong-postgres-password>"
+export CARECONNECT_JWT_SECRET="<random-string-at-least-32-chars>"
+```
+
+The scripts enforce a minimum length on both (8 and 32 characters) and refuse to
+deploy while any `REPLACE_ME` placeholder remains unresolved. Avoid `/`, `@`,
+`"`, and spaces in the database password — RDS rejects them.
+
+Only edit the parameter files directly if you are running the raw
+`aws cloudformation create-stack` commands instead of the scripts.
 
 
 
@@ -896,7 +946,7 @@ aws cloudformation describe-stacks \
 Expected shape:
 
 ```text
-331738867837.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo
+<account-id>.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo
 ```
 
 
@@ -958,7 +1008,7 @@ echo "$IMAGE_URI"
 Expected image URI:
 
 ```text
-331738867837.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo:cfdemo
+<account-id>.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo:cfdemo
 ```
 
 
@@ -1218,6 +1268,39 @@ aws cloudformation describe-stack-events \
 
 ### Teardown: `cfdemo`
 
+**Use the teardown script unless you have a reason not to:**
+
+```bash
+./cloudformation-fargate/cdestroy_cloudformation.sh --environment cfdemo --profile careconnect-sso
+```
+
+It deletes the four stacks in the correct order and empties the ECR repository
+first, which is what causes the manual path below to fail. Expect roughly 10
+minutes.
+
+Emptying ECR takes more than one pass, and that is normal: tagged images are
+manifest lists whose child images cannot be deleted until the parent is gone, so
+the first pass reports `ImageReferencedByManifestList` failures for the children
+and a later pass removes them. `Repository '...' is already empty` at the end
+means the loop finished, not that it found nothing to do.
+
+Afterwards, confirm nothing survived — the script reports success based on stack
+deletion, so check the resources themselves:
+
+```bash
+aws cloudformation list-stacks --profile careconnect-sso --region us-east-1 \
+  --query "StackSummaries[?contains(StackName,'cfdemo') && StackStatus!='DELETE_COMPLETE'].[StackName,StackStatus]" --output text
+aws rds describe-db-instances --profile careconnect-sso --region us-east-1 --query "DBInstances[].DBInstanceIdentifier" --output text
+aws ecs list-clusters --profile careconnect-sso --region us-east-1 --query "clusterArns" --output text
+aws ecr describe-repositories --profile careconnect-sso --region us-east-1 --query "repositories[].repositoryName" --output text
+aws apigatewayv2 get-apis --profile careconnect-sso --region us-east-1 --query "Items[].Name" --output text
+```
+
+All five should come back empty. RDS and Fargate are the two that actually cost
+money, so they are the ones worth confirming.
+
+The manual sequence below is the fallback when the script cannot be used.
+
 Use this order so dependencies are removed cleanly. Wait until each `wait`
 command completes before continuing:
 
@@ -1303,7 +1386,7 @@ aws ecr batch-delete-image `
   --profile careconnect-sso `
   --region us-east-1 `
   --repository-name careconnect-backend-cfdemo `
-  --image-ids imageDigest=sha256:sha256:e1dc629030f58bd5c2db35fa5b83084afd4437bc675443fb82e5f79d425a7f00 imageDigest=sha256:sha256:0b1fea9aa2d457a32bb5d6ef0a59530f7f5d0c99c0eaaefc51053e3c90bea1bf
+  --image-ids imageDigest=sha256:e1dc629030f58bd5c2db35fa5b83084afd4437bc675443fb82e5f79d425a7f00 imageDigest=sha256:0b1fea9aa2d457a32bb5d6ef0a59530f7f5d0c99c0eaaefc51053e3c90bea1bf
 ```
 
 Confirm the repository is empty:
