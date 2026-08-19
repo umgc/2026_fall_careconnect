@@ -2,9 +2,14 @@
 # Team B — Automated Testing & Coverage Enforcement Pipeline
 #
 # Triggers:
-#   push feature/b-*        → fast path: build + unit tests only
-#   PR  → team-b-develop    → full pipeline
-#   push develop            → full pipeline + regression suite
+#   push feature/b-*             → fast path: build + unit tests + coverage gate
+#   PR  → team-b-develop         → fast path (many merges/day within the team;
+#                                   E2E/accessibility here is high cost, low
+#                                   signal since those stages don't block merge)
+#   PR  → develop                → full pipeline (this is the team-b-develop →
+#                                   develop integration point that affects
+#                                   other teams)
+#   push develop                 → full pipeline + regression suite
 #
 # Stages (single job, sequential steps):
 #   1. Checkout, branch validation, JAVA_HOME
@@ -21,9 +26,11 @@ name: Team B CI
 # Push runs are scoped to develop and Team B branches — running the
 # full ~2h pipeline on every push to every team's feature branches
 # burns Actions minutes and spams their authors with failure emails.
-# PRs still run the full pipeline whenever they target develop or
-# team-b-develop, regardless of source branch, so the coverage gate
-# continues to protect every merge into those branches.
+# PRs targeting team-b-develop stay on the fast path too — that's the
+# team's internal integration branch, merged into many times a day, and
+# the coverage gate (the only stage that actually blocks a merge) still
+# runs. The full pipeline is reserved for PRs targeting develop, since
+# that's the point where a regression would affect other teams.
 on:
   push:
     branches:
@@ -42,6 +49,12 @@ env:
   JAVA_VERSION: '17'
   # Parallel Flutter test runners — matches local full-suite verification.
   FLUTTER_TEST_CONCURRENCY: '4'
+  # Full pipeline (E2E emulator + accessibility scan) runs only for PRs
+  # targeting develop, or direct pushes to develop. PRs targeting
+  # team-b-develop, and all other pushes, get the fast path.
+  IS_FULL_PIPELINE: >-
+    ${{ (github.event_name == 'pull_request' && github.base_ref == 'develop') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 # Cancel superseded runs on the same branch/PR so CI does not pile up.
 concurrency:
@@ -233,9 +246,7 @@ jobs:
       # Tests annotated with "// BLOCKED:" are logged and skipped.
       # ----------------------------------------------------------------
       - name: Enable KVM for Android emulator
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -243,9 +254,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Identify BLOCKED integration tests
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         id: scan-blocked
         working-directory: frontend
         run: |
@@ -263,9 +272,7 @@ jobs:
           echo "=== Blocked test count: $(cat /tmp/blocked_tests.txt | wc -l) ==="
 
       - name: Run E2E integration tests (Android emulator)
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -289,31 +296,23 @@ jobs:
       # Enforces WCAG 2.1 AA (tags: wcag2a, wcag2aa).
       # ----------------------------------------------------------------
       - name: Set up Node.js for axe-core
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Build Flutter web
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         continue-on-error: true
         working-directory: frontend
         run: flutter build web --release
 
       - name: Install axe-core CLI and static server
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         run: npm install -g @axe-core/cli@4 serve
 
       - name: Serve Flutter web and run WCAG 2.1 AA scan
-        if: >
-          github.event_name == 'pull_request' ||
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        if: env.IS_FULL_PIPELINE == 'true'
         continue-on-error: true
         working-directory: frontend
         run: |
@@ -353,11 +352,7 @@ jobs:
       # Stage 8: Final artifact upload
       # ----------------------------------------------------------------
       - name: Upload accessibility report
-        if: >
-          always() && (
-            github.event_name == 'pull_request' ||
-            (github.event_name == 'push' && github.ref == 'refs/heads/develop')
-          )
+        if: always() && env.IS_FULL_PIPELINE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: accessibility-report
