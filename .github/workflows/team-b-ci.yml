@@ -16,6 +16,9 @@
 #   1. Checkout, branch info, JAVA_HOME
 #   2. Build  (Flutter + Maven)
 #   3. Unit tests (BLOCKING — a failing test fails the PR)
+#        - PR, and direct push to develop/team-b-develop: full suite
+#        - push to feature/b-*, fix/b-*, sync/team-b-*: only tests
+#          that map to files changed since branching off team-b-develop
 #   4. Test result artifact upload
 
 name: Team B CI
@@ -38,6 +41,15 @@ env:
   JAVA_VERSION: '17'
   # Parallel Flutter test runners — matches local full-suite verification.
   FLUTTER_TEST_CONCURRENCY: '4'
+  # A push to feature/b-*, fix/b-*, or sync/team-b-* only runs tests
+  # affected by that branch's changes (fast, pre-PR sanity check) —
+  # otherwise the same full suite runs twice (once on push, once on
+  # the PR) for no added signal. PRs and direct pushes to
+  # develop/team-b-develop always run the full suite as the real gate.
+  RUN_FULL_TESTS: >-
+    ${{ github.event_name == 'pull_request' ||
+        github.ref == 'refs/heads/develop' ||
+        github.ref == 'refs/heads/team-b-develop' }}
 
 # Cancel superseded runs on the same branch/PR so CI does not pile up.
 concurrency:
@@ -112,7 +124,14 @@ jobs:
       # ----------------------------------------------------------------
       # Stage 3: Unit tests (BLOCKING — no continue-on-error)
       # ----------------------------------------------------------------
-      - name: Flutter unit tests
+      - name: Determine changed-test diff base
+        if: env.RUN_FULL_TESTS != 'true'
+        run: |
+          git fetch origin +team-b-develop:refs/remotes/origin/team-b-develop
+          echo "DIFF_BASE=$(git merge-base HEAD origin/team-b-develop)" >> "$GITHUB_ENV"
+
+      - name: Flutter unit tests (full suite)
+        if: env.RUN_FULL_TESTS == 'true'
         working-directory: frontend
         run: |
           flutter test \
@@ -120,9 +139,82 @@ jobs:
             --exclude-tags integration \
             --reporter expanded
 
-      - name: Maven unit tests
+      # Maps changed lib/**.dart files to their test/**_test.dart
+      # counterpart by naming convention, plus any test files changed
+      # directly. Doesn't catch tests that indirectly depend on a
+      # changed file without a 1:1 named test — the PR's full suite
+      # is the real safety net for that.
+      - name: Flutter unit tests (changed files only)
+        if: env.RUN_FULL_TESTS != 'true'
+        working-directory: frontend
+        run: |
+          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          TEST_FILES=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              test/*_test.dart)
+                TEST_FILES+=("$f")
+                ;;
+              lib/*.dart)
+                candidate="test/${f#lib/}"
+                candidate="${candidate%.dart}_test.dart"
+                [ -f "$candidate" ] && TEST_FILES+=("$candidate")
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ ${#TEST_FILES[@]} -eq 0 ]; then
+            echo "No frontend test files map to changed code in this push; skipping."
+            exit 0
+          fi
+          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_FILES[@]}" | sort -u)
+          echo "Running: ${UNIQUE[*]}"
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --exclude-tags integration \
+            --reporter expanded \
+            "${UNIQUE[@]}"
+
+      - name: Maven unit tests (full suite)
+        if: env.RUN_FULL_TESTS == 'true'
         working-directory: backend/core
         run: mvn -B test
+
+      # Maps changed src/main/java/**.java files to their
+      # src/test/java/**Test.java counterpart by naming convention,
+      # plus any test files changed directly. Same caveat as the
+      # Flutter step above — the PR's full suite is the real gate.
+      - name: Maven unit tests (changed files only)
+        if: env.RUN_FULL_TESTS != 'true'
+        working-directory: backend/core
+        run: |
+          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          TEST_CLASSES=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              src/test/java/*Test.java)
+                rel="${f#src/test/java/}"
+                TEST_CLASSES+=("${rel%.java}")
+                ;;
+              src/main/java/*.java)
+                rel="${f#src/main/java/}"
+                base="${rel%.java}"
+                candidate="src/test/java/${base}Test.java"
+                [ -f "$candidate" ] && TEST_CLASSES+=("${base}Test")
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ ${#TEST_CLASSES[@]} -eq 0 ]; then
+            echo "No backend test classes map to changed code in this push; skipping."
+            exit 0
+          fi
+          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_CLASSES[@]}" | sort -u | tr '/' '.')
+          TEST_ARG="$(IFS=,; echo "${UNIQUE[*]}")"
+          echo "Running: ${TEST_ARG}"
+          mvn -B test -Dtest="${TEST_ARG}"
 
       # ----------------------------------------------------------------
       # Stage 4: Test result artifact upload
