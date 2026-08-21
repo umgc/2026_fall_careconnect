@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # scripts/check-branch-name.sh
-# Enforces Team B branch naming convention on push.
-# Allowed patterns: feature/b-* or hotfix/b-*
+# Enforces CareConnect branch naming convention on push.
+# Allowed patterns: <type>/<team>-<description>
 #
-# Shared/integration branches (team-b-develop, develop, main) are allowed through.
+# Allowed types: feature, fix, hotfix, chore, docs, test
+# Allowed teams: a, b, c, d, e
+#
+# Shared/integration branches (team-*-develop, develop, main) are allowed through.
 
 set -euo pipefail
 
@@ -14,15 +17,20 @@ if [[ -z "$BRANCH" ]]; then
   exit 0
 fi
 
-# Allow pushes from team integration and shared branches directly
-ALLOWED_EXACT=("team-b-develop" "develop" "main")
+# Allow pushes from shared/integration branches directly
+ALLOWED_EXACT=("develop" "main")
 for allowed in "${ALLOWED_EXACT[@]}"; do
   if [[ "$BRANCH" == "$allowed" ]]; then
     exit 0
   fi
 done
 
-# Enforce team branch naming pattern for all other branches
+# Allow any team integration branch: team-a-develop, team-b-develop, etc.
+if [[ "$BRANCH" =~ ^team-[a-e]-develop$ ]]; then
+  exit 0
+fi
+
+# Enforce naming pattern for all other branches
 # Allowed types: feature, fix, hotfix, chore, docs, test
 # Allowed teams: a, b, c, d, e
 if [[ "$BRANCH" =~ ^(feature|fix|hotfix|chore|docs|test)/[a-e]-.+ ]]; then
@@ -43,10 +51,10 @@ echo "    feature/b-athena-patient-fetch"
 echo "    fix/a-dashboard-null-pointer"
 echo "    hotfix/c-auth-token-refresh"
 echo "    chore/d-update-dependencies"
-echo "    docs/b-update-api-guide"
+echo "    docs/e-update-api-guide"
 echo "    test/b-add-coverage-for-vitals"
 echo ""
 echo "  Rename your branch:"
-echo "    git branch -m $BRANCH <type>/b-<your-description>"
+echo "    git branch -m $BRANCH <type>/<team>-<your-description>"
 echo ""
 exit 1
