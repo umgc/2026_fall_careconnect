@@ -48,6 +48,9 @@ name: Build and Analyze
 # ----------------------------------------------------------
 on:
   pull_request:
+    branches:
+      - team_d
+      - team_d-*
   push:
     branches:
       - team_d
