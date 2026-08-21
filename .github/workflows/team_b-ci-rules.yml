@@ -1,21 +1,12 @@
-# team-b-ci.yml
-# Team B — Feature Development Build & Test Pipeline
+# Team B — Feature Development Build Pipeline
 #
 # Runs once on every PR targeting team-b-develop.
-# A failing build or test blocks the merge.
-# Security/SAST/SCA/secrets scanning is enforced repo-wide by
-# Team D's build-and-analyze.yml and is not duplicated here.
+# A failing test blocks the merge — no duplicate runs on push.
 #
 # Triggers:
 #   PR → team-b-develop
-#
-# Stages (single job, sequential steps):
-#   1. Checkout, branch info, JAVA_HOME
-#   2. Build  (Flutter + Maven)
-#   3. Unit tests (BLOCKING — a failing test fails the PR)
-#   4. Test result artifact upload
 
-name: Team B CI
+name: Team B Develop Branch CI
 
 on:
   pull_request:
