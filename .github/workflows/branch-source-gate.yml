@@ -1,0 +1,48 @@
+# branch-source-gate.yml
+# Enforces source-branch restrictions on protected target branches.
+#
+# Rules:
+#   PRs → main     must originate from: develop
+#   PRs → develop  must originate from: team-a-develop, team-b-develop,
+#                                        team-c-develop, team-d-develop,
+#                                        team-e-develop (or any team-*-develop)
+#
+# To enforce these rules, add this workflow as a required status check
+# in GitHub branch protection settings for both `main` and `develop`.
+
+name: Branch Source Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  check-source-branch:
+    name: Verify PR source branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check source branch for PRs → main
+        if: github.base_ref == 'main'
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "::error::PRs to 'main' must come from 'develop'."
+            echo "         Source branch was: ${{ github.head_ref }}"
+            exit 1
+          fi
+          echo "Source branch check passed: ${{ github.head_ref }} → main"
+
+      - name: Check source branch for PRs → develop
+        if: github.base_ref == 'develop'
+        run: |
+          SOURCE="${{ github.head_ref }}"
+          # Allow any team-*-develop branch (team-a-develop, team-b-develop, etc.)
+          if echo "${SOURCE}" | grep -qE '^team-[a-z]+-develop$'; then
+            echo "Source branch check passed: ${SOURCE} → develop"
+            exit 0
+          fi
+          echo "::error::PRs to 'develop' must come from a team develop branch (e.g. team-b-develop)."
+          echo "         Source branch was: ${SOURCE}"
+          exit 1
