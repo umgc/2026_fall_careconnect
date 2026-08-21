@@ -31,4 +31,9 @@ pre-push:
   commands:
     check-branch-name:
       run: bash scripts/check-branch-name.sh
-      fail_text: "Branch name does not match required pattern (feature/b-* or hotfix/b-*)."
+      fail_text: "Branch name does not match required pattern (<type>/<team>-*, where type is feature/fix/hotfix/chore/docs/test and team is a-e)."
+
+commit-msg:
+  commands:
+    check-commit-msg:
+      run: bash scripts/check-commit-msg.sh {1}

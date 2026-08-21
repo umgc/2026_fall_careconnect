@@ -22,23 +22,31 @@ for allowed in "${ALLOWED_EXACT[@]}"; do
   fi
 done
 
-# Enforce Team B naming pattern for all other branches
-if [[ "$BRANCH" =~ ^(feature|hotfix)/b-.+ ]]; then
+# Enforce team branch naming pattern for all other branches
+# Allowed types: feature, fix, hotfix, chore, docs, test
+# Allowed teams: a, b, c, d, e
+if [[ "$BRANCH" =~ ^(feature|fix|hotfix|chore|docs|test)/[a-e]-.+ ]]; then
   echo "Branch name OK: $BRANCH"
   exit 0
 fi
 
 echo ""
-echo "  ERROR: Branch name '$BRANCH' does not follow Team B naming rules."
+echo "  ERROR: Branch name '$BRANCH' does not follow the required naming rules."
 echo ""
-echo "  Required pattern:  feature/b-<description>"
-echo "                     hotfix/b-<description>"
+echo "  Required pattern:  <type>/<team>-<description>"
+echo ""
+echo "  Allowed types:  feature, fix, hotfix, chore, docs, test"
+echo "  Allowed teams:  a, b, c, d, e"
 echo ""
 echo "  Examples:"
 echo "    feature/b-athena-patient-fetch"
-echo "    hotfix/b-fix-auth-token-refresh"
+echo "    fix/a-dashboard-null-pointer"
+echo "    hotfix/c-auth-token-refresh"
+echo "    chore/d-update-dependencies"
+echo "    docs/b-update-api-guide"
+echo "    test/b-add-coverage-for-vitals"
 echo ""
 echo "  Rename your branch:"
-echo "    git branch -m $BRANCH feature/b-<your-description>"
+echo "    git branch -m $BRANCH <type>/b-<your-description>"
 echo ""
 exit 1
