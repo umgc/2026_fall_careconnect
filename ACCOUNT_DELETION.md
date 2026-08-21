@@ -4,7 +4,7 @@
 
 To request deletion of your Care Connect account, please email:
 
-**careconnect.support@gmail.com**
+**careconnect.support@gmail.com** 
 
 Include the following in your request:
 - Full name
