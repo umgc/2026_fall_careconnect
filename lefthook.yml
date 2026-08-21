@@ -1,0 +1,34 @@
+# lefthook.yml
+# Pre-commit and pre-push hooks for CareConnect Team B.
+# Run `lefthook install` once after cloning to activate.
+#
+# What runs:
+#   pre-commit: dart format, flutter analyze, maven compile (parallel, ~20s)
+#   pre-push:   branch name enforcement (feature/b-* or hotfix/b-*)
+#
+# Tests are excluded — they run in CI on every PR.
+# Skip hooks only when necessary: git commit --no-verify / git push --no-verify
+
+pre-commit:
+  parallel: true          # Run Flutter and Maven checks at the same time
+  commands:
+    dart-format:
+      glob: "frontend/lib/**/*.dart"
+      run: dart format --set-exit-if-changed {staged_files}
+      stage_fixed: true   # Auto-stage files that dart format corrected
+
+    flutter-analyze:
+      root: frontend
+      run: flutter analyze --no-pub
+      fail_text: "Flutter analyze found issues. Fix them before committing."
+
+    mvn-compile:
+      root: backend/core
+      run: mvn -B compile -DskipTests -q
+      fail_text: "Maven compile failed. Fix compilation errors before committing."
+
+pre-push:
+  commands:
+    check-branch-name:
+      run: bash scripts/check-branch-name.sh
+      fail_text: "Branch name does not match required pattern (feature/b-* or hotfix/b-*)."

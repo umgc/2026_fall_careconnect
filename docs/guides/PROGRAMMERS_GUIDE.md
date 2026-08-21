@@ -8044,3 +8044,174 @@ This comprehensive troubleshooting guide covers the most common issues encounter
 
 *Last Updated: October 2025*
 *Version: 2025.1.0*
+
+---
+
+## Pre-Commit Hooks (lefthook)
+
+CareConnect uses [**lefthook**](https://github.com/evilmartians/lefthook) to run fast,
+local quality checks before every commit and push. The configuration lives in
+`lefthook.yml` at the repo root and is committed to version control so every team
+member gets the same hooks automatically.
+
+### What runs and when
+
+| Hook | Checks | Blocking? |
+|---|---|---|
+| `pre-commit` | Dart format, Flutter analyze, Maven compile | Yes — bad format or compile error stops the commit |
+| `pre-push` | Branch name must match `feature/b-*` or `hotfix/b-*` | Yes — push from a wrongly named branch is rejected |
+
+Tests are intentionally **excluded** from the pre-commit hook. They run in CI on
+every PR. Keeping the pre-commit hook under ~30 seconds prevents developers from
+bypassing it with `--no-verify`.
+
+---
+
+### Installation
+
+Lefthook is a single binary — no Node, Python, or Ruby runtime required.
+
+**macOS**
+```bash
+brew install lefthook
+```
+
+**Windows (winget)**
+```powershell
+winget install evilmartians.lefthook
+```
+
+**Windows (scoop)**
+```powershell
+scoop install lefthook
+```
+
+**Linux (apt / curl)**
+```bash
+# curl install (any Linux distro)
+curl -sSL https://github.com/evilmartians/lefthook/releases/latest/download/lefthook_linux_amd64 \
+  -o /usr/local/bin/lefthook && chmod +x /usr/local/bin/lefthook
+```
+
+After installing, run this **once** from the repo root to activate the hooks:
+
+```bash
+lefthook install
+```
+
+That's it. The hooks are now active for every `git commit` and `git push`.
+
+---
+
+### Configuration (`lefthook.yml`)
+
+```yaml
+# lefthook.yml
+# Pre-commit and pre-push hooks for CareConnect Team B.
+# Run `lefthook install` once after cloning to activate.
+
+pre-commit:
+  parallel: true          # Run Flutter and Maven checks at the same time
+  commands:
+    dart-format:
+      glob: "frontend/lib/**/*.dart"
+      run: dart format --set-exit-if-changed {staged_files}
+      stage_fixed: true   # Auto-stage the formatted files
+
+    flutter-analyze:
+      root: frontend
+      run: flutter analyze --no-pub
+      fail_text: "Flutter analyze found issues. Fix them before committing."
+
+    mvn-compile:
+      root: backend/core
+      run: mvn -B compile -DskipTests -q
+      fail_text: "Maven compile failed. Fix compilation errors before committing."
+
+pre-push:
+  commands:
+    check-branch-name:
+      run: bash scripts/check-branch-name.sh
+      fail_text: "Branch name does not match required pattern (feature/b-* or hotfix/b-*)."
+```
+
+---
+
+### Branch name validator (`scripts/check-branch-name.sh`)
+
+```bash
+#!/usr/bin/env bash
+# scripts/check-branch-name.sh
+# Enforces Team B branch naming convention on push.
+# Allowed patterns: feature/b-* or hotfix/b-*
+
+set -euo pipefail
+
+BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
+
+if [[ -z "$BRANCH" ]]; then
+  echo "Could not determine current branch name; skipping check."
+  exit 0
+fi
+
+# Allow pushes from team integration and shared branches directly
+ALLOWED_EXACT=("team-b-develop" "develop" "main")
+for allowed in "${ALLOWED_EXACT[@]}"; do
+  if [[ "$BRANCH" == "$allowed" ]]; then
+    exit 0
+  fi
+done
+
+# Enforce Team B naming pattern for all other branches
+if [[ "$BRANCH" =~ ^(feature|hotfix)/b-.+ ]]; then
+  echo "Branch name OK: $BRANCH"
+  exit 0
+fi
+
+echo ""
+echo "  ERROR: Branch name '$BRANCH' does not follow Team B naming rules."
+echo ""
+echo "  Required pattern:  feature/b-<description>"
+echo "                     hotfix/b-<description>"
+echo ""
+echo "  Examples:"
+echo "    feature/b-athena-patient-fetch"
+echo "    hotfix/b-fix-auth-token-refresh"
+echo ""
+echo "  Rename your branch:"
+echo "    git branch -m $BRANCH feature/b-<your-description>"
+echo ""
+exit 1
+```
+
+Make the script executable:
+
+```bash
+chmod +x scripts/check-branch-name.sh
+```
+
+---
+
+### Skipping hooks (use sparingly)
+
+If you have a genuine reason to bypass the hooks (e.g., committing a WIP note or
+fixing a merge conflict), you can skip them with:
+
+```bash
+git commit --no-verify -m "wip: ..."
+git push --no-verify
+```
+
+Do not make `--no-verify` a habit. CI will still catch everything on the PR.
+
+---
+
+### Uninstalling
+
+To remove the hooks from your local `.git/hooks/`:
+
+```bash
+lefthook uninstall
+```
+
+This does not delete `lefthook.yml` — it only removes the local hook symlinks.
