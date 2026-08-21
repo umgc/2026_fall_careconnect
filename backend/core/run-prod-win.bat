@@ -62,7 +62,7 @@ if not "%missing_vars%"=="" (
     echo Please update your .env file with the required values
 )
 
-echo Starting CareConnect Backend in Development Mode...
+echo Starting CareConnect Backend in Production Mode...
 echo ==========================================
 
 REM Check if Docker Desktop is running (Windows specific)
@@ -166,7 +166,7 @@ echo ----------------------------------------
 echo Development Configuration:
 echo - Platform: Windows
 echo - Database: PostgreSQL (Docker)
-echo - Profile: dev
+echo - Profile: prod
 echo - API Keys: Mocked
 echo - Email: Console logging
 echo - File Storage: Local
