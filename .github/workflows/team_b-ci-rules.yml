@@ -14,7 +14,8 @@
 #   1. Checkout, branch info, JAVA_HOME
 #   2. Build  (Flutter + Maven)
 #   3. Unit tests for changed files only (BLOCKING)
-#   4. Test result artifact upload
+#   4. Coverage gate — 95% on changed files (BLOCKING)
+#   5. Test result artifact upload
 
 name: Team B Develop Branch CI
 
@@ -140,6 +141,7 @@ jobs:
           echo "Running: ${UNIQUE[*]}"
           flutter test \
             --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --coverage \
             --exclude-tags integration \
             --reporter expanded \
             "${UNIQUE[@]}"
@@ -172,10 +174,27 @@ jobs:
           mapfile -t UNIQUE < <(printf '%s\n' "${TEST_CLASSES[@]}" | sort -u | tr '/' '.')
           TEST_ARG="$(IFS=,; echo "${UNIQUE[*]}")"
           echo "Running: ${TEST_ARG}"
-          mvn -B test -Dtest="${TEST_ARG}"
+          mvn -B test jacoco:report -Dtest="${TEST_ARG}"
 
       # ----------------------------------------------------------------
-      # Stage 4: Test result artifact upload
+      # Stage 4: Coverage gate — 95% on changed files (BLOCKING)
+      # ----------------------------------------------------------------
+      - name: Set up Python (coverage gate)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Coverage gate (changed files, 95% threshold)
+        run: |
+          python scripts/coverage_gate.py \
+            --diff-base "${DIFF_BASE}" \
+            --threshold 0.95 \
+            --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
+            --lcov-info frontend/coverage/lcov.info \
+            --repo-root .
+
+      # ----------------------------------------------------------------
+      # Stage 5: Test result artifact upload
       # ----------------------------------------------------------------
       - name: Upload test results
         if: always()
@@ -184,5 +203,7 @@ jobs:
           name: test-results
           path: |
             backend/core/target/surefire-reports/
+            backend/core/target/site/jacoco/
             frontend/test-results/
+            frontend/coverage/
           retention-days: 14
