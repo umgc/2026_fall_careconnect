@@ -91,7 +91,35 @@ jobs:
       # ----------------------------------------------------------------
       # Stage 3: Unit tests (BLOCKING — no continue-on-error)
       # ----------------------------------------------------------------
-      - name: Flutter unit tests
+
+      # Determine the diff base (PR merge base) and whether a full
+      # test run is required.  A full run is triggered when project-wide
+      # files change (pubspec, pom.xml, analysis_options) because those
+      # affect every file in the project.
+      - name: Determine changed test diff base
+        run: |
+          BASE=$(git merge-base HEAD origin/${{ github.base_ref }})
+          echo "DIFF_BASE=${BASE}" >> "$GITHUB_ENV"
+
+          # Flutter infra files
+          FLUTTER_INFRA=$(git diff --name-only "${BASE}" -- \
+                   frontend/pubspec.yaml \
+                   frontend/pubspec.lock \
+                   frontend/analysis_options.yaml | wc -l)
+
+          # Maven infra files
+          MAVEN_INFRA=$(git diff --name-only "${BASE}" -- \
+                   backend/core/pom.xml | wc -l)
+
+          if [ "$FLUTTER_INFRA" -gt 0 ] || [ "$MAVEN_INFRA" -gt 0 ]; then
+            echo "RUN_FULL_TESTS=true" >> "$GITHUB_ENV"
+            echo "Infrastructure file changed — full test suite will run."
+          else
+            echo "RUN_FULL_TESTS=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Flutter unit tests (full suite)
+        if: env.RUN_FULL_TESTS == 'true'
         working-directory: frontend
         run: |
           flutter test \
@@ -99,9 +127,84 @@ jobs:
             --exclude-tags integration \
             --reporter expanded
 
-      - name: Maven unit tests
+      - name: Flutter unit tests (changed files only)
+        if: env.RUN_FULL_TESTS != 'true'
+        working-directory: frontend
+        run: |
+          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+
+          TEST_FILES=()
+
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+
+            case "$f" in
+              test/*_test.dart)
+                TEST_FILES+=("$f")
+                ;;
+              lib/*.dart)
+                candidate="test/${f#lib/}"
+                candidate="${candidate%.dart}_test.dart"
+                [ -f "$candidate" ] && TEST_FILES+=("$candidate")
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ ${#TEST_FILES[@]} -eq 0 ]; then
+            echo "No frontend test files map to changed code in this push; skipping."
+            exit 0
+          fi
+
+          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_FILES[@]}" | sort -u)
+          echo "Running: ${UNIQUE[*]}"
+
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --exclude-tags integration \
+            --reporter expanded \
+            "${UNIQUE[@]}"
+
+      - name: Maven unit tests (full suite)
+        if: env.RUN_FULL_TESTS == 'true'
         working-directory: backend/core
         run: mvn -B test
+
+      - name: Maven unit tests (changed files only)
+        if: env.RUN_FULL_TESTS != 'true'
+        working-directory: backend/core
+        run: |
+          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- src/)"
+
+          TEST_CLASSES=()
+
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+
+            case "$f" in
+              src/test/java/*)
+                # Direct change to a test file — extract class name
+                cls=$(basename "$f" .java)
+                TEST_CLASSES+=("$cls")
+                ;;
+              src/main/java/*)
+                # Changed source file — look for matching test class
+                cls=$(basename "$f" .java)
+                candidate_test="${cls}Test"
+                TEST_CLASSES+=("$candidate_test")
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ ${#TEST_CLASSES[@]} -eq 0 ]; then
+            echo "No backend test classes map to changed code in this push; skipping."
+            exit 0
+          fi
+
+          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_CLASSES[@]}" | sort -u)
+          TEST_PATTERN=$(IFS=","; echo "${UNIQUE[*]}")
+          echo "Running test classes: ${TEST_PATTERN}"
+
+          mvn -B test -Dtest="${TEST_PATTERN}" -DfailIfNoTests=false
 
       # ----------------------------------------------------------------
       # Stage 4: Test result artifact upload
