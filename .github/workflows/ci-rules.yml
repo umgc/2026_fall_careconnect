@@ -1,14 +1,16 @@
-# team-b-ci.yml
+# ci-rules.yml
 # CareConnect — Feature Branch CI Pipeline
 #
-# Runs once on every PR targeting team-b-develop.
+# Runs once on every PR targeting any team-*-develop branch
+# (team-a-develop, team-b-develop, team-c-develop, team-d-develop,
+# team-e-develop, or any future team-<name>-develop).
 # Only tests that map to files changed in the PR are executed.
 # A failing build, test, or coverage check blocks the merge.
 # Security/SAST/SCA/secrets scanning is enforced repo-wide by
 # Team D's build-and-analyze.yml and is not duplicated here.
 #
 # Triggers:
-#   PR → team-b-develop
+#   PR → team-*-develop
 #
 # Stages (single job, sequential steps):
 #   1. Checkout, branch info, JAVA_HOME
@@ -22,7 +24,7 @@ name: Feature Branch CI
 on:
   pull_request:
     branches:
-      - team-b-develop
+      - 'team-*-develop'
 
 env:
   FLUTTER_VERSION: '3.x'
