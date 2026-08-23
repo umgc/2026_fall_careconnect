@@ -399,7 +399,7 @@ jobs:
           java-version: '21'
 
       # ------------------------------------------------------
-      # Tool: Checkstyle (Java Style Enforcement)
+      # Tool: Checkstyle (Java Style Analysis)
       # ----------------------------------------------------------
       # Output: quality/analysis/raw/checkstyle.xml
       # ------------------------------------------------------
@@ -858,8 +858,12 @@ jobs:
       # Step 7: Run Quality Gate Engine
       # ----------------------------------------------------------
       # Exit codes:
-      #   0 → all policy checks passed (merge allowed)
-      #   1 → one or more policy checks failed (merge blocked)
+      #   0 → all checks passed, or gate.mode = report_only (never exits 1)
+      #   1 → policy violations detected AND gate.mode = enforce
+      #
+      # Current mode: report_only — this step always exits 0.
+      # Violations are reported but do not block the PR.
+      # To change enforcement, update gate.mode in policy.yaml.
       # ------------------------------------------------------
       - name: Run Quality Gate
         shell: bash
