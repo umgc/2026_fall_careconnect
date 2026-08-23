@@ -48,6 +48,8 @@ import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Task 5.3 — Ask AI gateway orchestrator.
@@ -388,33 +390,13 @@ public class AiAskService {
                             context.promptExcerptMap(),
                             context.citationRefMap())
                     || !claimCitations.grounded()) {
-                // Persist only claims that already passed verification — never the failing ones.
-                final String safeDraft = String.join(" ", verifiedClaimTexts);
-                final List<AiCitation> safeCitations = verifiedEvidenceByRef.isEmpty()
-                        ? List.of()
-                        : citationAssembler.assembleWithEvidence(
-                                List.copyOf(verifiedEvidenceByRef.keySet()),
-                                context.citationRefMap(),
-                                verifiedEvidenceByRef).citations();
-                return holdOrGroundingFailure(
-                        caller,
-                        request,
-                        auditSession,
-                        requestId,
-                        auditId,
-                        sessionId,
-                        locale,
-                        sanitizedQuery,
-                        safeDraft,
-                        safeCitations,
-                        List.of("UNSUPPORTED_CLAIM"),
-                        "Generated answer contains an unsupported factual claim",
-                        retrieval,
-                        context,
-                        retrievalLatencyMs,
-                        inferenceLatencyMs,
-                        llm.modelId(),
-                        askStartedNanos);
+                // Skip only the unsupported claim, not the whole answer — a model that
+                // pads its response with one extraneous or imperfectly-cited claim
+                // shouldn't cause an otherwise correctly-grounded claim to be withheld.
+                // If nothing survives this loop, the empty-answer check below still
+                // fails the request closed exactly as before.
+                log.debug("Ask AI dropping unsupported claim requestId={}", requestId);
+                continue;
             }
             verifiedClaimTexts.add(claim.text().trim());
             final String ref = claim.citationRefs().get(0);
@@ -793,20 +775,93 @@ public class AiAskService {
         return excerpt != null
                 && evidence != null
                 && evidence.codePointCount(0, evidence.length()) >= 20
-                && claim.text().equals(evidence)
+                && normalizedTextEquals(claim.text(), evidence)
                 && isCompleteSpan(excerpt, evidence)
                 && GroundingRelevancePolicy.isRelevant(
                         query, evidence, excerpt.text(), refMap.get(ref));
     }
 
+    private static final Pattern GROUNDING_WHITESPACE_RUN = Pattern.compile("\\s+");
+
+    /**
+     * Case/whitespace/quote-style differences are formatting drift, not evidence of an
+     * unsupported claim — different models "quote" a source sentence with varying
+     * fidelity (smart quotes, collapsed whitespace, minor capitalization) even when they
+     * genuinely identified the correct span. Comparing on a canonical form keeps the real
+     * safety property (claim text and evidence must be the same source sentence) without
+     * demanding byte-for-byte reproduction that in practice only one model family reliably
+     * produced (see aws-bedrock-grounding-contract-model-portability-fix.txt).
+     */
+    private static boolean normalizedTextEquals(final String a, final String b) {
+        return canonicalizeForMatch(collapseWhitespace(a))
+                .equals(canonicalizeForMatch(collapseWhitespace(b)));
+    }
+
+    private static String collapseWhitespace(final String value) {
+        return GROUNDING_WHITESPACE_RUN.matcher(value.trim()).replaceAll(" ");
+    }
+
+    /**
+     * Character-for-character substitutions only (quote/dash style + case folding) so the
+     * result stays the same length as the input — callers rely on offsets into the
+     * canonicalized text lining up with offsets into the original excerpt text.
+     */
+    private static String canonicalizeForMatch(final String value) {
+        final StringBuilder out = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            final char c = value.charAt(i);
+            switch (c) {
+                case '‘', '’', 'ʼ' -> out.append('\'');
+                case '“', '”' -> out.append('"');
+                case '–', '—' -> out.append('-');
+                default -> out.append(Character.toLowerCase(c));
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * Locates {@code evidence} inside the excerpt tolerant of whitespace-run, quote-style,
+     * and case drift, without collapsing the haystack itself — so the returned offsets
+     * still index into the real excerpt text for the sentence-boundary checks below.
+     * Returns {@code null} when there is no match, or more than one (ambiguous evidence
+     * is rejected exactly as the prior exact-match implementation rejected duplicates).
+     */
+    private static int[] findLenientSpan(final String haystackOriginal, final String evidence) {
+        final String haystackCanonical = canonicalizeForMatch(haystackOriginal);
+        final String needleCanonical = canonicalizeForMatch(evidence.trim());
+        if (needleCanonical.isEmpty()) {
+            return null;
+        }
+        final String[] tokens = GROUNDING_WHITESPACE_RUN.split(needleCanonical);
+        final StringBuilder patternSource = new StringBuilder();
+        for (int i = 0; i < tokens.length; i++) {
+            if (i > 0) {
+                patternSource.append("\\s+");
+            }
+            patternSource.append(Pattern.quote(tokens[i]));
+        }
+        final Matcher matcher = Pattern.compile(patternSource.toString()).matcher(haystackCanonical);
+        if (!matcher.find()) {
+            return null;
+        }
+        final int start = matcher.start();
+        final int end = matcher.end();
+        if (matcher.find(start + 1)) {
+            return null;
+        }
+        return new int[] {start, end};
+    }
+
     private static boolean isCompleteSpan(
             final RetrievalContextAssembler.PromptExcerpt excerpt,
             final String evidence) {
-        final int start = excerpt.text().indexOf(evidence);
-        if (start < 0 || excerpt.text().indexOf(evidence, start + 1) >= 0) {
+        final int[] span = findLenientSpan(excerpt.text(), evidence);
+        if (span == null) {
             return false;
         }
-        final int end = start + evidence.length();
+        final int start = span[0];
+        final int end = span[1];
         if ((start == 0 && excerpt.startTruncated())
                 || (end == excerpt.text().length() && excerpt.endTruncated())) {
             return false;
@@ -865,8 +920,14 @@ public class AiAskService {
             final UUID requestId,
             final UUID auditId,
             final UUID sessionId,
-            final String message) {
-        return new AskAiGroundingException(requestId, auditId, sessionId, message);
+            final String reason) {
+        // `reason` is a developer-facing diagnostic, not shown to callers — the exception
+        // carries a single, natural-language message so clients (including voice/TTS
+        // surfaces) never read a technical string like "did not satisfy the grounded
+        // response contract" back to a patient or caregiver.
+        log.warn("Ask AI grounding failure requestId={} reason={}", requestId, reason);
+        return new AskAiGroundingException(
+                requestId, auditId, sessionId, AskAiSafetyCopy.UNGROUNDED_EN);
     }
 
     private AiAskResponse noRecordsResponse(
