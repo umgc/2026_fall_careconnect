@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import '../../../services/tts_engine.dart';
 
 /// Speaks envelope-level mail text for ADA audio readout (Task 3.14.10).
 abstract class MailEnvelopeTts {
@@ -8,53 +8,6 @@ abstract class MailEnvelopeTts {
   Future<void> stop();
 
   Future<void> dispose();
-}
-
-/// Platform TTS engine surface used by [FlutterMailEnvelopeTts].
-///
-/// Extracted so unit tests can inject a fake without touching MethodChannels.
-abstract class MailTtsEngine {
-  Future<dynamic> setLanguage(String language);
-
-  Future<dynamic> setSpeechRate(double rate);
-
-  Future<dynamic> setVolume(double volume);
-
-  Future<dynamic> setPitch(double pitch);
-
-  Future<dynamic> awaitSpeakCompletion(bool awaitCompletion);
-
-  Future<dynamic> speak(String text);
-
-  Future<dynamic> stop();
-}
-
-class FlutterTtsEngine implements MailTtsEngine {
-  FlutterTtsEngine({FlutterTts? tts}) : _tts = tts ?? FlutterTts();
-
-  final FlutterTts _tts;
-
-  @override
-  Future<dynamic> setLanguage(String language) => _tts.setLanguage(language);
-
-  @override
-  Future<dynamic> setSpeechRate(double rate) => _tts.setSpeechRate(rate);
-
-  @override
-  Future<dynamic> setVolume(double volume) => _tts.setVolume(volume);
-
-  @override
-  Future<dynamic> setPitch(double pitch) => _tts.setPitch(pitch);
-
-  @override
-  Future<dynamic> awaitSpeakCompletion(bool awaitCompletion) =>
-      _tts.awaitSpeakCompletion(awaitCompletion);
-
-  @override
-  Future<dynamic> speak(String text) => _tts.speak(text);
-
-  @override
-  Future<dynamic> stop() => _tts.stop();
 }
 
 /// Shared TTS instance used by mail list/detail read-aloud controls.
@@ -78,10 +31,10 @@ class MailEnvelopeTtsService {
 }
 
 class FlutterMailEnvelopeTts implements MailEnvelopeTts {
-  FlutterMailEnvelopeTts({MailTtsEngine? engine})
+  FlutterMailEnvelopeTts({TtsEngine? engine})
       : _engine = engine ?? FlutterTtsEngine();
 
-  final MailTtsEngine _engine;
+  final TtsEngine _engine;
   bool _ready = false;
 
   Future<void> _ensureReady() async {
