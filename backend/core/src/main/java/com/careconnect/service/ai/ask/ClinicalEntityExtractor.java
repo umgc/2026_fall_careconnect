@@ -47,7 +47,7 @@ final class ClinicalEntityExtractor {
     private static final Set<String> GENERIC_CLINICAL_INTENT = Set.of(
             "allergy", "allergies", "appointment", "appointments", "care",
             "change", "changed", "changes", "current", "currently", "details",
-            "dose", "dosage", "drug", "drugs", "happened", "history", "information",
+            "dose", "dosage", "dosed", "dosing", "drug", "drugs", "happened", "history", "information",
             "latest", "level", "levels", "list", "medication", "medications",
             "medicine", "medicines", "meds", "most", "newest", "now", "patient",
             "pain", "recent", "recently", "record", "records", "status", "tablet",

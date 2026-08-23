@@ -57,6 +57,18 @@ class GroundingRelevancePolicyTest {
     }
 
     @Test
+    void dosageFigureIsAcceptedAsMedicationEvidenceForDrugsNotOnTheHardcodedList() {
+        // Lisinopril isn't in CONCEPTS' hardcoded medication word list — an
+        // exhaustive drug-name list can't be maintained, so a dosage figure like
+        // "10mg" must stand on its own as evidence the span is medication-related.
+        final String evidence = "Patient reports taking Lisinopril 10mg once daily each morning.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What medication is the patient taking?", evidence, evidence, strongChunk(evidence)))
+                .isTrue();
+    }
+
+    @Test
     void genericDoseQuestionStillUsesMedicationConceptEvidence() {
         final String evidence = "Insulin was increased to ten units nightly.";
 
