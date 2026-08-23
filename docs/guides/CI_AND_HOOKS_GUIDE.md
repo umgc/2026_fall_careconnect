@@ -17,9 +17,9 @@ This guide covers two complementary layers of quality enforcement:
 | `commit-msg` | Commit message format `<type>: <description>` | Warns only — commit still proceeds |
 | `pre-push` | Branch name pattern | Blocks push on bad branch name |
 
-### CI pipeline (`team_b-ci-rules.yml`)
+### CI pipeline (`ci-rules.yml`)
 
-Triggers on every PR targeting `team-b-develop`. Runs once — no duplicate runs on push.
+Triggers on every PR targeting any `team-*-develop` branch. Runs once — no duplicate runs on push.
 
 | Stage | What runs | Effect |
 |---|---|---|
@@ -63,7 +63,7 @@ docs/b-update-api-guide
 test/b-add-coverage-for-vitals
 ```
 
-Shared branches (`team-b-develop`, `develop`, `main`) bypass the check.
+Shared branches (`team-*-develop`, `develop`, `main`) bypass the check.
 
 ### Commit messages
 
@@ -181,7 +181,7 @@ lefthook install     # reinstall at any time
 
 ## CI Pipeline
 
-The CI pipeline runs on every PR targeting `team-b-develop`. It will not run on direct pushes to any branch.
+The CI pipeline runs on every PR targeting `team-*-develop`. It will not run on direct pushes to any branch.
 
 ### What triggers it
 
@@ -189,8 +189,10 @@ The CI pipeline runs on every PR targeting `team-b-develop`. It will not run on 
 on:
   pull_request:
     branches:
-      - team-b-develop
+      - 'team-*-develop'
 ```
+
+The `team-*-develop` glob matches any team's integration branch (`team-a-develop`, `team-b-develop`, `team-c-develop`, `team-d-develop`, `team-e-develop`, and any future `team-<name>-develop`) automatically — no per-team edits needed here when a team's branch is added or renamed.
 
 ### Stages
 

@@ -46,15 +46,12 @@ name: Build and Analyze
 # ----------------------------------------------------------
 # Trigger Conditions
 # ----------------------------------------------------------
+# Runs on every PR, regardless of source or target branch, so
+# SAST/SCA/secrets findings surface early instead of accumulating
+# on a team branch until it merges into develop. Does not run on
+# push — PR feedback is the intended entry point for this gate.
 on:
   pull_request:
-    branches:
-      - team_d
-      - team_d-*
-  push:
-    branches:
-      - team_d
-      - team_d-*
 
 # ----------------------------------------------------------
 # Default SCAN_ROOT
@@ -272,6 +269,14 @@ jobs:
       # Output: quality/analysis/raw/flutter_analyze.json
       # Format: {"issues": [{severity, message, file, line, rule}]}
       # ------------------------------------------------------
+      - name: Set up Flutter (if Flutter project found)
+        if: env.FLUTTER_ROOT != ''
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
       - name: Run Flutter Analyze (if Flutter project found)
         shell: bash
         run: |
@@ -284,7 +289,6 @@ jobs:
             exit 0
           fi
 
-          sudo snap install flutter --classic
           flutter --version
 
           pushd "${FLUTTER_ROOT}" >/dev/null
