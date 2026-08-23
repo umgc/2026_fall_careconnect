@@ -27,6 +27,8 @@ import os
 import sys
 from pathlib import Path
 
+import yaml
+
 from quality.ci.gate.report.report_github import post_or_update_pr_comment
 from quality.ci.gate.report.report_html import build_html_report
 from quality.ci.gate.report.report_md import build_markdown_report
@@ -37,6 +39,28 @@ EVALUATED_FILE = ANALYSIS_DIR / "evaluated" / "evaluated.json"
 NORMALIZED_FILE = ANALYSIS_DIR / "normalized" / "normalized.json"
 REPORT_MD_FILE = ANALYSIS_DIR / "report.md"
 REPORT_HTML_FILE = ANALYSIS_DIR / "report.html"
+POLICY_FILE = Path("quality/ci/gate/policy.yaml")
+
+
+def _load_gate_mode() -> str:
+    """
+    Read gate.mode from policy.yaml.
+
+    Returns "enforce" as a fail-safe default so the report never
+    silently under-reports enforcement status.
+
+    Returns
+    -------
+    str
+        "report_only" or "enforce"
+    """
+    try:
+        with open(POLICY_FILE, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        mode = str((data.get("gate", {}) or {}).get("mode", "enforce")).strip().lower()
+        return mode if mode in {"enforce", "report_only"} else "enforce"
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return "enforce"
 
 
 def _get_env() -> dict:
@@ -62,6 +86,7 @@ def _get_env() -> dict:
         "pr_number": os.environ.get("PR_NUMBER", ""),
         "scan_root": os.environ.get("SCAN_ROOT", "."),
         "token": os.environ.get("GITHUB_TOKEN", ""),
+        "gate_mode": _load_gate_mode(),
     }
 
 

@@ -1,8 +1,31 @@
 # File: .github/workflows/build-and-analyze.yml
 # ==========================================================
-# Build and Analyze (New Gate Engine)
+# Build and Analyze — SAST / SCA / Secrets Scan (Report-Only)
 # ----------------------------------------------------------
 # Quality/security workflow for CareConnect.
+#
+# CURRENT MODE: report_only  (set in quality/ci/gate/policy.yaml)
+# ----------------------------------------------------------
+# The gate runs on every PR and publishes a report, but it does NOT
+# block merges while gate.mode = report_only. This is intentional
+# during the baseline-establishment phase of the semester.
+#
+# Report status language (defined in report_md.py):
+#   REPORT ONLY — findings detected; gate is report_only; PR not blocked.
+#   PASSED      — no violations detected (any gate mode).
+#   BLOCKED     — reserved for gate.mode = enforce + actual blocking
+#                 violations that prevent a GitHub merge.
+#
+# Role column language:
+#   Advisory / Report Only — tool is blocking in policy.yaml, but the
+#                            gate mode overrides enforcement right now.
+#   Enforced               — only used when gate.mode = enforce.
+#   Advisory               — tool has blocking: false in policy.yaml.
+#
+# Secrets (TruffleHog / Gitleaks):
+#   Even in report_only mode, secrets findings are highlighted separately
+#   because a real credential or private key must be investigated and
+#   rotated regardless of the overall gate status.
 #
 # System of record:
 #   quality/ci/gate/
@@ -12,7 +35,7 @@
 #   2) Write raw artifacts to: quality/analysis/raw/
 #   3) Normalize results:       quality/analysis/normalized/normalized.json
 #   4) Evaluate policy:         quality/analysis/evaluated/evaluated.json
-#   5) Enforce merge outcome via gate engine exit code
+#   5) Report outcome (gate engine exits 0 in report_only mode)
 #   6) Publish rich report:
 #        - quality/analysis/report.md  (written by report.py)
 #        - Actions Job Summary
@@ -29,16 +52,25 @@
 #     The gate engine decides enforcement, not the workflow.
 #   - The ONLY environment difference between sandbox and production
 #     is SCAN_ROOT, controlled via .env (no workflow edits required).
+#   - Enforcement mode is controlled ONLY by gate.mode in policy.yaml.
+#     Do not edit this workflow to change blocking behavior.
 #
 # Environment Toggle:
 #   Sandbox:    SCAN_ROOT=quality/sandbox/passing|failing  (set in .env)
 #   Production: SCAN_ROOT=.                                (set in .env)
 #
-# Production checklist (before flipping to SCAN_ROOT=.):
-#   1) Remove sandbox fixtures:
-#        git rm -r quality/sandbox/passing quality/sandbox/failing
-#   2) Commit and push removal.
-#   3) Update .env: SCAN_ROOT=.
+# Planned enforcement progression (per course roadmap):
+#   Now    — report_only: all findings advisory, no PRs blocked.
+#   Next   — block newly introduced secrets and serious new CVEs.
+#   Later  — progressively enforce new/high-severity findings and
+#             agreed coverage/quality requirements.
+#
+# To tighten enforcement (when the team is ready):
+#   1) Update gate.mode in quality/ci/gate/policy.yaml.
+#   2) Set blocking: true only for tools you want to enforce.
+#   3) Open a PR so team leads can review the change — this workflow
+#      affects every team's merge process.
+#   Do NOT flip enforcement suddenly on inherited/baseline findings.
 # ==========================================================
 
 name: Build and Analyze
@@ -50,6 +82,10 @@ name: Build and Analyze
 # SAST/SCA/secrets findings surface early instead of accumulating
 # on a team branch until it merges into develop. Does not run on
 # push — PR feedback is the intended entry point for this gate.
+#
+# While gate.mode = report_only, this trigger is safe for all teams:
+# no PR will be blocked by this workflow. Teams see their findings
+# as advisory context, not as a merge barrier.
 on:
   pull_request:
 
@@ -363,7 +399,7 @@ jobs:
           java-version: '21'
 
       # ------------------------------------------------------
-      # Tool: Checkstyle (Java Style Enforcement)
+      # Tool: Checkstyle (Java Style Analysis)
       # ----------------------------------------------------------
       # Output: quality/analysis/raw/checkstyle.xml
       # ------------------------------------------------------
@@ -822,8 +858,12 @@ jobs:
       # Step 7: Run Quality Gate Engine
       # ----------------------------------------------------------
       # Exit codes:
-      #   0 → all policy checks passed (merge allowed)
-      #   1 → one or more policy checks failed (merge blocked)
+      #   0 → all checks passed, or gate.mode = report_only (never exits 1)
+      #   1 → policy violations detected AND gate.mode = enforce
+      #
+      # Current mode: report_only — this step always exits 0.
+      # Violations are reported but do not block the PR.
+      # To change enforcement, update gate.mode in policy.yaml.
       # ------------------------------------------------------
       - name: Run Quality Gate
         shell: bash
