@@ -5,12 +5,18 @@ import com.careconnect.repository.TelemetryEventRepository;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.time.OffsetDateTime;
+import java.util.concurrent.TimeUnit;
+
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 /** Service that records and queries application telemetry events. */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TelemetryService {
 
   /** Repository used to persist telemetry events. */
@@ -31,6 +37,19 @@ public class TelemetryService {
     }
 
     return repository.save(event);
+  }
+
+  /**
+   *  Every day, drops telemetry that's older than our retention policy
+   */
+  public static int TELEMETRY_RETENTION_DURATION = 28;
+  @Scheduled(fixedRate=1, timeUnit=TimeUnit.DAYS)
+  public void dropOld(){
+    int removedCount = repository.removeByEventTimeBefore(OffsetDateTime.now().minusDays(TELEMETRY_RETENTION_DURATION));
+    if(removedCount > 0){
+      log.info("Removed {} old telemetry events from database.", removedCount);
+    }
+
   }
 
   /**

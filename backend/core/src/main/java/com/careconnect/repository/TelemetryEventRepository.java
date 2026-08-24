@@ -58,6 +58,8 @@ public interface TelemetryEventRepository extends JpaRepository<TelemetryEvent, 
   List<EventNameCountProjection> countByEventNameBetween(
       @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
+  int removeByEventTimeBefore(OffsetDateTime from);
+
   @Query(
       value =
           """
