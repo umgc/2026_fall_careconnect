@@ -1,0 +1,212 @@
+# ci-rules.yml
+# CareConnect — Feature Branch CI Pipeline
+#
+# Runs once on every PR targeting any team-*-develop branch
+# (team-a-develop, team-b-develop, team-c-develop, team-d-develop,
+# team-e-develop, or any future team-<name>-develop).
+# Only tests that map to files changed in the PR are executed.
+# A failing build, test, or coverage check blocks the merge.
+# Security/SAST/SCA/secrets scanning is enforced repo-wide by
+# Team D's build-and-analyze.yml and is not duplicated here.
+#
+# Triggers:
+#   PR → team-*-develop
+#
+# Stages (single job, sequential steps):
+#   1. Checkout, branch info, JAVA_HOME
+#   2. Build  (Flutter + Maven)
+#   3. Unit tests for changed files only (BLOCKING)
+#   4. Coverage gate — 95% on changed files (BLOCKING)
+#   5. Test result artifact upload
+
+name: Feature Branch CI
+
+on:
+  pull_request:
+    branches:
+      - 'team-*-develop'
+
+env:
+  FLUTTER_VERSION: '3.x'
+  JAVA_VERSION: '17'
+  # Parallel Flutter test runners — matches local full-suite verification.
+  FLUTTER_TEST_CONCURRENCY: '4'
+
+# Cancel superseded runs on the same PR so CI does not pile up.
+concurrency:
+  group: feature-ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  feature-ci-pipeline:
+    name: Feature Branch — Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # ----------------------------------------------------------------
+      # Stage 1: Checkout + branch info + JAVA_HOME
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Log branch info
+        run: |
+          echo "Branch: ${{ github.head_ref }}"
+          echo "Event: ${{ github.event_name }}"
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Confirm JAVA_HOME
+        run: |
+          echo "JAVA_HOME=${JAVA_HOME}"
+          java -version
+
+      # ----------------------------------------------------------------
+      # Stage 2: Build — Flutter + Maven
+      # ----------------------------------------------------------------
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        working-directory: frontend
+        run: |
+          cp .env.example .env 2>/dev/null || touch .env
+          flutter pub get
+
+      - name: Flutter analyze (fast static check)
+        working-directory: frontend
+        continue-on-error: true
+        run: |
+          flutter analyze --no-pub 2>&1 | tail -5
+          echo "Note: analyze is informational — Team D's SAST pipeline enforces analysis."
+
+      - name: Maven compile (skip tests)
+        working-directory: backend/core
+        run: mvn -B clean compile -DskipTests
+
+      # Web uses different conditional imports (dart.library.js_interop)
+      # than the native path, so web-only breakage is invisible to the
+      # other build/test steps. Compile check only — no artifacts kept.
+      - name: Flutter build web (compile check)
+        working-directory: frontend
+        run: flutter build web --release
+
+      # ----------------------------------------------------------------
+      # Stage 3: Unit tests for changed files only (BLOCKING)
+      #
+      # Maps changed source files to their test counterparts by naming
+      # convention:
+      #   lib/foo/bar.dart        → test/foo/bar_test.dart
+      #   src/main/java/Foo.java  → src/test/java/FooTest.java
+      # Also picks up any test files changed directly.
+      # If nothing maps, the step skips gracefully (exit 0).
+      # ----------------------------------------------------------------
+      - name: Determine diff base
+        run: |
+          TARGET="${{ github.base_ref }}"
+          git fetch origin "+${TARGET}:refs/remotes/origin/${TARGET}"
+          echo "DIFF_BASE=$(git merge-base HEAD "origin/${TARGET}")" >> "$GITHUB_ENV"
+
+      - name: Flutter unit tests (changed files only)
+        working-directory: frontend
+        run: |
+          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          TEST_FILES=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              test/*_test.dart)
+                TEST_FILES+=("$f")
+                ;;
+              lib/*.dart)
+                candidate="test/${f#lib/}"
+                candidate="${candidate%.dart}_test.dart"
+                [ -f "$candidate" ] && TEST_FILES+=("$candidate")
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ ${#TEST_FILES[@]} -eq 0 ]; then
+            echo "No frontend test files map to changed code; skipping."
+            exit 0
+          fi
+          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_FILES[@]}" | sort -u)
+          echo "Running: ${UNIQUE[*]}"
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --coverage \
+            --exclude-tags integration \
+            --reporter expanded \
+            "${UNIQUE[@]}"
+
+      - name: Maven unit tests (changed files only)
+        working-directory: backend/core
+        run: |
+          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          TEST_CLASSES=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              src/test/java/*Test.java)
+                rel="${f#src/test/java/}"
+                TEST_CLASSES+=("${rel%.java}")
+                ;;
+              src/main/java/*.java)
+                rel="${f#src/main/java/}"
+                base="${rel%.java}"
+                candidate="src/test/java/${base}Test.java"
+                [ -f "$candidate" ] && TEST_CLASSES+=("${base}Test")
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ ${#TEST_CLASSES[@]} -eq 0 ]; then
+            echo "No backend test classes map to changed code; skipping."
+            exit 0
+          fi
+          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_CLASSES[@]}" | sort -u | tr '/' '.')
+          TEST_ARG="$(IFS=,; echo "${UNIQUE[*]}")"
+          echo "Running: ${TEST_ARG}"
+          mvn -B test jacoco:report -Dtest="${TEST_ARG}"
+
+      # ----------------------------------------------------------------
+      # Stage 4: Coverage gate — 95% on changed files (BLOCKING)
+      # ----------------------------------------------------------------
+      - name: Set up Python (coverage gate)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Coverage gate (changed files, 95% threshold)
+        run: |
+          python scripts/coverage_gate.py \
+            --diff-base "${DIFF_BASE}" \
+            --threshold 0.95 \
+            --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
+            --lcov-info frontend/coverage/lcov.info \
+            --repo-root .
+
+      # ----------------------------------------------------------------
+      # Stage 5: Test result artifact upload
+      # ----------------------------------------------------------------
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            backend/core/target/surefire-reports/
+            backend/core/target/site/jacoco/
+            frontend/test-results/
+            frontend/coverage/
+          retention-days: 14
