@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
@@ -577,9 +579,14 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
           if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
         };
 
+
         final response = await ApiService.addPatientMedication(
           patientId,
           medicationData,
+        );
+        
+        unawaited(
+          Telemetry.event('feature.medications.add', {'status': response}),
         );
 
         if (response.statusCode == 200) {
