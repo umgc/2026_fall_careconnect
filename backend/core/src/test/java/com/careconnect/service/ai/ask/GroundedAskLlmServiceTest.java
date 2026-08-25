@@ -55,6 +55,31 @@ class GroundedAskLlmServiceTest {
     }
 
     @Test
+    @DisplayName("generate tolerates a bare claims array without the {\"claims\":...} wrapper")
+    void generate_parsesBareClaimsArray() throws Exception {
+        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+        final GroundedAskLlmService service = new GroundedAskLlmService(
+                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
+
+        // Observed live from amazon.nova-lite-v1:0: a well-formed claim/citation,
+        // but the top-level object is a bare array instead of {"claims": [...]}.
+        final String body = """
+                {"output":{"message":{"content":[{"text":"```json\\n[{\\"text\\":\\"Started metformin.\\",\\"citations\\":[{\\"ref\\":\\"C1\\",\\"evidence\\":\\"Started metformin\\"}]}]\\n```"}]}}}
+                """;
+        when(client.invokeModel(any(InvokeModelRequest.class)))
+                .thenReturn(InvokeModelResponse.builder()
+                        .body(SdkBytes.fromUtf8String(body))
+                        .build());
+
+        final Optional<GroundedAskLlmService.GroundedLlmResult> result =
+                service.generate("system", "user");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().answerText()).contains("metformin");
+        assertThat(result.get().citationRefs()).containsExactly("C1");
+    }
+
+    @Test
     @DisplayName("generate classifies disabled AWS as configuration failure")
     void generate_awsDisabled() {
         final GroundedAskLlmService service = new GroundedAskLlmService(
