@@ -364,6 +364,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   /// Clear chat completely (user-initiated deletion)
   Future<void> _clearChatCompletely() async {
     final retentionDays = await _getRetentionPeriod();
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
