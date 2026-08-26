@@ -13,7 +13,7 @@ This guide covers two complementary layers of quality enforcement:
 
 | Hook | Checks | Effect |
 |---|---|---|
-| `pre-commit` | Dart format, Flutter analyze, Maven compile | Blocks commit on failure |
+| `pre-commit` | Dart format (changed files only) | Blocks commit on failure |
 | `commit-msg` | Commit message format `<type>: <description>` | Warns only — commit still proceeds |
 | `pre-push` | Branch name pattern | Blocks push on bad branch name |
 

@@ -3,29 +3,24 @@
 # Run `lefthook install` once after cloning to activate.
 #
 # What runs:
-#   pre-commit: dart format, flutter analyze, maven compile (parallel, ~20s)
+#   pre-commit: dart format (changed files only)
 #   pre-push:   branch name enforcement (feature/b-* or hotfix/b-*)
+#
+# flutter analyze / mvn compile were dropped from pre-commit: both tools
+# always scan/compile the whole module, so pre-existing issues elsewhere
+# in the codebase blocked commits unrelated to those files. CI's Build
+# stage still runs mvn compile (blocking) and flutter analyze (informational)
+# on every PR, so broken code is still caught before merge.
 #
 # Tests are excluded — they run in CI on every PR.
 # Skip hooks only when necessary: git commit --no-verify / git push --no-verify
 
 pre-commit:
-  parallel: true          # Run Flutter and Maven checks at the same time
   commands:
     dart-format:
       glob: "frontend/lib/**/*.dart"
       run: dart format --set-exit-if-changed {staged_files}
       stage_fixed: true   # Auto-stage files that dart format corrected
-
-    flutter-analyze:
-      root: frontend
-      run: flutter analyze --no-pub
-      fail_text: "Flutter analyze found issues. Fix them before committing."
-
-    mvn-compile:
-      root: backend/core
-      run: mvn -B compile -DskipTests -q
-      fail_text: "Maven compile failed. Fix compilation errors before committing."
 
 pre-push:
   commands:
