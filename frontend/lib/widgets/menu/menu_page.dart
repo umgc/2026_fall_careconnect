@@ -96,7 +96,6 @@ class _MenuPageState extends State<MenuPage> {
         route: '/invoice-assistant/dashboard',
         visibleFor: const {'CAREGIVER', 'ADMIN', 'PATIENT'},
         onTap: () {
-          //Navigator.pop(context);
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const InvoiceTabbedPage()),
@@ -109,7 +108,6 @@ class _MenuPageState extends State<MenuPage> {
           route: '/patient-report',
           visibleFor: const {'PATIENT'},
           onTap: () {
-            //Navigator.pop(context);
             Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -130,7 +128,6 @@ class _MenuPageState extends State<MenuPage> {
           icon: Icons.medication,
           label: local.menupage_medicationTrackerItem,
           onTap: () {
-            //Navigator.pop(context);
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -225,7 +222,6 @@ class _MenuPageState extends State<MenuPage> {
         route: '/admin/analytics',
         visibleFor: const {'ADMIN'},
         onTap: () {
-          //Navigator.pop(context);
           context.push('/admin/analytics');
         },
       ),
@@ -235,7 +231,6 @@ class _MenuPageState extends State<MenuPage> {
         route: '/admin/users',
         visibleFor: const {'ADMIN'},
         onTap: () {
-          //Navigator.pop(context);
           context.push('/admin/users');
         },
       ),

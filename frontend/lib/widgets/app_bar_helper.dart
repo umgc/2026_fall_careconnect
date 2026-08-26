@@ -29,9 +29,6 @@ class AppBarHelper {
               } else {
                 context.push('/dashboard');
               }
-              if (!Scaffold.of(context).isDrawerOpen) {
-                Scaffold.of(context).openEndDrawer();
-              }
             },
           ),
       bottom: bottom,
