@@ -47,12 +47,12 @@ class _MenuPageState extends State<MenuPage> {
   }
 
   String _translateRole(String role, AppLocalizations t) {
-    switch(role){
-      case('PATIENT'):
+    switch (role) {
+      case ('PATIENT'):
         return t.roles_Patient;
-      case('CAREGIVER'):
+      case ('CAREGIVER'):
         return t.roles_Caregiver;
-      case('ADMIN'):
+      case ('ADMIN'):
         return t.roles_Admin;
       default:
         return role;
@@ -96,7 +96,7 @@ class _MenuPageState extends State<MenuPage> {
         route: '/invoice-assistant/dashboard',
         visibleFor: const {'CAREGIVER', 'ADMIN', 'PATIENT'},
         onTap: () {
-          Navigator.pop(context);
+          //Navigator.pop(context);
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const InvoiceTabbedPage()),
@@ -109,7 +109,7 @@ class _MenuPageState extends State<MenuPage> {
           route: '/patient-report',
           visibleFor: const {'PATIENT'},
           onTap: () {
-            Navigator.pop(context);
+            //Navigator.pop(context);
             Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -130,7 +130,7 @@ class _MenuPageState extends State<MenuPage> {
           icon: Icons.medication,
           label: local.menupage_medicationTrackerItem,
           onTap: () {
-            Navigator.pop(context);
+            //Navigator.pop(context);
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -141,7 +141,7 @@ class _MenuPageState extends State<MenuPage> {
       _MenuItem(
         icon: Icons.public,
         label: local.socialFeed,
-        onTap: () => context.go('/social-feed?userId=${user.id}'),
+        onTap: () => context.push('/social-feed?userId=${user.id}'),
       ),
       _MenuItem(
         icon: Icons.emoji_events,
@@ -210,7 +210,9 @@ class _MenuPageState extends State<MenuPage> {
         route: '/alertpage',
       ),
       _MenuItem(
-          icon: Icons.mail, label: 'USPS ${local.menupage_mailDigestItem}', route: '/usps-test'),
+          icon: Icons.mail,
+          label: 'USPS ${local.menupage_mailDigestItem}',
+          route: '/usps-test'),
       _MenuItem(
         icon: Icons.person_add,
         label: local.menupage_addPatientItem,
@@ -223,8 +225,8 @@ class _MenuPageState extends State<MenuPage> {
         route: '/admin/analytics',
         visibleFor: const {'ADMIN'},
         onTap: () {
-          Navigator.pop(context);
-          context.go('/admin/analytics');
+          //Navigator.pop(context);
+          context.push('/admin/analytics');
         },
       ),
       _MenuItem(
@@ -233,8 +235,8 @@ class _MenuPageState extends State<MenuPage> {
         route: '/admin/users',
         visibleFor: const {'ADMIN'},
         onTap: () {
-          Navigator.pop(context);
-          context.go('/admin/users');
+          //Navigator.pop(context);
+          context.push('/admin/users');
         },
       ),
       _MenuItem(

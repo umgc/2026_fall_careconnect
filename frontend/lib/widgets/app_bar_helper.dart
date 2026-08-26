@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../widgets/app_bar_actions.dart';
 
 /// Helper class to create consistent AppBars across the application
@@ -19,10 +20,20 @@ class AppBarHelper {
       title: Text(title, style: Theme.of(context).appBarTheme.titleTextStyle),
       centerTitle: centerTitle,
       automaticallyImplyLeading: automaticallyImplyLeading,
-      leading: leading ?? IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.of(context).pop(),
-      ),
+      leading: leading ??
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.of(context).pop();
+              } else {
+                context.push('/dashboard');
+              }
+              if (!Scaffold.of(context).isDrawerOpen) {
+                Scaffold.of(context).openEndDrawer();
+              }
+            },
+          ),
       bottom: bottom,
       actions: [
         AppBarActions(additionalActions: additionalActions),
