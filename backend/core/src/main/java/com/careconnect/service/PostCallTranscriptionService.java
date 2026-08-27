@@ -981,8 +981,10 @@ public class PostCallTranscriptionService {
    * Downloads the Transcribe JSON output from S3 and converts it to transcript segment records.
    * {@code recordingStartedAt} is used to set accurate {@code occurredAt} timestamps on each
    * segment so the sentiment-highlight logic can match transcript lines to plot samples.
-   * {@code speakerMap} maps raw Transcribe labels (e.g. {@code spk_0}) to human-readable role
-   * names (e.g. {@code Caregiver}).
+   * {@code speakerMap} maps raw Transcribe labels (e.g. {@code spk_0}) to generic per-call
+   * ordinals (e.g. {@code Speaker 1}) built by {@link #buildSpeakerRoleMap}; this fallback path
+   * never has role information, so it cannot produce {@code Caregiver}/{@code Patient} labels —
+   * only the per-attendee KVS path in {@link #tryTranscribeKvsAttendeeStreams} does.
    */
   private List<TranscriptSegmentInput> downloadAndParse(
       final String bucket,
@@ -1005,8 +1007,9 @@ public class PostCallTranscriptionService {
    * @param root JSON root from the Transcribe output file
    * @param recordingStartedAt actual UTC start of the recording; used to compute per-segment
    *     {@code occurredAt} so the sentiment-highlight logic can match plot samples to lines
-   * @param speakerMap mapping from raw Transcribe labels (e.g. {@code spk_0}) to human-readable
-   *     role names (e.g. {@code Caregiver})
+   * @param speakerMap mapping from raw Transcribe labels (e.g. {@code spk_0}) to generic
+   *     per-call ordinals (e.g. {@code Speaker 1}); see {@link #downloadAndParse} for why this
+   *     fallback path never carries a role
    */
   private List<TranscriptSegmentInput> parseTranscriptItems(
       final JsonNode root,

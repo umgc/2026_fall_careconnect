@@ -21,6 +21,10 @@ ui-integration/**/.vite/
 .DS_Store
 **/.DS_Store
 
+# claude skills
+.claude/
+CLAUDE.md
+
 
 # Files and directories created by pub
 .dart_tool/

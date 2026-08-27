@@ -88,6 +88,13 @@ public class KvsPoolStreamDiscoveryService {
 
         final String poolRegion = kvsStreamPoolService.getStreamPoolRegion();
         if (poolRegion.isBlank()) {
+            if (log.isWarnEnabled()) {
+                log.warn(
+                        "KVS ingest is enabled but the configured stream-pool ARN has no region"
+                                + " segment; skipping stream discovery for callId={}. Check"
+                                + " careconnect.kvs.stream-pool-arn.",
+                        callId);
+            }
             return;
         }
 
