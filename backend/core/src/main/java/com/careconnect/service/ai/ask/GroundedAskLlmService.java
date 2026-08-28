@@ -3,6 +3,7 @@ package com.careconnect.service.ai.ask;
 import com.careconnect.ai.bedrock.BedrockModelSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -176,11 +177,28 @@ public class GroundedAskLlmService {
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
-            // Some models (observed: Nova) return the claims array directly at the
-            // top level instead of wrapping it in {"claims": [...]}. The array
-            // contents and every downstream validation are unaffected either way —
-            // this only tolerates the outer shape, not the claim/citation contract.
-            final JsonNode claimsNode = root.isArray() ? root : root.get("claims");
+            // Nova has been observed returning claims in three different shapes:
+            // (a) {"claims": [...]} — the documented contract
+            // (b) [...claim objects directly...] — top-level array of claims
+            // (c) [{"claims": [...]}, {"claims": [...]}, ...] — one wrapper object
+            //     per source, most common when citing multiple retrieved chunks
+            // Flatten (c) into (b) by unwrapping any array element that itself
+            // carries a "claims" array, so a claim's actual text/citations fields
+            // are never mistaken for a missing claim.
+            final JsonNode claimsNode;
+            if (root.isArray()) {
+                final ArrayNode flattened = objectMapper.createArrayNode();
+                for (final JsonNode element : root) {
+                    if (element.has("claims") && element.get("claims").isArray()) {
+                        flattened.addAll((ArrayNode) element.get("claims"));
+                    } else {
+                        flattened.add(element);
+                    }
+                }
+                claimsNode = flattened;
+            } else {
+                claimsNode = root.get("claims");
+            }
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
                 log.warn("Grounded model response did not contain a claims array");
                 throw new GroundedOutputValidationException(
