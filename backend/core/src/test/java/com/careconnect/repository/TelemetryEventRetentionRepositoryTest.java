@@ -158,7 +158,7 @@ class TelemetryEventRetentionRepositoryTest {
             "Blocked by defect D-1 (PR #62): removeByEventTimeBefore lacks @Modifying/@Transactional "
                     + "and dropOld() is not transactional, so the scheduled purge throws "
                     + "TransactionRequiredException and never deletes anything. Executed 2026-08-25 by "
-                    + "Kristopher Bickmore (Testing Lead) - status Fail; evidence in tmp/test-evidence/pr62/. "
+                    + "Kristopher Bickmore (Testing Lead) - status Fail. "
                     + "Re-enable when D-1 is fixed; see TC-TEL-RET-021 for the isolating case.")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @DisplayName("TC-TEL-RET-020: scheduled purge deletes expired rows with no ambient transaction")
