@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
  * expected to fail against the implementation as submitted in PR #63. Each names the defect it
  * proves. They are not characterization tests; they must go green once the defect is fixed.
  *
- * <p>Executed by: incanus86 (Testing Lead). PR author: MaximumVolts. Separation of duties per
+ * <p>Executed by: Kristopher Bickmore (Testing Lead). PR author: MaximumVolts. Separation of duties per
  * CLAUDE.md is satisfied - the author is not the executor.
  */
 @ExtendWith(MockitoExtension.class)
