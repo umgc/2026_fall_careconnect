@@ -115,8 +115,10 @@ public class GroundedAskLlmService {
                 final String raw = response.body().asUtf8String();
                 text = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
             } catch (final RuntimeException ex) {
+                log.warn("Grounded Ask AI Bedrock response payload was malformed");
                 throw new GroundedOutputValidationException(
-                        "Bedrock response payload was malformed", ex);
+                        "Bedrock response payload was malformed",
+                        GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
             }
             return parseStructured(text, modelId);
         } catch (final BedrockRuntimeException ex) {
@@ -166,8 +168,10 @@ public class GroundedAskLlmService {
 
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {
         if (text == null || text.isBlank()) {
+            log.warn("Grounded model returned an empty response");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was empty");
+                    "Grounded model response was empty",
+                    GroundedOutputValidationException.Kind.EMPTY_RESPONSE);
         }
         try {
             final String json = unwrapJson(text.trim());
@@ -178,8 +182,10 @@ public class GroundedAskLlmService {
             // this only tolerates the outer shape, not the claim/citation contract.
             final JsonNode claimsNode = root.isArray() ? root : root.get("claims");
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
+                log.warn("Grounded model response did not contain a claims array");
                 throw new GroundedOutputValidationException(
-                        "Grounded model response did not contain claims");
+                        "Grounded model response did not contain claims",
+                        GroundedOutputValidationException.Kind.MISSING_CLAIMS);
             }
             final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
@@ -203,8 +209,10 @@ public class GroundedAskLlmService {
                     }
                 }
                 if (claimText.isBlank() || claimRefs.isEmpty()) {
+                    log.warn("Grounded model claim was missing text or evidence");
                     throw new GroundedOutputValidationException(
-                            "Each grounded claim requires text and extractive evidence");
+                            "Each grounded claim requires text and extractive evidence",
+                            GroundedOutputValidationException.Kind.INCOMPLETE_CLAIM);
                 }
                 claims.add(new GroundedClaim(
                         claimText,
@@ -223,7 +231,8 @@ public class GroundedAskLlmService {
         } catch (final Exception ex) {
             log.warn("Unable to parse grounded Ask AI JSON");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was malformed", ex);
+                    "Grounded model response was malformed",
+                    GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
         }
     }
 

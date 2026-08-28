@@ -52,6 +52,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -131,7 +132,8 @@ class AiAskServiceTest {
                 askAuditService,
                 askConfirmationService,
                 medicationTimelineAggregator,
-                hitlEnabled);
+                hitlEnabled,
+                3);
     }
 
     @Test
@@ -609,12 +611,84 @@ class AiAskServiceTest {
         when(hybridRetrievalService.search(any(), eq(42L), eq("pain"), any()))
                 .thenReturn(new HybridRetrievalResult(List.of(chunk), "pain", false, 1, 1));
         when(groundedAskLlmService.generate(anyString(), anyString()))
-                .thenThrow(new GroundedOutputValidationException("missing claims"));
+                .thenThrow(new GroundedOutputValidationException(
+                        "missing claims", GroundedOutputValidationException.Kind.MISSING_CLAIMS));
 
         assertThatThrownBy(() -> service.ask(caller(), request("pain")))
                 .isInstanceOf(AskAiGroundingException.class)
                 .satisfies(ex -> assertThat(((AskAiGroundingException) ex).getStatus().value())
                         .isEqualTo(502));
+    }
+
+    @Test
+    @DisplayName("ask retries generation after a validation failure and delivers on the next attempt")
+    void ask_generationFailsThenSucceeds_retriesAndDelivers() throws Exception {
+        // Reproduces the real, observed behavior of amazon.nova-lite-v1:0: the model
+        // intermittently returns structurally invalid output (empty/no-claims/malformed)
+        // for a well-supported question, succeeding on a later attempt with no change in
+        // the underlying data. A single generation failure should not fail the whole
+        // request when a retry succeeds.
+        stubHappyPathPreRetrieval("pain");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "1",
+                "Reports intermittent mild pain in left knee",
+                "{\"contentHash\":\"abc\"}",
+                "auto",
+                0.02d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("pain"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "pain", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenThrow(new GroundedOutputValidationException(
+                        "empty", GroundedOutputValidationException.Kind.EMPTY_RESPONSE))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Reports intermittent mild pain in left knee",
+                        List.of("C1"),
+                        List.of(new GroundedAskLlmService.GroundedClaim(
+                                "Reports intermittent mild pain in left knee",
+                                List.of("C1"),
+                                java.util.Map.of("C1", "Reports intermittent mild pain in left knee"))),
+                        "amazon.nova-lite-v1:0")));
+
+        final AiAskResponse response = service.ask(caller(), request("pain"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        verify(groundedAskLlmService, times(2)).generate(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("ask exhausts retries then fails with a message specific to why generation failed")
+    void ask_generationExhaustsRetries_usesKindSpecificMessage() throws Exception {
+        stubHappyPathPreRetrieval("pain");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "1",
+                "Reports mild pain",
+                null,
+                "auto",
+                0.02d,
+                1,
+                null,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("pain"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "pain", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenThrow(new GroundedOutputValidationException(
+                        "empty", GroundedOutputValidationException.Kind.EMPTY_RESPONSE));
+
+        assertThatThrownBy(() -> service.ask(caller(), request("pain")))
+                .isInstanceOf(AskAiGroundingException.class)
+                .hasMessage(com.careconnect.service.ai.AskAiSafetyCopy.MODEL_NO_RESPONSE_EN);
+        // buildService(...) wires maxGenerationAttempts=3 — confirms every attempt was used,
+        // not just the first, before failing closed.
+        verify(groundedAskLlmService, times(3)).generate(anyString(), anyString());
     }
 
     @Test
