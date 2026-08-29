@@ -126,6 +126,7 @@ class TelemetrySecurityProdProfileTest {
         when(telemetryService.recent(10)).thenReturn(List.of(savedEvent));
     }
 
+    /** TC-TEL-ING-001 — production profile registers the anonymous ingestion endpoint. */
     @Test
     void productionProfileRegistersAnonymousIngestionEndpoint() throws Exception {
         assertThat(environment.getActiveProfiles()).containsExactly("prod");
@@ -144,6 +145,7 @@ class TelemetrySecurityProdProfileTest {
         verify(telemetryService).record(any(TelemetryEvent.class));
     }
 
+    /** TC-TEL-ING-002 — anonymous caller can read the enabled state. */
     @Test
     void anonymousCallerCanReadEnabledState() throws Exception {
         mockMvc.perform(get("/v1/api/dev/telemetry/enabled"))
@@ -151,6 +153,7 @@ class TelemetrySecurityProdProfileTest {
                 .andExpect(jsonPath("$.enabled").value(true));
     }
 
+    /** TC-TEL-ING-003 — negative authorization: anonymous caller reaches no admin surface. */
     @Test
     void anonymousCallerCannotChangeToggleOrReadRecentEvents() throws Exception {
         mockMvc.perform(put("/v1/api/dev/telemetry/enabled").param("enabled", "false"))
@@ -162,6 +165,7 @@ class TelemetrySecurityProdProfileTest {
         verify(telemetryService, never()).recent(10);
     }
 
+    /** TC-TEL-ING-004 — negative authorization: authenticated non-admin reaches no admin surface. */
     @Test
     void nonAdminCallerCannotChangeToggleOrReadRecentEvents() throws Exception {
         mockMvc.perform(put("/v1/api/dev/telemetry/enabled")
@@ -177,6 +181,7 @@ class TelemetrySecurityProdProfileTest {
         verify(telemetryService, never()).recent(10);
     }
 
+    /** TC-TEL-ING-005 — admin caller can change the toggle and read recent events. */
     @Test
     void adminCallerCanChangeToggleAndReadRecentEvents() throws Exception {
         mockMvc.perform(put("/v1/api/dev/telemetry/enabled")
