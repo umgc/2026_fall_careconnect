@@ -10,6 +10,21 @@
 # Written for bash 3.2 so it runs on stock macOS as well as CI. That means no
 # `mapfile`, no `${var,,}`, and no associative arrays.
 #
+# THIS SCRIPT LEAVES STATE BEHIND. Step 3 registers a PATIENT account and step 5
+# verifies it, and there is no account-deletion endpoint to undo that -- the API
+# exposes no DELETE for users. Every run therefore leaves one verified and one
+# rejected account in the target database. That is acceptable on a scratch
+# environment and is not acceptable on anything carrying real data.
+#
+#   - The address is `smoke-<timestamp>@example.com`. `example.com` is reserved
+#     by RFC 2606 and can never be registered, so a prod-profile run that
+#     actually sends mail cannot reach a real person. Override with
+#     --email-domain only if you own the domain.
+#   - The password is generated fresh per run and printed once in the summary.
+#     Nothing reusable is committed to this repository.
+#   - The summary at the end lists exactly what was created, with the SQL to
+#     remove it.
+#
 # Usage:
 #   ./scripts/smoke-test.sh --backend-url https://abc123.execute-api.us-east-1.amazonaws.com
 #   ./scripts/smoke-test.sh -u "$BACKEND_URL" --log-group /ecs/careconnect-backend-cfdemo
@@ -26,17 +41,32 @@ PROFILE="${AWS_PROFILE:-}"
 REGION="${AWS_REGION:-us-east-1}"
 FRONTEND_ORIGIN="http://localhost:3000"
 LOG_WAIT_SECONDS=90
+# RFC 2606 reserves example.com, so it can never be registered and a run that
+# really sends mail cannot reach a stranger.
+EMAIL_DOMAIN="${SMOKE_EMAIL_DOMAIN:-example.com}"
+
+# Under `set -u`, a bare `shift 2` on a flag given without its value aborts with
+# bash's own unbound-variable message before the parser can say anything useful.
+need_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "Missing value for $1" >&2
+    exit 1
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -u|--backend-url)   BACKEND_URL="$2"; shift 2 ;;
-    -g|--log-group)     LOG_GROUP="$2"; shift 2 ;;
-    -p|--profile)       PROFILE="$2"; shift 2 ;;
-    -r|--region)        REGION="$2"; shift 2 ;;
-    -o|--origin)        FRONTEND_ORIGIN="$2"; shift 2 ;;
-    -w|--log-wait)      LOG_WAIT_SECONDS="$2"; shift 2 ;;
+    -u|--backend-url)   need_value "$@"; BACKEND_URL="$2"; shift 2 ;;
+    -g|--log-group)     need_value "$@"; LOG_GROUP="$2"; shift 2 ;;
+    -p|--profile)       need_value "$@"; PROFILE="$2"; shift 2 ;;
+    -r|--region)        need_value "$@"; REGION="$2"; shift 2 ;;
+    -o|--origin)        need_value "$@"; FRONTEND_ORIGIN="$2"; shift 2 ;;
+    -w|--log-wait)      need_value "$@"; LOG_WAIT_SECONDS="$2"; shift 2 ;;
+    -d|--email-domain)  need_value "$@"; EMAIL_DOMAIN="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+      # Print the leading comment block, whatever its length, rather than a
+      # hardcoded line range that drifts every time the header is edited.
+      awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
       exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -84,8 +114,11 @@ echo "  origin:   $FRONTEND_ORIGIN"
 # ---------------------------------------------------------------------------
 step "1. Health"
 
-HEALTH_BODY="$(curl -s --max-time 30 "$BACKEND_URL/v1/api/test/health")"
-HEALTH_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$BACKEND_URL/v1/api/test/health")"
+# One request, not two: -w appends the status code to the body, so a flaky
+# endpoint cannot report healthy on one call and 503 on the next.
+HEALTH_RAW="$(curl -s -w '\n%{http_code}' --max-time 30 "$BACKEND_URL/v1/api/test/health")"
+HEALTH_CODE="$(printf '%s' "$HEALTH_RAW" | tail -1)"
+HEALTH_BODY="$(printf '%s' "$HEALTH_RAW" | sed '$d')"
 
 if [[ "$HEALTH_CODE" == "200" ]]; then
   pass "GET /v1/api/test/health -> 200"
@@ -120,8 +153,25 @@ fi
 step "3. Registration"
 
 STAMP="$(date +%Y%m%d%H%M%S)"
-TEST_EMAIL="smoke-${STAMP}@awstest1.com"
+TEST_EMAIL="smoke-${STAMP}@${EMAIL_DOMAIN}"
+BAD_EMAIL="smoke-noaddr-${STAMP}@${EMAIL_DOMAIN}"
 START_MS=$(( ( $(date +%s) - 30 ) * 1000 ))
+
+# Generated per run rather than committed. A fixed password in a public repo is
+# a working credential for every account this script has ever left behind.
+# The suffix guarantees the upper/lower/digit/symbol mix the app expects.
+random_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 12
+  else
+    LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom 2>/dev/null | head -c 24
+  fi
+}
+TEST_PASSWORD="Sm0ke!$(random_secret)Aa1"
+if [[ ${#TEST_PASSWORD} -lt 16 ]]; then
+  echo "Could not generate a random password (no openssl, no /dev/urandom)." >&2
+  exit 1
+fi
 
 # Deliberately omits `verificationBaseUrl`. That field lets a client override
 # the link host, which would mask a misconfigured server-side base URL — the
@@ -131,7 +181,7 @@ REGISTER_BODY="$(cat <<JSON
   "role": "PATIENT",
   "name": "Smoke Test",
   "email": "$TEST_EMAIL",
-  "password": "SmokeTest!2026",
+  "password": "$TEST_PASSWORD",
   "firstName": "Smoke",
   "lastName": "Test",
   "phone": "555-0100",
@@ -226,7 +276,9 @@ else
 
   CHECK="$(curl -s --max-time 30 \
     "$BACKEND_URL/v1/api/auth/check-verification?email=$TEST_EMAIL")"
-  if printf '%s' "$CHECK" | grep -qi 'true'; then
+  # The endpoint returns exactly {"verified":true|false}, so assert the field.
+  # A bare `true` also matches the false body's own field name in other shapes.
+  if printf '%s' "$CHECK" | grep -q '"verified":[[:space:]]*true'; then
     pass "check-verification reports the account verified"
   else
     fail "check-verification did not report verified: $(printf '%s' "$CHECK" | head -c 200)"
@@ -241,7 +293,7 @@ step "6. Validation failure modes"
 BAD_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 \
   -X POST "$BACKEND_URL/v1/api/auth/register" \
   -H "Content-Type: application/json" \
-  -d "{\"role\":\"PATIENT\",\"name\":\"No Address\",\"email\":\"smoke-noaddr-${STAMP}@awstest1.com\",\"password\":\"SmokeTest!2026\",\"firstName\":\"No\",\"lastName\":\"Address\"}")"
+  -d "{\"role\":\"PATIENT\",\"name\":\"No Address\",\"email\":\"$BAD_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"firstName\":\"No\",\"lastName\":\"Address\"}")"
 
 case "$BAD_CODE" in
   400)
@@ -252,6 +304,32 @@ case "$BAD_CODE" in
   *)
     fail "register without address -> $BAD_CODE (expected 400)" ;;
 esac
+
+# ---------------------------------------------------------------------------
+step "Accounts left behind"
+# There is no account-deletion endpoint, so this cannot clean up after itself.
+# Say plainly what is now in the database and how to remove it.
+
+if [[ "$REG_CODE" != "200" && "$BAD_CODE" != "500" ]]; then
+  echo "  Nothing to clean up: no registration succeeded."
+else
+  echo "  This run created accounts that nothing deletes automatically:"
+  [[ "$REG_CODE" == "200" ]] && \
+    echo "    $TEST_EMAIL   (registered, and verified if step 5 passed)"
+  [[ "$BAD_CODE" == "500" ]] && \
+    echo "    $BAD_EMAIL   (validation returned 500, so the row may exist)"
+  echo "  Password, generated for this run only:"
+  echo "    $TEST_PASSWORD"
+  echo
+  echo "  To remove them, against the environment's database. The child row goes"
+  echo "  first -- patient.user_id is a foreign key, so the users row will not"
+  echo "  delete while it is there:"
+  echo "    DELETE FROM patient WHERE user_id IN"
+  echo "      (SELECT id FROM users WHERE email LIKE 'smoke-%@${EMAIL_DOMAIN}');"
+  echo "    DELETE FROM users WHERE email LIKE 'smoke-%@${EMAIL_DOMAIN}';"
+  echo "  Run this only on a scratch environment. Never point this script at an"
+  echo "  environment holding real user data."
+fi
 
 # ---------------------------------------------------------------------------
 echo
