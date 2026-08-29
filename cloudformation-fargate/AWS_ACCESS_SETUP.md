@@ -45,16 +45,18 @@ Answer the prompts:
 | Prompt | Value |
 | ------ | ----- |
 | SSO session name | `careconnect` |
-| SSO start URL | `https://d-90679e4644.awsapps.com/start` |
+| SSO start URL | `https://d-XXXXXXXXXX.awsapps.com/start` (see below) |
 | SSO region | `us-east-1` |
 | SSO registration scopes | `sso:account:access` (accept the default) |
 
-The start URL is the same for everyone — `d-90679e4644` identifies the school's
-Identity Center instance, not you and not your account. Type it exactly as
-shown.
+**Get the real start URL from the course shell**, in the same announcement that
+granted you the AWS account. It is not written down here: the `d-XXXXXXXXXX`
+segment identifies the school's Identity Center instance, and this repository is
+public. The URL is the same for everyone in the course, and it does not
+identify you or your account, so use the value the course gives you verbatim.
 
 > **Do not copy it from your browser's address bar.** The portal is a
-> single-page app, so the bar shows `https://d-90679e4644.awsapps.com/start/#/`.
+> single-page app, so the bar shows `https://d-XXXXXXXXXX.awsapps.com/start/#/`.
 > That trailing `/#/` is a client-side route, not part of the URL, and leaving it
 > on makes `aws configure sso` fail during `RegisterClient` with an error that
 > does not mention the fragment.

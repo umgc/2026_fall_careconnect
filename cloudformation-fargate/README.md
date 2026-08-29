@@ -17,6 +17,7 @@ Fargate deployment.
 ### Table of Contents
 
 - [Stack order](#stack-order)
+- [Standalone templates](#standalone-templates)
 - [One-Command Scripts](#one-command-scripts)
 - [GitHub Actions Backend Deploy](#github-actions-backend-deploy)
 - [GitHub Actions Full Deploy](#github-actions-full-deploy)
@@ -45,6 +46,62 @@ Fargate deployment.
 3. `03-platform.yaml`
 4. Build and push the backend image to ECR
 5. `04-service.yaml`
+
+
+
+### Standalone templates
+
+Two templates in `templates/` sit outside the numbered 01-04 chain. They are
+deployed **once per AWS account**, not once per environment, and the deploy
+scripts do not touch them. Deploying either per environment would create
+duplicates that all act on the same account.
+
+| Template | What it creates | When to run it |
+| -------- | --------------- | -------------- |
+| `careconnect-budgets.yaml` | An account-wide monthly cost budget with actual alerts at 50/80/100% and a forecasted alert at 100%. | Once, before you leave any environment running. This is the guardrail against a forgotten stack draining the account. |
+| `github-oidc-deploy-role.yaml` | The GitHub Actions OIDC provider and the IAM role that CI assumes. No long-lived access keys. | Once per account that CI deploys into, before the first workflow run. Replaces sections 2a-2c of [`GITHUB_ACTIONS_SETUP.md`](GITHUB_ACTIONS_SETUP.md). |
+
+#### Cost budget
+
+`NotificationEmail` is `NoEcho` and has no default, so pass it at deploy time
+rather than committing it. The `BudgetLimitAmount` default of 75 USD is sized
+for one continuously running environment (Fargate 1 vCPU / 3 GB, RDS
+`db.t4g.micro`, public IPv4, plus Secrets Manager / ECR / CloudWatch, so about
+60 USD/month), leaving headroom without masking a runaway.
+
+```bash
+aws cloudformation deploy \
+  --stack-name careconnect-budgets \
+  --template-file cloudformation-fargate/templates/careconnect-budgets.yaml \
+  --parameter-overrides NotificationEmail=you@example.edu \
+  --region us-east-1 \
+  --profile careconnect-sso
+```
+
+Budgets are a global (`us-east-1`) billing service. Alerts arrive by email and
+the first one requires confirming the subscription.
+
+Per-environment budgets are not possible yet: no billable resource in templates
+01-04 carries a cost-allocation tag, and cost-allocation tags must additionally
+be activated in the Billing console and do not backfill.
+
+#### GitHub Actions deploy role
+
+Full parameter table and the command to read the role ARN back out are in
+[`GITHUB_ACTIONS_SETUP.md` section 2-CFN](GITHUB_ACTIONS_SETUP.md#2-cfn-cloudformation-instead-of-the-console-faster).
+
+```bash
+aws cloudformation deploy \
+  --stack-name careconnect-github-oidc \
+  --template-file cloudformation-fargate/templates/github-oidc-deploy-role.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1 \
+  --profile careconnect-sso
+```
+
+Set `CreateOidcProvider=No` if the account already has a
+`token.actions.githubusercontent.com` provider. Only one is allowed per
+account, and the stack fails with `EntityAlreadyExists` otherwise.
 
 
 

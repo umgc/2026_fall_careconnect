@@ -101,11 +101,11 @@ Resources:
               Address: !Ref NotificationEmail
 
 Outputs:
+  # Not exported. Nothing imports it, and a live export blocks the exporting
+  # stack from being updated or deleted until every importer is gone.
   BudgetName:
     Description: Name of the account-level monthly cost budget.
     Value: !Ref BudgetName
-    Export:
-      Name: careconnect-BudgetName
 
   BudgetLimit:
     Description: Monthly cost ceiling in USD.
