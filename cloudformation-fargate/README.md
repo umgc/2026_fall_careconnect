@@ -444,10 +444,16 @@ in [parameters/README.md](./parameters/README.md).
 
 For the data stack specifically:
 
-- committed `*-data.json` files contain placeholders only
+- committed `*-data.json` files contain placeholders only — never edit them
+  with real secret values
 - real secret values should be injected through:
-  - `CARECONNECT_DATABASE_MASTER_PASSWORD`
-  - `CARECONNECT_JWT_SECRET`
+  - `CARECONNECT_DATABASE_MASTER_PASSWORD` / `CARECONNECT_JWT_SECRET`, either
+    exported directly, or (recommended for local use) copy
+    [`.env.example`](./.env.example) to `.env.deploy` in this directory, fill
+    in real values, and leave it there — `cdeploy_cloudformation.sh` /
+    `cdeploy_cloudformation.ps1` auto-load it if present. `.env.deploy` is
+    gitignored (`.gitignore`'s `.env*` pattern already covers it); nothing
+    extra to configure.
   - or the manual GitHub full-deploy workflow that maps repository secrets into
   those variables
 - `BackendImageUri` in `*-service.json` is normally overridden by the deploy
