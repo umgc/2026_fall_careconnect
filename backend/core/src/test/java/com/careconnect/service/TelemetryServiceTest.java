@@ -30,11 +30,15 @@ import static org.mockito.Mockito.when;
  * Unit tests for {@link TelemetryService}, covering the server-side telemetry allowlist
  * introduced by PR #63 (WBS 1.5.2, branch {@code feature/e-telemetry-verification}).
  *
- * <p>Test IDs TC-TEL-01 .. TC-TEL-20 are permanent. Never renumber, never reuse.
+ * <p>Test IDs TC-TEL-01 .. TC-TEL-25 are permanent. Never renumber, never reuse.
  *
  * <p>Cases tagged EXPECTED-FAIL assert the <em>intended</em> behaviour of the feature and are
  * expected to fail against the implementation as submitted in PR #63. Each names the defect it
  * proves. They are not characterization tests; they must go green once the defect is fixed.
+ *
+ * <p>TC-TEL-22 .. TC-TEL-25 were added 2026-08-29 after commit {@code 6f38c103}. That commit closed
+ * DEF-TEL-01, DEF-TEL-02, DEF-TEL-06 and DEF-TEL-09, and introduced DEF-TEL-18, DEF-TEL-19 and
+ * DEF-TEL-20 in their place. TC-TEL-16 and TC-TEL-17 now pass and are retained as regression cover.
  *
  * <p>Executed by: Kristopher Bickmore (Testing Lead). PR author: MaximumVolts. Separation of duties per
  * CLAUDE.md is satisfied - the author is not the executor.
@@ -305,6 +309,17 @@ class TelemetryServiceTest {
 
             assertThatCode(() -> service.record(input)).doesNotThrowAnyException();
         }
+
+        @Test
+        @DisplayName("TC-TEL-22: allowlisted deviceInfo key with a null value does not throw [DEF-TEL-03]")
+        void tcTel22_nullDeviceInfoValueDoesNotThrow() {
+            final Map<String, Object> deviceInfo = new HashMap<>();
+            deviceInfo.put("platform", null);
+            deviceInfo.put("uiSurface", "web");
+            final TelemetryEvent input = event(ALLOWED_EVENT, validDetails(), deviceInfo);
+
+            assertThatCode(() -> service.record(input)).doesNotThrowAnyException();
+        }
     }
 
     // ==================================================================
@@ -352,6 +367,35 @@ class TelemetryServiceTest {
                     .as("event was not persisted, so the caller's copy must be untouched")
                     .containsKey("unexpected_key");
         }
+
+        @Test
+        @DisplayName("TC-TEL-23: a non-allowlisted event name is not handed back as a 200-able body [DEF-TEL-18]")
+        void tcTel23_unknownEventNameIsNotReturnedAsAccepted() {
+            final TelemetryEvent input = event("totally_not_an_allowed_event",
+                    validDetails(), validDeviceInfo());
+
+            final TelemetryEvent result = service.record(input);
+
+            verify(repository, never()).save(any());
+            assertThat(result)
+                    .as("DevTelemetryController serves a non-null return as 200 OK with a null id, "
+                            + "so a rejected event name must not come back as an object")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("TC-TEL-25: an allowlisted event never yields a null return [DEF-TEL-20]")
+        void tcTel25_allowlistedEventNeverReturnsNull() {
+            echoSave();
+
+            final TelemetryEvent result =
+                    service.record(event(ALLOWED_EVENT, validDetails(), validDeviceInfo()));
+
+            assertThat(result)
+                    .as("record() is documented to return the stored event; a null return on an "
+                            + "accepted event breaks that contract for every caller")
+                    .isNotNull();
+        }
     }
 
     // ==================================================================
@@ -382,6 +426,14 @@ class TelemetryServiceTest {
             service.recordAnonymous(ALLOWED_EVENT, details, validDeviceInfo(), "t", "s");
 
             assertThat(captureSaved().getDetails()).containsOnlyKeys("screen");
+        }
+
+        @Test
+        @DisplayName("TC-TEL-24: recordAnonymous with null details does not throw [DEF-TEL-19]")
+        void tcTel24_anonymousNullDetailsDoesNotThrow() {
+            assertThatCode(() -> service.recordAnonymous(
+                    ALLOWED_EVENT, null, validDeviceInfo(), "t", "s"))
+                    .doesNotThrowAnyException();
         }
     }
 
