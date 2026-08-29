@@ -1,6 +1,6 @@
-name: Change Board Scope Change Request
-description: Submit a proposed project scope change for Tech Lead review.
-title: "CR-TBD"
+name: CareConnect Scope Change Request
+description: Submit a proposed project scope change for affected Team Lead review.
+title: "[CR] "
 labels:
   - change-board
   - scope-change
@@ -8,9 +8,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this form to request a project scope change. This board controls scope decisions only; execution work should be tracked separately after a change is approved.
+        Use this form to request a CareConnect project scope change. This board controls scope decisions only; execution work should be tracked separately after a change is approved.
 
-        Do not assign your own CR number. Tech Leads will replace `CR-TBD` with the official CR number during triage.
+        Affected Team Leads own review and disposition for their areas. Each team selected under Affected Teams must record its review outcome, conditions, and required baseline or document updates in the Review / Resolution Record before the change request can proceed.
 
   - type: input
     id: short-change-name
@@ -44,6 +44,21 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: affected_teams
+    attributes:
+      label: Affected Teams
+      description: Select every team that may be affected by this change request.
+      multiple: true
+      options:
+        - Team Alpha - Software Test Plan / Test Report
+        - Team Bravo - Programmer Guide / Deployment & Operations Guide
+        - Team Charlie - User Guide
+        - Team Delta - Technical Design Document (TDD) / VPAT-ACR
+        - Team Echo - Software Requirements Specification (SRS)
+    validations:
+      required: true
+
   - type: textarea
     id: change-requested
     attributes:
@@ -54,108 +69,75 @@ body:
       required: true
 
   - type: textarea
-    id: reason-justification
+    id: reason-for-change
     attributes:
-      label: Reason / Justification
-      description: Explain why this change is needed.
-      placeholder: Describe the user, business, technical, or project reason for the request.
+      label: Reason for Change
+      description: Explain why this change is needed and what problem, risk, or opportunity it addresses.
+      placeholder: Explain the driver for this scope change.
     validations:
       required: true
 
   - type: textarea
-    id: expected-benefit
+    id: expected-impact
     attributes:
-      label: Expected Benefit
-      description: Describe the value this change adds to the project, user, system, or team.
-      placeholder: Explain the expected benefit if the change is approved.
+      label: Expected Impact
+      description: Summarize expected impacts to scope, schedule, deliverables, users, quality, compliance, security, or operations.
+      placeholder: Describe the expected impact of approving this change.
     validations:
       required: true
 
   - type: textarea
-    id: scope-impact
+    id: impacted-baselines-documents
     attributes:
-      label: Scope Impact
-      description: Explain how this changes project scope, including size, complexity, or schedule impact if known.
-      placeholder: Describe whether this adds, removes, or changes current scope.
-    validations:
-      required: true
-
-  - type: textarea
-    id: affected-features-components
-    attributes:
-      label: Affected Features or Components
-      description: Identify the feature, workflow, module, screen, data element, integration, or project artifact affected.
-      placeholder: List affected areas.
-    validations:
-      required: true
-
-  - type: textarea
-    id: known-risks-concerns
-    attributes:
-      label: Known Risks or Concerns
-      description: Identify technical, schedule, dependency, usability, security, quality, or requirements risks.
-      placeholder: List known risks, concerns, dependencies, or open questions.
+      label: Impacted Baselines / Documents
+      description: List any known baselines, controlled documents, or project artifacts that may need updates.
+      placeholder: Identify affected baselines, requirements, designs, test artifacts, guides, or other controlled documents.
     validations:
       required: false
 
-  - type: input
-    id: requested-decision-date
+  - type: textarea
+    id: dependencies-risks
     attributes:
-      label: Requested Decision Date
-      description: Enter the date when the team needs an approval or deferral decision.
-      placeholder: YYYY-MM-DD
+      label: Dependencies / Risks
+      description: List known dependencies, blockers, assumptions, or risks that should be considered during review.
+      placeholder: Note cross-team dependencies, external constraints, technical risks, or open questions.
     validations:
       required: false
 
-  - type: input
-    id: requestor-owner
-    attributes:
-      label: Change Requestor / Owner
-      description: Enter the person or team responsible for answering questions about this request.
-      placeholder: Team Alpha - Jane Doe
-    validations:
-      required: true
-
   - type: textarea
-    id: supporting-artifacts
+    id: review-resolution-record
     attributes:
-      label: Supporting Artifacts
-      description: Link or describe any supporting artifact, requirement, discussion, design, estimate, or evidence.
-      placeholder: Paste links or brief references here.
-    validations:
-      required: false
+      label: Review / Resolution Record
+      description: Affected Team Leads should record review outcomes, approval conditions, required baseline or document updates, cross-team dependencies, and any escalation notes here.
+      placeholder: |
+        Team Alpha:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
 
-  - type: checkboxes
-    id: submission-confirmation
-    attributes:
-      label: Submission Confirmation
-      description: Confirm the request is ready for Change Board intake.
-      options:
-        - label: I understand that Tech Leads assign the official CR number during triage.
-          required: true
-        - label: I understand this form is for scope change control only, not execution tracking.
-          required: true
-        - label: I selected only Technical Category values that clearly fit this request.
-          required: true
+        Team Bravo:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
 
-  - type: textarea
-    id: tech-lead-review
-    attributes:
-      label: Tech Lead Review Notes
-      description: Tech Leads use this section during triage and review.
-      value: |
-        Decision:
+        Team Charlie:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
 
-        Rationale:
+        Team Delta:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
 
-        Scope impact reviewed:
-
-        Schedule impact reviewed:
-
-        Technical feasibility reviewed:
-
-        Risk level:
-
-        Deferred reason, if applicable:
+        Team Echo:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
     validations:
       required: false
