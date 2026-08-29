@@ -88,25 +88,24 @@ public class TelemetryService {
       return event;
     }
 
+    if(event.getEventName() == null){return null;}
     /* Filter by events that are allowed */
     if(allowedEvents.contains(event.getEventName())){
         /* Remove all invalid details */
         Map<String, Object> details = event.getDetails();
+        if(details == null || details.isEmpty()){return null;}
         /* Do a little dark magic to filter it out */
         Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey)
                 .collect(Collectors.toMap(Function.identity(), details::get));
-        if(newDetails.isEmpty()){
-          // Not going to bother storing an event with no valid details.
-          return event;
-        }
         event.setDetails(newDetails);
 
         Map<String, Object> deviceInfo = event.getDeviceInfo();
+        if(deviceInfo == null || deviceInfo.isEmpty()){ return null;}
         Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey)
               .collect(Collectors.toMap(Function.identity(), deviceInfo::get));
         if(newDeviceInfo.isEmpty()){
           // Not going to bother storing an event with no valid deviceInfo
-          return event;
+          return null;
         }
         event.setDeviceInfo(newDeviceInfo);
         return repository.save(event);
@@ -163,6 +162,27 @@ public class TelemetryService {
     event.setSpanId(spanId);
     event.setDetails(details);
     event.setDeviceInfo(deviceInfo);
-    return repository.save(event);
+
+    if(event.getEventName() == null){return event;}
+    /* Filter by events that are allowed */
+    if(allowedEvents.contains(event.getEventName())){
+      /* Do a little dark magic to filter it out */
+      Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey)
+              .collect(Collectors.toMap(Function.identity(), details::get));
+      event.setDetails(newDetails);
+
+      if(deviceInfo == null || deviceInfo.isEmpty()){ return null;}
+      Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey)
+              .collect(Collectors.toMap(Function.identity(), deviceInfo::get));
+      if(newDeviceInfo.isEmpty()){
+        // Not going to bother storing an event with no valid deviceInfo
+        return null;
+      }
+      event.setDeviceInfo(newDeviceInfo);
+      return repository.save(event);
+    }
+
+    return null;
+
   }
 }
