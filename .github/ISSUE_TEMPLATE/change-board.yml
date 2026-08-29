@@ -1,0 +1,161 @@
+name: Change Board Scope Change Request
+description: Submit a proposed project scope change for Tech Lead review.
+title: "CR-TBD"
+labels:
+  - change-board
+  - scope-change
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to request a project scope change. This board controls scope decisions only; execution work should be tracked separately after a change is approved.
+
+        Do not assign your own CR number. Tech Leads will replace `CR-TBD` with the official CR number during triage.
+
+  - type: input
+    id: short-change-name
+    attributes:
+      label: Short change name
+      description: Provide a concise name for the requested change.
+      placeholder: Add provider search filter
+    validations:
+      required: true
+
+  - type: dropdown
+    id: technical-category
+    attributes:
+      label: Technical Category
+      description: Select the best one or two categories. Use only categories that clearly fit the request.
+      multiple: true
+      options:
+        - Accessibility
+        - AI
+        - Care coordination
+        - Clinical
+        - Data
+        - Infrastructure
+        - Integration
+        - Interoperability
+        - Partnerships
+        - Patient experience
+        - Platform
+        - Security
+        - UX
+    validations:
+      required: true
+
+  - type: textarea
+    id: change-requested
+    attributes:
+      label: Change Requested
+      description: Briefly describe what should be added, removed, or changed.
+      placeholder: Describe the proposed scope change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason-justification
+    attributes:
+      label: Reason / Justification
+      description: Explain why this change is needed.
+      placeholder: Describe the user, business, technical, or project reason for the request.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-benefit
+    attributes:
+      label: Expected Benefit
+      description: Describe the value this change adds to the project, user, system, or team.
+      placeholder: Explain the expected benefit if the change is approved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope-impact
+    attributes:
+      label: Scope Impact
+      description: Explain how this changes project scope, including size, complexity, or schedule impact if known.
+      placeholder: Describe whether this adds, removes, or changes current scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-features-components
+    attributes:
+      label: Affected Features or Components
+      description: Identify the feature, workflow, module, screen, data element, integration, or project artifact affected.
+      placeholder: List affected areas.
+    validations:
+      required: true
+
+  - type: textarea
+    id: known-risks-concerns
+    attributes:
+      label: Known Risks or Concerns
+      description: Identify technical, schedule, dependency, usability, security, quality, or requirements risks.
+      placeholder: List known risks, concerns, dependencies, or open questions.
+    validations:
+      required: false
+
+  - type: input
+    id: requested-decision-date
+    attributes:
+      label: Requested Decision Date
+      description: Enter the date when the team needs an approval or deferral decision.
+      placeholder: YYYY-MM-DD
+    validations:
+      required: false
+
+  - type: input
+    id: requestor-owner
+    attributes:
+      label: Change Requestor / Owner
+      description: Enter the person or team responsible for answering questions about this request.
+      placeholder: Team Alpha - Jane Doe
+    validations:
+      required: true
+
+  - type: textarea
+    id: supporting-artifacts
+    attributes:
+      label: Supporting Artifacts
+      description: Link or describe any supporting artifact, requirement, discussion, design, estimate, or evidence.
+      placeholder: Paste links or brief references here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: submission-confirmation
+    attributes:
+      label: Submission Confirmation
+      description: Confirm the request is ready for Change Board intake.
+      options:
+        - label: I understand that Tech Leads assign the official CR number during triage.
+          required: true
+        - label: I understand this form is for scope change control only, not execution tracking.
+          required: true
+        - label: I selected only Technical Category values that clearly fit this request.
+          required: true
+
+  - type: textarea
+    id: tech-lead-review
+    attributes:
+      label: Tech Lead Review Notes
+      description: Tech Leads use this section during triage and review.
+      value: |
+        Decision:
+
+        Rationale:
+
+        Scope impact reviewed:
+
+        Schedule impact reviewed:
+
+        Technical feasibility reviewed:
+
+        Risk level:
+
+        Deferred reason, if applicable:
+    validations:
+      required: false
