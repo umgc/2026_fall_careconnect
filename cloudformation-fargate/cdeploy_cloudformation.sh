@@ -160,6 +160,11 @@ trap cleanup EXIT
 
 # Read newline-separated stdin into the named array. macOS ships bash 3.2,
 # which has no `mapfile`/`readarray`, so this stands in for both.
+#
+# One difference from `mapfile -t`: a final line with no trailing newline is
+# dropped here, where mapfile would keep it. Every producer feeding this (the
+# Python/Node/jq helpers and the parameter builders) terminates its last line,
+# so there is no live difference today.
 read_lines_into() {
   local __array_name="$1"
   local __line
@@ -704,6 +709,16 @@ deploy_stack() {
   CURRENT_OPERATION="$operation stack '$stack_name'"
   echo "$operation stack '$stack_name'..."
 
+  # bash 3.2 treats an empty array as unset, so both the count and the
+  # expansion need the ${arr[@]+...} guard. Building the flag conditionally
+  # also avoids handing the AWS CLI a bare --parameter-overrides with no
+  # values, which it rejects.
+  local -a override_args
+  override_args=()
+  if [[ -n "${parameter_overrides[*]+x}" ]]; then
+    override_args=(--parameter-overrides "${parameter_overrides[@]}")
+  fi
+
   local aws_template_path
   aws_template_path="$(to_aws_path "$template_path")"
 
@@ -714,7 +729,7 @@ deploy_stack() {
     --template-file "$aws_template_path" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset \
-    --parameter-overrides "${parameter_overrides[@]}"; then
+    ${override_args[@]+"${override_args[@]}"}; then
     write_stack_failure_details "$stack_name"
     return 1
   fi

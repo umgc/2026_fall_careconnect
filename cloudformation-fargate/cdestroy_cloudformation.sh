@@ -116,6 +116,11 @@ trap 'on_error $? $LINENO' ERR
 
 # Read newline-separated stdin into the named array. macOS ships bash 3.2,
 # which has no `mapfile`/`readarray`, so this stands in for both.
+#
+# One difference from `mapfile -t`: a final line with no trailing newline is
+# dropped here, where mapfile would keep it. Every producer feeding this (the
+# Python/Node/jq helpers and the parameter builders) terminates its last line,
+# so there is no live difference today.
 read_lines_into() {
   local __array_name="$1"
   local __line
