@@ -17,7 +17,11 @@ Description: GitHub Actions OIDC provider and deployment role for CareConnect CI
 # Adding `environment:` to the deploy workflow without allowing the environment
 # subject here will break the deploy with an AssumeRoleWithWebIdentity failure.
 # Both forms are permitted below so the workflow can adopt GitHub Environments
-# without a second IAM change.
+# without a second IAM change -- but the environments are named explicitly
+# rather than wildcarded. `environment:*` would let anyone who can land a
+# workflow file create a brand-new, unprotected environment and assume this
+# role; only environments that actually have protection rules are a gate.
+# To add one, extend DeployEnvironment1-4 or use AdditionalSubject.
 
 Parameters:
   # Organization that owns the repository. The prior cohort's documented trust
@@ -36,8 +40,25 @@ Parameters:
     Type: String
     Default: main
 
+  # GitHub Environments allowed to assume this role. These must match the
+  # environment names used by backend-app-deploy.yml / backend-full-deploy.yml.
+  # Set an unused slot to '' to allow nothing for it -- an empty slot is
+  # dropped from the trust policy rather than matching everything.
+  DeployEnvironment1:
+    Type: String
+    Default: dev
+  DeployEnvironment2:
+    Type: String
+    Default: cfdemo
+  DeployEnvironment3:
+    Type: String
+    Default: staging
+  DeployEnvironment4:
+    Type: String
+    Default: prod
+
   # Optional extra subject, e.g. a release branch or a second repository.
-  # Leave empty to allow only the primary branch and environment deployments.
+  # Leave empty to allow only the primary branch and the named environments.
   AdditionalSubject:
     Type: String
     Default: ''
@@ -72,6 +93,10 @@ Conditions:
   ShouldCreateProvider: !Equals [!Ref CreateOidcProvider, 'Yes']
   HasAdditionalSubject: !Not [!Equals [!Ref AdditionalSubject, '']]
   AllowsInfrastructure: !Equals [!Ref AllowInfrastructureDeploy, 'Yes']
+  HasEnvironment1: !Not [!Equals [!Ref DeployEnvironment1, '']]
+  HasEnvironment2: !Not [!Equals [!Ref DeployEnvironment2, '']]
+  HasEnvironment3: !Not [!Equals [!Ref DeployEnvironment3, '']]
+  HasEnvironment4: !Not [!Equals [!Ref DeployEnvironment4, '']]
 
 Resources:
   GitHubOidcProvider:
@@ -103,16 +128,30 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !If
-                  - HasAdditionalSubject
-                  - - !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${PrimaryBranch}
-                    # Any GitHub Environment in this repo. The gate is the
-                    # environment's own protection rules (required reviewers),
-                    # which is a stronger control than an IAM string match.
-                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:*
+                # Every unused slot resolves to AWS::NoValue and drops out of
+                # the list, so an empty parameter grants nothing.
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${PrimaryBranch}
+                  - !If
+                    - HasEnvironment1
+                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment1}
+                    - !Ref AWS::NoValue
+                  - !If
+                    - HasEnvironment2
+                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment2}
+                    - !Ref AWS::NoValue
+                  - !If
+                    - HasEnvironment3
+                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment3}
+                    - !Ref AWS::NoValue
+                  - !If
+                    - HasEnvironment4
+                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:${DeployEnvironment4}
+                    - !Ref AWS::NoValue
+                  - !If
+                    - HasAdditionalSubject
                     - !Ref AdditionalSubject
-                  - - !Sub repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${PrimaryBranch}
-                    - !Sub repo:${GitHubOrg}/${GitHubRepo}:environment:*
+                    - !Ref AWS::NoValue
 
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/PowerUserAccess
