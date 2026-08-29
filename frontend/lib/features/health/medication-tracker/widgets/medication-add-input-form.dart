@@ -586,7 +586,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
         );
         
         unawaited(
-          Telemetry.event('feature.medications.add', {'status': response}),
+          Telemetry.event('feature.medications.add', {'status': response.statusCode})
         );
 
         if (response.statusCode == 200) {

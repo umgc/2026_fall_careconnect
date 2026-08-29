@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/models/medication_reminder_item.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'dart:async';
 
 class PatientMedicationReminderService {
   // Local optimistic overrides:
@@ -20,6 +22,10 @@ class PatientMedicationReminderService {
     }
 
     final response = await ApiService.getPatientMedicationsForPatient(patientId);
+    unawaited(
+          Telemetry.event('feature.medications.view_all', {'status': response.statusCode}),
+    );
+
     if (response.statusCode != 200) {
       return const <MedicationReminderItem>[];
     }
