@@ -8,7 +8,10 @@ import com.careconnect.repository.projection.FeatureUsageCountProjection;
 import com.careconnect.repository.projection.SyncCompletedSumProjection;
 import java.time.OffsetDateTime;
 import java.util.List;
+
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -58,6 +61,8 @@ public interface TelemetryEventRepository extends JpaRepository<TelemetryEvent, 
   List<EventNameCountProjection> countByEventNameBetween(
       @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
+  @Modifying
+  @Transactional
   int removeByEventTimeBefore(OffsetDateTime from);
 
   @Query(
