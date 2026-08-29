@@ -25,7 +25,7 @@ class OAuthService {
   // Launch the OAuth2 flow via backend
   static Future<void> launchGoogleOAuth() async {
     if (!isConfigured) {
-      throw Exception('Backend URL not configured. Check your .env file.');
+      throw Exception('Backend URL not configured. Check the BACKEND_URL --dart-define.');
     }
 
     final authUrl = buildAuthorizationUrl();
