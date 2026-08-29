@@ -165,12 +165,37 @@ public class SecurityConfig {
                         .requestMatchers("/api/gamification/**").authenticated()
                         .requestMatchers("/api/websocket/**").authenticated()
 
-                        /* ----- Public Telemetry Endpoints ----- */
+                        /* ---------- Telemetry: intentionally unauthenticated ----
+                         * These two matchers are public in EVERY profile, prod
+                         * included. That is deliberate, not an oversight:
+                         *
+                         *  - The Flutter client posts telemetry with no bearer
+                         *    token (ApiService.sendTelemetryEventV3), and events
+                         *    fire before login (screen_view on the login and
+                         *    signup routes, session_start). Requiring auth here
+                         *    does not harden the endpoint, it silently drops
+                         *    every pre-login event and 401s the rest.
+                         *  - Telemetry.getBackendEnabled() reads /enabled with no
+                         *    token, so that GET must stay public or the client
+                         *    fails open and keeps emitting after an opt-out.
+                         *
+                         * The endpoint is therefore defended by WHAT it accepts,
+                         * not by WHO calls it:
+                         *  - TelemetryService rejects any event outside its
+                         *    allowlist and strips non-allowlisted detail keys.
+                         *  - TelemetryController bounds payload size before the
+                         *    body reaches the service or the database.
+                         *
+                         * Mutating and reading stored telemetry stays ADMIN-only
+                         * (PUT /enabled and GET /recent, declared above).
+                         *
+                         * Rate limiting is NOT yet implemented. Until it is, this
+                         * endpoint accepts unauthenticated writes at any rate from
+                         * any source. Tracked as follow-up work.
+                         */
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").permitAll()
-
-
 
                         // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
                         // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.

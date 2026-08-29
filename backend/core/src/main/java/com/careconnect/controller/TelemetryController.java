@@ -7,7 +7,6 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +22,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TelemetryController {
 
+  /**
+   * Maximum number of top-level fields accepted on a telemetry payload.
+   *
+   * <p>The client sends six. The cap leaves headroom without allowing an
+   * unauthenticated caller to submit arbitrarily wide objects.
+   */
+  private static final int MAX_TOP_LEVEL_FIELDS = 16;
+
+  /** Maximum number of entries accepted in the details or deviceInfo maps. */
+  private static final int MAX_NESTED_ENTRIES = 32;
+
+  /**
+   * Maximum accepted character length of any single stringified value.
+   *
+   * <p>Set above the client-side guardrail cap of 64 so that legitimate
+   * payloads are never rejected here; this is a backstop against direct
+   * callers, not a duplicate of the client's own limit.
+   */
+  private static final int MAX_VALUE_LENGTH = 256;
+
   /** Service used to persist and query telemetry events. */
   private final TelemetryService telemetry;
 
@@ -30,15 +49,25 @@ public class TelemetryController {
   private final TelemetryToggleService toggle;
 
   /**
-   * Emits a telemetry event from a development request payload.
+   * Emits a telemetry event from a request payload.
+   *
+   * <p>This endpoint is reachable without authentication in every profile (see
+   * SecurityConfig for why), so it bounds the payload before anything is handed
+   * to the service layer or persisted. Size rejection happens here; event-name
+   * and detail-key filtering happen in {@link TelemetryService}.
    *
    * @param body request body containing telemetry fields
-   * @return created telemetry event, or no content when telemetry is disabled
+   * @return created telemetry event, no content when telemetry is disabled, or
+   *     bad request when the payload exceeds the accepted bounds
    */
   @PostMapping
   public final ResponseEntity<?> emit(@RequestBody final Map<String, Object> body) {
     if (!toggle.isEnabled()) {
       return ResponseEntity.noContent().build();
+    }
+
+    if (!withinBounds(body)) {
+      return ResponseEntity.badRequest().body(Map.of("error", "payload exceeds accepted bounds"));
     }
 
     final TelemetryEvent event = new TelemetryEvent();
@@ -82,6 +111,59 @@ public class TelemetryController {
   @SuppressWarnings("PMD.LinguisticNaming")
   public final ResponseEntity<?> setEnabled(@RequestParam final boolean enabled) {
     return ResponseEntity.ok(Map.of("enabled", toggle.setEnabled(enabled)));
+  }
+
+  /**
+   * Reports whether a telemetry payload is small enough to accept.
+   *
+   * @param body request body to measure
+   * @return true when the payload is within every configured bound
+   */
+  private static boolean withinBounds(final Map<String, Object> body) {
+    if (body.size() > MAX_TOP_LEVEL_FIELDS) {
+      return false;
+    }
+
+    for (final Map.Entry<String, Object> entry : body.entrySet()) {
+      final Object value = entry.getValue();
+      final boolean nested = value instanceof Map<?, ?>;
+      if (nested && !nestedWithinBounds((Map<?, ?>) value)) {
+        return false;
+      }
+      if (!nested && tooLong(value)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Reports whether a nested map is small enough to accept.
+   *
+   * @param nested details or deviceInfo map to measure
+   * @return true when the map is within every configured bound
+   */
+  private static boolean nestedWithinBounds(final Map<?, ?> nested) {
+    if (nested.size() > MAX_NESTED_ENTRIES) {
+      return false;
+    }
+
+    for (final Object value : nested.values()) {
+      if (tooLong(value)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Reports whether a single value stringifies to an over-long representation.
+   *
+   * @param value value to measure
+   * @return true when the value exceeds the accepted length
+   */
+  private static boolean tooLong(final Object value) {
+    return value != null && String.valueOf(value).length() > MAX_VALUE_LENGTH;
   }
 
   private static void setOptionalMap(final TelemetryEvent event, final Map<String, Object> body) {
