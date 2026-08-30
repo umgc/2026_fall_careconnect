@@ -30,13 +30,19 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AiOutputValidationServiceTest {
 
-    @Mock AiAuditLedgerService auditLedgerService;
-    @Mock MedicalDataAnonymizer anonymizer;
-    @Mock ConfirmationService confirmationService;
-    @Mock AIServiceFactory aiServiceFactory;
-    @Mock AIService judgeService;
+    @Mock
+    AiAuditLedgerService auditLedgerService;
+    @Mock
+    MedicalDataAnonymizer anonymizer;
+    @Mock
+    ConfirmationService confirmationService;
+    @Mock
+    AIServiceFactory aiServiceFactory;
+    @Mock
+    AIService judgeService;
 
-    @InjectMocks AiOutputValidationService service;
+    @InjectMocks
+    AiOutputValidationService service;
 
     private ValidationResult validate(String output) {
         return service.validate(output, "What are my meds?", AuditSourceFeature.ASK_AI, 42L, 7L, "sess-1");

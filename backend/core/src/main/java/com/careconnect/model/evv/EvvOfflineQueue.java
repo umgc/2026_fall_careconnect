@@ -8,10 +8,16 @@ import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
-@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-@Entity @Table(name = "evv_offline_queue")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "evv_offline_queue")
 public class EvvOfflineQueue {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "record_id", nullable = false)
@@ -48,7 +54,8 @@ public class EvvOfflineQueue {
     private Integer priority = 1; // 1=normal, 2=high, 3=urgent
 
     // Store the full record data for offline operations
-    @Convert(disableConversion = true) @Column(name = "record_data", columnDefinition = "jsonb")
+    @Convert(disableConversion = true)
+    @Column(name = "record_data", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> recordData;
 

@@ -7,11 +7,11 @@ import java.time.Instant;
 
 @Entity
 @Table(
-    name = "summary_metrics",
-    uniqueConstraints = @UniqueConstraint(
-        name = "uq_patient_window",
-        columnNames = {"patient_user_id", "period_start", "period_end"}
-    )
+        name = "summary_metrics",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_patient_window",
+                columnNames = {"patient_user_id", "period_start", "period_end"}
+        )
 )
 @Data
 @EqualsAndHashCode(callSuper = false)

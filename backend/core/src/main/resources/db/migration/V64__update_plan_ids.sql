@@ -2,7 +2,8 @@
 -- This ensures frontend tierId mappings match database Plan IDs
 
 -- Delete existing plans (if any)
-DELETE FROM plan;
+DELETE
+FROM plan;
 
 -- Reset sequence to start at 1
 ALTER SEQUENCE plan_id_seq RESTART WITH 1;

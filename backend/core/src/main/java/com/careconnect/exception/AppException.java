@@ -2,7 +2,7 @@ package com.careconnect.exception;
 
 import org.springframework.http.HttpStatus;
 
-public class AppException extends RuntimeException{
+public class AppException extends RuntimeException {
 
     private final HttpStatus status;
 

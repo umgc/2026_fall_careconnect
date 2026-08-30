@@ -85,6 +85,41 @@ class RetrievalIndexServiceTest {
 
     private RetrievalIndexService service;
 
+    private static CallTranscriptService.IndexingSnapshot indexingSnapshot(
+            final List<CallTranscriptSegment> segments, final String version) {
+        return new CallTranscriptService.IndexingSnapshot(segments, version);
+    }
+
+    private static CallSession callSession(final String callId, final Long patientId) {
+        final CallSession session = new CallSession();
+        session.setCallId(callId);
+        session.setPatientId(patientId);
+        return session;
+    }
+
+    private static UspsMailpiece authoritativeMailpiece() {
+        final UspsMailpiece mailpiece = new UspsMailpiece();
+        mailpiece.setId(55L);
+        mailpiece.setPatientId(42L);
+        mailpiece.setSourceKey("2025-03-03|m-1");
+        mailpiece.setContentHash("sha-abc");
+        mailpiece.setSender("Acme");
+        mailpiece.setSummary("Statement");
+        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
+        mailpiece.setConsentScope("on_consent");
+        return mailpiece;
+    }
+
+    private static Collection<String> anyCollection() {
+        return any();
+    }
+
+    private static List<String> summarySources(final long summaryId) {
+        return List.of(
+                SummarySourceKey.call(summaryId),
+                SummarySourceKey.legacy(summaryId));
+    }
+
     @BeforeEach
     void setUp() {
         final ObjectMapper mapper = new ObjectMapper();
@@ -146,8 +181,7 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
                 eq(42L), eq("call-summary:99"), eq("99"),
                 eq(SummarySourceKey.CALL_KIND), anyCollection());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         verify(chunkEmbeddingService).embedAndPersist(anyList());
         assertThat(captor.getValue())
@@ -252,8 +286,7 @@ class RetrievalIndexServiceTest {
                 ContentHashUtil.sha256(summary.getSummaryJson())));
 
         assertThat(written).isEqualTo(1);
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getConsentScope()).isEqualTo("hidden");
         assertThat(captor.getValue().get(0).getSourceRecordId())
@@ -409,8 +442,7 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
                 eq(42L), eq("call-summary:99"), eq("99"),
                 eq(SummarySourceKey.CALL_KIND), anyCollection());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getChunkMetadata())
                 .contains("\"citationMetadataVersion\":1")
@@ -555,8 +587,7 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
                 eq(42L), eq("call-summary:99"), eq("99"),
                 eq(SummarySourceKey.CALL_KIND), anyCollection());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue())
                 .extracting(RetrievalIndexChunk::getSourceRecordId)
@@ -701,8 +732,7 @@ class RetrievalIndexServiceTest {
         verify(chunkRepository).deleteCallSummaryChunksForReplacement(
                 eq(42L), eq("visit-summary:50"), eq("visit-summary:50"),
                 eq(SummarySourceKey.VISIT_KIND), anyCollection());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue())
                 .extracting(RetrievalIndexChunk::getRecordType)
@@ -869,8 +899,7 @@ class RetrievalIndexServiceTest {
         assertThat(service.replaySummaryCitationMetadata(99L, 42L, claim, 300_000L))
                 .isEqualTo(SummaryCitationReplayOutcome.UPDATED);
 
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         verify(chunkRepository).quarantineLegacySummarySourceAcrossPatients(
                 eq("99"), eq(RetrievalRecordType.summaryTypeNames()));
@@ -923,8 +952,7 @@ class RetrievalIndexServiceTest {
                 new TranscriptIndexedPayload(
                         "call-archive", 42L, 2, "sha256:complete"))).isEqualTo(2);
 
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor =
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor =
                 ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(2);
@@ -1052,11 +1080,6 @@ class RetrievalIndexServiceTest {
                         .isFalse());
     }
 
-    private static CallTranscriptService.IndexingSnapshot indexingSnapshot(
-            final List<CallTranscriptSegment> segments, final String version) {
-        return new CallTranscriptService.IndexingSnapshot(segments, version);
-    }
-
     @Test
     @DisplayName("ingestMailpieceIndexed writes USPS_MAIL chunk and replaces prior source rows")
     void ingestMailpieceIndexed_writesChunk() {
@@ -1084,8 +1107,7 @@ class RetrievalIndexServiceTest {
         assertThat(written).isEqualTo(1);
         verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
                 42L, "55", RetrievalRecordType.USPS_MAIL.name());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().get(0).getRecordType())
@@ -1164,8 +1186,7 @@ class RetrievalIndexServiceTest {
         assertThat(written).isEqualTo(1);
         verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
                 42L, "55", RetrievalRecordType.USPS_MAIL.name());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getChunkText()).contains("Importance: HIGH");
         assertThat(captor.getValue().get(0).getChunkMetadata()).contains("importanceFingerprint");
@@ -1250,8 +1271,7 @@ class RetrievalIndexServiceTest {
         assertThat(written).isEqualTo(1);
         verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
                 42L, "7", RetrievalRecordType.CLINICAL_NOTE.name());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().get(0).getRecordType())
@@ -1382,8 +1402,7 @@ class RetrievalIndexServiceTest {
         assertThat(written).isEqualTo(1);
         verify(chunkRepository).deleteByPatientIdAndSourceRecordIdAndRecordType(
                 42L, "21", RetrievalRecordType.UPLOADED_DOCUMENT.name());
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().get(0).getRecordType())
@@ -1475,8 +1494,7 @@ class RetrievalIndexServiceTest {
                 21L, 42L, contentHash, "MEDICAL_RECORD", "stale outbox text", "on_consent"));
 
         assertThat(written).isEqualTo(1);
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<RetrievalIndexChunk>> captor = ArgumentCaptor.forClass(List.class);
         verify(chunkRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getChunkText())
                 .contains("Authoritative lab caption.")
@@ -1505,35 +1523,5 @@ class RetrievalIndexServiceTest {
                 .isInstanceOf(IndexingDeferredException.class);
 
         verify(chunkRepository, never()).saveAll(anyList());
-    }
-
-    private static CallSession callSession(final String callId, final Long patientId) {
-        final CallSession session = new CallSession();
-        session.setCallId(callId);
-        session.setPatientId(patientId);
-        return session;
-    }
-
-    private static UspsMailpiece authoritativeMailpiece() {
-        final UspsMailpiece mailpiece = new UspsMailpiece();
-        mailpiece.setId(55L);
-        mailpiece.setPatientId(42L);
-        mailpiece.setSourceKey("2025-03-03|m-1");
-        mailpiece.setContentHash("sha-abc");
-        mailpiece.setSender("Acme");
-        mailpiece.setSummary("Statement");
-        mailpiece.setDigestDate(java.time.LocalDate.of(2025, 3, 3));
-        mailpiece.setConsentScope("on_consent");
-        return mailpiece;
-    }
-
-    private static Collection<String> anyCollection() {
-        return any();
-    }
-
-    private static List<String> summarySources(final long summaryId) {
-        return List.of(
-                SummarySourceKey.call(summaryId),
-                SummarySourceKey.legacy(summaryId));
     }
 }

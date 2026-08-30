@@ -59,28 +59,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("CallSummaryController Tests")
 class CallSummaryControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean
-    private CallSummaryService callSummaryService;
-
-    @MockitoBean
-    private CallSessionService callSessionService;
-
-    @MockitoBean
-    private UserRepository userRepository;
-
-    @MockitoBean
-    private CaregiverVisibilityService caregiverVisibilityService;
-
     private static final long SUMMARY_ID = 101L;
     private static final long CURRENT_USER_ID = 500L;
     private static final long OWNER_USER_ID = 999L;
     private static final long PATIENT_ID = 77L;
     private static final String CALL_ID = "call-1";
     private static final String CURRENT_USER_EMAIL = "user";
-
+    @Autowired
+    private MockMvc mockMvc;
+    @MockitoBean
+    private CallSummaryService callSummaryService;
+    @MockitoBean
+    private CallSessionService callSessionService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private CaregiverVisibilityService caregiverVisibilityService;
     private User caregiverUser;
 
     @BeforeEach

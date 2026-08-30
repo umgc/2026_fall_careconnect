@@ -5,8 +5,8 @@ import jakarta.persistence.Id;
 
 @Entity
 public class Permission {
-	@Id
-	private String id;
+    @Id
+    private String id;
     private String name;
     private String description;
 
@@ -17,16 +17,16 @@ public class Permission {
         this.name = name;
         this.description = description;
     }
-    
+
     public String getId() {
-		return id;
-	}
+        return id;
+    }
 
-	public void setId(String id) {
-		this.id = id;
-	}
+    public void setId(String id) {
+        this.id = id;
+    }
 
-	public String getName() {
+    public String getName() {
         return name;
     }
 

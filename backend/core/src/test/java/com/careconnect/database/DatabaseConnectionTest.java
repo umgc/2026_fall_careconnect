@@ -20,11 +20,16 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class DatabaseConnectionTest {
 
-    @Mock private DataSource dataSource;
-    @Mock private Connection connection;
-    @Mock private DatabaseMetaData metaData;
-    @Mock private Statement statement;
-    @Mock private ResultSet resultSet;
+    @Mock
+    private DataSource dataSource;
+    @Mock
+    private Connection connection;
+    @Mock
+    private DatabaseMetaData metaData;
+    @Mock
+    private Statement statement;
+    @Mock
+    private ResultSet resultSet;
 
     @BeforeEach
     void setUp() throws SQLException {
@@ -52,7 +57,7 @@ class DatabaseConnectionTest {
 
             final String productName = md.getDatabaseProductName().toLowerCase();
             assertTrue(productName.contains("postgresql"),
-                "Should be connected to PostgreSQL in dev mode, but connected to: " + productName);
+                    "Should be connected to PostgreSQL in dev mode, but connected to: " + productName);
         }
     }
 
@@ -135,7 +140,7 @@ class DatabaseConnectionTest {
             assertNotNull(url, "Database URL should not be null");
             assertTrue(url.contains("postgresql"), "URL should indicate PostgreSQL connection");
             assertTrue(url.contains("localhost") || url.contains("127.0.0.1"),
-                "URL should connect to localhost");
+                    "URL should connect to localhost");
             assertTrue(url.contains("5432"), "URL should use default PostgreSQL port 5432");
         }
     }

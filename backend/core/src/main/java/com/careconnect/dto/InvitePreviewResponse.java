@@ -4,17 +4,17 @@ import java.time.LocalDateTime;
 
 /**
  * Stable, non-enumerating preview returned by GET /v1/api/invite/{token}.
- *
+ * <p>
  * Issues #59 + #81:
- *  - "Who Invited Me?" context: inviterName, patientName, inviteReason.
- *  - The structure is STABLE: the same fields are returned for valid AND
- *    invalid/expired/revoked tokens. For non-valid tokens the context fields
- *    are null and {@code valid=false}, so the endpoint never reveals via HTTP
- *    status whether a token merely doesn't exist vs. exists-but-expired.
- *  - {@code status} is one of VALID | EXPIRED | REVOKED | ACCEPTED | INVALID.
- *  - {@code nextAction} tells the frontend what to do next (ACCEPT, REQUEST_NEW,
- *    SIGN_IN, NONE) so onboarding logic doesn't branch on status text.
- *
+ * - "Who Invited Me?" context: inviterName, patientName, inviteReason.
+ * - The structure is STABLE: the same fields are returned for valid AND
+ * invalid/expired/revoked tokens. For non-valid tokens the context fields
+ * are null and {@code valid=false}, so the endpoint never reveals via HTTP
+ * status whether a token merely doesn't exist vs. exists-but-expired.
+ * - {@code status} is one of VALID | EXPIRED | REVOKED | ACCEPTED | INVALID.
+ * - {@code nextAction} tells the frontend what to do next (ACCEPT, REQUEST_NEW,
+ * SIGN_IN, NONE) so onboarding logic doesn't branch on status text.
+ * <p>
  * To avoid enumeration, EXPIRED/REVOKED/ACCEPTED/INVALID are collapsed at the
  * HTTP layer into a single 200 response with this body. Only {@code status}
  * distinguishes them, and only AFTER the raw token hash has been verified, so
@@ -33,7 +33,9 @@ public record InvitePreviewResponse(
         LocalDateTime expiresAt
 ) {
 
-    /** Convenience factory for a fully-populated, valid preview. */
+    /**
+     * Convenience factory for a fully-populated, valid preview.
+     */
     public static InvitePreviewResponse valid(Long linkId, String linkType, String inviterName,
                                               String patientName, String inviteReason,
                                               String invitedEmail, LocalDateTime expiresAt,

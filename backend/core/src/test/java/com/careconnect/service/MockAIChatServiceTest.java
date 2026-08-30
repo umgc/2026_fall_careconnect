@@ -418,7 +418,7 @@ class MockAIChatServiceTest {
         request.setPatientId(10L);
         request.setMessage("This is a very long message that exceeds fifty characters and should be truncated for the title");
 
-        
+
         // The title should be truncated at 47 characters + "..."
         when(chatConversationRepository.save(any(ChatConversation.class))).thenAnswer(inv -> {
             final ChatConversation saved = inv.getArgument(0);

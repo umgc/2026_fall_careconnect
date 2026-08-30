@@ -23,16 +23,23 @@ import java.time.LocalTime;
  */
 public final class ScheduledVisitFixtures {
 
-    /** Canonical caregiver ID used across all default fixtures. */
+    /**
+     * Canonical caregiver ID used across all default fixtures.
+     */
     public static final Long DEFAULT_CAREGIVER_ID = 1L;
 
-    /** Canonical patient ID used across all default fixtures. */
+    /**
+     * Canonical patient ID used across all default fixtures.
+     */
     public static final Long DEFAULT_PATIENT_ID = 10L;
 
-    /** Fixed test date — a Tuesday, avoids weekend edge cases. */
+    /**
+     * Fixed test date — a Tuesday, avoids weekend edge cases.
+     */
     public static final LocalDate DEFAULT_DATE = LocalDate.of(2026, 3, 17);
 
-    private ScheduledVisitFixtures() { }
+    private ScheduledVisitFixtures() {
+    }
 
     /**
      * Returns a standard morning scheduled visit suitable for most conflict

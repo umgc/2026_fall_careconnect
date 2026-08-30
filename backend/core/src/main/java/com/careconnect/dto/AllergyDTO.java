@@ -39,4 +39,5 @@ public record AllergyDTO(
         // Keep canonical "isActive" but accept "active"
         @JsonAlias({"active"})
         Boolean isActive
-) {}
+) {
+}

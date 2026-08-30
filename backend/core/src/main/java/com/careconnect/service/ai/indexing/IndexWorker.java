@@ -77,6 +77,44 @@ public class IndexWorker {
         this.noBurnParkHours = Math.max(1, noBurnParkHours);
     }
 
+    private static Throwable rootCause(final Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (current instanceof IndexingDeferredException) {
+                return current;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        Throwable current = ex;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static String textOrNull(final JsonNode node, final String field) {
+        if (node == null) {
+            return null;
+        }
+        final JsonNode child = node.get(field);
+        return child == null || child.isNull() ? null : child.asText(null);
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        return b;
+    }
+
+    private static String truncate(final String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() > 500 ? message.substring(0, 500) : message;
+    }
+
     /**
      * Claims a batch of unprocessed rows in one short transaction (lock + lease), then
      * processes each row with ingest and outbox status updates in separate transactions.
@@ -274,43 +312,5 @@ public class IndexWorker {
         log.warn("IndexWorker ignoring unsupported eventType={} outboxId={}",
                 eventType, row.getId());
         return 0;
-    }
-
-    private static Throwable rootCause(final Throwable ex) {
-        for (Throwable current = ex; current != null; current = current.getCause()) {
-            if (current instanceof IndexingDeferredException) {
-                return current;
-            }
-            if (current.getCause() == current) {
-                break;
-            }
-        }
-        Throwable current = ex;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String textOrNull(final JsonNode node, final String field) {
-        if (node == null) {
-            return null;
-        }
-        final JsonNode child = node.get(field);
-        return child == null || child.isNull() ? null : child.asText(null);
-    }
-
-    private static String firstNonBlank(final String a, final String b) {
-        if (a != null && !a.isBlank()) {
-            return a;
-        }
-        return b;
-    }
-
-    private static String truncate(final String message) {
-        if (message == null) {
-            return null;
-        }
-        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 }

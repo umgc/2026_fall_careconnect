@@ -31,12 +31,17 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AiAllergyControllerTest {
 
-    @Mock private AiAllergyService aiAllergyService;
-    @Mock private AllergyRepository allergyRepository;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
+    @Mock
+    private AiAllergyService aiAllergyService;
+    @Mock
+    private AllergyRepository allergyRepository;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
 
-    @InjectMocks private AiAllergyController controller;
+    @InjectMocks
+    private AiAllergyController controller;
 
     private User adminUser;
     private User patientUser;

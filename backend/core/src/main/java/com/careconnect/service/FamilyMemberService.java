@@ -53,7 +53,7 @@ public class FamilyMemberService {
         this.emailService = emailService;
         this.analyticsService = analyticsService;
         this.gamificationService = gamificationService;
-        
+
         log.debug("FamilyMemberService initialized - passwordEncoder is null: {}", passwordEncoder == null);
     }
 
@@ -61,23 +61,23 @@ public class FamilyMemberService {
      * Register a new family member and link them to a patient
      */
     public FamilyMemberLinkResponse registerFamilyMember(FamilyMemberRegistration registration, Long grantedByUserId) {
-        log.debug("registerFamilyMember - registration: email={}, firstName={}, lastName={}, patientUserId={}, grantedByUserId={}", 
-                  registration.email(), registration.firstName(), registration.lastName(), 
-                  registration.patientUserId(), grantedByUserId);
-        
+        log.debug("registerFamilyMember - registration: email={}, firstName={}, lastName={}, patientUserId={}, grantedByUserId={}",
+                registration.email(), registration.firstName(), registration.lastName(),
+                registration.patientUserId(), grantedByUserId);
+
         // Validate required fields
         if (registration.email() == null || registration.email().trim().isEmpty()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Email is required for family member registration");
         }
-        
+
         if (registration.firstName() == null || registration.firstName().trim().isEmpty()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "First name is required for family member registration");
         }
-        
+
         if (registration.lastName() == null || registration.lastName().trim().isEmpty()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Last name is required for family member registration");
         }
-        
+
         if (registration.relationship() == null || registration.relationship().trim().isEmpty()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Relationship is required for family member registration");
         }
@@ -99,34 +99,34 @@ public class FamilyMemberService {
             boolean alreadyLinked = familyMemberLinkRepository.existsByFamilyUserAndPatientUserAndStatus(
                     existingFamilyUser.get(), patientUser, FamilyMemberLink.LinkStatus.ACTIVE);
             if (alreadyLinked) {
-                throw new AppException(HttpStatus.CONFLICT, 
-                    "This family member is already linked to this patient");
+                throw new AppException(HttpStatus.CONFLICT,
+                        "This family member is already linked to this patient");
             }
-            
+
             // Email exists but not linked to this patient - create link with existing user
             User familyUser = existingFamilyUser.get();
             log.debug("Using existing family member user: id={}, email={}", familyUser.getId(), familyUser.getEmail());
-            
+
             // Create family member link with existing user
             FamilyMemberLink link = new FamilyMemberLink(
                     familyUser, patientUser, grantedByUser, registration.relationship());
-            
+
             // Set the denormalized patient_id for faster queries
             Patient patient = patientRepository.findByUser(patientUser)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient profile not found"));
             link.setPatientId(patient.getId());
-            
+
             familyMemberLinkRepository.save(link);
-            
+
             // Send access granted email to existing family member
             String patientName = getPatientName(patientUser);
             String familyMemberFirstName = getFamilyMemberFirstName(familyUser);
             emailService.sendFamilyMemberAccessGrantedEmail(
-                    familyUser.getEmail(), 
+                    familyUser.getEmail(),
                     familyMemberFirstName,
                     patientName
             );
-            
+
             log.debug("Sent access granted email to existing family member: {}", familyUser.getEmail());
 
             boolean isFirstLink = familyMemberLinkRepository
@@ -140,7 +140,7 @@ public class FamilyMemberService {
                         20
                 );
             }
-            
+
             return toFamilyMemberLinkResponse(link);
         }
 
@@ -152,7 +152,7 @@ public class FamilyMemberService {
 
         // Generate a random password (will be changed when user sets up via email)
         String randomPassword = java.util.UUID.randomUUID().toString();
-        
+
         log.debug("Generated random password: {}, passwordEncoder is null: {}", randomPassword, passwordEncoder == null);
 
         // Create User account
@@ -161,32 +161,32 @@ public class FamilyMemberService {
         familyUser.setRole(Role.FAMILY_MEMBER);
         familyUser.setIsVerified(false);
         familyUser.setVerificationToken(passwordSetupToken);
-        
+
         // Encode and set password
         if (passwordEncoder == null) {
             log.error("PasswordEncoder is null! Cannot encode password");
             throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR, "Password encoder is not available");
         }
-        
+
         if (randomPassword == null || randomPassword.trim().isEmpty()) {
             log.error("Generated password is null or empty!");
             throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to generate password");
         }
-        
+
         String encodedPassword = passwordEncoder.encode(randomPassword);
         if (encodedPassword == null || encodedPassword.trim().isEmpty()) {
             log.error("Encoded password is null or empty!");
             throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to encode password");
         }
-        
+
         familyUser.setPassword(encodedPassword);
         familyUser.setPasswordHash(encodedPassword);
-        
-        log.debug("About to save familyUser: email={}, role={}, verified={}, hasPassword={}, encodedPasswordLength={}, hasPasswordHash={}, encodedPasswordHashLength={}", 
-                  familyUser.getEmail(), familyUser.getRole(), familyUser.getIsVerified(), 
-                  familyUser.getPassword() != null, familyUser.getPassword() != null ? familyUser.getPassword().length() : 0,
-                  familyUser.getPasswordHash() != null, familyUser.getPasswordHash() != null ? familyUser.getPasswordHash().length() : 0);
-        
+
+        log.debug("About to save familyUser: email={}, role={}, verified={}, hasPassword={}, encodedPasswordLength={}, hasPasswordHash={}, encodedPasswordHashLength={}",
+                familyUser.getEmail(), familyUser.getRole(), familyUser.getIsVerified(),
+                familyUser.getPassword() != null, familyUser.getPassword() != null ? familyUser.getPassword().length() : 0,
+                familyUser.getPasswordHash() != null, familyUser.getPasswordHash() != null ? familyUser.getPasswordHash().length() : 0);
+
         userRepository.save(familyUser);
 
         // Create FamilyMember profile
@@ -214,19 +214,19 @@ public class FamilyMemberService {
         // Create family member link
         FamilyMemberLink link = new FamilyMemberLink(
                 familyUser, patientUser, grantedByUser, registration.relationship());
-        
+
         // Set the denormalized patient_id for faster queries
         Patient patient = patientRepository.findByUser(patientUser)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient profile not found"));
         link.setPatientId(patient.getId());
-        
+
         familyMemberLinkRepository.save(link);
 
         // Send password setup email with credentials
         emailService.sendPasswordSetupEmailWithCredentials(
-                registration.email(), 
+                registration.email(),
                 passwordSetupToken,
-                registration.firstName(), 
+                registration.firstName(),
                 registration.email(), // username is email
                 randomPassword
         );
@@ -240,7 +240,7 @@ public class FamilyMemberService {
     @Transactional(readOnly = true)
     public List<PatientDataResponse> getAccessiblePatients(Long familyUserId) {
         List<FamilyMemberLink> links = familyMemberLinkRepository.findActivePatientsByFamilyMember(familyUserId, LocalDateTime.now());
-        
+
         return links.stream()
                 .map(this::toPatientDataResponse)
                 .collect(Collectors.toList());
@@ -271,7 +271,7 @@ public class FamilyMemberService {
     @Transactional(readOnly = true)
     public List<FamilyMemberLinkResponse> getFamilyMembersByPatient(Long patientUserId) {
         List<FamilyMemberLink> links = familyMemberLinkRepository.findActiveFamilyMembersByPatient(patientUserId, LocalDateTime.now());
-        
+
         return links.stream()
                 .map(this::toFamilyMemberLinkResponse)
                 .collect(Collectors.toList());
@@ -283,7 +283,7 @@ public class FamilyMemberService {
     @Transactional(readOnly = true)
     public List<FamilyMemberLinkResponse> getFamilyMembersByPatientId(Long patientId) {
         List<FamilyMemberLink> links = familyMemberLinkRepository.findActiveFamilyMembersByPatientId(patientId, LocalDateTime.now());
-        
+
         return links.stream()
                 .map(this::toFamilyMemberLinkResponse)
                 .collect(Collectors.toList());
@@ -319,7 +319,7 @@ public class FamilyMemberService {
     public boolean hasAccessToPatient(Long familyUserId, Long patientUserId) {
         User familyUser = userRepository.findById(familyUserId).orElse(null);
         User patientUser = userRepository.findById(patientUserId).orElse(null);
-        
+
         if (familyUser == null || patientUser == null) {
             return false;
         }
@@ -330,8 +330,8 @@ public class FamilyMemberService {
     /**
      * Create a temporary family member link
      */
-    public FamilyMemberLinkResponse createTemporaryLink(Long familyUserId, Long patientUserId, String relationship, 
-                                                       LocalDateTime expiresAt, String notes, Long grantedByUserId) {
+    public FamilyMemberLinkResponse createTemporaryLink(Long familyUserId, Long patientUserId, String relationship,
+                                                        LocalDateTime expiresAt, String notes, Long grantedByUserId) {
         User familyUser = userRepository.findById(familyUserId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Family member not found"));
 
@@ -347,16 +347,16 @@ public class FamilyMemberService {
             throw new AppException(HttpStatus.CONFLICT, "Active link already exists");
         }
 
-        FamilyMemberLink link = new FamilyMemberLink(familyUser, patientUser, grantedByUser, relationship, 
-                                                    FamilyMemberLink.LinkType.TEMPORARY);
+        FamilyMemberLink link = new FamilyMemberLink(familyUser, patientUser, grantedByUser, relationship,
+                FamilyMemberLink.LinkType.TEMPORARY);
         link.setExpiresAt(expiresAt);
         link.setNotes(notes);
-        
+
         // Set the denormalized patient_id for faster queries
         Patient patient = patientRepository.findByUser(patientUser)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Patient profile not found"));
         link.setPatientId(patient.getId());
-        
+
         familyMemberLinkRepository.save(link);
 
         return toFamilyMemberLinkResponse(link);
@@ -452,9 +452,9 @@ public class FamilyMemberService {
     private PatientDataResponse toPatientDataResponse(FamilyMemberLink link) {
         User patientUser = link.getPatientUser();
         Patient patient = patientRepository.findByUser(patientUser).orElse(null);
-        
-        String patientName = patient != null ? 
-                patient.getFirstName() + " " + patient.getLastName() : 
+
+        String patientName = patient != null ?
+                patient.getFirstName() + " " + patient.getLastName() :
                 patientUser.getEmail();
 
         // Get read-only patient data

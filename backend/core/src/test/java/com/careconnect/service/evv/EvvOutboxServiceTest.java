@@ -173,7 +173,8 @@ class EvvOutboxServiceTest {
     void enqueue_objectMapperThrows_throwsRuntimeException() throws Exception {
         final EvvRecord record = buildMinimalRecord();
         when(record.getPatient()).thenReturn(null);
-        when(objectMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("err") {});
+        when(objectMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("err") {
+        });
 
         assertThatThrownBy(() -> evvOutboxService.enqueue(record, "dc-sandata"))
                 .isInstanceOf(RuntimeException.class)

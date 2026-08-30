@@ -25,30 +25,34 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for call permission enforcement.
- *
+ * <p>
  * Covers TDD test IDs: CALL-016, CALL-017, CALL-019
- *
+ * <p>
  * Permission rules per TDD §4.5 / §12.3.2:
- *   CALL-016: Patient → unassigned caregiver = BLOCKED
- *   CALL-017: Patient → patient             = BLOCKED (see implementation gap note)
- *   CALL-019: Caregiver → caregiver         = SUCCESS (no restriction)
- *
+ * CALL-016: Patient → unassigned caregiver = BLOCKED
+ * CALL-017: Patient → patient             = BLOCKED (see implementation gap note)
+ * CALL-019: Caregiver → caregiver         = SUCCESS (no restriction)
+ * <p>
  * Enforcement is layered:
- *   - REST layer (/api/v3/calls/join): no caller-callee relationship check; any
- *     authenticated user can join a meeting by ID.
- *   - WebSocket layer (CallNotificationHandler.handleCallInvitation): checks the
- *     caregiver-patient link for PATIENT→CAREGIVER calls.
- *   - Service layer (CaregiverPatientLinkService): hasAccessToPatient() and
- *     isPatientVideoCallsEnabled() provide the business logic tested here.
+ * - REST layer (/api/v3/calls/join): no caller-callee relationship check; any
+ * authenticated user can join a meeting by ID.
+ * - WebSocket layer (CallNotificationHandler.handleCallInvitation): checks the
+ * caregiver-patient link for PATIENT→CAREGIVER calls.
+ * - Service layer (CaregiverPatientLinkService): hasAccessToPatient() and
+ * isPatientVideoCallsEnabled() provide the business logic tested here.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Call Permission Tests (CALL-016, CALL-017, CALL-019)")
 class CallPermissionServiceTest {
 
-    @Mock private CaregiverPatientLinkRepository caregiverPatientLinkRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private CaregiverRepository caregiverRepository;
+    @Mock
+    private CaregiverPatientLinkRepository caregiverPatientLinkRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private CaregiverRepository caregiverRepository;
 
     private CaregiverPatientLinkService linkService;
 
@@ -81,6 +85,69 @@ class CallPermissionServiceTest {
     // Enforcement in CallNotificationHandler.handleCallInvitation():
     //   if (sender.PATIENT && recipient.CAREGIVER) → calls hasAccessToPatient()
     //   if (!linked) → sends call-invitation-failed
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("CHIME-007: SRTP enforcement is delegated to AWS Chime SDK (ChimeSdkMeetingsClient) — application has no custom media encryption")
+    void chime007_srtp_delegatedToChimeSdk() {
+        // SRTP/DTLS is enforced by the Chime SDK, not by application code.
+        // This test asserts the design decision: we do NOT implement custom
+        // media encryption — we use ChimeSdkMeetingsClient which provides SRTP.
+        //
+        // Verification: ChimeSdkMeetingsClient is the only meeting creation path.
+        // If this dependency is removed or replaced with a non-SRTP stack,
+        // this test must be updated and a security review triggered.
+        assertThat(com.careconnect.service.ChimeService.class)
+                .isNotNull();
+        // ChimeService constructor requires ChimeSdkMeetingsClient — confirmed
+        // by @Autowired(required=false) to allow local-mode graceful fallback.
+        // When awsEnabled=true (production), ChimeSdkMeetingsClient is always used.
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CALL-017: Patient → patient = BLOCKED
+    //
+    // Enforced at two layers:
+    //   WebSocket: CallNotificationHandler.handleCallInvitation() sends
+    //              "call-invitation-failed" when both sender and recipient are PATIENT.
+    //   Service:   hasAccessToPatient() returns false (patients never hold the
+    //              caregiver role in the link table).
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private User buildUser(Long id, String email, Role role) {
+        User u = new User();
+        u.setId(id);
+        u.setEmail(email);
+        u.setRole(role);
+        u.setPassword("hashed");
+        u.setName(role.name() + "-" + id);
+        return u;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CALL-019: Caregiver → caregiver = SUCCESS
+    //
+    // No link check is required for CAREGIVER→CAREGIVER calls.
+    // CallNotificationHandler forwards the invitation without restriction.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private CaregiverPatientLink buildLink(User caregiver, User patient, String notes) {
+        CaregiverPatientLink link = new CaregiverPatientLink();
+        link.setCaregiverUser(caregiver);
+        link.setPatientUser(patient);
+        link.setStatus(CaregiverPatientLink.LinkStatus.ACTIVE);
+        link.setLinkType(CaregiverPatientLink.LinkType.PERMANENT);
+        link.setNotes(notes);
+        return link;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CHIME-007: SRTP Media Encryption
+    //
+    // SRTP is enforced by the AWS Chime SDK itself (DTLS key exchange + AES-128).
+    // Application code has no SRTP configuration to assert — the SDK handles it
+    // transparently. This test verifies the application correctly relies on Chime
+    // SDK (i.e., uses ChimeSdkMeetingsClient) rather than a custom WebRTC stack.
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -204,15 +271,7 @@ class CallPermissionServiceTest {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CALL-017: Patient → patient = BLOCKED
-    //
-    // Enforced at two layers:
-    //   WebSocket: CallNotificationHandler.handleCallInvitation() sends
-    //              "call-invitation-failed" when both sender and recipient are PATIENT.
-    //   Service:   hasAccessToPatient() returns false (patients never hold the
-    //              caregiver role in the link table).
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("CALL-017: Patient calls another patient — BLOCKED")
@@ -262,13 +321,6 @@ class CallPermissionServiceTest {
                     "Service layer must not allow patient-to-patient access (CALL-017)").isFalse();
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CALL-019: Caregiver → caregiver = SUCCESS
-    //
-    // No link check is required for CAREGIVER→CAREGIVER calls.
-    // CallNotificationHandler forwards the invitation without restriction.
-    // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("CALL-019: Caregiver calls another caregiver — SUCCESS (no link restriction)")
@@ -321,53 +373,5 @@ class CallPermissionServiceTest {
 
             assertThat(allowed).isTrue(); // CALL-001 and CALL-019 both allowed
         }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CHIME-007: SRTP Media Encryption
-    //
-    // SRTP is enforced by the AWS Chime SDK itself (DTLS key exchange + AES-128).
-    // Application code has no SRTP configuration to assert — the SDK handles it
-    // transparently. This test verifies the application correctly relies on Chime
-    // SDK (i.e., uses ChimeSdkMeetingsClient) rather than a custom WebRTC stack.
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    @Test
-    @DisplayName("CHIME-007: SRTP enforcement is delegated to AWS Chime SDK (ChimeSdkMeetingsClient) — application has no custom media encryption")
-    void chime007_srtp_delegatedToChimeSdk() {
-        // SRTP/DTLS is enforced by the Chime SDK, not by application code.
-        // This test asserts the design decision: we do NOT implement custom
-        // media encryption — we use ChimeSdkMeetingsClient which provides SRTP.
-        //
-        // Verification: ChimeSdkMeetingsClient is the only meeting creation path.
-        // If this dependency is removed or replaced with a non-SRTP stack,
-        // this test must be updated and a security review triggered.
-        assertThat(com.careconnect.service.ChimeService.class)
-                .isNotNull();
-        // ChimeService constructor requires ChimeSdkMeetingsClient — confirmed
-        // by @Autowired(required=false) to allow local-mode graceful fallback.
-        // When awsEnabled=true (production), ChimeSdkMeetingsClient is always used.
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private User buildUser(Long id, String email, Role role) {
-        User u = new User();
-        u.setId(id);
-        u.setEmail(email);
-        u.setRole(role);
-        u.setPassword("hashed");
-        u.setName(role.name() + "-" + id);
-        return u;
-    }
-
-    private CaregiverPatientLink buildLink(User caregiver, User patient, String notes) {
-        CaregiverPatientLink link = new CaregiverPatientLink();
-        link.setCaregiverUser(caregiver);
-        link.setPatientUser(patient);
-        link.setStatus(CaregiverPatientLink.LinkStatus.ACTIVE);
-        link.setLinkType(CaregiverPatientLink.LinkType.PERMANENT);
-        link.setNotes(notes);
-        return link;
     }
 }

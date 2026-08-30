@@ -16,18 +16,28 @@ import java.util.Map;
 @Data
 public class FormSubmissionRequest {
 
-    /** Which hiring/onboarding form this submission is for. */
+    /**
+     * Which hiring/onboarding form this submission is for.
+     */
     private FormType formType;
 
-    /** Optional form version; defaults to the bundled/active definition. */
+    /**
+     * Optional form version; defaults to the bundled/active definition.
+     */
     private String version;
 
-    /** Optional patient/subject context for the submission. */
+    /**
+     * Optional patient/subject context for the submission.
+     */
     private Long patientId;
 
-    /** Captured values keyed by "sectionId.fieldId". */
+    /**
+     * Captured values keyed by "sectionId.fieldId".
+     */
     private Map<String, Object> fieldValues;
 
-    /** Must be true — the user confirmed the submission before sending. */
+    /**
+     * Must be true — the user confirmed the submission before sending.
+     */
     private boolean confirmed;
 }

@@ -19,8 +19,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ScheduleConflictService {
 
-    private final ScheduledVisitRepository scheduledVisitRepository;
     private static final int DAILY_VISIT_LIMIT = 8;
+    private final ScheduledVisitRepository scheduledVisitRepository;
 
     /**
      * Detect overlapping visits for the same caregiver
@@ -229,8 +229,8 @@ public class ScheduleConflictService {
         }
 
         public boolean hasConflicts() {
-            return (caregiverConflicts != null && !caregiverConflicts.isEmpty()) || 
-                   (patientConflicts != null && !patientConflicts.isEmpty());
+            return (caregiverConflicts != null && !caregiverConflicts.isEmpty()) ||
+                    (patientConflicts != null && !patientConflicts.isEmpty());
         }
 
         public boolean hasWarnings() {

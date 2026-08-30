@@ -17,12 +17,20 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SourceDocumentMapping {
-    /** Human label of the corresponding field on the source document. */
+    /**
+     * Human label of the corresponding field on the source document.
+     */
     private String documentField;
-    /** Source section/step, e.g. "Step 1", "Section 1", "List A". */
+    /**
+     * Source section/step, e.g. "Step 1", "Section 1", "List A".
+     */
     private String section;
-    /** Line or box identifier, e.g. "1(a)", "Box 4". */
+    /**
+     * Line or box identifier, e.g. "1(a)", "Box 4".
+     */
     private String line;
-    /** 1-based page number on the source document. */
+    /**
+     * 1-based page number on the source document.
+     */
     private Integer page;
 }

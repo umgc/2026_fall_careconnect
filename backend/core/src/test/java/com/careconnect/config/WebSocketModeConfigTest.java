@@ -12,14 +12,14 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link WebSocketModeConfig}.
- *
+ * <p>
  * WebSocketModeConfig produces a {@code "websocketMode"} String bean whose value is
  * either {@code "local"} or {@code "aws"}, determined by whether the environment
  * property {@code AWS_WEBSOCKET_API_GATEWAY_ENDPOINT} (or the legacy fallback
  * {@code AWS_WEBSOCKET_API_ENDPOINT}) is set to a non-blank value. This bean
  * is consumed by other components that need to switch between a local WebSocket server
  * and an AWS API Gateway WebSocket endpoint at runtime.
- *
+ * <p>
  * The Spring {@link Environment} is mocked so that tests can control the property value
  * precisely (null, empty, blank, or a real URL) without needing real environment variables
  * or a Spring context. {@code @ExtendWith(MockitoExtension.class)} manages the mock

@@ -10,14 +10,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link StripeConfig}.
- *
+ * <p>
  * StripeConfig is a Spring {@code @Configuration} class whose {@code @PostConstruct}
  * {@code init()} method assigns the Stripe secret key to the static {@link Stripe#apiKey}
  * field — the global hook used by the Stripe Java SDK for every API call.
- *
+ * <p>
  * Because {@code Stripe.apiKey} is a static field, its state persists across tests.
  * {@code @AfterEach cleanup()} resets it to {@code null} to prevent test pollution.
- *
+ * <p>
  * The {@code secretKey} field of {@link StripeConfig} is private and annotated with
  * {@code @Value}; since Spring is not running, Java Reflection is used to inject test
  * values directly, allowing controlled verification of the blank-key guard and the

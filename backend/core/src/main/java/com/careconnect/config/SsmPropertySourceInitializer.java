@@ -23,7 +23,7 @@ import java.util.Map;
  * Initializes SSM Parameter Store as a property source for production environment.
  * This class loads secrets from AWS SSM before the Spring context is fully initialized,
  * allowing them to be used in @Value annotations and application.properties.
- *
+ * <p>
  * To enable this initializer, add to application-prod.properties:
  * context.initializer.classes=com.careconnect.config.SsmPropertySourceInitializer
  *
@@ -72,6 +72,19 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
         put("kvs-stream-pool-arn", "careconnect.kvs.stream-pool-arn");
     }};
 
+    /**
+     * Resolves the SSM path prefix for secrets. ECS sets {@code ENVIRONMENT} from CloudFormation;
+     * override entirely with {@code CARECONNECT_SSM_PREFIX} (must end with {@code /}).
+     */
+    static String resolveSsmPrefix(ConfigurableEnvironment environment) {
+        String explicitPrefix = environment.getProperty(SSM_PREFIX_PROPERTY);
+        if (explicitPrefix != null && !explicitPrefix.isBlank()) {
+            return explicitPrefix.endsWith("/") ? explicitPrefix : explicitPrefix + "/";
+        }
+        String envName = environment.getProperty(ENVIRONMENT_PROPERTY, "prod");
+        return "/careconnect/" + envName.trim() + "/";
+    }
+
     @Override
     public void initialize(ConfigurableApplicationContext applicationContext) {
         ConfigurableEnvironment environment = applicationContext.getEnvironment();
@@ -119,19 +132,6 @@ public class SsmPropertySourceInitializer implements ApplicationContextInitializ
             LOGGER.error("Failed to initialize SSM PropertySource - falling back to environment variables", e);
             // Don't fail application startup, just log the error and continue
         }
-    }
-
-    /**
-     * Resolves the SSM path prefix for secrets. ECS sets {@code ENVIRONMENT} from CloudFormation;
-     * override entirely with {@code CARECONNECT_SSM_PREFIX} (must end with {@code /}).
-     */
-    static String resolveSsmPrefix(ConfigurableEnvironment environment) {
-        String explicitPrefix = environment.getProperty(SSM_PREFIX_PROPERTY);
-        if (explicitPrefix != null && !explicitPrefix.isBlank()) {
-            return explicitPrefix.endsWith("/") ? explicitPrefix : explicitPrefix + "/";
-        }
-        String envName = environment.getProperty(ENVIRONMENT_PROPERTY, "prod");
-        return "/careconnect/" + envName.trim() + "/";
     }
 
     private Map<String, Object> loadParametersFromSsm(SsmClient ssmClient, String ssmPrefix) {

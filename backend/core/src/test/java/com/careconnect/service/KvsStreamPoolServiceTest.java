@@ -2,6 +2,7 @@ package com.careconnect.service;
 
 import java.time.Instant;
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -60,8 +61,8 @@ class KvsStreamPoolServiceTest {
         @DisplayName("SPEAKER-048: streamNameFromArn extracts stream name segment")
         void streamNameFromArn_parses() {
             assertThat(
-                            KvsPoolStreamDiscoveryService.streamNameFromArn(
-                                    "arn:aws:kinesisvideo:us-east-1:123:stream/ChimeSDKPool_abc/12345"))
+                    KvsPoolStreamDiscoveryService.streamNameFromArn(
+                            "arn:aws:kinesisvideo:us-east-1:123:stream/ChimeSDKPool_abc/12345"))
                     .isEqualTo("ChimeSDKPool_abc");
         }
 

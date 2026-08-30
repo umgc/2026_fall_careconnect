@@ -6,6 +6,7 @@ import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.repository.PostCallTranscriptionJobRepository;
 import com.careconnect.service.CallTranscriptService.TranscriptSegmentInput;
+
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,6 +14,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,17 +66,81 @@ class PostCallTranscriptionServiceTest {
     private static final String STREAM_ARN =
             "arn:aws:kinesisvideo:us-east-1:123:stream/ChimeMediaPipelines-test/1";
 
-    @Mock private TranscribeClient transcribeClient;
-    @Mock private S3Client s3Client;
-    @Mock private CallTranscriptService callTranscriptService;
-    @Mock private CallTelemetryService callTelemetryService;
-    @Mock private CallRecordingRepository recordingRepository;
-    @Mock private CallAttendeeRepository callAttendeeRepository;
-    @Mock private PostCallTranscriptionJobRepository jobRepository;
-    @Mock private KvsArchivedMediaExportService kvsArchivedMediaExportService;
-    @Mock private KvsAudioTranscodeService kvsAudioTranscodeService;
+    @Mock
+    private TranscribeClient transcribeClient;
+    @Mock
+    private S3Client s3Client;
+    @Mock
+    private CallTranscriptService callTranscriptService;
+    @Mock
+    private CallTelemetryService callTelemetryService;
+    @Mock
+    private CallRecordingRepository recordingRepository;
+    @Mock
+    private CallAttendeeRepository callAttendeeRepository;
+    @Mock
+    private PostCallTranscriptionJobRepository jobRepository;
+    @Mock
+    private KvsArchivedMediaExportService kvsArchivedMediaExportService;
+    @Mock
+    private KvsAudioTranscodeService kvsAudioTranscodeService;
 
     private PostCallTranscriptionService service;
+
+    private static CallRecording recording() {
+        final CallRecording recording = new CallRecording();
+        recording.setId(1L);
+        recording.setCallId(CALL_ID);
+        recording.setS3Bucket(BUCKET);
+        recording.setS3Prefix(PREFIX);
+        recording.setStartedAt(LocalDateTime.of(2026, 7, 3, 17, 0));
+        recording.setEndedAt(LocalDateTime.of(2026, 7, 3, 17, 2));
+        return recording;
+    }
+
+    private static CallAttendee attendee() {
+        final CallAttendee attendee = new CallAttendee();
+        attendee.setId(10L);
+        attendee.setCallId(CALL_ID);
+        attendee.setChimeAttendeeId("att-caregiver");
+        attendee.setKvsStreamArn(STREAM_ARN);
+        attendee.setUserId(2L);
+        attendee.setRole("CAREGIVER");
+        attendee.setJoinedAt(LocalDateTime.of(2026, 7, 3, 17, 0));
+        return attendee;
+    }
+
+    private static GetTranscriptionJobResponse completedJob() {
+        return GetTranscriptionJobResponse.builder()
+                .transcriptionJob(
+                        TranscriptionJob.builder()
+                                .transcriptionJobStatus(TranscriptionJobStatus.COMPLETED)
+                                .build())
+                .build();
+    }
+
+    private static ResponseInputStream<GetObjectResponse> transcriptStream() {
+        final String json =
+                """
+                        {"results":{"items":[
+                          {"type":"pronunciation","speaker_label":"spk_0","start_time":"0.10","end_time":"0.40","alternatives":[{"content":"hello"}]},
+                          {"type":"punctuation","alternatives":[{"content":"."}]}
+                        ]}}
+                        """;
+        return new ResponseInputStream<>(
+                GetObjectResponse.builder().build(),
+                AbortableInputStream.create(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    private static ResponseInputStream<GetObjectResponse> emptyTranscriptStream() {
+        final String json =
+                """
+                        {"results":{"transcripts":[{"transcript":""}],"items":[],"audio_segments":[]}}
+                        """;
+        return new ResponseInputStream<>(
+                GetObjectResponse.builder().build(),
+                AbortableInputStream.create(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
+    }
 
     @BeforeEach
     void setUp() {
@@ -90,7 +156,9 @@ class PostCallTranscriptionServiceTest {
         ReflectionTestUtils.setField(service, "kvsAudioTranscodeService", kvsAudioTranscodeService);
     }
 
-    /** Runs the worker transcription path (enqueue is covered by durability tests). */
+    /**
+     * Runs the worker transcription path (enqueue is covered by durability tests).
+     */
     private void runExecuteTranscription(final CallRecording recording) {
         ReflectionTestUtils.invokeMethod(
                 service, "executeTranscription", CALL_ID, recording, PLAYABLE_KEY);
@@ -105,7 +173,7 @@ class PostCallTranscriptionServiceTest {
         final Path wav = Files.createTempFile("kvs-test", ".wav");
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
-                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
                 .thenReturn(raw);
         when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
@@ -116,9 +184,9 @@ class PostCallTranscriptionServiceTest {
                 .thenReturn(completedJob());
         when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
         when(callTranscriptService.recordSegments(
-                        any(String.class),
-                        any(Long.class),
-                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                any(String.class),
+                any(Long.class),
+                org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
                 .thenReturn(1);
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
 
@@ -185,7 +253,7 @@ class PostCallTranscriptionServiceTest {
 
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(emptyAttendee, speakingAttendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
-                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
                 .thenReturn(raw1, raw2);
         when(kvsAudioTranscodeService.toWav(raw1)).thenReturn(wav1);
         when(kvsAudioTranscodeService.toWav(raw2)).thenReturn(wav2);
@@ -201,9 +269,9 @@ class PostCallTranscriptionServiceTest {
                 .when(s3Client)
                 .getObject(any(GetObjectRequest.class));
         when(callTranscriptService.recordSegments(
-                        any(String.class),
-                        any(Long.class),
-                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                any(String.class),
+                any(Long.class),
+                org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
                 .thenReturn(1);
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
 
@@ -223,10 +291,10 @@ class PostCallTranscriptionServiceTest {
                                 segments ->
                                         !segments.isEmpty()
                                                 && segments.stream()
-                                                        .allMatch(
-                                                                segment ->
-                                                                        "POST_CALL_KVS_ATTENDEE"
-                                                                                .equals(segment.source()))));
+                                                .allMatch(
+                                                        segment ->
+                                                                "POST_CALL_KVS_ATTENDEE"
+                                                                        .equals(segment.source()))));
         verify(callTranscriptService)
                 .recordSegments(
                         eq(CALL_ID),
@@ -235,70 +303,15 @@ class PostCallTranscriptionServiceTest {
                                 segments ->
                                         !segments.isEmpty()
                                                 && segments.stream()
-                                                        .allMatch(
-                                                                segment ->
-                                                                        "POST_CALL_MP4_MIXED"
-                                                                                .equals(segment.source()))));
+                                                .allMatch(
+                                                        segment ->
+                                                                "POST_CALL_MP4_MIXED"
+                                                                        .equals(segment.source()))));
 
         Files.deleteIfExists(raw1);
         Files.deleteIfExists(raw2);
         Files.deleteIfExists(wav1);
         Files.deleteIfExists(wav2);
-    }
-
-    private static CallRecording recording() {
-        final CallRecording recording = new CallRecording();
-        recording.setId(1L);
-        recording.setCallId(CALL_ID);
-        recording.setS3Bucket(BUCKET);
-        recording.setS3Prefix(PREFIX);
-        recording.setStartedAt(LocalDateTime.of(2026, 7, 3, 17, 0));
-        recording.setEndedAt(LocalDateTime.of(2026, 7, 3, 17, 2));
-        return recording;
-    }
-
-    private static CallAttendee attendee() {
-        final CallAttendee attendee = new CallAttendee();
-        attendee.setId(10L);
-        attendee.setCallId(CALL_ID);
-        attendee.setChimeAttendeeId("att-caregiver");
-        attendee.setKvsStreamArn(STREAM_ARN);
-        attendee.setUserId(2L);
-        attendee.setRole("CAREGIVER");
-        attendee.setJoinedAt(LocalDateTime.of(2026, 7, 3, 17, 0));
-        return attendee;
-    }
-
-    private static GetTranscriptionJobResponse completedJob() {
-        return GetTranscriptionJobResponse.builder()
-                .transcriptionJob(
-                        TranscriptionJob.builder()
-                                .transcriptionJobStatus(TranscriptionJobStatus.COMPLETED)
-                                .build())
-                .build();
-    }
-
-    private static ResponseInputStream<GetObjectResponse> transcriptStream() {
-        final String json =
-                """
-                {"results":{"items":[
-                  {"type":"pronunciation","speaker_label":"spk_0","start_time":"0.10","end_time":"0.40","alternatives":[{"content":"hello"}]},
-                  {"type":"punctuation","alternatives":[{"content":"."}]}
-                ]}}
-                """;
-        return new ResponseInputStream<>(
-                GetObjectResponse.builder().build(),
-                AbortableInputStream.create(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
-    }
-
-    private static ResponseInputStream<GetObjectResponse> emptyTranscriptStream() {
-        final String json =
-                """
-                {"results":{"transcripts":[{"transcript":""}],"items":[],"audio_segments":[]}}
-                """;
-        return new ResponseInputStream<>(
-                GetObjectResponse.builder().build(),
-                AbortableInputStream.create(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
     }
 
     private void stubSpeakerIdListing(final String... keys) {
@@ -337,7 +350,7 @@ class PostCallTranscriptionServiceTest {
 
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
-                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
                 .thenReturn(raw);
         when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
@@ -348,9 +361,9 @@ class PostCallTranscriptionServiceTest {
                 .thenReturn(completedJob());
         when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
         when(callTranscriptService.recordSegments(
-                        any(String.class),
-                        any(Long.class),
-                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                any(String.class),
+                any(Long.class),
+                org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
                 .thenReturn(1);
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
         stubSpeakerIdListing(wavKey, transcriptKey);
@@ -368,10 +381,10 @@ class PostCallTranscriptionServiceTest {
                 ArgumentCaptor.forClass(DeleteObjectsRequest.class);
         verify(s3Client, org.mockito.Mockito.atLeastOnce()).deleteObjects(deleteCaptor.capture());
         assertThat(
-                        deleteCaptor.getAllValues().stream()
-                                .flatMap(req -> req.delete().objects().stream())
-                                .map(obj -> obj.key())
-                                .toList())
+                deleteCaptor.getAllValues().stream()
+                        .flatMap(req -> req.delete().objects().stream())
+                        .map(obj -> obj.key())
+                        .toList())
                 .contains(wavKey, transcriptKey);
 
         Files.deleteIfExists(raw);
@@ -391,7 +404,7 @@ class PostCallTranscriptionServiceTest {
 
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
-                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
                 .thenReturn(raw);
         when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
@@ -402,9 +415,9 @@ class PostCallTranscriptionServiceTest {
                 .thenReturn(completedJob());
         when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
         when(callTranscriptService.recordSegments(
-                        any(String.class),
-                        any(Long.class),
-                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                any(String.class),
+                any(Long.class),
+                org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
                 .thenReturn(1);
         when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
         stubSpeakerIdListing(wavKey);
@@ -429,11 +442,11 @@ class PostCallTranscriptionServiceTest {
     void parseSingleAttendeeTranscript_usesAudioSegments() throws Exception {
         final String json =
                 """
-                {"results":{"audio_segments":[
-                  {"id":0,"transcript":"Hello there.","start_time":"1.00","end_time":"2.50"},
-                  {"id":1,"transcript":"This is later.","start_time":"5.00","end_time":"6.20"}
-                ],"items":[]}}
-                """;
+                        {"results":{"audio_segments":[
+                          {"id":0,"transcript":"Hello there.","start_time":"1.00","end_time":"2.50"},
+                          {"id":1,"transcript":"This is later.","start_time":"5.00","end_time":"6.20"}
+                        ],"items":[]}}
+                        """;
         final var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
         final LocalDateTime started = LocalDateTime.of(2026, 7, 17, 14, 0);
 

@@ -34,13 +34,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MedicalContextServiceTest {
 
-    @Mock PatientRepository patientRepository;
-    @Mock MoodPainLogRepository moodPainLogRepository;
-    @Mock ClinicalNotesRepository clinicalNotesRepository;
-    @Mock MedicationRepository medicationRepository;
-    @Mock VitalsRepository vitalsRepository;
-    @Mock AllergyRepository allergyRepository;
-    @Mock DocumentProcessingService documentProcessingService;
+    @Mock
+    PatientRepository patientRepository;
+    @Mock
+    MoodPainLogRepository moodPainLogRepository;
+    @Mock
+    ClinicalNotesRepository clinicalNotesRepository;
+    @Mock
+    MedicationRepository medicationRepository;
+    @Mock
+    VitalsRepository vitalsRepository;
+    @Mock
+    AllergyRepository allergyRepository;
+    @Mock
+    DocumentProcessingService documentProcessingService;
 
     @InjectMocks
     MedicalContextService service;
@@ -51,7 +58,9 @@ class MedicalContextServiceTest {
         return Patient.builder().id(id).firstName("John").lastName("Doe").build();
     }
 
-    /** All include-by-default flags false so only explicit request overrides trigger sections */
+    /**
+     * All include-by-default flags false so only explicit request overrides trigger sections
+     */
     private UserAIConfig cfg() throws Exception {
         final UserAIConfig c = new UserAIConfig();
         c.setUserId(1L);
@@ -64,7 +73,9 @@ class MedicalContextServiceTest {
         return c;
     }
 
-    /** Request with every Boolean include-flag null → defers to aiConfig defaults */
+    /**
+     * Request with every Boolean include-flag null → defers to aiConfig defaults
+     */
     private ChatRequest bareRequest() throws Exception {
         return new ChatRequest();
     }

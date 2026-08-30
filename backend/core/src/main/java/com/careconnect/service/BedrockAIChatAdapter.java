@@ -21,10 +21,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BedrockAIChatAdapter implements AIChatService {
 
-    /** Shown to the user in place of held/rejected output — the raw text is never delivered. */
+    /**
+     * Shown to the user in place of held/rejected output — the raw text is never delivered.
+     */
     private static final String HELD_MESSAGE =
             "This response is being reviewed by a member of your care team before it can be shown. " +
-            "Please check back shortly.";
+                    "Please check back shortly.";
     private static final String REJECTED_MESSAGE =
             "A response could not be provided for this request. Please rephrase or contact your care team.";
 
@@ -47,7 +49,9 @@ public class BedrockAIChatAdapter implements AIChatService {
         return applyOutputValidation(request, response);
     }
 
-    /** WBS 3.15.3 — hold/reject gate: held or rejected output is replaced with a safe placeholder. */
+    /**
+     * WBS 3.15.3 — hold/reject gate: held or rejected output is replaced with a safe placeholder.
+     */
     private ChatResponse applyOutputValidation(ChatRequest request, ChatResponse response) {
         if (response == null || Boolean.FALSE.equals(response.getSuccess())) {
             return response;
