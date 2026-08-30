@@ -43,7 +43,7 @@ need to run the app locally, rotate credentials, or unblock QA.
    overrides explicit.
 2. The Gmail scope must remain `https://www.googleapis.com/auth/gmail.readonly`. Broader scopes (send/modify) require
    re-verification with Google and are not supported by the current backend flow.
-2. Never commit real secrets. `.env` is git-ignored; keep credentials in your password manager.
+3. Never commit real secrets. `.env` is git-ignored; keep credentials in your password manager.
 
 ## 4. Verify Spring Picks Up the Values
 

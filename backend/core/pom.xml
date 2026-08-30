@@ -711,18 +711,15 @@
                 <configuration>
                     <format>ALL</format>
                     <prettyPrint>true</prettyPrint>
-                    <excludeFromPurge>org.springframework.boot,org.springframework.security</excludeFromPurge>
+                    <excludes>org.springframework.boot,org.springframework.security</excludes>
                     <!-- Use local NVD API key (env or Maven property) -->
                     <nvdApiKey>${nvd.api.key}</nvdApiKey>
                     <!-- Enable NVD updates when key is provided -->
                     <autoUpdate>${dependency-check.autoUpdate}</autoUpdate>
-                    <skipUpdate>${dependency-check.skipUpdate}</skipUpdate>
                     <!-- Fail build only when CVSS threshold is set on command line -->
                     <failBuildOnCVSS>${owasp.cvss.threshold}</failBuildOnCVSS>
-                    <failBuild>${dependency-check.failBuild}</failBuild>
                     <nvdApiDelay>12000</nvdApiDelay>
-                    <nvdApiMaxRetries>10</nvdApiMaxRetries>
-                    <nvdApiRetryDelay>12000</nvdApiRetryDelay>
+                    <nvdMaxRetryCount>10</nvdMaxRetryCount>
                 </configuration>
             </plugin>
         </plugins>

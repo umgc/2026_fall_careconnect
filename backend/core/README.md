@@ -6,36 +6,28 @@ set it up on your local computer.
 ## **Table Of Contents**
 
 <!-- TOC -->
-
 * [**CareConnect CORE Backend App**](#careconnect-core-backend-app)
-    * [**Table Of Contents**](#table-of-contents)
-    * [Context of most of those instructions](#context-of-most-of-those-instructions)
-    * [Prerequisite](#prerequisite)
-    * [Quick Setup (Recommended)](#quick-setup-recommended)
-        * [1. Environment Configuration](#1-environment-configuration)
-        * [2. Start the Application](#2-start-the-application)
-            * [Linux/macOS](#linuxmacos)
-            * [Windows](#windows)
-    * [Alternative Setup (IDE Configuration)](#alternative-setup-ide-configuration)
-    * [Features Included](#features-included)
-        * [🔔 Firebase Push Notifications](#-firebase-push-notifications)
-        * [🔐 Authentication & Security](#-authentication--security)
-        * [🏥 Healthcare Features](#-healthcare-features)
-        * [📧 Multi-Provider Email Support](#-multi-provider-email-support)
-        * [💳 Payment Integration](#-payment-integration)
-        * [🤖 AI Integration](#-ai-integration)
-        * [☁️ Cloud Storage](#-cloud-storage)
-    * [API Documentation](#api-documentation)
-    * [Optional Tools](#optional-tools)
-    * [Support](#support)
-    * [Deployment on AWS](#deployment-on-aws)
-
+  * [**Table Of Contents**](#table-of-contents)
+  * [Context of most of those instructions](#context-of-most-of-those-instructions)
+  * [Prerequisite](#prerequisite)
+  * [Quick Setup (Recommended)](#quick-setup-recommended)
+    * [1. Environment Configuration](#1-environment-configuration)
+    * [2. Start the Application](#2-start-the-application)
+      * [Linux/macOS](#linuxmacos)
+      * [Windows](#windows)
+  * [Development profile flags (application-dev.properties)](#development-profile-flags-application-devproperties)
+  * [Alternative Setup (IDE Configuration)](#alternative-setup-ide-configuration)
+  * [Verifying Email in Dev Profile](#verifying-email-in-dev-profile)
+  * [API Documentation](#api-documentation)
+  * [Optional Tools](#optional-tools)
+  * [Support](#support)
+  * [Deployment on AWS](#deployment-on-aws)
 <!-- TOC -->
 
 ## Context of most of those instructions
 
 - They are generate based on a Linux (Ubuntu) VM.
-- Intellij IDEA was used (You can get a student license through UMGC)
+- IntelliJ IDEA was used (You can get a student license through UMGC)
 
 Although, the following would be similar to most platforms an IDEs you want to use.
 
