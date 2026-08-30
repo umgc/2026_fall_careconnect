@@ -48,7 +48,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/recent").hasRole(ROLE_ADMIN)
@@ -99,8 +99,8 @@ public class SecurityConfig {
                              • AWS ALB / ECS / Fargate health checks
                              • Monitoring tools
                         */
-                       .requestMatchers("/actuator/health").permitAll()
-                        
+                        .requestMatchers("/actuator/health").permitAll()
+
                         /* ---------- Swagger / API docs ------------------------ */
                         .requestMatchers(
                                 "/swagger-ui/**",
