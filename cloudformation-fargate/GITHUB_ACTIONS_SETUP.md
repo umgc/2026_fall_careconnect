@@ -91,6 +91,15 @@ or:
 The recommended setup is GitHub OIDC with an IAM role. This avoids storing long
 term AWS keys in the repository.
 
+> **Shortcut: deploy this instead of clicking through it.**
+> `templates/github-oidc-deploy-role.yaml` creates the OIDC provider and the role
+> in one CloudFormation stack, and is the scripted equivalent of sections 2a
+> through 2c below. The deploy command and parameters are in
+> [`README.md`](./README.md#account-level-templates). Use one path or the other,
+> not both. Sections 2a to 2c remain here as the console walkthrough, and are
+> still the right reference for understanding what the template creates or for
+> verifying an account somebody else set up.
+
 ### Click-by-click in AWS
 
 1. Sign in to the AWS Console
