@@ -149,12 +149,25 @@ trap 'on_error $? $LINENO' ERR
 
 cleanup() {
   local temp_file
-  for temp_file in "${TEMP_FILES[@]}"; do
+  # bash 3.2 (macOS) treats "${arr[@]}" as unbound under `set -u` when the
+  # array is empty, so expand it only when it has entries.
+  for temp_file in ${TEMP_FILES[@]+"${TEMP_FILES[@]}"}; do
     [[ -n "$temp_file" && -f "$temp_file" ]] && rm -f "$temp_file"
   done
 }
 
 trap cleanup EXIT
+
+# Read newline-separated stdin into the named array. macOS ships bash 3.2,
+# which has no `mapfile`/`readarray`, so this stands in for both.
+read_lines_into() {
+  local __array_name="$1"
+  local __line
+  eval "$__array_name=()"
+  while IFS= read -r __line; do
+    eval "$__array_name+=(\"\$__line\")"
+  done
+}
 
 require_command() {
   local name="$1"
@@ -663,7 +676,7 @@ deploy_stack() {
   # current state so the user can see which path is happening.
   CURRENT_STACK_NAME="$stack_name"
   local parameter_overrides=()
-  mapfile -t parameter_overrides < <(build_parameter_overrides "$parameter_file" "$@")
+  read_lines_into parameter_overrides < <(build_parameter_overrides "$parameter_file" "$@")
 
   local stack_status=""
   if stack_exists "$stack_name"; then
@@ -701,7 +714,7 @@ deploy_stack() {
     --template-file "$aws_template_path" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset \
-    --parameter-overrides "${parameter_overrides[@]}"; then
+    --parameter-overrides ${parameter_overrides[@]+"${parameter_overrides[@]}"}; then
     write_stack_failure_details "$stack_name"
     return 1
   fi
@@ -760,7 +773,7 @@ if (( ${#DATA_SECRET_OVERRIDE_ARGS[@]} > 0 )); then
   echo "Using data stack secrets from environment variables."
 fi
 
-DATA_EFFECTIVE_PARAMETERS="$(create_effective_parameter_file "$DATA_PARAMETERS" "${DATA_SECRET_OVERRIDE_ARGS[@]}")"
+DATA_EFFECTIVE_PARAMETERS="$(create_effective_parameter_file "$DATA_PARAMETERS" ${DATA_SECRET_OVERRIDE_ARGS[@]+"${DATA_SECRET_OVERRIDE_ARGS[@]}"})"
 
 # Fail fast if secrets/config placeholders were never replaced. The merged file
 # lets environment-backed secret overrides replace the checked-in placeholders

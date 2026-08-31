@@ -21,6 +21,7 @@ Fargate deployment.
 - [GitHub Actions Backend Deploy](#github-actions-backend-deploy)
 - [GitHub Actions Full Deploy](#github-actions-full-deploy)
 - [What each stack owns](#what-each-stack-owns)
+- [Account-level templates](#account-level-templates)
 - [Design choices](#design-choices)
 - [Required application contract](#required-application-contract)
 - [ECS task role permissions](#ecs-task-role-permissions)
@@ -45,6 +46,10 @@ Fargate deployment.
 3. `03-platform.yaml`
 4. Build and push the backend image to ECR
 5. `04-service.yaml`
+
+Two further templates sit outside this chain and are deployed once per AWS
+account rather than per environment. See
+[Account-level templates](#account-level-templates).
 
 
 
@@ -289,6 +294,75 @@ The full setup guide is in
 - app environment variable and secret wiring
 
 
+
+### Account-level templates
+
+`templates/careconnect-budgets.yaml` and `templates/github-oidc-deploy-role.yaml`
+are **not** part of the numbered `01`-`04` stack order. Those four are
+instantiated per environment; these two are deployed **once per AWS account**.
+
+| Template | Deploy when | How often |
+| -------- | ----------- | --------- |
+| `careconnect-budgets.yaml` | Your account runs any CareConnect environment | Once per account |
+| `github-oidc-deploy-role.yaml` | CI needs to deploy into your account | Once per account |
+
+#### `careconnect-budgets.yaml`
+
+Account-level monthly cost budget with tiered actual and forecasted alerts.
+Deploying it per environment would create duplicate account-wide budgets that all
+alert on the same spend, which is why it is deployed once.
+
+```bash
+aws cloudformation deploy \
+  --region us-east-1 \
+  --profile careconnect-sso \
+  --stack-name careconnect-budgets \
+  --template-file ./templates/careconnect-budgets.yaml \
+  --parameter-overrides NotificationEmail=you@umgc.edu
+```
+
+`NotificationEmail` is required. `BudgetLimitAmount` defaults to `75` USD, sized
+for one continuously running environment with headroom. Confirm the SNS
+subscription from your inbox or no alert will ever arrive.
+
+Per-environment budgets are not possible yet: no billable resource in `01`-`04`
+carries a cost-allocation tag, and cost allocation tags must additionally be
+activated in the Billing console and do not backfill.
+
+#### `github-oidc-deploy-role.yaml`
+
+Creates the GitHub Actions OIDC provider and the CI deployment role. This is the
+scripted equivalent of
+[`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md) sections 2a through 2c,
+which walk the same setup through the console. Use one path or the other, not
+both. No long-lived AWS access keys are created.
+
+```bash
+aws cloudformation deploy \
+  --region us-east-1 \
+  --profile careconnect-sso \
+  --stack-name careconnect-github-oidc \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --template-file ./templates/github-oidc-deploy-role.yaml \
+  --parameter-overrides GitHubOrg=umgc GitHubRepo=2026_fall_careconnect
+```
+
+If your account already has the GitHub OIDC provider, add
+`CreateOidcProvider=No` or the deploy fails on a duplicate provider. Many
+accounts already have it, so check IAM > Identity providers first.
+
+Read the `DeployRoleArn` output and store it in GitHub as the repository variable
+`AWS_GITHUB_ACTIONS_ROLE_ARN`:
+
+```bash
+aws cloudformation describe-stacks \
+  --region us-east-1 --profile careconnect-sso \
+  --stack-name careconnect-github-oidc \
+  --query "Stacks[0].Outputs[?OutputKey=='DeployRoleArn'].OutputValue" --output text
+```
+
+`AllowInfrastructureDeploy` defaults to `No`, which limits the role to app-only
+deploys. Set it to `Yes` only if CI must create or update the `01`-`04` stacks.
 
 ### Design choices
 
@@ -728,6 +802,56 @@ live), use [DEPLOY_2026_SUMMER.md](./DEPLOY_2026_SUMMER.md) — especially
 Set `APP_ROOT` to your local clone before running the commands below (see
 [Repository root](#repository-root-app_root)).
 
+#### 0. Check your toolchain first
+
+Every item below has actually blocked a first deploy. Confirming them takes a
+minute and saves you from failing 15 minutes in, after RDS has already been
+created.
+
+| Requirement | Check | Why it matters |
+| ----------- | ----- | -------------- |
+| AWS CLI v2, authenticated | `aws sts get-caller-identity --profile careconnect-sso` | An expired SSO token fails with `ExpiredToken` partway through. See [AWS_ACCESS_SETUP.md](./AWS_ACCESS_SETUP.md) if you do not have this profile yet |
+| Docker running | `docker info` | The build produces a `linux/amd64` image |
+| **Several GB free disk** | see below | A full disk fails the image export with an opaque `input/output error` during "exporting layers", not an out-of-space message |
+| **Java 17** | `java -version` | The backend targets 17. A newer default JDK breaks the Maven build; pin it for the session if yours is newer |
+| Shell | — | Windows uses the `.ps1` scripts; macOS / Linux use the `.sh` scripts, which run on any bash including the stock macOS 3.2 |
+
+Check free disk:
+
+```powershell
+Get-PSDrive C
+```
+
+macOS / Linux:
+
+```bash
+df -h .
+```
+
+If your default JDK is not 17, pin it for this session:
+
+```powershell
+# Adjust the path to your installed JDK 17.
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot"
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+java -version
+```
+
+macOS / Linux:
+
+```bash
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)"   # macOS
+# Linux: export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+export PATH="$JAVA_HOME/bin:$PATH"
+java -version
+```
+
+**Time and cost:** a first deploy takes roughly 20 minutes, most of it waiting
+on RDS. Teardown takes about 10. A full deploy-verify-destroy cycle costs
+well under a dollar; leaving the environment running costs roughly **$50–60 per
+month**, so tear it down when you are finished (see
+[Teardown](#teardown-cfdemo)).
+
 #### 1. Log in to AWS CLI
 
 ```powershell
@@ -758,6 +882,37 @@ At minimum, set:
 - a real PostgreSQL password
 - a real JWT secret
 - the final ECR image URI after the image push step
+
+**If you use the one-command deploy script, skip this step entirely.**
+`cdeploy_cloudformation.sh` and `cdeploy_cloudformation.ps1` handle all three
+for you, and leaving the committed files untouched is the safer habit:
+
+- the database password and JWT secret are read from
+  `CARECONNECT_DATABASE_MASTER_PASSWORD` and `CARECONNECT_JWT_SECRET` and merged
+  into a temporary parameter file, so real secrets never land in a tracked file
+- `BackendImageUri` is overwritten with the image the script just pushed, so the
+  value committed in `cfdemo-service.json` is ignored
+
+Set the secrets for the session before deploying:
+
+```powershell
+$env:CARECONNECT_DATABASE_MASTER_PASSWORD = "<strong-postgres-password>"
+$env:CARECONNECT_JWT_SECRET = "<random-string-at-least-32-chars>"
+```
+
+macOS / Linux:
+
+```bash
+export CARECONNECT_DATABASE_MASTER_PASSWORD="<strong-postgres-password>"
+export CARECONNECT_JWT_SECRET="<random-string-at-least-32-chars>"
+```
+
+The scripts enforce a minimum length on both (8 and 32 characters) and refuse to
+deploy while any `REPLACE_ME` placeholder remains unresolved. Avoid `/`, `@`,
+`"`, and spaces in the database password — RDS rejects them.
+
+Only edit the parameter files directly if you are running the raw
+`aws cloudformation create-stack` commands instead of the scripts.
 
 
 
@@ -896,7 +1051,7 @@ aws cloudformation describe-stacks \
 Expected shape:
 
 ```text
-331738867837.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo
+<account-id>.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo
 ```
 
 
@@ -958,7 +1113,7 @@ echo "$IMAGE_URI"
 Expected image URI:
 
 ```text
-331738867837.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo:cfdemo
+<account-id>.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo:cfdemo
 ```
 
 
@@ -1218,6 +1373,45 @@ aws cloudformation describe-stack-events \
 
 ### Teardown: `cfdemo`
 
+**Use the teardown script unless you have a reason not to:**
+
+```powershell
+.\cloudformation-fargate\cdestroy_cloudformation.ps1 -Environment cfdemo -Profile careconnect-sso
+```
+
+macOS / Linux:
+
+```bash
+./cloudformation-fargate/cdestroy_cloudformation.sh --environment cfdemo --profile careconnect-sso
+```
+
+It deletes the four stacks in the correct order and empties the ECR repository
+first, which is what causes the manual path below to fail. Expect roughly 10
+minutes.
+
+Emptying ECR takes more than one pass, and that is normal: tagged images are
+manifest lists whose child images cannot be deleted until the parent is gone, so
+the first pass reports `ImageReferencedByManifestList` failures for the children
+and a later pass removes them. `Repository '...' is already empty` at the end
+means the loop finished, not that it found nothing to do.
+
+Afterwards, confirm nothing survived — the script reports success based on stack
+deletion, so check the resources themselves:
+
+```bash
+aws cloudformation list-stacks --profile careconnect-sso --region us-east-1 \
+  --query "StackSummaries[?contains(StackName,'cfdemo') && StackStatus!='DELETE_COMPLETE'].[StackName,StackStatus]" --output text
+aws rds describe-db-instances --profile careconnect-sso --region us-east-1 --query "DBInstances[].DBInstanceIdentifier" --output text
+aws ecs list-clusters --profile careconnect-sso --region us-east-1 --query "clusterArns" --output text
+aws ecr describe-repositories --profile careconnect-sso --region us-east-1 --query "repositories[].repositoryName" --output text
+aws apigatewayv2 get-apis --profile careconnect-sso --region us-east-1 --query "Items[].Name" --output text
+```
+
+All five should come back empty. RDS and Fargate are the two that actually cost
+money, so they are the ones worth confirming.
+
+The manual sequence below is the fallback when the script cannot be used.
+
 Use this order so dependencies are removed cleanly. Wait until each `wait`
 command completes before continuing:
 
@@ -1303,7 +1497,7 @@ aws ecr batch-delete-image `
   --profile careconnect-sso `
   --region us-east-1 `
   --repository-name careconnect-backend-cfdemo `
-  --image-ids imageDigest=sha256:sha256:e1dc629030f58bd5c2db35fa5b83084afd4437bc675443fb82e5f79d425a7f00 imageDigest=sha256:sha256:0b1fea9aa2d457a32bb5d6ef0a59530f7f5d0c99c0eaaefc51053e3c90bea1bf
+  --image-ids imageDigest=sha256:e1dc629030f58bd5c2db35fa5b83084afd4437bc675443fb82e5f79d425a7f00 imageDigest=sha256:0b1fea9aa2d457a32bb5d6ef0a59530f7f5d0c99c0eaaefc51053e3c90bea1bf
 ```
 
 Confirm the repository is empty:
