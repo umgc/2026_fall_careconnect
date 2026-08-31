@@ -714,7 +714,7 @@ deploy_stack() {
     --template-file "$aws_template_path" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset \
-    --parameter-overrides "${parameter_overrides[@]}"; then
+    --parameter-overrides ${parameter_overrides[@]+"${parameter_overrides[@]}"}; then
     write_stack_failure_details "$stack_name"
     return 1
   fi
