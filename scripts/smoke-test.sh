@@ -15,6 +15,15 @@
 #   ./scripts/smoke-test.sh -u "$BACKEND_URL" --log-group /ecs/careconnect-backend-cfdemo
 #
 # Exit codes: 0 = all hard checks passed, 1 = at least one hard check failed.
+#
+# What this leaves behind: every run registers two PATIENT accounts,
+# smoke-<stamp>@example.com and smoke-noaddr-<stamp>@example.com, and verifies
+# the first. Nothing deletes them. CareConnect has no account-deletion endpoint:
+# removal is a manual request to careconnect.support@gmail.com with a 30-day SLA,
+# and HIPAA retention keeps the underlying records for six years regardless.
+# Passwords are generated per run and never recorded, so the accounts are inert,
+# but the user table grows by two rows every time this runs. Do not point it at
+# an environment where that matters.
 
 set -uo pipefail
 
@@ -36,7 +45,7 @@ while [[ $# -gt 0 ]]; do
     -o|--origin)        FRONTEND_ORIGIN="$2"; shift 2 ;;
     -w|--log-wait)      LOG_WAIT_SECONDS="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -120,7 +129,10 @@ fi
 step "3. Registration"
 
 STAMP="$(date +%Y%m%d%H%M%S)"
-TEST_EMAIL="smoke-${STAMP}@awstest1.com"
+# Generated per run, never stored. These accounts cannot be deleted (see the
+# header), so a published password would be a standing credential.
+TEST_PASSWORD="Sm0ke!$(LC_ALL=C od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+TEST_EMAIL="smoke-${STAMP}@example.com"
 START_MS=$(( ( $(date +%s) - 30 ) * 1000 ))
 
 # Deliberately omits `verificationBaseUrl`. That field lets a client override
@@ -131,7 +143,7 @@ REGISTER_BODY="$(cat <<JSON
   "role": "PATIENT",
   "name": "Smoke Test",
   "email": "$TEST_EMAIL",
-  "password": "SmokeTest!2026",
+  "password": "$TEST_PASSWORD",
   "firstName": "Smoke",
   "lastName": "Test",
   "phone": "555-0100",
@@ -241,7 +253,7 @@ step "6. Validation failure modes"
 BAD_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 \
   -X POST "$BACKEND_URL/v1/api/auth/register" \
   -H "Content-Type: application/json" \
-  -d "{\"role\":\"PATIENT\",\"name\":\"No Address\",\"email\":\"smoke-noaddr-${STAMP}@awstest1.com\",\"password\":\"SmokeTest!2026\",\"firstName\":\"No\",\"lastName\":\"Address\"}")"
+  -d "{\"role\":\"PATIENT\",\"name\":\"No Address\",\"email\":\"smoke-noaddr-${STAMP}@example.com\",\"password\":\"$TEST_PASSWORD\",\"firstName\":\"No\",\"lastName\":\"Address\"}")"
 
 case "$BAD_CODE" in
   400)
