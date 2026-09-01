@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TelemetryService {
 
     /* A list of all known telemetry events */
@@ -53,11 +56,12 @@ public class TelemetryService {
         }
         /* Filter by events that are allowed */
         if (allowedEvents.contains(event.getEventName())) {
+            Map<String, Object> details = event.getDetails();
             if (details == null) {
                 log.info("Recieved Invalid Telemetry Event: Null Details");
                 return null;
             }
-            Map<String, Object> details = event.getDetails();
+
             /* Do a little dark magic to filter it out */
             Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).collect(Collectors.toMap(Function.identity(), details::get));
             newDetails.values().removeIf(Objects::isNull);
