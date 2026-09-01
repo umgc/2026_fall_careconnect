@@ -30,15 +30,30 @@ import static org.mockito.Mockito.when;
  * Unit tests for {@link TelemetryService}, covering the server-side telemetry allowlist
  * introduced by PR #63 (WBS 1.5.2, branch {@code feature/e-telemetry-verification}).
  *
- * <p>Test IDs TC-TEL-01 .. TC-TEL-25 are permanent. Never renumber, never reuse.
+ * <p>Test IDs TC-TEL-01 .. TC-TEL-25, TC-TEL-28 and TC-TEL-29 are permanent. Never renumber,
+ * never reuse - TC-TEL-14 is withdrawn and its identifier stays retired. TC-TEL-26 and
+ * TC-TEL-27 live in {@code TelemetrySecurityDevChainTest}.
  *
- * <p>Cases tagged EXPECTED-FAIL assert the <em>intended</em> behaviour of the feature and are
- * expected to fail against the implementation as submitted in PR #63. Each names the defect it
- * proves. They are not characterization tests; they must go green once the defect is fixed.
+ * <p>Cases whose Javadoc says EXPECTED-FAIL assert the <em>intended</em> behaviour and are red
+ * against the branch as it stands. Each names the defect it proves. They are not
+ * characterization tests; they must go green once that defect is fixed. The marker sits on the
+ * individual case, not on the enclosing group - the groups now hold a mix of red and green, and
+ * a blanket label on a group would let a real regression hide inside it.
  *
  * <p>TC-TEL-22 .. TC-TEL-25 were added 2026-08-29 after commit {@code 6f38c103}. That commit closed
  * DEF-TEL-01, DEF-TEL-02, DEF-TEL-06 and DEF-TEL-09, and introduced DEF-TEL-18, DEF-TEL-19 and
  * DEF-TEL-20 in their place. TC-TEL-16 and TC-TEL-17 now pass and are retained as regression cover.
+ *
+ * <p>At {@code d48358e6} the still-failing cases are TC-TEL-12, TC-TEL-22 and TC-TEL-28
+ * (DEF-TEL-03), TC-TEL-15 (DEF-TEL-05) and TC-TEL-23 (DEF-TEL-18). TC-TEL-13 and TC-TEL-24
+ * went green at {@code 0139bd84}.
+ *
+ * <p>Changes of 2026-09-01, none of which renumbered or reused an identifier. TC-TEL-15 now
+ * asserts on the caller's own object rather than on a return value that is null on that path,
+ * which had turned it into an Error. TC-TEL-28 was added for the one DEF-TEL-03 collector no
+ * case reached. TC-TEL-14 is withdrawn: its premise held for details but not for deviceInfo,
+ * which the client builds as a fixed four-key literal, so it asserted a preference rather than
+ * a defect. TC-TEL-29 replaces it and pins the intended reject instead.
  *
  * <p>Executed by: Kristopher Bickmore (Testing Lead). PR author: MaximumVolts. Separation of duties per
  * CLAUDE.md is satisfied - the author is not the executor.
@@ -227,6 +242,34 @@ class TelemetryServiceTest {
     @DisplayName("Allowlist - reject path")
     class RejectPath {
 
+        /**
+         * TC-TEL-29 - added 2026-09-01, replacing the withdrawn TC-TEL-14.
+         *
+         * <p>Pins the behaviour the service intends rather than the one TC-TEL-14 preferred: an
+         * event whose deviceInfo carries no usable key is rejected rather than stored with empty
+         * metadata. Two inputs reach that outcome by different routes - an empty map is refused at
+         * {@code TelemetryService.java:72}, and a non-empty map with no allowlisted key is refused
+         * at {@code :80} after filtering. Both must return null and persist nothing.
+         *
+         * <p>This is a decision, not a defect, so the case is expected to pass. It fails if anyone
+         * relaxes either reject and starts storing events with no device metadata.
+         */
+        @Test
+        @DisplayName("TC-TEL-29: an event with no usable deviceInfo is rejected, not stored")
+        void tcTel29_unusableDeviceInfoRejected() {
+            final Map<String, Object> noAllowedKeys = new LinkedHashMap<>();
+            noAllowedKeys.put("nothingAllowedHere", "value");
+
+            assertThat(service.record(event(ALLOWED_EVENT, validDetails(), Map.of())))
+                    .as("an empty deviceInfo map is refused at TelemetryService.java:72")
+                    .isNull();
+            assertThat(service.record(event(ALLOWED_EVENT, validDetails(), noAllowedKeys)))
+                    .as("a deviceInfo map with no allowlisted key is refused at :80")
+                    .isNull();
+
+            verify(repository, never()).save(any());
+        }
+
         @Test
         @DisplayName("TC-TEL-06: non-allowlisted event name is never persisted")
         void tcTel06_unknownEventNameRejected() {
@@ -267,11 +310,11 @@ class TelemetryServiceTest {
     }
 
     // ==================================================================
-    //  Malformed input - EXPECTED-FAIL against PR #63 as submitted
+    //  Malformed input - null names, null maps, null map values
     // ==================================================================
 
     @Nested
-    @DisplayName("Malformed input (EXPECTED-FAIL against PR #63)")
+    @DisplayName("Malformed input")
     class MalformedInput {
 
         @Test
@@ -299,6 +342,12 @@ class TelemetryServiceTest {
             assertThatCode(() -> service.record(input)).doesNotThrowAnyException();
         }
 
+        /**
+         * TC-TEL-12 - EXPECTED-FAIL at {@code d48358e6}. {@code Collectors.toMap} delegates to
+         * {@code HashMap.merge}, which rejects a null value. The
+         * {@code removeIf(Objects::isNull)} added by {@code 0139bd84} sits after the collector
+         * and is therefore unreachable for this input.
+         */
         @Test
         @DisplayName("TC-TEL-12: allowlisted detail key with a null value does not throw [DEF-TEL-03]")
         void tcTel12_nullDetailValueDoesNotThrow() {
@@ -310,6 +359,11 @@ class TelemetryServiceTest {
             assertThatCode(() -> service.record(input)).doesNotThrowAnyException();
         }
 
+        /**
+         * TC-TEL-22 - EXPECTED-FAIL at {@code d48358e6}. DEF-TEL-03 on the deviceInfo collector in
+         * {@code record()}. See {@link #tcTel28_anonymousNullDeviceInfoValueDoesNotThrow()} for the
+         * same defect in {@code recordAnonymous}.
+         */
         @Test
         @DisplayName("TC-TEL-22: allowlisted deviceInfo key with a null value does not throw [DEF-TEL-03]")
         void tcTel22_nullDeviceInfoValueDoesNotThrow() {
@@ -323,11 +377,11 @@ class TelemetryServiceTest {
     }
 
     // ==================================================================
-    //  Silent-drop behaviour - EXPECTED-FAIL against PR #63 as submitted
+    //  Silent-drop behaviour - what the caller and the controller observe on a reject
     // ==================================================================
 
     @Nested
-    @DisplayName("Silent drops (EXPECTED-FAIL against PR #63)")
+    @DisplayName("Silent drops")
     class SilentDrops {
 
         @Test
@@ -340,16 +394,40 @@ class TelemetryServiceTest {
             verify(repository).save(any(TelemetryEvent.class));
         }
 
-        @Test
-        @DisplayName("TC-TEL-14: allowlisted event with empty deviceInfo is still persisted [DEF-TEL-04]")
-        void tcTel14_emptyDeviceInfoStillPersisted() {
-            echoSave();
+        /*
+         * TC-TEL-14 - WITHDRAWN 2026-09-01. The identifier is retired and must never be reused.
+         *
+         * The case asserted that an allowlisted event with an empty deviceInfo map is still
+         * persisted, on the reasoning behind DEF-TEL-04: the client can produce an empty map, so
+         * rejecting one drops legitimate events. That reasoning holds for details, where
+         * TelemetryGuardrails.sanitize returns an empty map when every property is blocked or over
+         * 64 characters - the details half of DEF-TEL-04 was a real defect and 0139bd84 closed it.
+         *
+         * It does not hold for deviceInfo. The client builds that map as a hardcoded four-key
+         * literal (telemetry.dart:159-163) and all four keys are on allowedDeviceInfo, so no client
+         * can send an empty or null deviceInfo. Rejecting one at TelemetryService.java:72 is
+         * deliberate and harms nothing. The case asserted a preference, not a defect, and the
+         * deviceInfo half of DEF-TEL-04 is withdrawn with it.
+         *
+         * TC-TEL-29 replaces it, asserting the behaviour the service actually intends.
+         */
 
-            service.record(event(ALLOWED_EVENT, validDetails(), Map.of()));
-
-            verify(repository).save(any(TelemetryEvent.class));
-        }
-
+        /**
+         * TC-TEL-15 - EXPECTED-FAIL. Amended 2026-09-01: asserts on the caller's own object rather
+         * than on the return value. Since {@code 6f38c103} this reject path returns {@code null},
+         * which turned the case into a NullPointerException Error and hid what it was written to
+         * prove. {@code record()} calls {@code setDetails} on the caller's own event at
+         * {@code TelemetryService.java:68}, unconditionally once the name is allowlisted and before
+         * either deviceInfo reject at {@code :72} and {@code :80}. This case supplies a deviceInfo
+         * map that is non-null and non-empty but carries no allowlisted key, so it clears
+         * {@code :72} and is rejected at {@code :80} - by which point the caller is already holding
+         * a stripped map for an event that was never stored.
+         *
+         * <p>Severity Low, corrected 2026-09-01 from Medium. The only caller in {@code src/main} is
+         * {@code DevTelemetryController:52}, which reassigns the returned reference and discards it
+         * on null, so nothing observes the mutation today. It is a latent hazard for the next
+         * caller, not a live bug.
+         */
         @Test
         @DisplayName("TC-TEL-15: a rejected event is returned to the caller unmutated [DEF-TEL-05]")
         void tcTel15_rejectedEventNotMutated() {
@@ -360,14 +438,19 @@ class TelemetryServiceTest {
             deviceInfo.put("nothingAllowedHere", "value");
 
             final TelemetryEvent input = event(ALLOWED_EVENT, details, deviceInfo);
-            final TelemetryEvent result = service.record(input);
+            service.record(input);
 
             verify(repository, never()).save(any());
-            assertThat(result.getDetails())
+            assertThat(input.getDetails())
                     .as("event was not persisted, so the caller's copy must be untouched")
                     .containsKey("unexpected_key");
         }
 
+        /**
+         * TC-TEL-23 - EXPECTED-FAIL at {@code d48358e6}. {@code TelemetryService.java:86} returns
+         * the unsaved event, which {@code DevTelemetryController} serves as 200 OK with a null
+         * id. Invalid details produce 400; an invalid event name produces 200.
+         */
         @Test
         @DisplayName("TC-TEL-23: a non-allowlisted event name is not handed back as a 200-able body [DEF-TEL-18]")
         void tcTel23_unknownEventNameIsNotReturnedAsAccepted() {
@@ -399,11 +482,11 @@ class TelemetryServiceTest {
     }
 
     // ==================================================================
-    //  recordAnonymous - EXPECTED-FAIL against PR #63 as submitted
+    //  recordAnonymous - the second ingest entry point
     // ==================================================================
 
     @Nested
-    @DisplayName("recordAnonymous (EXPECTED-FAIL against PR #63)")
+    @DisplayName("recordAnonymous")
     class RecordAnonymous {
 
         @Test
@@ -433,6 +516,29 @@ class TelemetryServiceTest {
         void tcTel24_anonymousNullDetailsDoesNotThrow() {
             assertThatCode(() -> service.recordAnonymous(
                     ALLOWED_EVENT, null, validDeviceInfo(), "t", "s"))
+                    .doesNotThrowAnyException();
+        }
+
+        /**
+         * TC-TEL-28 - EXPECTED-FAIL. Added 2026-09-01. DEF-TEL-03 on the fourth and last
+         * collector, {@code TelemetryService.java:153}.
+         *
+         * <p>{@code 0139bd84} added {@code removeIf(Objects::isNull)} after three of the four
+         * {@code Collectors.toMap} calls and omitted it entirely on this one, so
+         * {@code record()} and {@code recordAnonymous} disagree. The omission changes nothing
+         * today - the collector throws before any of those guards can run - but it means a
+         * correct fix applied only where the guards already are would leave this path broken
+         * and untested. TC-TEL-22 is the same defect in {@code record()}.
+         */
+        @Test
+        @DisplayName("TC-TEL-28: recordAnonymous with a null deviceInfo value does not throw [DEF-TEL-03]")
+        void tcTel28_anonymousNullDeviceInfoValueDoesNotThrow() {
+            final Map<String, Object> deviceInfo = new HashMap<>();
+            deviceInfo.put("platform", null);
+            deviceInfo.put("uiSurface", "web");
+
+            assertThatCode(() -> service.recordAnonymous(
+                    ALLOWED_EVENT, validDetails(), deviceInfo, "t", "s"))
                     .doesNotThrowAnyException();
         }
     }

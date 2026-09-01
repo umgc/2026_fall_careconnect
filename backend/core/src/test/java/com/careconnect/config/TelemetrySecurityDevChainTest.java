@@ -36,23 +36,27 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * HTTP-boundary tests for the telemetry ingest matcher on the {@code dev} filter chain, as
- * modified by PR #63 commit {@code 6f38c103}.
+ * HTTP-boundary tests for the telemetry ingest matcher on the {@code dev} filter chain.
  *
  * <p>Test IDs TC-TEL-26 and TC-TEL-27 are permanent. Never renumber, never reuse.
  *
- * <p>{@code 6f38c103} changed {@code POST /v1/api/dev/telemetry} from {@code permitAll()} to
- * {@code .authenticated()} in {@link SecurityConfig}. That matcher lives on {@code devChain},
- * which declares {@code securityMatcher("/v1/api/dev/**")} and never registers a
- * {@code JwtAuthenticationFilter} - only {@code apiChain} builds one. No request routed to that
- * chain can therefore carry an {@code Authentication}, so the matcher is not "requires a token",
- * it is an unconditional 401. That is DEF-TEL-17.
+ * <p>Both cases were written 2026-08-29 against commit {@code 6f38c103}, which changed
+ * {@code POST /v1/api/dev/telemetry} from {@code permitAll()} to {@code .authenticated()} in
+ * {@link SecurityConfig}. That matcher lives on {@code devChain}, which declares
+ * {@code securityMatcher("/v1/api/dev/**")} and never registers a {@code JwtAuthenticationFilter}
+ * - only {@code apiChain} builds one. No request routed to that chain could therefore carry an
+ * {@code Authentication}, so the matcher was not "requires a token", it was an unconditional 401.
+ * That was DEF-TEL-17, and TC-TEL-27 was the expected-fail that proved it.
+ *
+ * <p>{@code 0139bd84} reverted {@code SecurityConfig.java:51} to {@code permitAll()}. Both cases
+ * pass as of {@code d48358e6} and are retained as regression cover: TC-TEL-27 fails again if the
+ * matcher is tightened without a filter behind it, and TC-TEL-26 fails if ingest is closed to the
+ * anonymous client that actually calls it. TC-TEL-26 was amended 2026-09-01 from 401 to 200.
  *
  * <p>These tests deliberately use the real {@link SecurityConfig} and a real bearer token rather
  * than {@code SecurityMockMvcRequestPostProcessors.user(...)}. The post-processor injects an
@@ -176,31 +180,40 @@ class TelemetrySecurityDevChainTest {
     }
 
     /**
-     * TC-TEL-26 - an unauthenticated POST is rejected with 401.
+     * TC-TEL-26 - an unauthenticated POST is accepted.
      *
-     * <p>Documents the regression rather than asserting it is correct. The Flutter client sends no
-     * Authorization header (ApiService.sendTelemetryEventV3, api_service.dart:814-822) and emits
-     * session_start before any login (main.dart:225), so this status is what the production client
-     * now receives for every event. PR #25 TC-TEL-ING-001 asserts 200 for this same request.
+     * <p>Amended 2026-09-01. Written on 2026-08-29 asserting 401, to document the lockout
+     * {@code 6f38c103} introduced. {@code 0139bd84} reverted {@code SecurityConfig.java:51} to
+     * {@code permitAll()}, so 401 is no longer the expected result and the case is now a positive
+     * one.
+     *
+     * <p>200 is the correct expectation, not merely the current behaviour. The Flutter client sends
+     * no Authorization header (ApiService.sendTelemetryEventV3, api_service.dart:814-822) and emits
+     * session_start before any login (main.dart:225), so an authenticated ingest path would drop
+     * every pre-login event. The endpoint is defended by what it accepts - the TelemetryService
+     * allowlist - not by who calls it. PR #25 TC-TEL-ING-001 asserts 200 for this same request; the
+     * two branches now agree.
      */
     @Test
-    @DisplayName("TC-TEL-26: anonymous POST /v1/api/dev/telemetry is rejected 401 [DEF-TEL-17]")
-    void tcTel26_anonymousIngestIsRejected() throws Exception {
+    @DisplayName("TC-TEL-26: anonymous POST /v1/api/dev/telemetry is accepted [DEF-TEL-17]")
+    void tcTel26_anonymousIngestIsAccepted() throws Exception {
         mockMvc.perform(post("/v1/api/dev/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CLIENT_PAYLOAD))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
 
-        verify(telemetryService, never()).record(any(TelemetryEvent.class));
+        verify(telemetryService).record(any(TelemetryEvent.class));
     }
 
     /**
-     * TC-TEL-27 - EXPECTED-FAIL. A caller presenting a valid admin bearer token must be accepted.
+     * TC-TEL-27 - a caller presenting a valid admin bearer token is accepted.
      *
-     * <p>This is the case that separates an authorization decision from a wiring defect. If
-     * {@code .authenticated()} were a deliberate policy, a valid token would satisfy it. It does
-     * not: devChain never registers a JwtAuthenticationFilter, so the header is never read and the
-     * request is anonymous by the time the authorization manager sees it. Expect 401 today.
+     * <p>This is the case that separated an authorization decision from a wiring defect. If
+     * {@code .authenticated()} had been a deliberate policy, a valid token would have satisfied it.
+     * It did not: devChain registers no JwtAuthenticationFilter, so the header was never read and
+     * the request was anonymous by the time the authorization manager saw it. The case failed
+     * {@code Status expected:<200> but was:<401>} at {@code 6f38c103} and passes from
+     * {@code 0139bd84}, which restored {@code permitAll()}.
      */
     @Test
     @DisplayName("TC-TEL-27: POST with a valid admin bearer token is accepted [DEF-TEL-17]")
