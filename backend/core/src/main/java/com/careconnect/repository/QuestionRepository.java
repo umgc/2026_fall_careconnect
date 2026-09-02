@@ -12,17 +12,21 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     // Return all active/inactive questions
     List<Question> findByActive(Boolean active);
+
     List<Question> findAllByActiveTrueAndFormKeyAndFormVersionOrderByOrdinalAsc(String formKey, int formVersion);
 
     // (Optional niceties)
     List<Question> findAllByActiveTrue();
+
     List<Question> findAllByActiveFalse();
 
     List<Question> findAllByOrderByOrdinalAsc();
 
     List<Question> findAllByActiveFalseOrderByOrdinalAsc();
 
-    /** Shift ordinals within the same form/version at or above the given ordinal by 1. */
+    /**
+     * Shift ordinals within the same form/version at or above the given ordinal by 1.
+     */
     @Modifying
     @Query("""
             UPDATE Question q
@@ -37,16 +41,18 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
                          @Param("formKey") String formKey,
                          @Param("formVersion") int formVersion);
 
-    /** Check whether any other question in the same form/version occupies the given ordinal. */
+    /**
+     * Check whether any other question in the same form/version occupies the given ordinal.
+     */
     boolean existsByOrdinalAndFormKeyAndFormVersionAndIdNot(int ordinal, String formKey, int formVersion, Long id);
 
     @Query("""
-        SELECT q FROM Question q
-        WHERE (:active IS NULL OR q.active = :active)
-          AND (:formKey IS NULL OR q.formKey = :formKey)
-          AND (:formVersion IS NULL OR q.formVersion = :formVersion)
-        ORDER BY q.formKey ASC, q.formVersion ASC, q.sectionKey ASC, q.ordinal ASC, q.id ASC
-        """)
+            SELECT q FROM Question q
+            WHERE (:active IS NULL OR q.active = :active)
+              AND (:formKey IS NULL OR q.formKey = :formKey)
+              AND (:formVersion IS NULL OR q.formVersion = :formVersion)
+            ORDER BY q.formKey ASC, q.formVersion ASC, q.sectionKey ASC, q.ordinal ASC, q.id ASC
+            """)
     List<Question> findByFilters(
             @Param("active") Boolean active,
             @Param("formKey") String formKey,

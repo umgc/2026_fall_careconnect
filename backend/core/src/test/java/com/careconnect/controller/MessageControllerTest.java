@@ -40,20 +40,26 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MessageControllerTest {
 
-    @Mock private MessageRepository messageRepo;
-    @Mock private UserRepository userRepo;
-    @Mock private CaregiverPatientLinkService linkService;
-    @Mock private FileManagementService fileManagementService;
-    @Mock private PatientRepository patientRepo;
-    @Mock private CaregiverRepository caregiverRepo;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
+    private static final Long SENDER_ID = 1L;
+    private static final Long RECEIVER_ID = 2L;
+    @Mock
+    private MessageRepository messageRepo;
+    @Mock
+    private UserRepository userRepo;
+    @Mock
+    private CaregiverPatientLinkService linkService;
+    @Mock
+    private FileManagementService fileManagementService;
+    @Mock
+    private PatientRepository patientRepo;
+    @Mock
+    private CaregiverRepository caregiverRepo;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
     @InjectMocks
     private MessageController controller;
-
-    private static final Long SENDER_ID   = 1L;
-    private static final Long RECEIVER_ID = 2L;
 
     private Message makeMessage(Long id, Long senderId, Long receiverId, String content) {
         final Message m = new Message();

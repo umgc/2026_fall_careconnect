@@ -12,22 +12,44 @@
 --
 -- Related: V2607071920 (pgvector), V2607032257 (indexing_outbox), RetrievalRecordType enum.
 
-CREATE TABLE IF NOT EXISTS retrieval_index_chunk (
-    id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id        BIGINT        NOT NULL,
-    record_type       VARCHAR(40)   NOT NULL,
-    source_record_id  VARCHAR(120)  NOT NULL,
-    chunk_text        TEXT          NOT NULL,
-    chunk_metadata    JSONB         NULL,
-    search_vector     TSVECTOR      NULL,
-    embedding         vector(1536)  NULL,
-    indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    consent_scope     VARCHAR(40)   NULL
-);
+CREATE TABLE IF NOT EXISTS retrieval_index_chunk
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    patient_id BIGINT NOT NULL,
+    record_type VARCHAR
+(
+    40
+) NOT NULL,
+    source_record_id VARCHAR
+(
+    120
+) NOT NULL,
+    chunk_text TEXT NOT NULL,
+    chunk_metadata JSONB NULL,
+    search_vector TSVECTOR NULL,
+    embedding vector
+(
+    1536
+) NULL,
+    indexed_at TIMESTAMPTZ NOT NULL DEFAULT now
+(
+),
+    consent_scope VARCHAR
+(
+    40
+) NULL
+    );
 
 ALTER TABLE retrieval_index_chunk
     ADD CONSTRAINT fk_retrieval_chunk_patient
-    FOREIGN KEY (patient_id) REFERENCES patient (id);
+        FOREIGN KEY (patient_id) REFERENCES patient (id);
 
 -- RBAC scope filter — every retrieval query starts here (FR-AI-1).
 CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id
@@ -51,45 +73,59 @@ CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding
     ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops)
     WITH (lists = 100);
 
-COMMENT ON TABLE retrieval_index_chunk IS
+COMMENT
+ON TABLE retrieval_index_chunk IS
     'Ask AI hybrid retrieval index chunks (Task 1.5). Scoped by patient_id; record_type aligns with RetrievalRecordType enum.';
 
-COMMENT ON COLUMN retrieval_index_chunk.patient_id IS
+COMMENT
+ON COLUMN retrieval_index_chunk.patient_id IS
     'Patient entity id (patient.id). Mandatory scope key for every retrieval query (FR-AI-1).';
 
-COMMENT ON COLUMN retrieval_index_chunk.record_type IS
+COMMENT
+ON COLUMN retrieval_index_chunk.record_type IS
     'Canonical source type (e.g. CALL_SUMMARY, TRANSCRIPT_SEGMENT). Matches RetrievalRecordType.name().';
 
-COMMENT ON COLUMN retrieval_index_chunk.source_record_id IS
+COMMENT
+ON COLUMN retrieval_index_chunk.source_record_id IS
     'Stable id of the upstream source row (summary id, call id, document id, etc.) for idempotent indexing.';
 
-COMMENT ON COLUMN retrieval_index_chunk.chunk_text IS
+COMMENT
+ON COLUMN retrieval_index_chunk.chunk_text IS
     'Searchable excerpt indexed for FTS and embedding generation. Minimum-necessary text only (FR-AI-9).';
 
-COMMENT ON COLUMN retrieval_index_chunk.chunk_metadata IS
+COMMENT
+ON COLUMN retrieval_index_chunk.chunk_metadata IS
     'Optional JSON metadata: deep links, speaker, timestamps, visibility, content_hash, etc.';
 
-COMMENT ON COLUMN retrieval_index_chunk.search_vector IS
+COMMENT
+ON COLUMN retrieval_index_chunk.search_vector IS
     'PostgreSQL tsvector for full-text search. Auto-maintained from chunk_text via trigger.';
 
-COMMENT ON COLUMN retrieval_index_chunk.embedding IS
+COMMENT
+ON COLUMN retrieval_index_chunk.embedding IS
     '1536-dim pgvector embedding for semantic search (Bedrock Titan or approved embed model, Task 4.3).';
 
-COMMENT ON COLUMN retrieval_index_chunk.consent_scope IS
+COMMENT
+ON COLUMN retrieval_index_chunk.consent_scope IS
     'Caregiver visibility scope at index time: on_consent, auto, or hidden (REQ-SC-8).';
 
 -- Maintain search_vector from chunk_text on write (Task 4.2).
 -- Application keyword queries use plainto_tsquery('english', ...) via
 -- RetrievalIndexChunkRepository.searchByPatientIdFullText / FullTextSearchService.
 -- Follow-up: add Spanish config (to_tsvector('spanish', ...)) for bilingual FTS.
-CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger()
+CREATE
+OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := to_tsvector('english', COALESCE(NEW.chunk_text, ''));
-    RETURN NEW;
+    NEW.search_vector
+:= to_tsvector('english', COALESCE(NEW.chunk_text, ''));
+RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$
+LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_retrieval_index_chunk_search_vector
-    BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk
+    BEFORE INSERT OR
+UPDATE OF chunk_text
+ON retrieval_index_chunk
     FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger();

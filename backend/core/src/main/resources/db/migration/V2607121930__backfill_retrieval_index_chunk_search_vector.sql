@@ -12,17 +12,22 @@
 -- Query path: RetrievalIndexChunkRepository.searchByPatientIdFullText
 --             + FullTextSearchService (patient-scoped plainto_tsquery).
 
-CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger()
+CREATE
+OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := to_tsvector('english', COALESCE(NEW.chunk_text, ''));
-    RETURN NEW;
+    NEW.search_vector
+:= to_tsvector('english', COALESCE(NEW.chunk_text, ''));
+RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$
+LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_retrieval_index_chunk_search_vector ON retrieval_index_chunk;
 CREATE TRIGGER trg_retrieval_index_chunk_search_vector
-    BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk
+    BEFORE INSERT OR
+UPDATE OF chunk_text
+ON retrieval_index_chunk
     FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger();
 
 UPDATE retrieval_index_chunk

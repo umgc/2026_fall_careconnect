@@ -48,22 +48,73 @@ public class UserAIConfigDTO {
     @Builder.Default
     private Boolean isActive = true;
     private String systemPrompt;
+
     // Explicit getters for compatibility
-    public Long getId() { return id; }
-    public Long getUserId() { return userId; }
-    public Long getPatientId() { return patientId; }
-    public AIProvider getAiProvider() { return aiProvider; }
-    public String getOpenaiModel() { return openaiModel; }
-    public String getDeepseekModel() { return deepseekModel; }
-    public Integer getMaxTokens() { return maxTokens; }
-    public Double getTemperature() { return temperature; }
-    public Integer getConversationHistoryLimit() { return conversationHistoryLimit; }
-    public Boolean getIncludeVitalsByDefault() { return includeVitalsByDefault; }
-    public Boolean getIncludeMedicationsByDefault() { return includeMedicationsByDefault; }
-    public Boolean getIncludeNotesByDefault() { return includeNotesByDefault; }
-    public Boolean getIncludeMoodPainLogsByDefault() { return includeMoodPainLogsByDefault; }
-    public Boolean getIncludeAllergiesByDefault() { return includeAllergiesByDefault; }
-    public Boolean getIncludeDocumentsByDefault() { return includeDocumentsByDefault; }
-    public Boolean getIsActive() { return isActive; }
-    public String getSystemPrompt() { return systemPrompt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getPatientId() {
+        return patientId;
+    }
+
+    public AIProvider getAiProvider() {
+        return aiProvider;
+    }
+
+    public String getOpenaiModel() {
+        return openaiModel;
+    }
+
+    public String getDeepseekModel() {
+        return deepseekModel;
+    }
+
+    public Integer getMaxTokens() {
+        return maxTokens;
+    }
+
+    public Double getTemperature() {
+        return temperature;
+    }
+
+    public Integer getConversationHistoryLimit() {
+        return conversationHistoryLimit;
+    }
+
+    public Boolean getIncludeVitalsByDefault() {
+        return includeVitalsByDefault;
+    }
+
+    public Boolean getIncludeMedicationsByDefault() {
+        return includeMedicationsByDefault;
+    }
+
+    public Boolean getIncludeNotesByDefault() {
+        return includeNotesByDefault;
+    }
+
+    public Boolean getIncludeMoodPainLogsByDefault() {
+        return includeMoodPainLogsByDefault;
+    }
+
+    public Boolean getIncludeAllergiesByDefault() {
+        return includeAllergiesByDefault;
+    }
+
+    public Boolean getIncludeDocumentsByDefault() {
+        return includeDocumentsByDefault;
+    }
+
+    public Boolean getIsActive() {
+        return isActive;
+    }
+
+    public String getSystemPrompt() {
+        return systemPrompt;
+    }
 }

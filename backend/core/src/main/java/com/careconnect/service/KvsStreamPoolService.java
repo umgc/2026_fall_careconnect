@@ -25,12 +25,32 @@ public class KvsStreamPoolService {
         this.streamPoolArn = streamPoolArn == null ? "" : streamPoolArn.trim();
     }
 
-    /** Visible for unit tests. */
+    /**
+     * Visible for unit tests.
+     */
     static KvsStreamPoolService forTest(final boolean enabled, final String streamPoolArn) {
         return new KvsStreamPoolService(enabled, streamPoolArn);
     }
 
-    /** Chime KVS Stream Pool ARN used as the sink for {@code CreateMediaStreamPipeline}. */
+    static String extractResourceName(final String arn) {
+        if (arn == null || arn.isBlank()) {
+            return "";
+        }
+        final int slash = arn.lastIndexOf('/');
+        return slash >= 0 && slash < arn.length() - 1 ? arn.substring(slash + 1) : "";
+    }
+
+    static String extractArnRegion(final String arn) {
+        if (arn == null || arn.isBlank()) {
+            return "";
+        }
+        final String[] parts = arn.split(":");
+        return parts.length > 3 ? parts[3] : "";
+    }
+
+    /**
+     * Chime KVS Stream Pool ARN used as the sink for {@code CreateMediaStreamPipeline}.
+     */
     public String getStreamPoolArn() {
         return streamPoolArn;
     }
@@ -55,34 +75,24 @@ public class KvsStreamPoolService {
         return "ChimeMediaPipelines-" + poolName;
     }
 
-    /** AWS region from the Chime stream pool ARN, or empty when not configured. */
+    /**
+     * AWS region from the Chime stream pool ARN, or empty when not configured.
+     */
     public String getStreamPoolRegion() {
         return extractArnRegion(streamPoolArn);
     }
 
-    /** Whether Chime media stream pipeline ingest is configured. */
+    /**
+     * Whether Chime media stream pipeline ingest is configured.
+     */
     public boolean isIngestMode() {
         return enabled && !streamPoolArn.isBlank();
     }
 
-    /** Returns whether KVS speaker capture ingest is configured. */
+    /**
+     * Returns whether KVS speaker capture ingest is configured.
+     */
     public boolean isEnabled() {
         return isIngestMode();
-    }
-
-    static String extractResourceName(final String arn) {
-        if (arn == null || arn.isBlank()) {
-            return "";
-        }
-        final int slash = arn.lastIndexOf('/');
-        return slash >= 0 && slash < arn.length() - 1 ? arn.substring(slash + 1) : "";
-    }
-
-    static String extractArnRegion(final String arn) {
-        if (arn == null || arn.isBlank()) {
-            return "";
-        }
-        final String[] parts = arn.split(":");
-        return parts.length > 3 ? parts[3] : "";
     }
 }

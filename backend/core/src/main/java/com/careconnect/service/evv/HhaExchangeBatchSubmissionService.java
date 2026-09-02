@@ -55,37 +55,37 @@ public class HhaExchangeBatchSubmissionService {
      */
     public Object buildPayload(List<Long> recordIds) {
         log.info("[HHAExchange] Building payload for record IDs: {}", recordIds);
-        
+
         // Fetch records with Patient eagerly loaded to avoid lazy-loading errors
         List<EvvRecord> records = evvRecordRepository.findAllByIdWithPatient(recordIds);
         log.info("[HHAExchange] Fetched {} records with Patient data eagerly loaded", records.size());
-        
+
         List<EvvRecord> eligible = records.stream()
                 .filter(r -> {
                     boolean isVA = "VA".equalsIgnoreCase(r.getStateCode());
                     boolean isApproved = "APPROVED".equalsIgnoreCase(r.getStatus());
                     if (!isVA || !isApproved) {
-                        log.debug("[HHAExchange] Filtering out record {} - VA: {}, APPROVED: {}", 
+                        log.debug("[HHAExchange] Filtering out record {} - VA: {}, APPROVED: {}",
                                 r.getId(), isVA, isApproved);
                     }
                     return isVA && isApproved;
                 })
                 .collect(java.util.stream.Collectors.toList());
-        
-        log.info("[HHAExchange] Found {} eligible records from {} requested", 
+
+        log.info("[HHAExchange] Found {} eligible records from {} requested",
                 eligible.size(), recordIds.size());
-        
+
         if (eligible.isEmpty()) {
             throw new IllegalArgumentException(
                     "No eligible VA/APPROVED records found in: " + recordIds);
         }
-        
+
         try {
             Object request = hhaClient.buildRequest(eligible);
             log.info("[HHAExchange] Successfully built request for {} records", eligible.size());
             return request;
         } catch (Exception e) {
-            log.error("[HHAExchange] Error building request for {} records: {}", 
+            log.error("[HHAExchange] Error building request for {} records: {}",
                     eligible.size(), e.getMessage(), e);
             throw e;
         }

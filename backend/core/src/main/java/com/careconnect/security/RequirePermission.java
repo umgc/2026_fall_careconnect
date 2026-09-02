@@ -7,11 +7,11 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation to require a specific permission for a controller method.
- * 
+ * <p>
  * Usage:
+ *
  * @GetMapping("/{id}")
- * @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
- * public ResponseEntity<?> getPatient(@PathVariable Long id) { ... }
+ * @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS) public ResponseEntity<?> getPatient(@PathVariable Long id) { ... }
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

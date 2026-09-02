@@ -13,23 +13,23 @@ import java.util.Optional;
 
 @Repository
 public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> {
-    
+
     List<DeviceToken> findByUserAndIsActiveTrue(User user);
-    
+
     List<DeviceToken> findByUserIdAndIsActiveTrue(Long userId);
-    
+
     Optional<DeviceToken> findByFcmTokenAndIsActiveTrue(String fcmToken);
-    
+
     Optional<DeviceToken> findByUserAndDeviceIdAndIsActiveTrue(User user, String deviceId);
-    
+
     @Modifying
     @Query("UPDATE DeviceToken dt SET dt.isActive = false WHERE dt.user = :user AND dt.deviceId = :deviceId")
     void deactivateByUserAndDeviceId(@Param("user") User user, @Param("deviceId") String deviceId);
-    
+
     @Modifying
     @Query("UPDATE DeviceToken dt SET dt.isActive = false WHERE dt.fcmToken = :fcmToken")
     void deactivateByFcmToken(@Param("fcmToken") String fcmToken);
-    
+
     @Query("SELECT dt FROM DeviceToken dt WHERE dt.user.id IN :userIds AND dt.isActive = true")
     List<DeviceToken> findActiveTokensByUserIds(@Param("userIds") List<Long> userIds);
 }

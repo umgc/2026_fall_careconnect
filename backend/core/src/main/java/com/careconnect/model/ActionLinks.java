@@ -2,7 +2,10 @@ package com.careconnect.model;
 
 import lombok.*;
 
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ActionLinks {
     private String track;
     private String deliveryInstructions;

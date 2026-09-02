@@ -13,7 +13,8 @@ public class InboxMessageDto {
     private boolean hasUnread;
 
     // Default constructor
-    public InboxMessageDto() {}
+    public InboxMessageDto() {
+    }
 
     public InboxMessageDto(Long messageId, Long peerId, String peerName, String peerEmail,
                            String peerRole, String content, LocalDateTime timestamp, boolean hasUnread) {

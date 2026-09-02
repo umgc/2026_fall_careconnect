@@ -28,10 +28,10 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * AWS WebSocket Service for Lambda environment
- *
+ * <p>
  * This service manages WebSocket connections through AWS API Gateway
  * when the backend is deployed as Lambda functions.
- *
+ * <p>
  * Connection information is persisted in PostgreSQL for durability
  * across Lambda invocations.
  */

@@ -14,11 +14,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link OpenApiConfig}.
- *
+ * <p>
  * OpenApiConfig is a pure-annotation Spring configuration class: it carries no runtime
  * bean factory methods, only Springdoc/Swagger annotations ({@code @OpenAPIDefinition},
  * {@code @SecurityScheme}) that Springdoc reads at startup to generate the OpenAPI spec.
- *
+ * <p>
  * Because the contract is expressed entirely in annotations, these tests use the Java
  * Reflection API ({@code Class.getAnnotation}, {@code Class.getAnnotationsByType}) to
  * inspect the annotations at compile time without starting a Spring context. This is the

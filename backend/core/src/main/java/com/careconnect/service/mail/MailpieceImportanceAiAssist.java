@@ -39,6 +39,79 @@ public class MailpieceImportanceAiAssist {
         this.enabled = enabled;
     }
 
+    private static String buildPrompt(
+            final String sender,
+            final String summary,
+            final String ocrText,
+            final MailpieceImportanceResult ruleHint) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("""
+                You classify USPS Informed Delivery mailpieces for a patient caregiver app.
+                Return ONLY valid JSON (no markdown) with this exact shape:
+                {
+                  "importanceLevel": "HIGH|MODERATE|LOW|UNKNOWN",
+                  "confidence": 0.0,
+                  "category": "MEDICAL|FINANCIAL|LEGAL|ADMINISTRATIVE|MARKETING|OTHER",
+                  "reasoning": "one short sentence"
+                }
+                
+                Guidelines:
+                - HIGH: medical urgency, insurance denials, legal action, collections, shutoffs
+                - MODERATE: billing statements, appointments, insurance renewals, utilities
+                - LOW: marketing, coupons, catalogs, promotions
+                - Prefer HIGH when clinically or financially material risk is likely
+                
+                """);
+        sb.append("Rule-engine hint: level=")
+                .append(ruleHint == null ? "n/a" : ruleHint.level())
+                .append(", category=")
+                .append(ruleHint == null ? "n/a" : ruleHint.category())
+                .append(", reasoning=")
+                .append(ruleHint == null ? "n/a" : ruleHint.reasoning())
+                .append('\n');
+        sb.append("Sender: ").append(nullToEmpty(sender)).append('\n');
+        sb.append("Summary: ").append(nullToEmpty(summary)).append('\n');
+        sb.append("OCR: ").append(nullToEmpty(ocrText)).append('\n');
+        return sb.toString();
+    }
+
+    private static String extractJsonObject(final String raw) {
+        final String trimmed = raw.trim();
+        final int start = trimmed.indexOf('{');
+        final int end = trimmed.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return trimmed.substring(start, end + 1);
+        }
+        return trimmed;
+    }
+
+    private static String normalizeCategory(final String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "OTHER";
+        }
+        final String value = raw.trim().toUpperCase(Locale.ROOT);
+        return switch (value) {
+            case "MEDICAL", "FINANCIAL", "LEGAL", "ADMINISTRATIVE", "MARKETING", "OTHER" -> value;
+            default -> "OTHER";
+        };
+    }
+
+    private static String text(final JsonNode node, final String field) {
+        final JsonNode child = node.path(field);
+        return child.isMissingNode() || child.isNull() ? null : child.asText(null);
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        return b;
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value.trim();
+    }
+
     public Optional<MailpieceImportanceResult> classify(
             final String sender,
             final String summary,
@@ -99,78 +172,5 @@ public class MailpieceImportanceAiAssist {
             log.debug("Unable to parse AI importance JSON: {}", ex.getMessage());
             return Optional.empty();
         }
-    }
-
-    private static String buildPrompt(
-            final String sender,
-            final String summary,
-            final String ocrText,
-            final MailpieceImportanceResult ruleHint) {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("""
-                You classify USPS Informed Delivery mailpieces for a patient caregiver app.
-                Return ONLY valid JSON (no markdown) with this exact shape:
-                {
-                  "importanceLevel": "HIGH|MODERATE|LOW|UNKNOWN",
-                  "confidence": 0.0,
-                  "category": "MEDICAL|FINANCIAL|LEGAL|ADMINISTRATIVE|MARKETING|OTHER",
-                  "reasoning": "one short sentence"
-                }
-
-                Guidelines:
-                - HIGH: medical urgency, insurance denials, legal action, collections, shutoffs
-                - MODERATE: billing statements, appointments, insurance renewals, utilities
-                - LOW: marketing, coupons, catalogs, promotions
-                - Prefer HIGH when clinically or financially material risk is likely
-
-                """);
-        sb.append("Rule-engine hint: level=")
-                .append(ruleHint == null ? "n/a" : ruleHint.level())
-                .append(", category=")
-                .append(ruleHint == null ? "n/a" : ruleHint.category())
-                .append(", reasoning=")
-                .append(ruleHint == null ? "n/a" : ruleHint.reasoning())
-                .append('\n');
-        sb.append("Sender: ").append(nullToEmpty(sender)).append('\n');
-        sb.append("Summary: ").append(nullToEmpty(summary)).append('\n');
-        sb.append("OCR: ").append(nullToEmpty(ocrText)).append('\n');
-        return sb.toString();
-    }
-
-    private static String extractJsonObject(final String raw) {
-        final String trimmed = raw.trim();
-        final int start = trimmed.indexOf('{');
-        final int end = trimmed.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return trimmed.substring(start, end + 1);
-        }
-        return trimmed;
-    }
-
-    private static String normalizeCategory(final String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "OTHER";
-        }
-        final String value = raw.trim().toUpperCase(Locale.ROOT);
-        return switch (value) {
-            case "MEDICAL", "FINANCIAL", "LEGAL", "ADMINISTRATIVE", "MARKETING", "OTHER" -> value;
-            default -> "OTHER";
-        };
-    }
-
-    private static String text(final JsonNode node, final String field) {
-        final JsonNode child = node.path(field);
-        return child.isMissingNode() || child.isNull() ? null : child.asText(null);
-    }
-
-    private static String firstNonBlank(final String a, final String b) {
-        if (a != null && !a.isBlank()) {
-            return a.trim();
-        }
-        return b;
-    }
-
-    private static String nullToEmpty(final String value) {
-        return value == null ? "" : value.trim();
     }
 }

@@ -169,13 +169,13 @@ public class SnsService {
     public String sendPushNotification(String targetArn, String title, String body, Map<String, String> data) {
         // For FCM/APNs, we need to format the message appropriately
         String jsonMessage = String.format("""
-            {
-                "GCM": "{ \\"notification\\": { \\"title\\": \\"%s\\", \\"body\\": \\"%s\\" } %s }"
-            }
-            """,
-            title.replace("\"", "\\\""),
-            body.replace("\"", "\\\""),
-            data != null && !data.isEmpty() ? ", \"data\": " + data.toString() : ""
+                        {
+                            "GCM": "{ \\"notification\\": { \\"title\\": \\"%s\\", \\"body\\": \\"%s\\" } %s }"
+                        }
+                        """,
+                title.replace("\"", "\\\""),
+                body.replace("\"", "\\\""),
+                data != null && !data.isEmpty() ? ", \"data\": " + data.toString() : ""
         );
 
         PublishRequest req = PublishRequest.builder()

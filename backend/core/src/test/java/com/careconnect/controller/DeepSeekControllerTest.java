@@ -28,11 +28,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DeepSeekControllerTest {
 
-    @Mock private DeepSeekService deepSeekService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
+    @Mock
+    private DeepSeekService deepSeekService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
 
-    @InjectMocks private DeepSeekController controller;
+    @InjectMocks
+    private DeepSeekController controller;
 
     private User adminUser;
     private User familyUser;

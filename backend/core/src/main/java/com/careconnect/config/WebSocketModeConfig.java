@@ -8,7 +8,7 @@ import org.springframework.core.env.Environment;
 
 /**
  * WebSocket Mode Configuration
- *
+ * <p>
  * Automatically determines whether to use Local or AWS WebSocket mode based on
  * environment.
  * Priority:

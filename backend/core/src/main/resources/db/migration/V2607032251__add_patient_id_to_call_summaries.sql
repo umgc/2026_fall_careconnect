@@ -17,5 +17,6 @@ ALTER TABLE call_summaries
 CREATE INDEX IF NOT EXISTS idx_call_summary_patient_id
     ON call_summaries (patient_id);
 
-COMMENT ON COLUMN call_summaries.patient_id IS
+COMMENT
+ON COLUMN call_summaries.patient_id IS
     'Patient this summary is about. Nullable for historic rows; populated for new summaries via telemetry at persist time. Correlation key for Ask AI RBAC-scoped retrieval.';

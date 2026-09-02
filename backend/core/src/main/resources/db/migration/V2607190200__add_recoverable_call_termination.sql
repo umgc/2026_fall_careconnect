@@ -10,12 +10,14 @@ ALTER TABLE call_sessions
 -- Plain statements only: SchemaPatchRunner/ScriptUtils splits on ';' and cannot
 -- execute Postgres dollar-quoted anonymous blocks.
 ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS fk_call_sessions_termination_claimed_by;
-ALTER TABLE call_sessions ADD CONSTRAINT fk_call_sessions_termination_claimed_by
-    FOREIGN KEY (termination_claimed_by_user_id) REFERENCES users(id);
+ALTER TABLE call_sessions
+    ADD CONSTRAINT fk_call_sessions_termination_claimed_by
+        FOREIGN KEY (termination_claimed_by_user_id) REFERENCES users (id);
 
 ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS ck_call_sessions_termination_attempt_count;
-ALTER TABLE call_sessions ADD CONSTRAINT ck_call_sessions_termination_attempt_count
-    CHECK (termination_attempt_count >= 0);
+ALTER TABLE call_sessions
+    ADD CONSTRAINT ck_call_sessions_termination_attempt_count
+        CHECK (termination_attempt_count >= 0);
 
 CREATE INDEX IF NOT EXISTS idx_call_sessions_termination_retry
     ON call_sessions (termination_next_retry_at, termination_lease_until)

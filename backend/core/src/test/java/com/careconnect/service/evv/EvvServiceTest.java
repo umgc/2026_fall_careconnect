@@ -51,15 +51,24 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EvvServiceTest {
 
-    @Mock private EvvRecordRepository recordRepository;
-    @Mock private EvvCorrectionRepository correctionRepository;
-    @Mock private EvvOfflineQueueRepository offlineQueueRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private EvvLocationService locationService;
-    @Mock private AuditLogger audit;
-    @Mock private ScheduledVisitRepository scheduledVisitRepository;
-    @Mock private VisitSummaryService visitSummaryService;
+    @Mock
+    private EvvRecordRepository recordRepository;
+    @Mock
+    private EvvCorrectionRepository correctionRepository;
+    @Mock
+    private EvvOfflineQueueRepository offlineQueueRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private EvvLocationService locationService;
+    @Mock
+    private AuditLogger audit;
+    @Mock
+    private ScheduledVisitRepository scheduledVisitRepository;
+    @Mock
+    private VisitSummaryService visitSummaryService;
 
     @InjectMocks
     private EvvService evvService;
@@ -539,8 +548,7 @@ class EvvServiceTest {
 
         evvService.review(1L, true, 99L, null);
 
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(audit).log(any(), eq(99L), eq("APPROVED"), captor.capture());
         assertThat(captor.getValue()).doesNotContainKey("comment");
     }
@@ -787,8 +795,7 @@ class EvvServiceTest {
 
         evvService.approveEor(req, 99L);
 
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(audit).log(any(), eq(99L), eq("EOR_APPROVED"), captor.capture());
         assertThat(captor.getValue()).doesNotContainKey("comment");
     }

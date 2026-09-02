@@ -48,7 +48,6 @@ import com.careconnect.security.Role;
 import jakarta.servlet.http.HttpServletResponse;
 
 
-
 @Service
 public class AuthService {
 
@@ -120,7 +119,7 @@ public class AuthService {
             return ResponseEntity.badRequest()
                     .body(Collections.singletonMap("error", "Invalid role specified"));
         }
-        
+
         Optional<User> existingUserOpt = userRepository.findByEmailAndRole(request.getEmail(), roleEnum);
 
         // 2. If user exists
@@ -150,7 +149,7 @@ public class AuthService {
         // 3. Normal registration flow for new users
         final String verificationToken = UUID.randomUUID().toString();
         final String encodedPassword = passwordEncoder.encode(request.getPassword());
-        
+
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(encodedPassword);  // Set both fields for consistency
@@ -195,13 +194,13 @@ public class AuthService {
                     patient.setPhone(regReq.getPhone());
                     patient.setDob(regReq.getDob());
                     patient.setAddress(
-                        new Address(
-                            regReq.getAddress().line1(),
-                            regReq.getAddress().line2(),
-                            regReq.getAddress().city(),
-                            regReq.getAddress().state(),
-                            regReq.getAddress().zip()
-                        )
+                            new Address(
+                                    regReq.getAddress().line1(),
+                                    regReq.getAddress().line2(),
+                                    regReq.getAddress().city(),
+                                    regReq.getAddress().state(),
+                                    regReq.getAddress().zip()
+                            )
                     );
                     patient.setGender(regReq.getGender());
                     patient.setEmail(request.getEmail());
@@ -231,13 +230,13 @@ public class AuthService {
                     caregiver.setDob(regReq.getDob());
                     caregiver.setPhone(regReq.getPhone());
                     caregiver.setAddress(
-                        new Address(
-                            regReq.getAddress().line1(),
-                            regReq.getAddress().line2(),
-                            regReq.getAddress().city(),
-                            regReq.getAddress().state(),
-                            regReq.getAddress().zip()
-                        )
+                            new Address(
+                                    regReq.getAddress().line1(),
+                                    regReq.getAddress().line2(),
+                                    regReq.getAddress().city(),
+                                    regReq.getAddress().state(),
+                                    regReq.getAddress().zip()
+                            )
                     );
                     caregiver.setEmail(request.getEmail());
                     caregiver.setFirstName(regReq.getFirstName());
@@ -409,103 +408,110 @@ public class AuthService {
     //         .name(name)
     //         .build();
     // }
+
     /**
- * Stateless login – issues a signed JWT in an HttpOnly cookie.
- */
-public LoginResponse loginV2(LoginRequest req,
-                             HttpServletResponse res) {
+     * Stateless login – issues a signed JWT in an HttpOnly cookie.
+     */
+    public LoginResponse loginV2(LoginRequest req,
+                                 HttpServletResponse res) {
 
-    // Fix: Use findByEmailAndRole to prevent authentication issues when multiple users 
-    // have the same email with different roles
-    User user;
-    if (req.getRole() != null && !req.getRole().trim().isEmpty()) {
-        try {
-            Role roleEnum = Role.valueOf(req.getRole().toUpperCase());
-            user = users.findByEmailAndRole(req.getEmail(), roleEnum)
-                       .orElseThrow(() -> new AuthenticationException("Invalid credentials"));
-        } catch (IllegalArgumentException e) {
-            throw new AuthenticationException("Invalid role specified");
+        // Fix: Use findByEmailAndRole to prevent authentication issues when multiple users
+        // have the same email with different roles
+        User user;
+        if (req.getRole() != null && !req.getRole().trim().isEmpty()) {
+            try {
+                Role roleEnum = Role.valueOf(req.getRole().toUpperCase());
+                user = users.findByEmailAndRole(req.getEmail(), roleEnum)
+                        .orElseThrow(() -> new AuthenticationException("Invalid credentials"));
+            } catch (IllegalArgumentException e) {
+                throw new AuthenticationException("Invalid role specified");
+            }
+        } else {
+            // Fallback to findByEmail for backward compatibility, but this may cause issues
+            // if multiple users have the same email with different roles
+            user = users.findByEmail(req.getEmail())
+                    .orElseThrow(() -> new AuthenticationException("Invalid credentials"));
         }
-    } else {
-        // Fallback to findByEmail for backward compatibility, but this may cause issues
-        // if multiple users have the same email with different roles
-        user = users.findByEmail(req.getEmail())
-                   .orElseThrow(() -> new AuthenticationException("Invalid credentials"));
-    }
 
-    if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash()))
-        throw new AuthenticationException("Invalid credentials");
+        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash()))
+            throw new AuthenticationException("Invalid credentials");
 
-    if (!user.isActive())
-        throw new AuthenticationException("Account suspended");
+        if (!user.isActive())
+            throw new AuthenticationException("Account suspended");
 
-    /* ---------------- Gamification: First Login & 5-Day Streak ---------------- */
-    gamificationService.unlockAchievement(user.getId(), "First Login", 50);
+        /* ---------------- Gamification: First Login & 5-Day Streak ---------------- */
+        gamificationService.unlockAchievement(user.getId(), "First Login", 50);
 
-    handleLoginStreak(user);
-    userRepository.save(user);
+        handleLoginStreak(user);
+        userRepository.save(user);
 
 
 
-    /* ---------------- Resolve profile info ------------------------------ */
-    Long patientId   = null;
-    Long caregiverId = null;
-    String name      = null;
+        /* ---------------- Resolve profile info ------------------------------ */
+        Long patientId = null;
+        Long caregiverId = null;
+        String name = null;
 
-    switch (user.getRole()) {
-        case PATIENT -> {
-            Patient p = patients.findByUserId(user.getId()).orElse(null);
-            if (p != null) { patientId = p.getId(); name = p.getFirstName()+" "+p.getLastName(); }
-        }
-        case CAREGIVER -> {
-            Caregiver c = caregivers.findByUserId(user.getId()).orElse(null);
-            if (c != null) { caregiverId = c.getId(); name = c.getFirstName()+" "+c.getLastName(); }
-        }
-        case FAMILY_MEMBER -> {
-            FamilyMember fm = familyMembers.findByUser(user).orElse(null);
-            if (fm != null) {
-                name = fm.getFirstName() + " " + fm.getLastName();
-                caregiverId = fm.getId(); 
+        switch (user.getRole()) {
+            case PATIENT -> {
+                Patient p = patients.findByUserId(user.getId()).orElse(null);
+                if (p != null) {
+                    patientId = p.getId();
+                    name = p.getFirstName() + " " + p.getLastName();
+                }
+            }
+            case CAREGIVER -> {
+                Caregiver c = caregivers.findByUserId(user.getId()).orElse(null);
+                if (c != null) {
+                    caregiverId = c.getId();
+                    name = c.getFirstName() + " " + c.getLastName();
+                }
+            }
+            case FAMILY_MEMBER -> {
+                FamilyMember fm = familyMembers.findByUser(user).orElse(null);
+                if (fm != null) {
+                    name = fm.getFirstName() + " " + fm.getLastName();
+                    caregiverId = fm.getId();
+                }
+            }
+            case ADMIN -> {
+                name = user.getName();
             }
         }
-        case ADMIN -> {
-            name = user.getName();
-        }
+
+        /* ---------------- Build short-lived access token -------------------- */
+        String token = jwt.createToken(user.getEmail(), user.getRole());  // 15-min exp
+
+        /* ---------------- Send it as an HttpOnly cookie --------------------- */
+        ResponseCookie cookie = ResponseCookie.from("AUTH", token)
+                .httpOnly(true)
+                .secure(false)        // disable only when running localhost over http set to true in prod
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.ofHours(3))      // upper bound of sliding window
+                .build();
+        res.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+
+        /* ---------------- Response body (unchanged) ------------------------- */
+        return LoginResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .token(token)           // optional but handy for Postman / unit tests
+                .patientId(patientId)
+                .caregiverId(caregiverId)
+                .name(name)
+                .status(user.getStatus())
+                .emailVerified(user.getIsVerified())
+                .build();
     }
-
-    /* ---------------- Build short-lived access token -------------------- */
-    String token = jwt.createToken(user.getEmail(), user.getRole());  // 15-min exp
-
-    /* ---------------- Send it as an HttpOnly cookie --------------------- */
-    ResponseCookie cookie = ResponseCookie.from("AUTH", token)
-            .httpOnly(true)
-            .secure(false)        // disable only when running localhost over http set to true in prod
-            .sameSite("Lax")
-            .path("/")
-            .maxAge(Duration.ofHours(3))      // upper bound of sliding window
-            .build();
-    res.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-
-    /* ---------------- Response body (unchanged) ------------------------- */
-    return LoginResponse.builder()
-            .id(user.getId())
-            .email(user.getEmail())
-            .role(user.getRole())
-            .token(token)           // optional but handy for Postman / unit tests
-            .patientId(patientId)
-            .caregiverId(caregiverId)
-            .name(name)
-            .status(user.getStatus())
-            .emailVerified(user.getIsVerified())
-            .build();
-}
 
     /**
      * OAuth login (Google) - no password validation required
      */
     public LoginResponse loginOAuth(String email, HttpServletResponse res) {
         User user = users.findByEmail(email)
-                         .orElseThrow(() -> new AuthenticationException("User not found"));
+                .orElseThrow(() -> new AuthenticationException("User not found"));
 
         // Skip password validation for OAuth users
         if (!user.isActive())
@@ -521,18 +527,24 @@ public LoginResponse loginV2(LoginRequest req,
 
 
         /* ---------------- Resolve profile info ------------------------------ */
-        Long patientId   = null;
+        Long patientId = null;
         Long caregiverId = null;
-        String name      = null;
+        String name = null;
 
         switch (user.getRole()) {
             case PATIENT -> {
                 Patient p = patients.findByUser(user).orElse(null);
-                if (p != null) { patientId = p.getId(); name = p.getFirstName()+" "+p.getLastName(); }
+                if (p != null) {
+                    patientId = p.getId();
+                    name = p.getFirstName() + " " + p.getLastName();
+                }
             }
             case CAREGIVER -> {
                 Caregiver c = caregivers.findByUser(user).orElse(null);
-                if (c != null) { caregiverId = c.getId(); name = c.getFirstName()+" "+c.getLastName(); }
+                if (c != null) {
+                    caregiverId = c.getId();
+                    name = c.getFirstName() + " " + c.getLastName();
+                }
             }
             case FAMILY_MEMBER -> {
                 FamilyMember fm = familyMembers.findByUser(user).orElse(null);
@@ -557,7 +569,7 @@ public LoginResponse loginV2(LoginRequest req,
                 .secure(false)        // disable only when running localhost over http set to true in prod
                 .sameSite("Lax")
                 .path("/")
-                .maxAge(Duration.ofHours(3))     
+                .maxAge(Duration.ofHours(3))
                 .build();
         res.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
@@ -566,7 +578,7 @@ public LoginResponse loginV2(LoginRequest req,
                 .id(user.getId())
                 .email(user.getEmail())
                 .role(user.getRole())
-                .token(token)           
+                .token(token)
                 .patientId(patientId)
                 .caregiverId(caregiverId)
                 .name(name)
@@ -580,7 +592,7 @@ public LoginResponse loginV2(LoginRequest req,
     public ResponseEntity<?> changePassword(String email, String currentPassword, String newPassword) {
         try {
             User user = users.findByEmail(email)
-                           .orElseThrow(() -> new AuthenticationException("User not found"));
+                    .orElseThrow(() -> new AuthenticationException("User not found"));
 
             // Verify current password
             if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
@@ -594,7 +606,7 @@ public LoginResponse loginV2(LoginRequest req,
             user.setPasswordHash(encodedNewPassword);
             userRepository.save(user);
 
-            return ResponseEntity.ok(Collections.singletonMap("message", 
+            return ResponseEntity.ok(Collections.singletonMap("message",
                     "Password changed successfully"));
 
         } catch (Exception e) {
@@ -613,7 +625,7 @@ public LoginResponse loginV2(LoginRequest req,
         // 1. Call Google's tokeninfo endpoint
         // 2. Verify the token signature
         // 3. Extract user information
-        
+
         throw new UnsupportedOperationException("Google token validation not yet implemented");
     }
 
@@ -628,7 +640,7 @@ public LoginResponse loginV2(LoginRequest req,
         }
 
         User user = userOpt.get();
-        
+
         // Set password and verify account
         String encodedPassword = passwordEncoder.encode(newPassword);
         user.setPassword(encodedPassword);
@@ -637,7 +649,7 @@ public LoginResponse loginV2(LoginRequest req,
         user.setVerificationToken(null); // Clear token so it can't be reused
         userRepository.save(user);
 
-        return ResponseEntity.ok(Collections.singletonMap("message", 
+        return ResponseEntity.ok(Collections.singletonMap("message",
                 "Password has been set successfully! You can now log in."));
     }
 
@@ -650,11 +662,11 @@ public LoginResponse loginV2(LoginRequest req,
         try {
             String redirectUri = URLEncoder.encode(backendUrl + "/v1/api/auth/sso/google/callback", StandardCharsets.UTF_8);
             return googleAuthUri + "?" +
-                   "client_id=" + googleClientId +
-                   "&redirect_uri=" + redirectUri +
-                   "&scope=openid%20email%20profile" +
-                   "&response_type=code" +
-                   "&state=" + generateSecureState();
+                    "client_id=" + googleClientId +
+                    "&redirect_uri=" + redirectUri +
+                    "&scope=openid%20email%20profile" +
+                    "&response_type=code" +
+                    "&state=" + generateSecureState();
         } catch (Exception e) {
             throw new RuntimeException("Failed to build Google OAuth URL", e);
         }
@@ -667,18 +679,18 @@ public LoginResponse loginV2(LoginRequest req,
         try {
             // Exchange authorization code for access token
             String googleAccessToken = exchangeCodeForToken(code);
-            
+
             // Get user info from Google
             Map<String, Object> userInfo = getUserInfoFromGoogle(googleAccessToken);
             String email = (String) userInfo.get("email");
-            
+
             if (email == null || email.trim().isEmpty()) {
                 throw new OAuthException("Unable to retrieve email from Google", "invalid_response");
             }
-            
+
             // Login using OAuth (no password validation)
             return loginOAuth(email, response);
-            
+
         } catch (OAuthException e) {
             // Re-throw OAuth exceptions as-is (they have specific error types)
             throw e;
@@ -690,7 +702,7 @@ public LoginResponse loginV2(LoginRequest req,
         }
     }
 
- private String exchangeCodeForToken(String code) {
+    private String exchangeCodeForToken(String code) {
         try {
             RestTemplate restTemplate = new RestTemplate();
 
@@ -710,10 +722,11 @@ public LoginResponse loginV2(LoginRequest req,
 
             // Use exchange method to send the request with explicit headers
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                googleTokenUri,
-                HttpMethod.POST,
-                requestEntity,
-                new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+                    googleTokenUri,
+                    HttpMethod.POST,
+                    requestEntity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                    }
             );
 
             // Add logging for the response body for further debugging if needed
@@ -737,7 +750,7 @@ public LoginResponse loginV2(LoginRequest req,
         } catch (HttpClientErrorException e) {
             // Catch specific HTTP client errors (like 400 BAD REQUEST)
             String responseBody = e.getResponseBodyAsString();
-            
+
             if (e.getStatusCode().value() == 400) {
                 if (responseBody.contains("invalid_grant")) {
                     throw new OAuthException("Authorization code has expired or is invalid", "invalid_grant", e);
@@ -769,10 +782,11 @@ public LoginResponse loginV2(LoginRequest req,
 
             RestTemplate restTemplate = new RestTemplate();
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                userInfoUrl,
-                HttpMethod.GET,
-                null,
-                new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+                    userInfoUrl,
+                    HttpMethod.GET,
+                    null,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                    }
             );
 
             if (response.getBody() == null) {
@@ -780,7 +794,7 @@ public LoginResponse loginV2(LoginRequest req,
             }
 
             return response.getBody();
-            
+
         } catch (HttpClientErrorException e) {
             // Handle HTTP client errors when calling Google's user info endpoint
             if (e.getStatusCode().value() == 401) {

@@ -79,10 +79,10 @@ public class AlexaCodeStoreService {
 
     /**
      * Service for collecting anonymized analytics from chat conversations
-     *
+     * <p>
      * Privacy Policy: Only aggregated, anonymized statistics are retained long-term.
      * No individual user data, conversation content, or personal information is stored.
-     *
+     * <p>
      * Analytics collected:
      * - Usage patterns (time of day, session length)
      * - Topic categories (medication questions, symptom tracking, etc.)
@@ -106,26 +106,26 @@ public class AlexaCodeStoreService {
             try {
                 // Create anonymized analytics record
                 ChatAnalytics analytics = ChatAnalytics.builder()
-                    .sessionId(UUID.randomUUID().toString()) // Anonymized session ID
-                    .sessionDate(conversation.getCreatedAt().toLocalDate())
-                    .sessionHour(conversation.getCreatedAt().getHour())
-                    .sessionDurationMinutes(calculateSessionDuration(conversation))
-                    .messageCount(messages.size())
-                    .userMessageCount(countUserMessages(messages))
-                    .aiMessageCount(countAiMessages(messages))
-                    .topicCategories(extractTopicCategories(messages))
-                    .averageResponseTimeMs(calculateAverageResponseTime(messages))
-                    .conversationType(conversation.getChatType().toString())
-                    .isSharedWithProvider(false) // Will be updated if shared
-                    .createdAt(LocalDateTime.now())
-                    .build();
+                        .sessionId(UUID.randomUUID().toString()) // Anonymized session ID
+                        .sessionDate(conversation.getCreatedAt().toLocalDate())
+                        .sessionHour(conversation.getCreatedAt().getHour())
+                        .sessionDurationMinutes(calculateSessionDuration(conversation))
+                        .messageCount(messages.size())
+                        .userMessageCount(countUserMessages(messages))
+                        .aiMessageCount(countAiMessages(messages))
+                        .topicCategories(extractTopicCategories(messages))
+                        .averageResponseTimeMs(calculateAverageResponseTime(messages))
+                        .conversationType(conversation.getChatType().toString())
+                        .isSharedWithProvider(false) // Will be updated if shared
+                        .createdAt(LocalDateTime.now())
+                        .build();
 
                 // Store analytics (this would be a separate table in real implementation)
                 logAnalytics(analytics);
 
             } catch (Exception e) {
                 log.error("Error collecting analytics for conversation: {}",
-                    conversation.getConversationId(), e);
+                        conversation.getConversationId(), e);
             }
         }
 
@@ -136,15 +136,15 @@ public class AlexaCodeStoreService {
             // In a real implementation, this would query the analytics table
             // For now, return sample aggregated data
             return Map.of(
-                "totalSessions", 0,
-                "averageSessionDuration", 0,
-                "mostCommonTopics", List.of(),
-                "peakUsageHours", List.of(),
-                "userSatisfactionScore", 0.0,
-                "systemPerformance", Map.of(
-                    "averageResponseTime", 0,
-                    "errorRate", 0.0
-                )
+                    "totalSessions", 0,
+                    "averageSessionDuration", 0,
+                    "mostCommonTopics", List.of(),
+                    "peakUsageHours", List.of(),
+                    "userSatisfactionScore", 0.0,
+                    "systemPerformance", Map.of(
+                            "averageResponseTime", 0,
+                            "errorRate", 0.0
+                    )
             );
         }
 
@@ -193,8 +193,8 @@ public class AlexaCodeStoreService {
         private int calculateSessionDuration(ChatConversation conversation) {
             if (conversation.getUpdatedAt() != null && conversation.getCreatedAt() != null) {
                 return (int) java.time.Duration.between(
-                    conversation.getCreatedAt(),
-                    conversation.getUpdatedAt()
+                        conversation.getCreatedAt(),
+                        conversation.getUpdatedAt()
                 ).toMinutes();
             }
             return 0;
@@ -202,38 +202,38 @@ public class AlexaCodeStoreService {
 
         private int countUserMessages(List<ChatMessage> messages) {
             return (int) messages.stream()
-                .filter(msg -> msg.getMessageType() == ChatMessage.MessageType.USER)
-                .count();
+                    .filter(msg -> msg.getMessageType() == ChatMessage.MessageType.USER)
+                    .count();
         }
 
         private int countAiMessages(List<ChatMessage> messages) {
             return (int) messages.stream()
-                .filter(msg -> msg.getMessageType() == ChatMessage.MessageType.ASSISTANT)
-                .count();
+                    .filter(msg -> msg.getMessageType() == ChatMessage.MessageType.ASSISTANT)
+                    .count();
         }
 
         private long calculateAverageResponseTime(List<ChatMessage> messages) {
             List<Long> responseTimes = messages.stream()
-                .filter(msg -> msg.getMessageType() == ChatMessage.MessageType.ASSISTANT)
-                .filter(msg -> msg.getProcessingTimeMs() != null)
-                .map(ChatMessage::getProcessingTimeMs)
-                .collect(Collectors.toList());
+                    .filter(msg -> msg.getMessageType() == ChatMessage.MessageType.ASSISTANT)
+                    .filter(msg -> msg.getProcessingTimeMs() != null)
+                    .map(ChatMessage::getProcessingTimeMs)
+                    .collect(Collectors.toList());
 
             if (responseTimes.isEmpty()) return 0;
 
             return responseTimes.stream()
-                .mapToLong(Long::longValue)
-                .sum() / responseTimes.size();
+                    .mapToLong(Long::longValue)
+                    .sum() / responseTimes.size();
         }
 
         private void logAnalytics(ChatAnalytics analytics) {
             // In a real implementation, this would save to an analytics table
             log.info("Analytics collected: Session={}, Date={}, Duration={}min, Messages={}, Topics={}",
-                analytics.getSessionId(),
-                analytics.getSessionDate(),
-                analytics.getSessionDurationMinutes(),
-                analytics.getMessageCount(),
-                analytics.getTopicCategories());
+                    analytics.getSessionId(),
+                    analytics.getSessionDate(),
+                    analytics.getSessionDurationMinutes(),
+                    analytics.getMessageCount(),
+                    analytics.getTopicCategories());
         }
 
         /**

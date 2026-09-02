@@ -35,21 +35,32 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class CallNotificationHandlerTest {
 
-    @Mock UserRepository                  userRepository;
-    @Mock JwtTokenProvider                jwtTokenProvider;
-    @Mock CallTelemetryService            callTelemetryService;
-    @Mock CaregiverPatientLinkService     caregiverPatientLinkService;
-    @Mock WebSocketSession                session;
-    @Mock WebSocketSession                recipientSession;
-    @Mock User                            user;
-    @Mock User                            recipientUser;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    JwtTokenProvider jwtTokenProvider;
+    @Mock
+    CallTelemetryService callTelemetryService;
+    @Mock
+    CaregiverPatientLinkService caregiverPatientLinkService;
+    @Mock
+    WebSocketSession session;
+    @Mock
+    WebSocketSession recipientSession;
+    @Mock
+    User user;
+    @Mock
+    User recipientUser;
 
-    @InjectMocks CallNotificationHandler handler;
+    @InjectMocks
+    CallNotificationHandler handler;
 
     //  helpers 
 
-    /** Authenticate `sess` as `usr` (userId, email). Stubs are lenient so they
-     *  can safely be declared even when not exercised by a particular code path. */
+    /**
+     * Authenticate `sess` as `usr` (userId, email). Stubs are lenient so they
+     * can safely be declared even when not exercised by a particular code path.
+     */
     private void authenticate(WebSocketSession sess, String sessionId,
                               User usr, Long userId, String email, String token) throws Exception {
         lenient().when(sess.getId()).thenReturn(sessionId);

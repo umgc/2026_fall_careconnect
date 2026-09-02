@@ -51,7 +51,7 @@ class WebSocketNotificationServiceTest {
     // ── sendCallInvitation ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendCallInvitation_validParams_sendsNotification")
     void sendCallInvitation_validParams_sendsNotification() throws Exception {
         webSocketNotificationService.sendCallInvitation(
@@ -63,7 +63,7 @@ class WebSocketNotificationServiceTest {
     // ── sendSMSNotification ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendSMSNotification_validParams_sendsNotification")
     void sendSMSNotification_validParams_sendsNotification() throws Exception {
         webSocketNotificationService.sendSMSNotification(
@@ -75,7 +75,7 @@ class WebSocketNotificationServiceTest {
     // ── sendAIChatNotification ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendAIChatNotification_validParams_sendsRealTimeUpdate")
     void sendAIChatNotification_validParams_sendsRealTimeUpdate() throws Exception {
         webSocketNotificationService.sendAIChatNotification("user1", "conv123", "AI response here");
@@ -86,7 +86,7 @@ class WebSocketNotificationServiceTest {
     // ── sendMoodPainLogUpdate ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendMoodPainLogUpdate_validParams_sendsRealTimeUpdate")
     void sendMoodPainLogUpdate_validParams_sendsRealTimeUpdate() throws Exception {
         webSocketNotificationService.sendMoodPainLogUpdate("patient1", "John Doe", 7, 3);
@@ -97,7 +97,7 @@ class WebSocketNotificationServiceTest {
     // ── sendMedicationReminder ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendMedicationReminder_validParams_sendsRealTimeUpdate")
     void sendMedicationReminder_validParams_sendsRealTimeUpdate() throws Exception {
         webSocketNotificationService.sendMedicationReminder("patient1", "Metformin", "08:00", "500mg");
@@ -108,7 +108,7 @@ class WebSocketNotificationServiceTest {
     // ── sendVitalSignsAlert ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendVitalSignsAlert_multipleRecipients_sendsToAll")
     void sendVitalSignsAlert_multipleRecipients_sendsToAll() throws Exception {
         final String[] recipientIds = {"doc1", "doc2", "doc3"};
@@ -123,7 +123,7 @@ class WebSocketNotificationServiceTest {
     }
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendVitalSignsAlert_singleRecipient_sendsToOne")
     void sendVitalSignsAlert_singleRecipient_sendsToOne() throws Exception {
         final String[] recipientIds = {"doc1"};
@@ -137,7 +137,7 @@ class WebSocketNotificationServiceTest {
     // ── sendFamilyMemberRequest ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendFamilyMemberRequest_validParams_sendsRealTimeUpdate")
     void sendFamilyMemberRequest_validParams_sendsRealTimeUpdate() throws Exception {
         webSocketNotificationService.sendFamilyMemberRequest(
@@ -149,7 +149,7 @@ class WebSocketNotificationServiceTest {
     // ── sendEmergencyAlert ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendEmergencyAlert_multipleContacts_sendsToAll")
     void sendEmergencyAlert_multipleContacts_sendsToAll() throws Exception {
         final String[] contactIds = {"contact1", "contact2"};
@@ -161,7 +161,7 @@ class WebSocketNotificationServiceTest {
     }
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendEmergencyAlert_emptyContacts_sendsToNone")
     void sendEmergencyAlert_emptyContacts_sendsToNone() throws Exception {
         final String[] contactIds = {};
@@ -175,7 +175,7 @@ class WebSocketNotificationServiceTest {
     // ── sendAppointmentReminder ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendAppointmentReminder_validParams_sendsRealTimeUpdate")
     void sendAppointmentReminder_validParams_sendsRealTimeUpdate() throws Exception {
         webSocketNotificationService.sendAppointmentReminder(
@@ -187,7 +187,7 @@ class WebSocketNotificationServiceTest {
     // ── broadcastSystemAnnouncement ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("broadcastSystemAnnouncement_validParams_broadcastsToAll")
     void broadcastSystemAnnouncement_validParams_broadcastsToAll() throws Exception {
         webSocketNotificationService.broadcastSystemAnnouncement(
@@ -241,7 +241,7 @@ class WebSocketNotificationServiceTest {
     // ── sendSOSCallToAllCaregivers ──
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendSOSCallToAllCaregivers_caregiversExist_sendsToAll")
     void sendSOSCallToAllCaregivers_caregiversExist_sendsToAll() throws Exception {
         final CaregiverPatientLinkResponse link1 = new CaregiverPatientLinkResponse(
@@ -265,7 +265,7 @@ class WebSocketNotificationServiceTest {
     }
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendSOSCallToAllCaregivers_noCaregiversFound_returnsZero")
     void sendSOSCallToAllCaregivers_noCaregiversFound_returnsZero() throws Exception {
         when(caregiverPatientLinkService.getCaregiversByPatient(1L))
@@ -296,7 +296,7 @@ class WebSocketNotificationServiceTest {
     }
 
     @SuppressWarnings("unchecked")
-@Test
+    @Test
     @DisplayName("sendSOSCallToAllCaregivers_sendCallInvitationThrows_continuesAndCountsSuccesses")
     void sendSOSCallToAllCaregivers_sendCallInvitationThrows_continuesAndCountsSuccesses() throws Exception {
         final CaregiverPatientLinkResponse link1 = new CaregiverPatientLinkResponse(

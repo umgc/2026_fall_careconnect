@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 /**
  * Development data loader that automatically injects mock data into the database
  * when running in dev profile with an empty database.
- *
+ * <p>
  * This component loads the mock_data.sql file from src/main/resources/db/mock_data.sql
  * and executes it only if the database has no users (empty state).
  */
@@ -72,26 +72,26 @@ public class DevDataLoader implements CommandLineRunner {
                 int symptomCount = getTableCount(stmt, "symptom_entry");
                 int subscriptionCount = getTableCount(stmt, "subscriptions");
                 int activeCaregiverLinkCount = getConditionalCount(
-                    stmt,
-                    "caregiver_patient_link",
-                    "status = 'ACTIVE'"
+                        stmt,
+                        "caregiver_patient_link",
+                        "status = 'ACTIVE'"
                 );
                 int activeFamilyLinkCount = getConditionalCount(
-                    stmt,
-                    "family_member_link",
-                    "status = 'ACTIVE'"
+                        stmt,
+                        "family_member_link",
+                        "status = 'ACTIVE'"
                 );
 
                 boolean seedDataIncomplete = planCount == 0
                         || medicationCount == 0
                         || symptomCount == 0
-                    || subscriptionCount == 0
-                    || activeCaregiverLinkCount == 0
-                    || activeFamilyLinkCount == 0;
+                        || subscriptionCount == 0
+                        || activeCaregiverLinkCount == 0
+                        || activeFamilyLinkCount == 0;
 
                 if (seedDataIncomplete) {
                     log.info("Detected incomplete seed data. plan={}, patient_medication={}, symptom_entry={}, subscriptions={}, active_caregiver_links={}, active_family_links={}. Running mock data repair.",
-                        planCount, medicationCount, symptomCount, subscriptionCount, activeCaregiverLinkCount, activeFamilyLinkCount);
+                            planCount, medicationCount, symptomCount, subscriptionCount, activeCaregiverLinkCount, activeFamilyLinkCount);
                 }
 
                 return seedDataIncomplete;

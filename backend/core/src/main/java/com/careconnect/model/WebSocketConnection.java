@@ -14,10 +14,10 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "websocket_connections", indexes = {
-    @Index(name = "idx_connection_id", columnList = "connection_id"),
-    @Index(name = "idx_user_email", columnList = "user_email"),
-    @Index(name = "idx_subscription_type", columnList = "subscription_type"),
-    @Index(name = "idx_expires_at", columnList = "expires_at")
+        @Index(name = "idx_connection_id", columnList = "connection_id"),
+        @Index(name = "idx_user_email", columnList = "user_email"),
+        @Index(name = "idx_subscription_type", columnList = "subscription_type"),
+        @Index(name = "idx_expires_at", columnList = "expires_at")
 })
 @Data
 @Builder

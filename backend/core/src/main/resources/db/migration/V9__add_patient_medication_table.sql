@@ -20,7 +20,7 @@ CREATE TABLE patient_medication
 );
 
 
-CREATE INDEX idx_patient_medication_patient_id ON patient_medication(patient_id);
-CREATE INDEX idx_patient_medication_active ON patient_medication(patient_id, is_active);
-CREATE INDEX idx_patient_medication_type ON patient_medication(medication_type);
-CREATE INDEX idx_patient_medication_name ON patient_medication(medication_name);
+CREATE INDEX idx_patient_medication_patient_id ON patient_medication (patient_id);
+CREATE INDEX idx_patient_medication_active ON patient_medication (patient_id, is_active);
+CREATE INDEX idx_patient_medication_type ON patient_medication (medication_type);
+CREATE INDEX idx_patient_medication_name ON patient_medication (medication_name);

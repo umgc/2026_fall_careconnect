@@ -26,14 +26,18 @@ public class TelemetryService {
     private static final List<String> allowedEvents = List.of("privacy_telemetry_toggle", "screen_view", "button_tap", "error_network", "error_timeout", "offline_toggled", "feature_use", "sync_started", "sync_completed", "sync_failed", "session_start", "session_end",
             // Feature analytics (anonymous)
             "feature.medications.view_all", "feature.medications.view_active", "feature.medications.view_pending", "feature.medications.add", "feature.medications.approve", "feature.medications.delete_soft", "feature.medications.delete_hard");
+    
     /* A list of all known telemetry properties */
     private static final List<String> allowedDetails = List.of("source", "target", "reason", "screen", "feature", "method", "endpoint", "timeoutMs", "statusCode", "errorType", "setting", "enabled", "route", "button_name", "scope", "pendingCount", "attempted", "failed", "succeeded");
+    
     /* A list of all known telemetry deviceInfo details */
     private static final List<String> allowedDeviceInfo = List.of("uiSurface", "platform", "isWeb", "debug");
+    
     /**
      * Repository used to persist telemetry events.
      */
     private final TelemetryEventRepository repository;
+
     /**
      * Feature toggle used to enable or disable telemetry collection.
      */

@@ -26,7 +26,7 @@ import java.util.Map;
 
 /**
  * WBS 3.15.5: defaults to denial + grant + revoke + pre-share review gate
- *
+ * <p>
  * {@link #canViewSummaries} is true only when a GRANTED row exists
  * State transitions go through {@link #submitForReview} then {@link #grant} or {@link #revoke}
  * Every transition writes a CAREGIVER_VISIBILITY event to the audit ledger
@@ -36,13 +36,37 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CaregiverVisibilityService {
 
+    private static final String REFERENCE_PREFIX = "visibility";
     private final CaregiverSummaryVisibilityRepository repository;
     private final ConfirmationService confirmationService;
     private final AiAuditLedgerService auditLedgerService;
     private final UserRepository userRepository;
     private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
 
-    /** Default-deny check used at summary-retrieval time. */
+    /**
+     * Parses a confirmation referenceId of the form
+     * {@code visibility:{caregiverUserId}:{patientUserId}} into
+     * {@code [caregiverUserId, patientUserId]}, or null when it does not match.
+     * Co-located with {@link #referenceId} so the encoding lives in one place.
+     */
+    public static Long[] parseVisibilityReference(String referenceId) {
+        if (referenceId == null) {
+            return null;
+        }
+        String[] parts = referenceId.split(":");
+        if (parts.length != 3 || !REFERENCE_PREFIX.equals(parts[0])) {
+            return null;
+        }
+        try {
+            return new Long[]{Long.parseLong(parts[1]), Long.parseLong(parts[2])};
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * Default-deny check used at summary-retrieval time.
+     */
     @Transactional(readOnly = true)
     public boolean canViewSummaries(Long caregiverUserId, Long patientUserId) {
         return repository.existsByCaregiverUserIdAndPatientUserIdAndStatus(
@@ -81,7 +105,9 @@ public class CaregiverVisibilityService {
         return toResponse(saved);
     }
 
-    /** Approve the review gate: caregiver may now view the patient's summaries. */
+    /**
+     * Approve the review gate: caregiver may now view the patient's summaries.
+     */
     @Transactional
     public VisibilityResponse grant(Long caregiverUserId, Long patientUserId, Long reviewerUserId) {
         CaregiverSummaryVisibility record = repository
@@ -124,7 +150,9 @@ public class CaregiverVisibilityService {
         return saved;
     }
 
-    /** Revoke access. Idempotent-ish: allowed from any current status. */
+    /**
+     * Revoke access. Idempotent-ish: allowed from any current status.
+     */
     @Transactional
     public VisibilityResponse revoke(Long caregiverUserId, Long patientUserId, Long reviewerUserId) {
         CaregiverSummaryVisibility saved = transition(
@@ -173,7 +201,9 @@ public class CaregiverVisibilityService {
         }
     }
 
-    /** A pre-share review may only be opened for an existing active caregiver-patient link. */
+    /**
+     * A pre-share review may only be opened for an existing active caregiver-patient link.
+     */
     private void requireCaregiverPatientLink(Long caregiverUserId, Long patientUserId) {
         User caregiver = userRepository.findById(caregiverUserId)
                 .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST,
@@ -189,31 +219,8 @@ public class CaregiverVisibilityService {
         }
     }
 
-    private static final String REFERENCE_PREFIX = "visibility";
-
     private String referenceId(Long caregiverUserId, Long patientUserId) {
         return REFERENCE_PREFIX + ":" + caregiverUserId + ":" + patientUserId;
-    }
-
-    /**
-     * Parses a confirmation referenceId of the form
-     * {@code visibility:{caregiverUserId}:{patientUserId}} into
-     * {@code [caregiverUserId, patientUserId]}, or null when it does not match.
-     * Co-located with {@link #referenceId} so the encoding lives in one place.
-     */
-    public static Long[] parseVisibilityReference(String referenceId) {
-        if (referenceId == null) {
-            return null;
-        }
-        String[] parts = referenceId.split(":");
-        if (parts.length != 3 || !REFERENCE_PREFIX.equals(parts[0])) {
-            return null;
-        }
-        try {
-            return new Long[] { Long.parseLong(parts[1]), Long.parseLong(parts[2]) };
-        } catch (NumberFormatException ex) {
-            return null;
-        }
     }
 
     private void audit(AuditEventType eventType, Long actorUserId, Long patientId,

@@ -14,12 +14,12 @@ ALTER TABLE family_member_link
 -- );
 
 -- Add index for faster queries
-CREATE INDEX idx_family_member_link_patient_id ON family_member_link(patient_id);
+CREATE INDEX idx_family_member_link_patient_id ON family_member_link (patient_id);
 
 -- Add foreign key constraint
 ALTER TABLE family_member_link
     ADD CONSTRAINT fk_family_member_link_patient_id
-        FOREIGN KEY (patient_id) REFERENCES patient(id);
+        FOREIGN KEY (patient_id) REFERENCES patient (id);
 
 -- Add unique constraint to prevent duplicate family member-patient links
 -- This ensures the same family member (by user) cannot be linked to the same patient multiple times
@@ -32,4 +32,5 @@ ALTER TABLE family_member_link
         UNIQUE (family_user_id, patient_id);
 
 -- Add column comment (PostgreSQL syntax)
-COMMENT ON COLUMN family_member_link.patient_id IS 'Denormalized patient ID for faster queries without joins';
+COMMENT
+ON COLUMN family_member_link.patient_id IS 'Denormalized patient ID for faster queries without joins';

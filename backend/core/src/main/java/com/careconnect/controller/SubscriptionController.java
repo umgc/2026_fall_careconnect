@@ -2,6 +2,7 @@ package com.careconnect.controller;
 
 import java.util.Map;
 import java.util.List;
+
 import com.careconnect.model.Subscription;
 import com.careconnect.model.Plan;
 import com.careconnect.repository.PlanRepository;
@@ -29,10 +30,10 @@ public class SubscriptionController {
     private final SubscriptionRepository subscriptionRepository;
 
     public SubscriptionController(
-        SubscriptionEnrichmentService subscriptionEnrichmentService,
-        PlanRepository planRepository,
-        SubscriptionRepository subscriptionRepository,
-        SubscriptionService subscriptionService
+            SubscriptionEnrichmentService subscriptionEnrichmentService,
+            PlanRepository planRepository,
+            SubscriptionRepository subscriptionRepository,
+            SubscriptionService subscriptionService
     ) {
         this.subscriptionEnrichmentService = subscriptionEnrichmentService;
         this.planRepository = planRepository;
@@ -49,9 +50,9 @@ public class SubscriptionController {
             return Long.parseLong(id);
         } catch (NumberFormatException e) {
             Subscription sub = subscriptionRepository.findAll().stream()
-                .filter(s -> id.equals(s.getExternalSubscriptionId()) || id.equals(s.getPaymentSubscriptionId()))
-                .findFirst()
-                .orElse(null);
+                    .filter(s -> id.equals(s.getExternalSubscriptionId()) || id.equals(s.getPaymentSubscriptionId()))
+                    .findFirst()
+                    .orElse(null);
             return sub != null ? sub.getId() : null;
         }
     }
@@ -61,17 +62,17 @@ public class SubscriptionController {
     public ResponseEntity<List<PlanDTO>> listPlans() {
         List<Plan> activePlans = planRepository.findByIsActiveTrue();
         List<PlanDTO> dtos = activePlans.stream()
-            .map(p -> new PlanDTO(
-                String.valueOf(p.getId()),
-                p.getIsActive() != null && p.getIsActive(),
-                p.getPriceCents() != null ? p.getPriceCents() : 0,
-                "usd",
-                p.getBillingPeriod() != null ? p.getBillingPeriod().toLowerCase() : "month",
-                1,
-                String.valueOf(p.getId()),
-                p.getName()
-            ))
-            .toList();
+                .map(p -> new PlanDTO(
+                        String.valueOf(p.getId()),
+                        p.getIsActive() != null && p.getIsActive(),
+                        p.getPriceCents() != null ? p.getPriceCents() : 0,
+                        "usd",
+                        p.getBillingPeriod() != null ? p.getBillingPeriod().toLowerCase() : "month",
+                        1,
+                        String.valueOf(p.getId()),
+                        p.getName()
+                ))
+                .toList();
         return ResponseEntity.ok(dtos);
     }
 
@@ -85,15 +86,15 @@ public class SubscriptionController {
             }
 
             Subscription sub = subscriptionRepository.findById(subscriptionId)
-                .orElseThrow(() -> new IllegalArgumentException("Subscription not found"));
+                    .orElseThrow(() -> new IllegalArgumentException("Subscription not found"));
 
             sub.setStatus("CANCELLED");
             sub.setCurrentPeriodEnd(null);
             subscriptionRepository.save(sub);
 
             return ResponseEntity.ok().body(Map.of(
-                "message", "Subscription cancelled successfully",
-                "subscriptionId", id
+                    "message", "Subscription cancelled successfully",
+                    "subscriptionId", id
             ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(ERROR_KEY, "Failed to cancel subscription: " + e.getMessage()));

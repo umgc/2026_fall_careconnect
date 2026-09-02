@@ -3,7 +3,8 @@ package com.careconnect.dto;
 import java.util.List;
 
 public record PatientWithLinkDto(
-    PatientSummaryDTO patient,
-    CaregiverPatientLinkResponse link,
-    List<PatientRiskResponseDto> flaggedRisks
-) {}
+        PatientSummaryDTO patient,
+        CaregiverPatientLinkResponse link,
+        List<PatientRiskResponseDto> flaggedRisks
+) {
+}

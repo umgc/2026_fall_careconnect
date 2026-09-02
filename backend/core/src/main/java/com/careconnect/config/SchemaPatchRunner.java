@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  * tables, with this runner supplying idempotent patches (indexes, extensions, FKs, and
  * other DDL Hibernate will not create). Required production changes additionally use a
  * bounded PostgreSQL advisory lock.
- *
+ * <p>
  * Each patch is idempotent: safe to execute on every restart.
  */
 @Slf4j
@@ -49,135 +49,227 @@ public class SchemaPatchRunner implements CommandLineRunner {
         this.patchLedger = patchLedger;
     }
 
+    /**
+     * Soft patches may skip only when the failure means the change is already present or
+     * an optional legacy object is already gone. Failed CREATE/ADD because a type, table,
+     * or dependency is missing must remain a warning (not "already applied").
+     */
+    static boolean isIdempotentAlreadyApplied(final String message, final String sql) {
+        final String msg = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        final String lowerSql = sql == null ? "" : sql.toLowerCase(Locale.ROOT);
+        if (msg.contains("42p16")
+                || msg.contains("already exists")
+                || (msg.contains("already") && msg.contains("duplicate"))) {
+            return true;
+        }
+        if (msg.contains("already") && !msg.contains("does not exist")) {
+            return true;
+        }
+        if (!msg.contains("does not exist")) {
+            return false;
+        }
+        return looksLikeOptionalDropOrRename(lowerSql);
+    }
+
+    private static boolean looksLikeOptionalDropOrRename(final String lowerSql) {
+        return lowerSql.contains("drop constraint")
+                || lowerSql.contains("drop column")
+                || lowerSql.contains("drop index")
+                || lowerSql.contains("drop not null")
+                || lowerSql.contains("rename column")
+                || (lowerSql.contains("alter column") && lowerSql.contains("drop"));
+    }
+
+    static String normalizeIndexDefinition(final String definition, final String schema) {
+        String normalized = definition.toLowerCase(Locale.ROOT);
+        normalized = normalized.replace("\"", "");
+        normalized = normalized.replace(" concurrently", "");
+        normalized = normalized.replace(" if not exists", "");
+        normalized = normalized.replace(" using btree", "");
+        normalized = normalized.replace(" asc", "");
+        if (schema != null && !schema.isBlank()) {
+            normalized = normalized.replace(schema.toLowerCase(Locale.ROOT) + ".", "");
+        }
+        normalized = POSTGRES_TEXT_CAST.matcher(normalized).replaceAll("");
+        normalized = QUOTED_NUMBER.matcher(normalized).replaceAll("$1");
+        return normalized.replaceAll("[\\s()]+", "");
+    }
+
+    static void configureDdlTimeouts(final Statement stmt) throws Exception {
+        final String database = stmt.getConnection().getMetaData().getDatabaseProductName();
+        if (database != null
+                && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")) {
+            stmt.execute("SET lock_timeout = '5s'");
+            stmt.execute("SET statement_timeout = '5min'");
+        }
+    }
+
+    private static String foreignKeyIfMissing(
+            final String constraint,
+            final String table,
+            final String column,
+            final String referencedTable,
+            final String referencedColumn,
+            final String suffix) {
+        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c " +
+                "WHERE c.conrelid = '" + table + "'::regclass " +
+                "AND c.confrelid = '" + referencedTable + "'::regclass " +
+                "AND c.contype = 'f' " +
+                "AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute " +
+                "WHERE attrelid = '" + table + "'::regclass AND attname = '" +
+                column + "')]::smallint[] " +
+                "AND c.confkey = ARRAY[(SELECT attnum FROM pg_attribute " +
+                "WHERE attrelid = '" + referencedTable + "'::regclass AND attname = '" +
+                referencedColumn + "')]::smallint[] " +
+                "AND c.confdeltype = '" + (suffix.contains("CASCADE") ? "c" : "a") +
+                "') THEN " +
+                "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint +
+                " FOREIGN KEY (" + column + ") REFERENCES " + referencedTable +
+                " (" + referencedColumn + ")" + suffix + "; END IF; END $$;";
+    }
+
+    /**
+     * Catalog IDs the runner guarantees to apply under the production migration lock.
+     */
+    static List<String> catalogPatchIdsAppliedByRunner() {
+        return SchemaPatchCatalog.PATCHES.stream().map(SchemaPatchLedger.Patch::id).toList();
+    }
+
+    private static String applicationVersion() {
+        final Package applicationPackage = SchemaPatchRunner.class.getPackage();
+        final String version = applicationPackage.getImplementationVersion();
+        return version == null || version.isBlank() ? "development" : version;
+    }
+
     @Override
     public void run(String... args) {
         applyPatch(
-            "V55 – allow NULL file_data for S3 storage",
-            "ALTER TABLE user_files ALTER COLUMN file_data DROP NOT NULL"
+                "V55 – allow NULL file_data for S3 storage",
+                "ALTER TABLE user_files ALTER COLUMN file_data DROP NOT NULL"
         );
         applyPatch(
-            "V55b – create evv_outbox table",
-            "CREATE TABLE IF NOT EXISTS evv_outbox (" +
-            "  id            BIGSERIAL PRIMARY KEY," +
-            "  evv_record_id BIGINT NOT NULL REFERENCES evv_record(id)," +
-            "  destination   VARCHAR(64) NOT NULL," +
-            "  payload       JSONB NOT NULL," +
-            "  status        VARCHAR(32) NOT NULL DEFAULT 'READY'," +
-            "  attempts      INT NOT NULL DEFAULT 0," +
-            "  last_error    TEXT," +
-            "  created_at    TIMESTAMP WITH TIME ZONE DEFAULT now()," +
-            "  updated_at    TIMESTAMP WITH TIME ZONE DEFAULT now()" +
-            ")"
+                "V55b – create evv_outbox table",
+                "CREATE TABLE IF NOT EXISTS evv_outbox (" +
+                        "  id            BIGSERIAL PRIMARY KEY," +
+                        "  evv_record_id BIGINT NOT NULL REFERENCES evv_record(id)," +
+                        "  destination   VARCHAR(64) NOT NULL," +
+                        "  payload       JSONB NOT NULL," +
+                        "  status        VARCHAR(32) NOT NULL DEFAULT 'READY'," +
+                        "  attempts      INT NOT NULL DEFAULT 0," +
+                        "  last_error    TEXT," +
+                        "  created_at    TIMESTAMP WITH TIME ZONE DEFAULT now()," +
+                        "  updated_at    TIMESTAMP WITH TIME ZONE DEFAULT now()" +
+                        ")"
         );
         applyPatch(
-            "V55c – index on evv_outbox(status)",
-            "CREATE INDEX IF NOT EXISTS idx_outbox_status ON evv_outbox(status)"
+                "V55c – index on evv_outbox(status)",
+                "CREATE INDEX IF NOT EXISTS idx_outbox_status ON evv_outbox(status)"
         );
         applyPatch(
-            "V62a – create risk_types table",
-            "CREATE TABLE IF NOT EXISTS risk_types (" +
-            "  id BIGSERIAL PRIMARY KEY," +
-            "  name VARCHAR(100) NOT NULL UNIQUE" +
-            ")"
+                "V62a – create risk_types table",
+                "CREATE TABLE IF NOT EXISTS risk_types (" +
+                        "  id BIGSERIAL PRIMARY KEY," +
+                        "  name VARCHAR(100) NOT NULL UNIQUE" +
+                        ")"
         );
         applyPatch(
-            "V62b – seed predefined risk types",
-            "INSERT INTO risk_types (name) VALUES " +
-            "('Aspiration Pneumonia')," +
-            "('Elopement')," +
-            "('Fall with Injury')," +
-            "('Self-Harm')," +
-            "('Seizures') " +
-            "ON CONFLICT (name) DO NOTHING"
+                "V62b – seed predefined risk types",
+                "INSERT INTO risk_types (name) VALUES " +
+                        "('Aspiration Pneumonia')," +
+                        "('Elopement')," +
+                        "('Fall with Injury')," +
+                        "('Self-Harm')," +
+                        "('Seizures') " +
+                        "ON CONFLICT (name) DO NOTHING"
         );
         applyPatch(
-            "V70a – rename stripe_customer_id → payment_customer_id on users",
-            "ALTER TABLE users RENAME COLUMN stripe_customer_id TO payment_customer_id"
+                "V70a – rename stripe_customer_id → payment_customer_id on users",
+                "ALTER TABLE users RENAME COLUMN stripe_customer_id TO payment_customer_id"
         );
         applyPatch(
-            "V70b – rename stripe_customer_id → payment_customer_id on subscriptions",
-            "ALTER TABLE subscriptions RENAME COLUMN stripe_customer_id TO payment_customer_id"
+                "V70b – rename stripe_customer_id → payment_customer_id on subscriptions",
+                "ALTER TABLE subscriptions RENAME COLUMN stripe_customer_id TO payment_customer_id"
         );
         applyPatch(
-            "V71 – rename stripe_subscription_id → payment_subscription_id on subscriptions",
-            "ALTER TABLE subscriptions RENAME COLUMN stripe_subscription_id TO payment_subscription_id"
+                "V71 – rename stripe_subscription_id → payment_subscription_id on subscriptions",
+                "ALTER TABLE subscriptions RENAME COLUMN stripe_subscription_id TO payment_subscription_id"
         );
         applyPatch(
-            "V72 – drop NOT NULL on payment_subscription_id",
-            "ALTER TABLE subscriptions ALTER COLUMN payment_subscription_id DROP NOT NULL"
+                "V72 – drop NOT NULL on payment_subscription_id",
+                "ALTER TABLE subscriptions ALTER COLUMN payment_subscription_id DROP NOT NULL"
         );
         applyPatch(
-            "V72b – drop NOT NULL on stripe_subscription_id if column still exists",
-            "ALTER TABLE subscriptions ALTER COLUMN stripe_subscription_id DROP NOT NULL"
+                "V72b – drop NOT NULL on stripe_subscription_id if column still exists",
+                "ALTER TABLE subscriptions ALTER COLUMN stripe_subscription_id DROP NOT NULL"
         );
         applyPatch(
-            "V73 – add transcription_status to call_recordings",
-            "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) NULL"
+                "V73 – add transcription_status to call_recordings",
+                "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS transcription_status VARCHAR(20) NULL"
         );
         applyPatch(
-            "V2606251137 – create call_attendees and kvs_pipeline_id",
-            "CREATE TABLE IF NOT EXISTS call_attendees ("
-                + "  id                 BIGSERIAL PRIMARY KEY,"
-                + "  call_id            VARCHAR(120) NOT NULL,"
-                + "  chime_attendee_id  VARCHAR(255) NOT NULL,"
-                + "  user_id            BIGINT NOT NULL,"
-                + "  role               VARCHAR(40) NOT NULL,"
-                + "  joined_at          TIMESTAMP NOT NULL,"
-                + "  left_at            TIMESTAMP,"
-                + "  CONSTRAINT uq_call_attendees_call_chime UNIQUE (call_id, chime_attendee_id)"
-                + ");"
-                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_call_id ON call_attendees(call_id);"
-                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_user_id ON call_attendees(user_id);"
-                + "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS kvs_pipeline_id VARCHAR(255) NULL"
+                "V2606251137 – create call_attendees and kvs_pipeline_id",
+                "CREATE TABLE IF NOT EXISTS call_attendees ("
+                        + "  id                 BIGSERIAL PRIMARY KEY,"
+                        + "  call_id            VARCHAR(120) NOT NULL,"
+                        + "  chime_attendee_id  VARCHAR(255) NOT NULL,"
+                        + "  user_id            BIGINT NOT NULL,"
+                        + "  role               VARCHAR(40) NOT NULL,"
+                        + "  joined_at          TIMESTAMP NOT NULL,"
+                        + "  left_at            TIMESTAMP,"
+                        + "  CONSTRAINT uq_call_attendees_call_chime UNIQUE (call_id, chime_attendee_id)"
+                        + ");"
+                        + "CREATE INDEX IF NOT EXISTS idx_call_attendees_call_id ON call_attendees(call_id);"
+                        + "CREATE INDEX IF NOT EXISTS idx_call_attendees_user_id ON call_attendees(user_id);"
+                        + "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS kvs_pipeline_id VARCHAR(255) NULL"
         );
         applyPatch(
-            "V2606270846 – add media_stream_pipeline_id to call_recordings",
-            "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS media_stream_pipeline_id VARCHAR(255) NULL"
+                "V2606270846 – add media_stream_pipeline_id to call_recordings",
+                "ALTER TABLE call_recordings ADD COLUMN IF NOT EXISTS media_stream_pipeline_id VARCHAR(255) NULL"
         );
         applyPatch(
-            "V76 – add kvs_stream_arn to call_attendees",
-            "ALTER TABLE call_attendees ADD COLUMN IF NOT EXISTS kvs_stream_arn VARCHAR(512) NULL;"
-                + "CREATE INDEX IF NOT EXISTS idx_call_attendees_kvs_stream_arn ON call_attendees(kvs_stream_arn)"
+                "V76 – add kvs_stream_arn to call_attendees",
+                "ALTER TABLE call_attendees ADD COLUMN IF NOT EXISTS kvs_stream_arn VARCHAR(512) NULL;"
+                        + "CREATE INDEX IF NOT EXISTS idx_call_attendees_kvs_stream_arn ON call_attendees(kvs_stream_arn)"
         );
         applyPatch(
-            "V74 – update mock user addresses to Falls Church, VA",
-            "UPDATE patient SET city = 'Falls Church', state = 'VA', zip = '22046' " +
-            "WHERE user_id = (SELECT id FROM users WHERE email = 'patient@careconnect.com') " +
-            "AND city IN ('Springfield', 'Chicago');" +
-            "UPDATE caregiver SET city = 'Falls Church', state = 'VA', zip = '22046' " +
-            "WHERE user_id IN (SELECT id FROM users WHERE email IN ('caregiver@careconnect.com', 'sarah.mitchell@careconnect.com')) " +
-            "AND city IN ('Springfield', 'Chicago')"
+                "V74 – update mock user addresses to Falls Church, VA",
+                "UPDATE patient SET city = 'Falls Church', state = 'VA', zip = '22046' " +
+                        "WHERE user_id = (SELECT id FROM users WHERE email = 'patient@careconnect.com') " +
+                        "AND city IN ('Springfield', 'Chicago');" +
+                        "UPDATE caregiver SET city = 'Falls Church', state = 'VA', zip = '22046' " +
+                        "WHERE user_id IN (SELECT id FROM users WHERE email IN ('caregiver@careconnect.com', 'sarah.mitchell@careconnect.com')) " +
+                        "AND city IN ('Springfield', 'Chicago')"
         );
         applyPatch(
-            "V75 – align user_files.file_category CHECK constraint with typed category model",
-            // Recreate the constraint so the employment / home-care intake categories are
-            // accepted. Superset of the previous allow-list (legacy HIRING_DOCUMENT retained
-            // for backward compatibility), so all existing rows remain valid. Idempotent.
-            "ALTER TABLE user_files DROP CONSTRAINT IF EXISTS user_files_file_category_check;" +
-            "ALTER TABLE user_files ADD CONSTRAINT user_files_file_category_check CHECK (" +
-            "file_category IN (" +
-            "  'PROFILE_IMAGE','MEDICAL_RECORD','CLINICAL_NOTE','PRESCRIPTION','LAB_RESULT'," +
-            "  'INSURANCE_DOCUMENT','CONSENT_FORM','CARE_PLAN'," +
-            "  'EMPLOYMENT_APPLICATION','ONBOARDING_FORM','BACKGROUND_CHECK','CERTIFICATION'," +
-            "  'REFERENCE','EMPLOYMENT_CONTRACT','TAX_FORM','WORK_AUTHORIZATION','EMERGENCY_CONTACT'," +
-            "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
-            "))"
+                "V75 – align user_files.file_category CHECK constraint with typed category model",
+                // Recreate the constraint so the employment / home-care intake categories are
+                // accepted. Superset of the previous allow-list (legacy HIRING_DOCUMENT retained
+                // for backward compatibility), so all existing rows remain valid. Idempotent.
+                "ALTER TABLE user_files DROP CONSTRAINT IF EXISTS user_files_file_category_check;" +
+                        "ALTER TABLE user_files ADD CONSTRAINT user_files_file_category_check CHECK (" +
+                        "file_category IN (" +
+                        "  'PROFILE_IMAGE','MEDICAL_RECORD','CLINICAL_NOTE','PRESCRIPTION','LAB_RESULT'," +
+                        "  'INSURANCE_DOCUMENT','CONSENT_FORM','CARE_PLAN'," +
+                        "  'EMPLOYMENT_APPLICATION','ONBOARDING_FORM','BACKGROUND_CHECK','CERTIFICATION'," +
+                        "  'REFERENCE','EMPLOYMENT_CONTRACT','TAX_FORM','WORK_AUTHORIZATION','EMERGENCY_CONTACT'," +
+                        "  'HIRING_DOCUMENT','OTHER_DOCUMENT'" +
+                        "))"
         );
         applyPatch(
-            "V75a - add session_id column to telemetry_events",
-            "ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS session_id VARCHAR(64)"
+                "V75a - add session_id column to telemetry_events",
+                "ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS session_id VARCHAR(64)"
         );
         applyPatch(
-            "V75b - index session_id on telemetry_events",
-            "CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id_time " +
-            "ON telemetry_events (session_id, event_time DESC) " +
-            "WHERE session_id IS NOT NULL"
+                "V75b - index session_id on telemetry_events",
+                "CREATE INDEX IF NOT EXISTS idx_telemetry_events_session_id_time " +
+                        "ON telemetry_events (session_id, event_time DESC) " +
+                        "WHERE session_id IS NOT NULL"
         );
         applyEmailCredentialPatches();
         applyPatch(
-            "V2607032300 - add include_documents_by_default to user_ai_config",
-            "ALTER TABLE user_ai_config " +
-            "ADD COLUMN IF NOT EXISTS include_documents_by_default BOOLEAN DEFAULT TRUE"
+                "V2607032300 - add include_documents_by_default to user_ai_config",
+                "ALTER TABLE user_ai_config " +
+                        "ADD COLUMN IF NOT EXISTS include_documents_by_default BOOLEAN DEFAULT TRUE"
         );
         if (isPostgreSql()) {
             withProductionSchemaMigrationLock(() -> {
@@ -210,69 +302,71 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
         // Confirmation items use only plain types, so they apply unconditionally on H2 and Postgres.
         applyPatch(
-            "V300626 – create confirmation_items table",
-            "CREATE TABLE IF NOT EXISTS confirmation_items (" +
-            "  id              BIGSERIAL PRIMARY KEY," +
-            "  source_type     VARCHAR(32)  NOT NULL," +
-            "  status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING'," +
-            "  payload         TEXT         NOT NULL," +
-            "  reference_id    VARCHAR(120)," +
-            "  requested_by    BIGINT       NOT NULL," +
-            "  patient_id      BIGINT," +
-            "  resolved_by     BIGINT," +
-            "  resolved_at     TIMESTAMP," +
-            "  resolution_note VARCHAR(500)," +
-            "  version         BIGINT       NOT NULL DEFAULT 0," +
-            "  created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP," +
-            "  updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP)"
+                "V300626 – create confirmation_items table",
+                "CREATE TABLE IF NOT EXISTS confirmation_items (" +
+                        "  id              BIGSERIAL PRIMARY KEY," +
+                        "  source_type     VARCHAR(32)  NOT NULL," +
+                        "  status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING'," +
+                        "  payload         TEXT         NOT NULL," +
+                        "  reference_id    VARCHAR(120)," +
+                        "  requested_by    BIGINT       NOT NULL," +
+                        "  patient_id      BIGINT," +
+                        "  resolved_by     BIGINT," +
+                        "  resolved_at     TIMESTAMP," +
+                        "  resolution_note VARCHAR(500)," +
+                        "  version         BIGINT       NOT NULL DEFAULT 0," +
+                        "  created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP," +
+                        "  updated_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP)"
         );
         applyPatch(
-            "V300626d – add patient_id to confirmation_items",
-            "ALTER TABLE confirmation_items ADD COLUMN IF NOT EXISTS patient_id BIGINT"
+                "V300626d – add patient_id to confirmation_items",
+                "ALTER TABLE confirmation_items ADD COLUMN IF NOT EXISTS patient_id BIGINT"
         );
         applyPatch(
-            "V300626a – index confirmation_items(status)",
-            "CREATE INDEX IF NOT EXISTS idx_confirmation_items_status ON confirmation_items (status)"
+                "V300626a – index confirmation_items(status)",
+                "CREATE INDEX IF NOT EXISTS idx_confirmation_items_status ON confirmation_items (status)"
         );
         applyPatch(
-            "V300626b – index confirmation_items(source_type)",
-            "CREATE INDEX IF NOT EXISTS idx_confirmation_items_source_type ON confirmation_items (source_type)"
+                "V300626b – index confirmation_items(source_type)",
+                "CREATE INDEX IF NOT EXISTS idx_confirmation_items_source_type ON confirmation_items (source_type)"
         );
         applyPatch(
-            "V300626c – index confirmation_items(requested_by)",
-            "CREATE INDEX IF NOT EXISTS idx_confirmation_items_requested_by ON confirmation_items (requested_by)"
+                "V300626c – index confirmation_items(requested_by)",
+                "CREATE INDEX IF NOT EXISTS idx_confirmation_items_requested_by ON confirmation_items (requested_by)"
         );
         applyPatch(
-            "V2607131000 – create caregiver_summary_visibility table",
-            "CREATE TABLE IF NOT EXISTS caregiver_summary_visibility (" +
-            "  id                BIGSERIAL PRIMARY KEY," +
-            "  caregiver_user_id BIGINT       NOT NULL," +
-            "  patient_user_id   BIGINT       NOT NULL," +
-            "  status            VARCHAR(16)  NOT NULL DEFAULT 'PENDING_REVIEW'," +
-            "  requested_by      BIGINT," +
-            "  reviewed_by       BIGINT," +
-            "  reviewed_at       TIMESTAMP," +
-            "  version           BIGINT       NOT NULL DEFAULT 0," +
-            "  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-            "  updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-            "  CONSTRAINT uq_caregiver_summary_visibility_pair UNIQUE (caregiver_user_id, patient_user_id))"
+                "V2607131000 – create caregiver_summary_visibility table",
+                "CREATE TABLE IF NOT EXISTS caregiver_summary_visibility (" +
+                        "  id                BIGSERIAL PRIMARY KEY," +
+                        "  caregiver_user_id BIGINT       NOT NULL," +
+                        "  patient_user_id   BIGINT       NOT NULL," +
+                        "  status            VARCHAR(16)  NOT NULL DEFAULT 'PENDING_REVIEW'," +
+                        "  requested_by      BIGINT," +
+                        "  reviewed_by       BIGINT," +
+                        "  reviewed_at       TIMESTAMP," +
+                        "  version           BIGINT       NOT NULL DEFAULT 0," +
+                        "  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+                        "  updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+                        "  CONSTRAINT uq_caregiver_summary_visibility_pair UNIQUE (caregiver_user_id, patient_user_id))"
         );
         applyPatch(
-            "V2607131000a – index caregiver_summary_visibility(caregiver_user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_caregiver_summary_visibility_caregiver " +
-            "ON caregiver_summary_visibility (caregiver_user_id)"
+                "V2607131000a – index caregiver_summary_visibility(caregiver_user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_caregiver_summary_visibility_caregiver " +
+                        "ON caregiver_summary_visibility (caregiver_user_id)"
         );
         applyPatch(
-            "V2607131000b – index caregiver_summary_visibility(patient_user_id, status)",
-            "CREATE INDEX IF NOT EXISTS idx_caregiver_summary_visibility_patient_status " +
-            "ON caregiver_summary_visibility (patient_user_id, status)"
+                "V2607131000b – index caregiver_summary_visibility(patient_user_id, status)",
+                "CREATE INDEX IF NOT EXISTS idx_caregiver_summary_visibility_patient_status " +
+                        "ON caregiver_summary_visibility (patient_user_id, status)"
         );
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
         seedDemoScheduledVisits();
     }
 
-    /** Durable purge fencing and post-commit object deletion for transcript archives. */
+    /**
+     * Durable purge fencing and post-commit object deletion for transcript archives.
+     */
     private void applyTranscriptArchiveStoragePatch() {
         applyCatalogPatch("2607191300-transcript-archive-purge");
     }
@@ -282,58 +376,58 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyH2AiHeldItemTables() {
         applyRequiredPatch(
-            "H2 – ai_held_item",
-            "CREATE TABLE IF NOT EXISTS ai_held_item ("
-                + "  id UUID PRIMARY KEY,"
-                + "  patient_id BIGINT NOT NULL,"
-                + "  requester_user_id BIGINT NOT NULL,"
-                + "  session_id UUID,"
-                + "  audit_id UUID NOT NULL,"
-                + "  request_id UUID,"
-                + "  source_surface VARCHAR(32) NOT NULL,"
-                + "  status VARCHAR(24) NOT NULL,"
-                + "  tier SMALLINT NOT NULL DEFAULT 2,"
-                + "  trigger_codes CLOB NOT NULL,"
-                + "  query_text CLOB,"
-                + "  query_text_hash VARCHAR(64),"
-                + "  draft_answer CLOB NOT NULL,"
-                + "  final_answer CLOB,"
-                + "  citations_json CLOB NOT NULL,"
-                + "  validation_findings_json CLOB,"
-                + "  reviewer_user_id BIGINT,"
-                + "  reviewed_at TIMESTAMP,"
-                + "  review_notes VARCHAR(500),"
-                + "  delivery_status VARCHAR(32) NOT NULL,"
-                + "  expires_at TIMESTAMP,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – ai_held_item",
+                "CREATE TABLE IF NOT EXISTS ai_held_item ("
+                        + "  id UUID PRIMARY KEY,"
+                        + "  patient_id BIGINT NOT NULL,"
+                        + "  requester_user_id BIGINT NOT NULL,"
+                        + "  session_id UUID,"
+                        + "  audit_id UUID NOT NULL,"
+                        + "  request_id UUID,"
+                        + "  source_surface VARCHAR(32) NOT NULL,"
+                        + "  status VARCHAR(24) NOT NULL,"
+                        + "  tier SMALLINT NOT NULL DEFAULT 2,"
+                        + "  trigger_codes CLOB NOT NULL,"
+                        + "  query_text CLOB,"
+                        + "  query_text_hash VARCHAR(64),"
+                        + "  draft_answer CLOB NOT NULL,"
+                        + "  final_answer CLOB,"
+                        + "  citations_json CLOB NOT NULL,"
+                        + "  validation_findings_json CLOB,"
+                        + "  reviewer_user_id BIGINT,"
+                        + "  reviewed_at TIMESTAMP,"
+                        + "  review_notes VARCHAR(500),"
+                        + "  delivery_status VARCHAR(32) NOT NULL,"
+                        + "  expires_at TIMESTAMP,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ai_held_item patient status index",
-            "CREATE INDEX IF NOT EXISTS idx_held_patient_status "
-                + "ON ai_held_item (patient_id, status)");
+                "H2 – ai_held_item patient status index",
+                "CREATE INDEX IF NOT EXISTS idx_held_patient_status "
+                        + "ON ai_held_item (patient_id, status)");
         applyRequiredPatch(
-            "H2 – drop legacy ai_held_item open unique",
-            "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
+                "H2 – drop legacy ai_held_item open unique",
+                "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
         applyRequiredPatch(
-            "H2 – ai_held_item open unique",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
-                + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
-                + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+                "H2 – ai_held_item open unique",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
+                        + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
+                        + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
         applyRequiredPatch(
-            "H2 – user_files.extracted_text",
-            "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
+                "H2 – user_files.extracted_text",
+                "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
         applyRequiredPatch(
-            "H2 – ai_safety_audit_event",
-            "CREATE TABLE IF NOT EXISTS ai_safety_audit_event ("
-                + "  id UUID PRIMARY KEY,"
-                + "  audit_id UUID NOT NULL,"
-                + "  held_item_id UUID,"
-                + "  event_type VARCHAR(40) NOT NULL,"
-                + "  actor_user_id BIGINT,"
-                + "  payload_json CLOB,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – ai_safety_audit_event",
+                "CREATE TABLE IF NOT EXISTS ai_safety_audit_event ("
+                        + "  id UUID PRIMARY KEY,"
+                        + "  audit_id UUID NOT NULL,"
+                        + "  held_item_id UUID,"
+                        + "  event_type VARCHAR(40) NOT NULL,"
+                        + "  actor_user_id BIGINT,"
+                        + "  payload_json CLOB,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
     }
 
     /**
@@ -341,61 +435,61 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyH2AiAskAuditTables() {
         applyRequiredPatch(
-            "H2 – ai_ask_audit_record",
-            "CREATE TABLE IF NOT EXISTS ai_ask_audit_record ("
-                + "  audit_id UUID PRIMARY KEY,"
-                + "  request_id UUID NOT NULL UNIQUE,"
-                + "  session_id UUID,"
-                + "  client_request_id VARCHAR(64),"
-                + "  patient_id BIGINT NOT NULL,"
-                + "  caller_user_id BIGINT NOT NULL,"
-                + "  caller_role VARCHAR(32) NOT NULL,"
-                + "  input_modality VARCHAR(8) NOT NULL DEFAULT 'TEXT',"
-                + "  locale VARCHAR(10) NOT NULL DEFAULT 'en-US',"
-                + "  query_text_hash VARCHAR(64) NOT NULL,"
-                + "  query_length INT NOT NULL,"
-                + "  delivery_status VARCHAR(24) NOT NULL,"
-                + "  tier SMALLINT NOT NULL DEFAULT 0,"
-                + "  held BOOLEAN NOT NULL DEFAULT FALSE,"
-                + "  held_item_id UUID,"
-                + "  error_code VARCHAR(40),"
-                + "  answer_text_hash VARCHAR(64),"
-                + "  answer_length INT,"
-                + "  citations_json CLOB NOT NULL,"
-                + "  escalation_json CLOB NOT NULL,"
-                + "  trigger_codes CLOB NOT NULL,"
-                + "  validation_findings_json CLOB,"
-                + "  retrieval_meta_json CLOB NOT NULL,"
-                + "  scope_json CLOB NOT NULL,"
-                + "  model_provider VARCHAR(32),"
-                + "  model_id VARCHAR(128),"
-                + "  total_latency_ms INT,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – ai_ask_audit_record",
+                "CREATE TABLE IF NOT EXISTS ai_ask_audit_record ("
+                        + "  audit_id UUID PRIMARY KEY,"
+                        + "  request_id UUID NOT NULL UNIQUE,"
+                        + "  session_id UUID,"
+                        + "  client_request_id VARCHAR(64),"
+                        + "  patient_id BIGINT NOT NULL,"
+                        + "  caller_user_id BIGINT NOT NULL,"
+                        + "  caller_role VARCHAR(32) NOT NULL,"
+                        + "  input_modality VARCHAR(8) NOT NULL DEFAULT 'TEXT',"
+                        + "  locale VARCHAR(10) NOT NULL DEFAULT 'en-US',"
+                        + "  query_text_hash VARCHAR(64) NOT NULL,"
+                        + "  query_length INT NOT NULL,"
+                        + "  delivery_status VARCHAR(24) NOT NULL,"
+                        + "  tier SMALLINT NOT NULL DEFAULT 0,"
+                        + "  held BOOLEAN NOT NULL DEFAULT FALSE,"
+                        + "  held_item_id UUID,"
+                        + "  error_code VARCHAR(40),"
+                        + "  answer_text_hash VARCHAR(64),"
+                        + "  answer_length INT,"
+                        + "  citations_json CLOB NOT NULL,"
+                        + "  escalation_json CLOB NOT NULL,"
+                        + "  trigger_codes CLOB NOT NULL,"
+                        + "  validation_findings_json CLOB,"
+                        + "  retrieval_meta_json CLOB NOT NULL,"
+                        + "  scope_json CLOB NOT NULL,"
+                        + "  model_provider VARCHAR(32),"
+                        + "  model_id VARCHAR(128),"
+                        + "  total_latency_ms INT,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ai_ask_audit_event",
-            "CREATE TABLE IF NOT EXISTS ai_ask_audit_event ("
-                + "  id UUID PRIMARY KEY,"
-                + "  audit_id UUID NOT NULL,"
-                + "  event_type VARCHAR(48) NOT NULL,"
-                + "  event_sequence INT NOT NULL,"
-                + "  actor_user_id BIGINT,"
-                + "  payload_json CLOB NOT NULL,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  CONSTRAINT uq_ai_ask_audit_event_seq UNIQUE (audit_id, event_sequence)"
-                + ")");
+                "H2 – ai_ask_audit_event",
+                "CREATE TABLE IF NOT EXISTS ai_ask_audit_event ("
+                        + "  id UUID PRIMARY KEY,"
+                        + "  audit_id UUID NOT NULL,"
+                        + "  event_type VARCHAR(48) NOT NULL,"
+                        + "  event_sequence INT NOT NULL,"
+                        + "  actor_user_id BIGINT,"
+                        + "  payload_json CLOB NOT NULL,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  CONSTRAINT uq_ai_ask_audit_event_seq UNIQUE (audit_id, event_sequence)"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ai_ask_audit_delivery_supplement",
-            "CREATE TABLE IF NOT EXISTS ai_ask_audit_delivery_supplement ("
-                + "  id UUID PRIMARY KEY,"
-                + "  audit_id UUID NOT NULL,"
-                + "  delivery_status VARCHAR(24) NOT NULL,"
-                + "  final_answer_hash VARCHAR(64),"
-                + "  citations_json CLOB NOT NULL,"
-                + "  reviewer_user_id BIGINT,"
-                + "  reviewed_at TIMESTAMP NOT NULL,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – ai_ask_audit_delivery_supplement",
+                "CREATE TABLE IF NOT EXISTS ai_ask_audit_delivery_supplement ("
+                        + "  id UUID PRIMARY KEY,"
+                        + "  audit_id UUID NOT NULL,"
+                        + "  delivery_status VARCHAR(24) NOT NULL,"
+                        + "  final_answer_hash VARCHAR(64),"
+                        + "  citations_json CLOB NOT NULL,"
+                        + "  reviewer_user_id BIGINT,"
+                        + "  reviewed_at TIMESTAMP NOT NULL,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
     }
 
     /**
@@ -403,50 +497,50 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyH2VisitSummariesAndAskConfirmationTables() {
         applyRequiredPatch(
-            "H2 – visit_summaries",
-            "CREATE TABLE IF NOT EXISTS visit_summaries ("
-                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
-                + "  visit_id VARCHAR(120) NOT NULL,"
-                + "  patient_id BIGINT,"
-                + "  summary_json CLOB NOT NULL,"
-                + "  status VARCHAR(24) NOT NULL,"
-                + "  transcript_segment_count INT NOT NULL DEFAULT 0,"
-                + "  generated_by_user_id BIGINT,"
-                + "  error_message CLOB,"
-                + "  generated_at TIMESTAMP NOT NULL,"
-                + "  risk_level VARCHAR(16),"
-                + "  caregiver_visibility VARCHAR(16) NOT NULL DEFAULT 'on_consent',"
-                + "  summary_confidence DECIMAL(3,2),"
-                + "  summarization_engine VARCHAR(128),"
-                + "  transcript_snapshot_version VARCHAR(80),"
-                + "  model_config_version VARCHAR(160),"
-                + "  transcript_available BOOLEAN NOT NULL DEFAULT TRUE,"
-                + "  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
-                + "  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – visit_summaries",
+                "CREATE TABLE IF NOT EXISTS visit_summaries ("
+                        + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                        + "  visit_id VARCHAR(120) NOT NULL,"
+                        + "  patient_id BIGINT,"
+                        + "  summary_json CLOB NOT NULL,"
+                        + "  status VARCHAR(24) NOT NULL,"
+                        + "  transcript_segment_count INT NOT NULL DEFAULT 0,"
+                        + "  generated_by_user_id BIGINT,"
+                        + "  error_message CLOB,"
+                        + "  generated_at TIMESTAMP NOT NULL,"
+                        + "  risk_level VARCHAR(16),"
+                        + "  caregiver_visibility VARCHAR(16) NOT NULL DEFAULT 'on_consent',"
+                        + "  summary_confidence DECIMAL(3,2),"
+                        + "  summarization_engine VARCHAR(128),"
+                        + "  transcript_snapshot_version VARCHAR(80),"
+                        + "  model_config_version VARCHAR(160),"
+                        + "  transcript_available BOOLEAN NOT NULL DEFAULT TRUE,"
+                        + "  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                        + "  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – visit_summaries visit_id index",
-            "CREATE INDEX IF NOT EXISTS idx_visit_summary_visit_id "
-                + "ON visit_summaries (visit_id)");
+                "H2 – visit_summaries visit_id index",
+                "CREATE INDEX IF NOT EXISTS idx_visit_summary_visit_id "
+                        + "ON visit_summaries (visit_id)");
         applyRequiredPatch(
-            "H2 – visit_summaries patient_id index",
-            "CREATE INDEX IF NOT EXISTS idx_visit_summary_patient_id "
-                + "ON visit_summaries (patient_id)");
+                "H2 – visit_summaries patient_id index",
+                "CREATE INDEX IF NOT EXISTS idx_visit_summary_patient_id "
+                        + "ON visit_summaries (patient_id)");
         applyRequiredPatch(
-            "H2 – ai_ask_confirmation_decision",
-            "CREATE TABLE IF NOT EXISTS ai_ask_confirmation_decision ("
-                + "  id UUID PRIMARY KEY,"
-                + "  session_id UUID NOT NULL,"
-                + "  patient_id BIGINT NOT NULL,"
-                + "  caller_user_id BIGINT NOT NULL,"
-                + "  request_id UUID,"
-                + "  decision VARCHAR(32) NOT NULL,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – ai_ask_confirmation_decision",
+                "CREATE TABLE IF NOT EXISTS ai_ask_confirmation_decision ("
+                        + "  id UUID PRIMARY KEY,"
+                        + "  session_id UUID NOT NULL,"
+                        + "  patient_id BIGINT NOT NULL,"
+                        + "  caller_user_id BIGINT NOT NULL,"
+                        + "  request_id UUID,"
+                        + "  decision VARCHAR(32) NOT NULL,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ai_ask_confirmation_decision session index",
-            "CREATE INDEX IF NOT EXISTS idx_ai_ask_confirmation_session "
-                + "ON ai_ask_confirmation_decision (session_id, patient_id, caller_user_id, created_at)");
+                "H2 – ai_ask_confirmation_decision session index",
+                "CREATE INDEX IF NOT EXISTS idx_ai_ask_confirmation_session "
+                        + "ON ai_ask_confirmation_decision (session_id, patient_id, caller_user_id, created_at)");
     }
 
     /**
@@ -454,85 +548,87 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyH2ConsentGrantsTable() {
         applyRequiredPatch(
-            "H2 – consent_grants",
-            "CREATE TABLE IF NOT EXISTS consent_grants ("
-                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
-                + "  patient_user_id BIGINT NOT NULL,"
-                + "  grantee_user_id BIGINT NOT NULL,"
-                + "  grantee_role VARCHAR(32) NOT NULL,"
-                + "  scope VARCHAR(64) NOT NULL DEFAULT 'AI_RETRIEVAL',"
-                + "  status VARCHAR(24) NOT NULL,"
-                + "  granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  expires_at TIMESTAMP,"
-                + "  revoked_at TIMESTAMP,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – consent_grants",
+                "CREATE TABLE IF NOT EXISTS consent_grants ("
+                        + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                        + "  patient_user_id BIGINT NOT NULL,"
+                        + "  grantee_user_id BIGINT NOT NULL,"
+                        + "  grantee_role VARCHAR(32) NOT NULL,"
+                        + "  scope VARCHAR(64) NOT NULL DEFAULT 'AI_RETRIEVAL',"
+                        + "  status VARCHAR(24) NOT NULL,"
+                        + "  granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  expires_at TIMESTAMP,"
+                        + "  revoked_at TIMESTAMP,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – consent_grants lookup index",
-            "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
-                + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
+                "H2 – consent_grants lookup index",
+                "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
+                        + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
         applyRequiredPatch(
-            "H2 – consent_grants active unique",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
-                + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
-                + "WHERE status = 'ACTIVE'");
+                "H2 – consent_grants active unique",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
+                        + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
+                        + "WHERE status = 'ACTIVE'");
     }
 
-    /** H2/integration-test parity for Ask AI conversation share receipts. */
+    /**
+     * H2/integration-test parity for Ask AI conversation share receipts.
+     */
     private void applyH2AiAskConversationShareTable() {
         applyRequiredPatch(
-            "H2 – ai_ask_conversation_share",
-            "CREATE TABLE IF NOT EXISTS ai_ask_conversation_share ("
-                + "  id UUID PRIMARY KEY,"
-                + "  patient_id BIGINT NOT NULL,"
-                + "  shared_by_user_id BIGINT NOT NULL,"
-                + "  session_id UUID,"
-                + "  recipient_user_ids CLOB NOT NULL,"
-                + "  message_count INTEGER NOT NULL,"
-                + "  transcript_json CLOB NOT NULL,"
-                + "  transcript_sha256 VARCHAR(64) NOT NULL,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – ai_ask_conversation_share",
+                "CREATE TABLE IF NOT EXISTS ai_ask_conversation_share ("
+                        + "  id UUID PRIMARY KEY,"
+                        + "  patient_id BIGINT NOT NULL,"
+                        + "  shared_by_user_id BIGINT NOT NULL,"
+                        + "  session_id UUID,"
+                        + "  recipient_user_ids CLOB NOT NULL,"
+                        + "  message_count INTEGER NOT NULL,"
+                        + "  transcript_json CLOB NOT NULL,"
+                        + "  transcript_sha256 VARCHAR(64) NOT NULL,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ai_ask_conversation_share patient index",
-            "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_patient "
-                + "ON ai_ask_conversation_share (patient_id, created_at)");
+                "H2 – ai_ask_conversation_share patient index",
+                "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_patient "
+                        + "ON ai_ask_conversation_share (patient_id, created_at)");
         applyRequiredPatch(
-            "H2 – ai_ask_conversation_share shared_by index",
-            "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_shared_by "
-                + "ON ai_ask_conversation_share (shared_by_user_id, created_at)");
+                "H2 – ai_ask_conversation_share shared_by index",
+                "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_shared_by "
+                        + "ON ai_ask_conversation_share (shared_by_user_id, created_at)");
         applyRequiredPatch(
-            "H2 – ai_ask_conversation_share dedupe unique",
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_ask_share_dedupe "
-                + "ON ai_ask_conversation_share (patient_id, shared_by_user_id, transcript_sha256)");
+                "H2 – ai_ask_conversation_share dedupe unique",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_ask_share_dedupe "
+                        + "ON ai_ask_conversation_share (patient_id, shared_by_user_id, transcript_sha256)");
         applyRequiredPatch(
-            "H2 – ai_ask_share_recipient",
-            "CREATE TABLE IF NOT EXISTS ai_ask_share_recipient ("
-                + "  share_id UUID NOT NULL,"
-                + "  user_id BIGINT NOT NULL,"
-                + "  PRIMARY KEY (share_id, user_id)"
-                + ")");
+                "H2 – ai_ask_share_recipient",
+                "CREATE TABLE IF NOT EXISTS ai_ask_share_recipient ("
+                        + "  share_id UUID NOT NULL,"
+                        + "  user_id BIGINT NOT NULL,"
+                        + "  PRIMARY KEY (share_id, user_id)"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ai_ask_share_recipient user index",
-            "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_recipient_user "
-                + "ON ai_ask_share_recipient (user_id, share_id)");
+                "H2 – ai_ask_share_recipient user index",
+                "CREATE INDEX IF NOT EXISTS idx_ai_ask_share_recipient_user "
+                        + "ON ai_ask_share_recipient (user_id, share_id)");
         applyRequiredPatch(
-            "H2 – ask_ai_ocr_outbox",
-            "CREATE TABLE IF NOT EXISTS ask_ai_ocr_outbox ("
-                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
-                + "  file_id BIGINT NOT NULL,"
-                + "  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',"
-                + "  attempts INTEGER NOT NULL DEFAULT 0,"
-                + "  last_error CLOB,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  CONSTRAINT uq_ask_ai_ocr_outbox_file UNIQUE (file_id)"
-                + ")");
+                "H2 – ask_ai_ocr_outbox",
+                "CREATE TABLE IF NOT EXISTS ask_ai_ocr_outbox ("
+                        + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                        + "  file_id BIGINT NOT NULL,"
+                        + "  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',"
+                        + "  attempts INTEGER NOT NULL DEFAULT 0,"
+                        + "  last_error CLOB,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  CONSTRAINT uq_ask_ai_ocr_outbox_file UNIQUE (file_id)"
+                        + ")");
         applyRequiredPatch(
-            "H2 – ask_ai_ocr_outbox pending index",
-            "CREATE INDEX IF NOT EXISTS idx_ask_ai_ocr_outbox_pending "
-                + "ON ask_ai_ocr_outbox (status, updated_at)");
+                "H2 – ask_ai_ocr_outbox pending index",
+                "CREATE INDEX IF NOT EXISTS idx_ask_ai_ocr_outbox_pending "
+                        + "ON ask_ai_ocr_outbox (status, updated_at)");
     }
 
     /**
@@ -541,33 +637,35 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyH2TranscriptArchiveLifecycleTables() {
         applyRequiredPatch(
-            "H2 – transcript archive lifecycle",
-            "CREATE TABLE IF NOT EXISTS call_transcript_archive_lifecycle ("
-                + "  call_id VARCHAR(120) PRIMARY KEY,"
-                + "  generation BIGINT NOT NULL DEFAULT 0,"
-                + "  purged BOOLEAN NOT NULL DEFAULT FALSE,"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                + ")");
+                "H2 – transcript archive lifecycle",
+                "CREATE TABLE IF NOT EXISTS call_transcript_archive_lifecycle ("
+                        + "  call_id VARCHAR(120) PRIMARY KEY,"
+                        + "  generation BIGINT NOT NULL DEFAULT 0,"
+                        + "  purged BOOLEAN NOT NULL DEFAULT FALSE,"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")");
         applyRequiredPatch(
-            "H2 – transcript archive deletion outbox",
-            "CREATE TABLE IF NOT EXISTS transcript_archive_deletion_outbox ("
-                + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
-                + "  storage_key VARCHAR(512) NOT NULL,"
-                + "  attempts INTEGER NOT NULL DEFAULT 0,"
-                + "  next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  claimed_until TIMESTAMP,"
-                + "  claim_token UUID,"
-                + "  last_error VARCHAR(1000),"
-                + "  dead_lettered_at TIMESTAMP,"
-                + "  terminal_error VARCHAR(1000),"
-                + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-                + "  CONSTRAINT uq_transcript_archive_deletion_key UNIQUE (storage_key)"
-                + ")");
+                "H2 – transcript archive deletion outbox",
+                "CREATE TABLE IF NOT EXISTS transcript_archive_deletion_outbox ("
+                        + "  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,"
+                        + "  storage_key VARCHAR(512) NOT NULL,"
+                        + "  attempts INTEGER NOT NULL DEFAULT 0,"
+                        + "  next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  claimed_until TIMESTAMP,"
+                        + "  claim_token UUID,"
+                        + "  last_error VARCHAR(1000),"
+                        + "  dead_lettered_at TIMESTAMP,"
+                        + "  terminal_error VARCHAR(1000),"
+                        + "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "  CONSTRAINT uq_transcript_archive_deletion_key UNIQUE (storage_key)"
+                        + ")");
     }
 
-    /** Production parity for Flyway migration V2607190010. */
+    /**
+     * Production parity for Flyway migration V2607190010.
+     */
     private void applyCallSummaryIdempotencyPatch() {
         applyCatalogPatch("2607190010-call-summary-idempotency");
         ensureIndex(
@@ -587,89 +685,91 @@ public class SchemaPatchRunner implements CommandLineRunner {
         verifyCallSummaryIdempotencySchema();
     }
 
-    /** Durable call authorization and patient ownership (reference migration V2607182230). */
+    /**
+     * Durable call authorization and patient ownership (reference migration V2607182230).
+     */
     private void applyCallSessionPatches() {
         applyRequiredPatch(
-            "V2607182230a – create call_sessions",
-            "CREATE TABLE IF NOT EXISTS call_sessions (" +
-            "  id BIGSERIAL PRIMARY KEY," +
-            "  call_id VARCHAR(120) NOT NULL," +
-            "  patient_id BIGINT NOT NULL REFERENCES patient(id)," +
-            "  created_by_user_id BIGINT NOT NULL REFERENCES users(id)," +
-            "  scheduled_visit_id BIGINT NULL," +
-            "  chime_meeting_id VARCHAR(255) NULL," +
-            "  status VARCHAR(24) NOT NULL DEFAULT 'CREATED'," +
-            "  ended_at TIMESTAMP NULL," +
-            "  created_at TIMESTAMP NOT NULL DEFAULT now()," +
-            "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
-            "  CONSTRAINT uq_call_sessions_call_id UNIQUE (call_id)" +
-            ")"
+                "V2607182230a – create call_sessions",
+                "CREATE TABLE IF NOT EXISTS call_sessions (" +
+                        "  id BIGSERIAL PRIMARY KEY," +
+                        "  call_id VARCHAR(120) NOT NULL," +
+                        "  patient_id BIGINT NOT NULL REFERENCES patient(id)," +
+                        "  created_by_user_id BIGINT NOT NULL REFERENCES users(id)," +
+                        "  scheduled_visit_id BIGINT NULL," +
+                        "  chime_meeting_id VARCHAR(255) NULL," +
+                        "  status VARCHAR(24) NOT NULL DEFAULT 'CREATED'," +
+                        "  ended_at TIMESTAMP NULL," +
+                        "  created_at TIMESTAMP NOT NULL DEFAULT now()," +
+                        "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
+                        "  CONSTRAINT uq_call_sessions_call_id UNIQUE (call_id)" +
+                        ")"
         );
         // Hibernate ddl-auto can create call_sessions before this patch runs, so
         // CREATE TABLE IF NOT EXISTS never adds UNIQUE(call_id). Without it,
         // INSERT ... ON CONFLICT (call_id) fails and joins return 404.
         applyRequiredPatch(
-            "V2607182230a2 – ensure call_sessions.call_id unique for ON CONFLICT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_sessions_call_id_uidx "
-                    + "ON call_sessions (call_id)"
+                "V2607182230a2 – ensure call_sessions.call_id unique for ON CONFLICT",
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_sessions_call_id_uidx "
+                        + "ON call_sessions (call_id)"
         );
         applyRequiredPatch(
-            "V2607191700 – call_sessions recording_start_elected column",
-            "ALTER TABLE call_sessions "
-                    + "ADD COLUMN IF NOT EXISTS recording_start_elected "
-                    + "BOOLEAN NOT NULL DEFAULT FALSE"
+                "V2607191700 – call_sessions recording_start_elected column",
+                "ALTER TABLE call_sessions "
+                        + "ADD COLUMN IF NOT EXISTS recording_start_elected "
+                        + "BOOLEAN NOT NULL DEFAULT FALSE"
         );
         applyRequiredPatch(
-            "V2607191700 – call_sessions recording_start_elected default",
-            "ALTER TABLE call_sessions "
-                    + "ALTER COLUMN recording_start_elected SET DEFAULT FALSE"
+                "V2607191700 – call_sessions recording_start_elected default",
+                "ALTER TABLE call_sessions "
+                        + "ALTER COLUMN recording_start_elected SET DEFAULT FALSE"
         );
         applyRequiredPatch(
-            "V2607182230b – create call_participants",
-            "CREATE TABLE IF NOT EXISTS call_participants (" +
-            "  id BIGSERIAL PRIMARY KEY," +
-            "  call_session_id BIGINT NOT NULL REFERENCES call_sessions(id) ON DELETE CASCADE," +
-            "  user_id BIGINT NOT NULL REFERENCES users(id)," +
-            "  invited_by_user_id BIGINT NULL REFERENCES users(id)," +
-            "  status VARCHAR(24) NOT NULL DEFAULT 'INVITED'," +
-            "  joined_at TIMESTAMP NULL," +
-            "  left_at TIMESTAMP NULL," +
-            "  created_at TIMESTAMP NOT NULL DEFAULT now()," +
-            "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
-            "  CONSTRAINT uq_call_participants_session_user UNIQUE (call_session_id, user_id)" +
-            ")"
+                "V2607182230b – create call_participants",
+                "CREATE TABLE IF NOT EXISTS call_participants (" +
+                        "  id BIGSERIAL PRIMARY KEY," +
+                        "  call_session_id BIGINT NOT NULL REFERENCES call_sessions(id) ON DELETE CASCADE," +
+                        "  user_id BIGINT NOT NULL REFERENCES users(id)," +
+                        "  invited_by_user_id BIGINT NULL REFERENCES users(id)," +
+                        "  status VARCHAR(24) NOT NULL DEFAULT 'INVITED'," +
+                        "  joined_at TIMESTAMP NULL," +
+                        "  left_at TIMESTAMP NULL," +
+                        "  created_at TIMESTAMP NOT NULL DEFAULT now()," +
+                        "  updated_at TIMESTAMP NOT NULL DEFAULT now()," +
+                        "  CONSTRAINT uq_call_participants_session_user UNIQUE (call_session_id, user_id)" +
+                        ")"
         );
         applyRequiredPatch(
-            "V2607182230b2 – ensure call_participants session/user unique for ON CONFLICT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_participants_session_user_uidx "
-                    + "ON call_participants (call_session_id, user_id)"
+                "V2607182230b2 – ensure call_participants session/user unique for ON CONFLICT",
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_call_participants_session_user_uidx "
+                        + "ON call_participants (call_session_id, user_id)"
         );
         applyRequiredPatch(
-            "V2607182230c – call session authorization indexes",
-            "CREATE INDEX IF NOT EXISTS idx_call_sessions_patient_id " +
-            "  ON call_sessions(patient_id);" +
-            "CREATE INDEX IF NOT EXISTS idx_call_sessions_creator " +
-            "  ON call_sessions(created_by_user_id);" +
-            "CREATE INDEX IF NOT EXISTS idx_call_participants_user " +
-            "  ON call_participants(user_id, status);" +
-            "CREATE INDEX IF NOT EXISTS idx_call_participants_session " +
-            "  ON call_participants(call_session_id, status)"
+                "V2607182230c – call session authorization indexes",
+                "CREATE INDEX IF NOT EXISTS idx_call_sessions_patient_id " +
+                        "  ON call_sessions(patient_id);" +
+                        "CREATE INDEX IF NOT EXISTS idx_call_sessions_creator " +
+                        "  ON call_sessions(created_by_user_id);" +
+                        "CREATE INDEX IF NOT EXISTS idx_call_participants_user " +
+                        "  ON call_participants(user_id, status);" +
+                        "CREATE INDEX IF NOT EXISTS idx_call_participants_session " +
+                        "  ON call_participants(call_session_id, status)"
         );
         if (isPostgreSql()) {
             applyRequiredPatch(
-                "V2607182230d – repair call session foreign keys",
-                foreignKeyIfMissing("fk_call_sessions_patient", "call_sessions",
-                        "patient_id", "patient", "id", "") +
-                foreignKeyIfMissing("fk_call_sessions_created_by", "call_sessions",
-                        "created_by_user_id", "users", "id", "") +
-                foreignKeyIfMissing("fk_call_sessions_scheduled_visit", "call_sessions",
-                        "scheduled_visit_id", "scheduled_visits", "id", "") +
-                foreignKeyIfMissing("fk_call_participants_session", "call_participants",
-                        "call_session_id", "call_sessions", "id", " ON DELETE CASCADE") +
-                foreignKeyIfMissing("fk_call_participants_user", "call_participants",
-                        "user_id", "users", "id", "") +
-                foreignKeyIfMissing("fk_call_participants_invited_by", "call_participants",
-                        "invited_by_user_id", "users", "id", "")
+                    "V2607182230d – repair call session foreign keys",
+                    foreignKeyIfMissing("fk_call_sessions_patient", "call_sessions",
+                            "patient_id", "patient", "id", "") +
+                            foreignKeyIfMissing("fk_call_sessions_created_by", "call_sessions",
+                                    "created_by_user_id", "users", "id", "") +
+                            foreignKeyIfMissing("fk_call_sessions_scheduled_visit", "call_sessions",
+                                    "scheduled_visit_id", "scheduled_visits", "id", "") +
+                            foreignKeyIfMissing("fk_call_participants_session", "call_participants",
+                                    "call_session_id", "call_sessions", "id", " ON DELETE CASCADE") +
+                            foreignKeyIfMissing("fk_call_participants_user", "call_participants",
+                                    "user_id", "users", "id", "") +
+                            foreignKeyIfMissing("fk_call_participants_invited_by", "call_participants",
+                                    "invited_by_user_id", "users", "id", "")
             );
             verifyForeignKeyCount(
                     "call session patient", "call_sessions", "patient_id",
@@ -690,13 +790,13 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     "call participant inviter", "call_participants", "invited_by_user_id",
                     "users", "id", 'a', 1);
             applyRequiredPatch(
-                "V2607190015 – harden call lifecycle statuses",
-                "ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS ck_call_sessions_status;" +
-                "ALTER TABLE call_sessions ADD CONSTRAINT ck_call_sessions_status CHECK " +
-                "(status IN ('CREATED','ACTIVE','TERMINATING','ENDED','CANCELLED'));" +
-                "ALTER TABLE call_participants DROP CONSTRAINT IF EXISTS ck_call_participants_status;" +
-                "ALTER TABLE call_participants ADD CONSTRAINT ck_call_participants_status CHECK " +
-                "(status IN ('INVITED','JOINED','LEFT','DECLINED','EXPIRED'))"
+                    "V2607190015 – harden call lifecycle statuses",
+                    "ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS ck_call_sessions_status;" +
+                            "ALTER TABLE call_sessions ADD CONSTRAINT ck_call_sessions_status CHECK " +
+                            "(status IN ('CREATED','ACTIVE','TERMINATING','ENDED','CANCELLED'));" +
+                            "ALTER TABLE call_participants DROP CONSTRAINT IF EXISTS ck_call_participants_status;" +
+                            "ALTER TABLE call_participants ADD CONSTRAINT ck_call_participants_status CHECK " +
+                            "(status IN ('INVITED','JOINED','LEFT','DECLINED','EXPIRED'))"
             );
             // JDBC Statement (not ScriptUtils) — DO $$ blocks contain internal ';'.
             applyRequiredPatch(
@@ -761,12 +861,12 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyEmailCredentialPatches() {
         applyPatch(
-            "V2607221400 – email_credentials provider check allows GOOGLE_HEALTH",
-            "ALTER TABLE email_credentials " +
-            "  DROP CONSTRAINT IF EXISTS email_credentials_provider_check;" +
-            "ALTER TABLE email_credentials " +
-            "  ADD CONSTRAINT email_credentials_provider_check " +
-            "  CHECK (provider IN ('GMAIL', 'OUTLOOK', 'GOOGLE_HEALTH'))"
+                "V2607221400 – email_credentials provider check allows GOOGLE_HEALTH",
+                "ALTER TABLE email_credentials " +
+                        "  DROP CONSTRAINT IF EXISTS email_credentials_provider_check;" +
+                        "ALTER TABLE email_credentials " +
+                        "  ADD CONSTRAINT email_credentials_provider_check " +
+                        "  CHECK (provider IN ('GMAIL', 'OUTLOOK', 'GOOGLE_HEALTH'))"
         );
     }
 
@@ -782,147 +882,147 @@ public class SchemaPatchRunner implements CommandLineRunner {
             return;
         }
         applyRequiredPatch(
-            "V2607071920 – enable pgvector extension",
-            "CREATE EXTENSION IF NOT EXISTS vector"
+                "V2607071920 – enable pgvector extension",
+                "CREATE EXTENSION IF NOT EXISTS vector"
         );
         applyRequiredPatch(
-            "V2607071921a – create retrieval_index_chunk table",
-            "CREATE TABLE IF NOT EXISTS retrieval_index_chunk (" +
-            "  id                UUID          PRIMARY KEY DEFAULT gen_random_uuid()," +
-            "  patient_id        BIGINT        NOT NULL," +
-            "  record_type       VARCHAR(40)   NOT NULL," +
-            "  source_record_id  VARCHAR(120)  NOT NULL," +
-            "  source_kind       VARCHAR(40)   NULL," +
-            "  chunk_text        TEXT          NOT NULL," +
-            "  chunk_metadata    JSONB         NULL," +
-            "  search_vector     TSVECTOR      NULL," +
-            "  embedding         vector(1536)  NULL," +
-            "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
-            "  consent_scope     VARCHAR(40)   NULL," +
-            "  citation_replay_after TIMESTAMPTZ NULL," +
-            "  citation_replay_attempts INTEGER NOT NULL DEFAULT 0," +
-            "  citation_replay_claimed_until TIMESTAMPTZ NULL," +
-            "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
-            ")"
+                "V2607071921a – create retrieval_index_chunk table",
+                "CREATE TABLE IF NOT EXISTS retrieval_index_chunk (" +
+                        "  id                UUID          PRIMARY KEY DEFAULT gen_random_uuid()," +
+                        "  patient_id        BIGINT        NOT NULL," +
+                        "  record_type       VARCHAR(40)   NOT NULL," +
+                        "  source_record_id  VARCHAR(120)  NOT NULL," +
+                        "  source_kind       VARCHAR(40)   NULL," +
+                        "  chunk_text        TEXT          NOT NULL," +
+                        "  chunk_metadata    JSONB         NULL," +
+                        "  search_vector     TSVECTOR      NULL," +
+                        "  embedding         vector(1536)  NULL," +
+                        "  indexed_at        TIMESTAMPTZ   NOT NULL DEFAULT now()," +
+                        "  consent_scope     VARCHAR(40)   NULL," +
+                        "  citation_replay_after TIMESTAMPTZ NULL," +
+                        "  citation_replay_attempts INTEGER NOT NULL DEFAULT 0," +
+                        "  citation_replay_claimed_until TIMESTAMPTZ NULL," +
+                        "  migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE'" +
+                        ")"
         );
         // Repair path: Hibernate ddl-auto can create retrieval_index_chunk without embedding
         // (entity does not map the pgvector column). CREATE TABLE IF NOT EXISTS then no-ops.
         // A dedicated ADD COLUMN must run after the extension is available.
         applyRequiredPatch(
-            "V2607071921a2 – ensure retrieval_index_chunk.embedding column",
-            "ALTER TABLE retrieval_index_chunk "
-                    + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
+                "V2607071921a2 – ensure retrieval_index_chunk.embedding column",
+                "ALTER TABLE retrieval_index_chunk "
+                        + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
         );
         applyRequiredPatch(
-            "V2607071921a – ensure retrieval embedding column",
-            "ALTER TABLE retrieval_index_chunk "
-                + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
+                "V2607071921a – ensure retrieval embedding column",
+                "ALTER TABLE retrieval_index_chunk "
+                        + "ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL"
         );
         applyRequiredPatch(
-            "V2607071921a – ensure retrieval search_vector column",
-            "ALTER TABLE retrieval_index_chunk "
-                + "ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL"
+                "V2607071921a – ensure retrieval search_vector column",
+                "ALTER TABLE retrieval_index_chunk "
+                        + "ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL"
         );
         applyRequiredPatch(
-            "V2607182130 – typed retrieval replay and migration state",
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS patient_id BIGINT;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS record_type VARCHAR(40);" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS source_record_id VARCHAR(120);" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS chunk_text TEXT;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS chunk_metadata JSONB NULL;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL;" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ DEFAULT now();" +
-            "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS consent_scope VARCHAR(40) NULL;" +
-            "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS citation_replay_after TIMESTAMPTZ NULL;" +
-            "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS citation_replay_attempts INTEGER NOT NULL DEFAULT 0;" +
-            "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS citation_replay_claimed_until TIMESTAMPTZ NULL;" +
-            "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS citation_replay_claim_token UUID NULL;" +
-            "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE';" +
-            "UPDATE retrieval_index_chunk SET migration_status = 'QUARANTINED', " +
-            "citation_replay_claimed_until = NULL, citation_replay_claim_token = NULL " +
-            "WHERE source_kind IS NULL " +
-            "AND record_type IN ('CALL_SUMMARY','VISIT_SUMMARY','SUMMARY_ACTION_ITEM'," +
-            "'SUMMARY_APPOINTMENT','SUMMARY_CARE_INSTRUCTION','SUMMARY_CONDITION'," +
-            "'SUMMARY_SOAP','SUMMARY_CLINICAL_OBSERVATION') AND migration_status = 'ACTIVE'"
+                "V2607182130 – typed retrieval replay and migration state",
+                "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid();" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS patient_id BIGINT;" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS record_type VARCHAR(40);" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS source_record_id VARCHAR(120);" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL;" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS chunk_text TEXT;" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS chunk_metadata JSONB NULL;" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS search_vector TSVECTOR NULL;" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS embedding vector(1536) NULL;" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ DEFAULT now();" +
+                        "ALTER TABLE retrieval_index_chunk ADD COLUMN IF NOT EXISTS consent_scope VARCHAR(40) NULL;" +
+                        "ALTER TABLE retrieval_index_chunk " +
+                        "  ADD COLUMN IF NOT EXISTS citation_replay_after TIMESTAMPTZ NULL;" +
+                        "ALTER TABLE retrieval_index_chunk " +
+                        "  ADD COLUMN IF NOT EXISTS citation_replay_attempts INTEGER NOT NULL DEFAULT 0;" +
+                        "ALTER TABLE retrieval_index_chunk " +
+                        "  ADD COLUMN IF NOT EXISTS citation_replay_claimed_until TIMESTAMPTZ NULL;" +
+                        "ALTER TABLE retrieval_index_chunk " +
+                        "  ADD COLUMN IF NOT EXISTS citation_replay_claim_token UUID NULL;" +
+                        "ALTER TABLE retrieval_index_chunk " +
+                        "  ADD COLUMN IF NOT EXISTS migration_status VARCHAR(24) NOT NULL DEFAULT 'ACTIVE';" +
+                        "UPDATE retrieval_index_chunk SET migration_status = 'QUARANTINED', " +
+                        "citation_replay_claimed_until = NULL, citation_replay_claim_token = NULL " +
+                        "WHERE source_kind IS NULL " +
+                        "AND record_type IN ('CALL_SUMMARY','VISIT_SUMMARY','SUMMARY_ACTION_ITEM'," +
+                        "'SUMMARY_APPOINTMENT','SUMMARY_CARE_INSTRUCTION','SUMMARY_CONDITION'," +
+                        "'SUMMARY_SOAP','SUMMARY_CLINICAL_OBSERVATION') AND migration_status = 'ACTIVE'"
         );
         applyRequiredPatch(
-            "V2607182105 – add retrieval source ownership discriminator",
-            "ALTER TABLE retrieval_index_chunk " +
-            "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL"
+                "V2607182105 – add retrieval source ownership discriminator",
+                "ALTER TABLE retrieval_index_chunk " +
+                        "  ADD COLUMN IF NOT EXISTS source_kind VARCHAR(40) NULL"
         );
         applyRequiredPatch(
-            "V2607071921b – retrieval_index_chunk patient FK",
-            foreignKeyIfMissing(
-                    "fk_retrieval_chunk_patient", "retrieval_index_chunk",
-                    "patient_id", "patient", "id", "")
+                "V2607071921b – retrieval_index_chunk patient FK",
+                foreignKeyIfMissing(
+                        "fk_retrieval_chunk_patient", "retrieval_index_chunk",
+                        "patient_id", "patient", "id", "")
         );
         applyRequiredPatch(
-            "V2607071921c – retrieval_index_chunk indexes",
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id " +
-            "  ON retrieval_index_chunk (patient_id);" +
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_record_type " +
-            "  ON retrieval_index_chunk (patient_id, record_type);" +
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source " +
-            "  ON retrieval_index_chunk (source_record_id, record_type)"
+                "V2607071921c – retrieval_index_chunk indexes",
+                "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_id " +
+                        "  ON retrieval_index_chunk (patient_id);" +
+                        "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_patient_record_type " +
+                        "  ON retrieval_index_chunk (patient_id, record_type);" +
+                        "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_source " +
+                        "  ON retrieval_index_chunk (source_record_id, record_type)"
         );
         applyRequiredPatch(
-            "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
-            "CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger() " +
-            "RETURNS TRIGGER AS $$ " +
-            "BEGIN " +
-            "  NEW.search_vector := to_tsvector('english', COALESCE(NEW.chunk_text, '')); " +
-            "  RETURN NEW; " +
-            "END; " +
-            "$$ LANGUAGE plpgsql;" +
-            "DROP TRIGGER IF EXISTS trg_retrieval_index_chunk_search_vector ON retrieval_index_chunk;" +
-            "CREATE TRIGGER trg_retrieval_index_chunk_search_vector " +
-            "  BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk " +
-            "  FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger()"
+                "V2607071921d – retrieval_index_chunk FTS search_vector trigger",
+                "CREATE OR REPLACE FUNCTION retrieval_index_chunk_search_vector_trigger() " +
+                        "RETURNS TRIGGER AS $$ " +
+                        "BEGIN " +
+                        "  NEW.search_vector := to_tsvector('english', COALESCE(NEW.chunk_text, '')); " +
+                        "  RETURN NEW; " +
+                        "END; " +
+                        "$$ LANGUAGE plpgsql;" +
+                        "DROP TRIGGER IF EXISTS trg_retrieval_index_chunk_search_vector ON retrieval_index_chunk;" +
+                        "CREATE TRIGGER trg_retrieval_index_chunk_search_vector " +
+                        "  BEFORE INSERT OR UPDATE OF chunk_text ON retrieval_index_chunk " +
+                        "  FOR EACH ROW EXECUTE FUNCTION retrieval_index_chunk_search_vector_trigger()"
         );
         applyRequiredPatch(
-            "V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)",
-            "UPDATE retrieval_index_chunk " +
-            "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
-            "WHERE search_vector IS NULL"
+                "V2607121930 – backfill retrieval_index_chunk search_vector (Task 4.2)",
+                "UPDATE retrieval_index_chunk " +
+                        "SET search_vector = to_tsvector('english', COALESCE(chunk_text, '')) " +
+                        "WHERE search_vector IS NULL"
         );
         applyRequiredPatch(
-            "V2607032257 – create indexing_outbox",
-            "CREATE TABLE IF NOT EXISTS indexing_outbox (" +
-            "  id BIGSERIAL PRIMARY KEY," +
-            "  event_type VARCHAR(64) NOT NULL," +
-            "  payload_json TEXT NOT NULL," +
-            "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
-            "  processed_at TIMESTAMP NULL," +
-            "  attempt_count INTEGER NOT NULL DEFAULT 0," +
-            "  last_error TEXT NULL" +
-            ");" +
-            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_unprocessed " +
-            "  ON indexing_outbox (created_at) WHERE processed_at IS NULL;" +
-            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_event_type " +
-            "  ON indexing_outbox (event_type)"
+                "V2607032257 – create indexing_outbox",
+                "CREATE TABLE IF NOT EXISTS indexing_outbox (" +
+                        "  id BIGSERIAL PRIMARY KEY," +
+                        "  event_type VARCHAR(64) NOT NULL," +
+                        "  payload_json TEXT NOT NULL," +
+                        "  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP," +
+                        "  processed_at TIMESTAMP NULL," +
+                        "  attempt_count INTEGER NOT NULL DEFAULT 0," +
+                        "  last_error TEXT NULL" +
+                        ");" +
+                        "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_unprocessed " +
+                        "  ON indexing_outbox (created_at) WHERE processed_at IS NULL;" +
+                        "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_event_type " +
+                        "  ON indexing_outbox (event_type)"
         );
         applyRequiredPatch(
-            "V2607122000 – indexing_outbox claimed_at lease column",
-            "ALTER TABLE indexing_outbox " +
-            "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
-            "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
-            "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
+                "V2607122000 – indexing_outbox claimed_at lease column",
+                "ALTER TABLE indexing_outbox " +
+                        "  ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;" +
+                        "CREATE INDEX IF NOT EXISTS idx_indexing_outbox_claimable " +
+                        "  ON indexing_outbox (id ASC) WHERE processed_at IS NULL"
         );
         applyRequiredPatch(
-            "V2607161317 – partial index for embedding backfill scans (Task 4.4, optional DBA follow-up)",
-            "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding_null_backfill " +
-            "  ON retrieval_index_chunk (indexed_at ASC NULLS LAST, id ASC) " +
-            "  WHERE embedding IS NULL " +
-            "    AND chunk_text IS NOT NULL " +
-            "    AND TRIM(BOTH FROM chunk_text) <> ''"
+                "V2607161317 – partial index for embedding backfill scans (Task 4.4, optional DBA follow-up)",
+                "CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding_null_backfill " +
+                        "  ON retrieval_index_chunk (indexed_at ASC NULLS LAST, id ASC) " +
+                        "  WHERE embedding IS NULL " +
+                        "    AND chunk_text IS NOT NULL " +
+                        "    AND TRIM(BOTH FROM chunk_text) <> ''"
         );
         applyCatalogPatch("2607191400-summary-citation-replay");
         applyCatalogPatch("2607191500-summary-chunk-ownership-correction");
@@ -974,38 +1074,38 @@ public class SchemaPatchRunner implements CommandLineRunner {
             return;
         }
         applyPatch(
-            "V2606290938 – reject_update_delete_immutable function (shared)",
-            "CREATE OR REPLACE FUNCTION reject_update_delete_immutable() RETURNS TRIGGER AS $$ " +
-            "BEGIN RAISE EXCEPTION 'Updates and deletes are not allowed on immutable log tables (%).', " +
-            "TG_TABLE_NAME; END; $$ LANGUAGE plpgsql"
+                "V2606290938 – reject_update_delete_immutable function (shared)",
+                "CREATE OR REPLACE FUNCTION reject_update_delete_immutable() RETURNS TRIGGER AS $$ " +
+                        "BEGIN RAISE EXCEPTION 'Updates and deletes are not allowed on immutable log tables (%).', " +
+                        "TG_TABLE_NAME; END; $$ LANGUAGE plpgsql"
         );
         applyPatch(
-            "V2606290938a – create ai_audit_ledger table",
-            "CREATE TABLE IF NOT EXISTS ai_audit_ledger (" +
-            "  id             BIGSERIAL     PRIMARY KEY," +
-            "  event_type     VARCHAR(50)   NOT NULL," +
-            "  actor_user_id  BIGINT," +
-            "  patient_id     BIGINT," +
-            "  session_id     VARCHAR(128)," +
-            "  source_feature VARCHAR(100)  NOT NULL," +
-            "  payload        JSONB," +
-            "  occurred_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW())"
+                "V2606290938a – create ai_audit_ledger table",
+                "CREATE TABLE IF NOT EXISTS ai_audit_ledger (" +
+                        "  id             BIGSERIAL     PRIMARY KEY," +
+                        "  event_type     VARCHAR(50)   NOT NULL," +
+                        "  actor_user_id  BIGINT," +
+                        "  patient_id     BIGINT," +
+                        "  session_id     VARCHAR(128)," +
+                        "  source_feature VARCHAR(100)  NOT NULL," +
+                        "  payload        JSONB," +
+                        "  occurred_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW())"
         );
         applyPatch("V2606290938b – index ai_audit_ledger(actor_user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_actor ON ai_audit_ledger(actor_user_id)");
+                "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_actor ON ai_audit_ledger(actor_user_id)");
         applyPatch("V2606290938c – index ai_audit_ledger(patient_id)",
-            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_patient ON ai_audit_ledger(patient_id)");
+                "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_patient ON ai_audit_ledger(patient_id)");
         applyPatch("V2606290938d – index ai_audit_ledger(event_type)",
-            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_event_type ON ai_audit_ledger(event_type)");
+                "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_event_type ON ai_audit_ledger(event_type)");
         applyPatch("V2606290938e – index ai_audit_ledger(occurred_at)",
-            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_occurred_at ON ai_audit_ledger(occurred_at)");
+                "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_occurred_at ON ai_audit_ledger(occurred_at)");
         applyPatch("V2606290938f – index ai_audit_ledger(session_id)",
-            "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_session ON ai_audit_ledger(session_id)");
+                "CREATE INDEX IF NOT EXISTS idx_ai_audit_ledger_session ON ai_audit_ledger(session_id)");
         applyPatch(
-            "V2606290938g – ai_audit_ledger immutability trigger",
-            "DROP TRIGGER IF EXISTS tr_ai_audit_ledger_immutable ON ai_audit_ledger;" +
-            "CREATE TRIGGER tr_ai_audit_ledger_immutable BEFORE UPDATE OR DELETE ON ai_audit_ledger " +
-            "FOR EACH ROW EXECUTE FUNCTION reject_update_delete_immutable()"
+                "V2606290938g – ai_audit_ledger immutability trigger",
+                "DROP TRIGGER IF EXISTS tr_ai_audit_ledger_immutable ON ai_audit_ledger;" +
+                        "CREATE TRIGGER tr_ai_audit_ledger_immutable BEFORE UPDATE OR DELETE ON ai_audit_ledger " +
+                        "FOR EACH ROW EXECUTE FUNCTION reject_update_delete_immutable()"
         );
     }
 
@@ -1018,69 +1118,69 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyUspsMailpiecePatches() {
         applyPatch(
-            "V2607142100a – create usps_mailpiece table",
-            "CREATE TABLE IF NOT EXISTS usps_mailpiece (" +
-            "  id              BIGSERIAL       PRIMARY KEY," +
-            "  patient_id      BIGINT          NOT NULL," +
-            "  user_id         VARCHAR(120)    NULL," +
-            "  source_key      VARCHAR(160)    NOT NULL," +
-            "  external_id     VARCHAR(120)    NULL," +
-            "  sender          VARCHAR(512)    NULL," +
-            "  summary         TEXT            NULL," +
-            "  image_ref       VARCHAR(1024)   NULL," +
-            "  received_at     TIMESTAMPTZ     NULL," +
-            "  digest_date     DATE            NULL," +
-            "  ocr_text        TEXT            NULL," +
-            "  content_hash    VARCHAR(80)     NOT NULL," +
-            "  consent_scope   VARCHAR(40)     NULL," +
-            "  created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()," +
-            "  updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()" +
-            ")"
+                "V2607142100a – create usps_mailpiece table",
+                "CREATE TABLE IF NOT EXISTS usps_mailpiece (" +
+                        "  id              BIGSERIAL       PRIMARY KEY," +
+                        "  patient_id      BIGINT          NOT NULL," +
+                        "  user_id         VARCHAR(120)    NULL," +
+                        "  source_key      VARCHAR(160)    NOT NULL," +
+                        "  external_id     VARCHAR(120)    NULL," +
+                        "  sender          VARCHAR(512)    NULL," +
+                        "  summary         TEXT            NULL," +
+                        "  image_ref       VARCHAR(1024)   NULL," +
+                        "  received_at     TIMESTAMPTZ     NULL," +
+                        "  digest_date     DATE            NULL," +
+                        "  ocr_text        TEXT            NULL," +
+                        "  content_hash    VARCHAR(80)     NOT NULL," +
+                        "  consent_scope   VARCHAR(40)     NULL," +
+                        "  created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()," +
+                        "  updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()" +
+                        ")"
         );
         applyPatch(
-            "V2607142100b – usps_mailpiece patient FK",
-            "DO $$ BEGIN " +
-            "  ALTER TABLE usps_mailpiece " +
-            "    ADD CONSTRAINT fk_usps_mailpiece_patient " +
-            "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
-            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+                "V2607142100b – usps_mailpiece patient FK",
+                "DO $$ BEGIN " +
+                        "  ALTER TABLE usps_mailpiece " +
+                        "    ADD CONSTRAINT fk_usps_mailpiece_patient " +
+                        "    FOREIGN KEY (patient_id) REFERENCES patient (id); " +
+                        "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
         );
         applyPatch(
-            "V2607142100c – usps_mailpiece unique (patient_id, source_key)",
-            "DO $$ BEGIN " +
-            "  ALTER TABLE usps_mailpiece " +
-            "    ADD CONSTRAINT uq_usps_mailpiece_patient_source_key " +
-            "    UNIQUE (patient_id, source_key); " +
-            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+                "V2607142100c – usps_mailpiece unique (patient_id, source_key)",
+                "DO $$ BEGIN " +
+                        "  ALTER TABLE usps_mailpiece " +
+                        "    ADD CONSTRAINT uq_usps_mailpiece_patient_source_key " +
+                        "    UNIQUE (patient_id, source_key); " +
+                        "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
         );
         applyPatch(
-            "V2607142100d – usps_mailpiece indexes",
-            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_digest_date " +
-            "  ON usps_mailpiece (patient_id, digest_date);" +
-            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_content_hash " +
-            "  ON usps_mailpiece (patient_id, content_hash)"
+                "V2607142100d – usps_mailpiece indexes",
+                "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_digest_date " +
+                        "  ON usps_mailpiece (patient_id, digest_date);" +
+                        "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_content_hash " +
+                        "  ON usps_mailpiece (patient_id, content_hash)"
         );
         applyPatch(
-            "V2607142130a – usps_mailpiece importance classification columns",
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS importance_level VARCHAR(16) NULL;" +
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS importance_confidence NUMERIC(3, 2) NULL;" +
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS classification_method VARCHAR(32) NULL;" +
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS classification_engine VARCHAR(128) NULL;" +
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS importance_reasoning TEXT NULL;" +
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS importance_category VARCHAR(40) NULL;" +
-            "ALTER TABLE usps_mailpiece " +
-            "  ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ NULL"
+                "V2607142130a – usps_mailpiece importance classification columns",
+                "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS importance_level VARCHAR(16) NULL;" +
+                        "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS importance_confidence NUMERIC(3, 2) NULL;" +
+                        "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS classification_method VARCHAR(32) NULL;" +
+                        "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS classification_engine VARCHAR(128) NULL;" +
+                        "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS importance_reasoning TEXT NULL;" +
+                        "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS importance_category VARCHAR(40) NULL;" +
+                        "ALTER TABLE usps_mailpiece " +
+                        "  ADD COLUMN IF NOT EXISTS classified_at TIMESTAMPTZ NULL"
         );
         applyPatch(
-            "V2607142130b – usps_mailpiece importance index",
-            "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance " +
-            "  ON usps_mailpiece (patient_id, importance_level, digest_date)"
+                "V2607142130b – usps_mailpiece importance index",
+                "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance " +
+                        "  ON usps_mailpiece (patient_id, importance_level, digest_date)"
         );
     }
 
@@ -1091,26 +1191,26 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void seedDemoScheduledVisits() {
         String sql =
-            "INSERT INTO scheduled_visits " +
-            "  (caregiver_id, patient_id, service_type, scheduled_date, scheduled_time, " +
-            "   duration_minutes, priority, status, created_at, updated_at) " +
-            "SELECT " +
-            "  (SELECT c.id FROM caregiver c JOIN users u ON c.user_id = u.id WHERE u.email = 'caregiver@careconnect.com' LIMIT 1), " +
-            "  (SELECT p.id FROM patient p JOIN users u ON p.user_id = u.id WHERE u.email = 'patient@careconnect.com' LIMIT 1), " +
-            "  svc, sdate, stime, dur, 'Normal', 'Scheduled', NOW(), NOW() " +
-            "FROM (VALUES " +
-            "  ('Medication Management', CURRENT_DATE + 1, TIME '09:00:00', 45) " +
-            ") AS v(svc, sdate, stime, dur) " +
-            "WHERE NOT EXISTS (SELECT 1 FROM scheduled_visits LIMIT 1)";
+                "INSERT INTO scheduled_visits " +
+                        "  (caregiver_id, patient_id, service_type, scheduled_date, scheduled_time, " +
+                        "   duration_minutes, priority, status, created_at, updated_at) " +
+                        "SELECT " +
+                        "  (SELECT c.id FROM caregiver c JOIN users u ON c.user_id = u.id WHERE u.email = 'caregiver@careconnect.com' LIMIT 1), " +
+                        "  (SELECT p.id FROM patient p JOIN users u ON p.user_id = u.id WHERE u.email = 'patient@careconnect.com' LIMIT 1), " +
+                        "  svc, sdate, stime, dur, 'Normal', 'Scheduled', NOW(), NOW() " +
+                        "FROM (VALUES " +
+                        "  ('Medication Management', CURRENT_DATE + 1, TIME '09:00:00', 45) " +
+                        ") AS v(svc, sdate, stime, dur) " +
+                        "WHERE NOT EXISTS (SELECT 1 FROM scheduled_visits LIMIT 1)";
 
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(true);
             // Remove any previously seeded demo visits for the demo caregiver account
             stmt.executeUpdate(
-                "DELETE FROM scheduled_visits WHERE caregiver_id = " +
-                "(SELECT c.id FROM caregiver c JOIN users u ON c.user_id = u.id " +
-                " WHERE u.email = 'caregiver@careconnect.com' LIMIT 1)"
+                    "DELETE FROM scheduled_visits WHERE caregiver_id = " +
+                            "(SELECT c.id FROM caregiver c JOIN users u ON c.user_id = u.id " +
+                            " WHERE u.email = 'caregiver@careconnect.com' LIMIT 1)"
             );
             int rows = stmt.executeUpdate(sql);
             if (rows > 0) {
@@ -1142,37 +1242,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
-    /**
-     * Soft patches may skip only when the failure means the change is already present or
-     * an optional legacy object is already gone. Failed CREATE/ADD because a type, table,
-     * or dependency is missing must remain a warning (not "already applied").
-     */
-    static boolean isIdempotentAlreadyApplied(final String message, final String sql) {
-        final String msg = message == null ? "" : message.toLowerCase(Locale.ROOT);
-        final String lowerSql = sql == null ? "" : sql.toLowerCase(Locale.ROOT);
-        if (msg.contains("42p16")
-                || msg.contains("already exists")
-                || (msg.contains("already") && msg.contains("duplicate"))) {
-            return true;
-        }
-        if (msg.contains("already") && !msg.contains("does not exist")) {
-            return true;
-        }
-        if (!msg.contains("does not exist")) {
-            return false;
-        }
-        return looksLikeOptionalDropOrRename(lowerSql);
-    }
-
-    private static boolean looksLikeOptionalDropOrRename(final String lowerSql) {
-        return lowerSql.contains("drop constraint")
-                || lowerSql.contains("drop column")
-                || lowerSql.contains("drop index")
-                || lowerSql.contains("drop not null")
-                || lowerSql.contains("rename column")
-                || (lowerSql.contains("alter column") && lowerSql.contains("drop"));
-    }
-
     private void applyRequiredPatch(String name, String sql) {
         try (Connection conn = dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
@@ -1193,55 +1262,55 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void ensureRetrievalConcurrentIndexes() {
         ensureConcurrentIndex(
-            "V2607182130b – concurrent retrieval replay index",
-            "idx_retrieval_summary_replay",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
-            "  ON retrieval_index_chunk " +
-            "    (citation_replay_after, patient_id, source_record_id) " +
-            "  WHERE migration_status = 'ACTIVE'",
-            "CREATE INDEX idx_retrieval_summary_replay "
-                    + "ON retrieval_index_chunk "
-                    + "(citation_replay_after, patient_id, source_record_id) "
-                    + "WHERE migration_status = 'ACTIVE'"
+                "V2607182130b – concurrent retrieval replay index",
+                "idx_retrieval_summary_replay",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay " +
+                        "  ON retrieval_index_chunk " +
+                        "    (citation_replay_after, patient_id, source_record_id) " +
+                        "  WHERE migration_status = 'ACTIVE'",
+                "CREATE INDEX idx_retrieval_summary_replay "
+                        + "ON retrieval_index_chunk "
+                        + "(citation_replay_after, patient_id, source_record_id) "
+                        + "WHERE migration_status = 'ACTIVE'"
         );
         ensureConcurrentIndex(
-            "V2607182130c – concurrent retrieval replay claim index",
-            "idx_retrieval_summary_replay_claim",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay_claim " +
-            "  ON retrieval_index_chunk " +
-            "    (citation_replay_claimed_until, citation_replay_after, " +
-            "     patient_id, source_record_id) " +
-            "  WHERE migration_status = 'ACTIVE'",
-            "CREATE INDEX idx_retrieval_summary_replay_claim "
-                    + "ON retrieval_index_chunk "
-                    + "(citation_replay_claimed_until, citation_replay_after, "
-                    + "patient_id, source_record_id) "
-                    + "WHERE migration_status = 'ACTIVE'"
+                "V2607182130c – concurrent retrieval replay claim index",
+                "idx_retrieval_summary_replay_claim",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_summary_replay_claim " +
+                        "  ON retrieval_index_chunk " +
+                        "    (citation_replay_claimed_until, citation_replay_after, " +
+                        "     patient_id, source_record_id) " +
+                        "  WHERE migration_status = 'ACTIVE'",
+                "CREATE INDEX idx_retrieval_summary_replay_claim "
+                        + "ON retrieval_index_chunk "
+                        + "(citation_replay_claimed_until, citation_replay_after, "
+                        + "patient_id, source_record_id) "
+                        + "WHERE migration_status = 'ACTIVE'"
         );
         ensureConcurrentIndex(
-            "V2607182105b – concurrent retrieval source identity index",
-            "idx_retrieval_chunk_source_identity",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
-            "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)",
-            "CREATE INDEX idx_retrieval_chunk_source_identity "
-                    + "ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
+                "V2607182105b – concurrent retrieval source identity index",
+                "idx_retrieval_chunk_source_identity",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_source_identity " +
+                        "  ON retrieval_index_chunk (patient_id, source_kind, source_record_id)",
+                "CREATE INDEX idx_retrieval_chunk_source_identity "
+                        + "ON retrieval_index_chunk (patient_id, source_kind, source_record_id)"
         );
         ensureConcurrentIndex(
-            "V2607071921c – concurrent retrieval FTS index",
-            "idx_retrieval_chunk_fts",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_fts " +
-            "ON retrieval_index_chunk USING GIN (search_vector)",
-            "CREATE INDEX idx_retrieval_chunk_fts "
-                    + "ON retrieval_index_chunk USING GIN (search_vector)"
+                "V2607071921c – concurrent retrieval FTS index",
+                "idx_retrieval_chunk_fts",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_fts " +
+                        "ON retrieval_index_chunk USING GIN (search_vector)",
+                "CREATE INDEX idx_retrieval_chunk_fts "
+                        + "ON retrieval_index_chunk USING GIN (search_vector)"
         );
         ensureConcurrentIndex(
-            "V2607071921c – concurrent retrieval embedding index",
-            "idx_retrieval_chunk_embedding",
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_embedding " +
-            "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)",
-            "CREATE INDEX idx_retrieval_chunk_embedding "
-                    + "ON retrieval_index_chunk USING ivfflat "
-                    + "(embedding vector_cosine_ops) WITH (lists = 100)"
+                "V2607071921c – concurrent retrieval embedding index",
+                "idx_retrieval_chunk_embedding",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_chunk_embedding " +
+                        "ON retrieval_index_chunk USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)",
+                "CREATE INDEX idx_retrieval_chunk_embedding "
+                        + "ON retrieval_index_chunk USING ivfflat "
+                        + "(embedding vector_cosine_ops) WITH (lists = 100)"
         );
     }
 
@@ -1279,9 +1348,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     exists = true;
                     healthy = result.getBoolean(1)
                             && normalizeIndexDefinition(
-                                    result.getString(2), result.getString(3))
-                                    .equals(normalizeIndexDefinition(
-                                            expectedDefinition, result.getString(3)));
+                            result.getString(2), result.getString(3))
+                            .equals(normalizeIndexDefinition(
+                                    expectedDefinition, result.getString(3)));
                 }
             }
             if (exists && !healthy) {
@@ -1296,8 +1365,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 if (!result.next()
                         || !result.getBoolean(1)
                         || !normalizeIndexDefinition(result.getString(2), result.getString(3))
-                                .equals(normalizeIndexDefinition(
-                                        expectedDefinition, result.getString(3)))) {
+                        .equals(normalizeIndexDefinition(
+                                expectedDefinition, result.getString(3)))) {
                     throw new IllegalStateException(
                             "Index is not ready and valid: " + indexName);
                 }
@@ -1306,30 +1375,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Required concurrent index could not be prepared: " + name, e);
-        }
-    }
-
-    static String normalizeIndexDefinition(final String definition, final String schema) {
-        String normalized = definition.toLowerCase(Locale.ROOT);
-        normalized = normalized.replace("\"", "");
-        normalized = normalized.replace(" concurrently", "");
-        normalized = normalized.replace(" if not exists", "");
-        normalized = normalized.replace(" using btree", "");
-        normalized = normalized.replace(" asc", "");
-        if (schema != null && !schema.isBlank()) {
-            normalized = normalized.replace(schema.toLowerCase(Locale.ROOT) + ".", "");
-        }
-        normalized = POSTGRES_TEXT_CAST.matcher(normalized).replaceAll("");
-        normalized = QUOTED_NUMBER.matcher(normalized).replaceAll("$1");
-        return normalized.replaceAll("[\\s()]+", "");
-    }
-
-    static void configureDdlTimeouts(final Statement stmt) throws Exception {
-        final String database = stmt.getConnection().getMetaData().getDatabaseProductName();
-        if (database != null
-                && database.toLowerCase(java.util.Locale.ROOT).contains("postgresql")) {
-            stmt.execute("SET lock_timeout = '5s'");
-            stmt.execute("SET statement_timeout = '5min'");
         }
     }
 
@@ -1360,7 +1405,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 work.run();
             } finally {
                 stmt.executeQuery(
-                        "SELECT pg_advisory_unlock(" + PRODUCTION_SCHEMA_LOCK + ")")
+                                "SELECT pg_advisory_unlock(" + PRODUCTION_SCHEMA_LOCK + ")")
                         .close();
             }
         } catch (InterruptedException e) {
@@ -1374,30 +1419,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
             throw new IllegalStateException(
                     "Unable to coordinate production schema migration", e);
         }
-    }
-
-    private static String foreignKeyIfMissing(
-            final String constraint,
-            final String table,
-            final String column,
-            final String referencedTable,
-            final String referencedColumn,
-            final String suffix) {
-        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c " +
-                "WHERE c.conrelid = '" + table + "'::regclass " +
-                "AND c.confrelid = '" + referencedTable + "'::regclass " +
-                "AND c.contype = 'f' " +
-                "AND c.conkey = ARRAY[(SELECT attnum FROM pg_attribute " +
-                "WHERE attrelid = '" + table + "'::regclass AND attname = '" +
-                column + "')]::smallint[] " +
-                "AND c.confkey = ARRAY[(SELECT attnum FROM pg_attribute " +
-                "WHERE attrelid = '" + referencedTable + "'::regclass AND attname = '" +
-                referencedColumn + "')]::smallint[] " +
-                "AND c.confdeltype = '" + (suffix.contains("CASCADE") ? "c" : "a") +
-                "') THEN " +
-                "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint +
-                " FOREIGN KEY (" + column + ") REFERENCES " + referencedTable +
-                " (" + referencedColumn + ")" + suffix + "; END IF; END $$;";
     }
 
     private void verifyForeignKeyCount(
@@ -1805,20 +1826,20 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyRecordingWorkerAuditColumnPatches() {
         applyRequiredPatch(
-            "V2607301000a – ensure post_call_transcription_jobs audit columns",
-            "ALTER TABLE IF EXISTS post_call_transcription_jobs "
-                    + "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
-                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-                    + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
-                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                "V2607301000a – ensure post_call_transcription_jobs audit columns",
+                "ALTER TABLE IF EXISTS post_call_transcription_jobs "
+                        + "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
+                        + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                        + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
+                        + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
         );
         applyRequiredPatch(
-            "V2607301000b – ensure recording_compensation_outbox audit columns",
-            "ALTER TABLE IF EXISTS recording_compensation_outbox "
-                    + "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
-                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-                    + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
-                    + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                "V2607301000b – ensure recording_compensation_outbox audit columns",
+                "ALTER TABLE IF EXISTS recording_compensation_outbox "
+                        + "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ "
+                        + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                        + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
+                        + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
         );
     }
 
@@ -1851,7 +1872,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String message = e.getMessage() == null ? "" : e.getMessage();
             if (message.contains("call_recordings")
                     && (message.contains("does not exist")
-                            || message.contains("not found"))) {
+                    || message.contains("not found"))) {
                 log.info(
                         "Skipping recording-state prechecks; call_recordings not present yet");
                 return;
@@ -1870,16 +1891,5 @@ public class SchemaPatchRunner implements CommandLineRunner {
         for (final SchemaPatchLedger.Patch patch : SchemaPatchCatalog.PATCHES) {
             applyCatalogPatch(patch.id());
         }
-    }
-
-    /** Catalog IDs the runner guarantees to apply under the production migration lock. */
-    static List<String> catalogPatchIdsAppliedByRunner() {
-        return SchemaPatchCatalog.PATCHES.stream().map(SchemaPatchLedger.Patch::id).toList();
-    }
-
-    private static String applicationVersion() {
-        final Package applicationPackage = SchemaPatchRunner.class.getPackage();
-        final String version = applicationPackage.getImplementationVersion();
-        return version == null || version.isBlank() ? "development" : version;
     }
 }
