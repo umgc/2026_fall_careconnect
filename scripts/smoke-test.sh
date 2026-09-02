@@ -30,6 +30,15 @@
 #   ./scripts/smoke-test.sh -u "$BACKEND_URL" --log-group /ecs/careconnect-backend-cfdemo
 #
 # Exit codes: 0 = all hard checks passed, 1 = at least one hard check failed.
+#
+# What this leaves behind: every run registers two PATIENT accounts,
+# smoke-<stamp>@example.com and smoke-noaddr-<stamp>@example.com, and verifies
+# the first. Nothing deletes them. CareConnect has no account-deletion endpoint:
+# removal is a manual request to careconnect.support@gmail.com with a 30-day SLA,
+# and HIPAA retention keeps the underlying records for six years regardless.
+# Passwords are generated per run and never recorded, so the accounts are inert,
+# but the user table grows by two rows every time this runs. Do not point it at
+# an environment where that matters.
 
 set -uo pipefail
 

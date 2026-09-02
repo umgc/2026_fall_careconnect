@@ -22,6 +22,7 @@ Fargate deployment.
 - [GitHub Actions Backend Deploy](#github-actions-backend-deploy)
 - [GitHub Actions Full Deploy](#github-actions-full-deploy)
 - [What each stack owns](#what-each-stack-owns)
+- [Account-level templates](#account-level-templates)
 - [Design choices](#design-choices)
 - [Required application contract](#required-application-contract)
 - [ECS task role permissions](#ecs-task-role-permissions)
@@ -46,6 +47,10 @@ Fargate deployment.
 3. `03-platform.yaml`
 4. Build and push the backend image to ECR
 5. `04-service.yaml`
+
+Two further templates sit outside this chain and are deployed once per AWS
+account rather than per environment. See
+[Account-level templates](#account-level-templates).
 
 
 
@@ -346,6 +351,82 @@ The full setup guide is in
 - app environment variable and secret wiring
 
 
+
+### Account-level templates
+
+`templates/careconnect-budgets.yaml` and `templates/github-oidc-deploy-role.yaml`
+are **not** part of the numbered `01`-`04` stack order. Those four are
+instantiated per environment; these two are deployed **once per AWS account**.
+
+| Template | Deploy when | How often |
+| -------- | ----------- | --------- |
+| `careconnect-budgets.yaml` | Your account runs any CareConnect environment | Once per account |
+| `github-oidc-deploy-role.yaml` | CI needs to deploy into your account | Once per account |
+
+#### `careconnect-budgets.yaml`
+
+Account-level monthly cost budget with tiered actual and forecasted alerts.
+Deploying it per environment would create duplicate account-wide budgets that all
+alert on the same spend, which is why it is deployed once.
+
+```bash
+aws cloudformation deploy \
+  --region us-east-1 \
+  --profile careconnect-sso \
+  --stack-name careconnect-budgets \
+  --template-file ./templates/careconnect-budgets.yaml \
+  --parameter-overrides NotificationEmail=you@umgc.edu
+```
+
+`NotificationEmail` is required. `BudgetLimitAmount` defaults to `75` USD, sized
+for one continuously running environment with headroom. Confirm the SNS
+subscription from your inbox or no alert will ever arrive.
+
+Per-environment budgets are not possible yet: no billable resource in `01`-`04`
+carries a cost-allocation tag, and cost allocation tags must additionally be
+activated in the Billing console and do not backfill.
+
+#### `github-oidc-deploy-role.yaml`
+
+Creates the GitHub Actions OIDC provider and the CI deployment role. This is the
+scripted equivalent of
+[`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md) sections 2a through 2c,
+which walk the same setup through the console. Use one path or the other, not
+both. No long-lived AWS access keys are created.
+
+```bash
+aws cloudformation deploy \
+  --region us-east-1 \
+  --profile careconnect-sso \
+  --stack-name careconnect-github-oidc \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --template-file ./templates/github-oidc-deploy-role.yaml \
+  --parameter-overrides GitHubOrg=umgc GitHubRepo=2026_fall_careconnect
+```
+
+If your account already has the GitHub OIDC provider, add
+`CreateOidcProvider=No` or the deploy fails on a duplicate provider. Many
+accounts already have it, so check IAM > Identity providers first.
+
+Read the `DeployRoleArn` output and store it in GitHub as the repository variable
+`AWS_GITHUB_ACTIONS_ROLE_ARN`:
+
+```bash
+aws cloudformation describe-stacks \
+  --region us-east-1 --profile careconnect-sso \
+  --stack-name careconnect-github-oidc \
+  --query "Stacks[0].Outputs[?OutputKey=='DeployRoleArn'].OutputValue" --output text
+```
+
+`AllowInfrastructureDeploy` defaults to `No`, which limits the role to app-only
+deploys. Set it to `Yes` only if CI must create or update the `01`-`04` stacks.
+
+`DeployEnvironment1` through `DeployEnvironment4` default to `dev`, `cfdemo`,
+`staging` and `prod`. These are the GitHub Environments allowed to assume the
+role. They are named explicitly rather than wildcarded, so an environment you
+have not listed cannot deploy. Set a slot to an empty string to allow nothing
+for it, and use `AdditionalSubject` if you need a subject the four slots cannot
+express.
 
 ### Design choices
 

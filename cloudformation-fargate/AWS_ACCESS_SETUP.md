@@ -45,15 +45,16 @@ Answer the prompts:
 | Prompt | Value |
 | ------ | ----- |
 | SSO session name | `careconnect` |
-| SSO start URL | `https://d-XXXXXXXXXX.awsapps.com/start` (see below) |
+| SSO start URL | see the note below |
 | SSO region | `us-east-1` |
 | SSO registration scopes | `sso:account:access` (accept the default) |
 
-**Get the real start URL from the course shell**, in the same announcement that
-granted you the AWS account. It is not written down here: the `d-XXXXXXXXXX`
-segment identifies the school's Identity Center instance, and this repository is
-public. The URL is the same for everyone in the course, and it does not
-identify you or your account, so use the value the course gives you verbatim.
+The start URL is the same for everyone and has the shape
+`https://d-XXXXXXXXXX.awsapps.com/start`. That `d-` value is the school's
+Identity Center directory ID. It identifies the institution, not you and not
+your account, but it is deliberately not published in this repo: get the
+current start URL from the course shell, where it is posted alongside the
+account assignments. Type it exactly as given there.
 
 > **Do not copy it from your browser's address bar.** The portal is a
 > single-page app, so the bar shows `https://d-XXXXXXXXXX.awsapps.com/start/#/`.

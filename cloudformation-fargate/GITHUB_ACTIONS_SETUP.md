@@ -91,56 +91,16 @@ or:
 The recommended setup is GitHub OIDC with an IAM role. This avoids storing long
 term AWS keys in the repository.
 
-There are two ways to create it. Both produce the same provider and role, and
-you only need one.
+> **Shortcut: deploy this instead of clicking through it.**
+> `templates/github-oidc-deploy-role.yaml` creates the OIDC provider and the role
+> in one CloudFormation stack, and is the scripted equivalent of sections 2a
+> through 2c below. The deploy command and parameters are in
+> [`README.md`](./README.md#account-level-templates). Use one path or the other,
+> not both. Sections 2a to 2c remain here as the console walkthrough, and are
+> still the right reference for understanding what the template creates or for
+> verifying an account somebody else set up.
 
-### 2-CFN. CloudFormation instead of the console (faster)
-
-`templates/github-oidc-deploy-role.yaml` creates the OIDC provider and the
-deploy role in one stack. It replaces sections 2a, 2b, and 2c below. Skip
-straight to section 3 once it completes.
-
-Run it **once per AWS account** that CI deploys into. Under per-user LEO
-accounts that means each environment owner runs it in their own account and
-hands the resulting role ARN to whoever administers the repository.
-
-```bash
-aws cloudformation deploy \
-  --stack-name careconnect-github-oidc \
-  --template-file cloudformation-fargate/templates/github-oidc-deploy-role.yaml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1 \
-  --profile careconnect-sso
-```
-
-Then read the role ARN for section 3:
-
-```bash
-aws cloudformation describe-stacks \
-  --stack-name careconnect-github-oidc \
-  --query 'Stacks[0].Outputs[?OutputKey==`DeployRoleArn`].OutputValue' \
-  --output text \
-  --region us-east-1 --profile careconnect-sso
-```
-
-Parameters worth knowing before you run it:
-
-| Parameter | Default | When to change it |
-| --------- | ------- | ----------------- |
-| `CreateOidcProvider` | `Yes` | Set to `No` if the account already has a `token.actions.githubusercontent.com` provider. Only one is allowed per account, and the stack fails with `EntityAlreadyExists` otherwise. Check first with the console steps in 2a. |
-| `GitHubOrg` / `GitHubRepo` | `umgc` / `2026_fall_careconnect` | Change if you deploy from a fork. The trust policy will not match otherwise. |
-| `PrimaryBranch` | `main` | The branch allowed to deploy without a GitHub Environment. |
-| `DeployEnvironment1-4` | `dev`, `cfdemo`, `staging`, `prod` | The GitHub Environments allowed to assume the role. Named explicitly rather than wildcarded, so an environment you have not listed cannot deploy. Set a slot to `''` to allow nothing for it. |
-| `AllowInfrastructureDeploy` | `No` | Set to `Yes` only in the account that runs `backend-full-deploy.yml`. `PowerUserAccess` cannot create the IAM task roles that `03-platform.yaml` needs. |
-
-To change parameters, add `--parameter-overrides Key=Value ...` to the deploy
-command. To tear it down: `aws cloudformation delete-stack --stack-name
-careconnect-github-oidc`.
-
-### 2-CONSOLE. Click-by-click in AWS
-
-Use this path if you cannot run CloudFormation, or you want to watch each piece
-being created.
+### Click-by-click in AWS
 
 1. Sign in to the AWS Console
 2. In the top search bar, search for `IAM`
