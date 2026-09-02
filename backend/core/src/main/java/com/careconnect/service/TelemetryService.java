@@ -66,9 +66,10 @@ public class TelemetryService {
                 return null;
             }
 
+            details.values().removeIf(Objects::isNull);
             /* Do a little dark magic to filter it out */
             Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).collect(Collectors.toMap(Function.identity(), details::get));
-            newDetails.values().removeIf(Objects::isNull);
+
             event.setDetails(newDetails);
 
             Map<String, Object> deviceInfo = event.getDeviceInfo();
@@ -76,8 +77,9 @@ public class TelemetryService {
                 log.info("Recieved Invalid Telemetry Event: Null/Empty Device Info");
                 return null;
             }
+            deviceInfo.values().removeIf(Objects::isNull);
             Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
-            newDeviceInfo.values().removeIf(Objects::isNull);
+
             if (newDeviceInfo.isEmpty()) {
                 // Not going to bother storing an event with no valid deviceInfo
                 log.info("Recieved Invalid Telemetry Event: Invalid Device Info");
@@ -145,15 +147,17 @@ public class TelemetryService {
                 log.info("Recieved Invalid Telemetry Event: Null Details");
                 return null;
             }
+            details.values().removeIf(Objects::isNull);
             /* Do a little dark magic to filter it out */
             Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).collect(Collectors.toMap(Function.identity(), details::get));
-            newDetails.values().removeIf(Objects::isNull);
+
             event.setDetails(newDetails);
 
             if (deviceInfo == null || deviceInfo.isEmpty()) {
                 log.info("Recieved Invalid Telemetry Event: Null/Empty Device Info");
                 return null;
             }
+            deviceInfo.values().removeIf(Objects::isNull);
             Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
             if (newDeviceInfo.isEmpty()) {
                 // Not going to bother storing an event with no valid deviceInfo
