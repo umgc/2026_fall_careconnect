@@ -1,8 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/usps/presentation/mail_envelope_tts.dart';
+import 'package:care_connect_app/services/tts_engine.dart';
 
-class _RecordingEngine implements MailTtsEngine {
+class _RecordingEngine implements TtsEngine {
   final List<String> calls = <String>[];
   bool throwOnAwaitCompletion = false;
 
