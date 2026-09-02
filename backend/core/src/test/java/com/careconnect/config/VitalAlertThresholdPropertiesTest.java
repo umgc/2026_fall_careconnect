@@ -16,17 +16,17 @@ class VitalAlertThresholdPropertiesTest {
     @Test
     void bindsDefaultPolicyValues() {
         VitalAlertThresholdProperties properties = bindFrom(Map.ofEntries(
-            Map.entry("careconnect.alerts.vitals.heart-rate.low-max", "60.0"),
-            Map.entry("careconnect.alerts.vitals.heart-rate.high-min", "100.0"),
-            Map.entry("careconnect.alerts.vitals.heart-rate.critical-min", "120.0"),
-            Map.entry("careconnect.alerts.vitals.spo2.high-max", "95.0"),
-            Map.entry("careconnect.alerts.vitals.spo2.critical-max", "90.0"),
-            Map.entry("careconnect.alerts.vitals.blood-pressure.systolic.low-max", "90"),
-            Map.entry("careconnect.alerts.vitals.blood-pressure.systolic.high-min", "140"),
-            Map.entry("careconnect.alerts.vitals.blood-pressure.systolic.critical-min", "180"),
-            Map.entry("careconnect.alerts.vitals.blood-pressure.diastolic.low-max", "60"),
-            Map.entry("careconnect.alerts.vitals.blood-pressure.diastolic.high-min", "90"),
-            Map.entry("careconnect.alerts.vitals.blood-pressure.diastolic.critical-min", "110")
+                Map.entry("careconnect.alerts.vitals.heart-rate.low-max", "60.0"),
+                Map.entry("careconnect.alerts.vitals.heart-rate.high-min", "100.0"),
+                Map.entry("careconnect.alerts.vitals.heart-rate.critical-min", "120.0"),
+                Map.entry("careconnect.alerts.vitals.spo2.high-max", "95.0"),
+                Map.entry("careconnect.alerts.vitals.spo2.critical-max", "90.0"),
+                Map.entry("careconnect.alerts.vitals.blood-pressure.systolic.low-max", "90"),
+                Map.entry("careconnect.alerts.vitals.blood-pressure.systolic.high-min", "140"),
+                Map.entry("careconnect.alerts.vitals.blood-pressure.systolic.critical-min", "180"),
+                Map.entry("careconnect.alerts.vitals.blood-pressure.diastolic.low-max", "60"),
+                Map.entry("careconnect.alerts.vitals.blood-pressure.diastolic.high-min", "90"),
+                Map.entry("careconnect.alerts.vitals.blood-pressure.diastolic.critical-min", "110")
         ));
 
         assertEquals(60.0, properties.getHeartRate().getLowMax());
@@ -45,9 +45,9 @@ class VitalAlertThresholdPropertiesTest {
     @Test
     void profileSpecificOverridesCanChangeThresholds() {
         VitalAlertThresholdProperties properties = bindFrom(Map.of(
-            "careconnect.alerts.vitals.heart-rate.high-min", "105.0",
-            "careconnect.alerts.vitals.heart-rate.critical-min", "130.0",
-            "careconnect.alerts.vitals.spo2.high-max", "94.0"
+                "careconnect.alerts.vitals.heart-rate.high-min", "105.0",
+                "careconnect.alerts.vitals.heart-rate.critical-min", "130.0",
+                "careconnect.alerts.vitals.spo2.high-max", "94.0"
         ));
 
         assertEquals(105.0, properties.getHeartRate().getHighMin());
@@ -60,6 +60,6 @@ class VitalAlertThresholdPropertiesTest {
         environment.getPropertySources().addFirst(new MapPropertySource("test", sourceValues));
         Binder binder = new Binder(ConfigurationPropertySources.from(environment.getPropertySources()));
         return binder.bind("careconnect.alerts.vitals", VitalAlertThresholdProperties.class)
-            .orElseGet(VitalAlertThresholdProperties::new);
+                .orElseGet(VitalAlertThresholdProperties::new);
     }
 }

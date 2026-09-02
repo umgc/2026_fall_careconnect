@@ -9,16 +9,16 @@ import java.time.LocalDateTime;
 
 /**
  * Service for enforcing Role-Based Access Control (RBAC) throughout the application.
- * 
+ * <p>
  * This service provides methods to check and enforce permissions at API endpoints.
  * It acts as the enforcement layer that ensures users can only perform authorized actions.
- * 
+ * <p>
  * Usage in Controllers:
  * <pre>
  * {@code
  * @Autowired
  * private AuthorizationService authorizationService;
- * 
+ *
  * @PostMapping("/tasks")
  * public ResponseEntity<?> createTask(@RequestBody Task task, @AuthenticationPrincipal User user) {
  *     try {
@@ -31,7 +31,7 @@ import java.time.LocalDateTime;
  * }
  * }
  * </pre>
- * 
+ *
  * @author CareConnect Team
  * @version 1.0
  */
@@ -42,7 +42,7 @@ public class AuthorizationService {
     private final FamilyMemberLinkRepository familyMemberLinkRepository;
 
     public AuthorizationService(CaregiverPatientLinkRepository caregiverPatientLinkRepository,
-                                 FamilyMemberLinkRepository familyMemberLinkRepository) {
+                                FamilyMemberLinkRepository familyMemberLinkRepository) {
         this.caregiverPatientLinkRepository = caregiverPatientLinkRepository;
         this.familyMemberLinkRepository = familyMemberLinkRepository;
     }
@@ -52,13 +52,11 @@ public class AuthorizationService {
     /**
      * Require user to have a specific permission.
      * Throws UnauthorizedException if user doesn't have the permission.
-     * 
-     * @param user The authenticated user
+     *
+     * @param user       The authenticated user
      * @param permission The required permission
      * @throws UnauthorizedException if user lacks the permission
-     * 
-     * @example
-     * authorizationService.requirePermission(user, Permission.CREATE_TASKS);
+     * @example authorizationService.requirePermission(user, Permission.CREATE_TASKS);
      */
     public void requirePermission(User user, Permission permission) throws UnauthorizedException {
         if (user == null) {
@@ -67,10 +65,10 @@ public class AuthorizationService {
 
         if (!user.hasPermission(permission)) {
             throw new UnauthorizedException(
-                String.format("User '%s' does not have permission '%s'. This action requires %s permission.",
-                    user.getEmail(),
-                    permission.name(),
-                    permission.getDescription().toLowerCase())
+                    String.format("User '%s' does not have permission '%s'. This action requires %s permission.",
+                            user.getEmail(),
+                            permission.name(),
+                            permission.getDescription().toLowerCase())
             );
         }
     }
@@ -78,15 +76,13 @@ public class AuthorizationService {
     /**
      * Require user to have ALL of the specified permissions.
      * Throws UnauthorizedException if user is missing any permission.
-     * 
-     * @param user The authenticated user
+     *
+     * @param user        The authenticated user
      * @param permissions One or more required permissions
      * @throws UnauthorizedException if user lacks any permission
-     * 
-     * @example
-     * authorizationService.requireAllPermissions(user, 
-     *     Permission.CREATE_TASKS, 
-     *     Permission.VIEW_ASSIGNED_PATIENTS);
+     * @example authorizationService.requireAllPermissions(user,
+     *Permission.CREATE_TASKS,
+     *Permission.VIEW_ASSIGNED_PATIENTS);
      */
     public void requireAllPermissions(User user, Permission... permissions) throws UnauthorizedException {
         if (user == null) {
@@ -96,9 +92,9 @@ public class AuthorizationService {
         for (Permission permission : permissions) {
             if (!user.hasPermission(permission)) {
                 throw new UnauthorizedException(
-                    String.format("User '%s' is missing required permission: %s",
-                        user.getEmail(),
-                        permission.name())
+                        String.format("User '%s' is missing required permission: %s",
+                                user.getEmail(),
+                                permission.name())
                 );
             }
         }
@@ -107,16 +103,14 @@ public class AuthorizationService {
     /**
      * Require user to have ANY of the specified permissions.
      * Throws UnauthorizedException if user has none of the permissions.
-     * 
-     * @param user The authenticated user
+     *
+     * @param user        The authenticated user
      * @param permissions One or more acceptable permissions
      * @throws UnauthorizedException if user has none of the permissions
-     * 
-     * @example
-     * // Allow if user can either create or update tasks
-     * authorizationService.requireAnyPermission(user, 
-     *     Permission.CREATE_TASKS, 
-     *     Permission.UPDATE_TASKS);
+     * @example // Allow if user can either create or update tasks
+     * authorizationService.requireAnyPermission(user,
+     * Permission.CREATE_TASKS,
+     * Permission.UPDATE_TASKS);
      */
     public void requireAnyPermission(User user, Permission... permissions) throws UnauthorizedException {
         if (user == null) {
@@ -132,9 +126,9 @@ public class AuthorizationService {
                 }
             }
             throw new UnauthorizedException(
-                String.format("User '%s' does not have any of the required permissions: %s",
-                    user.getEmail(),
-                    permissionList.toString())
+                    String.format("User '%s' does not have any of the required permissions: %s",
+                            user.getEmail(),
+                            permissionList.toString())
             );
         }
     }
@@ -144,12 +138,10 @@ public class AuthorizationService {
     /**
      * Require user to have Admin role.
      * Throws UnauthorizedException if user is not an admin.
-     * 
+     *
      * @param user The authenticated user
      * @throws UnauthorizedException if user is not admin
-     * 
-     * @example
-     * authorizationService.requireAdmin(user);
+     * @example authorizationService.requireAdmin(user);
      */
     public void requireAdmin(User user) throws UnauthorizedException {
         if (user == null) {
@@ -158,9 +150,9 @@ public class AuthorizationService {
 
         if (!user.isAdmin()) {
             throw new UnauthorizedException(
-                String.format("Admin access required. User '%s' has role '%s'",
-                    user.getEmail(),
-                    user.getRole().getDisplayName())
+                    String.format("Admin access required. User '%s' has role '%s'",
+                            user.getEmail(),
+                            user.getRole().getDisplayName())
             );
         }
     }
@@ -168,12 +160,10 @@ public class AuthorizationService {
     /**
      * Require user to have Caregiver role.
      * Throws UnauthorizedException if user is not a caregiver.
-     * 
+     *
      * @param user The authenticated user
      * @throws UnauthorizedException if user is not caregiver
-     * 
-     * @example
-     * authorizationService.requireCaregiver(user);
+     * @example authorizationService.requireCaregiver(user);
      */
     public void requireCaregiver(User user) throws UnauthorizedException {
         if (user == null) {
@@ -182,9 +172,9 @@ public class AuthorizationService {
 
         if (!user.isCaregiver()) {
             throw new UnauthorizedException(
-                String.format("Caregiver access required. User '%s' has role '%s'",
-                    user.getEmail(),
-                    user.getRole().getDisplayName())
+                    String.format("Caregiver access required. User '%s' has role '%s'",
+                            user.getEmail(),
+                            user.getRole().getDisplayName())
             );
         }
     }
@@ -210,9 +200,9 @@ public class AuthorizationService {
 
         if (!user.isAdmin() && !user.isCaregiver()) {
             throw new UnauthorizedException(
-                String.format("Admin or Caregiver access required. User '%s' has role '%s'",
-                    user.getEmail(),
-                    user.getRole().getDisplayName())
+                    String.format("Admin or Caregiver access required. User '%s' has role '%s'",
+                            user.getEmail(),
+                            user.getRole().getDisplayName())
             );
         }
     }
@@ -238,9 +228,9 @@ public class AuthorizationService {
      *       active, non-expired family-member link in the database</li>
      * </ul>
      *
-     * @param user The authenticated user
+     * @param user      The authenticated user
      * @param patientId The database ID of the patient being accessed
-     * @throws UnauthorizedException if user cannot access this patient
+     * @throws UnauthorizedException    if user cannot access this patient
      * @throws IllegalArgumentException if patientId is null
      */
     public void requirePatientAccess(User user, Long patientId) throws UnauthorizedException {
@@ -261,7 +251,7 @@ public class AuthorizationService {
         if (user.isPatient()) {
             if (!user.getId().equals(patientId)) {
                 throw new UnauthorizedException(
-                    "Patients can only access their own data"
+                        "Patients can only access their own data"
                 );
             }
             return;
@@ -274,38 +264,38 @@ public class AuthorizationService {
         if (user.isCaregiver()) {
             if (!user.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)) {
                 throw new UnauthorizedException(
-                    "User does not have permission to view patient data"
+                        "User does not have permission to view patient data"
                 );
             }
             boolean linked = caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(
-                user.getId(), patientId, LocalDateTime.now());
+                    user.getId(), patientId, LocalDateTime.now());
             if (!linked) {
                 throw new UnauthorizedException(
-                    String.format("Caregiver '%s' is not assigned to patient %d",
-                        user.getEmail(),
-                        patientId)
+                        String.format("Caregiver '%s' is not assigned to patient %d",
+                                user.getEmail(),
+                                patientId)
                 );
             }
         } else if (user.isFamilyMember()) {
             if (!user.hasPermission(Permission.VIEW_HEALTH_DATA)) {
                 throw new UnauthorizedException(
-                    "User does not have permission to view patient data"
+                        "User does not have permission to view patient data"
                 );
             }
             boolean linked = familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(
-                user.getId(), patientId, LocalDateTime.now());
+                    user.getId(), patientId, LocalDateTime.now());
             if (!linked) {
                 throw new UnauthorizedException(
-                    String.format("Family member '%s' is not linked to patient %d",
-                        user.getEmail(),
-                        patientId)
+                        String.format("Family member '%s' is not linked to patient %d",
+                                user.getEmail(),
+                                patientId)
                 );
             }
         } else {
             throw new UnauthorizedException(
-                String.format("User '%s' is not authorized to access patient %d",
-                    user.getEmail(),
-                    patientId)
+                    String.format("User '%s' is not authorized to access patient %d",
+                            user.getEmail(),
+                            patientId)
             );
         }
     }
@@ -313,13 +303,11 @@ public class AuthorizationService {
     /**
      * Check if user can access their own data or is an admin.
      * Common pattern for endpoints that operate on user's own data.
-     * 
-     * @param user The authenticated user
+     *
+     * @param user         The authenticated user
      * @param targetUserId The user ID being accessed
      * @throws UnauthorizedException if user cannot access this user's data
-     * 
-     * @example
-     * authorizationService.requireSelfOrAdmin(user, targetUserId);
+     * @example authorizationService.requireSelfOrAdmin(user, targetUserId);
      */
     public void requireSelfOrAdmin(User user, Long targetUserId) throws UnauthorizedException {
         if (user == null) {
@@ -333,7 +321,7 @@ public class AuthorizationService {
         // Allow if accessing own data or if admin
         if (!user.getId().equals(targetUserId) && !user.isAdmin()) {
             throw new UnauthorizedException(
-                "You can only access your own data unless you are an administrator"
+                    "You can only access your own data unless you are an administrator"
             );
         }
     }
@@ -343,14 +331,12 @@ public class AuthorizationService {
     /**
      * Check if user has a permission without throwing exception.
      * Returns true/false instead of throwing.
-     * 
-     * @param user The user to check
+     *
+     * @param user       The user to check
      * @param permission The permission to verify
      * @return true if user has permission, false otherwise
-     * 
-     * @example
-     * if (authorizationService.hasPermission(user, Permission.CREATE_TASKS)) {
-     *     // Show create button
+     * @example if (authorizationService.hasPermission(user, Permission.CREATE_TASKS)) {
+     * // Show create button
      * }
      */
     public boolean hasPermission(User user, Permission permission) {
@@ -359,7 +345,7 @@ public class AuthorizationService {
 
     /**
      * Check if user is authenticated (not null).
-     * 
+     *
      * @param user The user to check
      * @return true if user is authenticated
      */
@@ -370,7 +356,7 @@ public class AuthorizationService {
     /**
      * Check if user can modify data (not read-only).
      * Family members have read-only access.
-     * 
+     *
      * @param user The user to check
      * @return true if user can create/update/delete data
      */
@@ -381,20 +367,46 @@ public class AuthorizationService {
     /**
      * Get a user-friendly error message for permission denial.
      * Useful for generating helpful error responses.
-     * 
+     *
      * @param permission The permission that was denied
      * @return User-friendly error message
      */
     public String getPermissionDeniedMessage(Permission permission) {
         return String.format(
-            "Access denied. This action requires '%s' permission. " +
-            "Description: %s. Please contact your administrator if you believe you should have this access.",
-            permission.name(),
-            permission.getDescription()
+                "Access denied. This action requires '%s' permission. " +
+                        "Description: %s. Please contact your administrator if you believe you should have this access.",
+                permission.name(),
+                permission.getDescription()
         );
     }
 
     // ========== Authorization Check Results ==========
+
+    /**
+     * Check authorization without throwing exception.
+     * Returns a result object with authorization status and reason.
+     *
+     * @param user       The user to check
+     * @param permission The required permission
+     * @return AuthorizationResult indicating if authorized and why
+     * @example AuthorizationResult result = authorizationService.checkPermission(user, Permission.CREATE_TASKS);
+     * if (!result.isAuthorized()) {
+     * return ResponseEntity.status(403).body(result.getReason());
+     * }
+     */
+    public AuthorizationResult checkPermission(User user, Permission permission) {
+        if (user == null) {
+            return AuthorizationResult.deny("User is not authenticated");
+        }
+
+        if (!user.hasPermission(permission)) {
+            return AuthorizationResult.deny(
+                    String.format("User lacks required permission: %s", permission.name())
+            );
+        }
+
+        return AuthorizationResult.allow();
+    }
 
     /**
      * Simple result class for authorization checks.
@@ -409,14 +421,6 @@ public class AuthorizationService {
             this.reason = reason;
         }
 
-        public boolean isAuthorized() {
-            return authorized;
-        }
-
-        public String getReason() {
-            return reason;
-        }
-
         public static AuthorizationResult allow() {
             return new AuthorizationResult(true, "Authorized");
         }
@@ -424,33 +428,13 @@ public class AuthorizationService {
         public static AuthorizationResult deny(String reason) {
             return new AuthorizationResult(false, reason);
         }
-    }
 
-    /**
-     * Check authorization without throwing exception.
-     * Returns a result object with authorization status and reason.
-     * 
-     * @param user The user to check
-     * @param permission The required permission
-     * @return AuthorizationResult indicating if authorized and why
-     * 
-     * @example
-     * AuthorizationResult result = authorizationService.checkPermission(user, Permission.CREATE_TASKS);
-     * if (!result.isAuthorized()) {
-     *     return ResponseEntity.status(403).body(result.getReason());
-     * }
-     */
-    public AuthorizationResult checkPermission(User user, Permission permission) {
-        if (user == null) {
-            return AuthorizationResult.deny("User is not authenticated");
+        public boolean isAuthorized() {
+            return authorized;
         }
 
-        if (!user.hasPermission(permission)) {
-            return AuthorizationResult.deny(
-                String.format("User lacks required permission: %s", permission.name())
-            );
+        public String getReason() {
+            return reason;
         }
-
-        return AuthorizationResult.allow();
     }
 }

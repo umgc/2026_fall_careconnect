@@ -11,7 +11,7 @@ public class NotificationResponse {
     private String messageId; // Firebase message ID
     private String error;
     private Long timestamp;
-    
+
     public static NotificationResponse success(String messageId) {
         return NotificationResponse.builder()
                 .success(true)
@@ -20,7 +20,7 @@ public class NotificationResponse {
                 .timestamp(System.currentTimeMillis())
                 .build();
     }
-    
+
     public static NotificationResponse failure(String error) {
         return NotificationResponse.builder()
                 .success(false)

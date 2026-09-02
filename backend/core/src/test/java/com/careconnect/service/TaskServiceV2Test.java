@@ -53,16 +53,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 class TaskServiceV2Test {
 
+    private final ObjectMapper mapper = new ObjectMapper();
     @Mock
     private TaskRepository taskRepository;
-
     @Mock
     private PatientRepository patientRepository;
-
     @InjectMocks
     private TaskServiceV2 taskService;
-
-    private final ObjectMapper mapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws Exception {

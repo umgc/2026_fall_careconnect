@@ -30,21 +30,21 @@ public class EmergencyController {
      */
     @GetMapping("/{emergencyId}.pdf")
     @Operation(
-        summary = "🚨 Get Emergency PDF",
-        description = "Generate a pre-filled Vial of Life PDF document for emergency responders.\n\n"
-            + "This endpoint is designed to be accessed via QR codes in emergency situations.\n"
-            + "It returns an official Vial of Life form pre-populated with the patient's:\n"
-            + "- Basic information (name, DOB, blood type)\n"
-            + "- Critical allergies and medical conditions\n"
-            + "- Current medications\n"
-            + "- Emergency contact information\n\n"
-            + "**Security Note:** This endpoint uses emergency ID tokens for access control.\n",
-        tags = {"Emergency Information", "🚨 Emergency Response"}
+            summary = "🚨 Get Emergency PDF",
+            description = "Generate a pre-filled Vial of Life PDF document for emergency responders.\n\n"
+                    + "This endpoint is designed to be accessed via QR codes in emergency situations.\n"
+                    + "It returns an official Vial of Life form pre-populated with the patient's:\n"
+                    + "- Basic information (name, DOB, blood type)\n"
+                    + "- Critical allergies and medical conditions\n"
+                    + "- Current medications\n"
+                    + "- Emergency contact information\n\n"
+                    + "**Security Note:** This endpoint uses emergency ID tokens for access control.\n",
+            tags = {"Emergency Information", "🚨 Emergency Response"}
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "PDF generated and returned successfully"),
-        @ApiResponse(responseCode = "404", description = "Patient not found for emergency ID"),
-        @ApiResponse(responseCode = "500", description = "Error generating PDF")
+            @ApiResponse(responseCode = "200", description = "PDF generated and returned successfully"),
+            @ApiResponse(responseCode = "404", description = "Patient not found for emergency ID"),
+            @ApiResponse(responseCode = "500", description = "Error generating PDF")
     })
     public ResponseEntity<byte[]> getEmergencyPdf(
             @Parameter(description = "Emergency ID (e.g., VIAL123456)", required = true)
@@ -76,14 +76,14 @@ public class EmergencyController {
      */
     @GetMapping("/download/{emergencyId}.pdf")
     @Operation(
-        summary = "⬇️ Download Emergency PDF",
-        description = "Download a pre-filled Vial of Life PDF document (forces download)",
-        tags = {"Emergency Information", "🚨 Emergency Response"}
+            summary = "⬇️ Download Emergency PDF",
+            description = "Download a pre-filled Vial of Life PDF document (forces download)",
+            tags = {"Emergency Information", "🚨 Emergency Response"}
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "PDF downloaded successfully"),
-        @ApiResponse(responseCode = "404", description = "Patient not found for emergency ID"),
-        @ApiResponse(responseCode = "500", description = "Error generating PDF")
+            @ApiResponse(responseCode = "200", description = "PDF downloaded successfully"),
+            @ApiResponse(responseCode = "404", description = "Patient not found for emergency ID"),
+            @ApiResponse(responseCode = "500", description = "Error generating PDF")
     })
     public ResponseEntity<byte[]> downloadEmergencyPdf(
             @Parameter(description = "Emergency ID (e.g., VIAL123456)", required = true)
@@ -116,9 +116,9 @@ public class EmergencyController {
      */
     @GetMapping("/health")
     @Operation(
-        summary = "🏥 Emergency Service Health Check",
-        description = "Check if emergency PDF generation service is available",
-        tags = {"Emergency Information"}
+            summary = "🏥 Emergency Service Health Check",
+            description = "Check if emergency PDF generation service is available",
+            tags = {"Emergency Information"}
     )
     public ResponseEntity<String> healthCheck() {
         return ResponseEntity.ok("Emergency PDF service is operational");
@@ -129,9 +129,9 @@ public class EmergencyController {
      */
     @GetMapping("/debug/{emergencyId}")
     @Operation(
-        summary = "🐛 Debug Patient Data",
-        description = "Debug endpoint to check if patient data can be retrieved for an emergency ID",
-        tags = {"Emergency Information", "🛠️ Development"}
+            summary = "🐛 Debug Patient Data",
+            description = "Debug endpoint to check if patient data can be retrieved for an emergency ID",
+            tags = {"Emergency Information", "🛠️ Development"}
     )
     public ResponseEntity<String> debugPatientData(
             @Parameter(description = "Emergency ID (e.g., VIAL123456)", required = true)
@@ -164,13 +164,13 @@ public class EmergencyController {
             } catch (Exception e) {
                 LOGGER.error("Debug: Error in PDF generation", e);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error generating PDF: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                        .body("Error generating PDF: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             }
 
         } catch (Exception e) {
             LOGGER.error("Debug: Unexpected error", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Unexpected error: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                    .body("Unexpected error: " + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
     }
 }

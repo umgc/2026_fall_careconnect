@@ -91,7 +91,7 @@ class TokenProviderTest {
     void testGenerateToken_twoCallsDiffer() throws Exception {
         // Tokens are used for identity/security; the same value must not be
         // returned on back-to-back calls.
-        final String first  = tokenProvider.generateToken();
+        final String first = tokenProvider.generateToken();
         final String second = tokenProvider.generateToken();
         assertNotEquals(first, second);
     }

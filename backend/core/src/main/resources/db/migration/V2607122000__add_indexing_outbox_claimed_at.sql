@@ -8,7 +8,8 @@
 ALTER TABLE indexing_outbox
     ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL;
 
-COMMENT ON COLUMN indexing_outbox.claimed_at IS
+COMMENT
+ON COLUMN indexing_outbox.claimed_at IS
     'Set when IndexWorker claims a row; cleared on process/fail/defer. '
     'Rows with a fresh claimed_at are skipped by other workers until lease expiry.';
 

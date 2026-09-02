@@ -10,10 +10,12 @@ import com.careconnect.repository.evv.EvvRecordRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.model.schedule.ScheduledVisit;
 import com.careconnect.service.VisitSummaryService;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,7 +24,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Service @RequiredArgsConstructor
+@Service
+@RequiredArgsConstructor
 public class EvvService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EvvService.class);
 
@@ -41,121 +44,120 @@ public class EvvService {
      */
     private Map<String, Object> buildLocationDetails(EvvRecord record) {
         var details = new java.util.HashMap<String, Object>();
-        
+
         // Add legacy location if available
         if (record.getLocationLat() != null || record.getLocationLng() != null) {
             details.put("locationLat", record.getLocationLat());
             details.put("locationLng", record.getLocationLng());
             details.put("locationSource", record.getLocationSource());
         }
-        
+
         // Add check-in location if available
         if (record.getCheckinLocationLat() != null || record.getCheckinLocationLng() != null) {
             details.put("checkinLocationLat", record.getCheckinLocationLat());
             details.put("checkinLocationLng", record.getCheckinLocationLng());
             details.put("checkinLocationSource", record.getCheckinLocationSource());
         }
-        
+
         // Add check-out location if available
         if (record.getCheckoutLocationLat() != null || record.getCheckoutLocationLng() != null) {
             details.put("checkoutLocationLat", record.getCheckoutLocationLat());
             details.put("checkoutLocationLng", record.getCheckoutLocationLng());
             details.put("checkoutLocationSource", record.getCheckoutLocationSource());
         }
-        
+
         return details;
     }
 
     /**
-    *Validates EVV location fields per federal EVV quality guardrails (Issue #62).
-    *Enforces:
-    * - GPS coordinates present when locationType is GPS
-    * - GPS accuracy within acceptable threshold (<500 meters)
-    * - noGpsReason required when locationType is not GPS
-    * - Manual address required when locationType is MANUAL
-    */
+     * Validates EVV location fields per federal EVV quality guardrails (Issue #62).
+     * Enforces:
+     * - GPS coordinates present when locationType is GPS
+     * - GPS accuracy within acceptable threshold (<500 meters)
+     * - noGpsReason required when locationType is not GPS
+     * - Manual address required when locationType is MANUAL
+     */
     private void validateLocationGuardrails(
-        String locationSource,
-        Double lat,
-        Double lng,
-        Double accuracyM,
-        String noGpsReason,
-        String manualAddress,
-        String role ) 
-        {
+            String locationSource,
+            Double lat,
+            Double lng,
+            Double accuracyM,
+            String noGpsReason,
+            String manualAddress,
+            String role) {
 
-            if (locationSource == null) return;
+        if (locationSource == null) return;
 
-            switch (locationSource.toUpperCase()) {
-                case "GPS" -> {
-                    if (lat == null || lng == null) {
-                        throw new IllegalArgumentException(
+        switch (locationSource.toUpperCase()) {
+            case "GPS" -> {
+                if (lat == null || lng == null) {
+                    throw new IllegalArgumentException(
                             role + " location type is GPS but coordinates are missing. " + "latitude and longitude are required when using GPS."
-                        );
-                    }
+                    );
+                }
 
-                    if (accuracyM != null && accuracyM > 500.0) {
-                        throw new IllegalArgumentException(
+                if (accuracyM != null && accuracyM > 500.0) {
+                    throw new IllegalArgumentException(
                             role + " GPS accuracy is " + accuracyM + "m which exceeds the 500m threshold required for EVV compliance. Please retry GPS or use patient address."
-                        );
-                    }
+                    );
                 }
-
-                case "PATIENT_ADDRESS", "MANUAL" -> {
-                    if (noGpsReason == null || noGpsReason.isBlank()) {
-                        throw new IllegalArgumentException(
-                            role + " location type is " + locationSource + " but no GPS reason was provided. Federal EVV regulations require a reason when GPS is not used."
-                        );
-                    }
-
-                    if ("MANUAL".equalsIgnoreCase(locationSource) && (manualAddress == null || manualAddress.isBlank())) {
-                        throw new IllegalArgumentException(
-                            role + " location type is MANUAL but no address was provided. A manual address is required when using manual location entry."
-                        );   
-                    }
-                }
-
-                default -> throw new IllegalArgumentException(
-                    "Unknown " + role + " location source: " + locationSource + ". Valid values are: GPS, PATIENT_ADDRESS, MANUAL."
-                );
             }
+
+            case "PATIENT_ADDRESS", "MANUAL" -> {
+                if (noGpsReason == null || noGpsReason.isBlank()) {
+                    throw new IllegalArgumentException(
+                            role + " location type is " + locationSource + " but no GPS reason was provided. Federal EVV regulations require a reason when GPS is not used."
+                    );
+                }
+
+                if ("MANUAL".equalsIgnoreCase(locationSource) && (manualAddress == null || manualAddress.isBlank())) {
+                    throw new IllegalArgumentException(
+                            role + " location type is MANUAL but no address was provided. A manual address is required when using manual location entry."
+                    );
+                }
+            }
+
+            default -> throw new IllegalArgumentException(
+                    "Unknown " + role + " location source: " + locationSource + ". Valid values are: GPS, PATIENT_ADDRESS, MANUAL."
+            );
         }
+    }
 
 
     @Transactional
     public EvvRecord createRecord(EvvRecordRequestDto req, Long actorId) {
         var patient = patientRepository.findById(req.getPatientId())
                 .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
-        
+
         // Build individual name from patient data
         String individualName = patient.getFirstName() + " " + patient.getLastName();
-        
+
         // Snapshot caregiver name for immutable audit trail
         String caregiverName = userRepository.findById(req.getCaregiverId())
                 .map(u -> u.getName() != null ? u.getName() : "Caregiver #" + req.getCaregiverId())
                 .orElse("Caregiver #" + req.getCaregiverId());
-        
+
         // EVV Quality Guardrail (Issue #62) - validate location fields before persisting
         validateLocationGuardrails(
-            req.getCheckinLocationSource(),
-            req.getCheckinLocationLat(),
-            req.getCheckinLocationLng(),
-            req.getCheckinAccuracyM(),
-            req.getCheckinNoGpsReason(),
-            req.getCheckinManualAddress(),
-            "Check-in"
+                req.getCheckinLocationSource(),
+                req.getCheckinLocationLat(),
+                req.getCheckinLocationLng(),
+                req.getCheckinAccuracyM(),
+                req.getCheckinNoGpsReason(),
+                req.getCheckinManualAddress(),
+                "Check-in"
         );
 
         validateLocationGuardrails(
-            req.getCheckoutLocationSource(),
-            req.getCheckoutLocationLat(),
-            req.getCheckoutLocationLng(),
-            req.getCheckoutAccuracyM(),
-            req.getCheckoutNoGpsReason(),
-            req.getCheckoutManualAddress(),
-            "Check-out"
+                req.getCheckoutLocationSource(),
+                req.getCheckoutLocationLat(),
+                req.getCheckoutLocationLng(),
+                req.getCheckoutAccuracyM(),
+                req.getCheckoutNoGpsReason(),
+                req.getCheckoutManualAddress(),
+                "Check-out"
         );
-        
+
         var rec = EvvRecord.builder()
                 .patient(patient)
                 .serviceType(req.getServiceType())
@@ -180,16 +182,16 @@ public class EvvService {
                 .updatedAt(OffsetDateTime.now())
                 .build();
         var saved = recordRepository.save(rec); // REQ 2
-        
+
         // Save check-in and check-out locations using the new location service
         saveLocationsForRecord(saved, req);
-        
+
         // Populate location fields and log with location data
         populateLocationFields(saved);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(saved));
         auditDetails.put("deviceInfo", req.getDeviceInfo());
         audit.log(saved, actorId, "CREATED", auditDetails); // REQ 4
-        
+
         // If this EVV record is linked to a scheduled visit, mark the scheduled visit as completed
         if (req.getScheduledVisitId() != null) {
             try {
@@ -212,10 +214,10 @@ public class EvvService {
                 // Don't fail the EVV record creation if we can't update the scheduled visit
             }
         }
-        
+
         return saved;
     }
-    
+
     /**
      * Convert EvvCorrectionRequestDto to EvvRecordRequestDto for location saving
      */
@@ -232,7 +234,7 @@ public class EvvService {
                 .checkoutLocationSource(correction.getCheckoutLocationSource())
                 .build();
     }
-    
+
     /**
      * Helper method to save check-in and check-out locations for an EVV record.
      * Passes noGpsReason, manualAddress, and accuracyM per federal EVV requirements.
@@ -240,12 +242,12 @@ public class EvvService {
     private void saveLocationsForRecord(EvvRecord record, EvvRecordRequestDto req) {
         // Determine check-in location source
         String checkinSource = req.getCheckinLocationSource();
-        
+
         // Backward compatibility: If using legacy locationSource field, treat it as check-in
         if (checkinSource == null && req.getLocationSource() != null) {
             checkinSource = req.getLocationSource().equalsIgnoreCase("gps") ? "GPS" : "PATIENT_ADDRESS";
         }
-        
+
         // Save check-in location if data is provided
         if (checkinSource != null) {
             try {
@@ -257,11 +259,11 @@ public class EvvService {
                         .noGpsReason(checkinReason)
                         .manualAddress(req.getCheckinManualAddress())
                         .build();
-                
+
                 if ("GPS".equals(checkinSource)) {
                     Double lat = req.getCheckinLocationLat() != null ? req.getCheckinLocationLat() : req.getLocationLat();
                     Double lng = req.getCheckinLocationLng() != null ? req.getCheckinLocationLng() : req.getLocationLng();
-                    
+
                     if (lat != null && lng != null) {
                         EvvLocationRequest.CoordinatesDto coords = EvvLocationRequest.CoordinatesDto.builder()
                                 .lat(BigDecimal.valueOf(lat))
@@ -283,7 +285,7 @@ public class EvvService {
                 log.error("[EVV] Failed to save check-in location for record {}: {}", record.getId(), e.getMessage());
             }
         }
-        
+
         // Save check-out location if data is provided
         if (req.getCheckoutLocationSource() != null) {
             try {
@@ -295,7 +297,7 @@ public class EvvService {
                         .noGpsReason(checkoutReason)
                         .manualAddress(req.getCheckoutManualAddress())
                         .build();
-                
+
                 if ("GPS".equals(req.getCheckoutLocationSource())) {
                     if (req.getCheckoutLocationLat() != null && req.getCheckoutLocationLng() != null) {
                         EvvLocationRequest.CoordinatesDto coords = EvvLocationRequest.CoordinatesDto.builder()
@@ -330,7 +332,7 @@ public class EvvService {
     }
 
     @Transactional
-    public EvvRecord review(Long id, boolean approve, Long actorId, String comment){
+    public EvvRecord review(Long id, boolean approve, Long actorId, String comment) {
         var rec = recordRepository.findByIdWithPatient(id).orElseThrow();
         if (approve) {
             rec.markApproved();
@@ -338,7 +340,7 @@ public class EvvService {
             rec.markRejected();
         }
         recordRepository.save(rec);
-        
+
         // Populate location data before audit logging
         populateLocationFields(rec);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(rec));
@@ -346,7 +348,7 @@ public class EvvService {
             auditDetails.put("comment", comment);
         }
         audit.log(rec, actorId, approve ? "APPROVED" : "REJECTED", auditDetails);
-        
+
         return rec;
     }
 
@@ -354,31 +356,31 @@ public class EvvService {
     public EvvRecord createOfflineRecord(EvvRecordRequestDto req, Long actorId, String deviceId) {
         var patient = patientRepository.findById(req.getPatientId())
                 .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
-        
+
         // Build individual name from patient data
         String individualName = patient.getFirstName() + " " + patient.getLastName();
 
         // EVV Quality Guardrail (Issue #62) - validate location fields before persisting
         validateLocationGuardrails(
-            req.getCheckinLocationSource(),
-            req.getCheckinLocationLat(),
-            req.getCheckinLocationLng(),
-            req.getCheckinAccuracyM(),
-            req.getCheckinNoGpsReason(),
-            req.getCheckinManualAddress(),
-            "Check-in"
+                req.getCheckinLocationSource(),
+                req.getCheckinLocationLat(),
+                req.getCheckinLocationLng(),
+                req.getCheckinAccuracyM(),
+                req.getCheckinNoGpsReason(),
+                req.getCheckinManualAddress(),
+                "Check-in"
         );
 
         validateLocationGuardrails(
-            req.getCheckoutLocationSource(),
-            req.getCheckoutLocationLat(),
-            req.getCheckoutLocationLng(),
-            req.getCheckoutAccuracyM(),
-            req.getCheckoutNoGpsReason(),
-            req.getCheckoutManualAddress(),
-            "Check-out"
+                req.getCheckoutLocationSource(),
+                req.getCheckoutLocationLat(),
+                req.getCheckoutLocationLng(),
+                req.getCheckoutAccuracyM(),
+                req.getCheckoutNoGpsReason(),
+                req.getCheckoutManualAddress(),
+                "Check-out"
         );
-        
+
         var rec = EvvRecord.builder()
                 .patient(patient)
                 .serviceType(req.getServiceType())
@@ -398,9 +400,9 @@ public class EvvService {
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
-        
+
         var saved = recordRepository.save(rec);
-        
+
         // Add to offline queue
         var queueItem = EvvOfflineQueue.builder()
                 .recordId(saved.getId())
@@ -409,28 +411,28 @@ public class EvvService {
                 .deviceId(deviceId)
                 .priority(1)
                 .recordData(Map.ofEntries(
-                    Map.entry("serviceType", req.getServiceType()),
-                    Map.entry("individualName", individualName),
-                    Map.entry("patientId", req.getPatientId()),
-                    Map.entry("dateOfService", req.getDateOfService()),
-                    Map.entry("timeIn", req.getTimeIn()),
-                    Map.entry("timeOut", req.getTimeOut()),
-                    Map.entry("locationLat", req.getLocationLat()),
-                    Map.entry("locationLng", req.getLocationLng()),
-                    Map.entry("locationSource", req.getLocationSource()),
-                    Map.entry("stateCode", req.getStateCode()),
-                    Map.entry("deviceInfo", req.getDeviceInfo())
+                        Map.entry("serviceType", req.getServiceType()),
+                        Map.entry("individualName", individualName),
+                        Map.entry("patientId", req.getPatientId()),
+                        Map.entry("dateOfService", req.getDateOfService()),
+                        Map.entry("timeIn", req.getTimeIn()),
+                        Map.entry("timeOut", req.getTimeOut()),
+                        Map.entry("locationLat", req.getLocationLat()),
+                        Map.entry("locationLng", req.getLocationLng()),
+                        Map.entry("locationSource", req.getLocationSource()),
+                        Map.entry("stateCode", req.getStateCode()),
+                        Map.entry("deviceInfo", req.getDeviceInfo())
                 ))
                 .build();
-        
+
         offlineQueueRepository.save(queueItem);
-        
+
         // Populate location fields and log with location data
         populateLocationFields(saved);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(saved));
         auditDetails.put("deviceId", deviceId);
         audit.log(saved, actorId, "OFFLINE_CREATED", auditDetails);
-        
+
         return saved;
     }
 
@@ -438,7 +440,7 @@ public class EvvService {
     public EvvRecord correctRecord(EvvCorrectionRequestDto req, Long actorId) {
         var originalRecord = recordRepository.findByIdWithPatient(req.getOriginalRecordId())
                 .orElseThrow(() -> new IllegalArgumentException("Original record not found"));
-        
+
         // Create corrected record - starts as UNDER_REVIEW since it needs approval
         var correctedRecord = EvvRecord.builder()
                 .patient(originalRecord.getPatient())
@@ -463,16 +465,16 @@ public class EvvService {
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
-        
+
         var savedCorrected = recordRepository.save(correctedRecord);
-        
+
         // Save location data for corrected record if provided
         saveLocationsForRecord(savedCorrected, convertCorrectionToRecordRequest(req, originalRecord));
-        
+
         // Mark original record as rejected since it was found to be incorrect
         originalRecord.markRejected();
         recordRepository.save(originalRecord);
-        
+
         // Create correction record
         var correction = EvvCorrection.builder()
                 .originalRecord(originalRecord)
@@ -483,29 +485,29 @@ public class EvvService {
                 .correctedAt(OffsetDateTime.now())
                 .approvalRequired(true) // Corrections require approval
                 .originalValues(Map.of(
-                    "serviceType", originalRecord.getServiceType(),
-                    "individualName", originalRecord.getIndividualName(),
-                    "dateOfService", originalRecord.getDateOfService(),
-                    "timeIn", originalRecord.getTimeIn(),
-                    "timeOut", originalRecord.getTimeOut(),
-                    "locationLat", originalRecord.getLocationLat(),
-                    "locationLng", originalRecord.getLocationLng(),
-                    "locationSource", originalRecord.getLocationSource()
+                        "serviceType", originalRecord.getServiceType(),
+                        "individualName", originalRecord.getIndividualName(),
+                        "dateOfService", originalRecord.getDateOfService(),
+                        "timeIn", originalRecord.getTimeIn(),
+                        "timeOut", originalRecord.getTimeOut(),
+                        "locationLat", originalRecord.getLocationLat(),
+                        "locationLng", originalRecord.getLocationLng(),
+                        "locationSource", originalRecord.getLocationSource()
                 ))
                 .correctedValues(Map.of(
-                    "serviceType", savedCorrected.getServiceType(),
-                    "individualName", savedCorrected.getIndividualName(),
-                    "dateOfService", savedCorrected.getDateOfService(),
-                    "timeIn", savedCorrected.getTimeIn(),
-                    "timeOut", savedCorrected.getTimeOut(),
-                    "locationLat", savedCorrected.getLocationLat(),
-                    "locationLng", savedCorrected.getLocationLng(),
-                    "locationSource", savedCorrected.getLocationSource()
+                        "serviceType", savedCorrected.getServiceType(),
+                        "individualName", savedCorrected.getIndividualName(),
+                        "dateOfService", savedCorrected.getDateOfService(),
+                        "timeIn", savedCorrected.getTimeIn(),
+                        "timeOut", savedCorrected.getTimeOut(),
+                        "locationLat", savedCorrected.getLocationLat(),
+                        "locationLng", savedCorrected.getLocationLng(),
+                        "locationSource", savedCorrected.getLocationSource()
                 ))
                 .build();
-        
+
         correctionRepository.save(correction);
-        
+
         // Populate location fields and log with comprehensive audit details
         populateLocationFields(savedCorrected);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(savedCorrected));
@@ -513,7 +515,7 @@ public class EvvService {
         auditDetails.put("reasonCode", req.getReasonCode());
         auditDetails.put("explanation", req.getExplanation());
         audit.log(savedCorrected, actorId, "CORRECTED", auditDetails);
-        
+
         return savedCorrected;
     }
 
@@ -521,10 +523,10 @@ public class EvvService {
     public EvvRecord approveEor(EorApprovalRequestDto req, Long approverId) {
         var record = recordRepository.findByIdWithPatient(req.getRecordId())
                 .orElseThrow(() -> new IllegalArgumentException("Record not found"));
-        
+
         record.approveEor(approverId, req.getComment());
         recordRepository.save(record);
-        
+
         // Populate location data before audit logging
         populateLocationFields(record);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(record));
@@ -532,39 +534,39 @@ public class EvvService {
             auditDetails.put("comment", req.getComment());
         }
         audit.log(record, approverId, "EOR_APPROVED", auditDetails);
-        
+
         return record;
     }
 
     public Page<EvvRecord> searchRecords(EvvSearchRequestDto searchRequest) {
         Sort sort = Sort.by(Sort.Direction.fromString(searchRequest.getSortDirection()), searchRequest.getSortBy());
         Pageable pageable = PageRequest.of(searchRequest.getPage(), searchRequest.getSize(), sort);
-        
+
         Page<EvvRecord> records = recordRepository.searchRecords(
-            searchRequest.getPatientName(),
-            searchRequest.getServiceType(),
-            searchRequest.getPatientId(),
-            searchRequest.getCaregiverId(),
-            searchRequest.getStartDate(),
-            searchRequest.getEndDate(),
-            searchRequest.getStateCode(),
-            searchRequest.getStatus(),
-            pageable
+                searchRequest.getPatientName(),
+                searchRequest.getServiceType(),
+                searchRequest.getPatientId(),
+                searchRequest.getCaregiverId(),
+                searchRequest.getStartDate(),
+                searchRequest.getEndDate(),
+                searchRequest.getStateCode(),
+                searchRequest.getStatus(),
+                pageable
         );
-        
+
         // Populate location data from evv_record_location table
         records.forEach(this::populateLocationFields);
-        
+
         return records;
     }
-    
+
     /**
      * Populate check-in and check-out location fields from evv_record_location table
      */
     private void populateLocationFields(EvvRecord record) {
         try {
             List<EvvLocationResponse> locations = locationService.getLocationsForRecord(record.getId());
-            
+
             for (EvvLocationResponse loc : locations) {
                 if (loc.getRole() == EvvLocationRole.CHECK_IN) {
                     record.setCheckinLocationLat(loc.getLatitude() != null ? loc.getLatitude().doubleValue() : null);
@@ -593,15 +595,15 @@ public class EvvService {
     public EvvCorrection approveCorrection(Long correctionId, Long approverId, String comment) {
         var correction = correctionRepository.findById(correctionId)
                 .orElseThrow(() -> new IllegalArgumentException("Correction not found"));
-        
+
         correction.approve(approverId, comment);
         correctionRepository.save(correction);
-        
+
         // Approve the corrected EVV record
         var correctedRecord = correction.getCorrectedRecord();
         correctedRecord.markApproved();
         recordRepository.save(correctedRecord);
-        
+
         // Populate location data before audit logging
         populateLocationFields(correctedRecord);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(correctedRecord));
@@ -610,7 +612,7 @@ public class EvvService {
             auditDetails.put("comment", comment);
         }
         audit.log(correctedRecord, approverId, "CORRECTION_APPROVED", auditDetails);
-        
+
         return correction;
     }
 
@@ -618,15 +620,15 @@ public class EvvService {
     public EvvCorrection rejectCorrection(Long correctionId, Long reviewerId, String comment) {
         var correction = correctionRepository.findById(correctionId)
                 .orElseThrow(() -> new IllegalArgumentException("Correction not found"));
-        
+
         correction.reject(reviewerId, comment);
         correctionRepository.save(correction);
-        
+
         // Reject the corrected EVV record
         var correctedRecord = correction.getCorrectedRecord();
         correctedRecord.markRejected();
         recordRepository.save(correctedRecord);
-        
+
         // Populate location data before audit logging
         populateLocationFields(correctedRecord);
         var auditDetails = new java.util.HashMap<>(buildLocationDetails(correctedRecord));
@@ -635,7 +637,7 @@ public class EvvService {
             auditDetails.put("comment", comment);
         }
         audit.log(correctedRecord, reviewerId, "CORRECTION_REJECTED", auditDetails);
-        
+
         return correction;
     }
 

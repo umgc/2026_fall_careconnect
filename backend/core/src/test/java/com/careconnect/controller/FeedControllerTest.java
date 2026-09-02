@@ -34,27 +34,32 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-/*
- * FeedController uses SecurityContextHolder for auth and delegates to FeedService.
- * All dependencies are field-injected (@Autowired), so @InjectMocks uses field injection.
- */
+        /*
+         * FeedController uses SecurityContextHolder for auth and delegates to FeedService.
+         * All dependencies are field-injected (@Autowired), so @InjectMocks uses field injection.
+         */
 class FeedControllerTest {
 
-    @Mock private FeedService feedService;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private CaregiverRepository caregiverRepository;
-    @Mock private Authentication authentication;
-    @Mock private SecurityContext securityContext;
-
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
+    private static final String EMAIL = "user@example.com";
+    private static final Long USER_ID = 10L;
+    @Mock
+    private FeedService feedService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private CaregiverRepository caregiverRepository;
+    @Mock
+    private Authentication authentication;
+    @Mock
+    private SecurityContext securityContext;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
     @InjectMocks
     private FeedController controller;
-
-    private static final String EMAIL   = "user@example.com";
-    private static final Long   USER_ID = 10L;
 
     @BeforeEach
     void setUpSecurityContext() throws Exception {

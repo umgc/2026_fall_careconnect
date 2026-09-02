@@ -13,12 +13,12 @@ import static org.mockito.Mockito.mock;
 
 /**
  * Shared Spring test configuration for integration tests that run under the "test" profile.
- *
+ * <p>
  * This class is annotated with {@link TestConfiguration} so it is only loaded in test
  * contexts — never in production. It is also gated by {@code @Profile("test")} so it
  * is only active when the "test" profile is explicitly set, preventing accidental
  * inclusion in integration tests that use different profiles.
- *
+ * <p>
  * Each bean is annotated with {@link Primary} so that Spring prefers these mock
  * implementations over any real beans of the same type that may be on the classpath.
  * This is the standard pattern for replacing infrastructure dependencies (JWT, WebSocket

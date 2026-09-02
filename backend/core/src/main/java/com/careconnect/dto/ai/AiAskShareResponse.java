@@ -11,4 +11,5 @@ public record AiAskShareResponse(
         List<Long> recipientUserIds,
         int messageCount,
         Instant createdAt,
-        String transcriptJson) {}
+        String transcriptJson) {
+}

@@ -253,7 +253,7 @@ class RetrievalContextAssemblerTest {
 
         assertThat(ctx.userPrompt()).contains("2026-07");
         assertThat(RetrievalContextAssembler.selectNewestDated(
-                        List.of(offset, local, dateOnly, bad)))
+                List.of(offset, local, dateOnly, bad)))
                 .extracting(RankedChunk::citationRef)
                 .containsExactly("C3");
     }

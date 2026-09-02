@@ -59,10 +59,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class TaskServiceV2 {
 
     private static final Logger log = LoggerFactory.getLogger(TaskServiceV2.class);
-    private TaskRepository taskRepository;
-    private PatientRepository patientRepository;
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private final ObjectMapper mapper;
+    private TaskRepository taskRepository;
+    private PatientRepository patientRepository;
 
     /**
      * Constructs the service with required repositories and mapper.
@@ -75,6 +75,18 @@ public class TaskServiceV2 {
         this.taskRepository = taskRepository;
         this.patientRepository = patientRepository;
         this.mapper = mapper;
+    }
+
+    private static LocalDate onlyDate(String isoDateOrDateTime) {
+        // accepts "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm..."
+        return LocalDate.parse(isoDateOrDateTime.substring(0, 10));
+    }
+
+    private static boolean hasAnySelectedDay(List<Boolean> days) {
+        if (days == null) {
+            return false;
+        }
+        return days.stream().anyMatch(Boolean.TRUE::equals);
     }
 
     /**
@@ -252,7 +264,7 @@ public class TaskServiceV2 {
         Task parentTask = (existingTask.getParentTaskId() == null)
                 ? existingTask
                 : taskRepository.findById(parentId)
-                        .orElseThrow(() -> new ParentTaskNotFoundException(parentId));
+                .orElseThrow(() -> new ParentTaskNotFoundException(parentId));
 
         // Snapshot old recurrence fields BEFORE applying edits
         String originalParentDate = parentTask.getDate();
@@ -395,7 +407,7 @@ public class TaskServiceV2 {
      * @return number of expected occurrences (≥1)
      */
     private int calculateCount(LocalDate startDate, LocalDate endDate, String frequency,
-            int interval, List<Boolean> daysOfWeek) {
+                               int interval, List<Boolean> daysOfWeek) {
         switch (frequency.toLowerCase()) {
             case "daily":
                 long days = Duration.between(startDate.atStartOfDay(), endDate.atStartOfDay()).toDays();
@@ -510,6 +522,10 @@ public class TaskServiceV2 {
         }
     }
 
+    // -----------------------------
+    // Private helpers (mapping, recurrence, updates)
+    // -----------------------------
+
     /**
      * Checks if a task exists by ID.
      *
@@ -534,10 +550,6 @@ public class TaskServiceV2 {
         return tasks.stream().map(this::mapToDto).toList();
     }
 
-    // -----------------------------
-    // Private helpers (mapping, recurrence, updates)
-    // -----------------------------
-
     /**
      * Maps a {@link Task} entity to a {@link TaskDtoV2}.
      */
@@ -558,13 +570,13 @@ public class TaskServiceV2 {
                 .patientId(task.getPatient() != null ? task.getPatient().getId() : null)
                 .notifications(task.getNotifications() != null
                         ? task.getNotifications().stream()
-                                .map(n -> new ScheduledNotificationDTO(
-                                        n.getReceiverId(),
-                                        n.getTitle(),
-                                        n.getBody(),
-                                        n.getNotificationType(),
-                                        n.getScheduledTime() != null ? n.getScheduledTime().toString() : null))
-                                .toList()
+                        .map(n -> new ScheduledNotificationDTO(
+                                n.getReceiverId(),
+                                n.getTitle(),
+                                n.getBody(),
+                                n.getNotificationType(),
+                                n.getScheduledTime() != null ? n.getScheduledTime().toString() : null))
+                        .toList()
                         : null)
                 .build();
     }
@@ -723,12 +735,13 @@ public class TaskServiceV2 {
             }
         }
     }
+    // --- Utilities ---------------------------------------------------------------
 
     /**
      * Builds a new recurring occurrence based on parent task and DTO.
      */
     private Task buildOccurrence(Task parentTask, TaskDtoV2 dto, Patient patient,
-            LocalDateTime baseDateTime, LocalDate occurrenceDate) {
+                                 LocalDateTime baseDateTime, LocalDate occurrenceDate) {
 
         LocalTime occTime = (dto.getTimeOfDay() != null)
                 ? LocalTime.parse(dto.getTimeOfDay())
@@ -832,36 +845,6 @@ public class TaskServiceV2 {
         }
         return dates;
     }
-    // --- Utilities ---------------------------------------------------------------
-
-    private static LocalDate onlyDate(String isoDateOrDateTime) {
-        // accepts "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm..."
-        return LocalDate.parse(isoDateOrDateTime.substring(0, 10));
-    }
-
-    /** Parameters that define a recurrence. */
-    private static final class SeriesParams {
-        final LocalDate startDate; // parent date (first occurrence)
-        final LocalTime time; // may be null
-        final String frequency; // daily|weekly|monthly|yearly
-        final int interval; // >= 1
-        final int count; // >= 1
-        final List<Boolean> days; // weekly: length=7 (Sun..Sat), else null
-
-        SeriesParams(LocalDate startDate, LocalTime time, String frequency,
-                int interval, int count, List<Boolean> days) {
-            this.startDate = startDate;
-            this.time = time;
-            this.frequency = frequency != null ? frequency : "daily";
-            this.interval = Math.max(1, interval);
-            this.count = Math.max(1, count);
-            this.days = days;
-        }
-
-        SeriesParams withCount(int newCount) {
-            return new SeriesParams(startDate, time, frequency, interval, Math.max(1, newCount), days);
-        }
-    }
 
     /**
      * Build the full list of occurrence dates either by COUNT (endCap=null) or by
@@ -908,8 +891,8 @@ public class TaskServiceV2 {
                 int weeklyIterations = 0;
                 int maxWeeklyIterations = (endCap != null)
                         ? Math.max(1, (int) Duration.between(
-                                p.startDate.atStartOfDay(),
-                                endCap.plusDays(1).atStartOfDay()).toDays() / 7 + 2)
+                        p.startDate.atStartOfDay(),
+                        endCap.plusDays(1).atStartOfDay()).toDays() / 7 + 2)
                         : Math.max(8, p.count * 8);
                 while (weeklyIterations++ < maxWeeklyIterations) {
                     LocalDate weekStart = cursor.with(DayOfWeek.SUNDAY);
@@ -972,7 +955,9 @@ public class TaskServiceV2 {
         return out;
     }
 
-    /** End of current saved series = last date from (parent + count). */
+    /**
+     * End of current saved series = last date from (parent + count).
+     */
     private LocalDate impliedEndDateFromSaved(Task parent) {
         SeriesParams p = new SeriesParams(
                 onlyDate(parent.getDate()),
@@ -985,16 +970,11 @@ public class TaskServiceV2 {
         return dates.isEmpty() ? onlyDate(parent.getDate()) : dates.get(dates.size() - 1);
     }
 
-    /** Count given a target end cap. */
+    /**
+     * Count given a target end cap.
+     */
     private int recomputeCountFromEnd(SeriesParams params, LocalDate endCap) {
         return generateDates(params, endCap).size();
-    }
-
-    private static boolean hasAnySelectedDay(List<Boolean> days) {
-        if (days == null) {
-            return false;
-        }
-        return days.stream().anyMatch(Boolean.TRUE::equals);
     }
 
     /**
@@ -1095,6 +1075,32 @@ public class TaskServiceV2 {
                     currentSeries.size() + 1, expectedCount);
         }
 
+    }
+
+    /**
+     * Parameters that define a recurrence.
+     */
+    private static final class SeriesParams {
+        final LocalDate startDate; // parent date (first occurrence)
+        final LocalTime time; // may be null
+        final String frequency; // daily|weekly|monthly|yearly
+        final int interval; // >= 1
+        final int count; // >= 1
+        final List<Boolean> days; // weekly: length=7 (Sun..Sat), else null
+
+        SeriesParams(LocalDate startDate, LocalTime time, String frequency,
+                     int interval, int count, List<Boolean> days) {
+            this.startDate = startDate;
+            this.time = time;
+            this.frequency = frequency != null ? frequency : "daily";
+            this.interval = Math.max(1, interval);
+            this.count = Math.max(1, count);
+            this.days = days;
+        }
+
+        SeriesParams withCount(int newCount) {
+            return new SeriesParams(startDate, time, frequency, interval, Math.max(1, newCount), days);
+        }
     }
 
 }

@@ -46,15 +46,24 @@ class PatientControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean private PatientService patientService;
-    @MockitoBean private FamilyMemberService familyMemberService;
-    @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
-    @MockitoBean private UserRepository userRepository;
-    @MockitoBean private MoodPainLogService moodPainLogService;
-    @MockitoBean private MedicationService medicationService;
-    @MockitoBean private PatientRiskService patientRiskService;
-    @MockitoBean private SecurityUtil securityUtil;
-    @MockitoBean private AuthorizationService authorizationService;
+    @MockitoBean
+    private PatientService patientService;
+    @MockitoBean
+    private FamilyMemberService familyMemberService;
+    @MockitoBean
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private MoodPainLogService moodPainLogService;
+    @MockitoBean
+    private MedicationService medicationService;
+    @MockitoBean
+    private PatientRiskService patientRiskService;
+    @MockitoBean
+    private SecurityUtil securityUtil;
+    @MockitoBean
+    private AuthorizationService authorizationService;
 
     private ObjectMapper objectMapper;
 
@@ -70,10 +79,10 @@ class PatientControllerTest {
     void setUp() throws Exception {
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-        patientUser = buildUser(1L, "patient@test.com",   Role.PATIENT);
+        patientUser = buildUser(1L, "patient@test.com", Role.PATIENT);
         caregiverUser = buildUser(2L, "caregiver@test.com", Role.CAREGIVER);
-        familyUser = buildUser(3L, "family@test.com",    Role.FAMILY_MEMBER);
-        adminUser = buildUser(4L, "admin@test.com",     Role.ADMIN);
+        familyUser = buildUser(3L, "family@test.com", Role.FAMILY_MEMBER);
+        adminUser = buildUser(4L, "admin@test.com", Role.ADMIN);
 
         patient = new Patient();
         patient.setId(10L);
@@ -110,20 +119,20 @@ class PatientControllerTest {
 
     private MedicationDTO sampleMedication() throws Exception {
         final MedicationDTO temp = MedicationDTO.builder()
-            .id(1L)
-            .patientId(10L)
-            .medicationName("Aspirin")
-            .dosage("100mg")
-            .frequency("Daily")
-            .route("Oral")
-            .medicationType(MedicationType.OVER_THE_COUNTER)
-            .prescribedBy("Dr. Smith")
-            .prescribedDate("2022-01-01")
-            .startDate("2022-01-02")
-            .endDate("2022-01-31")
-            .notes("Take with food")
-            .isActive(true)
-            .build();
+                .id(1L)
+                .patientId(10L)
+                .medicationName("Aspirin")
+                .dosage("100mg")
+                .frequency("Daily")
+                .route("Oral")
+                .medicationType(MedicationType.OVER_THE_COUNTER)
+                .prescribedBy("Dr. Smith")
+                .prescribedDate("2022-01-01")
+                .startDate("2022-01-02")
+                .endDate("2022-01-31")
+                .notes("Take with food")
+                .isActive(true)
+                .build();
         return temp;
     }
 
@@ -629,7 +638,7 @@ class PatientControllerTest {
         void returnsLogsInDateRange() throws Exception {
             mockCurrentUser(patientUser);
             final LocalDateTime start = LocalDateTime.now().minusDays(7);
-            final LocalDateTime end   = LocalDateTime.now();
+            final LocalDateTime end = LocalDateTime.now();
             when(moodPainLogService.getMoodPainLogsByDateRange(patientUser, start, end))
                     .thenReturn(List.of(sampleLog()));
 
@@ -727,7 +736,7 @@ class PatientControllerTest {
         void patientViewsAnalytics() throws Exception {
             mockCurrentUser(patientUser);
             final LocalDateTime start = LocalDateTime.now().minusDays(30);
-            final LocalDateTime end   = LocalDateTime.now();
+            final LocalDateTime end = LocalDateTime.now();
             final MoodPainAnalyticsDTO analytics = mock(MoodPainAnalyticsDTO.class);
             when(moodPainLogService.getMoodPainAnalytics(patientUser, start, end)).thenReturn(analytics);
 
@@ -743,7 +752,7 @@ class PatientControllerTest {
         void caregiverCannotViewAnalytics() throws Exception {
             mockCurrentUser(caregiverUser);
             final LocalDateTime start = LocalDateTime.now().minusDays(30);
-            final LocalDateTime end   = LocalDateTime.now();
+            final LocalDateTime end = LocalDateTime.now();
 
             mockMvc.perform(get("/v1/api/patients/mood-pain-log/analytics")
                             .param("startDate", start.toString())

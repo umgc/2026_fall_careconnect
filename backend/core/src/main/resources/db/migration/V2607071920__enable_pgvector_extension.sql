@@ -7,7 +7,9 @@
 -- Production: Aurora PostgreSQL 15+ with the vector extension enabled before this runs.
 -- Related: Task 1.5 retrieval_index_chunk.embedding column.
 
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE
+EXTENSION IF NOT EXISTS vector;
 
-COMMENT ON EXTENSION vector IS
+COMMENT
+ON EXTENSION vector IS
     'pgvector extension for Ask AI semantic retrieval (Task 1.6). Stores 1536-dim embeddings on retrieval_index_chunk.';

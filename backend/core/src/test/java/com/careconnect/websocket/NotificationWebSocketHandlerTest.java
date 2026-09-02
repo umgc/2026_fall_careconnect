@@ -16,7 +16,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationWebSocketHandlerTest {
 
-    @Mock WebSocketSession session;
+    @Mock
+    WebSocketSession session;
 
     private NotificationWebSocketHandler handler;
 

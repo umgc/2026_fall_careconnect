@@ -12,11 +12,15 @@ import java.util.List;
 public interface DocumentStatusHistoryRepository
         extends JpaRepository<DocumentStatusHistory, Long> {
 
-    /** Full audit trail for a subject, newest first. */
+    /**
+     * Full audit trail for a subject, newest first.
+     */
     List<DocumentStatusHistory> findBySubjectTypeAndSubjectIdOrderByChangedAtDesc(
             DocumentRequirementStatus.SubjectType subjectType, Long subjectId);
 
-    /** Audit trail for a single required document of a subject, newest first. */
+    /**
+     * Audit trail for a single required document of a subject, newest first.
+     */
     List<DocumentStatusHistory> findBySubjectTypeAndSubjectIdAndDocumentTypeOrderByChangedAtDesc(
             DocumentRequirementStatus.SubjectType subjectType, Long subjectId,
             UserFile.FileCategory documentType);

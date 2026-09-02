@@ -41,11 +41,11 @@ public class FamilyMemberController {
         String userEmail = authentication.getName();
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
-        
+
         if (user.getRole() != Role.FAMILY_MEMBER) {
             throw new AppException(HttpStatus.FORBIDDEN, "This endpoint is only accessible to family members");
         }
-        
+
         return user;
     }
 
@@ -84,14 +84,14 @@ public class FamilyMemberController {
 
     @GetMapping("/patients/{patientId}/dashboard")
     public ResponseEntity<DashboardDTO> getPatientDashboard(@PathVariable Long patientId,
-                                                           @RequestParam(defaultValue = "30") int days) {
+                                                            @RequestParam(defaultValue = "30") int days) {
         User familyMember = getCurrentFamilyMember();
-        
+
         // Verify access to patient
         if (!familyMemberService.hasAccessToPatient(familyMember.getId(), patientId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied to patient data");
         }
-        
+
         DashboardDTO dashboard = analyticsService.getDashboard(patientId, Period.ofDays(days));
         return ResponseEntity.ok(dashboard);
     }
@@ -101,14 +101,14 @@ public class FamilyMemberController {
 
     @GetMapping("/patients/{patientId}/vitals")
     public ResponseEntity<List<VitalSampleDTO>> getPatientVitals(@PathVariable Long patientId,
-                                                                @RequestParam(defaultValue = "7") int days) {
+                                                                 @RequestParam(defaultValue = "7") int days) {
         User familyMember = getCurrentFamilyMember();
-        
+
         // Verify access to patient
         if (!familyMemberService.hasAccessToPatient(familyMember.getId(), patientId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied to patient data");
         }
-        
+
         List<VitalSampleDTO> vitals = analyticsService.getVitals(patientId, Period.ofDays(days));
         return ResponseEntity.ok(vitals);
     }

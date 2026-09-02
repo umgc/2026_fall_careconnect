@@ -22,19 +22,16 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PatientNotetakerControllerTest {
 
+    private static final Long PATIENT_ID = 1L;
+    private static final Long NOTE_ID = 10L;
     @Mock
     private PatientNotetakerService patientNotetakerService;
-
     @Mock
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
-
     @InjectMocks
     private PatientNotetakerController controller;
-
-    private static final Long PATIENT_ID = 1L;
-    private static final Long NOTE_ID    = 10L;
 
     private PatientNotetakerConfigDTO configDTO() throws Exception {
         final PatientNotetakerConfigDTO dto = new PatientNotetakerConfigDTO();
@@ -79,7 +76,7 @@ class PatientNotetakerControllerTest {
 
     @Test
     void updatePatientNoteTakerConfig_success_returnsOkWithUpdatedConfig() throws Exception {
-        final PatientNotetakerConfigDTO input   = configDTO();
+        final PatientNotetakerConfigDTO input = configDTO();
         final PatientNotetakerConfigDTO updated = configDTO();
         when(patientNotetakerService.createOrUpdatePatientNotetakerConfig(PATIENT_ID, input)).thenReturn(updated);
 
@@ -106,7 +103,7 @@ class PatientNotetakerControllerTest {
 
     @Test
     void createPatientNote_success_returnsCreatedWithNote() throws Exception {
-        final PatientNoteDTO input   = noteDTO();
+        final PatientNoteDTO input = noteDTO();
         final PatientNoteDTO created = noteDTO();
         when(patientNotetakerService.createNoteForPatient(PATIENT_ID, input)).thenReturn(created);
 
@@ -133,7 +130,7 @@ class PatientNotetakerControllerTest {
 
     @Test
     void updatePatientNote_success_returnsOkWithUpdatedNote() throws Exception {
-        final PatientNoteDTO input   = noteDTO();
+        final PatientNoteDTO input = noteDTO();
         final PatientNoteDTO updated = noteDTO();
         when(patientNotetakerService.updateNoteForPatient(PATIENT_ID, NOTE_ID, input)).thenReturn(updated);
 

@@ -126,7 +126,7 @@ class ScheduleConflictFixturePatternTest {
         @DisplayName("total duration sums basic and afternoon fixture visits")
         void totalDurationSumsBasicAndAfternoonVisits() {
             // Arrange: two non-overlapping visits from the fixture library.
-            ScheduledVisit morning   = ScheduledVisitFixtures.basicScheduledVisit();    // 60 min
+            ScheduledVisit morning = ScheduledVisitFixtures.basicScheduledVisit();    // 60 min
             ScheduledVisit afternoon = ScheduledVisitFixtures.afternoonVisit(2L);       // 60 min
             // cancelledVisit must not be counted.
             ScheduledVisit cancelled = ScheduledVisitFixtures.cancelledVisit(3L);
@@ -160,8 +160,8 @@ class ScheduleConflictFixturePatternTest {
 
             // Act + Assert
             assertFalse(conflictService.exceedsDailyLimit(
-                    ScheduledVisitFixtures.DEFAULT_CAREGIVER_ID,
-                    ScheduledVisitFixtures.DEFAULT_DATE),
+                            ScheduledVisitFixtures.DEFAULT_CAREGIVER_ID,
+                            ScheduledVisitFixtures.DEFAULT_DATE),
                     "Two visits must not exceed the default daily limit of 8.");
         }
 

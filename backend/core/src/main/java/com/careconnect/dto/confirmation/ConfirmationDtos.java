@@ -8,7 +8,10 @@ import java.time.LocalDateTime;
 
 public class ConfirmationDtos {
 
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ConfirmationItemResponse {
         private Long id;
         private String sourceType;
@@ -24,16 +27,25 @@ public class ConfirmationDtos {
         private LocalDateTime updatedAt;
     }
 
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CreateConfirmationRequest {
-        @NotNull private String sourceType;
-        @NotNull private String payload;
+        @NotNull
+        private String sourceType;
+        @NotNull
+        private String payload;
         private String referenceId;
-        @NotNull private Long requestedBy;
+        @NotNull
+        private Long requestedBy;
         private Long patientId;
     }
 
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ResolveConfirmationRequest {
         @Size(max = 500)
         private String note;

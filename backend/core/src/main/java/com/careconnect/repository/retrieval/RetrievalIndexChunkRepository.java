@@ -22,18 +22,6 @@ import java.util.UUID;
 @Repository
 public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIndexChunk, UUID> {
 
-    interface SummaryReplayCandidate {
-        Long getPatientId();
-
-        String getSourceRecordId();
-
-        String getSourceKind();
-
-        UUID getClaimToken();
-
-        Integer getAttempts();
-    }
-
     List<RetrievalIndexChunk> findByPatientId(Long patientId);
 
     List<RetrievalIndexChunk> findByPatientIdAndRecordType(Long patientId, String recordType);
@@ -692,7 +680,9 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             nativeQuery = true)
     boolean tryAcquireSummaryReplayLock(@Param("lockKey") String lockKey);
 
-    /** Serializes delete-and-replace for one patient/source identity. */
+    /**
+     * Serializes delete-and-replace for one patient/source identity.
+     */
     @Query(
             value = """
                     SELECT pg_advisory_xact_lock(hashtextextended(
@@ -841,4 +831,16 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
             @Param("id") UUID id,
             @Param("embedding") String embedding,
             @Param("claimToken") UUID claimToken);
+
+    interface SummaryReplayCandidate {
+        Long getPatientId();
+
+        String getSourceRecordId();
+
+        String getSourceKind();
+
+        UUID getClaimToken();
+
+        Integer getAttempts();
+    }
 }

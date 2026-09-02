@@ -30,27 +30,20 @@ import static org.mockito.Mockito.when;
 @DisplayName("CallTranscriptService Tests")
 class CallTranscriptServiceTest {
 
+    private static final String CALL_ID = "call-1";
     @Mock
     private CallTranscriptSegmentRepository callTranscriptSegmentRepository;
-
     @Mock
     private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
-
     @Mock
     private CallTranscriptArchiveService callTranscriptArchiveService;
-
     @Mock
     private CallPatientResolver callPatientResolver;
-
     @Mock
     private TranscriptArchiveLifecycleRepository lifecycleRepository;
-
     @Mock
     private DatabaseLockService databaseLockService;
-
     private CallTranscriptService service;
-
-    private static final String CALL_ID = "call-1";
 
     @BeforeEach
     void setUp() {

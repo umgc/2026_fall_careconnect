@@ -76,10 +76,10 @@ CREATE TABLE invite_token
 );
 
 CREATE UNIQUE INDEX idx_invite_token_lookup ON invite_token (token_lookup);
-CREATE INDEX idx_invite_token_link        ON invite_token (link_id);
-CREATE INDEX idx_invite_token_status      ON invite_token (status);
+CREATE INDEX idx_invite_token_link ON invite_token (link_id);
+CREATE INDEX idx_invite_token_status ON invite_token (status);
 -- Partial index to make the scheduled expiry sweep cheap.
-CREATE INDEX idx_invite_token_expires     ON invite_token (expires_at) WHERE status = 'PENDING';
+CREATE INDEX idx_invite_token_expires ON invite_token (expires_at) WHERE status = 'PENDING';
 
 -- Enforce "at most one PENDING invite per link" at the DATABASE level. The
 -- application also checks this (existsActivePendingToken), but that check and
@@ -93,17 +93,17 @@ CREATE UNIQUE INDEX idx_invite_token_one_pending_per_link
 
 CREATE TABLE invite_token_audit
 (
-    id             BIGSERIAL PRIMARY KEY,
-    token_id       BIGINT      NOT NULL,
-    event_type     VARCHAR(40) NOT NULL,   -- CREATED, VIEWED, ACCEPTED, EXPIRED, REVOKED
-    actor_user_id  BIGINT,                 -- NULL for system/anonymous events
-    actor_ip       VARCHAR(45),            -- IPv4 or IPv6
-    detail         VARCHAR(1000),          -- freeform context (JSON or text)
-    occurred_at    TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id            BIGSERIAL PRIMARY KEY,
+    token_id      BIGINT      NOT NULL,
+    event_type    VARCHAR(40) NOT NULL, -- CREATED, VIEWED, ACCEPTED, EXPIRED, REVOKED
+    actor_user_id BIGINT,               -- NULL for system/anonymous events
+    actor_ip      VARCHAR(45),          -- IPv4 or IPv6
+    detail        VARCHAR(1000),        -- freeform context (JSON or text)
+    occurred_at   TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_invite_audit_token
         FOREIGN KEY (token_id) REFERENCES invite_token (id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_invite_audit_token    ON invite_token_audit (token_id);
+CREATE INDEX idx_invite_audit_token ON invite_token_audit (token_id);
 CREATE INDEX idx_invite_audit_occurred ON invite_token_audit (occurred_at DESC);

@@ -2,6 +2,7 @@ package com.careconnect.security;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
@@ -20,12 +21,12 @@ public class RolePermissionServiceTest {
     public void testAdminHasAllPermissions() throws Exception {
         Set<Permission> adminPerms = RolePermissionService.getPermissionsForRole(Role.ADMIN);
         assertEquals(29, adminPerms.size(),
-            "Admin should have all 29 permissions");
-        
+                "Admin should have all 29 permissions");
+
         // Verify admin has every permission
         for (Permission p : Permission.values()) {
             assertTrue(adminPerms.contains(p),
-                "Admin should have permission: " + p.name());
+                    "Admin should have permission: " + p.name());
         }
     }
 
@@ -34,7 +35,7 @@ public class RolePermissionServiceTest {
     public void testCaregiverHasCorrectPermissionCount() throws Exception {
         Set<Permission> caregiverPerms = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
         assertEquals(22, caregiverPerms.size(),
-            "Caregiver should have exactly 22 permissions");
+                "Caregiver should have exactly 22 permissions");
     }
 
     @Test
@@ -42,7 +43,7 @@ public class RolePermissionServiceTest {
     public void testPatientHasCorrectPermissionCount() throws Exception {
         Set<Permission> patientPerms = RolePermissionService.getPermissionsForRole(Role.PATIENT);
         assertEquals(7, patientPerms.size(),
-            "Patient should have exactly 7 permissions");
+                "Patient should have exactly 7 permissions");
     }
 
     @Test
@@ -50,7 +51,7 @@ public class RolePermissionServiceTest {
     public void testFamilyMemberHasCorrectPermissionCount() throws Exception {
         Set<Permission> familyPerms = RolePermissionService.getPermissionsForRole(Role.FAMILY_MEMBER);
         assertEquals(3, familyPerms.size(),
-            "Family Member should have exactly 3 permissions");
+                "Family Member should have exactly 3 permissions");
     }
 
     // ========== Specific Permission Tests - Admin ==========
@@ -71,26 +72,26 @@ public class RolePermissionServiceTest {
     @DisplayName("Caregiver should have patient management permissions")
     public void testCaregiverHasPatientManagementPermissions() throws Exception {
         assertTrue(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.VIEW_ASSIGNED_PATIENTS),
-            "Caregiver should be able to view assigned patients");
+                "Caregiver should be able to view assigned patients");
         assertTrue(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.CREATE_PATIENTS),
-            "Caregiver should be able to create patients");
+                "Caregiver should be able to create patients");
         assertTrue(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.UPDATE_PATIENTS),
-            "Caregiver should be able to update patients");
+                "Caregiver should be able to update patients");
     }
 
     @Test
     @DisplayName("Caregiver should NOT have admin-only permissions")
     public void testCaregiverDoesNotHaveAdminPermissions() throws Exception {
         assertFalse(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.VIEW_ALL_USERS),
-            "Caregiver should NOT be able to view all users");
+                "Caregiver should NOT be able to view all users");
         assertFalse(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.MANAGE_USERS),
-            "Caregiver should NOT be able to manage users");
+                "Caregiver should NOT be able to manage users");
         assertFalse(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.ASSIGN_ROLES),
-            "Caregiver should NOT be able to assign roles");
+                "Caregiver should NOT be able to assign roles");
         assertFalse(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.VIEW_ALL_PATIENTS),
-            "Caregiver should NOT be able to view all patients (only assigned)");
+                "Caregiver should NOT be able to view all patients (only assigned)");
         assertFalse(RolePermissionService.hasPermission(Role.CAREGIVER, Permission.DELETE_PATIENTS),
-            "Caregiver should NOT be able to delete patients");
+                "Caregiver should NOT be able to delete patients");
     }
 
     @Test
@@ -145,28 +146,28 @@ public class RolePermissionServiceTest {
     @DisplayName("Patient should have limited task permissions")
     public void testPatientHasLimitedTaskPermissions() throws Exception {
         assertTrue(RolePermissionService.hasPermission(Role.PATIENT, Permission.VIEW_TASKS),
-            "Patient should be able to view tasks");
+                "Patient should be able to view tasks");
         assertTrue(RolePermissionService.hasPermission(Role.PATIENT, Permission.COMPLETE_TASKS),
-            "Patient should be able to complete tasks");
-        
+                "Patient should be able to complete tasks");
+
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.CREATE_TASKS),
-            "Patient should NOT be able to create tasks");
+                "Patient should NOT be able to create tasks");
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.UPDATE_TASKS),
-            "Patient should NOT be able to update tasks");
+                "Patient should NOT be able to update tasks");
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.DELETE_TASKS),
-            "Patient should NOT be able to delete tasks");
+                "Patient should NOT be able to delete tasks");
     }
 
     @Test
     @DisplayName("Patient should have own health data permissions")
     public void testPatientHasOwnHealthDataPermissions() throws Exception {
         assertTrue(RolePermissionService.hasPermission(Role.PATIENT, Permission.VIEW_HEALTH_DATA),
-            "Patient should be able to view own health data");
+                "Patient should be able to view own health data");
         assertTrue(RolePermissionService.hasPermission(Role.PATIENT, Permission.RECORD_HEALTH_DATA),
-            "Patient should be able to record own health data");
-        
+                "Patient should be able to record own health data");
+
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.EXPORT_HEALTH_DATA),
-            "Patient should NOT be able to export health data");
+                "Patient should NOT be able to export health data");
     }
 
     @Test
@@ -206,17 +207,17 @@ public class RolePermissionServiceTest {
     @DisplayName("Task 2.2: Patient should have USE_AI_FEATURES for Ask AI")
     public void testPatientHasUseAiFeaturesPermission() {
         assertTrue(
-            RolePermissionService.hasPermission(Role.PATIENT, Permission.USE_AI_FEATURES),
-            "Patient must have USE_AI_FEATURES to access Ask AI on own records");
+                RolePermissionService.hasPermission(Role.PATIENT, Permission.USE_AI_FEATURES),
+                "Patient must have USE_AI_FEATURES to access Ask AI on own records");
         assertTrue(
-            RolePermissionService.getPermissionsForRole(Role.PATIENT).contains(Permission.USE_AI_FEATURES));
+                RolePermissionService.getPermissionsForRole(Role.PATIENT).contains(Permission.USE_AI_FEATURES));
     }
 
     @Test
     @DisplayName("Task 2.2: Patient USE_AI_FEATURES does not grant device or admin AI permissions")
     public void testPatientUseAiFeaturesDoesNotGrantExtraAiOrDevicePermissions() {
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.MANAGE_DEVICES),
-            "USE_AI_FEATURES must not imply MANAGE_DEVICES for patients");
+                "USE_AI_FEATURES must not imply MANAGE_DEVICES for patients");
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.VIEW_ALL_PATIENTS));
         assertFalse(RolePermissionService.hasPermission(Role.PATIENT, Permission.VIEW_ANALYTICS));
     }
@@ -232,27 +233,27 @@ public class RolePermissionServiceTest {
     @DisplayName("Task 2.2: Family Member should NOT have USE_AI_FEATURES")
     public void testFamilyMemberDoesNotHaveUseAiFeatures() {
         assertFalse(
-            RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.USE_AI_FEATURES),
-            "Family members remain read-only; Ask AI for linked patients is a separate scope decision");
+                RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.USE_AI_FEATURES),
+                "Family members remain read-only; Ask AI for linked patients is a separate scope decision");
     }
 
     @Test
     @DisplayName("Task 2.2: hasAllPermissions(PATIENT, USE_AI_FEATURES, VIEW_TASKS) is true")
     public void testPatientHasAllPermissionsIncludingUseAiFeatures() {
         assertTrue(RolePermissionService.hasAllPermissions(
-            Role.PATIENT,
-            Permission.USE_AI_FEATURES,
-            Permission.VIEW_TASKS,
-            Permission.VIEW_HEALTH_DATA));
+                Role.PATIENT,
+                Permission.USE_AI_FEATURES,
+                Permission.VIEW_TASKS,
+                Permission.VIEW_HEALTH_DATA));
     }
 
     @Test
     @DisplayName("Task 2.2: hasAnyPermission finds USE_AI_FEATURES among unrelated permissions")
     public void testHasAnyPermissionFindsPatientUseAiFeatures() {
         assertTrue(RolePermissionService.hasAnyPermission(
-            Role.PATIENT,
-            Permission.CREATE_TASKS,
-            Permission.USE_AI_FEATURES));
+                Role.PATIENT,
+                Permission.CREATE_TASKS,
+                Permission.USE_AI_FEATURES));
     }
 
     // ========== Specific Permission Tests - Family Member ==========
@@ -261,28 +262,28 @@ public class RolePermissionServiceTest {
     @DisplayName("Family Member should have read-only view permissions")
     public void testFamilyMemberHasReadOnlyPermissions() throws Exception {
         assertTrue(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.VIEW_TASKS),
-            "Family Member should be able to view tasks");
+                "Family Member should be able to view tasks");
         assertTrue(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.VIEW_HEALTH_DATA),
-            "Family Member should be able to view health data");
+                "Family Member should be able to view health data");
         assertTrue(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.VIEW_MESSAGES),
-            "Family Member should be able to view messages");
+                "Family Member should be able to view messages");
     }
 
     @Test
     @DisplayName("Family Member should NOT be able to create, update, or delete")
     public void testFamilyMemberCannotModify() throws Exception {
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.CREATE_TASKS),
-            "Family Member should NOT be able to create tasks");
+                "Family Member should NOT be able to create tasks");
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.UPDATE_TASKS),
-            "Family Member should NOT be able to update tasks");
+                "Family Member should NOT be able to update tasks");
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.DELETE_TASKS),
-            "Family Member should NOT be able to delete tasks");
+                "Family Member should NOT be able to delete tasks");
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.COMPLETE_TASKS),
-            "Family Member should NOT be able to complete tasks");
+                "Family Member should NOT be able to complete tasks");
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.RECORD_HEALTH_DATA),
-            "Family Member should NOT be able to record health data");
+                "Family Member should NOT be able to record health data");
         assertFalse(RolePermissionService.hasPermission(Role.FAMILY_MEMBER, Permission.SEND_MESSAGES),
-            "Family Member should NOT be able to send messages");
+                "Family Member should NOT be able to send messages");
     }
 
     // ========== hasAllPermissions Tests ==========
@@ -291,24 +292,24 @@ public class RolePermissionServiceTest {
     @DisplayName("hasAllPermissions should return true when role has all specified permissions")
     public void testHasAllPermissionsPositive() throws Exception {
         assertTrue(RolePermissionService.hasAllPermissions(Role.CAREGIVER,
-            Permission.CREATE_TASKS,
-            Permission.VIEW_HEALTH_DATA,
-            Permission.SEND_MESSAGES));
+                Permission.CREATE_TASKS,
+                Permission.VIEW_HEALTH_DATA,
+                Permission.SEND_MESSAGES));
     }
 
     @Test
     @DisplayName("hasAllPermissions should return false when role is missing one permission")
     public void testHasAllPermissionsNegative() throws Exception {
         assertFalse(RolePermissionService.hasAllPermissions(Role.PATIENT,
-            Permission.VIEW_TASKS,
-            Permission.CREATE_TASKS)); // Patient doesn't have CREATE_TASKS
+                Permission.VIEW_TASKS,
+                Permission.CREATE_TASKS)); // Patient doesn't have CREATE_TASKS
     }
 
     @Test
     @DisplayName("hasAllPermissions should handle empty permission array")
     public void testHasAllPermissionsEmpty() throws Exception {
         assertTrue(RolePermissionService.hasAllPermissions(Role.PATIENT),
-            "Should return true for empty permission array");
+                "Should return true for empty permission array");
     }
 
     @Test
@@ -323,17 +324,17 @@ public class RolePermissionServiceTest {
     @DisplayName("hasAnyPermission should return true when role has at least one permission")
     public void testHasAnyPermissionPositive() throws Exception {
         assertTrue(RolePermissionService.hasAnyPermission(Role.PATIENT,
-            Permission.CREATE_TASKS,  // Patient doesn't have this
-            Permission.VIEW_TASKS));   // But patient HAS this
+                Permission.CREATE_TASKS,  // Patient doesn't have this
+                Permission.VIEW_TASKS));   // But patient HAS this
     }
 
     @Test
     @DisplayName("hasAnyPermission should return false when role has none of the permissions")
     public void testHasAnyPermissionNegative() throws Exception {
         assertFalse(RolePermissionService.hasAnyPermission(Role.PATIENT,
-            Permission.CREATE_TASKS,
-            Permission.DELETE_TASKS,
-            Permission.MANAGE_USERS));
+                Permission.CREATE_TASKS,
+                Permission.DELETE_TASKS,
+                Permission.MANAGE_USERS));
     }
 
     @Test
@@ -365,7 +366,7 @@ public class RolePermissionServiceTest {
     @DisplayName("getPermissionsForRole should return unmodifiable set")
     public void testGetPermissionsForRoleReturnsUnmodifiable() throws Exception {
         Set<Permission> permissions = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
-        
+
         assertThrows(UnsupportedOperationException.class, () -> {
             permissions.add(Permission.MANAGE_USERS);
         }, "Returned permission set should be unmodifiable");
@@ -384,7 +385,7 @@ public class RolePermissionServiceTest {
     public void testGetPermissionsForRoleConsistent() throws Exception {
         Set<Permission> first = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
         Set<Permission> second = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
-        
+
         assertEquals(first.size(), second.size());
         assertTrue(first.containsAll(second));
     }
@@ -409,10 +410,10 @@ public class RolePermissionServiceTest {
     @DisplayName("getPermissionSummary should return summary for all roles")
     public void testGetPermissionSummary() throws Exception {
         Map<String, Integer> summary = RolePermissionService.getPermissionSummary();
-        
+
         assertNotNull(summary);
         assertEquals(4, summary.size(), "Summary should have 4 roles");
-        
+
         assertEquals(29, summary.get("Administrator"));
         assertEquals(22, summary.get("Caregiver"));
         assertEquals(7, summary.get("Patient"));
@@ -426,15 +427,15 @@ public class RolePermissionServiceTest {
     public void testPatientPermissionsAreSubsetOfCaregiver() throws Exception {
         Set<Permission> patientPerms = RolePermissionService.getPermissionsForRole(Role.PATIENT);
         Set<Permission> caregiverPerms = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
-        
+
         // All patient permissions should also be in caregiver permissions
         for (Permission p : patientPerms) {
             if (p != Permission.SEND_MESSAGES && p != Permission.VIEW_MESSAGES) {
                 // Skip communication permissions as they're intentionally shared
-                assertTrue(caregiverPerms.contains(p) || 
-                          p == Permission.SEND_MESSAGES || 
-                          p == Permission.VIEW_MESSAGES,
-                    "Patient permission " + p.name() + " should also be in Caregiver permissions");
+                assertTrue(caregiverPerms.contains(p) ||
+                                p == Permission.SEND_MESSAGES ||
+                                p == Permission.VIEW_MESSAGES,
+                        "Patient permission " + p.name() + " should also be in Caregiver permissions");
             }
         }
     }
@@ -446,13 +447,13 @@ public class RolePermissionServiceTest {
         int patientCount = RolePermissionService.getPermissionCount(Role.PATIENT);
         int caregiverCount = RolePermissionService.getPermissionCount(Role.CAREGIVER);
         int adminCount = RolePermissionService.getPermissionCount(Role.ADMIN);
-        
+
         assertTrue(familyCount < patientCount,
-            "Family Member should have fewer permissions than Patient");
+                "Family Member should have fewer permissions than Patient");
         assertTrue(familyCount < caregiverCount,
-            "Family Member should have fewer permissions than Caregiver");
+                "Family Member should have fewer permissions than Caregiver");
         assertTrue(familyCount < adminCount,
-            "Family Member should have fewer permissions than Admin");
+                "Family Member should have fewer permissions than Admin");
     }
 
     // ========== HIPAA Compliance Tests ==========

@@ -68,8 +68,8 @@ public class SecurityConfig {
                              • AWS ALB / ECS / Fargate health checks
                              • Monitoring tools
                         */
-                       .requestMatchers("/actuator/health").permitAll()
-                        
+                        .requestMatchers("/actuator/health").permitAll()
+
                         /* ---------- Swagger / API docs ------------------------ */
                         .requestMatchers(
                                 "/swagger-ui/**",

@@ -3,6 +3,7 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.util.Set;
 
 @Entity

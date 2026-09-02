@@ -10,6 +10,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class GroundingRelevancePolicyTest {
 
+    private static RankedChunk strongChunk(final String text) {
+        return new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                text,
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+    }
+
     @Test
     void specificMedicationDoesNotAcceptDifferentMedicationFromStrongHit() {
         final String evidence = "Insulin was increased to ten units nightly.";
@@ -143,20 +158,5 @@ class GroundingRelevancePolicyTest {
         assertThat(GroundingRelevancePolicy.isRelevant(
                 "What happened with metformin?", evidence, evidence, strongChunk(evidence)))
                 .isFalse();
-    }
-
-    private static RankedChunk strongChunk(final String text) {
-        return new RankedChunk(
-                UUID.randomUUID(),
-                42L,
-                RetrievalRecordType.CALL_SUMMARY,
-                "99",
-                text,
-                null,
-                "auto",
-                0.03d,
-                1,
-                1,
-                "C1");
     }
 }

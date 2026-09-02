@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link NotificationService}.
- *
+ * <p>
  * All external dependencies (AWS SES/SNS, repositories) are mocked so tests
  * exercise only the notification orchestration logic.  Users with ID 1-3 are
  * pre-stubbed in setUp() with email and phone so that notification channels

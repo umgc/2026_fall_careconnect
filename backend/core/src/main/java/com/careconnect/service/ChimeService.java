@@ -5,9 +5,11 @@ import com.careconnect.model.CallSession;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.CallSessionRepository;
 import lombok.extern.slf4j.Slf4j;
+
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -39,87 +41,109 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ChimeService — manages AWS Chime SDK video call meetings.
- *
+ * <p>
  * Flow:
- *   1. Caller sends call invitation via WebSocket (CallNotificationHandler)
- *   2. Recipient accepts — frontend calls POST /api/v3/calls/{callId}/meeting
- *   3. This service creates a Chime meeting and adds both users as attendees
- *   4. Both users receive meeting credentials and join via Jitsi/Chime SDK in Flutter
- *   5. When call ends, DELETE /api/v3/calls/{callId}/meeting cleans up
+ * 1. Caller sends call invitation via WebSocket (CallNotificationHandler)
+ * 2. Recipient accepts — frontend calls POST /api/v3/calls/{callId}/meeting
+ * 3. This service creates a Chime meeting and adds both users as attendees
+ * 4. Both users receive meeting credentials and join via Jitsi/Chime SDK in Flutter
+ * 5. When call ends, DELETE /api/v3/calls/{callId}/meeting cleans up
  */
 @Slf4j
 @Service
 public class ChimeService {
 
-    /** AWS Chime SDK meetings client. */
+    /**
+     * Local-mock media region used when AWS is unavailable.
+     */
+    private static final String DEFAULT_MEDIA_REGION = "us-east-1";
+    /**
+     * Maximum length for a Chime external user ID.
+     */
+    private static final int CHIME_USER_ID_MAX_LENGTH = 64;
+    /**
+     * Lease window for durable attendee-creation ownership (covers slow AWS list/create).
+     */
+    private static final long ATTENDEE_CLAIM_LEASE_SECONDS = 120L;
+    /**
+     * AWS Chime SDK meetings client.
+     */
     private final ChimeSdkMeetingsClient chimeSdkMeetingsClient;
     private final CallSessionRepository callSessionRepository;
     private final CallParticipantRepository callParticipantRepository;
     private final TransactionTemplate transactionTemplate;
-
-    /** Whether AWS integration is enabled. */
+    /**
+     * Whether AWS integration is enabled.
+     */
     private final boolean awsEnabled;
-
-    /** Whether Chime transcription is enabled. */
-    private final boolean transcriptionEnabled;
-
-    /** BCP-47 language code for transcription. */
-    private final String transcriptionLanguageCode;
-
-    /** AWS region for the transcription service. */
-    private final String transcriptionRegion;
 
     // In-memory store of active meetings: callId -> Meeting
     // On ECS single-instance this is sufficient — no distributed cache needed
-
-    /** Active meetings keyed by callId. */
+    /**
+     * Whether Chime transcription is enabled.
+     */
+    private final boolean transcriptionEnabled;
+    /**
+     * BCP-47 language code for transcription.
+     */
+    private final String transcriptionLanguageCode;
+    /**
+     * AWS region for the transcription service.
+     */
+    private final String transcriptionRegion;
+    /**
+     * Active meetings keyed by callId.
+     */
     private final Map<String, Meeting> activeMeetings = new ConcurrentHashMap<>();
-
-    /** Cached join credentials per callId and userId (L5a idempotent re-join). */
+    /**
+     * Cached join credentials per callId and userId (L5a idempotent re-join).
+     */
     private final Map<String, Map<String, Map<String, Object>>> attendeeCredentials =
             new ConcurrentHashMap<>();
-
-    /** Per attendee locks prevent duplicate local requests while the durable lock coordinates nodes. */
+    /**
+     * Per attendee locks prevent duplicate local requests while the durable lock coordinates nodes.
+     */
     private final Map<String, Object> attendeeCreationLocks = new ConcurrentHashMap<>();
-
-    /** Tracks whether transcription has been started for each callId. */
+    /**
+     * Tracks whether transcription has been started for each callId.
+     */
     private final Map<String, Boolean> transcriptionStarted = new ConcurrentHashMap<>();
-
-    /** Last source that attempted transcription for each callId. */
+    /**
+     * Last source that attempted transcription for each callId.
+     */
     private final Map<String, String> transcriptionLastSource = new ConcurrentHashMap<>();
-
-    /** Timestamp of last transcription attempt for each callId. */
+    /**
+     * Timestamp of last transcription attempt for each callId.
+     */
     private final Map<String, Long> transcriptionLastAttemptAtMs = new ConcurrentHashMap<>();
-
-    /** Last transcription status recorded for each callId. */
+    /**
+     * Last transcription status recorded for each callId.
+     */
     private final Map<String, String> transcriptionLastStatus = new ConcurrentHashMap<>();
-
-    /** Last transcription detail message for each callId. */
+    /**
+     * Last transcription detail message for each callId.
+     */
     private final Map<String, String> transcriptionLastDetail = new ConcurrentHashMap<>();
-
-    /** Last Chime meeting ID used for transcription per callId. */
+    /**
+     * Last Chime meeting ID used for transcription per callId.
+     */
     private final Map<String, String> transcriptionLastMeetingId = new ConcurrentHashMap<>();
-
-    /** Source of last successful transcription start per callId. */
+    /**
+     * Source of last successful transcription start per callId.
+     */
     private final Map<String, String> transcriptionLastStartSource = new ConcurrentHashMap<>();
-
-    /** Timestamp of last successful transcription start per callId. */
+    /**
+     * Timestamp of last successful transcription start per callId.
+     */
     private final Map<String, Long> transcriptionLastStartAtMs = new ConcurrentHashMap<>();
-
-    /** Status of last transcription start attempt per callId. */
+    /**
+     * Status of last transcription start attempt per callId.
+     */
     private final Map<String, String> transcriptionLastStartStatus = new ConcurrentHashMap<>();
-
-    /** Detail message of last transcription start attempt per callId. */
+    /**
+     * Detail message of last transcription start attempt per callId.
+     */
     private final Map<String, String> transcriptionLastStartDetail = new ConcurrentHashMap<>();
-
-    /** Local-mock media region used when AWS is unavailable. */
-    private static final String DEFAULT_MEDIA_REGION = "us-east-1";
-
-    /** Maximum length for a Chime external user ID. */
-    private static final int CHIME_USER_ID_MAX_LENGTH = 64;
-
-    /** Lease window for durable attendee-creation ownership (covers slow AWS list/create). */
-    private static final long ATTENDEE_CLAIM_LEASE_SECONDS = 120L;
 
     @Autowired
     public ChimeService(
@@ -129,10 +153,8 @@ public class ChimeService {
             final PlatformTransactionManager transactionManager,
             @Value("${careconnect.aws.enabled:true}") final boolean awsEnabled,
             @Value("${careconnect.chime.transcription.enabled:true}") final boolean transcriptionEnabled,
-            @Value("${careconnect.chime.transcription.language-code:en-US}")
-                final String transcriptionLanguageCode,
-            @Value("${careconnect.chime.transcription.region:us-east-1}")
-                final String transcriptionRegion) {
+            @Value("${careconnect.chime.transcription.language-code:en-US}") final String transcriptionLanguageCode,
+            @Value("${careconnect.chime.transcription.region:us-east-1}") final String transcriptionRegion) {
         this.chimeSdkMeetingsClient = chimeSdkMeetingsClient;
         this.callSessionRepository = callSessionRepository;
         this.callParticipantRepository = callParticipantRepository;
@@ -145,7 +167,9 @@ public class ChimeService {
         this.transcriptionRegion = transcriptionRegion;
     }
 
-    /** Compatibility constructor for isolated unit tests. */
+    /**
+     * Compatibility constructor for isolated unit tests.
+     */
     ChimeService(
             final ChimeSdkMeetingsClient chimeSdkMeetingsClient,
             final boolean awsEnabled,
@@ -163,7 +187,9 @@ public class ChimeService {
                 transcriptionRegion);
     }
 
-    /** Compatibility constructor used by multi-node unit tests. */
+    /**
+     * Compatibility constructor used by multi-node unit tests.
+     */
     ChimeService(
             final ChimeSdkMeetingsClient chimeSdkMeetingsClient,
             final CallSessionRepository callSessionRepository,
@@ -185,6 +211,19 @@ public class ChimeService {
     // ================================================================
     // CREATE MEETING
     // Called when a call is accepted — creates the Chime meeting room
+    // ================================================================
+
+    private static Long parseNumericUserId(final String userId) {
+        try {
+            return Long.parseLong(userId.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    // ================================================================
+    // CREATE ATTENDEE
+    // Called for each user joining the meeting — returns join credentials
     // ================================================================
 
     /**
@@ -258,11 +297,6 @@ public class ChimeService {
         }
     }
 
-    // ================================================================
-    // CREATE ATTENDEE
-    // Called for each user joining the meeting — returns join credentials
-    // ================================================================
-
     /**
      * Adds a user to an existing Chime meeting.
      * Must be called for both the caller and the recipient.
@@ -299,7 +333,7 @@ public class ChimeService {
         final Meeting meeting = activeMeetings.get(callId);
         if (meeting == null) {
             throw new RuntimeException("No active meeting found for callId: " + callId
-                + ". Create the meeting first.");
+                    + ". Create the meeting first.");
         }
 
         final Map<String, Object> cached = getCachedAttendeeCredentials(callId, userId);
@@ -322,22 +356,22 @@ public class ChimeService {
             final String mediaRegion = meeting.mediaRegion() == null
                     ? DEFAULT_MEDIA_REGION : meeting.mediaRegion();
             final Map<String, Object> credentials = Map.of(
-                "meetingId",         meeting.meetingId(),
-                "externalMeetingId", meeting.externalMeetingId(),
-                "mediaRegion",       mediaRegion,
-                "mediaPlacement",    Map.of(
-                    "audioHostUrl",      "",
-                    "audioFallbackUrl",  "",
-                    "screenDataUrl",     "",
-                    "screenSharingUrl",  "",
-                    "screenViewingUrl",  "",
-                    "signalingUrl",      "",
-                    "turnControlUrl",    "",
-                    "eventIngestionUrl", ""
-                ),
-                "attendeeId",      "local-attendee-" + UUID.randomUUID(),
-                "externalUserId",  externalUserId,
-                "joinToken",       "local-join-token-" + UUID.randomUUID()
+                    "meetingId", meeting.meetingId(),
+                    "externalMeetingId", meeting.externalMeetingId(),
+                    "mediaRegion", mediaRegion,
+                    "mediaPlacement", Map.of(
+                            "audioHostUrl", "",
+                            "audioFallbackUrl", "",
+                            "screenDataUrl", "",
+                            "screenSharingUrl", "",
+                            "screenViewingUrl", "",
+                            "signalingUrl", "",
+                            "turnControlUrl", "",
+                            "eventIngestionUrl", ""
+                    ),
+                    "attendeeId", "local-attendee-" + UUID.randomUUID(),
+                    "externalUserId", externalUserId,
+                    "joinToken", "local-join-token-" + UUID.randomUUID()
             );
             return finalizeOrCompensate(
                     callId, userId, claim, meeting.meetingId(), credentials, false);
@@ -377,13 +411,6 @@ public class ChimeService {
             log.error("Failed to create attendee for userId: {} in callId: {}", userId, callId, e);
             throw new RuntimeException("Failed to join video call: " + e.getMessage(), e);
         }
-    }
-
-    private record AttendeeClaim(
-            Long sessionId,
-            Long userId,
-            UUID claimToken,
-            Map<String, Object> existingCredentials) {
     }
 
     private AttendeeClaim claimAttendeeCreation(
@@ -478,23 +505,23 @@ public class ChimeService {
                 ? meeting.mediaPlacement().eventIngestionUrl() : "";
         final Map<String, Object> mediaPlacement = meeting.mediaPlacement() == null
                 ? Map.of(
-                    "audioHostUrl", "",
-                    "audioFallbackUrl", "",
-                    "screenDataUrl", "",
-                    "screenSharingUrl", "",
-                    "screenViewingUrl", "",
-                    "signalingUrl", "",
-                    "turnControlUrl", "",
-                    "eventIngestionUrl", "")
+                "audioHostUrl", "",
+                "audioFallbackUrl", "",
+                "screenDataUrl", "",
+                "screenSharingUrl", "",
+                "screenViewingUrl", "",
+                "signalingUrl", "",
+                "turnControlUrl", "",
+                "eventIngestionUrl", "")
                 : Map.of(
-                    "audioHostUrl", meeting.mediaPlacement().audioHostUrl(),
-                    "audioFallbackUrl", meeting.mediaPlacement().audioFallbackUrl(),
-                    "screenDataUrl", meeting.mediaPlacement().screenDataUrl(),
-                    "screenSharingUrl", meeting.mediaPlacement().screenSharingUrl(),
-                    "screenViewingUrl", meeting.mediaPlacement().screenViewingUrl(),
-                    "signalingUrl", meeting.mediaPlacement().signalingUrl(),
-                    "turnControlUrl", meeting.mediaPlacement().turnControlUrl(),
-                    "eventIngestionUrl", eventIngestionUrl);
+                "audioHostUrl", meeting.mediaPlacement().audioHostUrl(),
+                "audioFallbackUrl", meeting.mediaPlacement().audioFallbackUrl(),
+                "screenDataUrl", meeting.mediaPlacement().screenDataUrl(),
+                "screenSharingUrl", meeting.mediaPlacement().screenSharingUrl(),
+                "screenViewingUrl", meeting.mediaPlacement().screenViewingUrl(),
+                "signalingUrl", meeting.mediaPlacement().signalingUrl(),
+                "turnControlUrl", meeting.mediaPlacement().turnControlUrl(),
+                "eventIngestionUrl", eventIngestionUrl);
         return Map.of(
                 "meetingId", meeting.meetingId(),
                 "externalMeetingId", meeting.externalMeetingId(),
@@ -503,8 +530,8 @@ public class ChimeService {
                 "mediaPlacement", mediaPlacement,
                 "attendeeId", participant.getChimeAttendeeId(),
                 "externalUserId",
-                        participant.getChimeExternalUserId() == null
-                                ? "" : participant.getChimeExternalUserId(),
+                participant.getChimeExternalUserId() == null
+                        ? "" : participant.getChimeExternalUserId(),
                 "joinToken", participant.getChimeJoinToken());
     }
 
@@ -640,31 +667,31 @@ public class ChimeService {
                 ? meeting.mediaPlacement().eventIngestionUrl() : "";
         final Map<String, Object> mediaPlacement = meeting.mediaPlacement() == null
                 ? Map.of(
-                    "audioHostUrl", "",
-                    "audioFallbackUrl", "",
-                    "screenDataUrl", "",
-                    "screenSharingUrl", "",
-                    "screenViewingUrl", "",
-                    "signalingUrl", "",
-                    "turnControlUrl", "",
-                    "eventIngestionUrl", "")
+                "audioHostUrl", "",
+                "audioFallbackUrl", "",
+                "screenDataUrl", "",
+                "screenSharingUrl", "",
+                "screenViewingUrl", "",
+                "signalingUrl", "",
+                "turnControlUrl", "",
+                "eventIngestionUrl", "")
                 : Map.of(
-                    "audioHostUrl", meeting.mediaPlacement().audioHostUrl(),
-                    "audioFallbackUrl", meeting.mediaPlacement().audioFallbackUrl(),
-                    "screenDataUrl", meeting.mediaPlacement().screenDataUrl(),
-                    "screenSharingUrl", meeting.mediaPlacement().screenSharingUrl(),
-                    "screenViewingUrl", meeting.mediaPlacement().screenViewingUrl(),
-                    "signalingUrl", meeting.mediaPlacement().signalingUrl(),
-                    "turnControlUrl", meeting.mediaPlacement().turnControlUrl(),
-                    "eventIngestionUrl", eventIngestionUrl);
+                "audioHostUrl", meeting.mediaPlacement().audioHostUrl(),
+                "audioFallbackUrl", meeting.mediaPlacement().audioFallbackUrl(),
+                "screenDataUrl", meeting.mediaPlacement().screenDataUrl(),
+                "screenSharingUrl", meeting.mediaPlacement().screenSharingUrl(),
+                "screenViewingUrl", meeting.mediaPlacement().screenViewingUrl(),
+                "signalingUrl", meeting.mediaPlacement().signalingUrl(),
+                "turnControlUrl", meeting.mediaPlacement().turnControlUrl(),
+                "eventIngestionUrl", eventIngestionUrl);
         return Map.of(
-            "meetingId",         meeting.meetingId(),
-            "externalMeetingId", meeting.externalMeetingId(),
-            "mediaRegion",       mediaRegion,
-            "mediaPlacement",    mediaPlacement,
-            "attendeeId",     attendee.attendeeId(),
-            "externalUserId", attendee.externalUserId(),
-            "joinToken",      attendee.joinToken()
+                "meetingId", meeting.meetingId(),
+                "externalMeetingId", meeting.externalMeetingId(),
+                "mediaRegion", mediaRegion,
+                "mediaPlacement", mediaPlacement,
+                "attendeeId", attendee.attendeeId(),
+                "externalUserId", attendee.externalUserId(),
+                "joinToken", attendee.joinToken()
         );
     }
 
@@ -676,7 +703,7 @@ public class ChimeService {
     /**
      * Convenience method — creates the meeting (if not already created)
      * and immediately adds the user as an attendee.
-     *
+     * <p>
      * Flutter calls this once per user when a call is accepted.
      *
      * @param callId the unique call identifier
@@ -802,7 +829,9 @@ public class ChimeService {
         return meeting == null ? null : meeting.meetingId();
     }
 
-    /** Media region for an active meeting (defaults to {@link #DEFAULT_MEDIA_REGION}). */
+    /**
+     * Media region for an active meeting (defaults to {@link #DEFAULT_MEDIA_REGION}).
+     */
     public final String getMediaRegion(final String callId) {
         final Meeting meeting = activeMeetings.get(callId);
         if (meeting != null
@@ -823,7 +852,9 @@ public class ChimeService {
                 "arn:aws:chime:%s:%s:meeting/%s", getMediaRegion(callId), accountId, meetingId);
     }
 
-    /** Reverse lookup: Chime meeting ID → call ID for active meetings. */
+    /**
+     * Reverse lookup: Chime meeting ID → call ID for active meetings.
+     */
     public final String findCallIdByMeetingId(final String meetingId) {
         if (meetingId == null || meetingId.isBlank()) {
             return null;
@@ -865,7 +896,9 @@ public class ChimeService {
         }
     }
 
-    /** Live Chime attendee id for a user in a meeting, or null when not present / unknown. */
+    /**
+     * Live Chime attendee id for a user in a meeting, or null when not present / unknown.
+     */
     public String findLiveAttendeeIdForUser(
             final String callId, final String meetingId, final String userId) {
         if (userId == null || userId.isBlank()) {
@@ -902,8 +935,8 @@ public class ChimeService {
         final String meetingId = meeting != null
                 ? meeting.meetingId()
                 : (getDurableMeetingId(callId) != null
-                    ? getDurableMeetingId(callId)
-                    : transcriptionLastMeetingId.get(callId));
+                ? getDurableMeetingId(callId)
+                : transcriptionLastMeetingId.get(callId));
 
         out.put("callId", callId);
         out.put("meetingActive", meeting != null);
@@ -1086,19 +1119,11 @@ public class ChimeService {
         return liveAttendeeId != null && liveAttendeeId.equals(cachedAttendeeId.toString());
     }
 
-    private static Long parseNumericUserId(final String userId) {
-        try {
-            return Long.parseLong(userId.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
     private Map<String, Object> buildMeetingResponse(final Meeting meeting) {
         return Map.of(
-            "meetingId",         meeting.meetingId(),
-            "externalMeetingId", meeting.externalMeetingId(),
-            "mediaRegion",       meeting.mediaRegion()
+                "meetingId", meeting.meetingId(),
+                "externalMeetingId", meeting.externalMeetingId(),
+                "mediaRegion", meeting.mediaRegion()
         );
     }
 
@@ -1139,16 +1164,16 @@ public class ChimeService {
         try {
             final StartMeetingTranscriptionRequest request =
                     StartMeetingTranscriptionRequest.builder()
-                    .meetingId(meeting.meetingId())
-                    .transcriptionConfiguration(
-                            TranscriptionConfiguration.builder()
-                                    .engineTranscribeSettings(
-                                            EngineTranscribeSettings.builder()
-                                                    .languageCode(transcriptionLanguageCode)
-                                                    .region(transcriptionRegion)
-                                                    .build())
-                                    .build())
-                    .build();
+                            .meetingId(meeting.meetingId())
+                            .transcriptionConfiguration(
+                                    TranscriptionConfiguration.builder()
+                                            .engineTranscribeSettings(
+                                                    EngineTranscribeSettings.builder()
+                                                            .languageCode(transcriptionLanguageCode)
+                                                            .region(transcriptionRegion)
+                                                            .build())
+                                            .build())
+                            .build();
 
             final StartMeetingTranscriptionResponse response =
                     chimeSdkMeetingsClient.startMeetingTranscription(request);
@@ -1158,14 +1183,14 @@ public class ChimeService {
             recordTranscriptionStartAttempt(callId, source, "STARTED", responseSummary);
             if (log.isInfoEnabled()) {
                 log.info(
-                    "Started Chime transcription for callId={} meetingId={} "
-                        + "language={} region={} source={} response={}",
-                    callId,
-                    meeting.meetingId(),
-                    transcriptionLanguageCode,
-                    transcriptionRegion,
-                    source,
-                    responseSummary);
+                        "Started Chime transcription for callId={} meetingId={} "
+                                + "language={} region={} source={} response={}",
+                        callId,
+                        meeting.meetingId(),
+                        transcriptionLanguageCode,
+                        transcriptionRegion,
+                        source,
+                        responseSummary);
             }
             logMeetingTranscriptionStatus(callId, meeting.meetingId(), source + ":post-start");
         } catch (Exception e) {
@@ -1174,13 +1199,13 @@ public class ChimeService {
             recordTranscriptionStartAttempt(callId, source, "START_FAILED", detail);
             if (log.isWarnEnabled()) {
                 log.warn(
-                    "Could not start Chime transcription for callId={} meetingId={} source={}: {}. "
-                        + "Verify Chime StartMeetingTranscription permission and "
-                        + "Transcribe service-linked role.",
-                    callId,
-                    meeting.meetingId(),
-                    source,
-                    detail);
+                        "Could not start Chime transcription for callId={} meetingId={} source={}: {}. "
+                                + "Verify Chime StartMeetingTranscription permission and "
+                                + "Transcribe service-linked role.",
+                        callId,
+                        meeting.meetingId(),
+                        source,
+                        detail);
             }
         }
     }
@@ -1232,8 +1257,8 @@ public class ChimeService {
             // Some AWS SDK versions do not expose getMeetingTranscription APIs.
             // Use reflection so this code remains compatible across versions.
             final Class<?> requestClass = Class.forName(
-                "software.amazon.awssdk.services.chimesdkmeetings.model"
-                    + ".GetMeetingTranscriptionRequest");
+                    "software.amazon.awssdk.services.chimesdkmeetings.model"
+                            + ".GetMeetingTranscriptionRequest");
             final Object requestBuilder = requestClass.getMethod("builder").invoke(null);
             requestBuilder.getClass()
                     .getMethod("meetingId", String.class)
@@ -1252,6 +1277,13 @@ public class ChimeService {
         } catch (Exception statusErr) {
             return "STATUS_QUERY_FAILED: " + statusErr.getMessage();
         }
+    }
+
+    private record AttendeeClaim(
+            Long sessionId,
+            Long userId,
+            UUID claimToken,
+            Map<String, Object> existingCredentials) {
     }
 
 }

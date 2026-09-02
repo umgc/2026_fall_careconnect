@@ -54,8 +54,7 @@ public class ChunkEmbeddingService {
             final ObjectMapper objectMapper,
             @Autowired(required = false) final BedrockRuntimeClient bedrockRuntimeClient,
             @Value("${careconnect.embedding.enabled:true}") final boolean enabled,
-            @Value("${careconnect.embedding.model-id:amazon.titan-embed-text-v1}")
-                    final String modelId,
+            @Value("${careconnect.embedding.model-id:amazon.titan-embed-text-v1}") final String modelId,
             @Value("${careconnect.embedding.batch-size:25}") final int batchSize,
             @Value("${careconnect.embedding.max-input-chars:8000}") final int maxInputChars) {
         this.chunkRepository = chunkRepository;
@@ -68,6 +67,32 @@ public class ChunkEmbeddingService {
         rejectUnsupportedModel(this.modelId);
         this.batchSize = Math.max(1, batchSize);
         this.maxInputChars = Math.max(256, maxInputChars);
+    }
+
+    private static void rejectUnsupportedModel(final String modelId) {
+        final String lower = modelId.toLowerCase(Locale.ROOT);
+        if (lower.contains("titan-embed-text-v2")
+                && RetrievalIndexSchema.EMBEDDING_DIMENSION > 1024) {
+            throw new IllegalStateException(
+                    "Titan Embed Text v2 maxes at 1024-d; schema requires "
+                            + RetrievalIndexSchema.EMBEDDING_DIMENSION
+                            + ". Use amazon.titan-embed-text-v1 or migrate the embedding column.");
+        }
+    }
+
+    private static boolean isRetryableThrottle(final BedrockRuntimeException ex) {
+        final String code = ex.awsErrorDetails() == null ? "" : ex.awsErrorDetails().errorCode();
+        final String message = ex.getMessage() == null ? "" : ex.getMessage();
+        return "ThrottlingException".equalsIgnoreCase(code)
+                || message.toLowerCase(Locale.ROOT).contains("throttl");
+    }
+
+    private static String truncate(final String text, final int maxChars) {
+        final String trimmed = text.trim();
+        if (trimmed.length() <= maxChars) {
+            return trimmed;
+        }
+        return trimmed.substring(0, maxChars);
     }
 
     /**
@@ -211,31 +236,5 @@ public class ChunkEmbeddingService {
                             + modelId);
         }
         return values;
-    }
-
-    private static void rejectUnsupportedModel(final String modelId) {
-        final String lower = modelId.toLowerCase(Locale.ROOT);
-        if (lower.contains("titan-embed-text-v2")
-                && RetrievalIndexSchema.EMBEDDING_DIMENSION > 1024) {
-            throw new IllegalStateException(
-                    "Titan Embed Text v2 maxes at 1024-d; schema requires "
-                            + RetrievalIndexSchema.EMBEDDING_DIMENSION
-                            + ". Use amazon.titan-embed-text-v1 or migrate the embedding column.");
-        }
-    }
-
-    private static boolean isRetryableThrottle(final BedrockRuntimeException ex) {
-        final String code = ex.awsErrorDetails() == null ? "" : ex.awsErrorDetails().errorCode();
-        final String message = ex.getMessage() == null ? "" : ex.getMessage();
-        return "ThrottlingException".equalsIgnoreCase(code)
-                || message.toLowerCase(Locale.ROOT).contains("throttl");
-    }
-
-    private static String truncate(final String text, final int maxChars) {
-        final String trimmed = text.trim();
-        if (trimmed.length() <= maxChars) {
-            return trimmed;
-        }
-        return trimmed.substring(0, maxChars);
     }
 }

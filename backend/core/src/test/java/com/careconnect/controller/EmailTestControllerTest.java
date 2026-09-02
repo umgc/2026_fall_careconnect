@@ -20,19 +20,19 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EmailTestControllerTest {
 
+    private static final String TEST_EMAIL = "test@example.com";
     @Mock
     private EmailTestService emailTestService;
 
+    // ── shared constants ──────────────────────────────────────────────────────
     @InjectMocks
     private EmailTestController controller;
 
-    // ── shared constants ──────────────────────────────────────────────────────
-
-    private static final String TEST_EMAIL = "test@example.com";
-
     // ── shared helpers ────────────────────────────────────────────────────────
 
-    /** Returns a mutable config map so individual tests can override fields. */
+    /**
+     * Returns a mutable config map so individual tests can override fields.
+     */
     private Map<String, Object> configMap(boolean valid) {
         final Map<String, Object> config = new HashMap<>();
         config.put("configurationValid", valid);
@@ -339,7 +339,7 @@ class EmailTestControllerTest {
             final Map<String, Object> body = controller.healthCheck().getBody();
 
             assertThat(body).containsEntry("status", "UP")
-                            .containsEntry("healthy", true);
+                    .containsEntry("healthy", true);
         }
 
         @Test
@@ -349,7 +349,7 @@ class EmailTestControllerTest {
             final Map<String, Object> body = controller.healthCheck().getBody();
 
             assertThat(body).containsEntry("status", "DOWN")
-                            .containsEntry("healthy", false);
+                    .containsEntry("healthy", false);
         }
 
         @Test

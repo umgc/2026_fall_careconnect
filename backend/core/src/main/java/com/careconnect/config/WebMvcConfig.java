@@ -19,12 +19,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         // CORS Configuration
         registry.addMapping("/**")
-                 .allowedOriginPatterns(
-                    "http://localhost:50030",
-                    "http://localhost:3000",
-                    "https://care-connect-develop.d26kqsucj1bwc1.amplifyapp.com", 
-                    "https://isabel-santiagolewis.github.io" // ALEXA TESTING: FOR TESTING ONLY OF MOCK ALEXA LOGIN PAGE
-                ) 
+                .allowedOriginPatterns(
+                        "http://localhost:50030",
+                        "http://localhost:3000",
+                        "https://care-connect-develop.d26kqsucj1bwc1.amplifyapp.com",
+                        "https://isabel-santiagolewis.github.io" // ALEXA TESTING: FOR TESTING ONLY OF MOCK ALEXA LOGIN PAGE
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS") // OPTIONS REQUIRED FOR ALEXA LOGIN FUNCTIONALITY
                 .allowedHeaders("*") // * REQUIRED FOR ALEXA LOGIN FUNCTIONALITY
                 .allowCredentials(true);  // Allow credentials (cookies)

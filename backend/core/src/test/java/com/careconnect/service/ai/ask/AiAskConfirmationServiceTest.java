@@ -42,6 +42,13 @@ class AiAskConfirmationServiceTest {
 
     private AiAskConfirmationService service;
 
+    private static User user(final Long id) {
+        final User user = new User();
+        user.setId(id);
+        user.setRole(Role.CAREGIVER);
+        return user;
+    }
+
     @BeforeEach
     void setUp() {
         service = new AiAskConfirmationService(
@@ -71,7 +78,7 @@ class AiAskConfirmationServiceTest {
         final AiAskConfirmationRequest request = new AiAskConfirmationRequest(
                 UUID.randomUUID(), 99L, null, null, "DECLINE");
         doThrow(ForbiddenScopeException.of(
-                        ScopeDenialReason.PATIENT_OUT_OF_SCOPE, 99L, 9L, "denied", null))
+                ScopeDenialReason.PATIENT_OUT_OF_SCOPE, 99L, 9L, "denied", null))
                 .when(retrievalScopeService)
                 .assertCanAsk(eq(caller), eq(99L), isNull());
 
@@ -94,7 +101,7 @@ class AiAskConfirmationServiceTest {
                 .createdAt(Instant.now())
                 .build();
         when(decisionRepository.findFirstByRequestIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                        requestId, 9L, AiAskConfirmationService.APPROVE_ONCE))
+                requestId, 9L, AiAskConfirmationService.APPROVE_ONCE))
                 .thenReturn(Optional.of(existing));
 
         final AiAskConfirmationDecision result = service.recordDecision(
@@ -111,7 +118,7 @@ class AiAskConfirmationServiceTest {
     void hasTerminalDecisionForRequest_trueWhenAnyDecisionExists() {
         final UUID requestId = UUID.randomUUID();
         when(decisionRepository.existsByRequestIdAndCallerUserIdAndDecision(
-                        eq(requestId), eq(9L), anyString()))
+                eq(requestId), eq(9L), anyString()))
                 .thenAnswer(invocation ->
                         AiAskConfirmationService.DECLINE.equals(invocation.getArgument(2)));
 
@@ -122,8 +129,8 @@ class AiAskConfirmationServiceTest {
     void hasActiveSessionApproval_queriesRepository() {
         final UUID sessionId = UUID.randomUUID();
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
                 .thenReturn(Optional.of(AiAskConfirmationDecision.builder()
                         .id(UUID.randomUUID())
                         .sessionId(sessionId)
@@ -140,8 +147,8 @@ class AiAskConfirmationServiceTest {
     void hasActiveSessionApproval_falseWhenOlderThanTtl() {
         final UUID sessionId = UUID.randomUUID();
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
                 .thenReturn(Optional.of(AiAskConfirmationDecision.builder()
                         .id(UUID.randomUUID())
                         .sessionId(sessionId)
@@ -159,8 +166,8 @@ class AiAskConfirmationServiceTest {
         final String callId = "call-ttl";
         final UUID sessionId = AiAskConfirmationService.callSummarySessionId(callId);
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
                 .thenReturn(Optional.of(AiAskConfirmationDecision.builder()
                         .id(UUID.randomUUID())
                         .sessionId(sessionId)
@@ -178,8 +185,8 @@ class AiAskConfirmationServiceTest {
     void installCallSummarySessionApproval_skipsAssertCanAskAndPersists() throws Exception {
         final User caller = user(9L);
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                any(), eq(42L), eq(9L), eq(AiAskConfirmationService.APPROVE_SESSION)))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        any(), eq(42L), eq(9L), eq(AiAskConfirmationService.APPROVE_SESSION)))
                 .thenReturn(Optional.empty());
         when(decisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -201,8 +208,8 @@ class AiAskConfirmationServiceTest {
 
         final UUID sessionId = UUID.randomUUID();
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
                 .thenReturn(Optional.empty());
         assertThat(service.hasActiveSessionApproval(sessionId, 42L, 9L)).isFalse();
     }
@@ -213,8 +220,8 @@ class AiAskConfirmationServiceTest {
                 decisionRepository, askAuditService, retrievalScopeService, 0L);
         final UUID sessionId = UUID.randomUUID();
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        sessionId, 42L, 9L, AiAskConfirmationService.APPROVE_SESSION))
                 .thenReturn(Optional.of(AiAskConfirmationDecision.builder()
                         .id(UUID.randomUUID())
                         .sessionId(sessionId)
@@ -227,8 +234,8 @@ class AiAskConfirmationServiceTest {
         assertThat(noTtl.hasActiveSessionApproval(sessionId, 42L, 9L)).isTrue();
         assertThat(noTtl.isAskSessionApprovalExpired(null)).isTrue();
         assertThat(noTtl.isAskSessionApprovalExpired(AiAskConfirmationDecision.builder()
-                        .createdAt(null)
-                        .build()))
+                .createdAt(null)
+                .build()))
                 .isTrue();
     }
 
@@ -267,8 +274,8 @@ class AiAskConfirmationServiceTest {
                 .createdAt(Instant.now())
                 .build();
         when(decisionRepository
-                        .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                                any(), eq(42L), eq(9L), eq(AiAskConfirmationService.APPROVE_SESSION)))
+                .findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+                        any(), eq(42L), eq(9L), eq(AiAskConfirmationService.APPROVE_SESSION)))
                 .thenReturn(Optional.of(existing));
 
         assertThat(service.installCallSummarySessionApproval(user(9L), 42L, "call-dup"))
@@ -286,7 +293,7 @@ class AiAskConfirmationServiceTest {
 
         final UUID requestId = UUID.randomUUID();
         when(decisionRepository.existsByRequestIdAndCallerUserIdAndDecision(
-                        eq(requestId), eq(9L), anyString()))
+                eq(requestId), eq(9L), anyString()))
                 .thenReturn(false);
         assertThat(service.hasTerminalDecisionForRequest(requestId, 9L)).isFalse();
         assertThat(service.hasDecision(requestId, 9L, "approve once")).isFalse();
@@ -297,13 +304,13 @@ class AiAskConfirmationServiceTest {
         assertThatThrownBy(() -> service.recordDecision(null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.recordDecision(
-                        user(9L),
-                        new AiAskConfirmationRequest(null, 42L, null, null, "APPROVE_ONCE")))
+                user(9L),
+                new AiAskConfirmationRequest(null, 42L, null, null, "APPROVE_ONCE")))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.recordDecision(
-                        user(9L),
-                        new AiAskConfirmationRequest(
-                                UUID.randomUUID(), 42L, null, null, "NOPE")))
+                user(9L),
+                new AiAskConfirmationRequest(
+                        UUID.randomUUID(), 42L, null, null, "NOPE")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("APPROVE_ONCE");
 
@@ -321,12 +328,5 @@ class AiAskConfirmationServiceTest {
         assertThat(saved.getDecision()).isEqualTo(AiAskConfirmationService.DECLINE);
         verify(askAuditService).appendStandaloneEvent(
                 eq(auditId), eq("CONFIRMATION_DECLINE"), eq(9L), any());
-    }
-
-    private static User user(final Long id) {
-        final User user = new User();
-        user.setId(id);
-        user.setRole(Role.CAREGIVER);
-        return user;
     }
 }

@@ -18,15 +18,23 @@
 -- Related: WBS 3.11.5 emit (#190), 3.11.1 transcript emit (#186),
 --          backlog 3.4 poller, backlog 1.5 retrieval index.
 
-CREATE TABLE IF NOT EXISTS indexing_outbox (
-    id             BIGSERIAL   PRIMARY KEY,
-    event_type     VARCHAR(64) NOT NULL,
-    payload_json   TEXT        NOT NULL,
-    created_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    processed_at   TIMESTAMP   NULL,
-    attempt_count  INTEGER     NOT NULL DEFAULT 0,
-    last_error     TEXT        NULL
-);
+CREATE TABLE IF NOT EXISTS indexing_outbox
+(
+    id
+    BIGSERIAL
+    PRIMARY
+    KEY,
+    event_type
+    VARCHAR
+(
+    64
+) NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NULL
+    );
 
 -- Poller reads unprocessed rows in insertion order. Partial index keeps
 -- the working set tiny once the backlog is drained.
@@ -38,17 +46,22 @@ CREATE INDEX IF NOT EXISTS idx_indexing_outbox_unprocessed
 CREATE INDEX IF NOT EXISTS idx_indexing_outbox_event_type
     ON indexing_outbox (event_type);
 
-COMMENT ON TABLE indexing_outbox IS
+COMMENT
+ON TABLE indexing_outbox IS
     'Transactional outbox for indexing events (WBS 3.11.5 emit, backlog 3.4 poller). Rows written in the same transaction as summary/transcript persistence; poller stamps processed_at on successful SNS publish.';
 
-COMMENT ON COLUMN indexing_outbox.event_type IS
+COMMENT
+ON COLUMN indexing_outbox.event_type IS
     'Event type discriminator: SUMMARY_CREATED | TRANSCRIPT_INDEXED (extensible to future types).';
 
-COMMENT ON COLUMN indexing_outbox.payload_json IS
+COMMENT
+ON COLUMN indexing_outbox.payload_json IS
     'Full event envelope as JSON: {eventType, eventId, occurredAt, schemaVersion, payload: {...}}. Consumers use eventId for idempotency.';
 
-COMMENT ON COLUMN indexing_outbox.processed_at IS
+COMMENT
+ON COLUMN indexing_outbox.processed_at IS
     'NULL until the poller successfully publishes to SNS. Poller filters on this column.';
 
-COMMENT ON COLUMN indexing_outbox.attempt_count IS
+COMMENT
+ON COLUMN indexing_outbox.attempt_count IS
     'Retry counter incremented by the poller on each publish attempt (backoff / DLQ signal).';

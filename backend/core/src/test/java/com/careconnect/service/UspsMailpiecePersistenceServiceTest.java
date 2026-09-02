@@ -29,6 +29,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,17 +42,26 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UspsMailpiecePersistenceServiceTest {
 
-    @Mock private PatientRepository patientRepository;
-    @Mock private UspsMailpieceRepository mailpieceRepository;
-    @Mock private IndexingEventEmitter indexingEventEmitter;
-
-    private UspsMailpiecePersistenceService service;
     private final AtomicLong idSeq = new AtomicLong(100);
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private UspsMailpieceRepository mailpieceRepository;
+    @Mock
+    private IndexingEventEmitter indexingEventEmitter;
+    private UspsMailpiecePersistenceService service;
+
+    private static USPSDigest digestWithOnePiece() {
+        final OffsetDateTime now = OffsetDateTime.of(2025, 3, 3, 12, 0, 0, 0, ZoneOffset.UTC);
+        final MailPiece piece = new MailPiece(
+                "m-1", "Acme Bank", "Statement",
+                "https://example.com/x.png", now, null);
+        return new USPSDigest(now, List.of(piece), List.of());
+    }
 
     @BeforeEach
     void setUp() {
-        @SuppressWarnings("unchecked")
-        final ObjectProvider<AIServiceFactory> aiFactoryProvider = org.mockito.Mockito.mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked") final ObjectProvider<AIServiceFactory> aiFactoryProvider = org.mockito.Mockito.mock(ObjectProvider.class);
         final MailpieceImportanceClassifier classifier = new MailpieceImportanceClassifier(
                 new MailpieceImportanceRuleEngine(),
                 new MailpieceImportanceAiAssist(
@@ -165,13 +175,5 @@ class UspsMailpiecePersistenceServiceTest {
                         MailpieceNormalizer.NormalizedMailpiece.class,
                         com.careconnect.service.mail.MailpieceImportanceResult.class)
                 .getAnnotation(Transactional.class)).isNotNull();
-    }
-
-    private static USPSDigest digestWithOnePiece() {
-        final OffsetDateTime now = OffsetDateTime.of(2025, 3, 3, 12, 0, 0, 0, ZoneOffset.UTC);
-        final MailPiece piece = new MailPiece(
-                "m-1", "Acme Bank", "Statement",
-                "https://example.com/x.png", now, null);
-        return new USPSDigest(now, List.of(piece), List.of());
     }
 }

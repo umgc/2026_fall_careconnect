@@ -10,6 +10,7 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
@@ -119,16 +120,51 @@ public class ScheduledVisit {
     }
 
     // Explicit getters added due to Lombok processing issue
-    public Long getId() { return id; }
-    public Long getCaregiverId() { return caregiverId; }
-    public Long getPatientId() { return patientId; }
-    public String getServiceType() { return serviceType; }
-    public java.time.LocalDate getScheduledDate() { return scheduledDate; }
-    public java.time.LocalTime getScheduledTime() { return scheduledTime; }
-    public Integer getDurationMinutes() { return durationMinutes; }
-    public String getPriority() { return priority; }
-    public String getNotes() { return notes; }
-    public String getStatus() { return status; }
-    public java.time.LocalDateTime getCreatedAt() { return createdAt; }
-    public java.time.LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getCaregiverId() {
+        return caregiverId;
+    }
+
+    public Long getPatientId() {
+        return patientId;
+    }
+
+    public String getServiceType() {
+        return serviceType;
+    }
+
+    public java.time.LocalDate getScheduledDate() {
+        return scheduledDate;
+    }
+
+    public java.time.LocalTime getScheduledTime() {
+        return scheduledTime;
+    }
+
+    public Integer getDurationMinutes() {
+        return durationMinutes;
+    }
+
+    public String getPriority() {
+        return priority;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public java.time.LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public java.time.LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 }

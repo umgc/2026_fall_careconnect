@@ -24,14 +24,16 @@ public class PatientNotetakerConfigDTO {
     private List<PatientNotetakerKeyword> triggerKeywords;
     private LocalDateTime updatedAt;
 
-    public PatientNotetakerConfigDTO() {}
+    public PatientNotetakerConfigDTO() {
+    }
+
     public PatientNotetakerConfigDTO(
-        Long id,
-        Long patientId,
-        Boolean isEnabled,
-        Boolean permitCaregiverAccess,
-        List<PatientNotetakerKeyword> triggerKeywords,
-        LocalDateTime updatedAt
+            Long id,
+            Long patientId,
+            Boolean isEnabled,
+            Boolean permitCaregiverAccess,
+            List<PatientNotetakerKeyword> triggerKeywords,
+            LocalDateTime updatedAt
     ) {
         this.id = id;
         this.patientId = patientId;
@@ -41,7 +43,7 @@ public class PatientNotetakerConfigDTO {
         this.updatedAt = updatedAt;
     }
 
-    public  PatientNotetakerConfigDTO(PatientNotetakerConfig config) {
+    public PatientNotetakerConfigDTO(PatientNotetakerConfig config) {
         if (config != null) {
             this.id = config.getId();
             this.patientId = config.getPatientId();
@@ -49,8 +51,7 @@ public class PatientNotetakerConfigDTO {
             this.permitCaregiverAccess = config.getPermitCaregiverAccess();
             this.triggerKeywords = config.getTriggerKeywords();
             this.updatedAt = config.getUpdatedAt();
-        }
-        else { 
+        } else {
             this.id = null;
             this.patientId = null;
             this.isEnabled = null;
@@ -62,13 +63,13 @@ public class PatientNotetakerConfigDTO {
 
     public PatientNotetakerConfig toEntity() {
         return PatientNotetakerConfig.builder()
-            .id(this.id)
-            .patientId(this.patientId)
-            .isEnabled(this.isEnabled)
-            .permitCaregiverAccess(this.permitCaregiverAccess)
-            .triggerKeywords(this.triggerKeywords)
-            .updatedAt(this.updatedAt)
-            .build();
+                .id(this.id)
+                .patientId(this.patientId)
+                .isEnabled(this.isEnabled)
+                .permitCaregiverAccess(this.permitCaregiverAccess)
+                .triggerKeywords(this.triggerKeywords)
+                .updatedAt(this.updatedAt)
+                .build();
     }
 }
 

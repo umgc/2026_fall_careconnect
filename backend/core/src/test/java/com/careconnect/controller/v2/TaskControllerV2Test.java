@@ -102,7 +102,7 @@ class TaskControllerV2Test {
     @Test
     void createTask_returnsOkWithCreatedTask() throws Exception {
         final TaskDtoV2 requestDto = TaskDtoV2.builder().name("Exercise").date("2026-04-01").isCompleted(false).build();
-        final TaskDtoV2 savedDto   = TaskDtoV2.builder().id(5L).name("Exercise").date("2026-04-01").isCompleted(false).build();
+        final TaskDtoV2 savedDto = TaskDtoV2.builder().id(5L).name("Exercise").date("2026-04-01").isCompleted(false).build();
         when(taskService.createTask(10L, requestDto)).thenReturn(savedDto);
 
         final ResponseEntity<TaskDtoV2> response = controller.createTask(10L, requestDto);

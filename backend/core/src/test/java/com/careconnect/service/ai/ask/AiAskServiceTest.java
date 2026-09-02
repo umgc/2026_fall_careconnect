@@ -84,6 +84,24 @@ class AiAskServiceTest {
 
     private AiAskService service;
 
+    private static User caller() {
+        final User user = new User();
+        user.setId(7L);
+        user.setRole(Role.PATIENT);
+        return user;
+    }
+
+    private static AiAskRequest request(final String query) {
+        return new AiAskRequest(
+                query,
+                42L,
+                null,
+                null,
+                InputModality.TEXT,
+                "en-US",
+                null);
+    }
+
     @BeforeEach
     void setUp() {
         lenient().when(askAuditService.startRequest(any())).thenAnswer(invocation -> {
@@ -768,8 +786,7 @@ class AiAskServiceTest {
 
         final ArgumentCaptor<com.careconnect.service.ai.safety.SafetyInput> inputCaptor =
                 ArgumentCaptor.forClass(com.careconnect.service.ai.safety.SafetyInput.class);
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<com.careconnect.dto.ai.AiCitation>> citationsCaptor =
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<com.careconnect.dto.ai.AiCitation>> citationsCaptor =
                 ArgumentCaptor.forClass(List.class);
         verify(hitlService).createHold(inputCaptor.capture(), any(), citationsCaptor.capture(), any());
         assertThat(inputCaptor.getValue().draftAnswerText()).isEqualTo(verified);
@@ -1098,23 +1115,5 @@ class AiAskServiceTest {
                                 List.of("C1"),
                                 java.util.Map.of("C1", evidence))),
                         "amazon.nova-lite-v1:0")));
-    }
-
-    private static User caller() {
-        final User user = new User();
-        user.setId(7L);
-        user.setRole(Role.PATIENT);
-        return user;
-    }
-
-    private static AiAskRequest request(final String query) {
-        return new AiAskRequest(
-                query,
-                42L,
-                null,
-                null,
-                InputModality.TEXT,
-                "en-US",
-                null);
     }
 }

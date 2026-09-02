@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link AiProperties} and its nested {@link AiProperties.ProviderProps} class.
- *
+ * <p>
  * AiProperties is a Spring {@code @ConfigurationProperties} bean that holds per-provider
  * AI settings (API key, model name, base URL, temperature, max tokens). These tests verify
  * default values, setter/getter correctness, null tolerance, and multi-provider support

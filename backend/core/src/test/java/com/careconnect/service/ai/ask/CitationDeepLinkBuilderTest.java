@@ -49,18 +49,18 @@ class CitationDeepLinkBuilderTest {
     @DisplayName("clinical note links require patientId")
     void build_clinicalNote_requiresPatientId() {
         assertThat(builder.build(new RankedChunk(
-                        UUID.randomUUID(),
-                        null,
-                        RetrievalRecordType.CLINICAL_NOTE,
-                        null,
-                        "42",
-                        "text",
-                        null,
-                        "auto",
-                        0.1d,
-                        1,
-                        null,
-                        "C1")))
+                UUID.randomUUID(),
+                null,
+                RetrievalRecordType.CLINICAL_NOTE,
+                null,
+                "42",
+                "text",
+                null,
+                "auto",
+                0.1d,
+                1,
+                null,
+                "C1")))
                 .isNull();
     }
 
@@ -166,17 +166,17 @@ class CitationDeepLinkBuilderTest {
             final String sourceId,
             final String metadataJson) {
         return builder.build(new RankedChunk(
-                        UUID.randomUUID(),
-                        42L,
-                        type,
-                        sourceKind,
-                        sourceId,
-                        "text",
-                        metadataJson,
-                        "auto",
-                        0.1d,
-                        1,
-                        null,
-                        "C1"));
+                UUID.randomUUID(),
+                42L,
+                type,
+                sourceKind,
+                sourceId,
+                "text",
+                metadataJson,
+                "auto",
+                0.1d,
+                1,
+                null,
+                "C1"));
     }
 }
