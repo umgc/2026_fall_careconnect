@@ -4,6 +4,7 @@
   { "ParameterKey": "SpringProfile", "ParameterValue": "dev" },
   { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "false" },
   { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
+  { "ParameterKey": "AiModel", "ParameterValue": "amazon.nova-lite-v1:0" },
   { "ParameterKey": "FromEmail", "ParameterValue": "noreply@careconnect.com" },
   { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "" },
   { "ParameterKey": "FrontendBaseUrl", "ParameterValue": "http://localhost:3000" },
