@@ -49,7 +49,7 @@ public class TelemetryService {
      * @param event telemetry event to store
      * @return stored event, or the original event when telemetry is disabled or null if the event is invalid
      */
-    public TelemetryEvent record(final TelemetryEvent event) {
+    public TelemetryEvent record(TelemetryEvent event) {
         if (!toggle.isEnabled()) {
             return event;
         }
@@ -89,7 +89,7 @@ public class TelemetryService {
             return repository.save(event);
         }
         log.info("Recieved Invalid Telemetry Event: Invalid Event Name");
-        return event;
+        return null;
     }
 
 
@@ -124,7 +124,7 @@ public class TelemetryService {
      * @param spanId     distributed span identifier
      * @return stored event, or {@code null} when telemetry is disabled or the event is invalid
      */
-    public TelemetryEvent recordAnonymous(final String eventName, final Map<String, Object> details, final Map<String, Object> deviceInfo, final String traceId, final String spanId) {
+    public TelemetryEvent recordAnonymous(final String eventName, Map<String, Object> details, Map<String, Object> deviceInfo, final String traceId, final String spanId) {
         if (!toggle.isEnabled()) {
             return null;
         }
