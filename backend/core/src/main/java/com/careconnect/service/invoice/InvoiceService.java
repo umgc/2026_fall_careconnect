@@ -34,6 +34,56 @@ public class InvoiceService {
         this.paymentRepo = paymentRepo;
     }
 
+    public static Sort resolveSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "statementDate");
+        }
+        switch (sort) {
+            case "due_desc":
+                return Sort.by(Sort.Direction.DESC, "dueDate");
+            case "due_asc":
+                return Sort.by(Sort.Direction.ASC, "dueDate");
+            case "amount_desc":
+                return Sort.by(Sort.Direction.DESC, "amountDue");
+            case "amount_asc":
+                return Sort.by(Sort.Direction.ASC, "amountDue");
+            default:
+                return Sort.by(Sort.Direction.DESC, "statementDate");
+        }
+    }
+
+    public static Set<PaymentStatus> parseStatuses(String csv) {
+        if (csv == null || csv.isBlank()) return Collections.emptySet();
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> {
+                    switch (s) {
+                        case "pending":
+                            return PaymentStatus.PENDING;
+                        case "overdue":
+                            return PaymentStatus.OVERDUE;
+                        case "pendingInsurance":
+                            return PaymentStatus.PENDING_INSURANCE;
+                        case "sent":
+                            return PaymentStatus.SENT;
+                        case "paid":
+                            return PaymentStatus.PAID;
+                        case "partialPayment":
+                            return PaymentStatus.PARTIAL_PAYMENT;
+                        case "rejectedInsurance":
+                            return PaymentStatus.REJECTED_INSURANCE;
+                        default:
+                            return PaymentStatus.PENDING;
+                    }
+                })
+                .collect(Collectors.toSet());
+    }
+
+    private static BigDecimal nvl(BigDecimal v, BigDecimal def) {
+        return v == null ? def : v;
+    }
+
     @Transactional
     public InvoiceDto create(InvoiceDto dto) {
         if (dto.id == null || dto.id.isBlank()) {
@@ -115,44 +165,12 @@ public class InvoiceService {
         return page.map(InvoiceMapper::toDto);
     }
 
-    public static Sort resolveSort(String sort) {
-        if (sort == null || sort.isBlank()) {
-            return Sort.by(Sort.Direction.DESC, "statementDate");
-        }
-        switch (sort) {
-            case "due_desc": return Sort.by(Sort.Direction.DESC, "dueDate");
-            case "due_asc": return Sort.by(Sort.Direction.ASC, "dueDate");
-            case "amount_desc": return Sort.by(Sort.Direction.DESC, "amountDue");
-            case "amount_asc": return Sort.by(Sort.Direction.ASC, "amountDue");
-            default: return Sort.by(Sort.Direction.DESC, "statementDate");
-        }
-    }
-
-    public static Set<PaymentStatus> parseStatuses(String csv) {
-        if (csv == null || csv.isBlank()) return Collections.emptySet();
-        return Arrays.stream(csv.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(s -> {
-                    switch (s) {
-                        case "pending": return PaymentStatus.PENDING;
-                        case "overdue": return PaymentStatus.OVERDUE;
-                        case "pendingInsurance": return PaymentStatus.PENDING_INSURANCE;
-                        case "sent": return PaymentStatus.SENT;
-                        case "paid": return PaymentStatus.PAID;
-                        case "partialPayment": return PaymentStatus.PARTIAL_PAYMENT;
-                        case "rejectedInsurance": return PaymentStatus.REJECTED_INSURANCE;
-                        default: return PaymentStatus.PENDING;
-                    }
-                })
-                .collect(Collectors.toSet());
-    }
-
     private String currentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) return "system";
         return auth.getName() == null ? "system" : auth.getName();
     }
+
     @Transactional
     public InvoiceDto recordPayment(String invoiceId, PaymentDto pdto, String actor) {
         Invoice invoice = repo.findById(invoiceId)
@@ -238,6 +256,7 @@ public class InvoiceService {
         Invoice saved = repo.save(invoice);
         return InvoiceMapper.toDto(saved);
     }
+
     public Optional<Invoice> findDuplicateByProviderAndTotal(String providerName, Double total, String invoiceNumber) {
         if (providerName == null || providerName.isBlank() || total == null) {
             return Optional.empty();
@@ -258,9 +277,5 @@ public class InvoiceService {
         return repo.findTopByProviderNameIgnoreCaseAndTotalBetweenOrderByCreatedAtDesc(
                 providerName, min, max
         );
-    }
-
-    private static BigDecimal nvl(BigDecimal v, BigDecimal def) {
-        return v == null ? def : v;
     }
 }

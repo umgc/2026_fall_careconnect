@@ -129,8 +129,13 @@ public class Invoice {
     @Builder.Default
     private java.util.List<InvoicePayment> payments = new java.util.ArrayList<>();
 
-    public java.util.List<InvoicePayment> getPayments() { return payments; }
-    public void setPayments(java.util.List<InvoicePayment> payments) { this.payments = payments; }
+    public java.util.List<InvoicePayment> getPayments() {
+        return payments;
+    }
+
+    public void setPayments(java.util.List<InvoicePayment> payments) {
+        this.payments = payments;
+    }
 
     public void addPayment(InvoicePayment p) {
         p.setInvoice(this);

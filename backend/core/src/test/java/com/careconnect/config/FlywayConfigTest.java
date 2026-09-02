@@ -12,7 +12,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for FlywayConfig.
- *
+ * <p>
  * Verifies:
  * - Bean creation
  * - Successful migration execution

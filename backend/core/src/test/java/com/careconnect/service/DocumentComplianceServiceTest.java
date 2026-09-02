@@ -53,12 +53,18 @@ class DocumentComplianceServiceTest {
     private static final int CARE_CIRCLE_REQUIRED =
             DocumentRequirementStatus.REQUIRED_DOCUMENTS.get(SubjectType.CARE_CIRCLE).size(); // 4
 
-    @Mock private DocumentRequirementStatusRepository statusRepository;
-    @Mock private DocumentStatusHistoryRepository historyRepository;
-    @Mock private UserFileRepository userFileRepository;
-    @Mock private StructuredDocumentEntryRepository structuredEntryRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
+    @Mock
+    private DocumentRequirementStatusRepository statusRepository;
+    @Mock
+    private DocumentStatusHistoryRepository historyRepository;
+    @Mock
+    private UserFileRepository userFileRepository;
+    @Mock
+    private StructuredDocumentEntryRepository structuredEntryRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
 
     private DocumentComplianceService service;
 
@@ -233,8 +239,8 @@ class DocumentComplianceServiceTest {
         LocalDateTime older = LocalDateTime.now().minusDays(2);
         LocalDateTime newer = LocalDateTime.now();
         stubEmployeeChecklist(List.of(), List.of(
-                file(10L, FileCategory.CERTIFICATION, EMPLOYEE_ID, OwnerType.CAREGIVER, null, "old.pdf", older),
-                file(11L, FileCategory.CERTIFICATION, EMPLOYEE_ID, OwnerType.CAREGIVER, null, "new.pdf", newer)),
+                        file(10L, FileCategory.CERTIFICATION, EMPLOYEE_ID, OwnerType.CAREGIVER, null, "old.pdf", older),
+                        file(11L, FileCategory.CERTIFICATION, EMPLOYEE_ID, OwnerType.CAREGIVER, null, "new.pdf", newer)),
                 List.of());
 
         DocumentChecklistDTO checklist = service.getChecklist(SubjectType.EMPLOYEE, EMPLOYEE_ID);

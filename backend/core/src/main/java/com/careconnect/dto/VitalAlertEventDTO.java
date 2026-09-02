@@ -15,4 +15,5 @@ public record VitalAlertEventDTO(
         Integer failureCount,
         String failureReason,
         Instant occurredAt
-) {}
+) {
+}

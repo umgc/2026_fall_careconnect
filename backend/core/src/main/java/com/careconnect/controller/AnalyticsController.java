@@ -18,9 +18,11 @@ import org.springframework.http.MediaType;
 
 import com.careconnect.dto.DashboardDTO;
 import com.careconnect.model.User;
+
 import java.util.Optional;
 import java.util.Map;
 import java.util.Collections;
+
 import org.springframework.security.core.Authentication;
 import com.careconnect.dto.ExportLinkDTO;
 import com.careconnect.dto.VitalAlertEventDTO;
@@ -42,9 +44,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+
 import java.time.Period;
+
 import org.springframework.security.core.Authentication;
 import com.careconnect.security.UserPrincipal;
+
 import java.util.Map;
 import java.util.Collections;
 
@@ -71,22 +76,20 @@ public class AnalyticsController {
 
     @Autowired
     private final PatientRepository patientRepository;
-    
+
     @Autowired
     private final CaregiverService caregiverService;
 
     @Autowired
-private final PatientCaregiverRepository caregiverPatientLinkRepository;
+    private final PatientCaregiverRepository caregiverPatientLinkRepository;
 
     @Autowired
-private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
-
+    private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
+    private final ScheduledExecutorService sseExecutor = Executors.newScheduledThreadPool(2);
     @Autowired
     private AnalyticsService analyticsService;
-    
     @Autowired
     private VitalSampleService vitalSampleService;
-    private final ScheduledExecutorService sseExecutor = Executors.newScheduledThreadPool(2);
 
     @GetMapping("/dashboard")
     public DashboardDTO dashboard(
@@ -100,31 +103,31 @@ private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
 
     @GetMapping("/export/vitals/csv")
     public ResponseEntity<byte[]> exportVitalsCsv(
-        @RequestParam Long patientId,
-        @RequestParam(defaultValue = "7") int days) throws UnauthorizedException {
-    User currentUser = securityUtil.resolveCurrentUser();
-    authorizationService.requireAdminOrCaregiver(currentUser);
-    if (days < 1) days = 1;
-    byte[] csv = analyticsService.exportVitalsCsv(patientId, Period.ofDays(days));
-    return ResponseEntity.ok()
-            .header("Content-Disposition", "attachment; filename=\"vitals.csv\"")
-            .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
-            .body(csv);
+            @RequestParam Long patientId,
+            @RequestParam(defaultValue = "7") int days) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+        if (days < 1) days = 1;
+        byte[] csv = analyticsService.exportVitalsCsv(patientId, Period.ofDays(days));
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"vitals.csv\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 
     @GetMapping("/export/vitals/pdf")
     public ResponseEntity<byte[]> exportVitalsPdf(
-        @RequestParam Long patientId,
-        @RequestParam(defaultValue = "7") int days) throws UnauthorizedException {
-    User currentUser = securityUtil.resolveCurrentUser();
-    authorizationService.requireAdminOrCaregiver(currentUser);
-    if (days < 1) days = 1;
-    byte[] pdf = analyticsService.exportVitalsPdf(patientId, Period.ofDays(days));
-    return ResponseEntity.ok()
-            .header("Content-Disposition", "attachment; filename=\"vitals.pdf\"")
-            .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
-            .body(pdf);
-}
+            @RequestParam Long patientId,
+            @RequestParam(defaultValue = "7") int days) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireAdminOrCaregiver(currentUser);
+        if (days < 1) days = 1;
+        byte[] pdf = analyticsService.exportVitalsPdf(patientId, Period.ofDays(days));
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"vitals.pdf\"")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
 
     @GetMapping(value = "/live", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter live(@RequestParam Long patientId) throws UnauthorizedException {
@@ -166,119 +169,116 @@ private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
         sseExecutor.shutdownNow();
     }
 
-@GetMapping("/vitals")
-public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int days) {
-  try {
-        if (days < 1) {
-            days = 1;
-        }
-        // Get user details from JWT token
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String userEmail = auth.getName();
-        
-        // Find user
-        User currentUser = userRepository.findByEmail(userEmail)
-            .orElseThrow(() -> new IllegalStateException("User not found"));
-        
-        // Find patient
-        Optional<Patient> patientOpt = patientRepository.findById(patientId);
-        if (patientOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Patient not found"));
-        }
-        
-        Patient patient = patientOpt.get();
-        User patientUser = patient.getUser();
-        
-        // Check access based on role
-        boolean hasAccess = false;
-        
-        if (currentUser.getRole() == Role.PATIENT) {
-            // Patient can only access their own data
-            hasAccess = currentUser.getId().equals(patientUser.getId());
-        } 
-        else if (currentUser.getRole() == Role.CAREGIVER) {
-            // Check if user is a caregiver for this patient
-    hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
+    @GetMapping("/vitals")
+    public ResponseEntity<?> vitals(@RequestParam Long patientId, @RequestParam int days) {
+        try {
+            if (days < 1) {
+                days = 1;
+            }
+            // Get user details from JWT token
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String userEmail = auth.getName();
 
-        }
-        else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
-            // Check if user is a family member for this patient
-    hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
+            // Find user
+            User currentUser = userRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new IllegalStateException("User not found"));
 
-        }
-        else if (currentUser.getRole() == Role.ADMIN) {
-            // Admins have access to all patients
-            hasAccess = true;
-        }
-        
-        if (!hasAccess) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(Map.of("error", "Not authorized to access this patient's data"));
-        }
+            // Find patient
+            Optional<Patient> patientOpt = patientRepository.findById(patientId);
+            if (patientOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Patient not found"));
+            }
 
-        // Access granted, return data
-        return ResponseEntity.ok(Map.of(
-            "data", analyticsService.getVitals(patientId, Period.ofDays(days)),
-            "message", "Vitals data retrieved successfully"
-        ));
-    } catch (Exception e) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-            "error", "Failed to retrieve vitals data"
-        ));
-    }
+            Patient patient = patientOpt.get();
+            User patientUser = patient.getUser();
+
+            // Check access based on role
+            boolean hasAccess = false;
+
+            if (currentUser.getRole() == Role.PATIENT) {
+                // Patient can only access their own data
+                hasAccess = currentUser.getId().equals(patientUser.getId());
+            } else if (currentUser.getRole() == Role.CAREGIVER) {
+                // Check if user is a caregiver for this patient
+                hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
+
+            } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
+                // Check if user is a family member for this patient
+                hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
+
+            } else if (currentUser.getRole() == Role.ADMIN) {
+                // Admins have access to all patients
+                hasAccess = true;
+            }
+
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Not authorized to access this patient's data"));
+            }
+
+            // Access granted, return data
+            return ResponseEntity.ok(Map.of(
+                    "data", analyticsService.getVitals(patientId, Period.ofDays(days)),
+                    "message", "Vitals data retrieved successfully"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "error", "Failed to retrieve vitals data"
+            ));
+        }
     }
 
-@GetMapping("/alerts/recent")
-public ResponseEntity<?> recentVitalAlerts(
-        @RequestParam Long patientId,
-        @RequestParam(defaultValue = "5") int limit
-) {
-    try {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String userEmail = auth.getName();
-        User currentUser = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new IllegalStateException("User not found"));
+    @GetMapping("/alerts/recent")
+    public ResponseEntity<?> recentVitalAlerts(
+            @RequestParam Long patientId,
+            @RequestParam(defaultValue = "5") int limit
+    ) {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String userEmail = auth.getName();
+            User currentUser = userRepository.findByEmail(userEmail)
+                    .orElseThrow(() -> new IllegalStateException("User not found"));
 
-        Optional<Patient> patientOpt = patientRepository.findById(patientId);
-        if (patientOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Patient not found"));
+            Optional<Patient> patientOpt = patientRepository.findById(patientId);
+            if (patientOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Patient not found"));
+            }
+            Patient patient = patientOpt.get();
+            User patientUser = patient.getUser();
+
+            boolean hasAccess = false;
+            if (currentUser.getRole() == Role.PATIENT) {
+                hasAccess = currentUser.getId().equals(patientUser.getId());
+            } else if (currentUser.getRole() == Role.CAREGIVER) {
+                hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
+            } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
+                hasAccess = familyMemberPatientLinkRepository.existsByFamilyMemberUserIdAndPatientId(
+                        currentUser.getId(),
+                        patientId,
+                        LocalDateTime.now()
+                );
+            } else if (currentUser.getRole() == Role.ADMIN) {
+                hasAccess = true;
+            }
+
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Not authorized to access this patient's alerts"));
+            }
+
+            List<VitalAlertEventDTO> alerts = analyticsService.getRecentVitalAlertEvents(patientId, limit);
+            return ResponseEntity.ok(Map.of(
+                    "data", alerts,
+                    "message", "Recent vital alerts retrieved successfully"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "error", "Failed to retrieve recent vital alerts"
+            ));
         }
-        Patient patient = patientOpt.get();
-        User patientUser = patient.getUser();
-
-        boolean hasAccess = false;
-        if (currentUser.getRole() == Role.PATIENT) {
-            hasAccess = currentUser.getId().equals(patientUser.getId());
-        } else if (currentUser.getRole() == Role.CAREGIVER) {
-            hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
-        } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
-            hasAccess = familyMemberPatientLinkRepository.existsByFamilyMemberUserIdAndPatientId(
-                    currentUser.getId(),
-                    patientId,
-                    LocalDateTime.now()
-            );
-        } else if (currentUser.getRole() == Role.ADMIN) {
-            hasAccess = true;
-        }
-
-        if (!hasAccess) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Not authorized to access this patient's alerts"));
-        }
-
-        List<VitalAlertEventDTO> alerts = analyticsService.getRecentVitalAlertEvents(patientId, limit);
-        return ResponseEntity.ok(Map.of(
-                "data", alerts,
-                "message", "Recent vital alerts retrieved successfully"
-        ));
-    } catch (Exception e) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "error", "Failed to retrieve recent vital alerts"
-        ));
     }
-}
 
     /**
      * Create a new vital sample
@@ -289,61 +289,58 @@ public ResponseEntity<?> recentVitalAlerts(
             // Get user details from JWT token
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String userEmail = auth.getName();
-            
+
             // Find user
             User currentUser = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new IllegalStateException("User not found"));
-            
+                    .orElseThrow(() -> new IllegalStateException("User not found"));
+
             // Find patient
             Optional<Patient> patientOpt = patientRepository.findById(vitalSampleDTO.patientId());
             if (patientOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Patient not found"));
+                        .body(Map.of("error", "Patient not found"));
             }
-            
+
             Patient patient = patientOpt.get();
             User patientUser = patient.getUser();
-            
+
             // Check access - only allow patients to create their own vitals or authorized caregivers/family
             boolean hasAccess = false;
-            
+
             if (currentUser.getRole() == Role.PATIENT) {
                 // Patient can only create their own data
                 hasAccess = currentUser.getId().equals(patientUser.getId());
-            } 
-            else if (currentUser.getRole() == Role.CAREGIVER) {
+            } else if (currentUser.getRole() == Role.CAREGIVER) {
                 // Check if user is a caregiver for this patient
                 hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), vitalSampleDTO.patientId());
-            }
-            else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
+            } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
                 // Check if user is a family member for this patient
                 hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), vitalSampleDTO.patientId());
-            }
-            else if (currentUser.getRole() == Role.ADMIN) {
+            } else if (currentUser.getRole() == Role.ADMIN) {
                 // Admins can create vitals for any patient
                 hasAccess = true;
             }
-            
+
             if (!hasAccess) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Not authorized to create vitals for this patient"));
+                        .body(Map.of("error", "Not authorized to create vitals for this patient"));
             }
 
             // Create the vital sample
             VitalSampleDTO created = vitalSampleService.createVitalSample(vitalSampleDTO);
-            
+
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(Map.of(
-                    "data", created,
-                    "message", "Vital sample created successfully"
-                ));
-            
+                    .body(Map.of(
+                            "data", created,
+                            "message", "Vital sample created successfully"
+                    ));
+
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to create vital sample"));
+                    .body(Map.of("error", "Failed to create vital sample"));
         }
     }
 
@@ -387,70 +384,67 @@ public ResponseEntity<?> recentVitalAlerts(
             // Get user details from JWT token
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String userEmail = auth.getName();
-            
+
             // Find user
             User currentUser = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new IllegalStateException("User not found"));
-            
+                    .orElseThrow(() -> new IllegalStateException("User not found"));
+
             // Check if vital sample exists and get patient info
             Optional<VitalSampleDTO> existingVitalOpt = vitalSampleService.getVitalSample(id);
             if (existingVitalOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Vital sample not found"));
+                        .body(Map.of("error", "Vital sample not found"));
             }
-            
+
             VitalSampleDTO existingVital = existingVitalOpt.get();
             Long patientId = existingVital.patientId();
-            
+
             // Find patient
             Optional<Patient> patientOpt = patientRepository.findById(patientId);
             if (patientOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Patient not found"));
+                        .body(Map.of("error", "Patient not found"));
             }
-            
+
             Patient patient = patientOpt.get();
             User patientUser = patient.getUser();
-            
+
             // Check access - only allow patients to update their own vitals or authorized caregivers/family
             boolean hasAccess = false;
-            
+
             if (currentUser.getRole() == Role.PATIENT) {
                 // Patient can only update their own data
                 hasAccess = currentUser.getId().equals(patientUser.getId());
-            } 
-            else if (currentUser.getRole() == Role.CAREGIVER) {
+            } else if (currentUser.getRole() == Role.CAREGIVER) {
                 // Check if user is a caregiver for this patient
                 hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
-            }
-            else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
+            } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
                 // Check if user is a family member for this patient
                 hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
-            }
-            else if (currentUser.getRole() == Role.ADMIN) {
+            } else if (currentUser.getRole() == Role.ADMIN) {
                 // Admins can update vitals for any patient
                 hasAccess = true;
             }
-            
+
             if (!hasAccess) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Not authorized to update vitals for this patient"));
+                        .body(Map.of("error", "Not authorized to update vitals for this patient"));
             }
 
             // Update the vital sample
             VitalSampleDTO updated = vitalSampleService.updateVitalSample(id, vitalSampleDTO);
-            
+
             return ResponseEntity.ok(Map.of(
-                "data", updated,
-                "message", "Vital sample updated successfully"
+                    "data", updated,
+                    "message", "Vital sample updated successfully"
             ));
-            
+
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to update vital sample"));
+                    .body(Map.of("error", "Failed to update vital sample"));
         }
     }
 }

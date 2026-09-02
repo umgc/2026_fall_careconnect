@@ -65,9 +65,9 @@ public class CaregiverController {
 
     @GetMapping("/{caregiverId}/patients")
     public ResponseEntity<List<PatientWithLinkDto>> getPatientsByCaregiver(
-        @PathVariable("caregiverId") Long caregiverId,
-        @RequestParam(required = false) String email,
-        @RequestParam(required = false) String name) throws UnauthorizedException {
+            @PathVariable("caregiverId") Long caregiverId,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String name) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
 
@@ -108,10 +108,10 @@ public class CaregiverController {
         return ResponseEntity.ok(caregiver);
     }
 
-     @RequirePermission(Permission.CREATE_PATIENTS)
+    @RequirePermission(Permission.CREATE_PATIENTS)
 
 
-     @PostMapping("/{caregiverId}/patients")
+    @PostMapping("/{caregiverId}/patients")
     public ResponseEntity<Patient> registerPatient(
             @PathVariable Long caregiverId,
             @RequestBody PatientRegistration reg) throws UnauthorizedException {
@@ -216,15 +216,15 @@ public class CaregiverController {
         // Check if the caregiver has access to this patient using entity IDs
         if (!caregiverService.caregiverHasAccessToPatient(caregiverId, patientId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body("Caregiver does not have access to this patient");
+                    .body("Caregiver does not have access to this patient");
         }
-        
+
         // If authorized, get the patient details with link information
         PatientWithLinkDto patientDto = caregiverService.getPatientWithLinkById(caregiverId, patientId);
         if (patientDto == null) {
             return ResponseEntity.notFound().build();
         }
-        
+
         return ResponseEntity.ok(patientDto);
     }
 }

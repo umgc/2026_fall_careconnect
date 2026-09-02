@@ -11,15 +11,15 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for AIChatServiceConfig.
- *
+ * <p>
  * Validates configuration bean creation behavior including validation
  * (API key, URL, HTTPS, temperature range) and ChatModel instantiation.
- *
+ * <p>
  * chatModel() calls validateConfiguration() before building the bean, so
  * missing API key / URL causes an IllegalStateException from validation.
  * The builder itself wraps any build-time exception in
  * "AI configuration failed".
- *
+ * <p>
  * Mocks SecurityAuditService to satisfy the constructor dependency.
  */
 class AIChatServiceConfigTest {

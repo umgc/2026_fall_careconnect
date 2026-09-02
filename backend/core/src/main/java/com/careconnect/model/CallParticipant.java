@@ -7,13 +7,17 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** A user authorized to join a durable call session. */
+/**
+ * A user authorized to join a durable call session.
+ */
 @Entity
 @Getter
 @Setter
@@ -47,7 +51,9 @@ public class CallParticipant extends Auditable {
     @Column(name = "left_at")
     private LocalDateTime leftAt;
 
-    /** Opaque Chime externalUserId (no names, roles, or raw user IDs). */
+    /**
+     * Opaque Chime externalUserId (no names, roles, or raw user IDs).
+     */
     @Column(name = "chime_external_user_id", length = 64)
     private String chimeExternalUserId;
 

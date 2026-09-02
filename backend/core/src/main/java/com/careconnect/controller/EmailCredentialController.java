@@ -46,6 +46,16 @@ public class EmailCredentialController {
     private final EmailCredentialLifecycleService credentialLifecycle;
     private final EmailCredentialService emailCredentialService;
 
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        if (second != null && !second.isBlank()) {
+            return second.trim();
+        }
+        return null;
+    }
+
     /**
      * Legacy boolean status — true only when Gmail sync is ACTIVE.
      */
@@ -146,15 +156,5 @@ public class EmailCredentialController {
         } catch (final NumberFormatException ex) {
             throw new UnauthorizedException("Invalid userId");
         }
-    }
-
-    private static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first.trim();
-        }
-        if (second != null && !second.isBlank()) {
-            return second.trim();
-        }
-        return null;
     }
 }

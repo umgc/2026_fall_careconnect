@@ -55,16 +55,16 @@ public class ScheduledVisitService {
         if (conflicts.getPatientConflicts() != null && !conflicts.getPatientConflicts().isEmpty()) {
             log.warn("Patient conflict detected - cannot schedule visit at same time");
             throw new IllegalArgumentException(
-                "Patient already has a scheduled visit during this time. " +
-                "Overlapping visits: " + formatConflictingVisits(conflicts.getPatientConflicts())
+                    "Patient already has a scheduled visit during this time. " +
+                            "Overlapping visits: " + formatConflictingVisits(conflicts.getPatientConflicts())
             );
         }
 
         // Caregiver conflicts: WARN but allow (caregiver may get assistance)
-        boolean hasCaregiverConflicts = conflicts.getCaregiverConflicts() != null && 
-                                       !conflicts.getCaregiverConflicts().isEmpty();
+        boolean hasCaregiverConflicts = conflicts.getCaregiverConflicts() != null &&
+                !conflicts.getCaregiverConflicts().isEmpty();
         if (hasCaregiverConflicts) {
-            log.warn("Caregiver conflict warning - has {} overlapping visits", 
+            log.warn("Caregiver conflict warning - has {} overlapping visits",
                     conflicts.getCaregiverConflicts().size());
         }
 
@@ -434,7 +434,7 @@ public class ScheduledVisitService {
      * Create an audit entry for visit changes
      */
     private void createAuditEntry(Long visitId, String action, String changedField,
-            String oldValue, String newValue, String changedBy) {
+                                  String oldValue, String newValue, String changedBy) {
         ScheduledVisitAudit audit = new ScheduledVisitAudit();
         audit.setVisitId(visitId);
         audit.setAction(action);

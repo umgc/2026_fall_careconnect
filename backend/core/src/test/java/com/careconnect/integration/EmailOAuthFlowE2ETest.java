@@ -56,17 +56,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * End-to-end integration tests for PR #235: HMAC-signed OAuth state,
  * structured connection status, and Gmail disconnect flow.
- *
+ * <p>
  * Covers the full OAuth lifecycle:
- *   GET connect-url → GET /oauth/google/start → GET /oauth/google/callback
- *   → GET /v1/api/email-credentials/status → DELETE /v1/api/email-credentials/gmail
- *
+ * GET connect-url → GET /oauth/google/start → GET /oauth/google/callback
+ * → GET /v1/api/email-credentials/status → DELETE /v1/api/email-credentials/gmail
+ * <p>
  * Uses:
- *   - @SpringBootTest (full application context, H2 in-memory DB)
- *   - MockMvc for HTTP assertions
- *   - Real OAuthStateSigner/OAuthRedirectValidator beans (exercises actual HMAC logic)
- *   - Mocked GoogleOAuthService (no real Google token exchange)
- *   - Mocked EmailCredentialRepository (controls credential state per scenario)
+ * - @SpringBootTest (full application context, H2 in-memory DB)
+ * - MockMvc for HTTP assertions
+ * - Real OAuthStateSigner/OAuthRedirectValidator beans (exercises actual HMAC logic)
+ * - Mocked GoogleOAuthService (no real Google token exchange)
+ * - Mocked EmailCredentialRepository (controls credential state per scenario)
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -100,56 +100,95 @@ class EmailOAuthFlowE2ETest {
 
     // ── AWS SDK mocks (required so full context loads without real credentials) ──
 
-    @MockitoBean private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
-    @MockitoBean private ChimeSdkMediaPipelinesClient chimeSdkMediaPipelinesClient;
-    @MockitoBean private BedrockRuntimeClient bedrockRuntimeClient;
-    @MockitoBean private S3Client s3Client;
-    @MockitoBean private S3Presigner s3Presigner;
-    @MockitoBean private TextractClient textractClient;
-    @MockitoBean private SsmClient ssmClient;
-    @MockitoBean private StsClient stsClient;
-    @MockitoBean private IamClient iamClient;
-    @MockitoBean private SnsService snsService;
+    private static final String ADMIN_EMAIL = "admin@e2e-oauth.test";
+    private static final String PATIENT_EMAIL = "patient@e2e-oauth.test";
+    private static final String RETURN_URL = "http://localhost:3000/usps-test";
+    private static final String AUTH_CODE = "google-auth-code-abc123";
+    @MockitoBean
+    private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
+    @MockitoBean
+    private ChimeSdkMediaPipelinesClient chimeSdkMediaPipelinesClient;
+    @MockitoBean
+    private BedrockRuntimeClient bedrockRuntimeClient;
+    @MockitoBean
+    private S3Client s3Client;
+    @MockitoBean
+    private S3Presigner s3Presigner;
+    @MockitoBean
+    private TextractClient textractClient;
 
     // ── Conditional services disabled in test profile ────────────────────────────
-
-    @MockitoBean private com.careconnect.service.OpenRouterService openRouterService;
-    @MockitoBean private dev.langchain4j.model.chat.ChatModel chatModel;
-    @MockitoBean(name = "mockAIChatService") private com.careconnect.service.AIChatService aiChatService;
-    @MockitoBean private com.careconnect.service.invoice.TextractService textractService;
-    @MockitoBean private com.careconnect.service.invoice.LlmExtractionService llmExtractionService;
-    @MockitoBean private com.careconnect.service.StripeService stripeService;
-    @MockitoBean private com.careconnect.service.SubscriptionService subscriptionService;
-    @MockitoBean private com.careconnect.service.DeepSeekService deepSeekService;
-    @MockitoBean private com.careconnect.service.AiSymptomService aiSymptomService;
-    @MockitoBean private com.careconnect.service.AiAllergyService aiAllergyService;
-    @MockitoBean private com.careconnect.service.S3StorageService s3StorageService;
-    @MockitoBean private com.careconnect.service.ParameterStoreService parameterStoreService;
+    @MockitoBean
+    private SsmClient ssmClient;
+    @MockitoBean
+    private StsClient stsClient;
+    @MockitoBean
+    private IamClient iamClient;
+    @MockitoBean
+    private SnsService snsService;
+    @MockitoBean
+    private com.careconnect.service.OpenRouterService openRouterService;
+    @MockitoBean
+    private dev.langchain4j.model.chat.ChatModel chatModel;
+    @MockitoBean(name = "mockAIChatService")
+    private com.careconnect.service.AIChatService aiChatService;
+    @MockitoBean
+    private com.careconnect.service.invoice.TextractService textractService;
+    @MockitoBean
+    private com.careconnect.service.invoice.LlmExtractionService llmExtractionService;
+    @MockitoBean
+    private com.careconnect.service.StripeService stripeService;
+    @MockitoBean
+    private com.careconnect.service.SubscriptionService subscriptionService;
+    @MockitoBean
+    private com.careconnect.service.DeepSeekService deepSeekService;
 
     // ── PR #235 service mocks ────────────────────────────────────────────────────
-
-    /** Mocked so no real Google token exchange occurs. */
-    @MockitoBean private GoogleOAuthService googleOAuthService;
-
-    /** Mocked so each test scenario controls the stored credential state. */
-    @MockitoBean private EmailCredentialRepository emailCredentialRepository;
+    @MockitoBean
+    private com.careconnect.service.AiSymptomService aiSymptomService;
+    @MockitoBean
+    private com.careconnect.service.AiAllergyService aiAllergyService;
 
     // ── Spring-managed beans ─────────────────────────────────────────────────────
-
-    @Autowired private MockMvc mockMvc;
-    @Autowired private UserRepository userRepository;
-    @Autowired private OAuthStateSigner oauthStateSigner;
-    @Autowired private ObjectMapper objectMapper;
+    @MockitoBean
+    private com.careconnect.service.S3StorageService s3StorageService;
+    @MockitoBean
+    private com.careconnect.service.ParameterStoreService parameterStoreService;
+    /**
+     * Mocked so no real Google token exchange occurs.
+     */
+    @MockitoBean
+    private GoogleOAuthService googleOAuthService;
+    /**
+     * Mocked so each test scenario controls the stored credential state.
+     */
+    @MockitoBean
+    private EmailCredentialRepository emailCredentialRepository;
 
     // ── Test fixtures ────────────────────────────────────────────────────────────
-
-    private static final String ADMIN_EMAIL   = "admin@e2e-oauth.test";
-    private static final String PATIENT_EMAIL = "patient@e2e-oauth.test";
-    private static final String RETURN_URL    = "http://localhost:3000/usps-test";
-    private static final String AUTH_CODE     = "google-auth-code-abc123";
-
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private OAuthStateSigner oauthStateSigner;
+    @Autowired
+    private ObjectMapper objectMapper;
     private User adminUser;
     private User patientUser;
+
+    private static String extractQueryParam(String url, String param) {
+        String search = param + "=";
+        int start = url.indexOf(search);
+        if (start < 0) return "";
+        start += search.length();
+        int end = url.indexOf('&', start);
+        return end < 0 ? url.substring(start) : url.substring(start, end);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 1. GET /v1/api/email-credentials/gmail/connect-url
+    // ═══════════════════════════════════════════════════════════════════════════
 
     @BeforeEach
     void setUp() {
@@ -177,7 +216,29 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 1. GET /v1/api/email-credentials/gmail/connect-url
+    // 2. GET /oauth/google/start  (public endpoint)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private EmailCredential connectedCredential() {
+        return connectedCredentialForUser(adminUser);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 3. GET /oauth/google/callback  (public endpoint)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private EmailCredential connectedCredentialForUser(User user) {
+        EmailCredential cred = new EmailCredential();
+        cred.setUserId(String.valueOf(user.getId()));
+        cred.setProvider(EmailCredential.Provider.GMAIL);
+        cred.setAccessTokenEnc("encrypted-access-token");
+        cred.setRefreshTokenEnc("encrypted-refresh-token");
+        cred.setExpiresAt(Instant.now().plusSeconds(3600));
+        return cred;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 4. GET /v1/api/email-credentials/status
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -248,7 +309,7 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 2. GET /oauth/google/start  (public endpoint)
+    // 4b. Patient self-service (no VIEW_ASSIGNED_PATIENTS permission required)
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -306,7 +367,7 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 3. GET /oauth/google/callback  (public endpoint)
+    // 5. DELETE /v1/api/email-credentials/gmail
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -317,7 +378,7 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("callback_withValidSignedState_exchangesCodeAndRedirectsToReturnUrl")
         void callback_withValidSignedState_exchangesCodeAndRedirectsToReturnUrl() throws Exception {
             String userId = String.valueOf(adminUser.getId());
-            String state  = oauthStateSigner.sign(userId, RETURN_URL);
+            String state = oauthStateSigner.sign(userId, RETURN_URL);
 
             doNothing().when(googleOAuthService).exchange(eq(userId), eq(AUTH_CODE));
 
@@ -436,7 +497,7 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 4. GET /v1/api/email-credentials/status
+    // 6. Full OAuth flow  — connect-url → start → callback → status → disconnect
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -538,9 +599,7 @@ class EmailOAuthFlowE2ETest {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 4b. Patient self-service (no VIEW_ASSIGNED_PATIENTS permission required)
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Helpers ──────────────────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("Patient self-service — email credential endpoints")
@@ -594,10 +653,6 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(status().isForbidden());
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 5. DELETE /v1/api/email-credentials/gmail
-    // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("DELETE /v1/api/email-credentials/gmail")
@@ -655,10 +710,6 @@ class EmailOAuthFlowE2ETest {
                     .andExpect(status().isUnauthorized());
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 6. Full OAuth flow  — connect-url → start → callback → status → disconnect
-    // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Full OAuth flow — happy path and replay-attack rejection")
@@ -771,30 +822,5 @@ class EmailOAuthFlowE2ETest {
             mockMvc.perform(get("/oauth/google/start").param("startToken", callbackState))
                     .andExpect(status().is4xxClientError());
         }
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────────
-
-    private EmailCredential connectedCredential() {
-        return connectedCredentialForUser(adminUser);
-    }
-
-    private EmailCredential connectedCredentialForUser(User user) {
-        EmailCredential cred = new EmailCredential();
-        cred.setUserId(String.valueOf(user.getId()));
-        cred.setProvider(EmailCredential.Provider.GMAIL);
-        cred.setAccessTokenEnc("encrypted-access-token");
-        cred.setRefreshTokenEnc("encrypted-refresh-token");
-        cred.setExpiresAt(Instant.now().plusSeconds(3600));
-        return cred;
-    }
-
-    private static String extractQueryParam(String url, String param) {
-        String search = param + "=";
-        int start = url.indexOf(search);
-        if (start < 0) return "";
-        start += search.length();
-        int end = url.indexOf('&', start);
-        return end < 0 ? url.substring(start) : url.substring(start, end);
     }
 }

@@ -783,8 +783,8 @@ public class GmailParser {
         }
         String lower = value.toLowerCase(Locale.ROOT);
         return lower.contains("ridealong")
-            || lower.contains("promo")
-            || lower.contains("sat");
+                || lower.contains("promo")
+                || lower.contains("sat");
     }
 
     private boolean isMarketingText(String value) {
@@ -793,9 +793,9 @@ public class GmailParser {
         }
         String lower = value.toLowerCase(Locale.ROOT);
         return lower.contains("ridealong")
-            || lower.contains("promotion")
-            || lower.contains("learn more about your mail")
-            || lower.contains("tru") && lower.contains("stage");
+                || lower.contains("promotion")
+                || lower.contains("learn more about your mail")
+                || lower.contains("tru") && lower.contains("stage");
     }
 
     private String sanitizeSender(String value) {
@@ -909,8 +909,6 @@ public class GmailParser {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private record MailpieceFields(String sender, String summary) {}
-
     private boolean isMetadataInsufficientForOcr(String sender, String summary) {
         return isBlank(sender) || isSummaryMetadataInsufficient(summary);
     }
@@ -970,8 +968,6 @@ public class GmailParser {
             return Optional.empty();
         }
     }
-
-    private record DecodedDataUrlImage(byte[] bytes, String metadata) {}
 
     private String normalizeSummary(String summary, String sender) {
         if (!isBlank(summary)) {
@@ -1187,5 +1183,11 @@ public class GmailParser {
         }
 
         return src;
+    }
+
+    private record MailpieceFields(String sender, String summary) {
+    }
+
+    private record DecodedDataUrlImage(byte[] bytes, String metadata) {
     }
 }

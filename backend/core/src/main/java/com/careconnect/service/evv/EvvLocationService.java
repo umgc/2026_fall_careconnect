@@ -23,10 +23,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class EvvLocationService {
-    
+
     private final EvvRecordLocationRepository locationRepository;
     private final EvvRecordRepository evvRecordRepository;
-    
+
     /**
      * Save or update an EVV location (upsert logic)
      * If a location already exists for the given (evvRecordId, role), it will be updated
@@ -35,17 +35,17 @@ public class EvvLocationService {
     public EvvLocationResponse saveLocation(EvvLocationRequest request) {
         // Validate request
         request.validate();
-        
+
         // Verify EVV record exists
         EvvRecord evvRecord = evvRecordRepository.findById(request.getEvvRecordId())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, 
-                    "EVV record not found with ID: " + request.getEvvRecordId()));
-        
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,
+                        "EVV record not found with ID: " + request.getEvvRecordId()));
+
         // Check if location already exists (upsert logic)
         EvvRecordLocation location = locationRepository
                 .findByEvvRecordIdAndRole(request.getEvvRecordId(), request.getRole())
                 .orElse(null);
-        
+
         if (location == null) {
             // Create new location
             location = EvvRecordLocation.builder()
@@ -53,20 +53,20 @@ public class EvvLocationService {
                     .role(request.getRole())
                     .build();
         }
-        
+
         // Set location type
         location.setType(request.getType());
-        
+
         // Handle based on location type
         if (request.getType() == EvvLocationType.GPS) {
             // Validate GPS coordinates are provided
-            if (request.getCoords() == null || 
-                request.getCoords().getLat() == null || 
-                request.getCoords().getLng() == null) {
-                throw new AppException(HttpStatus.BAD_REQUEST, 
-                    "GPS location requires latitude and longitude coordinates");
+            if (request.getCoords() == null ||
+                    request.getCoords().getLat() == null ||
+                    request.getCoords().getLng() == null) {
+                throw new AppException(HttpStatus.BAD_REQUEST,
+                        "GPS location requires latitude and longitude coordinates");
             }
-            
+
             // Set GPS coordinates
             location.setLatitude(request.getCoords().getLat());
             location.setLongitude(request.getCoords().getLng());
@@ -74,15 +74,15 @@ public class EvvLocationService {
             location.setAddressSnapshotJson(null);
             location.setNoGpsReason(null);
             location.setManualAddress(null);
-            
+
         } else if (request.getType() == EvvLocationType.PATIENT_ADDRESS) {
             // Get patient from EVV record
             Patient patient = evvRecord.getPatient();
             if (patient == null) {
-                throw new AppException(HttpStatus.BAD_REQUEST, 
-                    "EVV record does not have an associated patient");
+                throw new AppException(HttpStatus.BAD_REQUEST,
+                        "EVV record does not have an associated patient");
             }
-            
+
             // Create address snapshot
             Map<String, Object> addressSnapshot = new HashMap<>();
             if (patient.getAddress() != null) {
@@ -93,10 +93,10 @@ public class EvvLocationService {
                 addressSnapshot.put("postalCode", patient.getAddress().getZip());
                 addressSnapshot.put("country", "US");
             } else {
-                throw new AppException(HttpStatus.BAD_REQUEST, 
-                    "Patient does not have an address on file");
+                throw new AppException(HttpStatus.BAD_REQUEST,
+                        "Patient does not have an address on file");
             }
-            
+
             // Set address snapshot and clear GPS/manual fields
             location.setAddressSnapshotJson(addressSnapshot);
             location.setLatitude(null);
@@ -110,7 +110,7 @@ public class EvvLocationService {
             // MANUAL type: caregiver-entered address (e.g. community or facility visit)
             if (request.getManualAddress() == null || request.getManualAddress().isBlank()) {
                 throw new AppException(HttpStatus.BAD_REQUEST,
-                    "MANUAL location requires a manualAddress");
+                        "MANUAL location requires a manualAddress");
             }
             location.setManualAddress(request.getManualAddress());
             location.setAddressSnapshotJson(null);
@@ -120,15 +120,15 @@ public class EvvLocationService {
             // Federal EVV: store reason GPS was not used
             location.setNoGpsReason(request.getNoGpsReason());
         }
-        
+
         // Validate before saving
         location.validate();
-        
+
         // Save and return
         EvvRecordLocation saved = locationRepository.save(location);
         return toResponse(saved);
     }
-    
+
     /**
      * Get all locations for an EVV record
      */
@@ -136,16 +136,16 @@ public class EvvLocationService {
     public List<EvvLocationResponse> getLocationsForRecord(Long evvRecordId) {
         // Verify EVV record exists
         if (!evvRecordRepository.existsById(evvRecordId)) {
-            throw new AppException(HttpStatus.NOT_FOUND, 
-                "EVV record not found with ID: " + evvRecordId);
+            throw new AppException(HttpStatus.NOT_FOUND,
+                    "EVV record not found with ID: " + evvRecordId);
         }
-        
+
         List<EvvRecordLocation> locations = locationRepository.findByEvvRecordId(evvRecordId);
         return locations.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
-    
+
     /**
      * Get a specific location by role
      */
@@ -153,22 +153,22 @@ public class EvvLocationService {
     public EvvLocationResponse getLocationByRole(Long evvRecordId, EvvLocationRole role) {
         return locationRepository.findByEvvRecordIdAndRole(evvRecordId, role)
                 .map(this::toResponse)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, 
-                    "Location not found for EVV record " + evvRecordId + " with role " + role));
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,
+                        "Location not found for EVV record " + evvRecordId + " with role " + role));
     }
-    
+
     /**
      * Delete a location
      */
     @Transactional
     public void deleteLocation(Long evvRecordId, EvvLocationRole role) {
         if (!locationRepository.existsByEvvRecordIdAndRole(evvRecordId, role)) {
-            throw new AppException(HttpStatus.NOT_FOUND, 
-                "Location not found for EVV record " + evvRecordId + " with role " + role);
+            throw new AppException(HttpStatus.NOT_FOUND,
+                    "Location not found for EVV record " + evvRecordId + " with role " + role);
         }
         locationRepository.deleteByEvvRecordIdAndRole(evvRecordId, role);
     }
-    
+
     /**
      * Convert entity to response DTO
      */

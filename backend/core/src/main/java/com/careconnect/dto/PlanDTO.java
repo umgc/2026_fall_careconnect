@@ -12,12 +12,13 @@ import java.util.List;
 
 
 public record PlanDTO(
-    String id,
-    boolean active,
-    int amount,
-    String currency,
-    String interval,
-    int intervalCount,
-    String product,
-    String nickname
-) {}
+        String id,
+        boolean active,
+        int amount,
+        String currency,
+        String interval,
+        int intervalCount,
+        String product,
+        String nickname
+) {
+}

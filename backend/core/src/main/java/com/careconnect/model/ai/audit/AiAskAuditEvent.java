@@ -14,7 +14,9 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Append-only Ask AI lifecycle event (FR-AI-10 / REQ-SC-9). */
+/**
+ * Append-only Ask AI lifecycle event (FR-AI-10 / REQ-SC-9).
+ */
 @Entity
 @Table(
         name = "ai_ask_audit_event",

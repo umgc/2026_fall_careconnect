@@ -11,7 +11,7 @@ public class LeaderboardEntry {
 
     public LeaderboardEntry(Long userId, String lastName, String firstName, int xp, int level, String profileImageUrl) {
         this.userId = userId;
-        this.name = lastName +" "+ firstName;
+        this.name = lastName + " " + firstName;
         this.lastName = lastName;
         this.firstName = firstName;
         this.xp = xp;
@@ -19,9 +19,23 @@ public class LeaderboardEntry {
         this.profileImageUrl = profileImageUrl;
     }
 
-    public Long getUserId() { return userId; }
-    public String getName() { return name ; }
-    public int getXp() { return xp; }
-    public int getLevel() { return level; }
-    public String getProfileImageUrl() { return profileImageUrl; }
+    public Long getUserId() {
+        return userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getXp() {
+        return xp;
+    }
+
+    public int getLevel() {
+        return level;
+    }
+
+    public String getProfileImageUrl() {
+        return profileImageUrl;
+    }
 }

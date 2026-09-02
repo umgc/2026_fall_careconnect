@@ -11,10 +11,14 @@ public class ExtractedFieldDto {
     public String label;
     public String value = "";
 
-    /** True when the value was prefilled by OCR + LLM rather than a person. */
+    /**
+     * True when the value was prefilled by OCR + LLM rather than a person.
+     */
     public boolean machineGenerated;
 
-    /** Prefilled values are drafts only; they always remain editable. */
+    /**
+     * Prefilled values are drafts only; they always remain editable.
+     */
     public boolean editable = true;
 
     public ExtractedFieldDto() {

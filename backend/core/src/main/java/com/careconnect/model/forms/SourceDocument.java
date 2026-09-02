@@ -6,7 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Identifies the authoritative source document a digital form digitizes. */
+/**
+ * Identifies the authoritative source document a digital form digitizes.
+ */
 @Data
 @Builder
 @NoArgsConstructor

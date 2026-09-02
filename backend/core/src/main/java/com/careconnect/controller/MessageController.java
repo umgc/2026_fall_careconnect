@@ -56,6 +56,12 @@ public class MessageController {
     @Autowired
     private AuthorizationService authorizationService;
 
+    private static String fullName(String first, String last) {
+        String f = (first != null) ? first.trim() : "";
+        String l = (last != null) ? last.trim() : "";
+        return (f + " " + l).trim();
+    }
+
     // ✅ Send a new message
     @RequirePermission(Permission.SEND_MESSAGES)
 
@@ -190,11 +196,5 @@ public class MessageController {
             return at > 0 ? email.substring(0, at) : email;
         }
         return "Unknown";
-    }
-
-    private static String fullName(String first, String last) {
-        String f = (first != null) ? first.trim() : "";
-        String l = (last  != null) ? last.trim()  : "";
-        return (f + " " + l).trim();
     }
 }

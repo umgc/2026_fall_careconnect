@@ -112,13 +112,169 @@ public class AiAskService {
         this.hitlEnabled = hitlEnabled;
     }
 
+    private static boolean hasExtractiveEvidence(
+            final GroundedAskLlmService.GroundedClaim claim,
+            final String query,
+            final Map<String, RetrievalContextAssembler.PromptExcerpt> promptExcerptMap,
+            final Map<String, com.careconnect.service.ai.retrieval.RankedChunk> refMap) {
+        if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
+            return false;
+        }
+        final String ref = claim.citationRefs().get(0);
+        final RetrievalContextAssembler.PromptExcerpt excerpt = promptExcerptMap.get(ref);
+        final String evidence = claim.evidenceByRef().get(ref);
+        return excerpt != null
+                && evidence != null
+                && evidence.codePointCount(0, evidence.length()) >= 20
+                && claim.text().equals(evidence)
+                && isCompleteSpan(excerpt, evidence)
+                && GroundingRelevancePolicy.isRelevant(
+                query, evidence, excerpt.text(), refMap.get(ref));
+    }
+
+    private static boolean isCompleteSpan(
+            final RetrievalContextAssembler.PromptExcerpt excerpt,
+            final String evidence) {
+        final int start = excerpt.text().indexOf(evidence);
+        if (start < 0 || excerpt.text().indexOf(evidence, start + 1) >= 0) {
+            return false;
+        }
+        final int end = start + evidence.length();
+        if ((start == 0 && excerpt.startTruncated())
+                || (end == excerpt.text().length() && excerpt.endTruncated())) {
+            return false;
+        }
+        return isSentenceStart(excerpt.text(), start) && isSentenceEnd(excerpt.text(), end);
+    }
+
+    private static boolean isSentenceStart(final String text, final int start) {
+        if (start == 0) {
+            return true;
+        }
+        int offset = start;
+        while (offset > 0) {
+            final int codePoint = text.codePointBefore(offset);
+            offset -= Character.charCount(codePoint);
+            if (!Character.isWhitespace(codePoint)) {
+                return codePoint == '.' || codePoint == '!' || codePoint == '?'
+                        || codePoint == '\n' || codePoint == '\r';
+            }
+        }
+        return true;
+    }
+
+    private static boolean isSentenceEnd(final String text, final int end) {
+        if (end == text.length()) {
+            return true;
+        }
+        final int lastEvidenceCodePoint = text.codePointBefore(end);
+        final int nextCodePoint = text.codePointAt(end);
+        return (lastEvidenceCodePoint == '.'
+                || lastEvidenceCodePoint == '!'
+                || lastEvidenceCodePoint == '?')
+                && Character.isWhitespace(nextCodePoint);
+    }
+
+    private static String surroundingCitationContext(
+            final String excerpt, final String evidence) {
+        if (excerpt == null || evidence == null) {
+            return evidence;
+        }
+        final int evidenceStart = excerpt.indexOf(evidence);
+        if (evidenceStart < 0) {
+            return evidence;
+        }
+        final int evidenceEnd = evidenceStart + evidence.length();
+        final int before = excerpt.codePointCount(0, evidenceStart);
+        final int after = excerpt.codePointCount(evidenceEnd, excerpt.length());
+        final int contextStart = excerpt.offsetByCodePoints(
+                evidenceStart, -Math.min(before, CITATION_CONTEXT_CODE_POINTS));
+        final int contextEnd = excerpt.offsetByCodePoints(
+                evidenceEnd, Math.min(after, CITATION_CONTEXT_CODE_POINTS));
+        return excerpt.substring(contextStart, contextEnd).trim();
+    }
+
+    private static AskAiGroundingException groundingFailure(
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String message) {
+        return new AskAiGroundingException(requestId, auditId, sessionId, message);
+    }
+
+    private static int elapsedMs(final long startedNanos) {
+        return (int) Math.min(Integer.MAX_VALUE, (System.nanoTime() - startedNanos) / 1_000_000L);
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value;
+    }
+
+    public static AiAskResponse withheld(
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String errorCode,
+            final String message,
+            final List<String> details) {
+        return new AiAskResponse(
+                false,
+                requestId == null ? UUID.randomUUID() : requestId,
+                auditId == null ? UUID.randomUUID() : auditId,
+                sessionId,
+                Instant.now(),
+                DeliveryStatus.WITHHELD,
+                0,
+                false,
+                null,
+                null,
+                List.of(),
+                disclaimer("en-US"),
+                null,
+                null,
+                null,
+                message,
+                null,
+                new AiErrorBlock(
+                        errorCode,
+                        message,
+                        details == null ? List.of() : List.copyOf(details)),
+                null);
+    }
+
+    private static AiDisclaimer disclaimer(final String locale) {
+        return new AiDisclaimer(AskAiSafetyCopy.DISCLAIMER_EN, true, true, locale);
+    }
+
+    private static String normalizeLocale(final String locale) {
+        if (locale == null || locale.isBlank()) {
+            return "en-US";
+        }
+        return locale.trim();
+    }
+
+    private static Set<RetrievalRecordType> toTypeSet(final List<RetrievalRecordType> types) {
+        if (types == null || types.isEmpty()) {
+            return null;
+        }
+        final EnumSet<RetrievalRecordType> set = EnumSet.noneOf(RetrievalRecordType.class);
+        for (final RetrievalRecordType type : types) {
+            if (type == null) {
+                throw new AskAiRejectedException(
+                        "INVALID_REQUEST", "sourceTypes must not contain null", 400);
+            }
+            set.add(type);
+        }
+        return set;
+    }
+
     /**
      * Produces a records-grounded answer or fails closed before delivery.
      *
-     * @throws ForbiddenScopeException when the caller cannot retrieve the requested patient's records
-     * @throws UnauthorizedException when no authenticated caller is available
+     * @throws ForbiddenScopeException   when the caller cannot retrieve the requested patient's records
+     * @throws UnauthorizedException     when no authenticated caller is available
      * @throws AskAiUnavailableException when grounded inference is unavailable
-     * @throws AskAiGroundingException when model citations do not validate against retrieved records
+     * @throws AskAiGroundingException   when model citations do not validate against retrieved records
      */
     public AiAskResponse ask(final User caller, final AiAskRequest request)
             throws ForbiddenScopeException, UnauthorizedException {
@@ -383,19 +539,19 @@ public class AiAskService {
             if (claim.text() == null
                     || claim.text().isBlank()
                     || !hasExtractiveEvidence(
-                            claim,
-                            sanitizedQuery,
-                            context.promptExcerptMap(),
-                            context.citationRefMap())
+                    claim,
+                    sanitizedQuery,
+                    context.promptExcerptMap(),
+                    context.citationRefMap())
                     || !claimCitations.grounded()) {
                 // Persist only claims that already passed verification — never the failing ones.
                 final String safeDraft = String.join(" ", verifiedClaimTexts);
                 final List<AiCitation> safeCitations = verifiedEvidenceByRef.isEmpty()
                         ? List.of()
                         : citationAssembler.assembleWithEvidence(
-                                List.copyOf(verifiedEvidenceByRef.keySet()),
-                                context.citationRefMap(),
-                                verifiedEvidenceByRef).citations();
+                        List.copyOf(verifiedEvidenceByRef.keySet()),
+                        context.citationRefMap(),
+                        verifiedEvidenceByRef).citations();
                 return holdOrGroundingFailure(
                         caller,
                         request,
@@ -779,96 +935,6 @@ public class AiAskService {
                 null);
     }
 
-    private static boolean hasExtractiveEvidence(
-            final GroundedAskLlmService.GroundedClaim claim,
-            final String query,
-            final Map<String, RetrievalContextAssembler.PromptExcerpt> promptExcerptMap,
-            final Map<String, com.careconnect.service.ai.retrieval.RankedChunk> refMap) {
-        if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
-            return false;
-        }
-        final String ref = claim.citationRefs().get(0);
-        final RetrievalContextAssembler.PromptExcerpt excerpt = promptExcerptMap.get(ref);
-        final String evidence = claim.evidenceByRef().get(ref);
-        return excerpt != null
-                && evidence != null
-                && evidence.codePointCount(0, evidence.length()) >= 20
-                && claim.text().equals(evidence)
-                && isCompleteSpan(excerpt, evidence)
-                && GroundingRelevancePolicy.isRelevant(
-                        query, evidence, excerpt.text(), refMap.get(ref));
-    }
-
-    private static boolean isCompleteSpan(
-            final RetrievalContextAssembler.PromptExcerpt excerpt,
-            final String evidence) {
-        final int start = excerpt.text().indexOf(evidence);
-        if (start < 0 || excerpt.text().indexOf(evidence, start + 1) >= 0) {
-            return false;
-        }
-        final int end = start + evidence.length();
-        if ((start == 0 && excerpt.startTruncated())
-                || (end == excerpt.text().length() && excerpt.endTruncated())) {
-            return false;
-        }
-        return isSentenceStart(excerpt.text(), start) && isSentenceEnd(excerpt.text(), end);
-    }
-
-    private static boolean isSentenceStart(final String text, final int start) {
-        if (start == 0) {
-            return true;
-        }
-        int offset = start;
-        while (offset > 0) {
-            final int codePoint = text.codePointBefore(offset);
-            offset -= Character.charCount(codePoint);
-            if (!Character.isWhitespace(codePoint)) {
-                return codePoint == '.' || codePoint == '!' || codePoint == '?'
-                        || codePoint == '\n' || codePoint == '\r';
-            }
-        }
-        return true;
-    }
-
-    private static boolean isSentenceEnd(final String text, final int end) {
-        if (end == text.length()) {
-            return true;
-        }
-        final int lastEvidenceCodePoint = text.codePointBefore(end);
-        final int nextCodePoint = text.codePointAt(end);
-        return (lastEvidenceCodePoint == '.'
-                || lastEvidenceCodePoint == '!'
-                || lastEvidenceCodePoint == '?')
-                && Character.isWhitespace(nextCodePoint);
-    }
-
-    private static String surroundingCitationContext(
-            final String excerpt, final String evidence) {
-        if (excerpt == null || evidence == null) {
-            return evidence;
-        }
-        final int evidenceStart = excerpt.indexOf(evidence);
-        if (evidenceStart < 0) {
-            return evidence;
-        }
-        final int evidenceEnd = evidenceStart + evidence.length();
-        final int before = excerpt.codePointCount(0, evidenceStart);
-        final int after = excerpt.codePointCount(evidenceEnd, excerpt.length());
-        final int contextStart = excerpt.offsetByCodePoints(
-                evidenceStart, -Math.min(before, CITATION_CONTEXT_CODE_POINTS));
-        final int contextEnd = excerpt.offsetByCodePoints(
-                evidenceEnd, Math.min(after, CITATION_CONTEXT_CODE_POINTS));
-        return excerpt.substring(contextStart, contextEnd).trim();
-    }
-
-    private static AskAiGroundingException groundingFailure(
-            final UUID requestId,
-            final UUID auditId,
-            final UUID sessionId,
-            final String message) {
-        return new AskAiGroundingException(requestId, auditId, sessionId, message);
-    }
-
     private AiAskResponse noRecordsResponse(
             final AiAskAuditService.AuditSession auditSession,
             final UUID requestId,
@@ -913,71 +979,5 @@ public class AiAskService {
                 null,
                 null,
                 null);
-    }
-
-    private static int elapsedMs(final long startedNanos) {
-        return (int) Math.min(Integer.MAX_VALUE, (System.nanoTime() - startedNanos) / 1_000_000L);
-    }
-
-    private static String nullToEmpty(final String value) {
-        return value == null ? "" : value;
-    }
-
-    public static AiAskResponse withheld(
-            final UUID requestId,
-            final UUID auditId,
-            final UUID sessionId,
-            final String errorCode,
-            final String message,
-            final List<String> details) {
-        return new AiAskResponse(
-                false,
-                requestId == null ? UUID.randomUUID() : requestId,
-                auditId == null ? UUID.randomUUID() : auditId,
-                sessionId,
-                Instant.now(),
-                DeliveryStatus.WITHHELD,
-                0,
-                false,
-                null,
-                null,
-                List.of(),
-                disclaimer("en-US"),
-                null,
-                null,
-                null,
-                message,
-                null,
-                new AiErrorBlock(
-                        errorCode,
-                        message,
-                        details == null ? List.of() : List.copyOf(details)),
-                null);
-    }
-
-    private static AiDisclaimer disclaimer(final String locale) {
-        return new AiDisclaimer(AskAiSafetyCopy.DISCLAIMER_EN, true, true, locale);
-    }
-
-    private static String normalizeLocale(final String locale) {
-        if (locale == null || locale.isBlank()) {
-            return "en-US";
-        }
-        return locale.trim();
-    }
-
-    private static Set<RetrievalRecordType> toTypeSet(final List<RetrievalRecordType> types) {
-        if (types == null || types.isEmpty()) {
-            return null;
-        }
-        final EnumSet<RetrievalRecordType> set = EnumSet.noneOf(RetrievalRecordType.class);
-        for (final RetrievalRecordType type : types) {
-            if (type == null) {
-                throw new AskAiRejectedException(
-                        "INVALID_REQUEST", "sourceTypes must not contain null", 400);
-            }
-            set.add(type);
-        }
-        return set;
     }
 }

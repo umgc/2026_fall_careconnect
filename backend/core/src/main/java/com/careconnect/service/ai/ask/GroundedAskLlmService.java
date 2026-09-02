@@ -76,11 +76,52 @@ public class GroundedAskLlmService {
         this(bedrockRuntimeClient, objectMapper, defaultModelId, awsEnabled, 1024, 0.2d, 0.9d);
     }
 
+    private static GroundedProviderException classifyProviderFailure(
+            final String errorCode, final BedrockRuntimeException cause) {
+        if (CONFIGURATION_ERROR_CODES.contains(errorCode)) {
+            return new GroundedProviderException(
+                    GroundedProviderException.Kind.CONFIGURATION,
+                    false,
+                    "Grounded model configuration is unavailable",
+                    cause);
+        }
+        return new GroundedProviderException(
+                GroundedProviderException.Kind.PROVIDER,
+                TRANSIENT_PROVIDER_ERROR_CODES.contains(errorCode),
+                "Grounded model provider invocation failed",
+                cause);
+    }
+
+    private static String unwrapJson(final String text) {
+        String candidate = text;
+        if (candidate.startsWith("```")) {
+            final int firstNl = candidate.indexOf('\n');
+            final int lastFence = candidate.lastIndexOf("```");
+            if (firstNl > 0 && lastFence > firstNl) {
+                candidate = candidate.substring(firstNl + 1, lastFence).trim();
+            }
+        }
+        final int start = candidate.indexOf('{');
+        final int end = candidate.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return candidate.substring(start, end + 1);
+        }
+        return candidate;
+    }
+
+    private static String textOrEmpty(final JsonNode root, final String field) {
+        final JsonNode node = root.get(field);
+        if (node == null || node.isNull()) {
+            return "";
+        }
+        return node.asText("");
+    }
+
     /**
      * Invokes Bedrock with grounded system/user prompts and parses structured JSON.
      *
      * @return the validated grounded result
-     * @throws GroundedProviderException when configuration or provider invocation fails
+     * @throws GroundedProviderException         when configuration or provider invocation fails
      * @throws GroundedOutputValidationException when Bedrock responds with invalid output
      */
     public Optional<GroundedLlmResult> generate(final String systemPrompt, final String userPrompt) {
@@ -148,22 +189,6 @@ public class GroundedAskLlmService {
         return awsEnabled && bedrockRuntimeClient != null;
     }
 
-    private static GroundedProviderException classifyProviderFailure(
-            final String errorCode, final BedrockRuntimeException cause) {
-        if (CONFIGURATION_ERROR_CODES.contains(errorCode)) {
-            return new GroundedProviderException(
-                    GroundedProviderException.Kind.CONFIGURATION,
-                    false,
-                    "Grounded model configuration is unavailable",
-                    cause);
-        }
-        return new GroundedProviderException(
-                GroundedProviderException.Kind.PROVIDER,
-                TRANSIENT_PROVIDER_ERROR_CODES.contains(errorCode),
-                "Grounded model provider invocation failed",
-                cause);
-    }
-
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {
         if (text == null || text.isBlank()) {
             throw new GroundedOutputValidationException(
@@ -221,31 +246,6 @@ public class GroundedAskLlmService {
             throw new GroundedOutputValidationException(
                     "Grounded model response was malformed", ex);
         }
-    }
-
-    private static String unwrapJson(final String text) {
-        String candidate = text;
-        if (candidate.startsWith("```")) {
-            final int firstNl = candidate.indexOf('\n');
-            final int lastFence = candidate.lastIndexOf("```");
-            if (firstNl > 0 && lastFence > firstNl) {
-                candidate = candidate.substring(firstNl + 1, lastFence).trim();
-            }
-        }
-        final int start = candidate.indexOf('{');
-        final int end = candidate.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return candidate.substring(start, end + 1);
-        }
-        return candidate;
-    }
-
-    private static String textOrEmpty(final JsonNode root, final String field) {
-        final JsonNode node = root.get(field);
-        if (node == null || node.isNull()) {
-            return "";
-        }
-        return node.asText("");
     }
 
     public record GroundedClaim(

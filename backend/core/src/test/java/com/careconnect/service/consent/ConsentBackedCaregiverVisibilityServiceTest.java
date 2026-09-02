@@ -35,7 +35,9 @@ class ConsentBackedCaregiverVisibilityServiceTest {
     private final ConsentBackedCaregiverVisibilityService service =
             new ConsentBackedCaregiverVisibilityService(consentService, linkService, patientRepository, store);
 
-    /** Resolves PATIENT_ENTITY -> PATIENT_USER and puts the caregiver in the care circle. */
+    /**
+     * Resolves PATIENT_ENTITY -> PATIENT_USER and puts the caregiver in the care circle.
+     */
     private void stubLinkedPatient() {
         User user = new User();
         user.setId(PATIENT_USER);

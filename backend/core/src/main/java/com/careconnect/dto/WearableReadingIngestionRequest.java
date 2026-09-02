@@ -23,5 +23,6 @@ public record WearableReadingIngestionRequest(
             @NotNull(message = "recordedAt is required")
             Instant recordedAt,
             String source
-    ) {}
+    ) {
+    }
 }

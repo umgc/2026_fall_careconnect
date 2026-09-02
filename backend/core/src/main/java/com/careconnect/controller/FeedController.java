@@ -63,26 +63,26 @@ public class FeedController {
 
     @GetMapping("/all")
     @Operation(
-        summary = "Get global feed",
-        description = "Retrieve all posts from the global feed. Requires authentication."
+            summary = "Get global feed",
+            description = "Retrieve all posts from the global feed. Requires authentication."
     )
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Global feed retrieved successfully",
-            content = @Content(
-                mediaType = "application/json",
-                    schema = @Schema(implementation = PostWithCommentCountDto.class, type = "array")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Global feed retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PostWithCommentCountDto.class, type = "array")
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Not authenticated",
+                    content = @Content(
+                            mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n    \"error\": \"Not authenticated\"\n}")
+                    )
             )
-        ),
-        @ApiResponse(
-            responseCode = "403",
-            description = "Not authenticated",
-            content = @Content(
-                mediaType = "application/json",
-                examples = @ExampleObject(value = "{\n    \"error\": \"Not authenticated\"\n}")
-            )
-        )
     })
     public ResponseEntity<?> getGlobalFeed() {
         // RBAC: Defense-in-depth - ensure caller is authenticated
@@ -101,7 +101,7 @@ public class FeedController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("User not found");
         }
-        
+
         // Allow users to view their own feed, or admins to view any feed
         if (!user.getId().equals(userId) && !user.getRole().name().equals("ADMIN")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied");

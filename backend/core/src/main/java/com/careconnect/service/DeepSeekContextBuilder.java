@@ -3,6 +3,7 @@ package com.careconnect.service;
 import com.careconnect.model.Allergy;
 import com.careconnect.model.SymptomEntry;
 import org.springframework.stereotype.Component;
+
 import java.util.List;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -16,6 +17,10 @@ public class DeepSeekContextBuilder {
     private static final DateTimeFormatter TS =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .withZone(ZoneId.systemDefault());
+
+    private static String nz(String v) {
+        return v == null ? "" : v;
+    }
 
     public String buildAllergyContext(Long patientId, List<Allergy> allergies) {
         if (allergies == null || allergies.isEmpty()) {
@@ -54,7 +59,5 @@ public class DeepSeekContextBuilder {
         sb.append("\nUse this history to interpret the new symptom input.\n");
         return sb.toString();
     }
-
-    private static String nz(String v) { return v == null ? "" : v; }
 }
 

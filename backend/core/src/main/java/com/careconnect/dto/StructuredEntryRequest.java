@@ -23,22 +23,51 @@ public class StructuredEntryRequest {
      */
     private String documentType;
 
-    /** Patient context (care recipient). At least one context is required. */
+    /**
+     * Patient context (care recipient). At least one context is required.
+     */
     private Long patientId;
 
-    /** Employee context (caregiver / staff member). At least one context is required. */
+    /**
+     * Employee context (caregiver / staff member). At least one context is required.
+     */
     private Long employeeUserId;
 
-    /** Captured field values (field key -> value). */
+    /**
+     * Captured field values (field key -> value).
+     */
     private Map<String, String> fields;
 
     // Manual accessors for Lombok compatibility
-    public String getDocumentType() { return documentType; }
-    public Long getPatientId() { return patientId; }
-    public Long getEmployeeUserId() { return employeeUserId; }
-    public Map<String, String> getFields() { return fields; }
-    public void setDocumentType(String documentType) { this.documentType = documentType; }
-    public void setPatientId(Long patientId) { this.patientId = patientId; }
-    public void setEmployeeUserId(Long employeeUserId) { this.employeeUserId = employeeUserId; }
-    public void setFields(Map<String, String> fields) { this.fields = fields; }
+    public String getDocumentType() {
+        return documentType;
+    }
+
+    public void setDocumentType(String documentType) {
+        this.documentType = documentType;
+    }
+
+    public Long getPatientId() {
+        return patientId;
+    }
+
+    public void setPatientId(Long patientId) {
+        this.patientId = patientId;
+    }
+
+    public Long getEmployeeUserId() {
+        return employeeUserId;
+    }
+
+    public void setEmployeeUserId(Long employeeUserId) {
+        this.employeeUserId = employeeUserId;
+    }
+
+    public Map<String, String> getFields() {
+        return fields;
+    }
+
+    public void setFields(Map<String, String> fields) {
+        this.fields = fields;
+    }
 }

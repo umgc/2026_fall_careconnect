@@ -4,7 +4,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
-/** Default REQ-SC-7 provider until persistent patient indexing preferences are implemented. */
+/**
+ * Default REQ-SC-7 provider until persistent patient indexing preferences are implemented.
+ */
 @Component
 public class DefaultRetrievalSourceExclusionProvider implements RetrievalSourceExclusionProvider {
 

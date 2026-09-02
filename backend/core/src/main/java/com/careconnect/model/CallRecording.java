@@ -49,101 +49,145 @@ import java.util.UUID;
 )
 public class CallRecording extends Auditable {
 
-    /** Maximum length for call identifier columns. */
+    /**
+     * Maximum length for call identifier columns.
+     */
     private static final int
             CALL_ID_LENGTH =
             120;
 
-    /** Maximum length for standard identifier columns. */
+    /**
+     * Maximum length for standard identifier columns.
+     */
     private static final int
             STANDARD_ID_LENGTH =
             255;
 
-    /** Maximum length for S3 prefix values. */
+    /**
+     * Maximum length for S3 prefix values.
+     */
     private static final int
             S3_PREFIX_LENGTH =
             500;
 
-    /** Maximum length for recording status values. */
+    /**
+     * Maximum length for recording status values.
+     */
     private static final int STATUS_LENGTH = 20;
 
-    /** Maximum length for concatenation status values. */
+    /**
+     * Maximum length for concatenation status values.
+     */
     private static final int CONCATENATION_STATUS_LENGTH = 30;
 
-    /** Maximum length for transcription status values. */
+    /**
+     * Maximum length for transcription status values.
+     */
     private static final int TRANSCRIPTION_STATUS_LENGTH = 20;
 
-    /** Database identifier for the recording row. */
+    /**
+     * Database identifier for the recording row.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Call identifier associated with the recording. */
+    /**
+     * Call identifier associated with the recording.
+     */
     @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
     private String callId;
 
-    /** Monotonic capture generation within a call. */
+    /**
+     * Monotonic capture generation within a call.
+     */
     @Column(name = "generation", nullable = false)
     private long generation;
 
-    /** Whether the capture is retained for playback or only for transcription. */
+    /**
+     * Whether the capture is retained for playback or only for transcription.
+     */
     @Enumerated(EnumType.STRING)
     @Column(name = "purpose", nullable = false, length = 32)
     private RecordingPurpose purpose;
 
-    /** Authoritative lifecycle state used for cross-node ownership. */
+    /**
+     * Authoritative lifecycle state used for cross-node ownership.
+     */
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_status", nullable = false, length = 32)
     private RecordingLifecycleStatus lifecycleStatus;
 
-    /** Token fencing the current worker claim. */
+    /**
+     * Token fencing the current worker claim.
+     */
     @Column(name = "claim_token")
     private UUID claimToken;
 
     @Column(name = "claim_lease_until")
     private LocalDateTime claimLeaseUntil;
 
-    /** AWS Chime media pipeline identifier used to stop the pipeline. */
+    /**
+     * AWS Chime media pipeline identifier used to stop the pipeline.
+     */
     @Column(name = "pipeline_id", length = STANDARD_ID_LENGTH)
     private String pipelineId;
 
-    /** Explicit AWS identifier; pipelineId remains as a compatibility alias. */
+    /**
+     * Explicit AWS identifier; pipelineId remains as a compatibility alias.
+     */
     @Column(name = "aws_pipeline_id", length = STANDARD_ID_LENGTH)
     private String awsPipelineId;
 
-    /** AWS Chime concatenation pipeline identifier for stitched output. */
+    /**
+     * AWS Chime concatenation pipeline identifier for stitched output.
+     */
     @Column(name = "concatenation_pipeline_id", length = STANDARD_ID_LENGTH)
     private String concatenationPipelineId;
 
-    /** Legacy Media Insights pipeline id (O4 — column retained; no longer written or exposed). */
+    /**
+     * Legacy Media Insights pipeline id (O4 — column retained; no longer written or exposed).
+     */
     @Deprecated
     @Column(name = "kvs_pipeline_id", length = STANDARD_ID_LENGTH)
     private String kvsPipelineId;
 
-    /** AWS Chime media stream pipeline that ingests meeting audio into the KVS stream pool. */
+    /**
+     * AWS Chime media stream pipeline that ingests meeting audio into the KVS stream pool.
+     */
     @Column(name = "media_stream_pipeline_id", length = STANDARD_ID_LENGTH)
     private String mediaStreamPipelineId;
 
-    /** S3 bucket where recording artifacts are written. */
+    /**
+     * S3 bucket where recording artifacts are written.
+     */
     @Column(name = "s3_bucket", length = STANDARD_ID_LENGTH)
     private String s3Bucket;
 
-    /** S3 key prefix for this recording. */
+    /**
+     * S3 key prefix for this recording.
+     */
     @Column(name = "s3_prefix", length = S3_PREFIX_LENGTH)
     private String s3Prefix;
 
-    /** Recording lifecycle status value. */
+    /**
+     * Recording lifecycle status value.
+     */
     @Column(name = "status", nullable = false, length = STATUS_LENGTH)
     private String status;
 
-    /** Concatenation lifecycle status value. */
+    /**
+     * Concatenation lifecycle status value.
+     */
     @Column(
             name = "concatenation_status",
             length = CONCATENATION_STATUS_LENGTH
     )
     private String concatenationStatus;
 
-    /** User identifier of the person who initiated recording. */
+    /**
+     * User identifier of the person who initiated recording.
+     */
     @Column(name = "initiated_by_user_id")
     private Long initiatedByUserId;
 
@@ -157,21 +201,29 @@ public class CallRecording extends Auditable {
     @Column(name = "consented_by_user_id")
     private Long consentedByUserId;
 
-    /** Timestamp when recording started (UTC wall-clock). */
+    /**
+     * Timestamp when recording started (UTC wall-clock).
+     */
     @Column(name = "started_at", nullable = false)
     @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
     private LocalDateTime startedAt;
 
-    /** Timestamp when recording ended (UTC wall-clock). */
+    /**
+     * Timestamp when recording ended (UTC wall-clock).
+     */
     @Column(name = "ended_at")
     @Convert(converter = UtcWallClockLocalDateTimeConverter.class)
     private LocalDateTime endedAt;
 
-    /** Duration of the recording in seconds. */
+    /**
+     * Duration of the recording in seconds.
+     */
     @Column(name = "duration_seconds")
     private Long durationSeconds;
 
-    /** Error details captured while managing the recording. */
+    /**
+     * Error details captured while managing the recording.
+     */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
@@ -191,7 +243,9 @@ public class CallRecording extends Auditable {
     @Column(name = "purge_requested_at")
     private LocalDateTime purgeRequestedAt;
 
-    /** Post-call transcription lifecycle status value. */
+    /**
+     * Post-call transcription lifecycle status value.
+     */
     @Column(name = "transcription_status", length = TRANSCRIPTION_STATUS_LENGTH)
     private String transcriptionStatus;
 }

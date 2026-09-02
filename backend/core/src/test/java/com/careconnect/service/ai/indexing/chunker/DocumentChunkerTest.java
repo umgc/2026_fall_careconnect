@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.careconnect.service.ai.indexing.IndexingChunkDraft;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+
 import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

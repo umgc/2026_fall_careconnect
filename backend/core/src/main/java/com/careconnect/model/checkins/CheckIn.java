@@ -10,13 +10,11 @@ public class CheckIn {
 
     Date dateSubmitted;
 
-    CheckIn(CheckInTemplate inTemplate)
-    {
+    CheckIn(CheckInTemplate inTemplate) {
         template = inTemplate;
     }
 
-    public CheckIn()
-    {
+    public CheckIn() {
         //This just exists to make the controller stop complaining.
     }
 

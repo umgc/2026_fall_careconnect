@@ -44,10 +44,12 @@ import java.util.stream.Collectors;
 @Service
 public class FileManagementService {
 
+    /**
+     * Consent label on DOCUMENT_INDEXED emits — keep in sync with Ask AI OCR re-emit.
+     */
+    public static final String DEFAULT_DOCUMENT_CONSENT_SCOPE = "on_consent";
     private static final Logger log = LoggerFactory.getLogger(FileManagementService.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    /** Consent label on DOCUMENT_INDEXED emits — keep in sync with Ask AI OCR re-emit. */
-    public static final String DEFAULT_DOCUMENT_CONSENT_SCOPE = "on_consent";
     private static final String DEFAULT_CONSENT_SCOPE = DEFAULT_DOCUMENT_CONSENT_SCOPE;
 
     private final UserFileRepository userFileRepository;
@@ -61,19 +63,23 @@ public class FileManagementService {
     private final RetrievalIndexService retrievalIndexService;
     private final DocumentProcessingService documentProcessingService;
     private final AskAiDocumentOcrService askAiDocumentOcrService;
+    @Value("${app.file.storage.default:database}")
+    private String defaultStorageType;
+    @Value("${app.file.storage.use-s3:false}")
+    private boolean useS3ForNewFiles;
 
     @Autowired
     public FileManagementService(UserFileRepository userFileRepository,
-                               StructuredDocumentEntryRepository structuredEntryRepository,
-                               UserRepository userRepository,
-                               PatientRepository patientRepository,
-                               DatabaseStorageService databaseStorageService,
-                               DocumentComplianceService documentComplianceService,
-                               IndexingEventEmitter indexingEventEmitter,
-                               RetrievalIndexService retrievalIndexService,
-                               DocumentProcessingService documentProcessingService,
-                               @Autowired(required = false) S3StorageService s3StorageService,
-                               AskAiDocumentOcrService askAiDocumentOcrService) {
+                                 StructuredDocumentEntryRepository structuredEntryRepository,
+                                 UserRepository userRepository,
+                                 PatientRepository patientRepository,
+                                 DatabaseStorageService databaseStorageService,
+                                 DocumentComplianceService documentComplianceService,
+                                 IndexingEventEmitter indexingEventEmitter,
+                                 RetrievalIndexService retrievalIndexService,
+                                 DocumentProcessingService documentProcessingService,
+                                 @Autowired(required = false) S3StorageService s3StorageService,
+                                 AskAiDocumentOcrService askAiDocumentOcrService) {
         this.userFileRepository = userFileRepository;
         this.structuredEntryRepository = structuredEntryRepository;
         this.userRepository = userRepository;
@@ -86,31 +92,64 @@ public class FileManagementService {
         this.s3StorageService = s3StorageService;
         this.askAiDocumentOcrService = askAiDocumentOcrService;
     }
-    
-    @Value("${app.file.storage.default:database}")
-    private String defaultStorageType;
-    
-    @Value("${app.file.storage.use-s3:false}")
-    private boolean useS3ForNewFiles;
-    
+
+    public static String indexableDocumentText(final UserFile file) {
+        if (file == null) {
+            return null;
+        }
+        final String extracted = file.getExtractedText() == null ? "" : file.getExtractedText().trim();
+        final String description = file.getDescription() == null ? "" : file.getDescription().trim();
+        if (!extracted.isBlank() && !description.isBlank()) {
+            if (extracted.contains(description)) {
+                return extracted;
+            }
+            return description + "\n\n" + extracted;
+        }
+        if (!extracted.isBlank()) {
+            return extracted;
+        }
+        return description.isBlank() ? null : description;
+    }
+
+    /**
+     * True when {@link DocumentProcessingService} returned a bracketed failure/empty
+     * sentinel rather than real document text. Avoids the overly broad
+     * {@code startsWith("[")} check that would drop legitimate content like citations.
+     */
+    static boolean isExtractFailurePlaceholder(final String extracted) {
+        if (extracted == null || extracted.isBlank()) {
+            return true;
+        }
+        final String text = extracted.trim();
+        if (!text.startsWith("[")) {
+            return false;
+        }
+        return text.startsWith("[Error ")
+                || text.startsWith("[Unable to extract")
+                || text.startsWith("[Empty ")
+                || text.startsWith("[Binary file:")
+                || text.startsWith("[File contains no extractable")
+                || text.contains(" contains no extractable text:");
+    }
+
     /**
      * Upload a file for a user
      */
-    public FileUploadResponse uploadFile(MultipartFile file, Long userId, String userType, 
-                                       String category, String description, Long patientId) {
+    public FileUploadResponse uploadFile(MultipartFile file, Long userId, String userType,
+                                         String category, String description, Long patientId) {
         try {
             log.info("Uploading file for user: {}, type: {}, category: {}", userId, userType, category);
-            
+
             // Validate file
             validateFile(file);
             // No access control or ownership checks; all uploads are allowed for now
-            
+
             // Determine storage service - fall back to database if S3 is not available
             StorageService storageService = (useS3ForNewFiles && s3StorageService != null) ? s3StorageService : databaseStorageService;
-            
+
             // Upload file
             String filePath = storageService.uploadFile(file, userId, userType, category);
-            
+
             // Create file metadata record (for database storage, this might be redundant, but keeps consistency)
             UserFile userFile = UserFile.builder()
                     .filename(generateUniqueFilename(file.getOriginalFilename(), userId, userType, category))
@@ -125,7 +164,7 @@ public class FileManagementService {
                     .s3Path((useS3ForNewFiles && s3StorageService != null) ? filePath : null)
                     .description(description)
                     .build();
-            
+
             // For database storage, we need to update the record that was already created
             if (!(useS3ForNewFiles && s3StorageService != null)) {
                 Long fileId = extractFileIdFromPath(filePath);
@@ -141,7 +180,7 @@ public class FileManagementService {
             } else {
                 userFile = userFileRepository.save(userFile);
             }
-            
+
             // Handle profile image updates (resolve aliases so PROFILE/PROFILE_PICTURE also match)
             if (mapCategoryToEnum(category) == UserFile.FileCategory.PROFILE_IMAGE) {
                 updateUserProfileImage(userId, filePath);
@@ -154,7 +193,7 @@ public class FileManagementService {
 
             tryExtractAndPersistText(userFile, file);
             emitDocumentIndexed(userFile);
-            
+
             return FileUploadResponse.builder()
                     .fileId(userFile.getId())
                     .filename(userFile.getFilename())
@@ -166,13 +205,13 @@ public class FileManagementService {
                     .uploadedAt(userFile.getUploadedAt())
                     .message("File uploaded successfully")
                     .build();
-                    
+
         } catch (Exception e) {
             log.error("Failed to upload file for user: {}", userId, e);
             throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
         }
     }
-    
+
     /**
      * Store an application-generated document (e.g., a submitted form's PDF copy)
      * as a database-backed {@link UserFile} owned by {@code ownerId}. The file
@@ -235,24 +274,6 @@ public class FileManagementService {
         }
     }
 
-    public static String indexableDocumentText(final UserFile file) {
-        if (file == null) {
-            return null;
-        }
-        final String extracted = file.getExtractedText() == null ? "" : file.getExtractedText().trim();
-        final String description = file.getDescription() == null ? "" : file.getDescription().trim();
-        if (!extracted.isBlank() && !description.isBlank()) {
-            if (extracted.contains(description)) {
-                return extracted;
-            }
-            return description + "\n\n" + extracted;
-        }
-        if (!extracted.isBlank()) {
-            return extracted;
-        }
-        return description.isBlank() ? null : description;
-    }
-
     private void tryExtractAndPersistText(final UserFile userFile, final MultipartFile file) {
         if (userFile == null || file == null || documentProcessingService == null) {
             return;
@@ -296,27 +317,6 @@ public class FileManagementService {
     }
 
     /**
-     * True when {@link DocumentProcessingService} returned a bracketed failure/empty
-     * sentinel rather than real document text. Avoids the overly broad
-     * {@code startsWith("[")} check that would drop legitimate content like citations.
-     */
-    static boolean isExtractFailurePlaceholder(final String extracted) {
-        if (extracted == null || extracted.isBlank()) {
-            return true;
-        }
-        final String text = extracted.trim();
-        if (!text.startsWith("[")) {
-            return false;
-        }
-        return text.startsWith("[Error ")
-                || text.startsWith("[Unable to extract")
-                || text.startsWith("[Empty ")
-                || text.startsWith("[Binary file:")
-                || text.startsWith("[File contains no extractable")
-                || text.contains(" contains no extractable text:");
-    }
-
-    /**
      * Get file by ID
      */
     public Optional<UserFileDTO> getFile(Long fileId) {
@@ -324,7 +324,7 @@ public class FileManagementService {
                 .filter(UserFile::getIsActive)
                 .map(this::mapToDTO);
     }
-    
+
     /**
      * Download file content
      */
@@ -332,7 +332,7 @@ public class FileManagementService {
         UserFile userFile = userFileRepository.findById(fileId)
                 .filter(UserFile::getIsActive)
                 .orElseThrow(() -> new RuntimeException("File not found: " + fileId));
-        
+
         if (userFile.getStorageType() == UserFile.StorageType.DATABASE) {
             return userFile.getFileData();
         } else {
@@ -343,13 +343,13 @@ public class FileManagementService {
             return s3StorageService.download(userFile.getS3Path());
         }
     }
-    
+
     /**
      * List files for a user
      */
     public List<UserFileDTO> listUserFiles(Long userId, String userType, String category) {
         UserFile.OwnerType ownerType = UserFile.OwnerType.valueOf(userType.toUpperCase());
-        
+
         List<UserFile> files;
         if (category != null && !category.isEmpty()) {
             UserFile.FileCategory fileCategory = mapCategoryToEnum(category);
@@ -358,12 +358,12 @@ public class FileManagementService {
         } else {
             files = userFileRepository.findByOwnerIdAndOwnerTypeAndIsActiveTrue(userId, ownerType);
         }
-        
+
         return files.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
-    
+
     /**
      * List files accessible by a patient (includes files from caregivers/family)
      */
@@ -375,12 +375,12 @@ public class FileManagementService {
         } else {
             files = userFileRepository.findFilesAccessibleByPatient(patientId);
         }
-        
+
         return files.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
-    
+
     /**
      * List files accessible by caregiver for a specific patient
      */
@@ -392,12 +392,12 @@ public class FileManagementService {
         } else {
             files = userFileRepository.findFilesAccessibleByCaregiverForPatient(patientId);
         }
-        
+
         return files.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
-    
+
     /**
      * Delete file
      */
@@ -427,17 +427,17 @@ public class FileManagementService {
 
         log.info("File deleted: ID={}, owner={}", fileId, userFile.getOwnerId());
     }
-    
+
     /**
      * Get user's profile image
      */
     public Optional<UserFileDTO> getUserProfileImage(Long userId, String userType) {
         UserFile.OwnerType ownerType = UserFile.OwnerType.valueOf(userType.toUpperCase());
         return userFileRepository.findFirstByOwnerIdAndOwnerTypeAndFileCategoryAndIsActiveTrue(
-                userId, ownerType, UserFile.FileCategory.PROFILE_IMAGE)
+                        userId, ownerType, UserFile.FileCategory.PROFILE_IMAGE)
                 .map(this::mapToDTO);
     }
-    
+
     /**
      * List employment / home-care intake documents owned by a user (e.g. a caregiver's
      * hiring and onboarding forms).
@@ -548,7 +548,9 @@ public class FileManagementService {
         return mapEntryToDTO(saved, file);
     }
 
-    /** Get a structured entry by its ID. */
+    /**
+     * Get a structured entry by its ID.
+     */
     public Optional<StructuredDocumentEntryDTO> getStructuredEntry(Long entryId) {
         return structuredEntryRepository.findById(entryId)
                 .filter(StructuredDocumentEntry::getIsActive)
@@ -556,14 +558,18 @@ public class FileManagementService {
                         .map(file -> mapEntryToDTO(entry, file)));
     }
 
-    /** Get the structured entry captured from a specific uploaded file, if any. */
+    /**
+     * Get the structured entry captured from a specific uploaded file, if any.
+     */
     public Optional<StructuredDocumentEntryDTO> getStructuredEntryForFile(Long fileId) {
         return structuredEntryRepository.findFirstByUserFileIdAndIsActiveTrue(fileId)
                 .flatMap(entry -> userFileRepository.findById(entry.getUserFileId())
                         .map(file -> mapEntryToDTO(entry, file)));
     }
 
-    /** List structured entries linked to a patient (care-circle context). */
+    /**
+     * List structured entries linked to a patient (care-circle context).
+     */
     public List<StructuredDocumentEntryDTO> listStructuredEntriesForPatient(Long patientId) {
         List<StructuredDocumentEntry> entries = structuredEntryRepository.findByPatientIdAndIsActiveTrue(patientId);
         Set<Long> fileIds = entries.stream()
@@ -629,7 +635,8 @@ public class FileManagementService {
             return new LinkedHashMap<>();
         }
         try {
-            return OBJECT_MAPPER.readValue(fieldsJson, new TypeReference<LinkedHashMap<String, String>>() {});
+            return OBJECT_MAPPER.readValue(fieldsJson, new TypeReference<LinkedHashMap<String, String>>() {
+            });
         } catch (IOException e) {
             log.error("Failed to parse structured entry fields JSON", e);
             return new LinkedHashMap<>();
@@ -657,33 +664,33 @@ public class FileManagementService {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
         }
-        
+
         // Add size validation (e.g., max 10MB)
         long maxSize = 10 * 1024 * 1024; // 10MB
         if (file.getSize() > maxSize) {
             throw new IllegalArgumentException("File size exceeds maximum allowed size of 10MB");
         }
-        
+
         // Add content type validation if needed
         String contentType = file.getContentType();
         if (contentType == null) {
             throw new IllegalArgumentException("File content type is unknown");
         }
     }
-    
+
     private String generateUniqueFilename(String originalFilename, Long userId, String userType, String category) {
         String timestamp = String.valueOf(System.currentTimeMillis());
         String extension = getFileExtension(originalFilename);
         return String.format("%s_%d_%s_%s%s", userType.toLowerCase(), userId, category, timestamp, extension);
     }
-    
+
     private String getFileExtension(String filename) {
         if (filename == null || !filename.contains(".")) {
             return "";
         }
         return filename.substring(filename.lastIndexOf("."));
     }
-    
+
     /**
      * Map a client-supplied category string to the canonical {@link UserFile.FileCategory}.
      * Delegates to the single source of truth on the enum so the frontend and backend stay
@@ -693,7 +700,7 @@ public class FileManagementService {
     private UserFile.FileCategory mapCategoryToEnum(String category) {
         return UserFile.FileCategory.fromClientValue(category);
     }
-    
+
     private Long determinePatientId(Long userId, String userType) {
         if ("PATIENT".equals(userType.toUpperCase())) {
             // Find patient by user ID
@@ -703,14 +710,14 @@ public class FileManagementService {
         }
         return null; // For caregivers/family members, this should be set explicitly
     }
-    
+
     private void updateUserProfileImage(Long userId, String filePath) {
         try {
             Optional<User> userOpt = userRepository.findById(userId);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
                 String imageUrl = (useS3ForNewFiles && s3StorageService != null) ? s3StorageService.getFileUrl(filePath) :
-                                 databaseStorageService.getFileUrl(filePath);
+                        databaseStorageService.getFileUrl(filePath);
                 user.setProfileImageUrl(imageUrl);
                 userRepository.save(user);
                 log.info("Updated profile image URL for user: {}", userId);
@@ -719,7 +726,7 @@ public class FileManagementService {
             log.error("Failed to update profile image URL for user: {}", userId, e);
         }
     }
-    
+
     private void clearUserProfileImage(Long userId) {
         try {
             Optional<User> userOpt = userRepository.findById(userId);
@@ -733,14 +740,14 @@ public class FileManagementService {
             log.error("Failed to clear profile image URL for user: {}", userId, e);
         }
     }
-    
+
     private Long extractFileIdFromPath(String path) {
         if (path.startsWith("db://files/")) {
             return Long.parseLong(path.substring("db://files/".length()));
         }
         return null;
     }
-    
+
     private String resolveFileUrl(UserFile userFile) {
         if (userFile.getStorageType() == UserFile.StorageType.DATABASE) {
             return databaseStorageService.getFileUrl("db://files/" + userFile.getId());

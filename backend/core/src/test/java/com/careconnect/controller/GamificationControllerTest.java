@@ -25,17 +25,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class GamificationControllerTest {
 
+    private static final Long USER_ID = 42L;
     @Mock
     private GamificationService gamificationService;
     @Mock
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
-
     @InjectMocks
     private GamificationController controller;
-
-    private static final Long USER_ID = 42L;
 
     // ── awardXp() ─────────────────────────────────────────────────────────────
 

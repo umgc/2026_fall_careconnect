@@ -1,11 +1,13 @@
 package com.careconnect.repository.projection;
 
-/** Native-query projection for summed sync_completed counters. */
+/**
+ * Native-query projection for summed sync_completed counters.
+ */
 public interface SyncCompletedSumProjection {
 
-  Number getAttempted();
+    Number getAttempted();
 
-  Number getSucceeded();
+    Number getSucceeded();
 
-  Number getFailed();
+    Number getFailed();
 }

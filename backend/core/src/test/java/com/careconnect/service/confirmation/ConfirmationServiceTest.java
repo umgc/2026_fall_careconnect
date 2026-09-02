@@ -34,28 +34,38 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ConfirmationServiceTest {
 
-    @Mock
-    private ConfirmationItemRepository repository;
-
-    @Mock
-    private AiAuditLedgerService auditLedgerService;
-
-    @Mock
-    private ObjectProvider<CaregiverVisibilityService> visibilityServiceProvider;
-
-    @Mock
-    private CaregiverVisibilityService caregiverVisibilityService;
-
-    @InjectMocks
-    private ConfirmationService service;
-
     private static final Long USER_ID = 10L;
     private static final Long RESOLVER_ID = 20L;
     private static final String PAYLOAD = "{\"summary\":\"Patient took medication\"}";
     private static final String REFERENCE_ID = "call-123";
     private static final String NOTE = "Verified with patient";
+    @Mock
+    private ConfirmationItemRepository repository;
+    @Mock
+    private AiAuditLedgerService auditLedgerService;
+    @Mock
+    private ObjectProvider<CaregiverVisibilityService> visibilityServiceProvider;
+    @Mock
+    private CaregiverVisibilityService caregiverVisibilityService;
+    @InjectMocks
+    private ConfirmationService service;
 
     // createItem
+
+    private ConfirmationItem buildPendingItem(Long id) {
+        return ConfirmationItem.builder()
+                .id(id)
+                .sourceType(ConfirmationSourceType.SUMMARY)
+                .status(ConfirmationStatus.PENDING)
+                .payload(PAYLOAD)
+                .referenceId(REFERENCE_ID)
+                .requestedBy(USER_ID)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    // createItem from DTO
 
     @Nested
     class CreateItem {
@@ -115,7 +125,9 @@ class ConfirmationServiceTest {
             assertThat(result).isSameAs(expected);
         }
 
-        /** all 4 source types from AuditSourceFeature are accepted */
+        /**
+         * all 4 source types from AuditSourceFeature are accepted
+         */
         @ParameterizedTest
         @EnumSource(ConfirmationSourceType.class)
         void acceptsAllSourceTypes(ConfirmationSourceType sourceType) {
@@ -131,7 +143,7 @@ class ConfirmationServiceTest {
         }
     }
 
-    // createItem from DTO
+    // confirm 
 
     @Nested
     class CreateItemFromDto {
@@ -169,7 +181,7 @@ class ConfirmationServiceTest {
         }
     }
 
-    // confirm 
+    // dismiss
 
     @Nested
     class Confirm {
@@ -252,8 +264,10 @@ class ConfirmationServiceTest {
             verify(visibilityServiceProvider, never()).getObject();
         }
 
-        /** 4.11.2
-         * cannot double-confirm */
+        /**
+         * 4.11.2
+         * cannot double-confirm
+         */
         @Test
         void throwsWhenAlreadyConfirmed() {
             ConfirmationItem item = buildPendingItem(1L);
@@ -267,8 +281,10 @@ class ConfirmationServiceTest {
                     .isEqualTo(HttpStatus.BAD_REQUEST);
         }
 
-        /** 4.11.2
-         * cannot confirm a dismissed item */
+        /**
+         * 4.11.2
+         * cannot confirm a dismissed item
+         */
         @Test
         void throwsWhenAlreadyDismissed() {
             ConfirmationItem item = buildPendingItem(1L);
@@ -309,7 +325,7 @@ class ConfirmationServiceTest {
         }
     }
 
-    // dismiss
+    // timeout != approval (4.11.2)
 
     @Nested
     class Dismiss {
@@ -328,8 +344,10 @@ class ConfirmationServiceTest {
             assertThat(result.getResolvedAt()).isNotNull();
         }
 
-        /** (4.7.2): dismiss doesn't create a side effect 
-         * status is DISMISSED, not CONFIRMED */
+        /**
+         * (4.7.2): dismiss doesn't create a side effect
+         * status is DISMISSED, not CONFIRMED
+         */
         @Test
         void dismissedItemIsNotConfirmed() {
             ConfirmationItem item = buildPendingItem(1L);
@@ -393,14 +411,16 @@ class ConfirmationServiceTest {
         }
     }
 
-    // timeout != approval (4.11.2)
+    // queries
 
     @Nested
     class TimeoutInvariant {
 
-        /** (4.11.2) 
-         *  a PENDING item has no way to resolve itself besides confirmation
-         *  The only transitions are explicit confirm() or dismiss() */
+        /**
+         * (4.11.2)
+         * a PENDING item has no way to resolve itself besides confirmation
+         * The only transitions are explicit confirm() or dismiss()
+         */
         @Test
         void pendingItemStaysPendingWithoutExplicitAction() {
             ConfirmationItem item = buildPendingItem(1L);
@@ -414,7 +434,9 @@ class ConfirmationServiceTest {
             assertThat(item.getResolvedAt()).isNull();
         }
 
-        /** the service provides no batch-resolve or auto-expire method*/
+        /**
+         * the service provides no batch-resolve or auto-expire method
+         */
         @Test
         void serviceHasNoAutoResolveMethod() {
             // The ConfirmationService public API only exposes confirm() and dismiss()
@@ -431,7 +453,7 @@ class ConfirmationServiceTest {
         }
     }
 
-    // queries
+    // integration tests
 
     @Nested
     class Queries {
@@ -531,14 +553,16 @@ class ConfirmationServiceTest {
         }
     }
 
-    // integration tests
+    // helpers
 
     @Nested
     class CrossTeamContract {
 
-        /** (3.11.7, 4.7.2)
-         *  summary confirmation creates a PENDING item 
-         *  with sourceType=SUMMARY that can be confirmed */
+        /**
+         * (3.11.7, 4.7.2)
+         * summary confirmation creates a PENDING item
+         * with sourceType=SUMMARY that can be confirmed
+         */
         @Test
         void summaryConfirmationWorkflow() {
             when(repository.save(any())).thenAnswer(inv -> {
@@ -565,8 +589,10 @@ class ConfirmationServiceTest {
             assertThat(confirmed.getStatus()).isEqualTo(ConfirmationStatus.CONFIRMED);
         }
 
-        /** 4.7.2
-         *  Dismiss doesn't trigger any side effects */
+        /**
+         * 4.7.2
+         * Dismiss doesn't trigger any side effects
+         */
         @Test
         void summaryDismissBlocksSideEffect() {
             when(repository.save(any())).thenAnswer(inv -> {
@@ -586,9 +612,11 @@ class ConfirmationServiceTest {
             assertThat(dismissed.getStatus()).isNotEqualTo(ConfirmationStatus.CONFIRMED);
         }
 
-        /** (3.12.7, 4.11.1)
-         *  Tier 2 HITL hold
-         *  ASK_AI items stay PENDING until a reviewer explicitly approves them */
+        /**
+         * (3.12.7, 4.11.1)
+         * Tier 2 HITL hold
+         * ASK_AI items stay PENDING until a reviewer explicitly approves them
+         */
         @Test
         void askAiHitlHoldUntilReviewerActs() {
             when(repository.save(any())).thenAnswer(inv -> {
@@ -608,9 +636,11 @@ class ConfirmationServiceTest {
             // Item stays undelivered until confirm() is called
         }
 
-        /** (3.15.5, 4.11.3)
-         *  caregiver visibility
-         *  default-deny — item created with CAREGIVER_VISIBILITY stays PENDING */
+        /**
+         * (3.15.5, 4.11.3)
+         * caregiver visibility
+         * default-deny — item created with CAREGIVER_VISIBILITY stays PENDING
+         */
         @Test
         void caregiverVisibilityDefaultDeny() {
             when(repository.save(any())).thenAnswer(inv -> {
@@ -628,20 +658,5 @@ class ConfirmationServiceTest {
             assertThat(item.getStatus()).isEqualTo(ConfirmationStatus.PENDING);
             // Caregiver cannot see summary until item is explicitly confirmed
         }
-    }
-
-    // helpers
-
-    private ConfirmationItem buildPendingItem(Long id) {
-        return ConfirmationItem.builder()
-                .id(id)
-                .sourceType(ConfirmationSourceType.SUMMARY)
-                .status(ConfirmationStatus.PENDING)
-                .payload(PAYLOAD)
-                .referenceId(REFERENCE_ID)
-                .requestedBy(USER_ID)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
     }
 }

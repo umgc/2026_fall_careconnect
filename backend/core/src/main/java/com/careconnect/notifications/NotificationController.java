@@ -35,10 +35,10 @@ public class NotificationController {
             // Send email confirmation
             if (req.getToEmail() != null && !req.getToEmail().isEmpty()) {
                 String emailId = sesService.sendPaymentConfirmation(
-                    req.getToEmail(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Valued Customer",
-                    req.getAmount() != null ? req.getAmount() : "0.00",
-                    "TXN-" + System.currentTimeMillis()
+                        req.getToEmail(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Valued Customer",
+                        req.getAmount() != null ? req.getAmount() : "0.00",
+                        "TXN-" + System.currentTimeMillis()
                 );
                 log.info("Sent payment confirmation email messageId={}", emailId);
             }
@@ -46,9 +46,9 @@ public class NotificationController {
             // Send SMS confirmation
             if (req.getToPhone() != null && !req.getToPhone().isEmpty()) {
                 String smsId = snsService.sendPaymentConfirmationSms(
-                    req.getToPhone(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Customer",
-                    req.getAmount() != null ? req.getAmount() : "0.00"
+                        req.getToPhone(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Customer",
+                        req.getAmount() != null ? req.getAmount() : "0.00"
                 );
                 log.info("Sent payment confirmation SMS messageId={}", smsId);
             }
@@ -66,11 +66,11 @@ public class NotificationController {
             // Send email message
             if (req.getToEmail() != null && !req.getToEmail().isEmpty()) {
                 String emailId = sesService.sendCaregiverMessage(
-                    req.getToEmail(),
-                    "CareConnect System", // fromName
-                    req.getRecipientName() != null ? req.getRecipientName() : "Recipient",
-                    req.getMessage() != null ? req.getMessage() : "You have a new message",
-                    "normal" // priority
+                        req.getToEmail(),
+                        "CareConnect System", // fromName
+                        req.getRecipientName() != null ? req.getRecipientName() : "Recipient",
+                        req.getMessage() != null ? req.getMessage() : "You have a new message",
+                        "normal" // priority
                 );
                 log.info("Sent message email messageId={}", emailId);
             }
@@ -78,10 +78,10 @@ public class NotificationController {
             // Send SMS message
             if (req.getToPhone() != null && !req.getToPhone().isEmpty()) {
                 String smsId = snsService.sendCaregiverMessageSms(
-                    req.getToPhone(),
-                    "CareConnect",
-                    req.getMessage() != null ? req.getMessage() : "You have a new message",
-                    false // not urgent
+                        req.getToPhone(),
+                        "CareConnect",
+                        req.getMessage() != null ? req.getMessage() : "You have a new message",
+                        false // not urgent
                 );
                 log.info("Sent message SMS messageId={}", smsId);
             }
@@ -103,11 +103,11 @@ public class NotificationController {
             // Send email reminder
             if (req.getToEmail() != null && !req.getToEmail().isEmpty()) {
                 String emailId = sesService.sendMedicationReminder(
-                    req.getToEmail(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Patient",
-                    medicationName,
-                    dosage,
-                    scheduledTime
+                        req.getToEmail(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Patient",
+                        medicationName,
+                        dosage,
+                        scheduledTime
                 );
                 log.info("Sent medication reminder email messageId={}", emailId);
             }
@@ -115,10 +115,10 @@ public class NotificationController {
             // Send SMS reminder
             if (req.getToPhone() != null && !req.getToPhone().isEmpty()) {
                 String smsId = snsService.sendMedicationReminderSms(
-                    req.getToPhone(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Patient",
-                    medicationName,
-                    dosage
+                        req.getToPhone(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Patient",
+                        medicationName,
+                        dosage
                 );
                 log.info("Sent medication reminder SMS messageId={}", smsId);
             }
@@ -140,11 +140,11 @@ public class NotificationController {
             // Send email reminder
             if (req.getToEmail() != null && !req.getToEmail().isEmpty()) {
                 String emailId = sesService.sendAppointmentReminder(
-                    req.getToEmail(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Patient",
-                    appointmentType,
-                    dateTime,
-                    location
+                        req.getToEmail(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Patient",
+                        appointmentType,
+                        dateTime,
+                        location
                 );
                 log.info("Sent appointment reminder email messageId={}", emailId);
             }
@@ -152,10 +152,10 @@ public class NotificationController {
             // Send SMS reminder
             if (req.getToPhone() != null && !req.getToPhone().isEmpty()) {
                 String smsId = snsService.sendAppointmentReminderSms(
-                    req.getToPhone(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Patient",
-                    appointmentType,
-                    dateTime
+                        req.getToPhone(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Patient",
+                        appointmentType,
+                        dateTime
                 );
                 log.info("Sent appointment reminder SMS messageId={}", smsId);
             }
@@ -176,12 +176,12 @@ public class NotificationController {
             // Send email alert
             if (req.getToEmail() != null && !req.getToEmail().isEmpty()) {
                 String emailId = sesService.sendEmail(
-                    req.getToEmail(),
-                    "EMERGENCY ALERT - " + emergencyType,
-                    null,
-                    String.format("EMERGENCY: %s requires immediate attention. Type: %s, Location: %s",
-                        req.getRecipientName() != null ? req.getRecipientName() : "Patient",
-                        emergencyType, location)
+                        req.getToEmail(),
+                        "EMERGENCY ALERT - " + emergencyType,
+                        null,
+                        String.format("EMERGENCY: %s requires immediate attention. Type: %s, Location: %s",
+                                req.getRecipientName() != null ? req.getRecipientName() : "Patient",
+                                emergencyType, location)
                 );
                 log.info("Sent emergency alert email messageId={}", emailId);
             }
@@ -189,10 +189,10 @@ public class NotificationController {
             // Send SMS alert
             if (req.getToPhone() != null && !req.getToPhone().isEmpty()) {
                 String smsId = snsService.sendEmergencyAlertSms(
-                    req.getToPhone(),
-                    req.getRecipientName() != null ? req.getRecipientName() : "Patient",
-                    emergencyType,
-                    location
+                        req.getToPhone(),
+                        req.getRecipientName() != null ? req.getRecipientName() : "Patient",
+                        emergencyType,
+                        location
                 );
                 log.info("Sent emergency alert SMS messageId={}", smsId);
             }
@@ -214,11 +214,11 @@ public class NotificationController {
             // Send email message
             if (req.getToEmail() != null && !req.getToEmail().isEmpty()) {
                 String emailId = sesService.sendCaregiverMessage(
-                    req.getToEmail(),
-                    fromName,
-                    req.getRecipientName() != null ? req.getRecipientName() : "Recipient",
-                    message,
-                    urgent ? "urgent" : "normal"
+                        req.getToEmail(),
+                        fromName,
+                        req.getRecipientName() != null ? req.getRecipientName() : "Recipient",
+                        message,
+                        urgent ? "urgent" : "normal"
                 );
                 log.info("Sent caregiver message email messageId={}", emailId);
             }
@@ -226,10 +226,10 @@ public class NotificationController {
             // Send SMS message
             if (req.getToPhone() != null && !req.getToPhone().isEmpty()) {
                 String smsId = snsService.sendCaregiverMessageSms(
-                    req.getToPhone(),
-                    fromName,
-                    message,
-                    urgent
+                        req.getToPhone(),
+                        fromName,
+                        message,
+                        urgent
                 );
                 log.info("Sent caregiver message SMS messageId={}", smsId);
             }
@@ -263,47 +263,47 @@ public class NotificationController {
 
         // Medication Reminder
         mocks.add(new MockNotificationResponse(
-            "medication_reminder",
-            "John Doe (Patient)",
-            "Medication Reminder: Take Your Lisinopril",
-            "Dear John,\n\nThis is a reminder to take your prescribed medication:\n\nMedication: Lisinopril\nDosage: 10mg\nTime: 8:00 AM\n\nPlease take your medication as scheduled. If you have any questions, contact your caregiver.\n\nBest regards,\nCareConnect System",
-            "CareConnect: Reminder - Take Lisinopril 10mg at 8:00 AM"
+                "medication_reminder",
+                "John Doe (Patient)",
+                "Medication Reminder: Take Your Lisinopril",
+                "Dear John,\n\nThis is a reminder to take your prescribed medication:\n\nMedication: Lisinopril\nDosage: 10mg\nTime: 8:00 AM\n\nPlease take your medication as scheduled. If you have any questions, contact your caregiver.\n\nBest regards,\nCareConnect System",
+                "CareConnect: Reminder - Take Lisinopril 10mg at 8:00 AM"
         ));
 
         // Appointment Reminder
         mocks.add(new MockNotificationResponse(
-            "appointment_reminder",
-            "Jane Smith (Patient)",
-            "Upcoming Appointment: Cardiology Check-up",
-            "Dear Jane,\n\nYou have an upcoming appointment:\n\nType: Cardiology Check-up\nDate & Time: March 25, 2026 at 2:00 PM\nLocation: Main Street Clinic\n\nPlease arrive 15 minutes early. Bring your insurance card and any recent test results.\n\nBest regards,\nCareConnect System",
-            "CareConnect: Appointment reminder - Cardiology check-up on March 25 at 2:00 PM at Main Street Clinic"
+                "appointment_reminder",
+                "Jane Smith (Patient)",
+                "Upcoming Appointment: Cardiology Check-up",
+                "Dear Jane,\n\nYou have an upcoming appointment:\n\nType: Cardiology Check-up\nDate & Time: March 25, 2026 at 2:00 PM\nLocation: Main Street Clinic\n\nPlease arrive 15 minutes early. Bring your insurance card and any recent test results.\n\nBest regards,\nCareConnect System",
+                "CareConnect: Appointment reminder - Cardiology check-up on March 25 at 2:00 PM at Main Street Clinic"
         ));
 
         // Caregiver Message
         mocks.add(new MockNotificationResponse(
-            "caregiver_message",
-            "Bob Johnson (Patient)",
-            "New Message from Your Caregiver",
-            "Dear Bob,\n\nYou have received a new message from your caregiver:\n\n\"Hi Bob, I noticed your blood pressure reading was a bit high yesterday. Please remember to take it easy today and let me know if you need anything.\"\n\nFrom: Sarah Wilson (Caregiver)\n\nBest regards,\nCareConnect System",
-            "CareConnect: New message from Sarah Wilson: Hi Bob, I noticed your blood pressure reading was high yesterday. Take it easy and let me know if you need anything."
+                "caregiver_message",
+                "Bob Johnson (Patient)",
+                "New Message from Your Caregiver",
+                "Dear Bob,\n\nYou have received a new message from your caregiver:\n\n\"Hi Bob, I noticed your blood pressure reading was a bit high yesterday. Please remember to take it easy today and let me know if you need anything.\"\n\nFrom: Sarah Wilson (Caregiver)\n\nBest regards,\nCareConnect System",
+                "CareConnect: New message from Sarah Wilson: Hi Bob, I noticed your blood pressure reading was high yesterday. Take it easy and let me know if you need anything."
         ));
 
         // Emergency Alert
         mocks.add(new MockNotificationResponse(
-            "emergency_alert",
-            "Alice Brown (Patient)",
-            "EMERGENCY ALERT: Fall Detected",
-            "EMERGENCY ALERT\n\nPatient: Alice Brown\nAlert Type: Fall Detected\nLocation: Living Room\nTime: 3:15 PM\n\nImmediate attention required. Please check on the patient immediately.\n\nThis is an automated emergency notification from CareConnect.",
-            "EMERGENCY: Alice Brown - Fall detected in Living Room at 3:15 PM. Check immediately!"
+                "emergency_alert",
+                "Alice Brown (Patient)",
+                "EMERGENCY ALERT: Fall Detected",
+                "EMERGENCY ALERT\n\nPatient: Alice Brown\nAlert Type: Fall Detected\nLocation: Living Room\nTime: 3:15 PM\n\nImmediate attention required. Please check on the patient immediately.\n\nThis is an automated emergency notification from CareConnect.",
+                "EMERGENCY: Alice Brown - Fall detected in Living Room at 3:15 PM. Check immediately!"
         ));
 
         // Vital Signs Alert
         mocks.add(new MockNotificationResponse(
-            "vital_alert",
-            "Mike Davis (Patient)",
-            "Alert: Abnormal Heart Rate Detected",
-            "Dear Caregiver,\n\nAbnormal vital signs detected for your patient:\n\nPatient: Mike Davis\nAlert: Heart rate is 120 bpm (above normal range)\nTime: 10:30 AM\n\nPlease review the patient's condition and take appropriate action.\n\nBest regards,\nCareConnect Monitoring System",
-            "CareConnect Alert: Mike Davis - Heart rate 120 bpm (high). Please check."
+                "vital_alert",
+                "Mike Davis (Patient)",
+                "Alert: Abnormal Heart Rate Detected",
+                "Dear Caregiver,\n\nAbnormal vital signs detected for your patient:\n\nPatient: Mike Davis\nAlert: Heart rate is 120 bpm (above normal range)\nTime: 10:30 AM\n\nPlease review the patient's condition and take appropriate action.\n\nBest regards,\nCareConnect Monitoring System",
+                "CareConnect Alert: Mike Davis - Heart rate 120 bpm (high). Please check."
         ));
 
         return ResponseEntity.ok(mocks);

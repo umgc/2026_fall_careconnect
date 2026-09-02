@@ -16,4 +16,5 @@ public record CreateInviteResponse(
         String status,
         LocalDateTime expiresAt,
         LocalDateTime createdAt
-) {}
+) {
+}

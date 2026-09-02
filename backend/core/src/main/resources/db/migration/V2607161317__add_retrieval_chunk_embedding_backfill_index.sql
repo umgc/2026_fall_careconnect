@@ -7,8 +7,9 @@
 CREATE INDEX IF NOT EXISTS idx_retrieval_chunk_embedding_null_backfill
     ON retrieval_index_chunk (indexed_at ASC NULLS LAST, id ASC)
     WHERE embedding IS NULL
-      AND chunk_text IS NOT NULL
-      AND TRIM(BOTH FROM chunk_text) <> '';
+    AND chunk_text IS NOT NULL
+    AND TRIM (BOTH FROM chunk_text) <> '';
 
-COMMENT ON INDEX idx_retrieval_chunk_embedding_null_backfill IS
+COMMENT
+ON INDEX idx_retrieval_chunk_embedding_null_backfill IS
     'Optional DBA follow-up for Task 4.4 embedding backfill worker (oldest NULL embeddings first).';

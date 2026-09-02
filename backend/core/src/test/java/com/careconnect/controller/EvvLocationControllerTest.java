@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EvvLocationControllerTest {
 
+    private static final Long EVV_RECORD_ID = 10L;
     @Mock
     private EvvLocationService locationService;
     @Mock
@@ -34,16 +35,15 @@ class EvvLocationControllerTest {
     @Mock
     private AuthorizationService authorizationService;
 
+    // ── shared constants ──────────────────────────────────────────────────────
     @InjectMocks
     private EvvLocationController controller;
 
-    // ── shared constants ──────────────────────────────────────────────────────
-
-    private static final Long EVV_RECORD_ID = 10L;
-
     // ── shared helpers ────────────────────────────────────────────────────────
 
-    /** PATIENT_ADDRESS type — validate() passes without coords but needs noGpsReason. */
+    /**
+     * PATIENT_ADDRESS type — validate() passes without coords but needs noGpsReason.
+     */
     private EvvLocationRequest patientAddressRequest() throws Exception {
         return EvvLocationRequest.builder()
                 .evvRecordId(EVV_RECORD_ID)
@@ -53,7 +53,9 @@ class EvvLocationControllerTest {
                 .build();
     }
 
-    /** GPS type with fully-populated coords — validate() passes. */
+    /**
+     * GPS type with fully-populated coords — validate() passes.
+     */
     private EvvLocationRequest gpsRequestWithValidCoords() throws Exception {
         final EvvLocationRequest.CoordinatesDto coords = EvvLocationRequest.CoordinatesDto.builder()
                 .lat(new BigDecimal("38.9072"))
@@ -194,7 +196,10 @@ class EvvLocationControllerTest {
                     .coords(null)
                     .build();
 
-            try { controller.saveLocation(request); } catch (IllegalArgumentException ignored) {}
+            try {
+                controller.saveLocation(request);
+            } catch (IllegalArgumentException ignored) {
+            }
 
             verifyNoInteractions(locationService);
         }

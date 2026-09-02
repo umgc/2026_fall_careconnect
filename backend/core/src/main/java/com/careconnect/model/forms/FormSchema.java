@@ -30,7 +30,9 @@ public class FormSchema {
     private String description;
     private String issuingAuthority;
 
-    /** Definition version (official form edition where one exists). */
+    /**
+     * Definition version (official form edition where one exists).
+     */
     private String version;
 
     @JsonSerialize(using = LocalDateSerializer.class)
