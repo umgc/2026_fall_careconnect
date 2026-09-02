@@ -2,6 +2,7 @@ package com.careconnect.service;
 
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,11 +27,34 @@ class ChimeMediaStreamEventServiceTest {
     private static final String STREAM_ARN =
             "arn:aws:kinesisvideo:us-east-1:123:stream/ChimeMediaPipelines-test/1";
 
-    @Mock private ChimeService chimeService;
-    @Mock private CallAttendeeService callAttendeeService;
+    @Mock
+    private ChimeService chimeService;
+    @Mock
+    private CallAttendeeService callAttendeeService;
 
     private KvsAttendeeStreamRegistry registry;
     private ChimeMediaStreamEventService service;
+
+    private static Map<String, Object> streamStartDetail(
+            final String attendeeId, final String externalUserId) {
+        final Map<String, Object> detail =
+                new java.util.HashMap<>(
+                        Map.of(
+                                "eventType",
+                                "chime:MediaPipelineKinesisVideoStreamStart",
+                                "meetingId",
+                                MEETING_ID,
+                                "externalMeetingId",
+                                CALL_ID,
+                                "attendeeId",
+                                attendeeId,
+                                "kinesisVideoStreamArn",
+                                STREAM_ARN));
+        if (externalUserId != null) {
+            detail.put("externalUserId", externalUserId);
+        }
+        return detail;
+    }
 
     @BeforeEach
     void setUp() {
@@ -92,26 +116,5 @@ class ChimeMediaStreamEventServiceTest {
         verify(callAttendeeService, never())
                 .recordJoinFromStreamEvent(anyString(), anyString(), anyString());
         verify(callAttendeeService, never()).findActiveChimeAttendeeIds(anyString());
-    }
-
-    private static Map<String, Object> streamStartDetail(
-            final String attendeeId, final String externalUserId) {
-        final Map<String, Object> detail =
-                new java.util.HashMap<>(
-                        Map.of(
-                                "eventType",
-                                "chime:MediaPipelineKinesisVideoStreamStart",
-                                "meetingId",
-                                MEETING_ID,
-                                "externalMeetingId",
-                                CALL_ID,
-                                "attendeeId",
-                                attendeeId,
-                                "kinesisVideoStreamArn",
-                                STREAM_ARN));
-        if (externalUserId != null) {
-            detail.put("externalUserId", externalUserId);
-        }
-        return detail;
     }
 }

@@ -2,10 +2,9 @@
 -- Collapse duplicate ACTIVE grants, then enforce uniqueness.
 
 UPDATE consent_grants g
-SET status = 'REVOKED',
+SET status     = 'REVOKED',
     revoked_at = COALESCE(g.revoked_at, NOW()),
-    updated_at = NOW()
-FROM (
+    updated_at = NOW() FROM (
   SELECT id,
          ROW_NUMBER() OVER (
            PARTITION BY patient_user_id, grantee_user_id, scope
@@ -15,8 +14,9 @@ FROM (
   WHERE status = 'ACTIVE'
 ) d
 WHERE g.id = d.id
-  AND d.rn > 1;
+  AND d.rn
+    > 1;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active
-  ON consent_grants (patient_user_id, grantee_user_id, scope)
-  WHERE status = 'ACTIVE';
+    ON consent_grants (patient_user_id, grantee_user_id, scope)
+    WHERE status = 'ACTIVE';

@@ -23,22 +23,22 @@ public class HomeCareLlmExtractionService {
     public String extractDocumentData(HomeCareDocumentType documentType, String rawDocumentText) {
 
         String systemMessageText = """
-        You are a home care onboarding document extraction engine.
-
-        Extract data from a %s and return ONLY valid JSON.
-
-        Do NOT explain anything.
-        Do NOT return text.
-        Do NOT use markdown.
-        Do NOT add fields that are not in the format below.
-
-        Return EXACTLY this format:
-
-        %s
-
-        Use an empty string "" for any value that is not present in the document.
-        Only return JSON.
-        """.formatted(documentType.getDisplayName(), documentType.promptSchemaJson());
+                You are a home care onboarding document extraction engine.
+                
+                Extract data from a %s and return ONLY valid JSON.
+                
+                Do NOT explain anything.
+                Do NOT return text.
+                Do NOT use markdown.
+                Do NOT add fields that are not in the format below.
+                
+                Return EXACTLY this format:
+                
+                %s
+                
+                Use an empty string "" for any value that is not present in the document.
+                Only return JSON.
+                """.formatted(documentType.getDisplayName(), documentType.promptSchemaJson());
 
         String prompt = systemMessageText + "\n\nDocument:\n" + rawDocumentText;
 

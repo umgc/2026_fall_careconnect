@@ -32,23 +32,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-/*
- * MockitoExtension enforces strict stubbing and manages mock lifecycle.
- * No Spring context needed — all dependencies are injected via @InjectMocks.
- */
+        /*
+         * MockitoExtension enforces strict stubbing and manages mock lifecycle.
+         * No Spring context needed — all dependencies are injected via @InjectMocks.
+         */
 class FamilyMemberControllerTest {
 
-    @Mock private FamilyMemberService familyMemberService;
-    @Mock private UserRepository userRepository;
-    @Mock private AnalyticsService analyticsService;
-    @Mock private Authentication authentication;
-    @Mock private SecurityContext securityContext;
-
+    private static final Long USER_ID = 1L;
+    private static final Long PATIENT_ID = 2L;
+    @Mock
+    private FamilyMemberService familyMemberService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private AnalyticsService analyticsService;
+    @Mock
+    private Authentication authentication;
+    @Mock
+    private SecurityContext securityContext;
     @InjectMocks
     private FamilyMemberController controller;
-
-    private static final Long USER_ID    = 1L;
-    private static final Long PATIENT_ID = 2L;
 
     @BeforeEach
     void setUpSecurityContext() throws Exception {

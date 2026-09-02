@@ -8,5 +8,6 @@ import java.util.List;
 
 public interface AnswerRepository extends JpaRepository<Answer, Long> {
     boolean existsByCheckIn_IdAndQuestion_Id(Long checkInId, Long questionId);
+
     List<Answer> findByCheckIn_Id(Long checkInId);
 }

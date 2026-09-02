@@ -3,9 +3,11 @@ package com.careconnect.service;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.ConsentGrant;
 import com.careconnect.repository.ConsentGrantRepository;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -29,7 +31,7 @@ public class ConsentService {
      * for the given patient.
      *
      * @param caregiverUserId user identifier of the prospective grantee
-     * @param patientUserId user identifier of the patient granting consent
+     * @param patientUserId   user identifier of the patient granting consent
      * @return true when an active, non-expired grant exists
      */
     @Transactional(readOnly = true)
@@ -48,7 +50,7 @@ public class ConsentService {
      * must not re-open {@code on_consent} retrieval after an explicit revoke.
      *
      * @param caregiverUserId grantee user id
-     * @param patientUserId patient user id
+     * @param patientUserId   patient user id
      * @return true when at least one grant row exists for the AI_RETRIEVAL scope
      */
     @Transactional(readOnly = true)
@@ -67,7 +69,7 @@ public class ConsentService {
      * link. Matches {@link com.careconnect.service.ai.retrieval.DefaultRetrievalConsentProvider}.
      *
      * @param caregiverUserId grantee user id
-     * @param patientUserId patient user id
+     * @param patientUserId   patient user id
      * @return true when Ask AI may treat {@code on_consent} content as consented
      */
     @Transactional(readOnly = true)
@@ -93,8 +95,8 @@ public class ConsentService {
      *
      * @param patientUserId user identifier of the patient granting consent
      * @param granteeUserId user identifier of the grantee
-     * @param granteeRole role of the grantee (e.g. {@code CAREGIVER})
-     * @param expiresAt optional expiry instant; null means no expiry
+     * @param granteeRole   role of the grantee (e.g. {@code CAREGIVER})
+     * @param expiresAt     optional expiry instant; null means no expiry
      * @return the persisted grant
      */
     @Transactional

@@ -65,6 +65,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class IndexingPipelineE2ETest {
 
+    private final AtomicReference<List<RetrievalIndexChunk>> indexedChunks =
+            new AtomicReference<>(List.of());
     @Mock
     private IndexingOutboxRepository outboxRepository;
     @Mock
@@ -87,11 +89,8 @@ class IndexingPipelineE2ETest {
     private RetrievalIndexChunkRepository chunkRepository;
     @Mock
     private ChunkEmbeddingService chunkEmbeddingService;
-
     private ObjectMapper objectMapper;
     private IndexWorker worker;
-    private final AtomicReference<List<RetrievalIndexChunk>> indexedChunks =
-            new AtomicReference<>(List.of());
 
     @BeforeEach
     void setUp() {
@@ -124,8 +123,7 @@ class IndexingPipelineE2ETest {
 
         lenient().when(outboxRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(chunkRepository.saveAll(anyList())).thenAnswer(inv -> {
-            @SuppressWarnings("unchecked")
-            final List<RetrievalIndexChunk> saved = inv.getArgument(0);
+            @SuppressWarnings("unchecked") final List<RetrievalIndexChunk> saved = inv.getArgument(0);
             indexedChunks.set(List.copyOf(saved));
             return saved;
         });

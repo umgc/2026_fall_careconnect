@@ -1,12 +1,13 @@
 package com.careconnect.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "family_member_link")
 public class FamilyMemberLink {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -50,16 +51,9 @@ public class FamilyMemberLink {
     @Column(name = "relationship")
     private String relationship; // "Son", "Daughter", "Spouse", etc.
 
-    public enum LinkStatus {
-        ACTIVE, SUSPENDED, REVOKED, EXPIRED
-    }
-
-    public enum LinkType {
-        PERMANENT, TEMPORARY, EMERGENCY
-    }
-
     // Constructors
-    public FamilyMemberLink() {}
+    public FamilyMemberLink() {
+    }
 
     public FamilyMemberLink(User familyUser, User patientUser, User grantedBy, String relationship) {
         this.familyUser = familyUser;
@@ -97,14 +91,27 @@ public class FamilyMemberLink {
     }
 
     // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public User getFamilyUser() { return familyUser; }
-    public void setFamilyUser(User familyUser) { this.familyUser = familyUser; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public User getPatientUser() { return patientUser; }
-    public void setPatientUser(User patientUser) { 
+    public User getFamilyUser() {
+        return familyUser;
+    }
+
+    public void setFamilyUser(User familyUser) {
+        this.familyUser = familyUser;
+    }
+
+    public User getPatientUser() {
+        return patientUser;
+    }
+
+    public void setPatientUser(User patientUser) {
         this.patientUser = patientUser;
         // Auto-populate patientId when patientUser is set
         if (patientUser != null) {
@@ -113,33 +120,84 @@ public class FamilyMemberLink {
         }
     }
 
-    public Long getPatientId() { return patientId; }
-    public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public Long getPatientId() {
+        return patientId;
+    }
 
-    public User getGrantedBy() { return grantedBy; }
-    public void setGrantedBy(User grantedBy) { this.grantedBy = grantedBy; }
+    public void setPatientId(Long patientId) {
+        this.patientId = patientId;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public User getGrantedBy() {
+        return grantedBy;
+    }
 
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public void setGrantedBy(User grantedBy) {
+        this.grantedBy = grantedBy;
+    }
 
-    public LinkStatus getStatus() { return status; }
-    public void setStatus(LinkStatus status) { 
-        this.status = status; 
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public LinkStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(LinkStatus status) {
+        this.status = status;
         this.updatedAt = LocalDateTime.now();
     }
 
-    public LinkType getLinkType() { return linkType; }
-    public void setLinkType(LinkType linkType) { this.linkType = linkType; }
+    public LinkType getLinkType() {
+        return linkType;
+    }
 
-    public LocalDateTime getExpiresAt() { return expiresAt; }
-    public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+    public void setLinkType(LinkType linkType) {
+        this.linkType = linkType;
+    }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
 
-    public String getRelationship() { return relationship; }
-    public void setRelationship(String relationship) { this.relationship = relationship; }
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public String getRelationship() {
+        return relationship;
+    }
+
+    public void setRelationship(String relationship) {
+        this.relationship = relationship;
+    }
+
+    public enum LinkStatus {
+        ACTIVE, SUSPENDED, REVOKED, EXPIRED
+    }
+
+    public enum LinkType {
+        PERMANENT, TEMPORARY, EMERGENCY
+    }
 }

@@ -43,52 +43,37 @@ import static org.mockito.Mockito.*;
 
 class AuthServiceTest {
 
-    @Mock
-    private GamificationService gamificationService;
-
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private EmailService emailService;
-
-    @Mock
-    private PasswordEncoder passwordEncoder;
-
-    @Mock
-    private UserRepository users;
-
-    @Mock
-    private PatientRepository patients;
-
-    @Mock
-    private CaregiverRepository caregivers;
-
-    @Mock
-    private FamilyMemberRepository familyMembers;
-
-    @Mock
-    private JwtTokenProvider jwt;
-
-    @Mock
-    private StripeService stripeService;
-
-    @Mock
-    private RestTemplate restTemplate;
-
-    @Mock
-    private CareConnectWebSocketHandler webSocketHandler;
-
-    @InjectMocks
-    private AuthService authService;
-
-    @Mock
-    private HttpServletResponse httpServletResponse;
-
-    private User testUser;
-
     private static HttpServer mockServer;
     private static int mockServerPort;
+    @Mock
+    private GamificationService gamificationService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private EmailService emailService;
+    @Mock
+    private PasswordEncoder passwordEncoder;
+    @Mock
+    private UserRepository users;
+    @Mock
+    private PatientRepository patients;
+    @Mock
+    private CaregiverRepository caregivers;
+    @Mock
+    private FamilyMemberRepository familyMembers;
+    @Mock
+    private JwtTokenProvider jwt;
+    @Mock
+    private StripeService stripeService;
+    @Mock
+    private RestTemplate restTemplate;
+    @Mock
+    private CareConnectWebSocketHandler webSocketHandler;
+    @InjectMocks
+    private AuthService authService;
+    @Mock
+    private HttpServletResponse httpServletResponse;
+    private User testUser;
 
     @BeforeAll
     static void startMockServer() throws IOException {
@@ -779,8 +764,7 @@ class AuthServiceTest {
             final ResponseEntity<?> response = authService.checkEmailVerificationStatus("unknown@test.com");
 
             assertEquals(HttpStatus.OK, response.getStatusCode());
-            @SuppressWarnings("unchecked")
-            final Map<String, Object> body = (Map<String, Object>) response.getBody();
+            @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
             assertNotNull(body);
             assertEquals(false, body.get("verified"));
         }
@@ -797,8 +781,7 @@ class AuthServiceTest {
             final ResponseEntity<?> response = authService.checkEmailVerificationStatus("test@test.com");
 
             assertEquals(HttpStatus.OK, response.getStatusCode());
-            @SuppressWarnings("unchecked")
-            final Map<String, Object> body = (Map<String, Object>) response.getBody();
+            @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
             assertNotNull(body);
             assertEquals(true, body.get("verified"));
         }
@@ -815,8 +798,7 @@ class AuthServiceTest {
             final ResponseEntity<?> response = authService.checkEmailVerificationStatus("test@test.com");
 
             assertEquals(HttpStatus.OK, response.getStatusCode());
-            @SuppressWarnings("unchecked")
-            final Map<String, Object> body = (Map<String, Object>) response.getBody();
+            @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
             assertNotNull(body);
             assertEquals(false, body.get("verified"));
         }

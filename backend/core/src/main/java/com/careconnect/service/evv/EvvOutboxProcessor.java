@@ -26,15 +26,21 @@ import java.util.Map;
 @Slf4j
 public class EvvOutboxProcessor {
 
+    /**
+     * Actor ID used in audit log entries created by automated submissions.
+     */
+    private static final Long SYSTEM_ACTOR_ID = 0L;
+    /**
+     * Maximum outbox rows processed in a single poll cycle.
+     */
+    private static final int BATCH_SIZE = 50;
     private final EvvOutboxService outboxService;
     private final EvvSubmissionService submissionService;
     private final EvvRecordRepository evvRecordRepository;
 
-    /** Actor ID used in audit log entries created by automated submissions. */
-    private static final Long SYSTEM_ACTOR_ID = 0L;
-
-    /** Maximum outbox rows processed in a single poll cycle. */
-    private static final int BATCH_SIZE = 50;
+    private static String truncate(String msg) {
+        return (msg != null && msg.length() > 500) ? msg.substring(0, 500) : msg;
+    }
 
     @Scheduled(fixedDelayString = "${careconnect.evv.outbox.poll-interval-ms:30000}")
     public void processOutbox() {
@@ -65,9 +71,5 @@ public class EvvOutboxProcessor {
                 outboxService.markFailed(outboxId, truncate(e.getMessage()));
             }
         }
-    }
-
-    private static String truncate(String msg) {
-        return (msg != null && msg.length() > 500) ? msg.substring(0, 500) : msg;
     }
 }

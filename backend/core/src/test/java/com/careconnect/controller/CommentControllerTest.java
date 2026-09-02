@@ -123,11 +123,11 @@ class CommentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                                 "{" +
-                                  "\"userId\": 1," +
-                                  "\"username\": \"test\"," +
-                                  "\"content\": \"Hello\"" +
-                                "}"
-                                ))
+                                        "\"userId\": 1," +
+                                        "\"username\": \"test\"," +
+                                        "\"content\": \"Hello\"" +
+                                        "}"
+                        ))
                 .andExpect(status().isForbidden());
 
         verify(userRepository).findByEmail("missing@example.com");
@@ -148,11 +148,11 @@ class CommentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                                 "{" +
-                                  "\"userId\": 1," +
-                                  "\"username\": \"wrong\"," +
-                                  "\"content\": \"Invalid\"" +
-                                "}"
-                                ))
+                                        "\"userId\": 1," +
+                                        "\"username\": \"wrong\"," +
+                                        "\"content\": \"Invalid\"" +
+                                        "}"
+                        ))
                 .andExpect(status().isForbidden());
 
         verify(userRepository).findByEmail("user@example.com");
@@ -179,11 +179,11 @@ class CommentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(
                                 "{" +
-                                  "\"userId\": 1," +
-                                  "\"username\": \"john\"," +
-                                  "\"content\": \"Nice post\"" +
-                                "}"
-                                ))
+                                        "\"userId\": 1," +
+                                        "\"username\": \"john\"," +
+                                        "\"content\": \"Nice post\"" +
+                                        "}"
+                        ))
                 .andExpect(status().isCreated());
 
         verify(commentService)

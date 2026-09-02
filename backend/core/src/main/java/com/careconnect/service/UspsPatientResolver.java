@@ -18,6 +18,24 @@ public class UspsPatientResolver {
 
     private final UserRepository userRepository;
 
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        if (second != null && !second.isBlank()) {
+            return second.trim();
+        }
+        return null;
+    }
+
+    private static Optional<Long> parseNumericUserId(String value) {
+        try {
+            return Optional.of(Long.parseLong(value));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+    }
+
     public User resolvePatient(String patientEmail, String userId, User currentUser) throws UnauthorizedException {
         String identifier = firstNonBlank(patientEmail, userId);
         if (identifier == null || identifier.isBlank()) {
@@ -39,23 +57,5 @@ public class UspsPatientResolver {
 
     public User resolvePatient(String patientIdentifier, User currentUser) throws UnauthorizedException {
         return resolvePatient(patientIdentifier, null, currentUser);
-    }
-
-    private static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first.trim();
-        }
-        if (second != null && !second.isBlank()) {
-            return second.trim();
-        }
-        return null;
-    }
-
-    private static Optional<Long> parseNumericUserId(String value) {
-        try {
-            return Optional.of(Long.parseLong(value));
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
     }
 }

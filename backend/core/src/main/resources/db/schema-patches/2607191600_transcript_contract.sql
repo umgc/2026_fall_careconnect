@@ -7,7 +7,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_call_transcript_client_segment
 
 ALTER TABLE transcript_archive_deletion_outbox
     ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ,
-    ADD COLUMN IF NOT EXISTS terminal_error VARCHAR(1000);
+    ADD COLUMN IF NOT EXISTS terminal_error VARCHAR (1000);
 
 DROP INDEX IF EXISTS idx_transcript_archive_deletion_claim;
 CREATE INDEX IF NOT EXISTS idx_transcript_archive_deletion_claim

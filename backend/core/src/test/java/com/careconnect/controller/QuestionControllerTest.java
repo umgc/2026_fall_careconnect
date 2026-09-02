@@ -313,6 +313,7 @@ class QuestionControllerTest {
             verifyNoInteractions(questionService);
         }
     }
+
     @Nested
     @DisplayName("PATCH /questions/{id}/active")
     class SetActive {

@@ -14,10 +14,10 @@ import javax.annotation.PostConstruct;
 /**
  * Configuration class for loading secrets from AWS SSM Parameter Store in production.
  * In development, environment variables are used instead.
- *
+ * <p>
  * SSM Parameter Naming Convention:
  * /careconnect/prod/{parameter-name}
- *
+ * <p>
  * Example:
  * - /careconnect/prod/stripe-secret-key
  * - /careconnect/prod/openai-api-key
@@ -147,7 +147,7 @@ public class SsmConfig {
      * Helper method to retrieve parameter from SSM or fall back to environment variable.
      *
      * @param parameterName the SSM parameter name (without prefix)
-     * @param envFallback the environment variable fallback value
+     * @param envFallback   the environment variable fallback value
      * @return the parameter value
      */
     private String getSsmParameter(String parameterName, String envFallback) {

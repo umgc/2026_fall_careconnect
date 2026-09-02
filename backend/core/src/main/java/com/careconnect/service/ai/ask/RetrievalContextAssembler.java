@@ -124,10 +124,10 @@ final class RetrievalContextAssembler {
             if (newestAt == null
                     || occurredAt.isAfter(newestAt)
                     || (occurredAt.equals(newestAt)
-                        && chunk.citationRef() != null
-                        && newest != null
-                        && newest.citationRef() != null
-                        && chunk.citationRef().compareTo(newest.citationRef()) < 0)) {
+                    && chunk.citationRef() != null
+                    && newest != null
+                    && newest.citationRef() != null
+                    && chunk.citationRef().compareTo(newest.citationRef()) < 0)) {
                 newest = chunk;
                 newestAt = occurredAt;
             }

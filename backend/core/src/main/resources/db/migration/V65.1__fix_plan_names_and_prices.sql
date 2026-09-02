@@ -3,7 +3,8 @@
 -- Removes legacy Stripe-era plans and ensures exactly three canonical plans exist.
 
 -- Remove all legacy and duplicate plans
-DELETE FROM plan;
+DELETE
+FROM plan;
 
 -- Reset sequence
 ALTER SEQUENCE plan_id_seq RESTART WITH 1;

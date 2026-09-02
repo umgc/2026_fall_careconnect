@@ -22,10 +22,16 @@ import java.util.List;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FileAttachmentSpec {
-    /** UserFile.FileCategory name (e.g., ONBOARDING_FORM, HIRING_DOCUMENT). */
+    /**
+     * UserFile.FileCategory name (e.g., ONBOARDING_FORM, HIRING_DOCUMENT).
+     */
     private String category;
-    /** When true, completing the form renders a PDF persisted as a UserFile. */
+    /**
+     * When true, completing the form renders a PDF persisted as a UserFile.
+     */
     private boolean generatesPdf;
-    /** Categories of supporting evidence the employee may additionally upload. */
+    /**
+     * Categories of supporting evidence the employee may additionally upload.
+     */
     private List<String> supportingDocumentCategories;
 }

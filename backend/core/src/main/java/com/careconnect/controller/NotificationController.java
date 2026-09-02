@@ -43,6 +43,7 @@ public class NotificationController {
 
     @Autowired
     private AuthorizationService authorizationService;
+
     /**
      * Send a WebSocket notification to a specific user
      */
@@ -50,8 +51,8 @@ public class NotificationController {
 
     @PostMapping("/ws/send-to-user/{userId}")
     @Operation(
-        summary = "Send WebSocket notification to user",
-        description = "Send a WebSocket notification to a specific userId (user must be connected via WebSocket and registered)"
+            summary = "Send WebSocket notification to user",
+            description = "Send a WebSocket notification to a specific userId (user must be connected via WebSocket and registered)"
     )
     public ResponseEntity<Map<String, String>> sendWebSocketNotificationToUser(
             @PathVariable String userId,
@@ -64,19 +65,19 @@ public class NotificationController {
             return ResponseEntity.status(404).body(Map.of("error", "No active WebSocket session for user " + userId));
         }
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/send")
     @Operation(
-        summary = "Send push notification",
-        description = "Send a push notification to a specific device token"
+            summary = "Send push notification",
+            description = "Send a push notification to a specific device token"
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Notification sent successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized")
+            @ApiResponse(responseCode = "200", description = "Notification sent successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
     })
     public ResponseEntity<NotificationResponse> sendNotification(
             @RequestBody FirebaseNotificationRequest request) throws UnauthorizedException {
@@ -86,14 +87,14 @@ public class NotificationController {
         NotificationResponse response = notificationService.sendNotification(request);
         return ResponseEntity.ok(response);
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/send-bulk")
     @Operation(
-        summary = "Send bulk push notifications",
-        description = "Send push notifications to multiple device tokens"
+            summary = "Send bulk push notifications",
+            description = "Send push notifications to multiple device tokens"
     )
     public ResponseEntity<List<NotificationResponse>> sendBulkNotifications(
             @RequestBody List<FirebaseNotificationRequest> requests) throws UnauthorizedException {
@@ -103,14 +104,14 @@ public class NotificationController {
         List<NotificationResponse> responses = notificationService.sendBulkNotifications(requests);
         return ResponseEntity.ok(responses);
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/send-to-user/{userId}")
     @Operation(
-        summary = "Send notification to user",
-        description = "Send push notification to all devices of a specific user"
+            summary = "Send notification to user",
+            description = "Send push notification to all devices of a specific user"
     )
     public ResponseEntity<List<NotificationResponse>> sendNotificationToUser(
             @PathVariable Long userId,
@@ -125,14 +126,14 @@ public class NotificationController {
                 .sendNotificationToUser(userId, title, body, notificationType, data);
         return ResponseEntity.ok(responses);
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/vital-alert/{patientId}")
     @Operation(
-        summary = "Send vital signs alert",
-        description = "Send vital signs alert to patient's caregivers"
+            summary = "Send vital signs alert",
+            description = "Send vital signs alert to patient's caregivers"
     )
     public CompletableFuture<ResponseEntity<List<NotificationResponse>>> sendVitalAlert(
             @PathVariable Long patientId,
@@ -145,14 +146,14 @@ public class NotificationController {
         return notificationService.sendVitalAlert(patientId, vitalType, vitalValue, alertLevel)
                 .thenApply(ResponseEntity::ok);
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/medication-reminder/{patientId}")
     @Operation(
-        summary = "Send medication reminder",
-        description = "Send medication reminder to patient"
+            summary = "Send medication reminder",
+            description = "Send medication reminder to patient"
     )
     public CompletableFuture<ResponseEntity<List<NotificationResponse>>> sendMedicationReminder(
             @PathVariable Long patientId,
@@ -165,43 +166,43 @@ public class NotificationController {
         return notificationService.sendMedicationReminder(patientId, medicationName, dosage, scheduledTime)
                 .thenApply(ResponseEntity::ok);
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/emergency-alert/{patientId}")
     @Operation(
-        summary = "Send emergency alert",
-        description = "Send emergency alert to all caregivers and family members"
+            summary = "Send emergency alert",
+            description = "Send emergency alert to all caregivers and family members"
     )
     public CompletableFuture<ResponseEntity<List<NotificationResponse>>> sendEmergencyAlert(
             @PathVariable Long patientId,
             @RequestParam String emergencyType,
             @RequestParam String location) {
-        
+
         return notificationService.sendEmergencyAlert(patientId, emergencyType, location)
                 .thenApply(ResponseEntity::ok);
     }
-    
+
     @RequirePermission(Permission.CREATE_TASKS)
 
-    
+
     @PostMapping("/register-token")
     @Operation(
-        summary = "Register device token",
-        description = "Register FCM device token for push notifications"
+            summary = "Register device token",
+            description = "Register FCM device token for push notifications"
     )
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Token registered successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request"),
-        @ApiResponse(responseCode = "401", description = "Unauthorized")
+            @ApiResponse(responseCode = "200", description = "Token registered successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
     })
     public ResponseEntity<Map<String, String>> registerDeviceToken(
             @RequestParam Long userId,
             @RequestParam String fcmToken,
             @RequestParam String deviceId,
             @RequestParam DeviceToken.DeviceType deviceType) {
-        
+
         try {
             notificationService.registerDeviceToken(userId, fcmToken, deviceId, deviceType);
             return ResponseEntity.ok(Map.of("message", "Device token registered successfully"));
@@ -210,18 +211,18 @@ public class NotificationController {
                     .body(Map.of("error", "Failed to register device token: " + e.getMessage()));
         }
     }
-    
+
     @RequirePermission(Permission.DELETE_PATIENTS)
 
-    
+
     @DeleteMapping("/unregister-token")
     @Operation(
-        summary = "Unregister device token",
-        description = "Unregister FCM device token"
+            summary = "Unregister device token",
+            description = "Unregister FCM device token"
     )
     public ResponseEntity<Map<String, String>> unregisterDeviceToken(
             @RequestParam String fcmToken) {
-        
+
         try {
             notificationService.unregisterDeviceToken(fcmToken);
             return ResponseEntity.ok(Map.of("message", "Device token unregistered successfully"));

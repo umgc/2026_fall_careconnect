@@ -78,7 +78,7 @@ class VectorSimilaritySearchServiceTest {
     void search_withRecordTypes() {
         final float[] embedding = new float[RetrievalIndexSchema.EMBEDDING_DIMENSION];
         when(chunkRepository.searchByPatientIdVectorAndRecordTypes(
-                        eq(42L), anyString(), anyCollection(), eq(5)))
+                eq(42L), anyString(), anyCollection(), eq(5)))
                 .thenReturn(List.of());
 
         service.search(42L, embedding, Set.of("CALL_SUMMARY"), 5);

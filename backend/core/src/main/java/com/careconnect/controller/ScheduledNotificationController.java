@@ -37,12 +37,12 @@ public class ScheduledNotificationController {
         authorizationService.requireAdminOrCaregiver(currentUser);
 
         ScheduledNotification notification = scheduledNotificationService.createScheduledNotification(
-            null, // taskId - could be added to DTO
-            dto.getReceiverId(),
-            dto.getTitle(),
-            dto.getBody(),
-            LocalDateTime.parse(dto.getScheduledTime()),
-            dto.getNotificationType()
+                null, // taskId - could be added to DTO
+                dto.getReceiverId(),
+                dto.getTitle(),
+                dto.getBody(),
+                LocalDateTime.parse(dto.getScheduledTime()),
+                dto.getNotificationType()
         );
 
         return ResponseEntity.ok(toDTO(notification));
@@ -80,7 +80,7 @@ public class ScheduledNotificationController {
                 .collect(Collectors.toList());
 
         List<ScheduledNotification> notifications = scheduledNotificationService.createMedicationReminders(
-            patientId, medicationName, dosage, times);
+                patientId, medicationName, dosage, times);
 
         List<ScheduledNotificationDTO> dtos = notifications.stream()
                 .map(this::toDTO)
@@ -102,7 +102,7 @@ public class ScheduledNotificationController {
         authorizationService.requireAdminOrCaregiver(currentUser);
 
         ScheduledNotification notification = scheduledNotificationService.createAppointmentReminder(
-            patientId, appointmentType, LocalDateTime.parse(appointmentTime), location);
+                patientId, appointmentType, LocalDateTime.parse(appointmentTime), location);
 
         return ResponseEntity.ok(toDTO(notification));
     }
@@ -144,11 +144,11 @@ public class ScheduledNotificationController {
 
     private ScheduledNotificationDTO toDTO(ScheduledNotification notification) {
         return new ScheduledNotificationDTO(
-            notification.getReceiverId(),
-            notification.getTitle(),
-            notification.getBody(),
-            notification.getNotificationType(),
-            notification.getScheduledTime().toString()
+                notification.getReceiverId(),
+                notification.getTitle(),
+                notification.getBody(),
+                notification.getNotificationType(),
+                notification.getScheduledTime().toString()
         );
     }
 }

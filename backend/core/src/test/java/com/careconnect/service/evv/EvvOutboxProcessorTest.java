@@ -24,11 +24,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class EvvOutboxProcessorTest {
 
-    @Mock EvvOutboxService outboxService;
-    @Mock EvvSubmissionService submissionService;
-    @Mock EvvRecordRepository evvRecordRepository;
+    @Mock
+    EvvOutboxService outboxService;
+    @Mock
+    EvvSubmissionService submissionService;
+    @Mock
+    EvvRecordRepository evvRecordRepository;
 
-    @InjectMocks EvvOutboxProcessor processor;
+    @InjectMocks
+    EvvOutboxProcessor processor;
 
     private Map<String, Object> outboxRow(long outboxId, long recordId) {
         Map<String, Object> row = new java.util.HashMap<>();

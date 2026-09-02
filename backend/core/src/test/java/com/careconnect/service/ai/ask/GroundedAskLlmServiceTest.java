@@ -22,6 +22,21 @@ import static org.mockito.Mockito.when;
 
 class GroundedAskLlmServiceTest {
 
+    private static GroundedAskLlmService serviceThrowing(
+            final String errorCode, final String diagnostic) {
+        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
+        final BedrockRuntimeException failure = mock(BedrockRuntimeException.class);
+        final AwsErrorDetails details = AwsErrorDetails.builder()
+                .errorCode(errorCode)
+                .errorMessage(diagnostic)
+                .build();
+        when(failure.awsErrorDetails()).thenReturn(details);
+        when(failure.getMessage()).thenReturn(diagnostic);
+        when(client.invokeModel(any(InvokeModelRequest.class))).thenThrow(failure);
+        return new GroundedAskLlmService(
+                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
+    }
+
     @Test
     @DisplayName("generate parses structured JSON answer and citationRefs")
     void generate_parsesStructuredJson() throws Exception {
@@ -147,21 +162,6 @@ class GroundedAskLlmServiceTest {
         }
     }
 
-    private static GroundedAskLlmService serviceThrowing(
-            final String errorCode, final String diagnostic) {
-        final BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
-        final BedrockRuntimeException failure = mock(BedrockRuntimeException.class);
-        final AwsErrorDetails details = AwsErrorDetails.builder()
-                .errorCode(errorCode)
-                .errorMessage(diagnostic)
-                .build();
-        when(failure.awsErrorDetails()).thenReturn(details);
-        when(failure.getMessage()).thenReturn(diagnostic);
-        when(client.invokeModel(any(InvokeModelRequest.class))).thenThrow(failure);
-        return new GroundedAskLlmService(
-                client, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
-    }
-
     @Test
     @DisplayName("generate unwraps markdown-fenced JSON claims")
     void generate_unwrapsMarkdownFencedJson() {
@@ -232,13 +232,13 @@ class GroundedAskLlmServiceTest {
     @DisplayName("isAvailable reflects aws flag and client")
     void isAvailable_reflectsAwsAndClient() {
         assertThat(new GroundedAskLlmService(
-                        mock(BedrockRuntimeClient.class), new ObjectMapper(), "m", true)
+                mock(BedrockRuntimeClient.class), new ObjectMapper(), "m", true)
                 .isAvailable())
                 .isTrue();
         assertThat(new GroundedAskLlmService(null, new ObjectMapper(), "m", true).isAvailable())
                 .isFalse();
         assertThat(new GroundedAskLlmService(
-                        mock(BedrockRuntimeClient.class), new ObjectMapper(), "m", false)
+                mock(BedrockRuntimeClient.class), new ObjectMapper(), "m", false)
                 .isAvailable())
                 .isFalse();
     }

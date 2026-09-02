@@ -29,13 +29,20 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EmailCredentialServiceTest {
 
-    @Mock private EmailCredentialRepository credRepo;
-    @Mock private GoogleOAuthService googleOAuthService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-    @Mock private OAuthStateSigner oauthStateSigner;
-    @Mock private OAuthRedirectValidator oauthRedirectValidator;
-    @Mock private UspsPatientResolver patientResolver;
+    @Mock
+    private EmailCredentialRepository credRepo;
+    @Mock
+    private GoogleOAuthService googleOAuthService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
+    @Mock
+    private OAuthStateSigner oauthStateSigner;
+    @Mock
+    private OAuthRedirectValidator oauthRedirectValidator;
+    @Mock
+    private UspsPatientResolver patientResolver;
 
     @InjectMocks
     private EmailCredentialService service;

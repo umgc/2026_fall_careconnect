@@ -61,12 +61,12 @@ CREATE TABLE patient
 -- 3. Billing
 CREATE TABLE plan
 (
-    id BIGSERIAL PRIMARY KEY,
-    code VARCHAR(50) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    price_cents INT NOT NULL,
+    id             BIGSERIAL PRIMARY KEY,
+    code           VARCHAR(50)  NOT NULL,
+    name           VARCHAR(100) NOT NULL,
+    price_cents    INT          NOT NULL,
     billing_period VARCHAR(20) DEFAULT 'MONTH',
-    is_active BOOLEAN DEFAULT TRUE,
+    is_active      BOOLEAN     DEFAULT TRUE,
     UNIQUE (code),
     CONSTRAINT plan_chk_1 CHECK ((price_cents >= 0))
 

@@ -2,8 +2,8 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.Instant;
 
+import java.time.Instant;
 
 
 @Entity
@@ -12,7 +12,8 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 public class Payment {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -39,11 +40,31 @@ public class Payment {
     private String stripePaymentIntentId;
     private String stripeInvoiceId;
 
-    public void setAmountCents(Integer amountCents) { this.amountCents = amountCents; }
-    public void setStripeSessionId(String stripeSessionId) { this.stripeSessionId = stripeSessionId; }
-    public void setStripePaymentIntentId(String stripePaymentIntentId) { this.stripePaymentIntentId = stripePaymentIntentId; }
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setAmountCents(Integer amountCents) {
+        this.amountCents = amountCents;
+    }
+
+    public void setStripeSessionId(String stripeSessionId) {
+        this.stripeSessionId = stripeSessionId;
+    }
+
+    public void setStripePaymentIntentId(String stripePaymentIntentId) {
+        this.stripePaymentIntentId = stripePaymentIntentId;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }

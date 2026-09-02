@@ -2,9 +2,11 @@ package com.careconnect.service;
 
 import com.careconnect.model.RecordingCompensation;
 import com.careconnect.repository.RecordingCompensationRepository;
+
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +17,9 @@ import org.springframework.transaction.annotation.Propagation;
 import software.amazon.awssdk.services.chimesdkmediapipelines.ChimeSdkMediaPipelinesClient;
 import software.amazon.awssdk.services.chimesdkmediapipelines.model.DeleteMediaCapturePipelineRequest;
 
-/** Restart-safe compensation worker for leaked AWS capture resources. */
+/**
+ * Restart-safe compensation worker for leaked AWS capture resources.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,6 +31,20 @@ public class RecordingCompensationWorker {
 
     @Autowired(required = false)
     private ChimeSdkMediaPipelinesClient pipelinesClient;
+
+    private static boolean isNotFound(final Exception exception) {
+        return exception instanceof
+                software.amazon.awssdk.services.chimesdkmediapipelines.model
+                        .ChimeSdkMediaPipelinesException serviceException
+                && serviceException.statusCode() == 404;
+    }
+
+    private static String truncate(final String value) {
+        if (value == null || value.length() <= 2000) {
+            return value;
+        }
+        return value.substring(0, 2000);
+    }
 
     @Scheduled(fixedDelayString = "${careconnect.recording.compensation.interval-ms:15000}")
     public void runDue() {
@@ -82,19 +100,5 @@ public class RecordingCompensationWorker {
                 log.warn("Recording compensation {} remains retryable: {}", id, exception.getMessage());
             }
         }
-    }
-
-    private static boolean isNotFound(final Exception exception) {
-        return exception instanceof
-                software.amazon.awssdk.services.chimesdkmediapipelines.model
-                        .ChimeSdkMediaPipelinesException serviceException
-                && serviceException.statusCode() == 404;
-    }
-
-    private static String truncate(final String value) {
-        if (value == null || value.length() <= 2000) {
-            return value;
-        }
-        return value.substring(0, 2000);
     }
 }

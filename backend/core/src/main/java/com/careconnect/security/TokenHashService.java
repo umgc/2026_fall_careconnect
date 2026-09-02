@@ -8,10 +8,10 @@ import org.springframework.stereotype.Service;
 @Service
 @Slf4j
 public class TokenHashService {
-    
+
     @Autowired
     private PasswordEncoder passwordEncoder;
-    
+
     /**
      * Hash a refresh token before storing in database
      */
@@ -23,7 +23,7 @@ public class TokenHashService {
         log.debug("✅ Token hashed successfully");
         return hashed;
     }
-    
+
     /**
      * Verify a plain text token against the stored hash
      */
@@ -32,7 +32,7 @@ public class TokenHashService {
             log.warn("⚠️ Token or hash is null");
             return false;
         }
-        
+
         boolean matches = passwordEncoder.matches(plainToken, hashedToken);
         if (matches) {
             log.debug("✅ Token verified successfully");

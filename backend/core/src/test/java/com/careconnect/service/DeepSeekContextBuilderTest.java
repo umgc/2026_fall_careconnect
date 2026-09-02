@@ -26,11 +26,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DeepSeekContextBuilderTest {
 
-    private DeepSeekContextBuilder builder;
-
     private static final DateTimeFormatter TS =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .withZone(ZoneId.systemDefault());
+    private DeepSeekContextBuilder builder;
 
     @BeforeEach
     void setUp() throws Exception {
