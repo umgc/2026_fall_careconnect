@@ -1791,7 +1791,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           await ApiService.getPatientMedicationsForPatient(patientIdInt);
       
       unawaited(
-          Telemetry.event('feature.medications.view_all', {'status': resp.statusCode})
+          Telemetry.event('feature.medications.view_all', {'statusCode': resp.statusCode})
       );
       
       if (resp.statusCode == 200) {

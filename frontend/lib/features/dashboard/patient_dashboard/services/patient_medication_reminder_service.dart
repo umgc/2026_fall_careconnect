@@ -23,7 +23,7 @@ class PatientMedicationReminderService {
 
     final response = await ApiService.getPatientMedicationsForPatient(patientId);
     unawaited(
-          Telemetry.event('feature.medications.view_all', {'status': response.statusCode}),
+          Telemetry.event('feature.medications.view_all', {'statusCode': response.statusCode}),
     );
 
     if (response.statusCode != 200) {

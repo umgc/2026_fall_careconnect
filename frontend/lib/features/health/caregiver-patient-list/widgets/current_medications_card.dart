@@ -32,7 +32,7 @@ class CurrentMedicationsSection extends StatelessWidget {
       });
 
       unawaited(
-        Telemetry.event('feature.medications.view_active', {})
+        Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'})
       );
 
     return Container(
@@ -153,7 +153,7 @@ class _MedicationBlockState extends State<_MedicationBlock> {
       );
 
       unawaited(
-        Telemetry.event('feature.medications.delete_hard', {'status': response.statusCode})
+        Telemetry.event('feature.medications.delete_hard', {'statusCode': response.statusCode})
       );
 
       if (response.statusCode == 200) {
@@ -194,7 +194,7 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.med.id!,
       );
       unawaited(
-          Telemetry.event('feature.medications.approve', {'status': response.statusCode})
+          Telemetry.event('feature.medications.approve', {'statusCode': response.statusCode})
         );
 
 
@@ -228,7 +228,7 @@ class _MedicationBlockState extends State<_MedicationBlock> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
           unawaited(
-          Telemetry.event('feature.medications.view_all', {})
+          Telemetry.event('feature.medications.view_all', {'feature': 'MedicationBlock'})
         );
 
     return Container(

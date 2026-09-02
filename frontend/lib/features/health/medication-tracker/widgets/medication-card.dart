@@ -74,7 +74,7 @@ class _MedicationCardState extends State<MedicationCard> {
       );
 
       unawaited(
-          Telemetry.event('feature.medications.delete_soft', {'status': response}),
+          Telemetry.event('feature.medications.delete_soft', {'statusCode': response}),
       );
 
       if (response.statusCode == 204 || response.statusCode == 200) {
