@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
@@ -34,14 +33,6 @@ Future<void> main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
-
-      // Load env from committed .env.example so clean checkouts can build
-      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
-      try {
-        await dotenv.load(fileName: ".env");
-      } catch (_) {
-        await dotenv.load(fileName: ".env.example");
-      }
 
       // Performance optimization: Set preferred orientations
       await SystemChrome.setPreferredOrientations([
