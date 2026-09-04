@@ -270,6 +270,14 @@ class TelemetryServiceTest {
             verify(repository, never()).save(any());
         }
 
+        /**
+         * Amended 2026-09-04 at {@code d0c4af43}. The original assertion was
+         * {@code isSameAs(input)}, which encoded the pre-{@code e82f4cb1} contract where a
+         * non-allowlisted name came back as an unsaved object. DEF-TEL-18 was resolved in favour
+         * of a null return so {@code DevTelemetryController} can answer 400, so the assertion is
+         * corrected to match. The rejection itself - never persisted - is unchanged, and the ID
+         * stays TC-TEL-06.
+         */
         @Test
         @DisplayName("TC-TEL-06: non-allowlisted event name is never persisted")
         void tcTel06_unknownEventNameRejected() {
@@ -279,7 +287,9 @@ class TelemetryServiceTest {
             final TelemetryEvent result = service.record(input);
 
             verify(repository, never()).save(any());
-            assertThat(result).isSameAs(input);
+            assertThat(result)
+                    .as("a non-allowlisted event name is rejected with a null return [DEF-TEL-18]")
+                    .isNull();
         }
 
         @Test
