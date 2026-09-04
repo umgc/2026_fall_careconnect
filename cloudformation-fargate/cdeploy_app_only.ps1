@@ -11,6 +11,25 @@ param(
 
     [switch]$RunTests,
 
+    # Omit to leave CareConnectAiEnabled as whatever parameters/{env}-service.json
+    # already has committed; pass "true"/"false" to override it for this deploy.
+    [string]$AiEnabled,
+
+    # Omit to leave AiModel as whatever parameters/{env}-service.json already
+    # has committed; pass a Bedrock model ID to override it for this deploy.
+    [string]$AiModel,
+
+    # Omit to leave FrontendBaseUrl/CorsAllowedList as whatever
+    # parameters/{env}-service.json already has committed. When set, appends
+    # the given URL to the committed CORS list (which already carries the
+    # localhost/127.0.0.1 entries) rather than replacing it.
+    [string]$FrontendUrl,
+
+    # Skips the Maven/Docker build+push entirely and reuses the service
+    # stack's currently-deployed BackendImageUri — for a parameter-only
+    # update (e.g. just -FrontendUrl or -AiEnabled) with no backend code change.
+    [switch]$SkipBuild,
+
     [Alias("h")]
     [switch]$Help
 )
@@ -298,9 +317,28 @@ function Get-CloudFormationOutput {
     return [string]$value
 }
 
+function Get-CloudFormationParameter {
+    param(
+        [string]$StackName,
+        [string]$ParameterKey
+    )
+
+    $value = & aws cloudformation describe-stacks `
+        --region $Region `
+        --stack-name $StackName `
+        --query "Stacks[0].Parameters[?ParameterKey=='$ParameterKey'].ParameterValue" `
+        --output text
+    Assert-LastExitCode "Reading CloudFormation parameter '$ParameterKey' from stack '$StackName'"
+    return [string]$value
+}
+
 try {
     Write-Step "Checking prerequisites"
-    foreach ($command in @("aws", "docker", "java")) {
+    $requiredCommands = @("aws")
+    if (-not $SkipBuild) {
+        $requiredCommands += @("docker", "java")
+    }
+    foreach ($command in $requiredCommands) {
         if (-not (Test-CommandExists $command)) {
             throw "Required command not found in PATH: $command"
         }
@@ -310,7 +348,7 @@ try {
     Assert-PathExists $ServiceParameters
     Assert-PathExists $BackendDir
 
-    if (-not (Test-Path -LiteralPath (Join-Path $BackendDir "mvnw.cmd"))) {
+    if (-not $SkipBuild -and -not (Test-Path -LiteralPath (Join-Path $BackendDir "mvnw.cmd"))) {
         throw "Expected Maven wrapper not found at '$BackendDir\mvnw.cmd'."
     }
 
