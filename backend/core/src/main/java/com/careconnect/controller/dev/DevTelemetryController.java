@@ -43,17 +43,10 @@ public class DevTelemetryController {
         if (!details.isEmpty()) {
             event.setDetails(details);
         }
-
-    TelemetryEvent event = new TelemetryEvent();
-    event.setEventName(asString(body.getOrDefault("eventName", "dev_emit")));
-    event.setEventTime(OffsetDateTime.now(Clock.systemUTC()));
-    event.setSessionId(asString(body.get("sessionId")));
-    event.setTraceId(asString(body.get("traceId")));
-    event.setSpanId(asString(body.get("spanId")));
-    setOptionalMap(event, body);
-    event = telemetry.record(event);
-    if(event == null){return ResponseEntity.badRequest().build();}
-    return ResponseEntity.ok(event);
+        final Map<String, Object> deviceInfo = asMap(body.get("deviceInfo"));
+        if (!deviceInfo.isEmpty()) {
+            event.setDeviceInfo(deviceInfo);
+        }
   }
 
     private static String asString(final Object value) {
@@ -83,14 +76,16 @@ public class DevTelemetryController {
             return ResponseEntity.noContent().build();
         }
 
-        final TelemetryEvent event = new TelemetryEvent();
+        TelemetryEvent event = new TelemetryEvent();
         event.setEventName(asString(body.getOrDefault("eventName", "dev_emit")));
         event.setEventTime(OffsetDateTime.now(Clock.systemUTC()));
         event.setSessionId(asString(body.get("sessionId")));
         event.setTraceId(asString(body.get("traceId")));
         event.setSpanId(asString(body.get("spanId")));
         setOptionalMap(event, body);
-        return ResponseEntity.ok(telemetry.record(event));
+        event = telemetry.record(event);
+        if(event == null){return ResponseEntity.badRequest().build();}
+        return ResponseEntity.ok(event);
     }
 
     /**
