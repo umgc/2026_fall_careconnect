@@ -35,6 +35,8 @@ public class TelemetryService {
      * Feature toggle used to enable or disable telemetry collection.
      */
     private final TelemetryToggleService toggle;
+    @Value("${careconnect.telemetry.memory.cleanup-after-days:30}")
+    private int cleanupAfterDays;
 
     /**
      * Records a telemetry event when telemetry is enabled.
@@ -58,30 +60,9 @@ public class TelemetryService {
      */
     public List<TelemetryEvent> recent(final int limit) {
         final List<TelemetryEvent> results = repository.findTop50ByOrderByEventTimeDesc();
-
-  @Value("${careconnect.telemetry.memory.cleanup-after-days:30}")
-  private int cleanupAfterDays;
-  /**
-   *  Every day, drops telemetry that's older than our retention policy
-   */
-  @Scheduled(fixedDelay=1, timeUnit=TimeUnit.DAYS)
-  public void dropOld(){
-    int removedCount = repository.removeByEventTimeBefore(OffsetDateTime.now(ZoneOffset.UTC).minusDays(cleanupAfterDays));
-    if(removedCount > 0){
-      log.info("Removed {} old telemetry events from database.", removedCount);
-    }
-
-  }
-
-  /**
-   * Returns the most recent telemetry events up to the requested limit.
-   *
-   * @param limit requested number of events
-   * @return recent telemetry events
-   */
-  public List<TelemetryEvent> recent(final int limit) {
-    final List<TelemetryEvent> results = repository.findTop50ByOrderByEventTimeDesc();
-
+        if (results == null || results.isEmpty()) {
+            return Collections.emptyList();
+        }
         final int safeLimit = Math.max(1, Math.min(limit, 200));
         if (results.size() <= safeLimit) {
             return results;
@@ -89,6 +70,19 @@ public class TelemetryService {
 
         return results.subList(0, safeLimit);
     }
+
+    /**
+     * Every day, drops telemetry that's older than our retention policy
+     */
+    @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.DAYS)
+    public void dropOld() {
+        int removedCount = repository.removeByEventTimeBefore(OffsetDateTime.now(ZoneOffset.UTC).minusDays(cleanupAfterDays));
+        if (removedCount > 0) {
+            log.info("Removed {} old telemetry events from database.", removedCount);
+        }
+
+    }
+
 
     /**
      * Records anonymous feature telemetry without user identifiers.

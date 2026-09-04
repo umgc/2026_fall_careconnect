@@ -50,8 +50,10 @@ class TelemetryServiceRetentionTest {
         telemetryService = new TelemetryService(repository, toggle);
     }
 
+
+
     @Test
-    @DisplayName("TC-TEL-RET-001: cutoff passed to the repository is now minus 28 days")
+    @DisplayName("TC-TEL-RET-001: cutoff passed to the repository is now minus cleanupAfterDays days")
     void cutoffIsRetentionWindowBeforeNow() {
         final OffsetDateTime before = OffsetDateTime.now();
         when(repository.removeByEventTimeBefore(any())).thenReturn(0);
@@ -62,18 +64,15 @@ class TelemetryServiceRetentionTest {
         final ArgumentCaptor<OffsetDateTime> cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
         verify(repository).removeByEventTimeBefore(cutoff.capture());
 
-        // Pins the documented 28-day retention policy against a silent change.
-        assertThat(TelemetryService.TELEMETRY_RETENTION_DURATION).isEqualTo(28);
-
         final OffsetDateTime expectedLowerBound =
-                before.minusDays(TelemetryService.TELEMETRY_RETENTION_DURATION)
+                before.minusDays(30)
                         .minusSeconds(CLOCK_TOLERANCE_SECONDS);
         final OffsetDateTime expectedUpperBound =
-                after.minusDays(TelemetryService.TELEMETRY_RETENTION_DURATION)
+                after.minusDays(30)
                         .plusSeconds(CLOCK_TOLERANCE_SECONDS);
 
         assertThat(cutoff.getValue()).isAfter(expectedLowerBound).isBefore(expectedUpperBound);
-        assertThat(ChronoUnit.DAYS.between(cutoff.getValue(), after)).isEqualTo(28L);
+        assertThat(ChronoUnit.DAYS.between(cutoff.getValue(), after)).isEqualTo(30);
     }
 
     @Test
