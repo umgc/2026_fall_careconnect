@@ -48,7 +48,7 @@ JWT (JSON Web Tokens) enable stateless authentication, crucial for our distribut
 Healthcare scenarios often require immediate notification (medication reminders, vital sign alerts, emergency communications). WebSocket provides the persistent, bidirectional connection needed for these real-time features, while our fallback to HTTP polling ensures reliability even in constrained network environments.
 
 **Cloud Infrastructure - AWS**
-AWS provides the scalability, security certifications (HIPAA compliance options), and service breadth needed for healthcare applications. Our infrastructure-as-code approach using Terraform ensures reproducible, auditable deployments—a requirement for regulated healthcare environments.
+AWS provides the scalability, security certifications (HIPAA compliance options), and service breadth needed for healthcare applications. Our CloudFormation infrastructure-as-code stack set provides reproducible, auditable deployments—a requirement for regulated healthcare environments.
 
 ## Architecture Overview
 
@@ -235,7 +235,7 @@ To understand how these layers work together, let's trace a complete user action
 
 **Infrastructure:**
 - **Cloud Provider**: AWS
-- **Infrastructure as Code**: Terraform
+- **Infrastructure as Code**: CloudFormation
 - **Containerization**: Docker
 - **CI/CD**: GitHub Actions
 
@@ -321,7 +321,7 @@ cd 2025_fall/careconnect2025
 **Repository Structure Overview**: The repository contains multiple projects:
 - `careconnect2025/frontend/` - Flutter mobile/web application
 - `careconnect2025/backend/core/` - Spring Boot backend API
-- `careconnect2025/terraform_aws/` - Infrastructure as Code for AWS deployment
+- `cloudformation-fargate/` - CloudFormation infrastructure for AWS deployment
 - `careconnect2025/docs/` - Documentation including this guide
 
 #### 2. Set Up PostgreSQL Database
@@ -595,7 +595,7 @@ careconnect2025/
 │       │   └── exception/     # Exception handling
 │       ├── src/main/resources/ # Configuration files
 │       └── pom.xml            # Maven dependencies
-├── terraform_aws/             # AWS infrastructure
+├── cloudformation-fargate/    # AWS infrastructure
 └── docs/                      # Documentation
 ```
 
@@ -6787,44 +6787,13 @@ EXPOSE 8080
 CMD ["java", "-jar", "target/careconnect-backend-1.0.0.jar"]
 ```
 
-### Terraform Infrastructure
+### CloudFormation Infrastructure
 
-```hcl
-# terraform_aws/main.tf
-provider "aws" {
-  region = var.aws_region
-}
-
-module "vpc" {
-  source = "./modules/vpc"
-
-  environment = var.environment
-  cidr_block = var.vpc_cidr
-}
-
-module "rds" {
-  source = "./modules/rds"
-
-  environment = var.environment
-  vpc_id = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnet_ids
-
-  db_name = var.db_name
-  db_username = var.db_username
-  db_password = var.db_password
-}
-
-module "ecs" {
-  source = "./modules/ecs"
-
-  environment = var.environment
-  vpc_id = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnet_ids
-
-  backend_image = var.backend_image
-  db_host = module.rds.db_endpoint
-}
-```
+The active AWS infrastructure is defined in
+[`cloudformation-fargate/templates/`](../../cloudformation-fargate/templates/).
+Deploy the stacks in the documented order: networking, data, platform, and
+service. See the [CloudFormation README](../../cloudformation-fargate/README.md)
+for parameters, deployment commands, validation, and teardown procedures.
 
 ## Monitoring & Logging
 
