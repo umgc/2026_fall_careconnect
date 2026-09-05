@@ -1,8 +1,10 @@
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 class MedicationCard extends StatefulWidget {
   final Medication medication;
@@ -69,6 +71,10 @@ class _MedicationCardState extends State<MedicationCard> {
       final response = await ApiService.removePatientMedication(
         patientId,
         widget.medication.id!,
+      );
+
+      unawaited(
+          Telemetry.event('feature.medications.delete_soft', {'statusCode': response}),
       );
 
       if (response.statusCode == 204 || response.statusCode == 200) {
@@ -217,9 +223,9 @@ class _MedicationCardState extends State<MedicationCard> {
                   Expanded(
                     child: Text(
                       'Medication is pending caregiver approval for removal. '
-                          'Please continue to take medication as proscribed. '
-                          'If medication is causing sever symptoms, please call '
-                          'your care giver immediately.',
+                          'Please continue to take medication as prescribed. '
+                          'If medication is causing severe symptoms, please call '
+                          'your caregiver immediately.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.orange[700],
                         fontWeight: FontWeight.w500,

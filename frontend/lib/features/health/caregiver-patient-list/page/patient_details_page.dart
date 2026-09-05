@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'dart:async';
 
 // Pain level card
 import '../widgets/pain_level_card.dart';
@@ -1783,9 +1785,15 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         return;
       }
 
+ 
+
       final http.Response resp =
           await ApiService.getPatientMedicationsForPatient(patientIdInt);
-
+      
+      unawaited(
+          Telemetry.event('feature.medications.view_all', {'statusCode': resp.statusCode})
+      );
+      
       if (resp.statusCode == 200) {
         final List<dynamic> data = jsonDecode(resp.body);
 

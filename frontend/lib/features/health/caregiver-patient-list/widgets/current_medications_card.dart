@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'dart:async';
 import '../../../health/medication-tracker/models/medication-model.dart';
 import '../../../../services/api_service.dart';
 
@@ -28,6 +30,10 @@ class CurrentMedicationsSection extends StatelessWidget {
         if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
         return a.medicationName.toLowerCase().compareTo(b.medicationName.toLowerCase());
       });
+
+      unawaited(
+        Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'})
+      );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -146,6 +152,10 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.caregiverId!,
       );
 
+      unawaited(
+        Telemetry.event('feature.medications.delete_hard', {'statusCode': response.statusCode})
+      );
+
       if (response.statusCode == 200) {
         _showSnackBar('Medication deleted successfully');
         widget.onMedicationUpdated?.call();
@@ -183,6 +193,10 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.med.patientId!,
         widget.med.id!,
       );
+      unawaited(
+          Telemetry.event('feature.medications.approve', {'statusCode': response.statusCode})
+        );
+
 
       if (response.statusCode == 200) {
         _showSnackBar('Medication approved successfully');
@@ -213,6 +227,9 @@ class _MedicationBlockState extends State<_MedicationBlock> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+          unawaited(
+          Telemetry.event('feature.medications.view_all', {'feature': 'MedicationBlock'})
+        );
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
