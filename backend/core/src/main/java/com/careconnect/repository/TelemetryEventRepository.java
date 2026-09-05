@@ -10,7 +10,9 @@ import com.careconnect.repository.projection.SyncCompletedSumProjection;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,22 +62,26 @@ public interface TelemetryEventRepository extends JpaRepository<TelemetryEvent, 
     List<EventNameCountProjection> countByEventNameBetween(
             @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query(
-            value =
-                    """
-                            SELECT details->>'feature' AS feature, COUNT(*) AS count
-                            FROM telemetry_events
-                            WHERE event_time >= :from AND event_time < :to
-                              AND event_name = 'feature_use'
-                              AND details->>'feature' IS NOT NULL
-                              AND length(details->>'feature') <= 64
-                            GROUP BY details->>'feature'
-                            ORDER BY count DESC
-                            LIMIT 10
-                            """,
-            nativeQuery = true)
-    List<FeatureUsageCountProjection> countTopFeaturesBetween(
-            @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+  @Modifying
+  @Transactional
+  int removeByEventTimeBefore(OffsetDateTime from);
+
+  @Query(
+      value =
+          """
+          SELECT details->>'feature' AS feature, COUNT(*) AS count
+          FROM telemetry_events
+          WHERE event_time >= :from AND event_time < :to
+            AND event_name = 'feature_use'
+            AND details->>'feature' IS NOT NULL
+            AND length(details->>'feature') <= 64
+          GROUP BY details->>'feature'
+          ORDER BY count DESC
+          LIMIT 10
+          """,
+      nativeQuery = true)
+  List<FeatureUsageCountProjection> countTopFeaturesBetween(
+      @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
     @Query(
             value =

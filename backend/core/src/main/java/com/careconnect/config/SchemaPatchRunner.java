@@ -265,6 +265,12 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         "ON telemetry_events (session_id, event_time DESC) " +
                         "WHERE session_id IS NOT NULL"
         );
+        applyPatch(
+                "V75c - index event_time on telemetry_events",
+                "CREATE INDEX IF NOT EXISTS idx_telemetry_events_time " +
+                        "ON telemetry_events (event_time) " +
+                        "WHERE session_id IS NOT NULL"
+        );
         applyEmailCredentialPatches();
         applyPatch(
                 "V2607032300 - add include_documents_by_default to user_ai_config",
