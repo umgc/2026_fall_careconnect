@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -34,6 +35,9 @@ import static org.mockito.Mockito.when;
 @DisplayName("TelemetryService retention purge (PR #62)")
 class TelemetryServiceRetentionTest {
 
+    /** Retention window the service is configured with (careconnect.telemetry.memory.cleanup-after-days). */
+    private static final int RETENTION_DAYS = 30;
+
     /** Tolerance for wall-clock drift between the service call and the assertion. */
     private static final long CLOCK_TOLERANCE_SECONDS = 30L;
 
@@ -48,6 +52,7 @@ class TelemetryServiceRetentionTest {
     @BeforeEach
     void setUp() {
         telemetryService = new TelemetryService(repository, toggle);
+        ReflectionTestUtils.setField(telemetryService, "cleanupAfterDays", RETENTION_DAYS);
     }
 
 
@@ -65,14 +70,14 @@ class TelemetryServiceRetentionTest {
         verify(repository).removeByEventTimeBefore(cutoff.capture());
 
         final OffsetDateTime expectedLowerBound =
-                before.minusDays(30)
+                before.minusDays(RETENTION_DAYS)
                         .minusSeconds(CLOCK_TOLERANCE_SECONDS);
         final OffsetDateTime expectedUpperBound =
-                after.minusDays(30)
+                after.minusDays(RETENTION_DAYS)
                         .plusSeconds(CLOCK_TOLERANCE_SECONDS);
 
         assertThat(cutoff.getValue()).isAfter(expectedLowerBound).isBefore(expectedUpperBound);
-        assertThat(ChronoUnit.DAYS.between(cutoff.getValue(), after)).isEqualTo(30);
+        assertThat(ChronoUnit.DAYS.between(cutoff.getValue(), after)).isEqualTo(RETENTION_DAYS);
     }
 
     @Test

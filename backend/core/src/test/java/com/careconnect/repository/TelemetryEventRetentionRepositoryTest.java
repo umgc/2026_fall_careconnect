@@ -6,13 +6,13 @@ import com.careconnect.service.TelemetryToggleService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TelemetryEventRetentionRepositoryTest {
 
     /** Retention window under test, mirroring the value the service applies. */
-    private static final int RETENTION_DAYS = 28;
+    private static final int RETENTION_DAYS = 30;
 
     @Autowired
     private TelemetryEventRepository repository;
@@ -65,12 +65,12 @@ class TelemetryEventRetentionRepositoryTest {
     }
 
     @Test
-    @DisplayName("TC-TEL-RET-010: boundary - strictly-before, exactly-28-day-old row is retained")
+    @DisplayName("TC-TEL-RET-010: boundary - strictly-before, row exactly at the cutoff is retained")
     void deletesOnlyStrictlyOlderThanCutoff() {
         final OffsetDateTime now = OffsetDateTime.now();
-        seed("older", now.minusDays(29));
+        seed("older", now.minusDays(RETENTION_DAYS + 1L));
         seed("exactly", now.minusDays(RETENTION_DAYS));
-        seed("newer", now.minusDays(27));
+        seed("newer", now.minusDays(RETENTION_DAYS - 1L));
         seed("current", now);
 
         // Cutoff taken slightly before the "exactly" row so the strictly-less-than semantics of
@@ -98,7 +98,7 @@ class TelemetryEventRetentionRepositoryTest {
         final OffsetDateTime now = OffsetDateTime.now();
         seed("a", now.minusDays(1));
         seed("b", now.minusDays(14));
-        seed("c", now.minusDays(27));
+        seed("c", now.minusDays(RETENTION_DAYS - 1L));
 
         final int removed = repository.removeByEventTimeBefore(cutoff());
 
@@ -110,7 +110,7 @@ class TelemetryEventRetentionRepositoryTest {
     @DisplayName("TC-TEL-RET-013: all rows outside the window - all deleted")
     void deletesEveryRowOutsideWindow() {
         final OffsetDateTime now = OffsetDateTime.now();
-        seed("a", now.minusDays(29));
+        seed("a", now.minusDays(RETENTION_DAYS + 1L));
         seed("b", now.minusDays(60));
         seed("c", now.minusDays(365));
 
@@ -154,12 +154,6 @@ class TelemetryEventRetentionRepositoryTest {
      * <p>Because this method commits for real (no rollback), it cleans up after itself.
      */
     @Test
-    @Disabled(
-            "Blocked by defect D-1 (PR #62): removeByEventTimeBefore lacks @Modifying/@Transactional "
-                    + "and dropOld() is not transactional, so the scheduled purge throws "
-                    + "TransactionRequiredException and never deletes anything. Executed 2026-08-25 by "
-                    + "Kristopher Bickmore (Testing Lead) - status Fail. "
-                    + "Re-enable when D-1 is fixed; see TC-TEL-RET-021 for the isolating case.")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @DisplayName("TC-TEL-RET-020: scheduled purge deletes expired rows with no ambient transaction")
     void scheduledPurgeWorksOutsideAmbientTransaction() {
@@ -170,6 +164,7 @@ class TelemetryEventRetentionRepositoryTest {
 
             final TelemetryService telemetryService =
                     new TelemetryService(repository, new TelemetryToggleService(true));
+            ReflectionTestUtils.setField(telemetryService, "cleanupAfterDays", RETENTION_DAYS);
 
             telemetryService.dropOld();
 
@@ -201,6 +196,7 @@ class TelemetryEventRetentionRepositoryTest {
 
             final TelemetryService telemetryService =
                     new TelemetryService(repository, new TelemetryToggleService(true));
+            ReflectionTestUtils.setField(telemetryService, "cleanupAfterDays", RETENTION_DAYS);
 
             new TransactionTemplate(transactionManager)
                     .executeWithoutResult(status -> telemetryService.dropOld());
