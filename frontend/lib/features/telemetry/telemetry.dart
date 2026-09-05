@@ -63,7 +63,6 @@ class Telemetry {
       // Best-effort sync, but only once per app run.
       if (!_forcedBackendOffThisRun) {
         _forcedBackendOffThisRun = true;
-        await setBackendEnabled(false);
       }
       return false;
     }
@@ -71,6 +70,7 @@ class Telemetry {
     final backend = await _enabledBackendCached();
     return backend;
   }
+
 
   // ---------------------------
   // Backend toggle helpers
