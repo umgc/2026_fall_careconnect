@@ -38,6 +38,9 @@ public class BedrockAIChatService implements AIService {
 
         @Autowired
         public BedrockAIChatService(
+                        // Temporary local-development fallback while the intended Claude
+                        // inference-profile path is unavailable under the account regional guardrail.
+                        // Override with BEDROCK_MODEL_ID when an approved model is available.
                         @Value("${careconnect.ai.model:amazon.nova-lite-v1:0}") String defaultModelId,
                         @Value("${aws.region:us-east-1}") String bedrockRegion) {
                 this(
