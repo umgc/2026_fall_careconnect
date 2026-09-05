@@ -11,30 +11,35 @@ parameter file is for and what values need to be replaced before deployment.
 
 ### Files
 
-1. `dev-networking.json`
+1. `cost-guardrails.example.json`
+- sanitized reference for the account-level cost-guardrails stack; replace the
+  email address(es) and approved dollar thresholds in the documented
+  `Key=Value` deployment command before deployment
+
+2. `dev-networking.json`
 - baseline networking parameters for the `dev` environment
 
-2. `dev-data.json`
+3. `dev-data.json`
 - checked-in placeholder values for the `dev` environment data stack
-3. `dev-platform.json`
+4. `dev-platform.json`
 - ECR repository name and log retention for the `dev` environment
 
-4. `dev-service.json`
+5. `dev-service.json`
 - image URI and service/runtime settings for the `dev` environment
 
-5. `cfdemo-networking.json`
+6. `cfdemo-networking.json`
 - networking parameters for the parallel CloudFormation demo environment
 
-6. `cfdemo-data.json`
+7. `cfdemo-data.json`
 - checked-in placeholder values for the parallel CloudFormation demo environment data stack
 
-7. `cfdemo-platform.json`
+8. `cfdemo-platform.json`
 - ECR repository name and log retention for the parallel CloudFormation demo environment
 
-8. `cfdemo-service.json`
+9. `cfdemo-service.json`
 - image URI and service/runtime settings for the parallel CloudFormation demo environment
 
-9. `staging-*.json` / `prod-*.json`
+10. `staging-*.json` / `prod-*.json`
 - parameter sets for staging and production (SpringProfile `prod`, AI enabled, pgvector RDS)
 
 ### P0 Ask AI deploy unblock (Tasks 0.1)
