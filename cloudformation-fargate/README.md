@@ -8,7 +8,7 @@ backend running on:
 - Amazon RDS PostgreSQL
 - Amazon ECR
 
-It does not depend on the older `cloudformation/` or `terraform_aws/` layouts.
+It is self-contained and does not depend on older infrastructure layouts.
 
 This stack set was validated by deploying a parallel `cfdemo` environment in
 the same AWS account without interfering with the existing manually created

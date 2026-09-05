@@ -209,31 +209,10 @@ For credentials, setup help, or onboarding, contact your team lead or project ma
 
 
 ## Deployment on AWS
-This can be done after creating the infrastructure resources using the Terraform scripts. Follow the README(s) for more on the Terraform scripts. 
+CareConnect uses the CloudFormation stack set in
+[`cloudformation-fargate/`](../../cloudformation-fargate/README.md) for AWS
+deployment. It provisions the ECS Fargate backend, API Gateway, Amazon RDS,
+Amazon ECR, networking, and supporting resources.
 
-1. Install and Configure your AWS Cli. Jump to step 2 if you have done that already.
-2. Build the project and upload the zip file to AWS S3. 
-   ```
-   aws s3 cp target/careconnect-backend-0.0.1-SNAPSHOT-lambda-package.zip s3://<S3_BUCKET_NAME>/cc-backend-jars/careconnect-backend-0.0.1-SNAPSHOT-lambda-package.zip --sse aws:kms
-    ```
-
-3. If this the first deployment and initial resource creation. Once the file is uploaded use the Terraform compute application's scripts to create the Lambda.<br/>
-The Terraform compute app will create the Lambda with the S3 file, create a new Lambda version, create the API Gateway integration with the Lambda version.
-
-4. If this is a subsequent deployment, you can use these commands to update the function and create a new version. 
-   <br/>You might still need to go to the console to complete the API Gateway integration update, or once the zip is in S3 you can skip those commands and do the rest on the Console.
-    <br>Ideally an automated flow will be provided, and you won't need to do anything after the file is upload to S3.
-```sh
-# This is to update the function. Please replace your <S3_BUCKET_NAME>.
-aws lambda update-function-code --function-name cc_main_backend \
-    --s3-bucket <S3_BUCKET_NAME> --s3-key cc-backend-jars/careconnect-backend-0.0.1-SNAPSHOT-lambda-package.zip
-
-# This is to publish a new version for the lambda after the code is updated.  Please update the description to be meaningful to your version.
-aws lambda publish-version --function-name cc_main_backend --description "M3 Deployment"
-
-# This is to update the API Gateway Integration. Please replace the <API Id>, <INTEGRATION_ID>, <AWS_ACCOUNT_ID> and <VERSION_NUMBER>.
-aws apigatewayv2 update-integration \
-    --api-id <API_DI> \
-    --integration-id <INTEGRATION_ID> \
-    --integration-uri arn:aws:lambda:us-east-1:<AWS_ACCOUNT_ID>:function:cc_main_backend:<VERSION_NUMBER>
-```
+Follow the CloudFormation README for parameter setup, deployment order,
+validation, and teardown.
