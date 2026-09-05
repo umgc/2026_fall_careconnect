@@ -67,7 +67,7 @@ public class VoiceIntentService {
             return parseAIResponse(chatResponse.getAiResponse());
         } catch (Exception e) {
             log.error("Voice intent extraction failed: {}", e.getMessage(), e);
-            return VoiceIntentResponse.error(e.getMessage());
+            return VoiceIntentResponse.error("Voice intent service is temporarily unavailable.");
         }
     }
 
