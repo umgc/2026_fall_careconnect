@@ -20,6 +20,7 @@ import com.careconnect.dto.ChatResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
@@ -36,9 +37,17 @@ public class BedrockAIChatService implements AIService {
         private final String defaultModelId;
 
         @Autowired
-        public BedrockAIChatService(@Value("${careconnect.ai.model:amazon.nova-lite-v1:0}") String defaultModelId) {
+        public BedrockAIChatService(
+                        // Temporary local-development fallback while the intended Claude
+                        // inference-profile path is unavailable under the account regional guardrail.
+                        // Override with BEDROCK_MODEL_ID when an approved model is available.
+                        @Value("${careconnect.ai.model:amazon.nova-lite-v1:0}") String defaultModelId,
+                        @Value("${aws.region:us-east-1}") String bedrockRegion) {
                 this(
-                                BedrockRuntimeClient.builder().region(Region.US_EAST_1).build(),
+                                BedrockRuntimeClient.builder()
+                                                .region(Region.of(bedrockRegion))
+                                                .credentialsProvider(DefaultCredentialsProvider.create())
+                                                .build(),
                                 defaultModelId,
                                 new ObjectMapper()
                 );
