@@ -48,7 +48,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     // Core navigation
     _CommandMatch(phrase: 'take me home', intent: 'navigate', entity: 'home'),
     _CommandMatch(phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
     _CommandMatch(phrase: 'take me to my tracker', intent: 'navigate', entity: 'symptoms'),
+    _CommandMatch(phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
     _CommandMatch(phrase: 'open messages', intent: 'navigate', entity: 'messages'),
     _CommandMatch(phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
     _CommandMatch(phrase: 'open profile', intent: 'navigate', entity: 'profile'),
@@ -57,6 +59,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     // Health
     _CommandMatch(phrase: 'open medication tracker', intent: 'navigate', entity: 'medication'),
     _CommandMatch(phrase: 'take me to medications', intent: 'navigate', entity: 'medications'),
+    _CommandMatch(phrase: 'open medications', intent: 'navigate', entity: 'medications'),
+    _CommandMatch(phrase: 'open my medications', intent: 'navigate', entity: 'medications'),
     _CommandMatch(phrase: 'open virtual check in', intent: 'navigate', entity: 'virtual checkin'),
     _CommandMatch(phrase: 'start check in', intent: 'navigate', entity: 'virtual checkin'),
     // Integrations
@@ -610,8 +614,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _pendingDetail = null;
       _pendingIntent = null;
       _ambiguousMatches = [];
-      context.go(destination);
       _reset();
+      context.go(destination);
     } else if (intentDef != null && intentDef.handler != null) {
       _setStatus(
         status: _VoiceStatus.success,
@@ -632,8 +636,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _pendingDetail = null;
       _pendingIntent = null;
       _ambiguousMatches = [];
-      context.go('/calendar');
       _reset();
+      context.go('/calendar');
     } else {
       _setStatus(
         status: _VoiceStatus.success,
