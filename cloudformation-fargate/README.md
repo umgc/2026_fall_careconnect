@@ -40,11 +40,48 @@ Fargate deployment.
 
 ### Stack order
 
+0. `00-cost-guardrails.yaml` — deploy once per AWS account; it is not an
+   environment stack and must not be included in an environment teardown.
 1. `01-networking.yaml`
 2. `02-data.yaml`
 3. `03-platform.yaml`
 4. Build and push the backend image to ECR
 5. `04-service.yaml`
+
+### Account cost guardrails
+
+Deploy `00-cost-guardrails.yaml` once in the account before creating the first
+CareConnect environment. It creates an account-wide monthly cost budget with
+actual-spend alerts at 50%, 80%, and 100%, a 100% forecast alert, and a daily
+Cost Explorer service-cost anomaly notification. It does not stop resources or
+make any operational changes automatically.
+
+Use `parameters/cost-guardrails.example.json` as a sanitized reference for the
+required values. `SecondaryNotificationEmail` is optional. Each recipient must
+be a valid address that can receive cost-alert notifications. An SNS-based
+notification design would require subscription confirmation; this template uses
+direct email subscribers.
+
+`aws cloudformation deploy` expects `Key=Value` parameter overrides; it does
+not accept the JSON parameter-file format shown in the example file.
+
+```bash
+aws cloudformation deploy \
+  --profile careconnect \
+  --region us-east-1 \
+  --stack-name careconnect-cost-guardrails \
+  --template-file cloudformation-fargate/templates/00-cost-guardrails.yaml \
+  --parameter-overrides \
+    ProjectName=careconnect \
+    NotificationEmail='REPLACE_WITH_YOUR_EMAIL' \
+    SecondaryNotificationEmail='REPLACE_WITH_TEAM_LEAD_EMAIL' \
+    MonthlyBudgetUsd='REPLACE_WITH_APPROVED_MONTHLY_BUDGET' \
+    AnomalyAlertUsd='REPLACE_WITH_APPROVED_ANOMALY_THRESHOLD'
+```
+
+The guardrail is account-wide rather than tag-scoped: it will alert on all
+charges in this AWS account, including charges not created by CareConnect. Do
+not delete this stack as part of a `dev`, `staging`, or `prod` teardown.
 
 
 
