@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,9 +77,8 @@ public class TelemetryService {
                 return null;
             }
 
-            details.values().removeIf(Objects::isNull);
             /* Do a little dark magic to filter it out */
-            Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).collect(Collectors.toMap(Function.identity(), details::get));
+            Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), details::get));
 
             event.setDetails(newDetails);
 
@@ -89,8 +87,7 @@ public class TelemetryService {
                 log.info("Recieved Invalid Telemetry Event: Null/Empty Device Info");
                 return null;
             }
-            deviceInfo.values().removeIf(Objects::isNull);
-            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
+            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
 
             if (newDeviceInfo.isEmpty()) {
                 // Not going to bother storing an event with no valid deviceInfo
@@ -170,9 +167,8 @@ public class TelemetryService {
                 log.info("Recieved Invalid Telemetry Event: Null Details");
                 return null;
             }
-            details.values().removeIf(Objects::isNull);
             /* Do a little dark magic to filter it out */
-            Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).collect(Collectors.toMap(Function.identity(), details::get));
+            Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), details::get));
 
             event.setDetails(newDetails);
 
@@ -180,8 +176,7 @@ public class TelemetryService {
                 log.info("Recieved Invalid Telemetry Event: Null/Empty Device Info");
                 return null;
             }
-            deviceInfo.values().removeIf(Objects::isNull);
-            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
+            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
             if (newDeviceInfo.isEmpty()) {
                 // Not going to bother storing an event with no valid deviceInfo
                 log.info("Recieved Invalid Telemetry Event: Invalid Device Info");
