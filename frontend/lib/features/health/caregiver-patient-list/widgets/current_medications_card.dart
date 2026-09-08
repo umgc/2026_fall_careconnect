@@ -5,8 +5,9 @@ import 'dart:async';
 import '../../../health/medication-tracker/models/medication-model.dart';
 import '../../../../services/api_service.dart';
 
+
 /// Patient Details → Health tab
-class CurrentMedicationsSection extends StatelessWidget {
+class CurrentMedicationsSection extends StatefulWidget {
   final List<Medication> entries;
   final String title; // defaults to 'Current Medications'
   final Function()? onMedicationUpdated; // Callback to refresh medications
@@ -21,6 +22,9 @@ class CurrentMedicationsSection extends StatelessWidget {
   });
 
   @override
+  State<StatefulWidget> createState() => _CurrentMedicationsSectionState();
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -31,9 +35,7 @@ class CurrentMedicationsSection extends StatelessWidget {
         return a.medicationName.toLowerCase().compareTo(b.medicationName.toLowerCase());
       });
 
-      unawaited(
-        Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'})
-      );
+
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -88,6 +90,30 @@ class CurrentMedicationsSection extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection>{
+   @override Widget build(BuildContext context){
+    return Container();
+
+   }
+   
+   @override
+    void initState() {
+    super.initState();
+
+    // Emitted once per mount, never from build(): build runs again on every
+    // layout change, which multiplies the view count.
+    unawaited(
+      Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'}),
+    );
+
+    if (widget.entries.any((m) => !m.isActive)) {
+      unawaited(
+        Telemetry.event('feature.medications.view_pending', {'feature': 'CurrentMedicationsSection'}),
+      );
+    }
+}
 }
 
 class _MedicationBlock extends StatefulWidget {
@@ -227,9 +253,6 @@ class _MedicationBlockState extends State<_MedicationBlock> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-          unawaited(
-          Telemetry.event('feature.medications.view_all', {'feature': 'MedicationBlock'})
-        );
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
