@@ -201,6 +201,10 @@ public class SecurityConfig {
                         /* ---------- Everything else: deny --------------------- */
                         .anyRequest().denyAll()
                 )
+                .oauth2Login(
+                        oauth -> oauth.defaultSuccessful("/results")
+                )
+
                 .build();
     }
 
