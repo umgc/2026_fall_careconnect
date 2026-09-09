@@ -321,6 +321,55 @@ class AiAskServiceTest {
     }
 
     @Test
+    @DisplayName("ask drops an unsupported claim but delivers a later claim that is relevant")
+    void ask_dropsUnsupportedClaimButDeliversRemainingRelevantClaim() throws Exception {
+        // Reproduces a real observed case: the model pads its answer with an
+        // extraneous, irrelevant claim ahead of the actually-relevant one. That
+        // single bad claim must not cause the whole (otherwise correct) answer
+        // to be withheld.
+        final String chunkText = "Metformin was discussed. "
+                + "The patient's blood pressure was 130 over 85 today.";
+        stubHappyPathPreRetrieval("blood pressure");
+        final RankedChunk chunk = new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                chunkText,
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+        when(hybridRetrievalService.search(any(), eq(42L), eq("blood pressure"), any()))
+                .thenReturn(new HybridRetrievalResult(List.of(chunk), "blood pressure", false, 1, 1));
+        when(groundedAskLlmService.generate(anyString(), anyString()))
+                .thenReturn(Optional.of(new GroundedAskLlmService.GroundedLlmResult(
+                        "Metformin was discussed. The patient's blood pressure was 130 over 85 today.",
+                        List.of("C1", "C1"),
+                        List.of(
+                                new GroundedAskLlmService.GroundedClaim(
+                                        "Metformin was discussed.",
+                                        List.of("C1"),
+                                        java.util.Map.of("C1", "Metformin was discussed.")),
+                                new GroundedAskLlmService.GroundedClaim(
+                                        "The patient's blood pressure was 130 over 85 today.",
+                                        List.of("C1"),
+                                        java.util.Map.of(
+                                                "C1",
+                                                "The patient's blood pressure was 130 over 85 today."))),
+                        "amazon.nova-lite-v1:0")));
+
+        final AiAskResponse response = service.ask(caller(), request("blood pressure"));
+
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.answer().text())
+                .contains("130 over 85")
+                .doesNotContain("Metformin was discussed");
+    }
+
+    @Test
     void ask_citationDisplaysSurroundingPromptContext() throws Exception {
         final String evidence = "The patient started metformin 500 mg.";
         stubExtractiveResult(
@@ -846,7 +895,8 @@ class AiAskServiceTest {
 
         assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
                 .isInstanceOf(AskAiGroundingException.class)
-                .hasMessageContaining("HITL is disabled");
+                .extracting(ex -> ((AskAiGroundingException) ex).getErrorCode())
+                .isEqualTo(AskAiGroundingException.ERROR_CODE);
         verify(hitlService, never()).createHold(any(), any(), anyList(), any());
     }
 

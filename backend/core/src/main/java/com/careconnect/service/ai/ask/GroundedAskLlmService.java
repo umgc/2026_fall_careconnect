@@ -172,7 +172,11 @@ public class GroundedAskLlmService {
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
-            final JsonNode claimsNode = root.get("claims");
+            // Some models (observed: Nova) return the claims array directly at the
+            // top level instead of wrapping it in {"claims": [...]}. The array
+            // contents and every downstream validation are unaffected either way —
+            // this only tolerates the outer shape, not the claim/citation contract.
+            final JsonNode claimsNode = root.isArray() ? root : root.get("claims");
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
                 throw new GroundedOutputValidationException(
                         "Grounded model response did not contain claims");
@@ -232,8 +236,15 @@ public class GroundedAskLlmService {
                 candidate = candidate.substring(firstNl + 1, lastFence).trim();
             }
         }
-        final int start = candidate.indexOf('{');
-        final int end = candidate.lastIndexOf('}');
+        // Whichever bracket type appears first is the true outer container —
+        // slicing to a hardcoded '{'/'}' pair silently strips a bare array's
+        // own brackets (turning `[{"a":1}]` into `{"a":1}`) when a model
+        // (observed: Nova) returns claims as a top-level array.
+        final int firstBrace = candidate.indexOf('{');
+        final int firstBracket = candidate.indexOf('[');
+        final boolean isArray = firstBracket >= 0 && (firstBrace < 0 || firstBracket < firstBrace);
+        final int start = isArray ? firstBracket : firstBrace;
+        final int end = isArray ? candidate.lastIndexOf(']') : candidate.lastIndexOf('}');
         if (start >= 0 && end > start) {
             return candidate.substring(start, end + 1);
         }
