@@ -80,20 +80,20 @@ public class TelemetryService {
             /* Do a little dark magic to filter it out */
             Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), details::get));
 
-            event.setDetails(newDetails);
-
             Map<String, Object> deviceInfo = event.getDeviceInfo();
             if (deviceInfo == null || deviceInfo.isEmpty()) {
                 log.info("Recieved Invalid Telemetry Event: Null/Empty Device Info");
                 return null;
             }
-            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
+            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).filter(k -> deviceInfo.get(k) != null).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
 
             if (newDeviceInfo.isEmpty()) {
                 // Not going to bother storing an event with no valid deviceInfo
                 log.info("Recieved Invalid Telemetry Event: Invalid Device Info");
                 return null;
             }
+
+            event.setDetails(newDetails);
             event.setDeviceInfo(newDeviceInfo);
             return repository.save(event);
         }
@@ -170,18 +170,19 @@ public class TelemetryService {
             /* Do a little dark magic to filter it out */
             Map<String, Object> newDetails = allowedDetails.stream().filter(details::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), details::get));
 
-            event.setDetails(newDetails);
+            
 
             if (deviceInfo == null || deviceInfo.isEmpty()) {
                 log.info("Recieved Invalid Telemetry Event: Null/Empty Device Info");
                 return null;
             }
-            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).filter(k -> details.get(k) != null).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
+            Map<String, Object> newDeviceInfo = allowedDeviceInfo.stream().filter(deviceInfo::containsKey).filter(k -> deviceInfo.get(k) != null).collect(Collectors.toMap(Function.identity(), deviceInfo::get));
             if (newDeviceInfo.isEmpty()) {
                 // Not going to bother storing an event with no valid deviceInfo
                 log.info("Recieved Invalid Telemetry Event: Invalid Device Info");
                 return null;
             }
+            event.setDetails(newDetails);
             event.setDeviceInfo(newDeviceInfo);
             return repository.save(event);
         }
