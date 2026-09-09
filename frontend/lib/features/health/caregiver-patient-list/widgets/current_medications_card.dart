@@ -22,19 +22,41 @@ class CurrentMedicationsSection extends StatefulWidget {
   });
 
   @override
-  State<StatefulWidget> createState() => _CurrentMedicationsSectionState();
+  State<CurrentMedicationsSection> createState() =>
+      _CurrentMedicationsSectionState();
+}
+
+class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Emitted once per mount, never from build(): build runs again on every
+    // layout change, which multiplies the view count.
+    unawaited(
+      Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'}),
+    );
+
+    if (widget.entries.any((m) => !m.isActive)) {
+      unawaited(
+        Telemetry.event('feature.medications.view_pending', {'feature': 'CurrentMedicationsSection'}),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final title = widget.title;
+    final onMedicationUpdated = widget.onMedicationUpdated;
+    final caregiverId = widget.caregiverId;
 
     // Active medications first, then alphabetical
-    final meds = List<Medication>.from(entries)
+    final meds = List<Medication>.from(widget.entries)
       ..sort((a, b) {
         if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
         return a.medicationName.toLowerCase().compareTo(b.medicationName.toLowerCase());
       });
-
 
 
     return Container(
@@ -90,30 +112,6 @@ class CurrentMedicationsSection extends StatefulWidget {
       ),
     );
   }
-}
-
-class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection>{
-   @override Widget build(BuildContext context){
-    return Container();
-
-   }
-   
-   @override
-    void initState() {
-    super.initState();
-
-    // Emitted once per mount, never from build(): build runs again on every
-    // layout change, which multiplies the view count.
-    unawaited(
-      Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'}),
-    );
-
-    if (widget.entries.any((m) => !m.isActive)) {
-      unawaited(
-        Telemetry.event('feature.medications.view_pending', {'feature': 'CurrentMedicationsSection'}),
-      );
-    }
-}
 }
 
 class _MedicationBlock extends StatefulWidget {
