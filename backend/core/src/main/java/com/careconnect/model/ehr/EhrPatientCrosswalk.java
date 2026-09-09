@@ -15,6 +15,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 /**
  * Maps a CareConnect patient to the identifier that same person carries in an external EHR,
  * one row per (patient, source).
@@ -80,4 +82,16 @@ public class EhrPatientCrosswalk extends Auditable {
      */
     @Column(name = "external_patient_id", nullable = false, length = 255)
     private String externalPatientId;
+
+    @Column(name="token")
+    private String token;
+
+    @Column(name="refresh_token")
+    private String refreshToken;
+
+    @Column(name="last_logged_in")
+    private LocalDateTime lastLoggedIn;
+
+    @Column(name="last_refreshed")
+    private LocalDateTime lastRefreshed;
 }
