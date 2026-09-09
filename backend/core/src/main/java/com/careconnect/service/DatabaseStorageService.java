@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DatabaseStorageService implements StorageService {
 
-    private static final Logger log = LoggerFactory.getLogger(DatabaseStorageService.class);
     private final UserFileRepository userFileRepository;
 
     @Override
