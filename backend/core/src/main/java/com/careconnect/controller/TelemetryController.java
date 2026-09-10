@@ -38,13 +38,48 @@ public class TelemetryController {
   private static final int MAX_NESTED_ENTRIES = 32;
 
   /**
-   * Maximum accepted character length of any single stringified value.
+   * Maximum accepted character length of a value stored inside the details or
+   * deviceInfo maps.
    *
-   * <p>Set above the client-side guardrail cap of 64 so that legitimate
-   * payloads are never rejected here; this is a backstop against direct
-   * callers, not a duplicate of the client's own limit.
+   * <p>Those two columns are {@code jsonb} and have no per-value width, so this
+   * is a size backstop rather than a column constraint. It sits above the
+   * client-side guardrail cap of 64 so that legitimate payloads are never
+   * rejected here.
+   *
+   * <p>The four column-backed string fields do NOT use this cap — see
+   * {@link #COLUMN_BACKED_MAX_LENGTHS}.
    */
   private static final int MAX_VALUE_LENGTH = 256;
+
+  /** Maximum accepted length of {@code eventName}; {@code event_name VARCHAR(128)}. */
+  private static final int MAX_EVENT_NAME_LENGTH = 128;
+
+  /** Maximum accepted length of {@code sessionId}; {@code session_id VARCHAR(64)}. */
+  private static final int MAX_SESSION_ID_LENGTH = 64;
+
+  /** Maximum accepted length of {@code traceId}; {@code trace_id VARCHAR(64)}. */
+  private static final int MAX_TRACE_ID_LENGTH = 64;
+
+  /** Maximum accepted length of {@code spanId}; {@code span_id VARCHAR(32)}. */
+  private static final int MAX_SPAN_ID_LENGTH = 32;
+
+  /**
+   * Per-field caps for the payload fields that land in a width-constrained
+   * column, mirroring the lengths declared on {@code TelemetryEvent}.
+   *
+   * <p>A single cap above these widths is not a bound at all: the value clears
+   * the controller, reaches {@code repository.save}, and dies there on a
+   * {@code DataIntegrityViolationException}. The allowlist in
+   * {@code TelemetryService} bounds {@code eventName} incidentally, because
+   * every allowlisted name is short, but it never inspects the other three.
+   * Keep these in step with the entity and the migrations if a column is
+   * widened.
+   */
+  private static final Map<String, Integer> COLUMN_BACKED_MAX_LENGTHS = Map.of(
+      "eventName", MAX_EVENT_NAME_LENGTH,
+      "sessionId", MAX_SESSION_ID_LENGTH,
+      "traceId", MAX_TRACE_ID_LENGTH,
+      "spanId", MAX_SPAN_ID_LENGTH);
 
     /**
      * Service used to persist and query telemetry events.
@@ -68,7 +103,7 @@ public class TelemetryController {
       }
 
       for (final Object value : nested.values()) {
-        if (tooLong(value)) {
+        if (tooLong(value, MAX_VALUE_LENGTH)) {
           return false;
         }
       }
@@ -79,10 +114,21 @@ public class TelemetryController {
     * Reports whether a single value stringifies to an over-long representation.
     *
     * @param value value to measure
+    * @param maxLength longest representation accepted for this value
     * @return true when the value exceeds the accepted length
     */
-    private static boolean tooLong(final Object value) {
-      return value != null && String.valueOf(value).length() > MAX_VALUE_LENGTH;
+    private static boolean tooLong(final Object value, final int maxLength) {
+      return value != null && String.valueOf(value).length() > maxLength;
+    }
+
+    /**
+    * Returns the length cap that applies to a top-level payload field.
+    *
+    * @param field top-level key from the request body
+    * @return the column width for a column-backed field, MAX_VALUE_LENGTH otherwise
+    */
+    private static int maxLengthFor(final String field) {
+      return COLUMN_BACKED_MAX_LENGTHS.getOrDefault(field, MAX_VALUE_LENGTH);
     }
 
     private static void setOptionalMap(final TelemetryEvent event, final Map<String, Object> body) {
@@ -142,7 +188,9 @@ public class TelemetryController {
       event.setSpanId(asString(body.get("spanId")));
       setOptionalMap(event, body);
       event = telemetry.record(event);
-      if(event == null){return ResponseEntity.badRequest().build();
+      if (event == null) {
+        return ResponseEntity.badRequest().build();
+      }
       return ResponseEntity.ok(event);
     }
 
@@ -196,7 +244,7 @@ public class TelemetryController {
       if (nested && !nestedWithinBounds((Map<?, ?>) value)) {
         return false;
       }
-      if (!nested && tooLong(value)) {
+      if (!nested && tooLong(value, maxLengthFor(entry.getKey()))) {
         return false;
       }
     }

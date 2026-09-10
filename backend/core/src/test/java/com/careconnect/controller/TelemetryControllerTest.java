@@ -6,6 +6,8 @@ import com.careconnect.service.TelemetryToggleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -263,28 +265,92 @@ class TelemetryControllerTest {
     /**
      * TC-TEL-ING-014 — negative, EXPECTED-FAIL, proves DEF-TEL-11.
      *
-     * <p>MAX_VALUE_LENGTH is 256, but telemetry_events.event_name is
-     * VARCHAR(128) (V34.2__create_telemetry_events.sql:3, mirrored by
-     * TelemetryEvent.EVENT_NAME_LENGTH). A 129-character event name is
-     * therefore accepted by the controller and handed to the service, where it
-     * cannot be persisted. The bound should reject at or below the column
-     * width; this case asserts that and currently fails.
+     * <p>MAX_VALUE_LENGTH is 256, but telemetry_events.session_id is
+     * VARCHAR(64) (V75__add_session_id_to_telemetry_events.sql:2). A
+     * 65-character sessionId is therefore accepted by the controller and handed
+     * to the service, where it cannot be persisted. The bound should reject at
+     * or below the column width; this case asserts that and currently fails.
+     *
+     * <p>Amended 2026-09-09. The case previously used a 129-character eventName
+     * against event_name VARCHAR(128). The TelemetryService allowlist (merged
+     * with PR #63, b680e45a) now rejects any name outside a fixed list, so that
+     * value can no longer reach the column and the eventName form no longer
+     * proves the defect. sessionId, traceId and spanId are not allowlist-checked
+     * and remain reachable, so the case now exercises sessionId. The defect and
+     * its ID are unchanged.
      *
      * <p>Must go green when DEF-TEL-11 is fixed. Not a characterization test.
      */
     @Test
-    void emit_whenEventNameExceedsColumnWidth_shouldRejectBeforeService() {
+    void emit_whenSessionIdExceedsColumnWidth_shouldRejectBeforeService() {
         when(toggleService.isEnabled()).thenReturn(true);
 
         Map<String, Object> body = new HashMap<>();
-        body.put("eventName", stringOfLength(129));
+        body.put("eventName", "screen_view");
+        body.put("sessionId", stringOfLength(65));
 
         ResponseEntity<?> response = controller.emit(body);
 
         assertThat(response.getStatusCode())
-                .as("DEF-TEL-11: a 129-char eventName exceeds VARCHAR(128) and must not "
+                .as("DEF-TEL-11: a 65-char sessionId exceeds VARCHAR(64) and must not "
                         + "reach the persistence layer")
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         verify(telemetryService, never()).record(any());
+    }
+
+    /**
+     * TC-TEL-ING-017 — negative, invalid input. Every column-backed field is
+     * rejected one character past its column width, and none reaches the
+     * service. Added 2026-09-09 with the DEF-TEL-11 fix: TC-TEL-ING-014 pins
+     * sessionId alone, this pins the other three so a cap can not be raised
+     * above its column unnoticed.
+     */
+    @ParameterizedTest(name = "TC-TEL-ING-017 [{index}] {0} at {1} chars is rejected")
+    @CsvSource({
+        "eventName, 129",
+        "sessionId, 65",
+        "traceId, 65",
+        "spanId, 33"
+    })
+    void emit_whenColumnBackedFieldExceedsItsWidth_returnsBadRequest(
+            String field, int length) {
+        when(toggleService.isEnabled()).thenReturn(true);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("eventName", "screen_view");
+        body.put(field, stringOfLength(length));
+
+        ResponseEntity<?> response = controller.emit(body);
+
+        assertThat(response.getStatusCode())
+                .as("DEF-TEL-11: %s at %d chars exceeds its column and must be "
+                        + "rejected before the service", field, length)
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        verify(telemetryService, never()).record(any());
+    }
+
+    /**
+     * TC-TEL-ING-018 — boundary. A payload sitting exactly on every
+     * column-backed cap is accepted, because each bound rejects only on
+     * strictly-greater-than. Pairs with TC-TEL-ING-015, which proves the same
+     * values persist. Added 2026-09-09 with the DEF-TEL-11 fix.
+     */
+    @Test
+    void emit_whenColumnBackedFieldsSitExactlyOnTheirWidths_isAccepted() {
+        when(toggleService.isEnabled()).thenReturn(true);
+        TelemetryEvent savedEvent = new TelemetryEvent();
+        savedEvent.setEventName("screen_view");
+        when(telemetryService.record(any(TelemetryEvent.class))).thenReturn(savedEvent);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("eventName", stringOfLength(128));
+        body.put("sessionId", stringOfLength(64));
+        body.put("traceId", stringOfLength(64));
+        body.put("spanId", stringOfLength(32));
+
+        ResponseEntity<?> response = controller.emit(body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(telemetryService).record(any(TelemetryEvent.class));
     }
 }
