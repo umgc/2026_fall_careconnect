@@ -16,7 +16,9 @@ $env:AWS_PROFILE      = 'careconnect'
 $env:AWS_REGION       = 'us-east-1'
 $env:AWS_DEFAULT_REGION = 'us-east-1'
 $env:BEDROCK_REGION   = 'us-east-1'
-$env:BEDROCK_MODEL_ID = 'amazon.nova-lite-v1:0'
+# Nova Lite is too weak for the grounded Ask AI JSON contract (claims + citations);
+# Nova Pro follows structured output reliably. Override with BEDROCK_MODEL_ID if needed.
+$env:BEDROCK_MODEL_ID = 'amazon.nova-pro-v1:0'
 
 # Norton Antivirus intercepts TLS (Web/Mail Shield). Trust its root so the AWS CLI can verify
 # AWS endpoints. NOTE: this env var is honored by the AWS CLI, NOT the Java SDK — for the
