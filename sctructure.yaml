@@ -9,7 +9,6 @@ careconnect2025
     ai
     database
   frontend
-  terraform_aws
     backend
     infra
       modules
