@@ -193,7 +193,6 @@ public class SecurityConfig {
                          * endpoint accepts unauthenticated writes at any rate from
                          * any source. Tracked as follow-up work.
                          */
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").permitAll()
 
