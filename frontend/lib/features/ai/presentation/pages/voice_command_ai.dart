@@ -86,6 +86,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _CommandMatch(phrase: 'open search', intent: 'navigate', entity: 'search'),
     _CommandMatch(phrase: 'open subscription', intent: 'navigate', entity: 'subscription'),
     _CommandMatch(phrase: 'open ai configuration', intent: 'navigate', entity: 'ai configuration'),
+    //emergency
+    _CommandMatch(phrase: 'help', intent: 'sos', entity: 'emergency'),
+    _CommandMatch(phrase: 'SOS', intent: 'sos', entity: 'emergency'),
   ];
 
   @override
@@ -400,12 +403,31 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (exactMatches.length == 1) {
         _speech.stop();
         final match = exactMatches.first;
-        final destination = VoiceIntentRegistry().resolveDestination(match.entity);
-        if (destination != null) {
+        final registry = VoiceIntentRegistry(); //added variable for method
+        final intentDef = registry.resolveIntent(match.intent);
+
+        //added support for intents that don't have a destination, like SOS
+        // Navigation commands
+        if (match.intent == 'navigate') {
+          final destination = registry.resolveDestination(match.entity);
+          if (destination != null) {
+            setState(() {
+              _pendingDestination = destination.route;
+              _pendingIntent = match.intent;
+              _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
+              _voiceStatus = _VoiceStatus.confirming;
+              _statusDetail = _pendingDetail!;
+            });
+            return;
+          }
+        }
+
+        //other commands that dont need a destination, like SOS
+        else if (intentDef != null) {
           setState(() {
-            _pendingDestination = destination.route;
-            _pendingIntent = match.intent;
-            _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
+            _pendingDestination = null; // NOT navigating to a screen, keep null
+            _pendingIntent = match.intent; 
+            _pendingDetail = '${intentDef.displayLabel} \u2014 confirm?';
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
@@ -440,18 +462,35 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (partialMatches.length == 1) {
         _speech.stop();
         final match = partialMatches.first;
-        final destination = VoiceIntentRegistry().resolveDestination(match.entity);
-        if (destination != null) {
+        final registry = VoiceIntentRegistry(); //added variable for method
+        final intentDef = registry.resolveIntent(match.intent);
+        if (match.intent == 'navigate') {
+          final destination = registry.resolveDestination(match.entity);
+          if (destination != null) {
+            setState(() {
+              _pendingDestination = destination.route;
+              _pendingIntent = match.intent;
+              _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
+              _voiceStatus = _VoiceStatus.confirming;
+              _statusDetail = _pendingDetail!;
+            });
+            return;
+          }
+        }
+
+        //other commands that dont need a destination, like SOS
+        else if (intentDef != null) {
           setState(() {
-            _pendingDestination = destination.route;
-            _pendingIntent = match.intent;
-            _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
+            _pendingDestination = null; // NOT navigating to a screen, keep null
+            _pendingIntent = match.intent; 
+            _pendingDetail = '${intentDef.displayLabel} \u2014 confirm?';
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
           return;
         }
       }
+      
 
       _setStatus(
         status: _VoiceStatus.fallback,
@@ -598,7 +637,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     }
   }
 
-  void _onConfirm() {
+  Future<void> _onConfirm() async {
     if (!mounted) return;
 
     final intent = _pendingIntent ?? 'navigate';
@@ -615,8 +654,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _pendingIntent = null;
       _ambiguousMatches = [];
       _reset();
-      context.go(destination);
-    } else if (intentDef != null && intentDef.handler != null) {
+    } else if (intentDef != null && intentDef.handler != null) { 
+      //if the intent is defined and has a handler, call the handler
+      await intentDef.handler!({}); // Calls the handler for the intent
+      
       _setStatus(
         status: _VoiceStatus.success,
         detail: '${AppLocalizations.of(context)?.voicecommand_onConfirmedCommand ?? 'Confirmed'} \u2014 ${intentDef.displayLabel}',
