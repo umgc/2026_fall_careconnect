@@ -216,6 +216,108 @@
       "warnings": ["Windows users need Git Bash or another bash-compatible shell for this existing script."]
     },
     {
+      "id": "backend.test",
+      "title": "Run backend tests",
+      "category": "Testing",
+      "summary": "Runs the Maven test suite in backend/core. Leave the filter blank for the full suite, or name a class or method to narrow it. Does not refresh the JaCoCo report.",
+      "working_dir": "backend/core",
+      "shell": {
+        "posix": ["./mvnw", "test"],
+        "windows": ["cmd", "/C", "mvnw.cmd", "test"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "tests",
+          "label": "Test class or method filter (blank runs all)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["-Dtest={{value}}"],
+            "windows": ["-Dtest={{value}}"]
+          }
+        }
+      ],
+      "requires": ["java"],
+      "warnings": ["Separate multiple classes with commas, not '+'. An unmatched filter fails the build with surefire's \"No tests matching pattern\" error."]
+    },
+    {
+      "id": "backend.test.coverage",
+      "title": "Run backend tests with coverage",
+      "category": "Testing",
+      "summary": "Runs the Maven test suite and regenerates backend/core/target/site/jacoco/jacoco.xml. Run this before quality.coverage.changed, which reads that report and will otherwise score a stale one.",
+      "working_dir": "backend/core",
+      "shell": {
+        "posix": ["./mvnw", "test", "jacoco:report"],
+        "windows": ["cmd", "/C", "mvnw.cmd", "test", "jacoco:report"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "tests",
+          "label": "Test class or method filter (blank runs all)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["-Dtest={{value}}"],
+            "windows": ["-Dtest={{value}}"]
+          }
+        }
+      ],
+      "requires": ["java"],
+      "warnings": ["Separate multiple classes with commas, not '+'. An unmatched filter fails the build with surefire's \"No tests matching pattern\" error.", "Slower than backend.test; the full suite is over 7,000 tests."]
+    },
+    {
+      "id": "frontend.test",
+      "title": "Run frontend tests",
+      "category": "Testing",
+      "summary": "Runs the Flutter test suite in frontend. Leave the target blank for all tests, or pass a file or directory path. Does not refresh the lcov report.",
+      "working_dir": "frontend",
+      "shell": {
+        "posix": ["flutter", "test"],
+        "windows": ["flutter", "test"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "target",
+          "label": "Test file or directory (blank runs all)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["{{value}}"],
+            "windows": ["{{value}}"]
+          }
+        }
+      ],
+      "requires": ["flutter"]
+    },
+    {
+      "id": "frontend.test.coverage",
+      "title": "Run frontend tests with coverage",
+      "category": "Testing",
+      "summary": "Runs the Flutter test suite and regenerates frontend/coverage/lcov.info. Run this before quality.coverage.changed, which reads that report and will otherwise score a stale one.",
+      "working_dir": "frontend",
+      "shell": {
+        "posix": ["flutter", "test", "--coverage"],
+        "windows": ["flutter", "test", "--coverage"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "target",
+          "label": "Test file or directory (blank runs all)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["{{value}}"],
+            "windows": ["{{value}}"]
+          }
+        }
+      ],
+      "requires": ["flutter"]
+    },
+    {
       "id": "smoke.register_patient",
       "title": "Register a dev patient",
       "category": "Backend smoke tests",

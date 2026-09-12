@@ -23,6 +23,112 @@ Known stale scripts are intentionally kept out of curated menus. For example,
 `backend/core/test-ai-chat.sh` is hidden because it was found to target old AI
 and auth endpoints.
 
+## Installing Go
+
+Only needed to build from source or run via `go run`. If you just want to *use*
+the toolkit, `bootstrap` downloads a prebuilt binary and no Go install is
+required — see [Bootstrap](#bootstrap).
+
+### Windows
+
+Pick one:
+
+**Installer (simplest).** Download the `.msi` from <https://go.dev/dl/> and run
+it. It installs to `C:\Program Files\Go` and adds `go` to `PATH`
+automatically. **Close and reopen your terminal afterwards** — an already-open
+PowerShell will not see the new `PATH`.
+
+**winget:**
+
+```powershell
+winget install --id GoLang.Go -e
+```
+
+**Chocolatey:**
+
+```powershell
+choco install golang -y
+```
+
+Verify, in a *new* terminal:
+
+```powershell
+go version
+```
+
+Expect `go version go1.22` or newer. If you get
+`'go' is not recognized as the name of a cmdlet`, the `PATH` change has not
+reached that shell — reopen it, and if it still fails add `C:\Program Files\Go\bin`
+to your user `PATH` manually via System Properties -> Environment Variables.
+
+### macOS
+
+```bash
+brew install go
+go version
+```
+
+### Linux
+
+Use your distribution's package manager, or the official tarball from
+<https://go.dev/dl/>. Distribution packages are often several releases behind;
+check `go version` reports 1.22 or newer.
+
+## Building From Source
+
+The module has no third-party dependencies, so builds work offline and need no
+`go mod download` step.
+
+Build every supported target into `dist/`:
+
+```bash
+cd dev-toolkit
+sh build.sh          # macOS / Linux / Git Bash
+```
+
+```powershell
+cd dev-toolkit
+.\build.ps1          # Windows PowerShell
+```
+
+Both scripts build all six targets and then run the matching bootstrap script,
+which creates the repo-root launcher for the machine that ran the build. On
+Apple Silicon macOS that looks like:
+
+```text
+dev-tool -> dev-toolkit/dist/careconnect-dev-toolkit-darwin-arm64
+```
+
+Outputs land in `dev-toolkit/dist/`:
+
+- `careconnect-dev-toolkit-linux-amd64`
+- `careconnect-dev-toolkit-linux-arm64`
+- `careconnect-dev-toolkit-darwin-amd64`
+- `careconnect-dev-toolkit-darwin-arm64`
+- `careconnect-dev-toolkit-windows-amd64.exe`
+- `careconnect-dev-toolkit-windows-arm64.exe`
+
+`dist/` is gitignored: binaries ship as GitHub release assets rather than in
+the repository, and bootstrap fetches the one matching your machine.
+
+To build only for the current machine, skip the build scripts entirely and let
+bootstrap do it — with no prebuilt binary present and no release available, it
+compiles just the host target:
+
+```bash
+DEV_TOOLKIT_OFFLINE=1 sh dev-toolkit/bootstrap.sh
+```
+
+After **any** change to `internal/toolkit/catalog.json`, rebuild before using
+`./dev-tool`. The catalog is compiled into the binary with `go:embed`, so a
+stale `dist/` binary will not show new commands or inputs:
+
+```bash
+cd dev-toolkit
+go test ./...        # catalog is validated by the Go tests
+sh build.sh
+```
+
 ## Run From Source
 
 Install Go 1.22 or newer, then:
@@ -64,41 +170,6 @@ go run ./cmd/careconnect-dev --run infra.deploy.app --yes \
 Choice inputs accept either the literal value (`environment=dev`) or its
 1-based menu index (`environment=1`). An unrecognized `-set` name prints a
 warning (not an error) so a typo doesn't silently do nothing.
-
-## Build Binaries
-
-From macOS/Linux/Git Bash:
-
-```bash
-cd dev-toolkit
-sh build.sh
-```
-
-From Windows PowerShell:
-
-```powershell
-cd dev-toolkit
-.\build.ps1
-```
-
-Outputs are written to `dev-toolkit/dist/`:
-
-- `careconnect-dev-toolkit-linux-amd64`
-- `careconnect-dev-toolkit-linux-arm64`
-- `careconnect-dev-toolkit-darwin-amd64`
-- `careconnect-dev-toolkit-darwin-arm64`
-- `careconnect-dev-toolkit-windows-amd64.exe`
-- `careconnect-dev-toolkit-windows-arm64.exe`
-
-The POSIX shell build script is `build.sh`.
-
-The build scripts also run the matching bootstrap script to create or update a
-repo-root launcher for the machine running the build. For example, on Apple
-Silicon macOS:
-
-```text
-dev-tool -> dev-toolkit/dist/careconnect-dev-toolkit-darwin-arm64
-```
 
 ## Bootstrap
 
@@ -192,6 +263,80 @@ creates `dev-tool.cmd` as a fallback launcher:
 .\dev-tool.cmd
 ```
 
+## Command Matrix
+
+Every catalog entry, the `dev-tool` invocation, and the underlying command it wraps.
+Run `dev-tool` forms from the repository root; the raw forms already include any
+`cd` the entry needs. Generated from `internal/toolkit/catalog.json` — regenerate this
+section if you add or change an entry.
+
+### Backend smoke tests
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `smoke.register_patient` | _built-in Go action_ | _built-in Go action_ | — | — |
+| `smoke.two_user_call` | `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-two-user-call.ps1` | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify-two-user-call.ps1` | `base_url`, `end_call` | `powershell` |
+
+### CloudFormation
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `frontend.build_amplify_zip` | `cd frontend && bash build-amplify-zip.sh` | `cd frontend && powershell.exe -NoProfile -ExecutionPolicy Bypass -File build-amplify-zip.ps1` | `backend_url`, `app_domain`, `app_port` | `flutter` |
+| `infra.deploy.app` | `bash cloudformation-fargate/cdeploy_app_only.sh` | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File cloudformation-fargate\cdeploy_app_only.ps1` | `environment`, `profile`, `region`, `image_tag`, `run_tests`, `ai_enabled`, `ai_model`, `frontend_url`, `skip_build` | `aws`, `docker`, `java` |
+| `infra.deploy.full` | `bash cloudformation-fargate/cdeploy_cloudformation.sh` | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File cloudformation-fargate\cdeploy_cloudformation.ps1` | `environment`, `profile`, `region`, `image_tag`, `run_tests`, `ai_enabled`, `ai_model` | `aws`, `docker`, `java` |
+| `infra.destroy` | `bash cloudformation-fargate/cdestroy_cloudformation.sh` | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File cloudformation-fargate\cdestroy_cloudformation.ps1` | `environment`, `profile`, `region`, `skip_ecr` | `aws` |
+
+### Database
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `db.dump` | `cd backend/core/pg_docker && bash scripts/dump-database.sh` | `cd backend/core/pg_docker && cmd /C scripts\dump-database.bat` | — | `docker` |
+| `db.migrations` | `cd backend/core/pg_docker && bash scripts/run-migrations.sh` | `cd backend/core/pg_docker && cmd /C scripts\run-migrations.bat` | — | `docker` |
+| `db.reset` | `cd backend/core/pg_docker && bash scripts/reset-database.sh` | `cd backend/core/pg_docker && cmd /C scripts\reset-database.bat` | — | `docker` |
+
+### Local development
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `backend.health` | _built-in Go action_ | _built-in Go action_ | — | — |
+| `backend.security` | `cd backend/core && bash security-check.sh` | `cd backend/core && bash security-check.sh` | — | — |
+| `backend.start` | `cd backend/core && bash run-dev.sh` | `cd backend/core && cmd /C run-dev-win.bat` | — | `docker`, `java` |
+| `frontend.start` | `cd frontend && bash startup.sh` | `cd frontend && bash startup.sh` | — | `flutter` |
+
+### Quality
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `quality.branch` | `bash scripts/check-branch-name.sh` | `bash scripts/check-branch-name.sh` | — | `git` |
+| `quality.coverage.changed` | `python3 scripts/coverage_gate.py` | `py -3 scripts\coverage_gate.py` | `diff_base`, `threshold`, `jacoco`, `lcov`, `repo_root` | — |
+| `quality.coverage.module` | `bash scripts/coverage-gate.sh` | `bash scripts/coverage-gate.sh` | `repo_root` | — |
+| `quality.local` | `sh quality/Local_Scans/run-local-checks.sh` | `cmd /C quality\Local_Scans\run-local-checks.bat` | — | `java`, `flutter` |
+
+### Scripts
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `scripts.browser` | _built-in Go action_ | _built-in Go action_ | — | — |
+| `scripts.pdf_docs` | `bash scripts/generate-pdf-copies.sh` | `bash scripts/generate-pdf-copies.sh` | — | `pandoc` |
+
+### Testing
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `backend.test` | `cd backend/core && ./mvnw test` | `cd backend/core && cmd /C mvnw.cmd test` | `tests` | `java` |
+| `backend.test.coverage` | `cd backend/core && ./mvnw test jacoco:report` | `cd backend/core && cmd /C mvnw.cmd test jacoco:report` | `tests` | `java` |
+| `frontend.test` | `cd frontend && flutter test` | `cd frontend && flutter test` | `target` | `flutter` |
+| `frontend.test.coverage` | `cd frontend && flutter test --coverage` | `cd frontend && flutter test --coverage` | `target` | `flutter` |
+
+### Toolkit
+
+| Command | macOS / Linux | Windows | Inputs | Needs |
+| --- | --- | --- | --- | --- |
+| `toolkit.status` | _built-in Go action_ | _built-in Go action_ | — | — |
+
+Pass inputs non-interactively with `--set name=value` (repeatable). A blank value
+omits that input's arguments entirely, so `--set tests=` runs the full suite.
+Add `--yes` to skip the confirmation prompt.
 ## Command Catalog
 
 Curated menu items live in `internal/toolkit/catalog.json` and are embedded
