@@ -37,7 +37,35 @@ class SchemaPatchCatalogTest {
                 "2607251300-ai-held-item-open-unique",
                 "2607251310-user-files-extracted-text",
                 "2607271430-ai-ask-conversation-share",
-                "2607271830-ask-ai-share-recipient-ocr-outbox");
+                "2607271830-ask-ai-share-recipient-ocr-outbox",
+                "2609121200-ehr-identity-reconciliation");
+    }
+
+    @Test
+    void ehrIdentityReconciliation_isScriptUtilsSafeAndCreatesNoTables() throws Exception {
+        final String raw = new ClassPathResource(
+                "db/schema-patches/2609121200_ehr_identity_reconciliation.sql")
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        // Assert on executable SQL only — the header comments legitimately name the constructs
+        // they explain the absence of.
+        final String sql = raw.lines()
+                .filter(line -> !line.stripLeading().startsWith("--"))
+                .collect(java.util.stream.Collectors.joining("\n"));
+
+        // ScriptUtils splits on ';' and cannot execute dollar-quoted bodies.
+        assertThat(sql).doesNotContain("DO $$");
+        // Hibernate creates these tables from entities before the patch runs; a CREATE TABLE
+        // here would no-op while the ledger recorded the patch as applied.
+        assertThat(sql).doesNotContain("CREATE TABLE");
+        assertThat(sql)
+                .contains("uq_ehr_source_identity_patient_source")
+                .contains("ck_ehr_identity_conflict_resolution")
+                .contains("uq_ehr_identity_conflict_open");
+        // status and resolved_by are @Enumerated(EnumType.STRING), so Hibernate already emits
+        // their value-domain checks; declaring them here too would double-maintain them.
+        assertThat(sql)
+                .doesNotContain("ck_ehr_identity_conflict_status")
+                .doesNotContain("ck_ehr_identity_conflict_resolved_by");
     }
 
     @Test

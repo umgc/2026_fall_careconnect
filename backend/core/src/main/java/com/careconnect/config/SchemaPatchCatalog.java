@@ -73,7 +73,10 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607271430_create_ai_ask_conversation_share.sql"),
             new SchemaPatchLedger.Patch(
                     "2607271830-ask-ai-share-recipient-ocr-outbox",
-                    "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"));
+                    "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2609121200-ehr-identity-reconciliation",
+                    "db/schema-patches/2609121200_ehr_identity_reconciliation.sql"));
 
     private SchemaPatchCatalog() {
     }
