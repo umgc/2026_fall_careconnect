@@ -1,6 +1,6 @@
 package com.careconnect.config;
 
-import com.careconnect.controller.dev.DevTelemetryController;
+import com.careconnect.controller.TelemetryController;
 import com.careconnect.exception.GlobalExceptionHandler;
 import com.careconnect.model.TelemetryEvent;
 import com.careconnect.security.AuthorizationService;
@@ -68,7 +68,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * per CLAUDE.md is satisfied - the author is not the executor.
  */
 @WebMvcTest(
-        controllers = DevTelemetryController.class,
+        controllers = TelemetryController.class,
         excludeFilters = @Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
                 classes = GlobalExceptionHandler.class),

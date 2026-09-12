@@ -1,7 +1,7 @@
 [
   { "ParameterKey": "Environment", "ParameterValue": "cfdemo" },
   { "ParameterKey": "BackendImageUri", "ParameterValue": "752824437392.dkr.ecr.us-east-1.amazonaws.com/careconnect-backend-cfdemo" },
-  { "ParameterKey": "SpringProfile", "ParameterValue": "dev" },
+  { "ParameterKey": "SpringProfile", "ParameterValue": "prod" },
   { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "true" },
   { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
   { "ParameterKey": "FromEmail", "ParameterValue": "noreply@careconnect.com" },

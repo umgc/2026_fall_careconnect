@@ -20,6 +20,7 @@ import 'package:care_connect_app/features/evv/presentation/pages/start_visit_pag
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
 import 'package:care_connect_app/features/social/presentation/pages/chat_room_screen.dart';
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/transcript_outbox/encrypted_transcript_outbox.dart';
@@ -196,6 +197,9 @@ void main() {
       final events = await _runWidgetAndCaptureEvents(
         tester,
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: ChangeNotifierProvider<UserProvider>.value(
             value: provider,
             child: const MedicationsTrackerPage(),
