@@ -24,6 +24,10 @@ class TelemetryGuardrails {
     'sync_failed',
     'session_start',
     'session_end',
+    // Server-side default applied by TelemetryController when a payload carries
+    // no eventName. The client never emits it; it is listed here to keep this
+    // set identical to TelemetryService.allowedEvents (TC-TEL-21).
+    'dev_emit',
     // Feature analytics (anonymous)
     'feature.medications.view_all',
     'feature.medications.view_active',
