@@ -193,6 +193,16 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>sts</artifactId>
         </dependency>
+        <!-- Required for ProfileCredentialsProvider to resolve sso_session-based AWS profiles
+             (e.g. AWS_PROFILE pointing at an `aws sso login` profile) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sso</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>ssooidc</artifactId>
+        </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>iam</artifactId>
