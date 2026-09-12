@@ -1,0 +1,3 @@
+# Prebuilt binaries ship as GitHub release assets and are fetched or built by
+# bootstrap.sh / bootstrap.ps1 on demand. See README.md > Bootstrap.
+dist/

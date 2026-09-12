@@ -1,0 +1,621 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "backend.start",
+      "title": "Start backend in dev mode",
+      "category": "Local development",
+      "summary": "Loads backend/core/.env, starts Docker PostgreSQL if needed, and runs Spring Boot with the dev profile.",
+      "working_dir": "backend/core",
+      "shell": {
+        "posix": ["bash", "run-dev.sh"],
+        "windows": ["cmd", "/C", "run-dev-win.bat"]
+      },
+      "platform_support": "native",
+      "env_files": ["backend/core/.env"],
+      "env_vars": ["JDBC_URI", "DB_USER", "DB_PASSWORD", "SECURITY_JWT_SECRET", "FIREBASE_PROJECT_ID", "FIREBASE_SENDER_ID", "SERVER_PORT"],
+      "requires": ["docker", "java"],
+      "warnings": ["Runs in the foreground until stopped."]
+    },
+    {
+      "id": "frontend.start",
+      "title": "Open frontend startup menu",
+      "category": "Local development",
+      "summary": "Delegates to the existing Flutter startup menu for web, iOS, Android, and rebuild workflows.",
+      "working_dir": "frontend",
+      "shell": {
+        "posix": ["bash", "startup.sh"],
+        "windows": ["bash", "startup.sh"]
+      },
+      "platform_support": "posix",
+      "env_files": ["frontend/.env"],
+      "env_vars": ["CC_BASE_URL_WEB", "CC_BASE_URL_ANDROID", "CC_BASE_URL_IOS", "CC_BASE_URL_OTHER", "FLUTTER_WEB_PORT"],
+      "requires": ["flutter"],
+      "warnings": ["Windows users need Git Bash or another bash-compatible shell for this existing script."]
+    },
+    {
+      "id": "backend.health",
+      "title": "Check backend health",
+      "category": "Local development",
+      "summary": "Calls the CareConnect health endpoint with a short timeout. Defaults to http://localhost:8080 unless overridden.",
+      "action": "health",
+      "platform_support": "native",
+      "env_files": ["backend/core/.env"],
+      "env_vars": ["CARECONNECT_DEV_TOOLKIT_BASE_URL", "BACKEND_BASE_URL", "BASE_URL", "SERVER_PORT"]
+    },
+    {
+      "id": "backend.security",
+      "title": "Run backend security env check",
+      "category": "Local development",
+      "summary": "Runs backend/core/security-check.sh to identify missing security-related environment settings.",
+      "working_dir": "backend/core",
+      "shell": {
+        "posix": ["bash", "security-check.sh"],
+        "windows": ["bash", "security-check.sh"]
+      },
+      "platform_support": "posix",
+      "env_files": ["backend/core/.env"],
+      "env_vars": ["SECURITY_JWT_SECRET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "FIREBASE_PROJECT_ID"],
+      "warnings": ["Windows users need Git Bash or another bash-compatible shell for this existing script."]
+    },
+    {
+      "id": "db.reset",
+      "title": "Reset local PostgreSQL database",
+      "category": "Database",
+      "summary": "Stops the local PostgreSQL container, removes its data volume, recreates it, and waits for readiness.",
+      "working_dir": "backend/core/pg_docker",
+      "shell": {
+        "posix": ["bash", "scripts/reset-database.sh"],
+        "windows": ["cmd", "/C", "scripts\\reset-database.bat"]
+      },
+      "platform_support": "native",
+      "requires": ["docker"],
+      "warnings": ["Destructive: removes the local PostgreSQL data volume."]
+    },
+    {
+      "id": "db.dump",
+      "title": "Dump local PostgreSQL database",
+      "category": "Database",
+      "summary": "Creates a timestamped local database backup using the existing pg_docker helper.",
+      "working_dir": "backend/core/pg_docker",
+      "shell": {
+        "posix": ["bash", "scripts/dump-database.sh"],
+        "windows": ["cmd", "/C", "scripts\\dump-database.bat"]
+      },
+      "platform_support": "native",
+      "requires": ["docker"]
+    },
+    {
+      "id": "db.migrations",
+      "title": "Run local database migration helper",
+      "category": "Database",
+      "summary": "Runs the existing pg_docker migration helper. The backend dev profile primarily uses JPA update and SchemaPatchRunner.",
+      "working_dir": "backend/core/pg_docker",
+      "shell": {
+        "posix": ["bash", "scripts/run-migrations.sh"],
+        "windows": ["cmd", "/C", "scripts\\run-migrations.bat"]
+      },
+      "platform_support": "native",
+      "requires": ["docker"]
+    },
+    {
+      "id": "quality.local",
+      "title": "Run local quality gate",
+      "category": "Quality",
+      "summary": "Runs Flutter Analyze, Checkstyle, PMD, and SpotBugs, then generates the local HTML/ZIP report.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["sh", "quality/Local_Scans/run-local-checks.sh"],
+        "windows": ["cmd", "/C", "quality\\Local_Scans\\run-local-checks.bat"]
+      },
+      "platform_support": "native",
+      "requires": ["java", "flutter"],
+      "warnings": ["Can take several minutes and may open a browser/report window."]
+    },
+    {
+      "id": "quality.coverage.changed",
+      "title": "Check coverage for changed files",
+      "category": "Quality",
+      "summary": "Runs scripts/coverage_gate.py against changed Java/Dart files using JaCoCo and lcov reports.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["python3", "scripts/coverage_gate.py"],
+        "windows": ["py", "-3", "scripts\\coverage_gate.py"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "diff_base",
+          "label": "Git diff base",
+          "type": "text",
+          "default": "origin/team-b-develop",
+          "args": {
+            "posix": ["--diff-base", "{{value}}"],
+            "windows": ["--diff-base", "{{value}}"]
+          }
+        },
+        {
+          "name": "threshold",
+          "label": "Minimum coverage ratio",
+          "type": "text",
+          "default": "0.95",
+          "args": {
+            "posix": ["--threshold", "{{value}}"],
+            "windows": ["--threshold", "{{value}}"]
+          }
+        },
+        {
+          "name": "jacoco",
+          "label": "JaCoCo XML path",
+          "type": "text",
+          "default": "backend/core/target/site/jacoco/jacoco.xml",
+          "args": {
+            "posix": ["--jacoco-xml", "{{value}}"],
+            "windows": ["--jacoco-xml", "{{value}}"]
+          }
+        },
+        {
+          "name": "lcov",
+          "label": "Flutter lcov path",
+          "type": "text",
+          "default": "frontend/coverage/lcov.info",
+          "args": {
+            "posix": ["--lcov-info", "{{value}}"],
+            "windows": ["--lcov-info", "{{value}}"]
+          }
+        },
+        {
+          "name": "repo_root",
+          "label": "Repository root",
+          "type": "text",
+          "default": ".",
+          "args": {
+            "posix": ["--repo-root", "{{value}}"],
+            "windows": ["--repo-root", "{{value}}"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "quality.coverage.module",
+      "title": "Run module coverage ratchet",
+      "category": "Quality",
+      "summary": "Runs scripts/coverage-gate.sh to enforce the Team B module coverage baseline/ratchet.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["bash", "scripts/coverage-gate.sh"],
+        "windows": ["bash", "scripts/coverage-gate.sh"]
+      },
+      "platform_support": "posix",
+      "inputs": [
+        {
+          "name": "repo_root",
+          "label": "Repository root argument",
+          "type": "text",
+          "default": ".",
+          "args": {
+            "posix": ["{{value}}"],
+            "windows": ["{{value}}"]
+          }
+        }
+      ],
+      "warnings": ["Windows users need Git Bash or another bash-compatible shell for this existing script."]
+    },
+    {
+      "id": "quality.branch",
+      "title": "Check current branch name",
+      "category": "Quality",
+      "summary": "Runs the repository branch naming convention check.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["bash", "scripts/check-branch-name.sh"],
+        "windows": ["bash", "scripts/check-branch-name.sh"]
+      },
+      "platform_support": "posix",
+      "requires": ["git"],
+      "warnings": ["Windows users need Git Bash or another bash-compatible shell for this existing script."]
+    },
+    {
+      "id": "smoke.register_patient",
+      "title": "Register a dev patient",
+      "category": "Backend smoke tests",
+      "summary": "Uses the real /v1/api/auth/register endpoint to create a simple patient account against the local backend.",
+      "action": "register-patient",
+      "platform_support": "native",
+      "env_files": ["backend/core/.env"],
+      "env_vars": ["CARECONNECT_DEV_TOOLKIT_BASE_URL", "BACKEND_BASE_URL", "BASE_URL", "SERVER_PORT"],
+      "warnings": ["Creates application data through the normal API. Use only against a local or disposable environment."]
+    },
+    {
+      "id": "smoke.two_user_call",
+      "title": "Verify seeded two-user call flow",
+      "category": "Backend smoke tests",
+      "summary": "Runs the existing PowerShell smoke test for seeded caregiver/patient login and video-call join/end flow.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/verify-two-user-call.ps1"],
+        "windows": ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts\\verify-two-user-call.ps1"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "base_url",
+          "label": "Backend base URL",
+          "type": "text",
+          "default": "http://localhost:8080",
+          "args": {
+            "posix": ["-BaseUrl", "{{value}}"],
+            "windows": ["-BaseUrl", "{{value}}"]
+          }
+        },
+        {
+          "name": "end_call",
+          "label": "End test call after verification",
+          "type": "bool",
+          "default": "true",
+          "when_true": {
+            "posix": ["-EndCall"],
+            "windows": ["-EndCall"]
+          },
+          "when_false": {
+            "posix": ["-EndCall:$false"],
+            "windows": ["-EndCall:$false"]
+          }
+        }
+      ],
+      "requires": ["powershell"],
+      "warnings": ["Uses seeded accounts patient@careconnect.com and caregiver@careconnect.com."]
+    },
+    {
+      "id": "infra.deploy.full",
+      "title": "Deploy full Fargate CloudFormation stack",
+      "category": "CloudFormation",
+      "summary": "Creates or updates networking, data, platform, builds/pushes the backend image, then deploys the ECS service.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["bash", "cloudformation-fargate/cdeploy_cloudformation.sh"],
+        "windows": ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "cloudformation-fargate\\cdeploy_cloudformation.ps1"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "environment",
+          "label": "Environment",
+          "type": "choice",
+          "default": "cfdemo",
+          "choices": ["dev", "cfdemo", "staging", "prod"],
+          "args": {
+            "posix": ["--environment", "{{value}}"],
+            "windows": ["-Environment", "{{value}}"]
+          }
+        },
+        {
+          "name": "profile",
+          "label": "AWS profile",
+          "type": "text",
+          "default": "default",
+          "default_env_var": "AWS_PROFILE",
+          "args": {
+            "posix": ["--profile", "{{value}}"],
+            "windows": ["-Profile", "{{value}}"]
+          }
+        },
+        {
+          "name": "region",
+          "label": "AWS region",
+          "type": "text",
+          "default": "us-east-1",
+          "default_env_var": "AWS_REGION",
+          "args": {
+            "posix": ["--region", "{{value}}"],
+            "windows": ["-Region", "{{value}}"]
+          }
+        },
+        {
+          "name": "image_tag",
+          "label": "Image tag override (blank for default)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--image-tag", "{{value}}"],
+            "windows": ["-ImageTag", "{{value}}"]
+          }
+        },
+        {
+          "name": "run_tests",
+          "label": "Run Maven tests during build",
+          "type": "bool",
+          "default": "false",
+          "when_true": {
+            "posix": ["--run-tests"],
+            "windows": ["-RunTests"]
+          }
+        },
+        {
+          "name": "ai_enabled",
+          "label": "Enable Ask AI / Bedrock on this deploy (adds inference cost)",
+          "type": "bool",
+          "default": "false",
+          "when_true": {
+            "posix": ["--ai-enabled", "true"],
+            "windows": ["-AiEnabled", "true"]
+          },
+          "when_false": {
+            "posix": ["--ai-enabled", "false"],
+            "windows": ["-AiEnabled", "false"]
+          }
+        },
+        {
+          "name": "ai_model",
+          "label": "Bedrock model ID override (blank leaves the committed parameters/{env}-service.json value)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--ai-model", "{{value}}"],
+            "windows": ["-AiModel", "{{value}}"]
+          }
+        }
+      ],
+      "env_files": ["cloudformation-fargate/.env.deploy"],
+      "env_vars": ["CARECONNECT_DATABASE_MASTER_PASSWORD", "CARECONNECT_JWT_SECRET"],
+      "generate_secrets_file": "cloudformation-fargate/.env.deploy",
+      "generate_secrets": [
+        {"key": "CARECONNECT_DATABASE_MASTER_PASSWORD", "bytes": 16},
+        {"key": "CARECONNECT_JWT_SECRET", "bytes": 32}
+      ],
+      "requires": ["aws", "docker", "java"],
+      "warnings": ["Creates or updates AWS resources and can incur cost.", "Requires AWS credentials and required secret environment variables."]
+    },
+    {
+      "id": "infra.deploy.app",
+      "title": "Deploy backend app only",
+      "category": "CloudFormation",
+      "summary": "Builds the backend, pushes a new Docker image, and updates only the ECS service stack.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["bash", "cloudformation-fargate/cdeploy_app_only.sh"],
+        "windows": ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "cloudformation-fargate\\cdeploy_app_only.ps1"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "environment",
+          "label": "Environment",
+          "type": "choice",
+          "default": "cfdemo",
+          "choices": ["dev", "cfdemo", "staging", "prod"],
+          "args": {
+            "posix": ["--environment", "{{value}}"],
+            "windows": ["-Environment", "{{value}}"]
+          }
+        },
+        {
+          "name": "profile",
+          "label": "AWS profile (blank uses current credentials)",
+          "type": "text",
+          "default": "",
+          "default_env_var": "AWS_PROFILE",
+          "args": {
+            "posix": ["--profile", "{{value}}"],
+            "windows": ["-Profile", "{{value}}"]
+          }
+        },
+        {
+          "name": "region",
+          "label": "AWS region",
+          "type": "text",
+          "default": "us-east-1",
+          "default_env_var": "AWS_REGION",
+          "args": {
+            "posix": ["--region", "{{value}}"],
+            "windows": ["-Region", "{{value}}"]
+          }
+        },
+        {
+          "name": "image_tag",
+          "label": "Image tag override (blank for git SHA/timestamp)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--image-tag", "{{value}}"],
+            "windows": ["-ImageTag", "{{value}}"]
+          }
+        },
+        {
+          "name": "run_tests",
+          "label": "Run Maven tests during build",
+          "type": "bool",
+          "default": "false",
+          "when_true": {
+            "posix": ["--run-tests"],
+            "windows": ["-RunTests"]
+          }
+        },
+        {
+          "name": "ai_enabled",
+          "label": "Enable Ask AI / Bedrock on this deploy (adds inference cost)",
+          "type": "bool",
+          "default": "false",
+          "when_true": {
+            "posix": ["--ai-enabled", "true"],
+            "windows": ["-AiEnabled", "true"]
+          },
+          "when_false": {
+            "posix": ["--ai-enabled", "false"],
+            "windows": ["-AiEnabled", "false"]
+          }
+        },
+        {
+          "name": "ai_model",
+          "label": "Bedrock model ID override (blank leaves the committed parameters/{env}-service.json value)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--ai-model", "{{value}}"],
+            "windows": ["-AiModel", "{{value}}"]
+          }
+        },
+        {
+          "name": "frontend_url",
+          "label": "Allow this Amplify/frontend URL in CORS (blank to leave committed value)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--frontend-url", "{{value}}"],
+            "windows": ["-FrontendUrl", "{{value}}"]
+          }
+        },
+        {
+          "name": "skip_build",
+          "label": "Skip Maven/Docker build and reuse the currently-deployed image (parameter-only update)",
+          "type": "bool",
+          "default": "false",
+          "when_true": {
+            "posix": ["--skip-build"],
+            "windows": ["-SkipBuild"]
+          }
+        }
+      ],
+      "requires": ["aws", "docker", "java"],
+      "warnings": ["Updates AWS ECS/API Gateway service resources and can incur cost.", "App-only deploy reapplies the full committed service parameter file, resetting CORS/FrontendBaseUrl/CareConnectAiEnabled to it unless overridden above."]
+    },
+    {
+      "id": "infra.destroy",
+      "title": "Destroy Fargate CloudFormation stack",
+      "category": "CloudFormation",
+      "summary": "Deletes service, platform, data, and networking stacks in dependency order.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["bash", "cloudformation-fargate/cdestroy_cloudformation.sh"],
+        "windows": ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "cloudformation-fargate\\cdestroy_cloudformation.ps1"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "environment",
+          "label": "Environment",
+          "type": "choice",
+          "default": "cfdemo",
+          "choices": ["dev", "cfdemo", "staging", "prod"],
+          "args": {
+            "posix": ["--environment", "{{value}}"],
+            "windows": ["-Environment", "{{value}}"]
+          }
+        },
+        {
+          "name": "profile",
+          "label": "AWS profile",
+          "type": "text",
+          "default": "default",
+          "default_env_var": "AWS_PROFILE",
+          "args": {
+            "posix": ["--profile", "{{value}}"],
+            "windows": ["-Profile", "{{value}}"]
+          }
+        },
+        {
+          "name": "region",
+          "label": "AWS region",
+          "type": "text",
+          "default": "us-east-1",
+          "default_env_var": "AWS_REGION",
+          "args": {
+            "posix": ["--region", "{{value}}"],
+            "windows": ["-Region", "{{value}}"]
+          }
+        },
+        {
+          "name": "skip_ecr",
+          "label": "Skip ECR cleanup",
+          "type": "bool",
+          "default": "false",
+          "when_true": {
+            "posix": ["--skip-ecr-cleanup"],
+            "windows": ["-SkipEcrCleanup"]
+          }
+        }
+      ],
+      "requires": ["aws"],
+      "warnings": ["Destructive: deletes AWS resources for the selected environment.", "Use only for disposable or explicitly approved environments."]
+    },
+    {
+      "id": "frontend.build_amplify_zip",
+      "title": "Build + zip frontend for manual Amplify upload",
+      "category": "CloudFormation",
+      "summary": "Runs flutter build web and zips build/web's contents into manual-amplify.zip (one level above the repo) for Amplify's drag-and-drop deploy.",
+      "working_dir": "frontend",
+      "shell": {
+        "posix": ["bash", "build-amplify-zip.sh"],
+        "windows": ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "build-amplify-zip.ps1"]
+      },
+      "platform_support": "native",
+      "inputs": [
+        {
+          "name": "backend_url",
+          "label": "Backend URL (blank falls back to http://localhost:8080 at runtime)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--backend-url", "{{value}}"],
+            "windows": ["-BackendUrl", "{{value}}"]
+          }
+        },
+        {
+          "name": "app_domain",
+          "label": "App domain — hostname only, no https:// (blank if backend URL is also blank)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--app-domain", "{{value}}"],
+            "windows": ["-AppDomain", "{{value}}"]
+          }
+        },
+        {
+          "name": "app_port",
+          "label": "App port (443 for a real deployed backend, blank otherwise)",
+          "type": "text",
+          "default": "",
+          "args": {
+            "posix": ["--app-port", "{{value}}"],
+            "windows": ["-AppPort", "{{value}}"]
+          }
+        }
+      ],
+      "requires": ["flutter"],
+      "warnings": ["Overwrites ../manual-amplify.zip (one level above the repo) — upload it yourself via the Amplify console; this does not deploy anything."]
+    },
+    {
+      "id": "scripts.pdf_docs",
+      "title": "Generate PDF copies of docs",
+      "category": "Scripts",
+      "summary": "Runs scripts/generate-pdf-copies.sh. Markdown sources are left unchanged.",
+      "working_dir": ".",
+      "shell": {
+        "posix": ["bash", "scripts/generate-pdf-copies.sh"],
+        "windows": ["bash", "scripts/generate-pdf-copies.sh"]
+      },
+      "platform_support": "posix",
+      "requires": ["pandoc"],
+      "warnings": ["Windows users need Git Bash or another bash-compatible shell for this existing script."]
+    },
+    {
+      "id": "scripts.browser",
+      "title": "Browse all helper scripts",
+      "category": "Scripts",
+      "summary": "Finds .sh, .ps1, .bat, and .py scripts under scripts, backend/core, quality, and cloudformation-fargate.",
+      "action": "browse-scripts",
+      "platform_support": "native",
+      "warnings": ["Advanced mode: scripts are run as-is after preview and confirmation.", "Known stale scripts are hidden from this browser by default."]
+    },
+    {
+      "id": "toolkit.status",
+      "title": "Show toolkit and machine status",
+      "category": "Toolkit",
+      "summary": "Prints repo root, platform, Git branch, backend health, and common dependency availability.",
+      "action": "status",
+      "platform_support": "native",
+      "env_files": ["backend/core/.env"],
+      "env_vars": ["CARECONNECT_DEV_TOOLKIT_BASE_URL", "BACKEND_BASE_URL", "BASE_URL", "SERVER_PORT", "AWS_PROFILE"]
+    }
+  ]
+}
