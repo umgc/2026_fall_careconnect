@@ -35,12 +35,21 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
 
-      // Load env from committed .env.example so clean checkouts can build
-      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      // Load local env files when available.
+      // Hosted web deployments use --dart-define values instead.
+// Hosted web deployments use --dart-define values instead.
       try {
         await dotenv.load(fileName: ".env");
       } catch (_) {
-        await dotenv.load(fileName: ".env.example");
+        try {
+          await dotenv.load(fileName: ".env.example");
+        } catch (_) {
+          if (kDebugMode) {
+            debugPrint(
+              'No .env or .env.example file available; using compile-time/default configuration.',
+            );
+          }
+        }
       }
 
       // Performance optimization: Set preferred orientations
