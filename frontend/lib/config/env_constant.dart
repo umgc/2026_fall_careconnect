@@ -57,7 +57,14 @@ String getFitbitClientSecret() {
 String _getUnifiedWebSocketBaseUrl() {
   // Prefer explicit environment variable
   if (_wsOverrideUrl.isNotEmpty) {
-    if (!kDebugMode && !_wsOverrideUrl.startsWith('wss://')) {
+    // Keep local ws:// hosts available for emulator/dev workflows. All other
+    // non-debug environments must use wss:// to avoid insecure transport.
+    final isLocalDevHost = _wsOverrideUrl.startsWith('ws://localhost') ||
+        _wsOverrideUrl.startsWith('ws://127.0.0.1') ||
+        _wsOverrideUrl.startsWith('ws://10.0.2.2');
+    if (!kDebugMode &&
+        !_wsOverrideUrl.startsWith('wss://') &&
+        !isLocalDevHost) {
       throw Exception(
         'WEBSOCKET_SERVER_URL must use wss:// in release builds.',
       );
@@ -69,7 +76,12 @@ String _getUnifiedWebSocketBaseUrl() {
   if (base.startsWith('https://')) {
     return base.replaceFirst('https://', 'wss://');
   } else if (base.startsWith('http://')) {
-    if (!kDebugMode) {
+    // Same carve-out as above: keep local development hosts working while
+    // preventing accidental insecure release/prod configuration.
+    final isLocalDevHost = base.startsWith('http://localhost') ||
+        base.startsWith('http://127.0.0.1') ||
+        base.startsWith('http://10.0.2.2');
+    if (!kDebugMode && !isLocalDevHost) {
       throw Exception(
         'In release builds, BACKEND_URL must use https:// and WebSocket must use wss://.',
       );
@@ -127,7 +139,7 @@ String getBackendBaseUrl() {
   // https enforcement disabled for local testing
   // TODO: re-enable before production release
   //if (!kDebugMode && !resolved.startsWith('https://')) {
-    //throw Exception('BACKEND_URL must use https:// in release builds.');
+  //throw Exception('BACKEND_URL must use https:// in release builds.');
   //}
 
   return resolved;
