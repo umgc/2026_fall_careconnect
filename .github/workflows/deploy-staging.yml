@@ -25,12 +25,15 @@ jobs:
           channel: 'stable'
 
       - run: flutter pub get
+        working-directory: frontend
+
       - run: flutter build web --release
+        working-directory: frontend
 
       - name: Zip build output
         run: |
-          cd build/web
-          zip -r ../../frontend.zip .
+          cd frontend/build/web
+          zip -r ../../../frontend.zip .
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
