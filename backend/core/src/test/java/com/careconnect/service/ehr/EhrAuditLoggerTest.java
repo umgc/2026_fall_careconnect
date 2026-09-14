@@ -3,6 +3,7 @@ package com.careconnect.service.ehr;
 import com.careconnect.model.ehr.EhrAuditEvent;
 import com.careconnect.model.ehr.EhrRetrievalOutcome;
 import com.careconnect.repository.ehr.EhrAuditEventRepository;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +16,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
+/**
+ * Test IDs TC-EHR-AUD-008..010 are permanent. Never renumber, never reuse.
+ */
 @ExtendWith(MockitoExtension.class)
 class EhrAuditLoggerTest {
 
@@ -31,6 +35,7 @@ class EhrAuditLoggerTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-AUD-008: log saves successful attempt with all fields")
     void log_savesSuccessfulAttemptWithAllFields() {
         final Map<String, Object> details = Map.of("latencyMs", 412);
 
@@ -47,6 +52,7 @@ class EhrAuditLoggerTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-AUD-009: log system-initiated empty attempt has no actor and zero records")
     void log_systemInitiatedEmptyAttempt_hasNoActorAndZeroRecords() {
         auditLogger.log(7L, "MEDICARE", "ExplanationOfBenefit",
                 EhrRetrievalOutcome.EMPTY, null, 0, null);
@@ -59,6 +65,7 @@ class EhrAuditLoggerTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-AUD-010: log failed attempt records no count and keeps error details")
     void log_failedAttempt_recordsNoCountAndKeepsErrorDetails() {
         final Map<String, Object> details = Map.of("errorCode", "ERR-MCR-05");
 
