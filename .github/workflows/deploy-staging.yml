@@ -21,7 +21,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'   # match `flutter --version` locally
+          flutter-version: '3.41.9'   # match `flutter --version` locally
           channel: 'stable'
 
       - run: flutter pub get
