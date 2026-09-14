@@ -77,6 +77,33 @@ jobs:
           fi
           ./cloudformation-fargate/cdestroy_cloudformation.sh "${ARGS[@]}"
 
+      - name: Purge scheduled-for-deletion secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_NAME="${{ github.event.inputs.environment }}"
+          REGION="${{ env.AWS_REGION }}"
+
+          # CloudFormation only SCHEDULES secret deletion (30-day recovery window)
+          # and the name stays reserved, so the next full deploy would fail with
+          # "a secret with this name is already scheduled for deletion". These
+          # secrets are recreated from GitHub secrets on every full deploy, so
+          # there is nothing to recover.
+          for SECRET in \
+            "/careconnect/${ENV_NAME}/db-password" \
+            "/careconnect/${ENV_NAME}/jwt-secret"; do
+            if aws secretsmanager describe-secret \
+                 --secret-id "$SECRET" --region "$REGION" >/dev/null 2>&1; then
+              aws secretsmanager delete-secret \
+                --secret-id "$SECRET" \
+                --region "$REGION" \
+                --force-delete-without-recovery >/dev/null
+              echo "Force-deleted $SECRET"
+            else
+              echo "$SECRET not present"
+            fi
+          done
+
       - name: Confirm nothing is left
         if: always()
         shell: bash
