@@ -6,7 +6,7 @@ START_TIME="$(date +%s)"
 
 # Track the active stack/operation so the ERR trap can print useful context.
 ENVIRONMENT="dev"
-PROFILE="careconnect-sso"
+PROFILE=""
 REGION="us-east-1"
 SKIP_ECR_CLEANUP="false"
 CURRENT_STACK_NAME=""
@@ -36,7 +36,7 @@ Usage: ./cdestroy_cloudformation.sh [options]
 
 Options:
   -e, --environment <name>   Environment name: dev, cfdemo, staging, prod
-  -p, --profile <profile>    AWS CLI profile (default: careconnect-sso)
+  -p, --profile <profile>    Optional AWS CLI profile for local use
   -r, --region <region>      AWS region (default: us-east-1)
       --skip-ecr-cleanup     Skip emptying the ECR repository before platform deletion
   -h, --help                 Show this help text
@@ -57,6 +57,12 @@ case "$ENVIRONMENT" in
     exit 1
     ;;
 esac
+
+if [[ -n "$PROFILE" ]]; then
+  # Local developers can still target a named AWS profile. In GitHub Actions we
+  # leave this empty so the script uses the temporary credentials from OIDC.
+  export AWS_PROFILE="$PROFILE"
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARAMETER_DIR="$SCRIPT_DIR/parameters"
@@ -106,7 +112,7 @@ on_error() {
     write_stack_failure_details "$CURRENT_STACK_NAME" >&2 || true
     echo >&2
     echo "Manual command:" >&2
-    echo "aws cloudformation describe-stack-events --profile \"$PROFILE\" --region \"$REGION\" --stack-name \"$CURRENT_STACK_NAME\" --query \"StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]\" --output table" >&2
+    echo "aws cloudformation describe-stack-events --region \"$REGION\" --stack-name \"$CURRENT_STACK_NAME\" --query \"StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]\" --output table" >&2
   fi
 
   exit "$exit_code"
@@ -190,7 +196,6 @@ run_python_helper() {
 stack_exists() {
   local stack_name="$1"
   aws_cli cloudformation describe-stacks \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" >/dev/null 2>&1
 }
@@ -198,7 +203,6 @@ stack_exists() {
 get_stack_status() {
   local stack_name="$1"
   aws_cli cloudformation describe-stacks \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" \
     --query "Stacks[0].StackStatus" \
@@ -216,7 +220,6 @@ write_stack_failure_details() {
 
   echo "Recent failed CloudFormation events for '$stack_name':"
   aws_cli cloudformation describe-stack-events \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" \
     --query "StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]" \
@@ -236,12 +239,10 @@ delete_stack() {
 
   step "Deleting stack: $stack_name"
   aws_cli cloudformation delete-stack \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name"
 
   aws_cli cloudformation wait stack-delete-complete \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name"
 }
@@ -305,7 +306,6 @@ NODE
 ecr_repo_exists() {
   local repository_name="$1"
   aws_cli ecr describe-repositories \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --repository-names "$repository_name" >/dev/null 2>&1
 }
@@ -331,7 +331,6 @@ clear_ecr_repository_images() {
   while true; do
     local image_json
     image_json="$(aws_cli ecr list-images \
-      --profile "$PROFILE" \
       --region "$REGION" \
       --repository-name "$repository_name" \
       --output json)"
@@ -396,7 +395,6 @@ NODE
     fi
 
     aws_cli ecr batch-delete-image \
-      --profile "$PROFILE" \
       --region "$REGION" \
       --repository-name "$repository_name" \
       --image-ids "${image_ids[@]}"
@@ -406,9 +404,9 @@ NODE
 step "Checking prerequisites"
 require_command aws
 
-step "Verifying AWS credentials for profile '$PROFILE'"
+step "Verifying AWS credentials"
 CURRENT_OPERATION="Verifying AWS credentials"
-aws_cli sts get-caller-identity --profile "$PROFILE" --region "$REGION" >/dev/null
+aws_cli sts get-caller-identity --region "$REGION" >/dev/null
 
 # Delete in dependency order so later stacks are no longer referenced by
 # earlier ones: service -> platform -> data -> networking.
@@ -428,7 +426,6 @@ delete_stack "$NETWORKING_STACK_NAME"
 step "Checking for remaining stacks in environment '$ENVIRONMENT'"
 CURRENT_OPERATION="Listing remaining stacks for environment '$ENVIRONMENT'"
 aws_cli cloudformation list-stacks \
-  --profile "$PROFILE" \
   --region "$REGION" \
   --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE DELETE_FAILED ROLLBACK_COMPLETE \
   --query "StackSummaries[?contains(StackName, '${ENVIRONMENT}')].[StackName,StackStatus]" \

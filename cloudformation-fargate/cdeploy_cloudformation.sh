@@ -6,7 +6,7 @@ START_TIME="$(date +%s)"
 
 # Track the active stack/operation so the ERR trap can print useful context.
 ENVIRONMENT="dev"
-PROFILE="careconnect-sso"
+PROFILE=""
 REGION="us-east-1"
 IMAGE_TAG=""
 RUN_TESTS="false"
@@ -41,7 +41,7 @@ Usage: ./cdeploy_cloudformation.sh [options]
 
 Options:
   -e, --environment <name>   Environment name: dev, cfdemo, staging, prod
-  -p, --profile <profile>    AWS CLI profile (default: careconnect-sso)
+  -p, --profile <profile>    Optional AWS CLI profile for local use
   -r, --region <region>      AWS region (default: us-east-1)
   -t, --image-tag <tag>      Docker/ECR image tag (default: same as environment)
       --run-tests            Run Maven tests during package build
@@ -63,6 +63,12 @@ case "$ENVIRONMENT" in
     exit 1
     ;;
 esac
+
+if [[ -n "$PROFILE" ]]; then
+  # Local developers can still target a named AWS profile. In GitHub Actions we
+  # leave this empty so the script uses the temporary credentials from OIDC.
+  export AWS_PROFILE="$PROFILE"
+fi
 
 if [[ -z "$IMAGE_TAG" ]]; then
   # Default the Docker tag to the environment name so dev/cfdemo stay separate.
@@ -139,7 +145,7 @@ on_error() {
     write_stack_failure_details "$CURRENT_STACK_NAME" >&2 || true
     echo >&2
     echo "Manual command:" >&2
-    echo "aws cloudformation describe-stack-events --profile \"$PROFILE\" --region \"$REGION\" --stack-name \"$CURRENT_STACK_NAME\" --query \"StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]\" --output table" >&2
+    echo "aws cloudformation describe-stack-events --region \"$REGION\" --stack-name \"$CURRENT_STACK_NAME\" --query \"StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]\" --output table" >&2
   fi
 
   exit "$exit_code"
@@ -203,7 +209,6 @@ aws_cli() {
 stack_exists() {
   local stack_name="$1"
   if aws_cli cloudformation describe-stacks \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" >/dev/null 2>&1; then
     return 0
@@ -215,7 +220,6 @@ stack_exists() {
 ecr_repository_exists() {
   local repository_name="$1"
   if aws_cli ecr describe-repositories \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --repository-names "$repository_name" >/dev/null 2>&1; then
     return 0
@@ -227,7 +231,6 @@ ecr_repository_exists() {
 get_stack_status() {
   local stack_name="$1"
   aws_cli cloudformation describe-stacks \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" \
     --query "Stacks[0].StackStatus" \
@@ -251,7 +254,6 @@ write_stack_failure_details() {
 
   echo "Recent failed CloudFormation events for '$stack_name':"
   aws_cli cloudformation describe-stack-events \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" \
     --query "StackEvents[?contains(ResourceStatus, 'FAILED')].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]" \
@@ -673,11 +675,9 @@ deploy_stack() {
   if [[ "$stack_status" == "ROLLBACK_COMPLETE" ]]; then
     echo "Stack '$stack_name' is in ROLLBACK_COMPLETE. Deleting it before retrying deployment..."
     aws_cli cloudformation delete-stack \
-      --profile "$PROFILE" \
       --region "$REGION" \
       --stack-name "$stack_name"
     aws_cli cloudformation wait stack-delete-complete \
-      --profile "$PROFILE" \
       --region "$REGION" \
       --stack-name "$stack_name"
     stack_status=""
@@ -695,7 +695,6 @@ deploy_stack() {
   aws_template_path="$(to_aws_path "$template_path")"
 
   if ! aws_cli cloudformation deploy \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" \
     --template-file "$aws_template_path" \
@@ -718,7 +717,6 @@ get_stack_output() {
   local output_key="$2"
 
   aws_cli cloudformation describe-stacks \
-    --profile "$PROFILE" \
     --region "$REGION" \
     --stack-name "$stack_name" \
     --query "Stacks[0].Outputs[?OutputKey=='${output_key}'].OutputValue" \
@@ -771,9 +769,9 @@ assert_parameter_min_length "$DATA_EFFECTIVE_PARAMETERS" "JwtSecret" 32
 assert_health_check_path_value "$SERVICE_PARAMETERS"
 assert_platform_repository_name_available "$PLATFORM_PARAMETERS"
 
-step "Verifying AWS credentials for profile '$PROFILE'"
+step "Verifying AWS credentials"
 CURRENT_OPERATION="Verifying AWS credentials"
-aws sts get-caller-identity --profile "$PROFILE" --region "$REGION" >/dev/null
+aws sts get-caller-identity --region "$REGION" >/dev/null
 
 # Stack order matters: networking -> data -> platform -> image push -> service.
 # Later stacks import values created by earlier ones.
@@ -815,7 +813,7 @@ fi
 # Authenticate Docker to the registry before push.
 step "Logging into ECR"
 CURRENT_OPERATION="Logging into ECR"
-aws_cli ecr get-login-password --profile "$PROFILE" --region "$REGION" \
+aws_cli ecr get-login-password --region "$REGION" \
   | docker login --username AWS --password-stdin "$REGISTRY_HOST"
 
 step "Building Docker image"
@@ -830,7 +828,21 @@ popd >/dev/null
 
 # The service stack is deployed last because it needs the final image URI.
 step "Deploying service stack: $SERVICE_STACK_NAME"
-deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "BackendImageUri=${IMAGE_URI}"
+# Service-stack values that differ per deployment target can be supplied from
+# the environment (e.g. GitHub Actions repository variables) instead of being
+# committed into parameters/<env>-service.json.
+SERVICE_OVERRIDE_ARGS=("BackendImageUri=${IMAGE_URI}")
+if [[ -n "${CARECONNECT_CORS_ALLOWED_LIST-}" ]]; then
+  SERVICE_OVERRIDE_ARGS+=("CorsAllowedList=${CARECONNECT_CORS_ALLOWED_LIST}")
+fi
+if [[ -n "${CARECONNECT_FRONTEND_BASE_URL-}" ]]; then
+  SERVICE_OVERRIDE_ARGS+=("FrontendBaseUrl=${CARECONNECT_FRONTEND_BASE_URL}")
+fi
+if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
+  SERVICE_OVERRIDE_ARGS+=("FromEmail=${CARECONNECT_FROM_EMAIL}")
+fi
+
+deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDE_ARGS[@]}"
 
 # Print the final API Gateway endpoint so the frontend or health checks can use it.
 step "Reading final API endpoint"
