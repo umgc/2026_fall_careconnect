@@ -423,6 +423,35 @@ delete_stack "$PLATFORM_STACK_NAME"
 delete_stack "$DATA_STACK_NAME"
 delete_stack "$NETWORKING_STACK_NAME"
 
+purge_scheduled_secrets() {
+  # CloudFormation only SCHEDULES AWS::SecretsManager::Secret deletion (default
+  # 30-day recovery window) and the secret NAME stays reserved for that period.
+  # Both secrets use fixed names, so the next full deploy would fail with
+  # "a secret with this name is already scheduled for deletion". They are
+  # recreated from the deploy-time password/JWT values every time, so there is
+  # nothing worth recovering.
+  local secret
+  for secret in \
+    "/careconnect/${ENVIRONMENT}/db-password" \
+    "/careconnect/${ENVIRONMENT}/jwt-secret"; do
+    CURRENT_OPERATION="Purging secret '$secret'"
+    if aws_cli secretsmanager describe-secret \
+         --region "$REGION" \
+         --secret-id "$secret" >/dev/null 2>&1; then
+      aws_cli secretsmanager delete-secret \
+        --region "$REGION" \
+        --secret-id "$secret" \
+        --force-delete-without-recovery >/dev/null
+      echo "Force-deleted secret: $secret"
+    else
+      echo "Secret '$secret' not present. Skipping."
+    fi
+  done
+}
+
+step "Purging scheduled-for-deletion secrets"
+purge_scheduled_secrets
+
 step "Checking for remaining stacks in environment '$ENVIRONMENT'"
 CURRENT_OPERATION="Listing remaining stacks for environment '$ENVIRONMENT'"
 aws_cli cloudformation list-stacks \
