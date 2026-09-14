@@ -1,0 +1,70 @@
+name: Deploy to Amplify (staging)
+
+on:
+  push:
+    branches: [staging]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AMPLIFY_APP_ID: ${{ vars.AMPLIFY_APP_ID }}
+  AMPLIFY_BRANCH: staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'   # match `flutter --version` locally
+          channel: 'stable'
+
+      - run: flutter pub get
+      - run: flutter build web --release
+
+      - name: Zip build output
+        run: |
+          cd build/web
+          zip -r ../../frontend.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AMPLIFY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create Amplify deployment
+        id: create_deployment
+        run: |
+          RESPONSE=$(aws amplify create-deployment \
+            --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH")
+          echo "job_id=$(echo $RESPONSE | jq -r '.jobId')" >> "$GITHUB_OUTPUT"
+          echo "zip_url=$(echo $RESPONSE | jq -r '.zipUploadUrl')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload zip
+        run: curl -f -X PUT -T frontend.zip "${{ steps.create_deployment.outputs.zip_url }}"
+
+      - name: Start deployment
+        run: |
+          aws amplify start-deployment \
+            --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH" \
+            --job-id "${{ steps.create_deployment.outputs.job_id }}"
+
+      - name: Wait for job to finish
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(aws amplify get-job \
+              --app-id "$AMPLIFY_APP_ID" --branch-name "$AMPLIFY_BRANCH" \
+              --job-id "${{ steps.create_deployment.outputs.job_id }}" \
+              --query 'job.summary.status' --output text)
+            echo "Status: $STATUS"
+            [ "$STATUS" = "SUCCEED" ] && exit 0
+            [[ "$STATUS" = "FAILED" || "$STATUS" = "CANCELLED" ]] && exit 1
+            sleep 10
+          done
+          echo "Timed out"; exit 1
