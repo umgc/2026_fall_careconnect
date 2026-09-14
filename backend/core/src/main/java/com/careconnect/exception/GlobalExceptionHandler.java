@@ -37,6 +37,16 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<?> handleAccessDeniedException(
+            org.springframework.security.access.AccessDeniedException ex) {
+        // A denied permission (e.g. from PermissionAspect) is a 403, not a 500. Without this the
+        // catch-all handleOtherExceptions would swallow it into "500 An unexpected error occurred".
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(ForbiddenScopeException.class)
     public ResponseEntity<?> handleForbiddenScopeException(ForbiddenScopeException ex) {
         Map<String, Object> error = new LinkedHashMap<>();

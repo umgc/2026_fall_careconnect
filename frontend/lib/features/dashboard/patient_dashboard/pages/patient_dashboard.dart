@@ -16,6 +16,7 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/communication_service.dart';
 import 'package:care_connect_app/features/ui_preview/new_ui_preview_card.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../services/evv_service.dart';
@@ -83,6 +84,33 @@ class _PatientDashboardState extends State<PatientDashboard> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
+    // Defer to after the current build frame: _initializeAndLoad() awaits
+    // UserProvider.initializeUser(), which calls notifyListeners() synchronously.
+    // Invoking that during didChangeDependencies' build window throws
+    // "cannot be marked as needing to build ... the framework is already building".
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initializeAndLoad();
+    });
+  }
+
+  /// Restore the user session BEFORE the dashboard's data calls read user.id /
+  /// user.patientId. UserProvider.initializeUser() runs asynchronously at app
+  /// start, so on a fresh (re)load the dashboard would otherwise race it and
+  /// wrongly show "User not logged in". Awaiting it here populates the session
+  /// (including patientId) for every load method below.
+  Future<void> _initializeAndLoad() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    if (userProvider.user == null) {
+      await userProvider.initializeUser();
+    }
+    if (!mounted) return;
+    // If there is still no authenticated user after restoring the session (e.g.
+    // the stored token was stale/expired and got cleared), send the user to the
+    // login page instead of showing the dead-end "User not logged in" dashboard.
+    if (userProvider.user == null) {
+      context.go('/login');
+      return;
+    }
     _loadDashboardData();
     _callNotificationInitialized = true;
     _checkConnectivity();
@@ -117,10 +145,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
       final int? patientId = user?.patientId;
 
       if (id == null) {
-        setState(() {
-          error = t.ptdashboard_userNotLoggedIn;
-          loading = false;
-        });
+        // No authenticated user: route to login rather than showing a dead-end
+        // "User not logged in" error on the dashboard.
+        if (mounted) context.go('/login');
         return;
       }
 

@@ -2,6 +2,10 @@ package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.ClinicalNoteIndexedPayload;
 import com.careconnect.indexing.DocumentIndexedPayload;
+import com.careconnect.indexing.EpicFhirIndexedPayload;
+import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.service.ai.indexing.chunker.EpicResourceChunker;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
@@ -81,6 +85,8 @@ public class RetrievalIndexService {
     private final MailpieceChunker mailpieceChunker;
     private final ClinicalNoteChunker clinicalNoteChunker;
     private final DocumentChunker documentChunker;
+    private final EpicResourceChunker epicResourceChunker;
+    private final EhrResourceRepository ehrResourceRepository;
     private final ObjectMapper objectMapper;
     private final ChunkEmbeddingService chunkEmbeddingService;
 
@@ -98,6 +104,8 @@ public class RetrievalIndexService {
             final MailpieceChunker mailpieceChunker,
             final ClinicalNoteChunker clinicalNoteChunker,
             final DocumentChunker documentChunker,
+            final EpicResourceChunker epicResourceChunker,
+            final EhrResourceRepository ehrResourceRepository,
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
@@ -113,6 +121,8 @@ public class RetrievalIndexService {
         this.mailpieceChunker = mailpieceChunker;
         this.clinicalNoteChunker = clinicalNoteChunker;
         this.documentChunker = documentChunker;
+        this.epicResourceChunker = epicResourceChunker;
+        this.ehrResourceRepository = ehrResourceRepository;
         this.objectMapper = objectMapper;
         this.chunkEmbeddingService = chunkEmbeddingService;
     }
@@ -653,6 +663,63 @@ public class RetrievalIndexService {
         chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
                 patientId, sourceRecordId, RetrievalRecordType.CLINICAL_NOTE.name());
         return persistDrafts(patientId, sourceRecordId, drafts);
+    }
+
+    /**
+     * Indexes one mirrored Epic FHIR resource into {@code retrieval_index_chunk} with
+     * {@code source_kind='epic'} (Epic Phase 2, Findings R2). Mirrors
+     * {@link #ingestClinicalNoteIndexed}: loads the authoritative {@link EhrResource} (never
+     * trusting the payload for patient ownership), hash-checks for idempotent re-index, replaces
+     * prior chunks for the {@code (patientId, sourceRecordId, recordType)} key, and persists.
+     *
+     * @return number of chunks written (0 when skipped or the resource type is not indexable)
+     */
+    @Transactional
+    public int ingestEpicFhir(final EpicFhirIndexedPayload payload) {
+        if (payload == null || payload.ehrResourceId() == null) {
+            throw new IllegalArgumentException("EPIC_FHIR_INDEXED payload requires ehrResourceId");
+        }
+        final EhrResource resource = ehrResourceRepository.findById(payload.ehrResourceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "EhrResource not found for id=" + payload.ehrResourceId()));
+        final Long patientId = resource.getUserId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index ehrResourceId=" + payload.ehrResourceId()
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "EPIC_FHIR_INDEXED patient scope does not match authoritative EhrResource");
+        }
+        final RetrievalRecordType recordType =
+                EpicResourceChunker.recordTypeFor(resource.getResourceType()).orElse(null);
+        if (recordType == null) {
+            // Non-indexable resource type (e.g. Patient, Practitioner) — nothing to embed.
+            return 0;
+        }
+        final String sourceRecordId = truncateSourceId("epic-" + resource.getResourceFhirId());
+        final String contentHash = resource.getContentHash();
+
+        chunkRepository.acquireSourceReplacementLock(patientId, recordType.name(), sourceRecordId);
+
+        if (chunkContentUnchanged(patientId, sourceRecordId, recordType, contentHash)) {
+            log.info("Skipping EPIC_FHIR_INDEXED for ehrResourceId={} — contentHash unchanged",
+                    payload.ehrResourceId());
+            return 0;
+        }
+
+        final List<IndexingChunkDraft> drafts =
+                epicResourceChunker.chunk(resource, payload.consentScope());
+        if (drafts.isEmpty()) {
+            log.warn("EPIC_FHIR_INDEXED produced no drafts for ehrResourceId={}; "
+                    + "leaving existing chunks unchanged", payload.ehrResourceId());
+            return 0;
+        }
+
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, recordType.name());
+        return persistDrafts(patientId, sourceRecordId, drafts, "epic");
     }
 
     /**

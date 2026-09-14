@@ -131,7 +131,10 @@ public class SecurityConfig {
                                 "/oauth/**",
                                 "/ws/**",
                                 "/api/notifications/demo/**",
-                                "/api/internal/chime/**"
+                                "/api/internal/chime/**",
+                                // Epic SMART redirect target — unauthenticated; user is recovered
+                                // from the signed, single-use state (Epic Phase 0).
+                                "/api/epic/callback"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */
@@ -162,6 +165,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api/allergies/**").authenticated()
                         .requestMatchers("/v1/api/symptoms/**").authenticated()
                         .requestMatchers("/v1/api/ai/**", "/api/ai/**").authenticated()
+                        .requestMatchers("/api/epic/**").authenticated()
                         .requestMatchers("/v1/api/ai/deepseek/**").authenticated()
                         .requestMatchers("/v1/api/family-members/**").authenticated()
                         .requestMatchers("/v1/api/ai-chat/**").authenticated()

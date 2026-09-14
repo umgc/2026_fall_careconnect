@@ -686,12 +686,15 @@ public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
 
         User user = userOpt.get();
 
-        return ResponseEntity.ok(Map.of(
-                "id", user.getId(),
-                "name", user.getName(),
-                "email", user.getEmail(),
-                "role", user.getRole()
-        ));
+        // Use a null-tolerant map: seeded/legacy users may have a null User.name,
+        // and Map.of() throws NPE on null values (which the catch below would then
+        // mislabel as "Invalid token").
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("id", user.getId());
+        body.put("name", user.getName());
+        body.put("email", user.getEmail());
+        body.put("role", user.getRole());
+        return ResponseEntity.ok(body);
 
     } catch (Exception e) {
 

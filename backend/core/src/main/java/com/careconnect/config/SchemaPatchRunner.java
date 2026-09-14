@@ -1082,6 +1082,18 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance " +
             "  ON usps_mailpiece (patient_id, importance_level, digest_date)"
         );
+        // ehr_resource.content_hash holds an algorithm-prefixed digest ("sha256:" + 64 hex = 71
+        // chars), which overflowed the original VARCHAR(64) and rolled back the whole Epic sync
+        // (SQLState 22001, value too long). Widen it; resource_fhir_id is widened defensively since
+        // real-world Epic FHIR logical ids can exceed 64 chars.
+        applyPatch(
+            "V2609131200 – widen ehr_resource.content_hash for algorithm-prefixed digest",
+            "ALTER TABLE ehr_resource ALTER COLUMN content_hash TYPE VARCHAR(128)"
+        );
+        applyPatch(
+            "V2609131201 – widen ehr_resource.resource_fhir_id for long Epic FHIR ids",
+            "ALTER TABLE ehr_resource ALTER COLUMN resource_fhir_id TYPE VARCHAR(255)"
+        );
     }
 
     /**

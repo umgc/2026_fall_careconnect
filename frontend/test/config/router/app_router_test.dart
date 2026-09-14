@@ -1142,7 +1142,8 @@ void main() {
       await _pumpRouterApp(tester, router);
       await tester.pumpAndSettle();
 
-      expect(find.text('Invalid note ID or missing note data'), findsOneWidget);
+      // The error is shown both in the body and via a SnackBar, so allow >= 1.
+      expect(find.text('Invalid note ID or missing patient context'), findsWidgets);
     });
   });
 

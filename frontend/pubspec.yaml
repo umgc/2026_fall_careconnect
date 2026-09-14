@@ -2,7 +2,7 @@ name: care_connect_app
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -40,14 +40,14 @@ dependencies:
   cookie_jar: ^4.0.8
   dio_cookie_manager: ^3.3.0
   confetti: ^0.8.0
-  url_launcher: ^6.3.2  # For OAuth redirects
-  crypto: ^3.0.6  # For generating state parameter
-  pointycastle: ^4.0.0  # For RSA key operations
-  app_links: ^6.4.1  # For handling deep links from OAuth callback (replaced uni_links)
+  url_launcher: ^6.3.2 # For OAuth redirects
+  crypto: ^3.0.6 # For generating state parameter
+  pointycastle: ^4.0.0 # For RSA key operations
+  app_links: ^6.4.1 # For handling deep links from OAuth callback (replaced uni_links)
   # -- Astha - start
   path_provider: ^2.1.5
   mime: ^2.0.0
-  image_picker: ^1.2.0  # image upload
+  image_picker: ^1.2.0 # image upload
   # Temporarily disabled for faster builds
   # jitsi_meet_flutter_sdk: ^11.4.0
   permission_handler: ^12.0.1 # permission for camera - downgraded for compatibility
@@ -68,21 +68,21 @@ dependencies:
   # cloud_firestore: ^6.0.1
   # firebase_messaging: ^16.0.1
   # firebase_auth: ^6.0.2
-  
+
   # Hybrid Video Calling Solution
   # Agora for mobile platforms (iOS/Android) - Using only core engine to avoid namespace issues
   # Note: While included in pubspec, conditional imports prevent web loading
   #  agora_rtc_engine: ^6.5.2
-  
+
   # WebRTC for web glatform (fallback for web compatibility)
   #  flutter_webrtc: ^1.2.0
   #  socket_io_client: ^3.1.2  # For WebRTC signaling server
-  
+
   # Keep existing packages for other functionality
-  
+
   # SMS functionality - temporarily disabled due to namespace issue
   # telephony: ^0.2.0+1  # For Android SMS - updated for namespace compatibility
-  
+
   # Platform detection
   platform: ^3.1.6
   # my key storage
@@ -106,7 +106,7 @@ dependencies:
   webview_flutter_android: ^4.10.0
   fl_chart: ^1.1.0
 
-  # AI Voice Commands 
+  # AI Voice Commands
   # ag added as a fix
   porcupine_flutter: ^3.0.5
   speech_to_text: ^7.3.0
@@ -133,10 +133,10 @@ dependencies:
   # Flutter SDK
   flutter:
     sdk: flutter
-  table_calendar: ^3.0.0  # Team A Dependency for calendar based scheduling of EVV visits
+  table_calendar: ^3.0.0 # Team A Dependency for calendar based scheduling of EVV visits
   flutter_web_plugins:
     sdk: flutter
-  flutter_svg: ^2.0.9  # Add this line
+  flutter_svg: ^2.0.9 # Add this line
 
   #USPS Tracking Dependencies
   #HTML parsing of email content
@@ -159,20 +159,20 @@ dependencies:
   # new_simple_audio_trimmer: ^0.1.5
   #The following is needed as the calendar for the Calendar Assisstant feature
   #table_calendar: ^3.2.0
-# Team D - Dependencies Begin
+  # Team D - Dependencies Begin
   pdfx: ^2.9.2
   qr_flutter: ^4.1.0
   #llm_toolkit: ^0.0.4
-  #llama_cpp_dart: 
+  #llama_cpp_dart:
   http_parser: ^4.0.2
   image: ^4.2.0
   # Required dependencies
   #flutter_gemma: ^0.9.0
-  #tflite_flutter: ^0.11.0 
+  #tflite_flutter: ^0.11.0
   #fftea: ^1.5.0
   json_schema: ^5.2.1
   flutter_staggered_grid_view: ^0.7.0
-  excel: ^4.0.6         # For creating and manipulating Excel files. 
+  excel: ^4.0.6 # For creating and manipulating Excel files.
   open_filex: ^4.7.0
 
   ##EVV Dependencies
@@ -217,11 +217,13 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
-flutter: 
-  generate: true  # enables gen-l10n on build
+flutter:
+  generate: true # enables gen-l10n on build
   uses-material-design: true
   assets:
     - .env.example
+    - .env
+    - .env.local
     - assets/forms/
     - assets/images/banner.png
     - assets/images/app_icon.png
@@ -233,7 +235,7 @@ flutter:
     - assets/images/CareConnectLogo.svg
     - assets/images/default_avatar.svg
     # - web/amazon-chime-sdk.min.js  # web-only asset; web/ dir not in repo (native chime embed used on Android/iOS)
- 
+
 # -------------------------------------------------------------------
 # Splash Screen configuration
 # flutter_native_splash generates native splash screens for your Flutter app on Android, iOS, and web.
@@ -251,7 +253,6 @@ flutter_native_splash:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
-
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -287,7 +288,7 @@ flutter_native_splash:
 # Flutter Launcher Icons Configuration
 flutter_launcher_icons:
   android: true
-  ios: true 
+  ios: true
   image_path: "assets/images/app_icon.png"
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/app_icon.png"

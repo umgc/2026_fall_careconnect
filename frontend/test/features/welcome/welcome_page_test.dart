@@ -1,13 +1,14 @@
 // Tests for WelcomePage — the app entry screen with backend health check.
-// The page makes a real HTTP call in initState with a 5-second timeout and
-// a 2-second loading delay (finally block) after that.
-// pumpAndSettle() alone does NOT advance the fake clock far enough to trigger
-// those timers. Instead we use pump(7s) to advance past both delays, then
-// pump() to process the resulting frame rebuilds.
+// The health check retries up to 5 times with a 2-second delay between attempts
+// so a slow backend boot self-heals (see _checkBackendHealth). Under the test
+// binding every HTTP request returns 400 immediately, so the retries elapse only
+// the ~8s of inter-attempt delays before _isLoading becomes false.
+// pumpAndSettle() alone does NOT advance the fake clock far enough to fire those
+// timers. Instead we pump ~12s to advance past all retries, then pump() to
+// process the resulting frame rebuilds.
 //
-// "Initial loading state" tests check the first frame, then drain both timers
-// (pump(6s) for the 5s timeout, pump(3s) for the 2s finally delay) to prevent
-// "Timer still pending after widget tree disposed" assertion failures.
+// "Initial loading state" tests check the first frame, then drain the retry
+// timers to prevent "Timer still pending after widget tree disposed" failures.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,9 +32,10 @@ Widget _wrap(Widget child) {
   );
 }
 
-// Advances fake clock past the 5-second HTTP timeout and the 2-second finally delay.
+// Advances the fake clock past all health-check retries (~8s of 2s delays),
+// with margin, so _isLoading becomes false and the ready state is rendered.
 Future<void> _advancePastHealthCheck(WidgetTester tester) async {
-  await tester.pump(const Duration(seconds: 7));
+  await tester.pump(const Duration(seconds: 12));
   await tester.pump(); // process setState() rebuilds
 }
 

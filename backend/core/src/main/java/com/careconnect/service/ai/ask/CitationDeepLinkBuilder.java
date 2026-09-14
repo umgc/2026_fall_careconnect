@@ -37,8 +37,24 @@ final class CitationDeepLinkBuilder {
             case CLINICAL_NOTE -> clinicalNoteLink(chunk.patientId(), chunk.sourceRecordId());
             case UPLOADED_DOCUMENT -> documentLink(chunk.sourceRecordId());
             case USPS_MAIL -> mailLink(chunk.sourceRecordId());
+            case EPIC_CONDITION, EPIC_MEDICATION, EPIC_ALLERGY, EPIC_OBSERVATION,
+                    EPIC_DIAGNOSTIC_REPORT, EPIC_IMMUNIZATION, EPIC_PROCEDURE,
+                    EPIC_DOCUMENT -> epicLink(chunk, metadata);
             default -> null;
         };
+    }
+
+    /**
+     * Epic detail route {@code /epic/{resourceType}/{id}?patientId=...}. Returns null (citation
+     * still renders, untappable) when the FHIR type/id are absent or non-path-safe.
+     */
+    private String epicLink(final RankedChunk chunk, final JsonNode metadata) {
+        final String type = pathSegment(textOrNull(metadata, "fhirResourceType"));
+        final String id = pathSegment(textOrNull(metadata, "fhirResourceId"));
+        if (type == null || id == null || chunk.patientId() == null || chunk.patientId() <= 0) {
+            return null;
+        }
+        return "/epic/" + type + "/" + id + "?patientId=" + chunk.patientId();
     }
 
     private String summaryChildLink(final RankedChunk chunk, final JsonNode metadata) {

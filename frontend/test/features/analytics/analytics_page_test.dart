@@ -15,6 +15,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/analytics/analytics_page.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 // ---------- helpers ----------
@@ -30,8 +31,12 @@ void _ignoreOverflowErrors(FlutterErrorDetails details) {
   }
 }
 
-Widget _wrap({int patientId = 0}) =>
-    MaterialApp(home: AnalyticsPage(patientId: patientId));
+Widget _wrap({int patientId = 0}) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: AnalyticsPage(patientId: patientId),
+    );
 
 void _setupMocks() {
   SharedPreferences.setMockInitialValues({});

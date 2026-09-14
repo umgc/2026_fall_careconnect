@@ -170,7 +170,9 @@ class _FileManagementPageState extends State<FileManagementPage>
     final user = userProvider.user;
     final t = AppLocalizations.of(context)!;
     if (user == null) {
-      Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
+      // This is a GoRouter app; use context.go (Navigator named routes are not
+      // registered, so pushReplacementNamed('/login') throws in production).
+      Future.microtask(() => context.go('/login'));
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final isAdmin = user.role.toUpperCase() == 'ADMIN';

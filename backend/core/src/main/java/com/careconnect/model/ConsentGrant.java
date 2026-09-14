@@ -39,6 +39,12 @@ public class ConsentGrant {
     /** Default scope used for Ask AI retrieval consent grants. */
     public static final String SCOPE_AI_RETRIEVAL = "AI_RETRIEVAL";
 
+    /**
+     * Scope for a patient consenting to import their own external EHR (Epic/MyChart) records
+     * (Epic Phase 0). Self-grant: patient and grantee are the same connecting user.
+     */
+    public static final String SCOPE_EHR_IMPORT = "EHR_IMPORT";
+
     /** Status set while a grant is in force. */
     public static final String STATUS_ACTIVE = "ACTIVE";
 

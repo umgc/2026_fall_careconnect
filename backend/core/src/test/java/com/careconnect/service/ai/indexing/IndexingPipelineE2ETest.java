@@ -110,6 +110,8 @@ class IndexingPipelineE2ETest {
                 new MailpieceChunker(),
                 new ClinicalNoteChunker(),
                 new DocumentChunker(),
+                new com.careconnect.service.ai.indexing.chunker.EpicResourceChunker(objectMapper),
+                org.mockito.Mockito.mock(com.careconnect.repository.ehr.EhrResourceRepository.class),
                 objectMapper,
                 chunkEmbeddingService);
         worker = new IndexWorker(

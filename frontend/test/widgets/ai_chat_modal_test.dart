@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:care_connect_app/widgets/ai_chat_modal.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import '../mock_user_provider.dart';
 
@@ -21,6 +22,9 @@ class _NullUserProvider extends MockUserProvider {
 Widget _wrap() {
   final provider = _NullUserProvider();
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: Builder(
@@ -99,6 +103,9 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: ChangeNotifierProvider<UserProvider>.value(
             value: provider,
             child: Builder(

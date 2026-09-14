@@ -4,6 +4,7 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/utils/sentiment_clip_recording_status.dart';
 import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
 import 'package:care_connect_app/widgets/sentiment_clip_player_widget.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +12,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+Widget _wrap(Widget child) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: child,
+    );
 
 Future<void> _pumpLoaded(WidgetTester tester) async {
   await tester.pump();

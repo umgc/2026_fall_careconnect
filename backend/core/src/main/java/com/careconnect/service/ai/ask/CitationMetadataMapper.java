@@ -138,6 +138,14 @@ final class CitationMetadataMapper {
             case TASK -> "Task";
             case EVV_RECORD -> "Visit record";
             case VITAL_SIGN -> "Vital sign";
+            case EPIC_CONDITION -> "Epic condition";
+            case EPIC_MEDICATION -> "Epic medication";
+            case EPIC_ALLERGY -> "Epic allergy";
+            case EPIC_OBSERVATION -> "Epic observation";
+            case EPIC_DIAGNOSTIC_REPORT -> "Epic report";
+            case EPIC_IMMUNIZATION -> "Epic immunization";
+            case EPIC_PROCEDURE -> "Epic procedure";
+            case EPIC_DOCUMENT -> "Epic document";
         };
         return occurredAt == null ? label : label + " — " + occurredAt.toString().substring(0, 10);
     }

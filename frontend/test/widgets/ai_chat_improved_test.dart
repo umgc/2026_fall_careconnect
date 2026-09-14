@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import '../mock_user_provider.dart';
 
 void main() {
@@ -245,6 +246,9 @@ void main() {
       return ChangeNotifierProvider<UserProvider>.value(
         value: provider,
         child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: AIChat(
               role: role,

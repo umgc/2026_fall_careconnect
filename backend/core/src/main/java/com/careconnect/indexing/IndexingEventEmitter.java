@@ -115,6 +115,17 @@ public class IndexingEventEmitter {
     }
 
     /**
+     * Emit an {@code EPIC_FHIR_INDEXED} event after an Epic FHIR resource is upserted into
+     * {@code ehr_resource} (Epic Phase 2). Must be called inside the sync transaction.
+     *
+     * @param payload EPIC_FHIR_INDEXED payload body
+     * @return the persisted outbox row
+     */
+    public IndexingOutboxRow emitEpicFhirIndexed(final EpicFhirIndexedPayload payload) {
+        return emit(IndexingEventType.EPIC_FHIR_INDEXED, payload);
+    }
+
+    /**
      * General-purpose emit hook. Package-private so type-specific
      * public wrappers enforce the correct payload type at compile time.
      *

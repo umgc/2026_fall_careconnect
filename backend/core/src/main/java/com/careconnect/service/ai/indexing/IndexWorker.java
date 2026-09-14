@@ -2,6 +2,7 @@ package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.ClinicalNoteIndexedPayload;
 import com.careconnect.indexing.DocumentIndexedPayload;
+import com.careconnect.indexing.EpicFhirIndexedPayload;
 import com.careconnect.indexing.IndexingEventType;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
@@ -260,6 +261,11 @@ public class IndexWorker {
                 final DocumentIndexedPayload payload =
                         objectMapper.treeToValue(payloadNode, DocumentIndexedPayload.class);
                 return retrievalIndexService.ingestDocumentIndexed(payload);
+            }
+            if (IndexingEventType.EPIC_FHIR_INDEXED.equals(eventType)) {
+                final EpicFhirIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, EpicFhirIndexedPayload.class);
+                return retrievalIndexService.ingestEpicFhir(payload);
             }
         } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
             throw ex;

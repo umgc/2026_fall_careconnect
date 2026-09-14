@@ -184,6 +184,65 @@ public class ConsentService {
      * @param granteeUserId user identifier of the grantee
      * @return number of grants revoked or sentinel rows written
      */
+    /**
+     * Records a patient's self-consent to import their own external EHR records
+     * ({@link ConsentGrant#SCOPE_EHR_IMPORT}, Epic Phase 0). Unlike
+     * {@link #grantAiRetrievalConsent} this is a self-grant (patient == grantee) and does not
+     * require a caregiver link. Idempotent: refreshes an existing ACTIVE row.
+     *
+     * @param patientUserId the connecting user (patient) id
+     * @return the persisted grant
+     */
+    @Transactional
+    public ConsentGrant recordEhrImportConsent(final Long patientUserId) {
+        if (patientUserId == null) {
+            throw new IllegalArgumentException("patientUserId is required");
+        }
+        final Instant now = Instant.now();
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, patientUserId, ConsentGrant.SCOPE_EHR_IMPORT, now);
+        if (!active.isEmpty()) {
+            final ConsentGrant primary = active.get(0);
+            primary.setGrantedAt(now);
+            primary.setRevokedAt(null);
+            primary.setStatus(ConsentGrant.STATUS_ACTIVE);
+            return consentGrantRepository.save(primary);
+        }
+        final ConsentGrant grant = ConsentGrant.builder()
+                .patientUserId(patientUserId)
+                .granteeUserId(patientUserId)
+                .granteeRole("PATIENT")
+                .scope(ConsentGrant.SCOPE_EHR_IMPORT)
+                .status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(now)
+                .build();
+        return consentGrantRepository.save(grant);
+    }
+
+    /**
+     * Revokes a patient's EHR-import self-consent (Epic "Disconnect").
+     *
+     * @param patientUserId the connecting user (patient) id
+     * @return number of grants revoked
+     */
+    @Transactional
+    public int revokeEhrImportConsent(final Long patientUserId) {
+        if (patientUserId == null) {
+            return 0;
+        }
+        final Instant now = Instant.now();
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, patientUserId, ConsentGrant.SCOPE_EHR_IMPORT, now);
+        for (final ConsentGrant grant : active) {
+            grant.setStatus(ConsentGrant.STATUS_REVOKED);
+            grant.setRevokedAt(now);
+        }
+        if (!active.isEmpty()) {
+            consentGrantRepository.saveAll(active);
+        }
+        return active.size();
+    }
+
     @Transactional
     public int revokeAiRetrievalConsent(final Long patientUserId, final Long granteeUserId) {
         if (patientUserId == null || granteeUserId == null) {
