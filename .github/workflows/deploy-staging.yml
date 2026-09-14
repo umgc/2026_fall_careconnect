@@ -35,6 +35,22 @@ jobs:
           cd frontend/build/web
           zip -r ../../../frontend.zip .
 
+      - name: Debug OIDC claims
+        run: |
+          TOKEN=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
+          python3 -c "
+          import json, base64
+          p = '$TOKEN'.split('.')[1]
+          p += '=' * (-len(p) % 4)
+          c = json.loads(base64.urlsafe_b64decode(p))
+          print('sub:        ', c.get('sub'))
+          print('aud:        ', c.get('aud'))
+          print('repository: ', c.get('repository'))
+          print('ref:        ', c.get('ref'))
+          "
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
