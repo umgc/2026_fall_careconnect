@@ -23,13 +23,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/screens/tabs/patient_tabs.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
+
+MaterialApp _app(Widget child) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: child,
+    );
 
 /// Wraps [child] in a minimal MaterialApp with a [UserProvider] whose
 /// initial session is null (logged-out state).
 Widget _withNullUser(Widget child) {
   return ChangeNotifierProvider<UserProvider>(
     create: (_) => UserProvider(),
-    child: MaterialApp(home: child),
+    child: _app(child),
   );
 }
 
@@ -45,7 +53,7 @@ Widget _withPatientUser(Widget child) {
   ));
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: MaterialApp(home: child),
+    child: _app(child),
   );
 }
 

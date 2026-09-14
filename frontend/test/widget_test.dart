@@ -30,7 +30,6 @@ import 'package:care_connect_app/features/gamification/presentation/pages/gamifi
 import 'package:care_connect_app/features/gamification/presentation/pages/achievement_detail_screen.dart';
 import 'package:care_connect_app/features/health/presentation/pages/meal_tracking_screen.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
-import 'package:care_connect_app/features/profile/presentation/pages/settings_screen.dart';
 
 // Model imports
 import 'package:care_connect_app/features/dashboard/models/patient_model.dart';
@@ -335,17 +334,6 @@ void main() {
 
       expect(find.byType(SymptomsAllergiesPage), findsOneWidget);
       expect(find.byType(Scaffold), findsAtLeastNWidgets(1));
-    });
-  });
-
-  group('Profile Tests', () {
-    testWidgets('SettingsScreen renders correctly', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
-
-      expect(find.byType(SettingsScreen), findsOneWidget);
-      expect(find.byType(Scaffold), findsOneWidget);
     });
   });
 

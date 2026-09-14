@@ -268,14 +268,37 @@
     
     // Run platform detection as soon as possible
     detectPlatform();
-    
-    // Hide loading indicator once Flutter is initialized
-    window.addEventListener('flutter-first-frame', function() {
+
+    // Clear the boot overlays (loading indicator + native splash) once Flutter is up.
+    // Relying on 'flutter-first-frame' alone proved unreliable with flutter_bootstrap.js:
+    // the event could be missed, leaving the full-screen #loading overlay (and the never-
+    // removed #splash) permanently covering the rendered app — it looked like the app
+    // "hung on the CareConnect logo". We now clear on first-frame, the moment the Flutter
+    // view element mounts (definitive "app is rendering"), and via a timed safety net.
+    var _bootOverlaysCleared = false;
+    function clearBootOverlays() {
+      if (_bootOverlaysCleared) return;
+      _bootOverlaysCleared = true;
       var loading = document.getElementById('loading');
-      if (loading) {
-        loading.style.display = 'none';
-      }
-    });
+      if (loading) { loading.style.display = 'none'; }
+      if (typeof removeSplashFromWeb === 'function') { removeSplashFromWeb(); }
+    }
+
+    window.addEventListener('flutter-first-frame', clearBootOverlays);
+
+    // Watch for the Flutter view being inserted into the DOM.
+    if (window.MutationObserver) {
+      var _bootObserver = new MutationObserver(function() {
+        if (document.querySelector('flt-glass-pane, flutter-view, flt-scene-host')) {
+          clearBootOverlays();
+          _bootObserver.disconnect();
+        }
+      });
+      _bootObserver.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    // Safety net: never leave the overlay up indefinitely (debug web can be slow).
+    setTimeout(clearBootOverlays, 15000);
   </script>
   
   <script src="flutter_bootstrap.js" async=""></script>

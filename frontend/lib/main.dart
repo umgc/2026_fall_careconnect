@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
@@ -33,6 +34,14 @@ Future<void> main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
+
+      // Load env from committed .env.example so clean checkouts can build
+      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      try {
+        await dotenv.load(fileName: ".env");
+      } catch (_) {
+        await dotenv.load(fileName: ".env.local");
+      }
 
       // Performance optimization: Set preferred orientations
       await SystemChrome.setPreferredOrientations([
@@ -261,6 +270,16 @@ class _CareConnectAppState extends State<CareConnectApp>
       print('OAuth callback detected: $link');
       // The actual OAuth handling is done in AuthService.loginWithGoogle()
       // This is just for logging and potential additional processing
+    }
+
+    // Epic SMART-on-FHIR return (careconnect://epic/linked?status=ok|error) — Epic Phase 0.
+    if (uri.scheme == 'careconnect' &&
+        uri.host == 'epic' &&
+        uri.path == '/linked') {
+      final ok = uri.queryParameters['status'] == 'ok';
+      print('Epic link callback detected: status=${ok ? 'ok' : 'error'}');
+      // The connection + initial sync are handled server-side; the UI polls
+      // EpicService.status() to refresh the "Connected" state after return.
     }
   }
 

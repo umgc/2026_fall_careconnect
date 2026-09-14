@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/notetaker/models/patient_note_model.dart';
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_detail_view.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import '../../mock_user_provider.dart';
 
@@ -32,7 +33,9 @@ PatientNote _makeNote({
   );
 }
 
-/// Wraps NotetakerDetailView with no extra (triggers redirect to notetaker-search).
+/// Wraps NotetakerDetailView with no extra and no note id/patient context, so
+/// the view renders its inline error state ("Invalid note ID or missing patient
+/// context") instead of loading a note.
 Widget _wrapNoExtra({MockUserProvider? provider}) {
   final userProvider =
       provider ?? MockUserProvider(mockUser: MockUser(role: 'PATIENT'));
@@ -54,7 +57,12 @@ Widget _wrapNoExtra({MockUserProvider? provider}) {
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(
+    routerConfig: router,
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+  );
 }
 
 /// Wraps NotetakerDetailView with a PatientNote as extra, using a sub-route
@@ -174,19 +182,24 @@ void main() {
     );
   });
 
-  group('NotetakerDetailView - no extra (redirect)', () {
-    testWidgets('shows CircularProgressIndicator when note is null',
+  group('NotetakerDetailView - no extra (inline error)', () {
+    testWidgets('shows the inline error when no note data is provided',
         (tester) async {
       await tester.pumpWidget(_wrapNoExtra());
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pump();
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
 
-    testWidgets('navigates to notetaker-search when extra is null',
+    testWidgets('does not navigate away when extra is null',
         (tester) async {
       await tester.pumpWidget(_wrapNoExtra());
       await tester.pump();
       await tester.pump();
-      expect(find.text('Notetaker Search'), findsOneWidget);
+      // Behavior changed from redirect-to-search to an inline error.
+      expect(find.text('Notetaker Search'), findsNothing);
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
   });
 

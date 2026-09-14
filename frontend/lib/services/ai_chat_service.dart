@@ -25,6 +25,15 @@ const Set<String> _aiAskRecordTypes = {
   'TASK',
   'EVV_RECORD',
   'VITAL_SIGN',
+  // Epic SMART-on-FHIR sourced clinical data (Epic Phase 2).
+  'EPIC_CONDITION',
+  'EPIC_MEDICATION',
+  'EPIC_ALLERGY',
+  'EPIC_OBSERVATION',
+  'EPIC_DIAGNOSTIC_REPORT',
+  'EPIC_IMMUNIZATION',
+  'EPIC_PROCEDURE',
+  'EPIC_DOCUMENT',
 };
 final RegExp _aiAskCitationIdPattern = RegExp(r'^C[1-9][0-9]*$');
 final RegExp _aiAskUuidPattern = RegExp(

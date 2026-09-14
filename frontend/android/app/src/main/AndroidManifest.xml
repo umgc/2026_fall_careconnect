@@ -50,6 +50,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Epic SMART-on-FHIR return deep link: careconnect://epic/linked (Epic Phase 0).
+                 iOS registers the scheme in Info.plist; Android needs this intent-filter or the
+                 native return from Epic will not resume the app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="careconnect" android:host="epic" />
+            </intent-filter>
         </activity>
         <meta-data
             android:name="flutterEmbedding"
