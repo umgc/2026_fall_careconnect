@@ -27,8 +27,20 @@ jobs:
       - run: flutter pub get
         working-directory: frontend
 
-      - run: flutter build web --release
+      - name: Build Flutter web
         working-directory: frontend
+        run: |
+          set -euo pipefail
+          if [[ -z "${BACKEND_URL:-}" ]]; then
+            echo "::error::STAGING_BACKEND_URL repository variable is not set. The build would fall back to http://localhost:8080."
+            exit 1
+          fi
+          echo "Building against backend: $BACKEND_URL"
+          flutter build web --release \
+            --no-tree-shake-icons \
+            --dart-define=BACKEND_URL="$BACKEND_URL"
+        env:
+          BACKEND_URL: ${{ vars.STAGING_BACKEND_URL }}
 
       - name: Zip build output
         run: |
