@@ -1,15 +1,15 @@
-name: Backend App Deploy
+name: Backend Deploy
 
+# Push to main or staging deploys the backend. There is deliberately no `paths`
+# filter: a push to `staging` must be able to stand the environment back up even
+# when only frontend files changed, because staging is torn down between demos
+# to control cost. The mode step below decides what actually needs to run, so
+# pushes that change nothing relevant still finish quickly.
 on:
   push:
     branches:
       - main
-    paths:
-      - "backend/**"
-      - "cloudformation-fargate/templates/04-service.yaml"
-      - "cloudformation-fargate/parameters/*-service.json"
-      - "cloudformation-fargate/cdeploy_app_only.sh"
-      - ".github/workflows/backend-app-deploy.yml"
+      - staging
   workflow_dispatch:
     inputs:
       environment:
@@ -26,26 +26,35 @@ on:
         description: "Optional image tag override"
         required: false
         default: ""
+      force_full_deploy:
+        description: "Force a full environment deploy even if the environment is already up"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   id-token: write
 
+# Not cancel-in-progress: a full deploy may be 20 minutes into creating RDS, and
+# cancelling that leaves a half-built stack behind.
 concurrency:
-  group: backend-app-deploy-${{ github.ref }}
-  cancel-in-progress: true
+  group: backend-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 
 jobs:
   deploy:
-    name: Build Push and Update ECS Service
+    name: Deploy Backend
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - name: Determine deployment settings
         id: settings
@@ -59,6 +68,8 @@ jobs:
 
           if [[ -n "$MANUAL_ENV" ]]; then
             DEPLOY_ENV="$MANUAL_ENV"
+          elif [[ "$GITHUB_REF_NAME" == "staging" ]]; then
+            DEPLOY_ENV="staging"
           else
             DEPLOY_ENV="$DEFAULT_ENV"
           fi
@@ -71,7 +82,6 @@ jobs:
 
           echo "deploy_environment=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-
           echo "Deploy environment: $DEPLOY_ENV"
           echo "Image tag: $IMAGE_TAG"
 
@@ -80,19 +90,149 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: careconnect-backend-app-deploy
+          role-session-name: careconnect-backend-deploy
+
+      - name: Determine deploy mode
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_NAME="${{ steps.settings.outputs.deploy_environment }}"
+          PLATFORM_STACK="careconnect-platform-${ENV_NAME}"
+
+          # The app-only path reads the ECR repository URI from the platform
+          # stack, so the platform stack is what "the environment is up" means.
+          if aws cloudformation describe-stacks \
+               --stack-name "$PLATFORM_STACK" \
+               --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+            ENV_UP=true
+          else
+            ENV_UP=false
+          fi
+
+          # Only rebuild when this push actually touched backend or infra files.
+          BACKEND_CHANGED=true
+          if [[ "${{ github.event_name }}" == "push" ]] && git rev-parse HEAD~1 >/dev/null 2>&1; then
+            if git diff --quiet HEAD~1 HEAD -- \
+                 backend \
+                 cloudformation-fargate \
+                 .github/workflows/backend-app-deploy.yml; then
+              BACKEND_CHANGED=false
+            fi
+          fi
+
+          if [[ "${{ github.event.inputs.force_full_deploy }}" == "true" ]]; then
+            MODE=full
+            echo "::notice::Full environment deploy forced."
+          elif [[ "$ENV_UP" == "false" ]]; then
+            MODE=full
+            echo "::warning::$PLATFORM_STACK not found — creating the full environment. THIS STARTS COSTING MONEY."
+          elif [[ "$BACKEND_CHANGED" == "true" ]]; then
+            MODE=app
+            echo "::notice::$ENV_NAME is up and backend files changed — app-only deploy."
+          else
+            MODE=skip
+            echo "::notice::$ENV_NAME is up and no backend/infra files changed — nothing to do."
+          fi
+
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Load environment secrets
+        if: steps.mode.outputs.mode == 'full'
+        shell: bash
+        env:
+          DEV_DATABASE_MASTER_PASSWORD: ${{ secrets.DEV_DATABASE_MASTER_PASSWORD }}
+          DEV_JWT_SECRET: ${{ secrets.DEV_JWT_SECRET }}
+          CFDEMO_DATABASE_MASTER_PASSWORD: ${{ secrets.CFDEMO_DATABASE_MASTER_PASSWORD }}
+          CFDEMO_JWT_SECRET: ${{ secrets.CFDEMO_JWT_SECRET }}
+          STAGING_DATABASE_MASTER_PASSWORD: ${{ secrets.STAGING_DATABASE_MASTER_PASSWORD }}
+          STAGING_JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+
+          case "${{ steps.settings.outputs.deploy_environment }}" in
+            dev)
+              DB_PASSWORD="$DEV_DATABASE_MASTER_PASSWORD"
+              JWT_SECRET="$DEV_JWT_SECRET"
+              ;;
+            cfdemo)
+              DB_PASSWORD="$CFDEMO_DATABASE_MASTER_PASSWORD"
+              JWT_SECRET="$CFDEMO_JWT_SECRET"
+              ;;
+            staging)
+              DB_PASSWORD="$STAGING_DATABASE_MASTER_PASSWORD"
+              JWT_SECRET="$STAGING_JWT_SECRET"
+              ;;
+            *)
+              echo "No GitHub secret mapping is configured for environment '${{ steps.settings.outputs.deploy_environment }}'." >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ -z "$DB_PASSWORD" || -z "$JWT_SECRET" ]]; then
+            echo "Required GitHub secrets are missing for '${{ steps.settings.outputs.deploy_environment }}'." >&2
+            exit 1
+          fi
+
+          # cdeploy_cloudformation.sh asserts JwtSecret >= 32 chars and
+          # DatabaseMasterPassword >= 8 before it touches AWS. Fail here instead,
+          # where the message is obvious.
+          if (( ${#JWT_SECRET} < 32 )); then
+            echo "JWT secret for this environment is ${#JWT_SECRET} chars; the deploy script requires at least 32." >&2
+            exit 1
+          fi
+
+          {
+            echo "CARECONNECT_DATABASE_MASTER_PASSWORD=$DB_PASSWORD"
+            echo "CARECONNECT_JWT_SECRET=$JWT_SECRET"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve service configuration
+        if: steps.mode.outputs.mode != 'skip'
+        shell: bash
+        env:
+          STAGING_CORS_ALLOWED_LIST: ${{ vars.STAGING_CORS_ALLOWED_LIST }}
+          STAGING_FRONTEND_BASE_URL: ${{ vars.STAGING_FRONTEND_BASE_URL }}
+          STAGING_FROM_EMAIL: ${{ vars.STAGING_FROM_EMAIL }}
+        run: |
+          set -euo pipefail
+          # Unset values simply mean "no override" — the committed
+          # parameters/<env>-service.json value is used instead.
+          case "${{ steps.settings.outputs.deploy_environment }}" in
+            staging)
+              [[ -n "${STAGING_CORS_ALLOWED_LIST:-}" ]] && echo "CARECONNECT_CORS_ALLOWED_LIST=$STAGING_CORS_ALLOWED_LIST" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_FRONTEND_BASE_URL:-}" ]] && echo "CARECONNECT_FRONTEND_BASE_URL=$STAGING_FRONTEND_BASE_URL" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_FROM_EMAIL:-}" ]] && echo "CARECONNECT_FROM_EMAIL=$STAGING_FROM_EMAIL" >> "$GITHUB_ENV"
+              ;;
+          esac
+          exit 0
 
       - name: Set up Java 17
+        if: steps.mode.outputs.mode != 'skip'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
 
-      - name: Make deploy script executable
-        run: chmod +x cloudformation-fargate/cdeploy_app_only.sh
+      - name: Make deploy scripts executable
+        if: steps.mode.outputs.mode != 'skip'
+        run: |
+          chmod +x cloudformation-fargate/cdeploy_cloudformation.sh
+          chmod +x cloudformation-fargate/cdeploy_app_only.sh
 
-      - name: Build backend image and update ECS service
+      - name: Create full environment
+        if: steps.mode.outputs.mode == 'full'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./cloudformation-fargate/cdeploy_cloudformation.sh \
+            --environment "${{ steps.settings.outputs.deploy_environment }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --image-tag "${{ steps.settings.outputs.image_tag }}"
+
+      - name: Update ECS service only
+        if: steps.mode.outputs.mode == 'app'
         shell: bash
         run: |
           set -euo pipefail
@@ -102,17 +242,30 @@ jobs:
             --image-tag "${{ steps.settings.outputs.image_tag }}"
 
       - name: Print API endpoint
+        if: steps.mode.outputs.mode != 'skip'
         shell: bash
         run: |
           set -euo pipefail
-          STACK_NAME="careconnect-service-${{ steps.settings.outputs.deploy_environment }}"
+          ENV_NAME="${{ steps.settings.outputs.deploy_environment }}"
           API_ENDPOINT=$(aws cloudformation describe-stacks \
             --region "${{ env.AWS_REGION }}" \
-            --stack-name "$STACK_NAME" \
+            --stack-name "careconnect-service-${ENV_NAME}" \
             --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
             --output text)
-          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Environment:** ${{ steps.settings.outputs.deploy_environment }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Image Tag:** ${{ steps.settings.outputs.image_tag }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **API Endpoint:** ${API_ENDPOINT}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Health Check:** ${API_ENDPOINT}/v1/api/test/health" >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "## Deployment Summary"
+            echo "- **Environment:** ${ENV_NAME}"
+            echo "- **Mode:** ${{ steps.mode.outputs.mode }}"
+            echo "- **Image Tag:** ${{ steps.settings.outputs.image_tag }}"
+            echo "- **API Endpoint:** ${API_ENDPOINT}"
+            echo "- **Health Check:** ${API_ENDPOINT}/v1/api/test/health"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${{ steps.mode.outputs.mode }}" == "full" ]]; then
+            {
+              echo ""
+              echo "### :warning: ${ENV_NAME} IS NOW RUNNING"
+              echo "Roughly \$1.80/day while up. Run **Backend Teardown** when you are finished."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

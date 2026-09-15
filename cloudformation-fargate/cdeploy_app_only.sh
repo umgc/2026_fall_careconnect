@@ -467,7 +467,21 @@ docker push "$IMAGE_URI"
 popd >/dev/null
 
 step "Deploying service stack: $SERVICE_STACK_NAME"
-deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "BackendImageUri=${IMAGE_URI}"
+# Service-stack values that differ per deployment target can be supplied from
+# the environment (e.g. GitHub Actions repository variables) instead of being
+# committed into parameters/<env>-service.json.
+SERVICE_OVERRIDE_ARGS=("BackendImageUri=${IMAGE_URI}")
+if [[ -n "${CARECONNECT_CORS_ALLOWED_LIST-}" ]]; then
+  SERVICE_OVERRIDE_ARGS+=("CorsAllowedList=${CARECONNECT_CORS_ALLOWED_LIST}")
+fi
+if [[ -n "${CARECONNECT_FRONTEND_BASE_URL-}" ]]; then
+  SERVICE_OVERRIDE_ARGS+=("FrontendBaseUrl=${CARECONNECT_FRONTEND_BASE_URL}")
+fi
+if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
+  SERVICE_OVERRIDE_ARGS+=("FromEmail=${CARECONNECT_FROM_EMAIL}")
+fi
+
+deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDE_ARGS[@]}"
 
 step "Reading final API endpoint"
 CURRENT_OPERATION="Reading final API endpoint"
