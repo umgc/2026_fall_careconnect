@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../services/auth_token_manager.dart';
 
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -781,8 +782,59 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     return FloatingActionButton(
       heroTag: 'globalVoiceFab',
       tooltip: AppLocalizations.of(context)!.mainscreen_voiceCommandsTooltip,
-      onPressed: () => context.push('/voice'),
+      onPressed: _showVoiceCommandsOverlay,
       child: const Icon(Icons.mic),
+    );
+  }
+
+  Future<void> _showVoiceCommandsOverlay() async {
+    if (!mounted) return;
+
+    // Use the root navigator so the flyout can overlay any tab content
+    // consistently and dismiss cleanly from callback handlers.
+    final overlayNavigator = Navigator.of(context, rootNavigator: true);
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return VoiceCommandAI(
+          // Flyout mode keeps users in context instead of route-switching to a
+          // dedicated voice page, which reduces navigation side effects.
+          presentationMode: VoiceCommandPresentation.flyout,
+          onCloseRequested: () {
+            if (overlayNavigator.canPop()) {
+              overlayNavigator.pop();
+            }
+          },
+          onNavigateRequested: (destination) {
+            if (overlayNavigator.canPop()) {
+              overlayNavigator.pop();
+            }
+            if (mounted) {
+              context.go(destination);
+            }
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0.12, 0),
+          end: Offset.zero,
+        ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: slide,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -1134,7 +1186,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
