@@ -84,6 +84,7 @@ public class AiAskService {
     private final AiAskConfirmationService askConfirmationService;
     private final MedicationTimelineAggregator medicationTimelineAggregator;
     private final boolean hitlEnabled;
+    private final int maxGenerationAttempts;
 
     public AiAskService(
             final RetrievalScopeService retrievalScopeService,
@@ -98,7 +99,8 @@ public class AiAskService {
             final AiAskAuditService askAuditService,
             final AiAskConfirmationService askConfirmationService,
             final MedicationTimelineAggregator medicationTimelineAggregator,
-            @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled) {
+            @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled,
+            @Value("${careconnect.ai.grounding.max-generation-attempts:3}") final int maxGenerationAttempts) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
         this.retrievalQueryPlanner = retrievalQueryPlanner;
@@ -112,6 +114,7 @@ public class AiAskService {
         this.askConfirmationService = askConfirmationService;
         this.medicationTimelineAggregator = medicationTimelineAggregator;
         this.hitlEnabled = hitlEnabled;
+        this.maxGenerationAttempts = Math.max(1, maxGenerationAttempts);
     }
 
     /**
@@ -340,14 +343,14 @@ public class AiAskService {
         final long inferenceStarted = System.nanoTime();
         final Optional<GroundedAskLlmService.GroundedLlmResult> llmOpt;
         try {
-            llmOpt = groundedAskLlmService.generate(
-                    context.systemPrompt(), context.userPrompt());
+            llmOpt = generateWithRetry(requestId, context);
         } catch (final GroundedOutputValidationException ex) {
             throw groundingFailure(
                     requestId,
                     auditId,
                     sessionId,
-                    "Generated answer did not satisfy the grounded response contract");
+                    "Generated answer did not satisfy the grounded response contract",
+                    userMessageFor(ex.kind()));
         } catch (final GroundedProviderException ex) {
             final boolean configuration =
                     ex.getKind() == GroundedProviderException.Kind.CONFIGURATION;
@@ -916,18 +919,71 @@ public class AiAskService {
         return excerpt.substring(contextStart, contextEnd).trim();
     }
 
+    /**
+     * The model occasionally returns output that fails structural validation (empty
+     * response, no claims array, malformed JSON) even for well-supported questions —
+     * observed with amazon.nova-lite-v1:0 at roughly a 15-30% per-call rate in manual
+     * testing. This is a format/reliability failure, not a content-safety judgment made
+     * by the model, so retrying is safe: it only re-invokes generation, not the claim
+     * verification loop below, which still fails closed on every attempt regardless of
+     * retry count. Deliberately does NOT retry {@link GroundedProviderException}
+     * (AWS/Bedrock-level failures, e.g. expired credentials, throttling) — those are
+     * unlikely to be fixed by an immediate retry and are surfaced to the caller as-is.
+     */
+    private Optional<GroundedAskLlmService.GroundedLlmResult> generateWithRetry(
+            final UUID requestId, final RetrievalContextAssembler.GroundedContext context) {
+        GroundedOutputValidationException lastFailure = null;
+        for (int attempt = 1; attempt <= maxGenerationAttempts; attempt++) {
+            try {
+                return groundedAskLlmService.generate(
+                        context.systemPrompt(), context.userPrompt());
+            } catch (final GroundedOutputValidationException ex) {
+                lastFailure = ex;
+                log.warn("Grounded Ask AI generation attempt {}/{} failed requestId={} kind={}",
+                        attempt, maxGenerationAttempts, requestId, ex.kind());
+            }
+        }
+        throw lastFailure;
+    }
+
+    private static String userMessageFor(final GroundedOutputValidationException.Kind kind) {
+        return switch (kind) {
+            case EMPTY_RESPONSE -> AskAiSafetyCopy.MODEL_NO_RESPONSE_EN;
+            case MISSING_CLAIMS -> AskAiSafetyCopy.MODEL_INCOMPLETE_RESPONSE_EN;
+            case MALFORMED_RESPONSE -> AskAiSafetyCopy.MODEL_MALFORMED_RESPONSE_EN;
+            // An incomplete individual claim is closest in spirit to a genuine
+            // grounding/content-verification gap rather than a transient technical
+            // hiccup, so it keeps the general "couldn't verify against your records"
+            // copy instead of a "try again" framing.
+            case INCOMPLETE_CLAIM -> AskAiSafetyCopy.UNGROUNDED_EN;
+        };
+    }
+
     private static AskAiGroundingException groundingFailure(
             final UUID requestId,
             final UUID auditId,
             final UUID sessionId,
             final String reason) {
+        return groundingFailure(requestId, auditId, sessionId, reason, AskAiSafetyCopy.UNGROUNDED_EN);
+    }
+
+    private static AskAiGroundingException groundingFailure(
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String reason,
+            final String userMessage) {
         // `reason` is a developer-facing diagnostic, not shown to callers — the exception
         // carries a single, natural-language message so clients (including voice/TTS
         // surfaces) never read a technical string like "did not satisfy the grounded
-        // response contract" back to a patient or caregiver.
+        // response contract" back to a patient or caregiver. `userMessage` lets callers
+        // pick copy that's accurate for the specific failure (e.g. "no response from the
+        // model" reads very differently from "couldn't verify this against your records"),
+        // while still defaulting to the general UNGROUNDED_EN copy everywhere that
+        // distinction doesn't apply.
         log.warn("Ask AI grounding failure requestId={} reason={}", requestId, reason);
         return new AskAiGroundingException(
-                requestId, auditId, sessionId, AskAiSafetyCopy.UNGROUNDED_EN);
+                requestId, auditId, sessionId, userMessage);
     }
 
     private AiAskResponse noRecordsResponse(

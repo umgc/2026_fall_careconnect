@@ -3,6 +3,7 @@ package com.careconnect.service.ai.ask;
 import com.careconnect.ai.bedrock.BedrockModelSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -115,8 +116,10 @@ public class GroundedAskLlmService {
                 final String raw = response.body().asUtf8String();
                 text = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
             } catch (final RuntimeException ex) {
+                log.warn("Grounded Ask AI Bedrock response payload was malformed");
                 throw new GroundedOutputValidationException(
-                        "Bedrock response payload was malformed", ex);
+                        "Bedrock response payload was malformed",
+                        GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
             }
             return parseStructured(text, modelId);
         } catch (final BedrockRuntimeException ex) {
@@ -166,20 +169,41 @@ public class GroundedAskLlmService {
 
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {
         if (text == null || text.isBlank()) {
+            log.warn("Grounded model returned an empty response");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was empty");
+                    "Grounded model response was empty",
+                    GroundedOutputValidationException.Kind.EMPTY_RESPONSE);
         }
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
-            // Some models (observed: Nova) return the claims array directly at the
-            // top level instead of wrapping it in {"claims": [...]}. The array
-            // contents and every downstream validation are unaffected either way —
-            // this only tolerates the outer shape, not the claim/citation contract.
-            final JsonNode claimsNode = root.isArray() ? root : root.get("claims");
+            // Nova has been observed returning claims in three different shapes:
+            // (a) {"claims": [...]} — the documented contract
+            // (b) [...claim objects directly...] — top-level array of claims
+            // (c) [{"claims": [...]}, {"claims": [...]}, ...] — one wrapper object
+            //     per source, most common when citing multiple retrieved chunks
+            // Flatten (c) into (b) by unwrapping any array element that itself
+            // carries a "claims" array, so a claim's actual text/citations fields
+            // are never mistaken for a missing claim.
+            final JsonNode claimsNode;
+            if (root.isArray()) {
+                final ArrayNode flattened = objectMapper.createArrayNode();
+                for (final JsonNode element : root) {
+                    if (element.has("claims") && element.get("claims").isArray()) {
+                        flattened.addAll((ArrayNode) element.get("claims"));
+                    } else {
+                        flattened.add(element);
+                    }
+                }
+                claimsNode = flattened;
+            } else {
+                claimsNode = root.get("claims");
+            }
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
+                log.warn("Grounded model response did not contain a claims array");
                 throw new GroundedOutputValidationException(
-                        "Grounded model response did not contain claims");
+                        "Grounded model response did not contain claims",
+                        GroundedOutputValidationException.Kind.MISSING_CLAIMS);
             }
             final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
@@ -203,8 +227,10 @@ public class GroundedAskLlmService {
                     }
                 }
                 if (claimText.isBlank() || claimRefs.isEmpty()) {
+                    log.warn("Grounded model claim was missing text or evidence");
                     throw new GroundedOutputValidationException(
-                            "Each grounded claim requires text and extractive evidence");
+                            "Each grounded claim requires text and extractive evidence",
+                            GroundedOutputValidationException.Kind.INCOMPLETE_CLAIM);
                 }
                 claims.add(new GroundedClaim(
                         claimText,
@@ -223,7 +249,8 @@ public class GroundedAskLlmService {
         } catch (final Exception ex) {
             log.warn("Unable to parse grounded Ask AI JSON");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was malformed", ex);
+                    "Grounded model response was malformed",
+                    GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
         }
     }
 
