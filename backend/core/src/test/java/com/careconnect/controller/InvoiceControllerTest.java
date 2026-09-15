@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -47,12 +48,21 @@ class InvoiceControllerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // Spring injects the LLM service through an ObjectProvider so the bean can be
+    // absent when careconnect.llm.enabled=false; mirror that here.
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<LlmExtractionService> llmProvider() {
+        ObjectProvider<LlmExtractionService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(llmExtractionService);
+        return provider;
+    }
+
     // Helper: controller with all services wired
     private InvoiceController controller() {
         return new InvoiceController(
             invoiceService, 
             textractService,
-            llmExtractionService,
+            llmProvider(),
             objectMapper, 
             securityUtil, 
             authorizationService,
@@ -65,7 +75,7 @@ class InvoiceControllerTest {
         return new InvoiceController(
             invoiceService,
             textractService,
-            llmExtractionService, 
+            llmProvider(),
             objectMapper, 
             securityUtil, 
             authorizationService, 
