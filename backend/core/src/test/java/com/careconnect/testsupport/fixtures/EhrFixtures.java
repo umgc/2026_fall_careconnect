@@ -1,8 +1,11 @@
 package com.careconnect.testsupport.fixtures;
 
 import com.careconnect.model.Patient;
+import com.careconnect.model.ehr.EhrAppointmentRecord;
 import com.careconnect.model.ehr.EhrConflictStatus;
 import com.careconnect.model.ehr.EhrIdentityConflict;
+import com.careconnect.model.ehr.EhrPatientCrosswalk;
+import com.careconnect.model.ehr.EhrRawPayload;
 import com.careconnect.model.ehr.EhrSource;
 import com.careconnect.model.ehr.EhrSourceIdentity;
 import java.time.LocalDate;
@@ -28,9 +31,9 @@ public final class EhrFixtures {
     }
 
     /** Returns an unsaved athenahealth source registry row. */
-    public static EhrSource athenaSource() {
+    public static EhrSource athenahealthSource() {
         return EhrSource.builder()
-                .code("ATHENA")
+                .code("ATHENAHEALTH")
                 .displayName("athenahealth")
                 .build();
     }
@@ -57,7 +60,6 @@ public final class EhrFixtures {
         return EhrSourceIdentity.builder()
                 .patient(patient)
                 .source(source)
-                .sourcePatientId("a-12345")
                 .firstName("Jane")
                 .lastName("Smith")
                 .dateOfBirth(LocalDate.of(1985, 3, 2))
@@ -69,7 +71,48 @@ public final class EhrFixtures {
                 .postalCode("21201")
                 .sourceUpdatedAt(SOURCE_UPDATED_AT)
                 .fetchedAt(DETECTED_AT)
-                .rawPayload(Map.of("resourceType", "Patient", "id", "a-12345"))
+                .build();
+    }
+
+    /** Returns an unsaved crosswalk row mapping the source's external id to {@code patient}. */
+    public static EhrPatientCrosswalk crosswalk(final Patient patient, final EhrSource source) {
+        return EhrPatientCrosswalk.builder()
+                .patient(patient)
+                .source(source)
+                .externalPatientId("a-12345")
+                .build();
+    }
+
+    /** Returns an unsaved raw FHIR {@code Appointment} payload for the given patient/source. */
+    public static EhrRawPayload rawAppointmentPayload(final Patient patient, final EhrSource source) {
+        return EhrRawPayload.builder()
+                .patient(patient)
+                .source(source)
+                .resourceType("Appointment")
+                .externalResourceId("appt-1")
+                .payload(Map.of("resourceType", "Appointment", "id", "appt-1", "status", "booked"))
+                .payloadSizeBytes(64)
+                .fetchedAt(DETECTED_AT)
+                .build();
+    }
+
+    /** Returns an unsaved appointment record for the given patient/source/raw payload. */
+    public static EhrAppointmentRecord appointment(
+            final Patient patient, final EhrSource source, final EhrRawPayload rawPayload) {
+        return EhrAppointmentRecord.builder()
+                .patient(patient)
+                .source(source)
+                .rawPayload(rawPayload)
+                .externalAppointmentId("appt-1")
+                .startTime(LocalDateTime.of(2026, 9, 20, 10, 0))
+                .endTime(LocalDateTime.of(2026, 9, 20, 10, 30))
+                .status("booked")
+                .providerName("Dr. Smith")
+                .location("Main Clinic")
+                .serviceType("Checkup")
+                .reason("Annual physical")
+                .sourceCreatedAt(LocalDateTime.of(2026, 9, 1, 0, 0))
+                .sourceUpdatedAt(SOURCE_UPDATED_AT)
                 .build();
     }
 

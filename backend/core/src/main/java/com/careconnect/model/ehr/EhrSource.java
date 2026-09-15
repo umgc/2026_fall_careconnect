@@ -44,7 +44,7 @@ public class EhrSource extends Auditable {
     private Long id;
 
     /**
-     * Stable machine code for the source, for example {@code ATHENA} or {@code EPIC}.
+     * Stable machine code for the source, for example {@code ATHENAHEALTH} or {@code EPIC}.
      * Adapters key off this rather than the display name or the surrogate id.
      */
     @Column(name = "code", nullable = false, unique = true, length = CODE_LENGTH)

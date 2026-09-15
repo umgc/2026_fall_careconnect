@@ -13,14 +13,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /**
  * Per-source demographic snapshot of one patient, as most recently seen at that source.
@@ -42,9 +39,6 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "ehr_source_identity")
 public class EhrSourceIdentity extends Auditable {
-
-    /** Maximum length of the source's own patient identifier. */
-    private static final int SOURCE_PATIENT_ID_LENGTH = 128;
 
     /** Maximum length of name and address-line columns. */
     private static final int NAME_LENGTH = 255;
@@ -75,14 +69,6 @@ public class EhrSourceIdentity extends Auditable {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "source_id", nullable = false)
     private EhrSource source;
-
-    /**
-     * The source's own identifier for this patient, for example a FHIR {@code Patient.id}.
-     * This is the crosswalk: a date-of-birth mismatch may mean the wrong external record was
-     * linked here, and this column is what makes that diagnosable.
-     */
-    @Column(name = "source_patient_id", nullable = false, length = SOURCE_PATIENT_ID_LENGTH)
-    private String sourcePatientId;
 
     /** Given name as reported by the source. */
     @Column(name = "first_name", length = NAME_LENGTH)
@@ -137,10 +123,11 @@ public class EhrSourceIdentity extends Auditable {
     private LocalDateTime fetchedAt;
 
     /**
-     * Raw resource payload as returned by the source, retained for debugging normalization
-     * disputes. Contains PHI and must never be exposed through an unscoped endpoint.
+     * Raw FHIR {@code Patient} resource this snapshot was mapped from, retained for debugging
+     * normalization disputes. Lives in its own table ({@link EhrRawPayload}) rather than a
+     * column here, so a fetch that fails to map still leaves the raw response on record.
      */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "raw_payload", columnDefinition = "jsonb")
-    private Map<String, Object> rawPayload;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "raw_payload_id")
+    private EhrRawPayload rawPayload;
 }

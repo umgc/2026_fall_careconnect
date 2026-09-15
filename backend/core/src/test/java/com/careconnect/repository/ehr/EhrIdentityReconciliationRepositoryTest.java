@@ -22,8 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Persistence tests for the EHR identity reconciliation tables against the configured H2 test
- * database (the test JDBC URL maps the PostgreSQL {@code jsonb} domain to TEXT, so the raw
- * payload round-trips).
+ * database.
  *
  * <p>NOTE: the CHECK constraints and the partial unique indexes
  * ({@code uq_ehr_identity_conflict_open}, {@code uq_ehr_source_identity_patient_source}) are
@@ -49,18 +48,18 @@ class EhrIdentityReconciliationRepositoryTest {
     private PatientRepository patientRepository;
 
     private Patient patient;
-    private EhrSource athena;
+    private EhrSource athenahealth;
 
     @BeforeEach
     void setUp() {
         patient = patientRepository.save(EhrFixtures.unsavedPatient());
-        athena = sourceRepository.save(EhrFixtures.athenaSource());
+        athenahealth = sourceRepository.save(EhrFixtures.athenahealthSource());
     }
 
     @Test
     void sourceAppliesR4AndActiveDefaults() {
         // Arrange / Act — builder omits fhirVersion and active entirely.
-        final EhrSource found = sourceRepository.findById(athena.getId()).orElseThrow();
+        final EhrSource found = sourceRepository.findById(athenahealth.getId()).orElseThrow();
 
         // Assert — the R4 assumption is persisted, not merely documented.
         assertThat(found.getFhirVersion()).isEqualTo("R4");
@@ -70,7 +69,7 @@ class EhrIdentityReconciliationRepositoryTest {
 
     @Test
     void findsSourceByStableCode() {
-        assertThat(sourceRepository.findByCode("ATHENA"))
+        assertThat(sourceRepository.findByCode("ATHENAHEALTH"))
                 .get()
                 .extracting(EhrSource::getDisplayName)
                 .isEqualTo("athenahealth");
@@ -78,28 +77,26 @@ class EhrIdentityReconciliationRepositoryTest {
     }
 
     @Test
-    void snapshotRoundTripsNormalizedDateAndJsonPayload() {
+    void snapshotRoundTripsNormalizedDate() {
         // Arrange
         final EhrSourceIdentity saved =
-                snapshotRepository.save(EhrFixtures.snapshot(patient, athena));
+                snapshotRepository.save(EhrFixtures.snapshot(patient, athenahealth));
 
         // Act
         final EhrSourceIdentity found = snapshotRepository.findById(saved.getId()).orElseThrow();
 
         // Assert — dob is a real date, so 1985-03-02 and 03/02/1985 cannot differ spuriously.
         assertThat(found.getDateOfBirth()).isEqualTo(LocalDate.of(1985, 3, 2));
-        assertThat(found.getSourcePatientId()).isEqualTo("a-12345");
         assertThat(found.getSourceUpdatedAt()).isEqualTo(EhrFixtures.SOURCE_UPDATED_AT);
-        assertThat(found.getRawPayload()).containsEntry("resourceType", "Patient");
     }
 
     @Test
     void findsSnapshotByPatientAndSourceUpsertKey() {
         // Arrange
-        snapshotRepository.save(EhrFixtures.snapshot(patient, athena));
+        snapshotRepository.save(EhrFixtures.snapshot(patient, athenahealth));
 
         // Act / Assert — this pair is what makes an interrupted sync safe to re-run.
-        assertThat(snapshotRepository.findByPatientIdAndSourceId(patient.getId(), athena.getId()))
+        assertThat(snapshotRepository.findByPatientIdAndSourceId(patient.getId(), athenahealth.getId()))
                 .isPresent();
         assertThat(snapshotRepository.findByPatientIdAndSourceId(patient.getId(), 999L)).isEmpty();
     }
@@ -108,7 +105,7 @@ class EhrIdentityReconciliationRepositoryTest {
     void reconcilerSeesEverySourceSnapshotForAPatient() {
         // Arrange — two sources disagreeing is the case the reconciler exists for.
         final EhrSource epic = sourceRepository.save(EhrFixtures.epicSource());
-        snapshotRepository.save(EhrFixtures.snapshot(patient, athena));
+        snapshotRepository.save(EhrFixtures.snapshot(patient, athenahealth));
         snapshotRepository.save(EhrFixtures.snapshot(patient, epic));
 
         // Act
@@ -118,7 +115,7 @@ class EhrIdentityReconciliationRepositoryTest {
         // Assert
         assertThat(all).hasSize(2)
                 .extracting(s -> s.getSource().getCode())
-                .containsExactlyInAnyOrder("ATHENA", "EPIC");
+                .containsExactlyInAnyOrder("ATHENAHEALTH", "EPIC");
     }
 
     @Test
@@ -126,7 +123,7 @@ class EhrIdentityReconciliationRepositoryTest {
         // Arrange / Act
         final EhrIdentityConflict saved = conflictRepository.save(
                 EhrFixtures.pendingConflict(
-                        patient, athena, "address_line1", "123 Main St, Apt 4", "456 Oak Ave"));
+                        patient, athenahealth, "address_line1", "123 Main St, Apt 4", "456 Oak Ave"));
 
         // Assert — a fresh conflict must never look partially resolved.
         assertThat(saved.getStatus()).isEqualTo(EhrConflictStatus.PENDING);
@@ -138,10 +135,10 @@ class EhrIdentityReconciliationRepositoryTest {
     void tracksResolutionPerFieldSoOneFieldCanSettleWhileAnotherWaits() {
         // Arrange — the design's core requirement: name confirmed, address still pending.
         final EhrIdentityConflict name = conflictRepository.save(
-                EhrFixtures.pendingConflict(patient, athena, "first_name", "Robert", "Bob"));
+                EhrFixtures.pendingConflict(patient, athenahealth, "first_name", "Robert", "Bob"));
         conflictRepository.save(
                 EhrFixtures.pendingConflict(
-                        patient, athena, "address_line1", "123 Main St", "456 Oak Ave"));
+                        patient, athenahealth, "address_line1", "123 Main St", "456 Oak Ave"));
 
         // Act — resolve only the name.
         name.setStatus(EhrConflictStatus.ACCEPTED);
@@ -170,7 +167,7 @@ class EhrIdentityReconciliationRepositoryTest {
                 .isFalse();
 
         conflictRepository.save(
-                EhrFixtures.pendingConflict(patient, athena, "phone", "555-0000", "555-0100"));
+                EhrFixtures.pendingConflict(patient, athenahealth, "phone", "555-0000", "555-0100"));
 
         assertThat(conflictRepository
                 .existsByPatientIdAndStatus(patient.getId(), EhrConflictStatus.PENDING))
@@ -181,14 +178,14 @@ class EhrIdentityReconciliationRepositoryTest {
     void findsTheSingleOpenConflictForAField() {
         // Arrange
         conflictRepository.save(
-                EhrFixtures.pendingConflict(patient, athena, "phone", "555-0000", "555-0100"));
+                EhrFixtures.pendingConflict(patient, athenahealth, "phone", "555-0000", "555-0100"));
 
         // Act / Assert — a re-sync locates the existing row instead of stacking a duplicate.
         assertThat(conflictRepository.findByPatientIdAndSourceIdAndFieldNameAndStatus(
-                        patient.getId(), athena.getId(), "phone", EhrConflictStatus.PENDING))
+                        patient.getId(), athenahealth.getId(), "phone", EhrConflictStatus.PENDING))
                 .isPresent();
         assertThat(conflictRepository.findByPatientIdAndSourceIdAndFieldNameAndStatus(
-                        patient.getId(), athena.getId(), "dob", EhrConflictStatus.PENDING))
+                        patient.getId(), athenahealth.getId(), "dob", EhrConflictStatus.PENDING))
                 .isEmpty();
     }
 
@@ -196,10 +193,10 @@ class EhrIdentityReconciliationRepositoryTest {
     void conflictValuesStaySnapshottedWhenTheSourceMovesOn() {
         // Arrange — conflict captured, then the source snapshot changes underneath it.
         final EhrSourceIdentity snapshot =
-                snapshotRepository.save(EhrFixtures.snapshot(patient, athena));
+                snapshotRepository.save(EhrFixtures.snapshot(patient, athenahealth));
         final EhrIdentityConflict conflict = conflictRepository.save(
                 EhrFixtures.pendingConflict(
-                        patient, athena, "address_line1", "123 Main St", "456 Oak Ave"));
+                        patient, athenahealth, "address_line1", "123 Main St", "456 Oak Ave"));
 
         // Act
         snapshot.setAddressLine1("789 Elm Rd");

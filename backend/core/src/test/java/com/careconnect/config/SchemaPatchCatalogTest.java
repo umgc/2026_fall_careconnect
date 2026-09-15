@@ -38,7 +38,8 @@ class SchemaPatchCatalogTest {
                 "2607251310-user-files-extracted-text",
                 "2607271430-ai-ask-conversation-share",
                 "2607271830-ask-ai-share-recipient-ocr-outbox",
-                "2609121200-ehr-identity-reconciliation");
+                "2609121200-ehr-identity-reconciliation",
+                "2609131500-ehr-crosswalk-payload-appointment");
     }
 
     @Test
@@ -66,6 +67,24 @@ class SchemaPatchCatalogTest {
         assertThat(sql)
                 .doesNotContain("ck_ehr_identity_conflict_status")
                 .doesNotContain("ck_ehr_identity_conflict_resolved_by");
+    }
+
+    @Test
+    void ehrCrosswalkPayloadAppointment_isScriptUtilsSafeAndCreatesNoTables() throws Exception {
+        final String raw = new ClassPathResource(
+                "db/schema-patches/2609131500_ehr_crosswalk_payload_appointment.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+        final String sql = raw.lines()
+                .filter(line -> !line.stripLeading().startsWith("--"))
+                .collect(java.util.stream.Collectors.joining("\n"));
+
+        assertThat(sql).doesNotContain("DO $$");
+        assertThat(sql).doesNotContain("CREATE TABLE");
+        assertThat(sql)
+                .contains("uq_ehr_patient_crosswalk_source_external")
+                .contains("uq_ehr_patient_crosswalk_patient_source")
+                .contains("uq_ehr_raw_payload_resource")
+                .contains("uq_ehr_appointment_record_external");
     }
 
     @Test

@@ -76,7 +76,10 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"),
             new SchemaPatchLedger.Patch(
                     "2609121200-ehr-identity-reconciliation",
-                    "db/schema-patches/2609121200_ehr_identity_reconciliation.sql"));
+                    "db/schema-patches/2609121200_ehr_identity_reconciliation.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2609131500-ehr-crosswalk-payload-appointment",
+                    "db/schema-patches/2609131500_ehr_crosswalk_payload_appointment.sql"));
 
     private SchemaPatchCatalog() {
     }
