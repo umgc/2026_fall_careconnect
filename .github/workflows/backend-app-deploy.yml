@@ -269,3 +269,67 @@ jobs:
               echo "Roughly \$1.80/day while up. Run **Backend Teardown** when you are finished."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # A green deploy previously meant only that CloudFormation settled. ECS
+      # reports running=1/desired=1 while it perpetually replaces a container
+      # that crash-loops on startup, so nothing here could go red for an app
+      # that never served a request. This gate makes that failure visible.
+      - name: Verify backend is serving
+        if: steps.mode.outputs.mode != 'skip'
+        shell: bash
+        run: |
+          set -uo pipefail
+          ENV_NAME="${{ steps.settings.outputs.deploy_environment }}"
+          REGION="${{ env.AWS_REGION }}"
+          CLUSTER="careconnect-${ENV_NAME}-cluster"
+          SERVICE="careconnect-${ENV_NAME}-backend"
+          LOG_GROUP="/ecs/careconnect-backend-${ENV_NAME}"
+
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --region "$REGION" --stack-name "careconnect-service-${ENV_NAME}" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+            --output text)
+
+          echo "Polling ${API_ENDPOINT}/actuator/health (up to 10 minutes)..."
+          DEADLINE=$(( SECONDS + 600 ))
+          CODE=000
+          while (( SECONDS < DEADLINE )); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+              "${API_ENDPOINT}/actuator/health" || echo 000)
+            if [[ "$CODE" == "200" ]]; then
+              echo "Backend is serving (HTTP 200)."
+              echo "- **Health:** :white_check_mark: serving" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "  HTTP ${CODE} - retrying in 15s"
+            sleep 15
+          done
+
+          echo "::error::Backend never became healthy (last HTTP ${CODE}). Diagnostics below."
+          echo "- **Health:** :x: never became healthy (last HTTP ${CODE})" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "===== ECS service ====="
+          aws ecs describe-services --region "$REGION" \
+            --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].{status:status,running:runningCount,desired:desiredCount,pending:pendingCount}' \
+            --output json || true
+
+          echo "===== ECS events (last 15) ====="
+          aws ecs describe-services --region "$REGION" \
+            --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].events[:15].[createdAt,message]' --output text || true
+
+          echo "===== stopped task reasons ====="
+          STOPPED=$(aws ecs list-tasks --region "$REGION" --cluster "$CLUSTER" \
+            --service-name "$SERVICE" --desired-status STOPPED \
+            --query 'taskArns[:3]' --output text 2>/dev/null || true)
+          if [[ -n "${STOPPED:-}" && "$STOPPED" != "None" ]]; then
+            aws ecs describe-tasks --region "$REGION" --cluster "$CLUSTER" --tasks $STOPPED \
+              --query 'tasks[].{stopped:stoppedReason,code:stopCode,containers:containers[].{name:name,exit:exitCode,reason:reason}}' \
+              --output json || true
+          fi
+
+          echo "===== container logs (last 30m, tail 200) ====="
+          aws logs tail "$LOG_GROUP" --region "$REGION" --since 30m 2>&1 | tail -200 || true
+
+          exit 1
