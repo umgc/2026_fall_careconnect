@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/config/env_constant.dart';
 import 'package:care_connect_app/services/auth_token_manager.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 enum _GmailConnectionState { disconnected, connected, needsReconnect, checking }
 
@@ -16,7 +17,8 @@ class UspsTestScreen extends StatefulWidget {
   State<UspsTestScreen> createState() => _UspsTestScreenState();
 }
 
-class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObserver {
+class _UspsTestScreenState extends State<UspsTestScreen>
+    with WidgetsBindingObserver {
   Map<String, dynamic>? digest;
   bool loading = false;
   String? error;
@@ -69,21 +71,24 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       error = null;
       _isSearchActive = false;
     });
+    final t = AppLocalizations.of(context)!;
     final base = getBackendBaseUrl();
 
     final patientEmail = _patientQueryValue();
     if (patientEmail == null) {
       setState(() {
-        error = 'Please log in to view USPS mail.';
+        error = t.usps_loginToViewMail;
         loading = false;
       });
       return;
     }
 
-    // Format date as YYYY-MM-DD
+// Format date as YYYY-MM-DD
     final dateString =
         '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+
     final encodedPatient = Uri.encodeComponent(patientEmail);
+
     final url =
         '$base/v1/api/usps/latest?patientEmail=$encodedPatient&date=$dateString';
 
@@ -91,11 +96,13 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       final dio = await _authenticatedDio();
 
       final resp = await dio.get(url);
+
       if (resp.statusCode == 200) {
         setState(() {
           digest = resp.data is Map<String, dynamic>
               ? (resp.data as Map<String, dynamic>)
               : json.decode(json.encode(resp.data)) as Map<String, dynamic>;
+
           searchResults = [];
           searchError = null;
           _searchController.clear();
@@ -103,7 +110,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       } else if (resp.statusCode == 204) {
         setState(() {
           digest = null;
-          error = 'No USPS digest found for $dateString.';
+          error = t.usps_noDigestFoundForDate(dateString);
         });
       } else {
         setState(() => error = 'HTTP ${resp.statusCode}');
@@ -116,14 +123,16 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   Future<void> _selectDate() async {
+    final t = AppLocalizations.of(context)!;
+
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: selectedDate,
       firstDate: DateTime(2020), // USPS Informed Delivery started around 2017
       lastDate: DateTime.now(),
-      helpText: 'Select digest date',
-      cancelText: 'Cancel',
-      confirmText: 'Select',
+      helpText: t.usps_selectDigestDate,
+      cancelText: t.usps_cancel,
+      confirmText: t.usps_select,
     );
 
     if (picked != null && picked != selectedDate) {
@@ -143,6 +152,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   Future<void> _searchMail() async {
+    final t = AppLocalizations.of(context)!;
+
     final keyword = _searchController.text.trim();
     if (keyword.isEmpty) {
       setState(() {
@@ -161,13 +172,15 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
 
     final base = getBackendBaseUrl();
     final patientEmail = _patientQueryValue();
+
     if (patientEmail == null) {
       setState(() {
-        searchError = 'Please log in to search USPS mail.';
+        searchError = t.usps_loginToSearchMail;
         searchLoading = false;
       });
       return;
     }
+
     final encodedPatient = Uri.encodeComponent(patientEmail);
 
     final url =
@@ -179,6 +192,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       );
 
       final resp = await dio.get(url);
+
       if (resp.statusCode == 200) {
         setState(() {
           searchResults = List<Map<String, dynamic>>.from(resp.data ?? []);
@@ -194,39 +208,54 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   Future<void> _openUri(String? u) async {
+    final t = AppLocalizations.of(context)!;
+
     if (u == null || u.isEmpty) return;
+
     final uri = Uri.parse(u);
+
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open link')),
+          SnackBar(
+            content: Text(t.usps_couldNotOpenLink),
+          ),
         );
       }
     }
   }
 
   Future<void> _checkGoogleConnection() async {
+    final t = AppLocalizations.of(context)!;
+
     final patientEmail = _patientQueryValue();
+
     if (patientEmail == null) {
       setState(() {
         gmailState = _GmailConnectionState.disconnected;
         isGoogleConnected = false;
-        gmailStatusMessage = 'Please log in to connect Gmail.';
+        gmailStatusMessage = t.usps_loginToConnectGmail;
       });
       return;
     }
 
     final base = getBackendBaseUrl();
+
     setState(() => gmailState = _GmailConnectionState.checking);
+
     try {
       final dio = await _authenticatedDio();
+
       final resp = await dio.get(
-          '$base/v1/api/email-credentials/status?patientEmail=${Uri.encodeComponent(patientEmail)}');
+        '$base/v1/api/email-credentials/status?patientEmail=${Uri.encodeComponent(patientEmail)}',
+      );
+
       if (resp.statusCode == 200 && resp.data is Map<String, dynamic>) {
         final data = resp.data as Map<String, dynamic>;
         final connected = data['connected'] == true;
         final status = data['status']?.toString() ?? '';
         final message = data['message']?.toString();
+
         setState(() {
           isGoogleConnected = connected;
           gmailStatusMessage = message;
@@ -246,7 +275,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       setState(() {
         isGoogleConnected = false;
         gmailState = _GmailConnectionState.disconnected;
-        gmailStatusMessage = 'Unable to check Gmail connection status.';
+        gmailStatusMessage = t.usps_unableCheckGmail;
       });
     }
   }
@@ -259,16 +288,26 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       final dio = await _authenticatedDio();
       await dio.delete(
           '$base/v1/api/email-credentials/gmail?patientEmail=${Uri.encodeComponent(patientEmail)}');
+
       await _checkGoogleConnection();
+
       if (mounted) {
+        final t = AppLocalizations.of(context)!;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gmail disconnected.')),
+          SnackBar(
+            content: Text(t.usps_gmailDisconnected),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
+        final t = AppLocalizations.of(context)!;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to disconnect Gmail')),
+          SnackBar(
+            content: Text(t.usps_failedDisconnectGmail),
+          ),
         );
       }
     }
@@ -302,26 +341,37 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   Future<void> _clearCache() async {
+    final t = AppLocalizations.of(context)!;
+
     final patientEmail = _patientQueryValue();
     if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in first')),
+        SnackBar(
+          content: Text(t.usps_loginFirst),
+        ),
       );
       return;
     }
 
     final base = getBackendBaseUrl();
+
     try {
       final dio = await _authenticatedDio();
+
       await dio.post(
-          '$base/v1/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}');
+        '$base/v1/api/usps/clear-cache?patientEmail=${Uri.encodeComponent(patientEmail)}',
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Cache cleared! Try fetching digest again.')),
+        SnackBar(
+          content: Text(t.usps_cacheCleared),
+        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to clear cache')),
+        SnackBar(
+          content: Text(t.usps_failedClearCache),
+        ),
       );
     }
   }
@@ -340,10 +390,14 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   Future<void> _connectGoogleAccount() async {
+    final t = AppLocalizations.of(context)!;
     final patientEmail = _patientQueryValue();
+
     if (patientEmail == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in first')),
+        SnackBar(
+          content: Text(t.usps_loginFirst),
+        ),
       );
       return;
     }
@@ -368,22 +422,36 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
       }
 
       _awaitingOAuthReturn = true;
+
       final uri = connectUrl.startsWith('http')
           ? Uri.parse(connectUrl)
           : Uri.parse('$base$connectUrl');
+
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         _awaitingOAuthReturn = false;
+
         if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open Google authentication')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.usps_couldNotOpenGoogleAuth,
+                ),
+              ),
+            );
+          }
         }
       }
     } catch (e) {
       _awaitingOAuthReturn = false;
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not start Gmail connection')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.usps_couldNotStartGmail,
+            ),
+          ),
         );
       }
     }
@@ -479,6 +547,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
   }
 
   void _showMailItemDetails(Map<String, dynamic> item) {
+    final t = AppLocalizations.of(context)!;
+
     final type = ((item['type'] as String?) ?? 'mail').toLowerCase();
     final bool isPackage = type == 'package';
 
@@ -494,12 +564,16 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     final rawSender = (item['sender'] as String?)?.trim();
     final sender = (rawSender != null && rawSender.isNotEmpty)
         ? rawSender
-        : (isPackage ? 'USPS Package' : 'Unknown sender');
+        : (isPackage ? t.usps_uspsPackage : t.usps_unknownSender);
+
     final subject = (item['summary'] as String?) ??
         (item['subject'] as String?) ??
         (isPackage && item['trackingNumber'] != null
-            ? 'Tracking ${item['trackingNumber']}'
-            : 'No subject available');
+            ? t.usps_trackingSubject(
+                item['trackingNumber'].toString(),
+              )
+            : t.usps_noSubjectAvailable);
+
     final trackingNumber = item['trackingNumber'] as String?;
     final delivered =
         (item['deliveryDate'] as String?) ?? (item['receivedAt'] as String?);
@@ -507,11 +581,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     final expectedDisplay = (item['expectedDate'] as String?) ??
         (expectedIso != null ? _formatDateLabel(expectedIso) : null);
 
-    final typeLabel = isPackage ? 'Package' : 'Mail Piece';
+    final typeLabel = isPackage ? t.usps_package : t.usps_mailPiece;
     final primaryActionUrl =
         isPackage ? (trackUrl ?? dashboardUrl) : (dashboardUrl ?? trackUrl);
     final primaryActionLabel =
-        isPackage ? 'Track Package' : 'View in USPS Dashboard';
+        isPackage ? t.usps_trackPackage : t.usps_viewInUspsDashboard;
     final String? dateLabel = isPackage ? expectedDisplay : delivered;
     showDialog<void>(
       context: context,
@@ -568,7 +642,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    isPackage ? 'Details' : 'Subject',
+                    isPackage ? t.usps_details : t.usps_subject,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.grey[600],
@@ -593,7 +667,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                   if (rawSender != null && rawSender.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'From: $sender',
+                      t.usps_fromSender(sender),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -602,7 +676,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                       trackingNumber.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'Tracking Number',
+                      t.usps_trackingNumber,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Colors.grey[600],
@@ -624,7 +698,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                               _openUri(trackUrl);
                             },
                             icon: const Icon(Icons.open_in_new, size: 16),
-                            label: const Text('Track'),
+                            label: Text(t.usps_track),
                           ),
                       ],
                     ),
@@ -632,7 +706,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                   if (dateLabel != null && dateLabel.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
-                      isPackage ? 'Expected Delivery' : 'Delivered',
+                      isPackage ? t.usps_expectedDelivery : t.usps_delivered,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Colors.grey[600],
@@ -674,7 +748,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           _openUri(trackUrl);
                         },
                         icon: const Icon(Icons.local_shipping),
-                        label: const Text('Track Package'),
+                        label: Text(t.usps_trackPackage),
                       ),
                     ),
                   ],
@@ -700,11 +774,12 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final mail = (digest?['mailpieces'] as List?) ?? const [];
     final pkgs = (digest?['packages'] as List?) ?? const [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('USPS Mail Digest')),
+      appBar: AppBar(title: Text(t.usps_mailDigestTitle)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -718,27 +793,34 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.mail, color: Theme.of(context).primaryColor),
+                        Icon(
+                          Icons.mail,
+                          color: Theme.of(context).primaryColor,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          'Gmail Integration',
+                          t.usps_gmailIntegration,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'CareConnect reads USPS Informed Delivery emails from Gmail using read-only access. We never send, delete, or modify your email.',
-                      style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                      t.usps_gmailDescription,
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       gmailStatusMessage ??
                           (gmailState == _GmailConnectionState.connected
-                              ? 'Google account connected. You can fetch USPS digests automatically.'
-                              : gmailState == _GmailConnectionState.needsReconnect
-                                  ? 'Gmail access expired. Reconnect to continue syncing mail.'
-                                  : 'Connect your Google account to automatically fetch USPS digests from Gmail.'),
+                              ? t.usps_googleAccountConnected
+                              : gmailState ==
+                                      _GmailConnectionState.needsReconnect
+                                  ? t.usps_gmailAccessExpired
+                                  : t.usps_connectGooglePrompt),
                       style: TextStyle(
                         color: gmailState == _GmailConnectionState.connected
                             ? Colors.green
@@ -754,10 +836,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                         child: ElevatedButton.icon(
                           onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.link),
-                          label: Text(gmailState ==
-                                  _GmailConnectionState.needsReconnect
-                              ? 'Reconnect Google Account'
-                              : 'Connect Google Account'),
+                          label: Text(
+                            gmailState == _GmailConnectionState.needsReconnect
+                                ? t.usps_reconnectGoogleAccount
+                                : t.usps_connectGoogleAccount,
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
@@ -770,7 +853,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                         child: OutlinedButton.icon(
                           onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Reconnect Google Account'),
+                          label: Text(t.usps_reconnectGoogleAccount),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.green,
                           ),
@@ -782,7 +865,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                         child: TextButton.icon(
                           onPressed: _disconnectGoogleAccount,
                           icon: const Icon(Icons.link_off),
-                          label: const Text('Disconnect Gmail'),
+                          label: Text(t.usps_disconnectGmail),
                         ),
                       ),
                     ],
@@ -807,12 +890,14 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.calendar_today,
-                                  color: Theme.of(context).primaryColor),
+                              Icon(
+                                Icons.calendar_today,
+                                color: Theme.of(context).primaryColor,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Select Digest Date',
+                                  t.usps_selectDigestDate,
                                   style:
                                       Theme.of(context).textTheme.titleMedium,
                                 ),
@@ -821,9 +906,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Choose any date to view historical USPS digest data.',
+                            t.usps_chooseDigestDate,
                             style: TextStyle(
-                                color: Colors.grey[600], fontSize: 12),
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           SizedBox(
@@ -855,7 +942,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                 _fetchDigest();
                               },
                               icon: const Icon(Icons.today, size: 16),
-                              label: const Text('Go to Today'),
+                              label: Text(t.usps_goToToday),
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.grey[600],
                                 padding:
@@ -885,7 +972,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Search Mail History',
+                                  t.usps_searchMailHistory,
                                   style:
                                       Theme.of(context).textTheme.titleMedium,
                                 ),
@@ -894,7 +981,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Search for mail by sender, subject, or any keyword.',
+                            t.usps_searchMailDescription,
                             style: TextStyle(
                                 color: Colors.grey[600], fontSize: 12),
                           ),
@@ -902,7 +989,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           TextField(
                             controller: _searchController,
                             decoration: InputDecoration(
-                              hintText: 'Enter keyword to search...',
+                              hintText: t.usps_searchHint,
                               prefixIcon: const Icon(Icons.search),
                               suffixIcon: _searchController.text.isNotEmpty
                                   ? IconButton(
@@ -944,7 +1031,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                                 Colors.white),
                                       ),
                                     )
-                                  : const Text('Search'),
+                                  : Text(t.usps_search),
                             ),
                           ),
                         ],
@@ -959,7 +1046,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
             Row(children: [
               ElevatedButton(
                 onPressed: loading ? null : _fetchDigest,
-                child: const Text('Fetch Digest'),
+                child: Text(t.usps_fetchDigest),
               ),
               const SizedBox(width: 12),
               ElevatedButton(
@@ -968,7 +1055,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('Clear Cache'),
+                child: Text(t.usps_clearCache),
               ),
               const SizedBox(width: 12),
               if (loading) const CircularProgressIndicator(),
@@ -997,7 +1084,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           const Icon(Icons.search, color: Colors.green),
                           const SizedBox(width: 8),
                           Text(
-                            'Found ${searchResults.length} mail items matching "${_searchController.text}"',
+                            t.usps_searchResultsFound(
+                              searchResults.length,
+                              _searchController.text,
+                            ),
                             style: const TextStyle(
                               color: Colors.green,
                               fontWeight: FontWeight.w500,
@@ -1009,14 +1099,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.green,
                             ),
-                            child: const Text('Clear Search'),
+                            child: Text(t.usps_clearSearch),
                           ),
                         ],
                       ),
                     ),
-                    const Text('Search Results',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      t.usps_searchResults,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     for (final result in searchResults)
                       Builder(
@@ -1024,35 +1118,45 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           final type = ((result['type'] as String?) ?? 'mail')
                               .toLowerCase();
                           final isPackage = type == 'package';
+
                           final actions = result['actions'];
                           final actionsMap = actions is Map<String, dynamic>
                               ? Map<String, dynamic>.from(actions as Map)
                               : <String, dynamic>{};
+
                           final trackUrl = actionsMap['track'] as String?;
                           final dashboardUrl =
                               actionsMap['dashboard'] as String?;
+
                           final trailingUrl = isPackage
                               ? (trackUrl ?? dashboardUrl)
                               : (dashboardUrl ?? trackUrl);
+
                           final trailingIcon = isPackage
                               ? Icons.local_shipping
                               : Icons.open_in_new;
+
                           final summary = result['summary'] ??
                               result['subject'] ??
-                              'No summary';
+                              t.usps_noSummary;
+
                           final from = result['sender'] as String?;
+
                           final attachmentSource =
                               (result['imageDataUrl'] as String?) ??
                                   (result['thumbnailUrl'] as String?);
+
                           final hasAttachment =
                               !isPackage && _hasAttachment(attachmentSource);
+
                           final deliveryLabel = isPackage
                               ? (result['expectedDate'] as String?) ??
                                   (result['deliveryDate'] as String?)
                               : result['deliveryDate'] as String?;
-                          final deliveryPrefix =
-                              isPackage ? 'Expected: ' : 'Delivered: ';
 
+                          final deliveryPrefix = isPackage
+                              ? t.usps_expectedPrefix
+                              : t.usps_deliveredPrefix;
                           return Card(
                             child: ListTile(
                               onTap: () => _showMailItemDetails(
@@ -1065,7 +1169,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                 children: [
                                   Expanded(
                                     child: Text(
-                                        result['sender'] ?? 'Unknown Sender'),
+                                      result['sender'] ?? t.usps_unknownSender,
+                                    ),
                                   ),
                                   if (hasAttachment) ...[
                                     const SizedBox(width: 6),
@@ -1074,7 +1179,9 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: isPackage
                                           ? Colors.orange.withOpacity(0.15)
@@ -1082,7 +1189,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      isPackage ? 'Package' : 'Mail',
+                                      isPackage ? t.usps_package : t.usps_mail,
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
@@ -1098,14 +1205,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (from != null && from.isNotEmpty)
-                                    Text('From: $from'),
+                                    Text(
+                                      t.usps_fromSender(from),
+                                    ),
                                   Text(summary),
                                   if (deliveryLabel != null &&
                                       deliveryLabel.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Theme.of(context)
                                             .primaryColor
@@ -1150,7 +1261,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Search failed: $searchError',
+                                t.usps_searchFailed(searchError!),
                                 style: const TextStyle(color: Colors.red),
                               ),
                             ),
@@ -1160,7 +1271,6 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                     ),
                     const SizedBox(height: 16),
                   ],
-
                   if (_isSearchActive &&
                       !searchLoading &&
                       searchError == null &&
@@ -1174,14 +1284,17 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'No mail items matched "${_searchController.text.trim()}".',
+                                t.usps_noMailItemsMatched(
+                                  _searchController.text.trim(),
+                                ),
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w500),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                             TextButton(
                               onPressed: () => _resetSearchToToday(),
-                              child: const Text('Show Today\'s Mail'),
+                              child: Text(t.usps_showTodaysMail),
                             ),
                           ],
                         ),
@@ -1189,8 +1302,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                     ),
                     const SizedBox(height: 16),
                   ],
-
-                  // Show selected date info
+// Show selected date info
                   if (digest != null && !_isSearchActive) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -1199,17 +1311,21 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                         color: Theme.of(context).primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: Theme.of(context)
-                                .primaryColor
-                                .withOpacity(0.3)),
+                          color:
+                              Theme.of(context).primaryColor.withOpacity(0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.event,
-                              color: Theme.of(context).primaryColor),
+                          Icon(
+                            Icons.event,
+                            color: Theme.of(context).primaryColor,
+                          ),
                           const SizedBox(width: 8),
                           Text(
-                            'Showing digest for ${selectedDate.month}/${selectedDate.day}/${selectedDate.year}',
+                            t.usps_showingDigestFor(
+                              '${selectedDate.month}/${selectedDate.day}/${selectedDate.year}',
+                            ),
                             style: TextStyle(
                               color: Theme.of(context).primaryColor,
                               fontWeight: FontWeight.w500,
@@ -1224,9 +1340,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${pkgs.length + mail.length} items',
+                              t.usps_itemCount(pkgs.length + mail.length),
                               style: const TextStyle(
-                                  color: Colors.green, fontSize: 12),
+                                color: Colors.green,
+                                fontSize: 12,
+                              ),
                             ),
                           ] else ...[
                             Icon(
@@ -1236,9 +1354,11 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'No items',
+                              t.usps_noItems,
                               style: const TextStyle(
-                                  color: Colors.grey, fontSize: 12),
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ],
@@ -1246,8 +1366,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                     ),
                   ],
                   if (!_isSearchActive && pkgs.isNotEmpty) ...[
-                    const Text('Packages',
-                        style: TextStyle(
+                    Text(t.usps_packages,
+                        style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     for (final p in pkgs)
@@ -1278,7 +1398,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           final detailPayload = {
                             ...pkg,
                             'type': 'package',
-                            'sender': sender ?? 'USPS Package',
+                            'sender': sender ?? t.usps_uspsPackage,
                             'expectedDate': expectedLabel,
                             'expectedDateIso': expectedIso,
                             'trackingNumber': trackingNumber,
@@ -1297,18 +1417,23 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                 children: [
                                   Expanded(
                                     child: Text(
-                                        sender ?? trackingNumber ?? 'Package'),
+                                      sender ??
+                                          trackingNumber ??
+                                          t.usps_package,
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: Colors.orange.withOpacity(0.15),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      'Package',
+                                      t.usps_package,
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
@@ -1322,11 +1447,18 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (sender != null && sender.isNotEmpty)
-                                    Text('From: $sender'),
+                                    Text(
+                                      t.usps_fromSender(sender),
+                                    ),
                                   if (trackingNumber != null &&
                                       trackingNumber.isNotEmpty)
-                                    Text('Tracking: $trackingNumber'),
-                                  Text('Expected: $expectedLabel'),
+                                    Text(
+                                      t.usps_trackingNumberValue(
+                                          trackingNumber),
+                                    ),
+                                  Text(
+                                    t.usps_expectedDateValue(expectedLabel),
+                                  ),
                                 ],
                               ),
                               trailing: IconButton(
@@ -1343,8 +1475,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                     const SizedBox(height: 16),
                   ],
                   if (!_isSearchActive && mail.isNotEmpty) ...[
-                    const Text('Mail Pieces',
-                        style: TextStyle(
+                    Text(t.usps_mailPieces,
+                        style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     for (final m in mail)
@@ -1358,21 +1490,27 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                               (mailPiece['imageDataUrl'] as String?) ??
                                   (mailPiece['thumbnailUrl'] as String?);
                           final hasAttachment = _hasAttachment(imageSource);
+
                           final summary = ((mailPiece['summary'] as String?) ??
                                   (mailPiece['subject'] as String?) ??
                                   '')
                               .trim();
+
                           final senderName =
                               (mailPiece['sender'] as String?)?.trim();
-                          final displayTitle =
-                              (senderName != null && senderName.isNotEmpty)
-                                  ? senderName
-                                  : (summary.isNotEmpty ? summary : 'Mail');
+
+                          final displayTitle = (senderName != null &&
+                                  senderName.isNotEmpty)
+                              ? senderName
+                              : (summary.isNotEmpty ? summary : t.usps_mail);
+
                           mailPiece['type'] ??= 'mail';
+
                           final actions = mailPiece['actions'];
                           final actionsMap = actions is Map<String, dynamic>
                               ? Map<String, dynamic>.from(actions as Map)
                               : <String, dynamic>{};
+
                           final dashboardUrl =
                               actionsMap['dashboard'] as String?;
                           final trackUrl = actionsMap['track'] as String?;
@@ -1381,7 +1519,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                           return Card(
                             child: ListTile(
                               onTap: () => _showMailItemDetails(
-                                  Map<String, dynamic>.from(mailPiece)),
+                                Map<String, dynamic>.from(mailPiece),
+                              ),
                               leading: _buildMailImage(imageSource),
                               title: Row(
                                 children: [
@@ -1401,7 +1540,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      'Mail',
+                                      t.usps_mail,
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
@@ -1430,7 +1569,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                   if ((mail.isEmpty && pkgs.isEmpty) &&
                       digest != null &&
                       !_isSearchActive)
-                    const Center(child: Text('No items in digest')),
+                    Center(child: Text(t.usps_noItemsInDigest)),
                 ],
               ),
             ),

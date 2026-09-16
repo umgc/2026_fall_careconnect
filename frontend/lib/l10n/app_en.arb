@@ -1023,6 +1023,146 @@
   "homecarereview_digitized": "Digitized",
   "homecarereview_reviewed": "(reviewed)",
   "homecarereview_savedForm": "Saved digitized form",
-  "homecarereview_failedToSave": "Failed to save digitized form"
+  "homecarereview_failedToSave": "Failed to save digitized form",
 
+"usps_mailDigestTitle": "USPS Mail Digest",
+"usps_gmailIntegration": "Gmail Integration",
+"usps_gmailDescription": "CareConnect reads USPS Informed Delivery emails from Gmail using read-only access. We never send, delete, or modify your email.",
+"usps_googleAccountConnected": "Google account connected. You can fetch USPS digests automatically.",
+"usps_gmailAccessExpired": "Gmail access expired. Reconnect to continue syncing mail.",
+"usps_connectGooglePrompt": "Connect your Google account to automatically fetch USPS digests from Gmail.",
+"usps_reconnectGoogleAccount": "Reconnect Google Account",
+"usps_connectGoogleAccount": "Connect Google Account",
+"usps_disconnectGmail": "Disconnect Gmail",
+"usps_selectDigestDate": "Select Digest Date",
+"usps_chooseDigestDate": "Choose any date to view historical USPS digest data.",
+"usps_goToToday": "Go to Today",
+"usps_searchMailHistory": "Search Mail History",
+"usps_searchMailDescription": "Search for mail by sender, subject, or any keyword.",
+"usps_searchHint": "Enter keyword to search...",
+"usps_search": "Search",
+"usps_fetchDigest": "Fetch Digest",
+"usps_clearCache": "Clear Cache",
+"usps_clearSearch": "Clear Search",
+"usps_searchResults": "Search Results",
+"usps_showTodaysMail": "Show Today's Mail",
+"usps_packages": "Packages",
+"usps_mailPieces": "Mail Pieces",
+"usps_package": "Package",
+"usps_uspsPackage": "USPS Package",
+"usps_unknownSender": "Unknown sender",
+"usps_noSubjectAvailable": "No subject available",
+"usps_mailPiece": "Mail Piece",
+"usps_viewInUspsDashboard": "View in USPS Dashboard",
+"usps_noDigestFoundForDate": "No USPS digest found for {date}.",
+"@usps_noDigestFoundForDate": {
+  "placeholders": {
+    "date": {
+      "type": "String"
+    }
+  }
+},
+"usps_searchResultsFound": "Found {count} mail items matching \"{query}\"",
+"@usps_searchResultsFound": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    },
+    "query": {
+      "type": "String"
+    }
+  }
+},
+"usps_noMailItemsMatched": "No mail items matched \"{query}\".",
+"@usps_noMailItemsMatched": {
+  "placeholders": {
+    "query": {
+      "type": "String"
+    }
+  }
+},
+"usps_trackingSubject": "Tracking {trackingNumber}",
+"@usps_trackingSubject": {
+  "placeholders": {
+    "trackingNumber": {
+      "type": "String"
+    }
+  }
+},
+"usps_showingDigestFor": "Showing digest for {date}",
+"@usps_showingDigestFor": {
+  "placeholders": {
+    "date": {
+      "type": "String"
+    }
+  }
+},
+"usps_itemCount": "{count} items",
+"@usps_itemCount": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"usps_noSummary": "No summary",
+"usps_expectedPrefix": "Expected: ",
+"usps_deliveredPrefix": "Delivered: ",
+"usps_fromSender": "From: {sender}",
+"@usps_fromSender": {
+  "placeholders": {
+    "sender": {
+      "type": "String"
+    }
+  }
+},
+"usps_trackingNumberValue": "Tracking: {trackingNumber}",
+"@usps_trackingNumberValue": {
+  "placeholders": {
+    "trackingNumber": {
+      "type": "String"
+    }
+  }
+},
+
+"usps_expectedDateValue": "Expected: {date}",
+"@usps_expectedDateValue": {
+  "placeholders": {
+    "date": {
+      "type": "String"
+    }
+  }
+},
+"usps_details": "Details",
+"usps_subject": "Subject",
+"usps_expectedDelivery": "Expected Delivery",
+"usps_delivered": "Delivered",
+"usps_searchFailed": "Search failed: {error}",
+"@usps_searchFailed": {
+  "placeholders": {
+    "error": {
+      "type": "String"
+    }
+  }
+},
+"usps_mail": "Mail",
+"usps_track": "Track",
+"usps_trackPackage": "Track Package",
+"usps_trackingNumber": "Tracking Number",
+"usps_noItems": "No items",
+"usps_noItemsInDigest": "No items in digest",
+"usps_cancel": "Cancel",
+"usps_select": "Select",
+"usps_couldNotOpenLink": "Could not open link",
+"usps_loginToViewMail": "Please log in to view USPS mail.",
+"usps_loginToSearchMail": "Please log in to search USPS mail.",
+"usps_loginToConnectGmail": "Please log in to connect Gmail.",
+"usps_unableCheckGmail": "Unable to check Gmail connection status.",
+"usps_gmailDisconnected": "Gmail disconnected.",
+"usps_failedDisconnectGmail": "Failed to disconnect Gmail",
+"usps_loginFirst": "Please log in first",
+"usps_cacheCleared": "Cache cleared! Try fetching digest again.",
+"usps_failedClearCache": "Failed to clear cache",
+"usps_couldNotOpenGoogleAuth": "Could not open Google authentication",
+"usps_couldNotStartGmail": "Could not start Gmail connection"
 }
