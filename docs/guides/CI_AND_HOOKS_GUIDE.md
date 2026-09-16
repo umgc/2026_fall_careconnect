@@ -250,8 +250,8 @@ Runs on every PR from a `team-*-develop` branch into `develop`. This is the poin
 - `mvn -B clean verify` (BLOCKING) — compile, the full unit test suite, packaging, and the JaCoCo report all in one command; also enforces the per-package coverage rules already defined in `pom.xml` (bound to the `verify` phase)
 - Coverage regression gate (see below)
 
-**`frontend-test`** (matrix, `FLUTTER_TEST_SHARDS` runners — currently 4)
-- `flutter test --total-shards=N --shard-index=i` (BLOCKING) — the full widget/unit suite (~11k tests), split across N matrix runners since a single runner made this the slowest job in the whole pipeline. `--concurrency` still controls worker processes *within* each shard's runner — orthogonal to the shard count.
+**`frontend-test`** (matrix, `FLUTTER_TEST_SHARDS` runners — currently 8)
+- `flutter test --total-shards=N --shard-index=i` (BLOCKING) — the full widget/unit suite (~11.5k tests), split across N matrix runners since a single unsharded run measured at 19 minutes on real CI. `--concurrency` still controls worker processes *within* each shard's runner — orthogonal to the shard count. Shard count was raised from an initial 4 to 8 since GitHub-hosted runners are free on this public repo, so there's no cost tradeoff to more parallelism (just watch for diminishing returns from per-shard checkout/setup overhead, and the account's concurrent-job limit).
 - Each shard uploads its own `coverage/lcov.info` as a short-lived artifact (3-day retention) for `frontend-coverage` to merge
 
 **`frontend-build`** (independent of the sharded tests)

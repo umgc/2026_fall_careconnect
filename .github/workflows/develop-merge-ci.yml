@@ -60,7 +60,10 @@ env:
   # Number of parallel matrix runners the frontend test suite is split
   # across (see frontend-test below). Orthogonal to FLUTTER_TEST_CONCURRENCY
   # above, which controls worker processes *within* each shard's runner.
-  FLUTTER_TEST_SHARDS: '4'
+  # This is a public repo, so GitHub-hosted runner minutes are free --
+  # raised from 4 to 8 after a real CI run measured the unsharded job at
+  # 19 minutes, since there's no cost downside to more parallelism here.
+  FLUTTER_TEST_SHARDS: '8'
   # Whole-repo coverage regression baseline, agreed 2026-09-15.
   # Backend measured ~82.8% locally at the time this was set, so 0.80
   # leaves headroom; frontend's actual current % was not verified before
@@ -151,7 +154,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
 
     steps:
       - name: Determine run mode
@@ -180,6 +183,14 @@ jobs:
       # runners; --concurrency is still the worker count *within* this
       # one shard's runner. Each shard writes its own coverage/lcov.info,
       # merged back into one report by frontend-coverage below.
+      #
+      # --timeout=60s: at least one known-broken test (e.g.
+      # usps_test_screen_test.dart's "Clear Cache with null user" case)
+      # hangs on a leaked async callback and eats the full 10-minute
+      # default timeout, which single-handedly dominates whichever
+      # shard it lands in regardless of shard count. Since it's going
+      # to fail either way (tracked separately, not fixed here), fail
+      # it fast instead of burning 10 minutes of wall-clock on it.
       - name: Flutter test (shard ${{ matrix.shard }}/${{ env.FLUTTER_TEST_SHARDS }})
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
@@ -189,6 +200,7 @@ jobs:
             --coverage \
             --total-shards="${FLUTTER_TEST_SHARDS}" \
             --shard-index="${{ matrix.shard }}" \
+            --timeout=60s \
             --reporter expanded
 
       - name: Upload shard coverage
