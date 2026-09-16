@@ -29,12 +29,18 @@
 #     instead of leaving a required check stuck at "Expected -- waiting
 #     for status to be reported."
 #
-# Stages (two parallel jobs):
-#   backend:  mvn -B clean verify (BLOCKING: compile + full test suite +
-#             package + jacoco report, in one invocation) + coverage
-#             regression gate
-#   frontend: flutter test full suite (BLOCKING) + flutter build web
-#             (BLOCKING) + coverage regression gate
+# Stages (parallel jobs):
+#   backend:         mvn -B clean verify (BLOCKING: compile + full test
+#                    suite + package + jacoco report, in one invocation)
+#                    + coverage regression gate
+#   frontend-test:   flutter test full suite (BLOCKING), sharded across
+#                    FLUTTER_TEST_SHARDS matrix runners -- the suite is
+#                    large enough (~11k tests) that a single runner made
+#                    this the slowest job in the pipeline
+#   frontend-build:  flutter build web (BLOCKING), independent of the
+#                    sharded tests
+#   frontend-coverage: merges each shard's lcov.info with `lcov`, then
+#                    runs the same coverage regression gate as backend
 #
 # Triggers:
 #   PR -> develop (in practice, only from team-*-develop branches; see
@@ -51,6 +57,10 @@ env:
   FLUTTER_VERSION: '3.x'
   JAVA_VERSION: '17'
   FLUTTER_TEST_CONCURRENCY: '4'
+  # Number of parallel matrix runners the frontend test suite is split
+  # across (see frontend-test below). Orthogonal to FLUTTER_TEST_CONCURRENCY
+  # above, which controls worker processes *within* each shard's runner.
+  FLUTTER_TEST_SHARDS: '4'
   # Whole-repo coverage regression baseline, agreed 2026-09-15.
   # Backend measured ~82.8% locally at the time this was set, so 0.80
   # leaves headroom; frontend's actual current % was not verified before
@@ -132,12 +142,16 @@ jobs:
           retention-days: 14
 
   # --------------------------------------------------------------------
-  # Frontend — full test suite + web build + coverage
+  # Frontend — full test suite, sharded across matrix runners
   # --------------------------------------------------------------------
-  frontend:
-    name: Frontend — Full Test & Build
+  frontend-test:
+    name: Frontend Test (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
 
     steps:
       - name: Determine run mode
@@ -162,23 +176,113 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      - name: Flutter test (full suite)
+      # --total-shards/--shard-index split the suite across matrix
+      # runners; --concurrency is still the worker count *within* this
+      # one shard's runner. Each shard writes its own coverage/lcov.info,
+      # merged back into one report by frontend-coverage below.
+      - name: Flutter test (shard ${{ matrix.shard }}/${{ env.FLUTTER_TEST_SHARDS }})
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: |
           flutter test \
             --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
             --coverage \
+            --total-shards="${FLUTTER_TEST_SHARDS}" \
+            --shard-index="${{ matrix.shard }}" \
             --reporter expanded
+
+      - name: Upload shard coverage
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-shard-${{ matrix.shard }}
+          path: frontend/coverage/lcov.info
+          retention-days: 3
+          if-no-files-found: error
+
+  # --------------------------------------------------------------------
+  # Frontend — web build (independent of the sharded tests above)
+  # --------------------------------------------------------------------
+  frontend-build:
+    name: Frontend — Web Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Determine run mode
+        id: mode
+        run: |
+          if [ "${{ github.head_ref }}" = "team-a-develop" ]; then
+            echo "run_suite=false" >> "$GITHUB_OUTPUT"
+            echo "Source branch is team-a-develop (E2E-only team) -- skipping web build."
+          else
+            echo "run_suite=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup frontend toolchain
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: ./.github/actions/setup-frontend
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
 
       # Web uses different conditional imports (dart.library.js_interop)
       # than the native path, so web-only breakage is invisible to the
-      # unit/widget test step above. Separate compile check, not a
+      # unit/widget test shards above. Separate compile check, not a
       # duplicate of `flutter test` — no artifacts kept.
       - name: Flutter build web (compile check)
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: flutter build web --release
+
+  # --------------------------------------------------------------------
+  # Frontend — merge shard coverage + regression gate
+  # --------------------------------------------------------------------
+  frontend-coverage:
+    name: Frontend Coverage Regression Gate
+    needs: frontend-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Determine run mode
+        id: mode
+        run: |
+          if [ "${{ github.head_ref }}" = "team-a-develop" ]; then
+            echo "run_suite=false" >> "$GITHUB_OUTPUT"
+            echo "Source branch is team-a-develop (E2E-only team) -- skipping coverage merge."
+          else
+            echo "run_suite=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/checkout@v4
+
+      - name: Download shard coverage
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: frontend-coverage-shard-*
+          path: shard-coverage
+
+      # `lcov -a` unions per-file hit/line data correctly; naively
+      # concatenating the raw lcov.info files would double-count shared
+      # source files that more than one shard touched.
+      - name: Merge shard coverage with lcov
+        if: steps.mode.outputs.run_suite == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y lcov
+          ARGS=()
+          for f in shard-coverage/*/lcov.info; do
+            ARGS+=(-a "$f")
+          done
+          lcov "${ARGS[@]}" -o merged-lcov.info
 
       - name: Set up Python (coverage regression gate)
         if: steps.mode.outputs.run_suite == 'true'
@@ -190,15 +294,13 @@ jobs:
         if: steps.mode.outputs.run_suite == 'true'
         run: |
           python scripts/coverage_baseline_gate.py \
-            --lcov-info frontend/coverage/lcov.info \
+            --lcov-info merged-lcov.info \
             --threshold "${FRONTEND_COVERAGE_BASELINE}"
 
-      - name: Upload frontend test results
+      - name: Upload merged coverage
         if: always() && steps.mode.outputs.run_suite == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: develop-merge-frontend-results
-          path: |
-            frontend/test-results/
-            frontend/coverage/
+          name: develop-merge-frontend-coverage
+          path: merged-lcov.info
           retention-days: 14

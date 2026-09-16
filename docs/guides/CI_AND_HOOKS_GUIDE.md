@@ -244,26 +244,32 @@ Retained for 14 days.
 
 Runs on every PR from a `team-*-develop` branch into `develop`. This is the point where several `feature/*` branches have already been merged together at the team level, so it re-checks the *combined* state with the full test suites instead of a diff — a cheap regression net for interactions between features that no single feature's diff-scoped test run could catch.
 
-#### Stages (two parallel jobs)
+#### Stages (four parallel-ish jobs)
 
 **`backend`**
 - `mvn -B clean verify` (BLOCKING) — compile, the full unit test suite, packaging, and the JaCoCo report all in one command; also enforces the per-package coverage rules already defined in `pom.xml` (bound to the `verify` phase)
 - Coverage regression gate (see below)
 
-**`frontend`**
-- `flutter test` (BLOCKING) — the full widget/unit suite, not diff-scoped
+**`frontend-test`** (matrix, `FLUTTER_TEST_SHARDS` runners — currently 4)
+- `flutter test --total-shards=N --shard-index=i` (BLOCKING) — the full widget/unit suite (~11k tests), split across N matrix runners since a single runner made this the slowest job in the whole pipeline. `--concurrency` still controls worker processes *within* each shard's runner — orthogonal to the shard count.
+- Each shard uploads its own `coverage/lcov.info` as a short-lived artifact (3-day retention) for `frontend-coverage` to merge
+
+**`frontend-build`** (independent of the sharded tests)
 - `flutter build web --release` (BLOCKING) — separate compile check, catches web-only conditional-import breakage that the test suite can't see
-- Coverage regression gate (see below)
 
-Neither job runs `flutter analyze` — it's already informational-only in `team-merge-ci.yml` and fully covered by `build-and-analyze.yml` on the same PR, so repeating it here added no decision-relevant information.
+**`frontend-coverage`** (`needs: frontend-test`)
+- Downloads every shard's `lcov.info` and merges them with `lcov -a` (a naive concatenation would double-count source files touched by more than one shard's tests)
+- Runs the same coverage regression gate as backend, against the merged report
 
-**Exception:** if the PR's *source* is `team-a-develop`, both jobs skip their build/test steps (each still reports a passing status) for the same reason as above.
+None of the frontend jobs run `flutter analyze` — it's already informational-only in `team-merge-ci.yml` and fully covered by `build-and-analyze.yml` on the same PR, so repeating it here added no decision-relevant information.
+
+**Exception:** if the PR's *source* is `team-a-develop`, every job here (`backend` included) skips its build/test steps (each still reports a passing status) for the same reason as above.
 
 #### Coverage regression gate
 
 `scripts/coverage_baseline_gate.py` checks **whole-repo aggregate** line coverage (not diff-scoped) against a fixed baseline:
 - Backend: JaCoCo's report-level `LINE` counter from `backend/core/target/site/jacoco/jacoco.xml`
-- Frontend: summed `LH`/`LF` across every `SF` block in `frontend/coverage/lcov.info`
+- Frontend: summed `LH`/`LF` across every `SF` block in the merged `lcov.info` (see `frontend-coverage` above)
 
 Current baselines (set 2026-09-15): `BACKEND_COVERAGE_BASELINE: '0.80'`, `FRONTEND_COVERAGE_BASELINE: '0.80'` (env vars in the workflow). Backend was measured at ~82.8% locally when this was set. If both env vars are left empty, the gate is report-only (prints current % and always passes) — useful if the team ever needs to temporarily relax enforcement while raising coverage.
 
