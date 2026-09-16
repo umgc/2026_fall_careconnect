@@ -17,18 +17,24 @@ This guide covers two complementary layers of quality enforcement:
 | `commit-msg` | Commit message format `<type>: <description>` | Warns only — commit still proceeds |
 | `pre-push` | Branch name pattern | Blocks push on bad branch name |
 
-### CI pipeline (`ci-rules.yml`)
+### CI pipeline (merge gates)
 
-Triggers on every PR targeting any `team-*-develop` branch. Runs once — no duplicate runs on push.
+The merge flow is `feature/* → team-*-develop → develop → staging → main`. Each arrow has its own PR-triggered gate — none run on direct pushes:
 
-| Stage | What runs | Effect |
-|---|---|---|
-| Build | Flutter pub get, analyze, Maven compile, Flutter web build | Blocks PR on failure |
-| Unit tests | Changed files only (Flutter + Maven) | Blocks PR on failure |
-| Coverage gate | 95% line coverage on changed files | Blocks PR on failure |
-| Artifacts | JaCoCo HTML, lcov, Surefire reports | Uploaded for inspection |
+| Gate | Runs on PR into | What it checks | Scope |
+|---|---|---|---|
+| `team-merge-ci.yml` | `team-*-develop` | Build + unit tests + 95% coverage | Changed files only |
+| `develop-merge-ci.yml` | `develop` | Build + full unit/widget suite + coverage regression | Whole repo |
+| `staging-merge-ci.yml` | `staging` | E2E + integration tests | Placeholder — not implemented yet (Team A) |
+| `branch-source-gate.yml` | `develop`, `main` | Source branch matches the expected prior stage | N/A |
 
-> Team D's `build-and-analyze.yml` runs security/SAST scans on **all PRs** repo-wide. It is separate from this pipeline and not duplicated here.
+Both `team-merge-ci.yml` and `develop-merge-ci.yml` skip their build/test steps (but still report a passing status) for PRs sourced from `team-a-develop`, since that team only adds E2E tests and never touches other teams' source or unit tests.
+
+> **Known gap:** `branch-source-gate.yml` does not currently have a rule for PRs into `staging` (only `develop` and `main` are covered), and its `main` rule still expects `develop` as the source rather than `staging`. In practice this means `staging → develop` is blocked as a side effect of the `develop` rule (only `team-*-develop` sources are allowed), but nothing yet enforces that PRs into `staging` come from `develop`, or that PRs into `main` come from `staging`. Not fixed as of this writing — flagged here so it isn't mistaken for intentional.
+
+> Team D's `build-and-analyze.yml` runs security/SAST scans on **all PRs** repo-wide, regardless of target branch. It is separate from these pipelines and not duplicated in any of them.
+
+> Pushing directly to `staging` (e.g. after merging a PR into it) triggers `deploy-staging.yml`, which deploys the built frontend to the AWS Amplify staging environment. That workflow is a deploy, not a test gate, and is out of scope for this guide.
 
 ---
 
@@ -181,9 +187,11 @@ lefthook install     # reinstall at any time
 
 ## CI Pipeline
 
-The CI pipeline runs on every PR targeting `team-*-develop`. It will not run on direct pushes to any branch.
+### team-merge-ci.yml — `feature/* → team-*-develop`
 
-### What triggers it
+Runs on every PR targeting `team-*-develop`. It will not run on direct pushes to any branch.
+
+#### What triggers it
 
 ```yaml
 on:
@@ -194,7 +202,9 @@ on:
 
 The `team-*-develop` glob matches any team's integration branch (`team-a-develop`, `team-b-develop`, `team-c-develop`, `team-d-develop`, `team-e-develop`, and any future `team-<name>-develop`) automatically — no per-team edits needed here when a team's branch is added or renamed.
 
-### Stages
+**Exception:** if the PR's *target* is `team-a-develop`, the build/test steps are skipped (job still reports a passing status) — that team's `feature/*` branches only add E2E tests and never touch other teams' source or unit tests, so there is nothing for this diff-based gate to check.
+
+#### Stages
 
 **Stage 1 — Build**
 - `flutter pub get`
@@ -227,6 +237,51 @@ Uploaded on every run (including failures) for inspection:
 - `frontend/coverage/`
 
 Retained for 14 days.
+
+---
+
+### develop-merge-ci.yml — `team-*-develop → develop`
+
+Runs on every PR from a `team-*-develop` branch into `develop`. This is the point where several `feature/*` branches have already been merged together at the team level, so it re-checks the *combined* state with the full test suites instead of a diff — a cheap regression net for interactions between features that no single feature's diff-scoped test run could catch.
+
+#### Stages (two parallel jobs)
+
+**`backend`**
+- `mvn -B clean verify` (BLOCKING) — compile, the full unit test suite, packaging, and the JaCoCo report all in one command; also enforces the per-package coverage rules already defined in `pom.xml` (bound to the `verify` phase)
+- Coverage regression gate (see below)
+
+**`frontend`**
+- `flutter test` (BLOCKING) — the full widget/unit suite, not diff-scoped
+- `flutter build web --release` (BLOCKING) — separate compile check, catches web-only conditional-import breakage that the test suite can't see
+- Coverage regression gate (see below)
+
+Neither job runs `flutter analyze` — it's already informational-only in `team-merge-ci.yml` and fully covered by `build-and-analyze.yml` on the same PR, so repeating it here added no decision-relevant information.
+
+**Exception:** if the PR's *source* is `team-a-develop`, both jobs skip their build/test steps (each still reports a passing status) for the same reason as above.
+
+#### Coverage regression gate
+
+`scripts/coverage_baseline_gate.py` checks **whole-repo aggregate** line coverage (not diff-scoped) against a fixed baseline:
+- Backend: JaCoCo's report-level `LINE` counter from `backend/core/target/site/jacoco/jacoco.xml`
+- Frontend: summed `LH`/`LF` across every `SF` block in `frontend/coverage/lcov.info`
+
+Current baselines (set 2026-09-15): `BACKEND_COVERAGE_BASELINE: '0.80'`, `FRONTEND_COVERAGE_BASELINE: '0.80'` (env vars in the workflow). Backend was measured at ~82.8% locally when this was set. If both env vars are left empty, the gate is report-only (prints current % and always passes) — useful if the team ever needs to temporarily relax enforcement while raising coverage.
+
+#### Shared setup
+
+Both `team-merge-ci.yml` and `develop-merge-ci.yml` use the same composite actions for toolchain setup, so JDK/Flutter versions and dependency caching stay consistent across both gates:
+- `.github/actions/setup-backend` — JDK (Temurin), with Maven dependency caching (`cache: maven`)
+- `.github/actions/setup-frontend` — Flutter SDK + `pub get`, with a separate `~/.pub-cache` cache keyed on `pubspec.lock`
+
+---
+
+### staging-merge-ci.yml — `develop → staging` (placeholder)
+
+Runs on every PR from `develop` into `staging`. By this stage, every unit/widget test and full-suite regression check has already passed at the two earlier gates, so this stage's only job is **E2E and integration tests** — no build, no unit tests, no coverage gate here.
+
+**Status:** placeholder. Team A owns E2E/integration testing and hasn't added any tests yet, so both jobs (`e2e-tests`, `integration-tests`) currently just print a notice and exit 0 — they never block a PR. When Team A adds real tests, replace the placeholder `run:` step in the matching job; the job names should stay the same so branch-protection required-check config doesn't need to change.
+
+There is existing, currently-unwired E2E scaffolding elsewhere in the repo (`frontend/integration_test/*.dart`, `scripts/run-e2e-emulator.sh`, left over from a prior `team-b-ci.yml`) that this placeholder intentionally does not call into — Team A decides whether to reuse, rewrite, or replace it.
 
 ---
 
