@@ -1,4 +1,4 @@
-# ci-rules.yml
+# team-merge-ci.yml
 # CareConnect — Feature Branch CI Pipeline
 #
 # Runs once on every PR targeting any team-*-develop branch
@@ -6,11 +6,16 @@
 # team-e-develop, or any future team-<name>-develop).
 # Only tests that map to files changed in the PR are executed.
 # A failing build, test, or coverage check blocks the merge.
-# Security/SAST/SCA/secrets scanning is enforced repo-wide by
-# Team D's build-and-analyze.yml and is not duplicated here.
 #
 # Triggers:
 #   PR → team-*-develop
+#
+# team-a-develop (testing team) is excluded: its feature/* branches only
+# add E2E tests and never touch other teams' source or unit tests, so
+# there is nothing here for this diff-based gate to check. The job stays
+# unconditional (steps are skipped, not the job) so it still reports a
+# status instead of leaving a required check stuck at "Expected --
+# waiting for status to be reported."
 #
 # Stages (single job, sequential steps):
 #   1. Checkout, branch info, JAVA_HOME
@@ -44,25 +49,41 @@ jobs:
 
     steps:
       # ----------------------------------------------------------------
+      # Stage 0: team-a-develop exclusion (see header note)
+      # ----------------------------------------------------------------
+      - name: Determine run mode
+        id: mode
+        run: |
+          if [ "${{ github.base_ref }}" = "team-a-develop" ]; then
+            echo "run_suite=false" >> "$GITHUB_OUTPUT"
+            echo "Target branch is team-a-develop (E2E-only team) -- skipping build/test suite."
+          else
+            echo "run_suite=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ----------------------------------------------------------------
       # Stage 1: Checkout + branch info + JAVA_HOME
       # ----------------------------------------------------------------
       - name: Checkout repository
+        if: steps.mode.outputs.run_suite == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Log branch info
+        if: steps.mode.outputs.run_suite == 'true'
         run: |
           echo "Branch: ${{ github.head_ref }}"
           echo "Event: ${{ github.event_name }}"
 
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+      - name: Setup backend toolchain
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: ./.github/actions/setup-backend
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: temurin
 
       - name: Confirm JAVA_HOME
+        if: steps.mode.outputs.run_suite == 'true'
         run: |
           echo "JAVA_HOME=${JAVA_HOME}"
           java -version
@@ -70,20 +91,14 @@ jobs:
       # ----------------------------------------------------------------
       # Stage 2: Build — Flutter + Maven
       # ----------------------------------------------------------------
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup frontend toolchain
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: ./.github/actions/setup-frontend
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - name: Flutter pub get
-        working-directory: frontend
-        run: |
-          cp .env.example .env 2>/dev/null || touch .env
-          flutter pub get
 
       - name: Flutter analyze (fast static check)
+        if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         continue-on-error: true
         run: |
@@ -91,6 +106,7 @@ jobs:
           echo "Note: analyze is informational — Team D's SAST pipeline enforces analysis."
 
       - name: Maven compile (skip tests)
+        if: steps.mode.outputs.run_suite == 'true'
         working-directory: backend/core
         run: mvn -B clean compile -DskipTests
 
@@ -98,6 +114,7 @@ jobs:
       # than the native path, so web-only breakage is invisible to the
       # other build/test steps. Compile check only — no artifacts kept.
       - name: Flutter build web (compile check)
+        if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: flutter build web --release
 
@@ -112,12 +129,14 @@ jobs:
       # If nothing maps, the step skips gracefully (exit 0).
       # ----------------------------------------------------------------
       - name: Determine diff base
+        if: steps.mode.outputs.run_suite == 'true'
         run: |
           TARGET="${{ github.base_ref }}"
           git fetch origin "+${TARGET}:refs/remotes/origin/${TARGET}"
           echo "DIFF_BASE=$(git merge-base HEAD "origin/${TARGET}")" >> "$GITHUB_ENV"
 
       - name: Flutter unit tests (changed files only)
+        if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: |
           CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
@@ -150,6 +169,7 @@ jobs:
             "${UNIQUE[@]}"
 
       - name: Maven unit tests (changed files only)
+        if: steps.mode.outputs.run_suite == 'true'
         working-directory: backend/core
         run: |
           CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
@@ -183,11 +203,13 @@ jobs:
       # Stage 4: Coverage gate — 95% on changed files (BLOCKING)
       # ----------------------------------------------------------------
       - name: Set up Python (coverage gate)
+        if: steps.mode.outputs.run_suite == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Coverage gate (changed files, 95% threshold)
+        if: steps.mode.outputs.run_suite == 'true'
         run: |
           python scripts/coverage_gate.py \
             --diff-base "${DIFF_BASE}" \
@@ -200,7 +222,7 @@ jobs:
       # Stage 5: Test result artifact upload
       # ----------------------------------------------------------------
       - name: Upload test results
-        if: always()
+        if: always() && steps.mode.outputs.run_suite == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-results
