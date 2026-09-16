@@ -250,8 +250,10 @@ Runs on every PR from a `team-*-develop` branch into `develop`. This is the poin
 - `mvn -B clean verify` (BLOCKING) — compile, the full unit test suite, packaging, and the JaCoCo report all in one command; also enforces the per-package coverage rules already defined in `pom.xml` (bound to the `verify` phase)
 - Coverage regression gate (see below)
 
-**`frontend-test`** (matrix, `FLUTTER_TEST_SHARDS` runners — currently 8)
-- `flutter test --total-shards=N --shard-index=i` (BLOCKING) — the full widget/unit suite (~11.5k tests), split across N matrix runners since a single unsharded run measured at 19 minutes on real CI. `--concurrency` still controls worker processes *within* each shard's runner — orthogonal to the shard count. Shard count was raised from an initial 4 to 8 since GitHub-hosted runners are free on this public repo, so there's no cost tradeoff to more parallelism (just watch for diminishing returns from per-shard checkout/setup overhead, and the account's concurrent-job limit).
+**`frontend-test`** (matrix, `FLUTTER_TEST_SHARDS` runners — currently 4)
+- `flutter test --total-shards=N --shard-index=i --timeout=30s` (BLOCKING) — the full widget/unit suite (~11.5k tests, minus the quarantined file below), split across N matrix runners since a single unsharded run measured at 19 minutes on real CI. `--concurrency` still controls worker processes *within* each shard's runner — orthogonal to the shard count.
+  - Tried raising shards from 4 to 8 (free on this public repo, so no cost tradeoff), but it only saved ~1 minute in real testing — the actual bottleneck was a hanging test dominating whichever shard drew it, not shard count. Back to 4.
+  - **Quarantine:** `test/features/usps/usps_test_screen_test.dart` is excluded from this run entirely (via an explicit file list passed to `flutter test`, computed with `find`). Its "Clear Cache with null user" test hangs on a leaked async callback and eats the full 10-minute default test timeout; `--timeout=30s` does not help because `testWidgets()` passes its own `Timeout` through `TestWidgetsFlutterBinding`, which takes priority over `package:test`'s CLI default. Remove the exclusion once that hang is fixed (tracked with the other known frontend failures, not fixed here).
 - Each shard uploads its own `coverage/lcov.info` as a short-lived artifact (3-day retention) for `frontend-coverage` to merge
 
 **`frontend-build`** (independent of the sharded tests)
