@@ -42,6 +42,15 @@ Parameters:
     Type: String
     Default: bedrock
 
+  # Bedrock model ID passed through to AI_MODEL, overriding the Java default
+  # (anthropic.claude-sonnet-4-5-20250929-v1:0). Defaults to Nova Lite because
+  # Claude inference for this account is only available out of us-west-2 while
+  # this stack deploys to us-east-1/us-east-2 — override once Claude access is
+  # sorted out for this region.
+  AiModel:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+
   # SendGrid from-address for prod profile email (API key loaded from SSM when SpringProfile=prod).
   FromEmail:
     Type: String
@@ -322,6 +331,8 @@ Resources:
               Value: !Ref CareConnectAiEnabled
             - Name: AI_PROVIDER
               Value: !Ref AiProvider
+            - Name: AI_MODEL
+              Value: !Ref AiModel
             # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
             - Name: EMAIL_PROVIDER
               Value: !If [IsProdProfile, 'sendgrid', 'console']

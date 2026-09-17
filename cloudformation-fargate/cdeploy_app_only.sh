@@ -10,6 +10,25 @@ PROFILE=""
 REGION="us-east-1"
 IMAGE_TAG=""
 RUN_TESTS="false"
+# Empty means "leave CareConnectAiEnabled as whatever parameters/{env}-service.json
+# already has committed" — only override when the caller explicitly asks. App-only
+# redeploys still reapply the full committed service parameter file, so an earlier
+# manual/full-deploy override can otherwise get silently reset here too.
+AI_ENABLED=""
+# Empty means "leave AiModel as whatever parameters/{env}-service.json already
+# has committed" — only override when the caller explicitly asks.
+AI_MODEL=""
+# Empty means "leave FrontendBaseUrl/CorsAllowedList as whatever
+# parameters/{env}-service.json already has committed". When set, appends the
+# given URL to the committed CORS list (which already carries the
+# localhost/127.0.0.1 entries) rather than replacing it — so the backend
+# accepts requests from a hosted Amplify frontend without losing local access.
+FRONTEND_URL=""
+# When true, skips the Maven/Docker build+push entirely and reuses the
+# service stack's currently-deployed BackendImageUri. For updating
+# FrontendBaseUrl/CorsAllowedList (or CareConnectAiEnabled) alone, without
+# waiting on a full rebuild for a backend that hasn't changed.
+SKIP_BUILD="false"
 CURRENT_STACK_NAME=""
 CURRENT_OPERATION=""
 ORIGINAL_AWS_PROFILE="${AWS_PROFILE-}"
@@ -36,6 +55,22 @@ while [[ $# -gt 0 ]]; do
       RUN_TESTS="true"
       shift
       ;;
+    -a|--ai-enabled)
+      AI_ENABLED="$2"
+      shift 2
+      ;;
+    -m|--ai-model)
+      AI_MODEL="$2"
+      shift 2
+      ;;
+    -u|--frontend-url)
+      FRONTEND_URL="$2"
+      shift 2
+      ;;
+    --skip-build)
+      SKIP_BUILD="true"
+      shift
+      ;;
     -h|--help)
       cat <<'EOF'
 Usage: ./cdeploy_app_only.sh [options]
@@ -49,6 +84,20 @@ Options:
   -r, --region <region>      AWS region (default: us-east-1)
   -t, --image-tag <tag>      Docker/ECR image tag (default: env + git SHA or timestamp)
       --run-tests            Run Maven tests during package build
+  -a, --ai-enabled <bool>    Override CareConnectAiEnabled (true/false) on the
+                              service stack; omit to leave the committed
+                              parameters/{env}-service.json value as-is
+  -m, --ai-model <model-id>  Override AiModel (Bedrock model ID) on the service
+                              stack; omit to leave the committed
+                              parameters/{env}-service.json value as-is
+  -u, --frontend-url <url>   Full https:// Amplify/frontend URL to allow —
+                              sets FrontendBaseUrl and appends to
+                              CorsAllowedList; omit to leave both as committed
+      --skip-build           Skip the Maven/Docker build+push and reuse the
+                              service stack's currently-deployed image —
+                              useful for a parameter-only update (e.g. just
+                              --frontend-url, --ai-enabled, or --ai-model) with
+                              no backend code change
   -h, --help                 Show this help text
 EOF
       exit 0
@@ -409,7 +458,11 @@ get_stack_output() {
 }
 
 step "Checking prerequisites"
-for cmd in aws docker java; do
+PREREQ_COMMANDS=(aws)
+if [[ "$SKIP_BUILD" != "true" ]]; then
+  PREREQ_COMMANDS+=(docker java)
+fi
+for cmd in "${PREREQ_COMMANDS[@]}"; do
   require_command "$cmd"
 done
 
@@ -427,47 +480,75 @@ if ! stack_exists "$PLATFORM_STACK_NAME"; then
   exit 1
 fi
 
-step "Reading ECR repository URI"
-CURRENT_OPERATION="Reading ECR repository URI"
-REPOSITORY_URI="$(get_stack_output "$PLATFORM_STACK_NAME" "EcrRepositoryUri" | tr -d '\r')"
-if [[ -z "$REPOSITORY_URI" || "$REPOSITORY_URI" == "None" ]]; then
-  echo "Platform stack '$PLATFORM_STACK_NAME' did not return EcrRepositoryUri." >&2
-  exit 1
+if [[ "$SKIP_BUILD" == "true" ]]; then
+  step "Reading current BackendImageUri from $SERVICE_STACK_NAME (--skip-build)"
+  CURRENT_OPERATION="Reading current BackendImageUri"
+  IMAGE_URI="$(aws_cli cloudformation describe-stacks \
+    --profile "$PROFILE" --region "$REGION" \
+    --stack-name "$SERVICE_STACK_NAME" \
+    --query "Stacks[0].Parameters[?ParameterKey=='BackendImageUri'].ParameterValue" \
+    --output text | tr -d '\r')"
+  if [[ -z "$IMAGE_URI" || "$IMAGE_URI" == "None" ]]; then
+    echo "Could not read the current BackendImageUri from stack '$SERVICE_STACK_NAME'." >&2
+    echo "Has the service stack been deployed at least once? --skip-build has nothing to reuse." >&2
+    exit 1
+  fi
+  echo "Reusing image: $IMAGE_URI"
+  REPOSITORY_NAME="(skipped — reused existing image)"
+else
+  step "Reading ECR repository URI"
+  CURRENT_OPERATION="Reading ECR repository URI"
+  REPOSITORY_URI="$(get_stack_output "$PLATFORM_STACK_NAME" "EcrRepositoryUri" | tr -d '\r')"
+  if [[ -z "$REPOSITORY_URI" || "$REPOSITORY_URI" == "None" ]]; then
+    echo "Platform stack '$PLATFORM_STACK_NAME' did not return EcrRepositoryUri." >&2
+    exit 1
+  fi
+
+  REPOSITORY_NAME="${REPOSITORY_URI#*/}"
+  IMAGE_URI="${REPOSITORY_URI}:${IMAGE_TAG}"
+  LOCAL_IMAGE_NAME="careconnect-backend-local:${IMAGE_TAG}"
+  REGISTRY_HOST="${REPOSITORY_URI%%/*}"
+
+  step "Building backend jar"
+  pushd "$BACKEND_DIR" >/dev/null
+  CURRENT_OPERATION="Building backend jar"
+  # Use batch mode and suppress Maven transfer-progress spam so CI logs stay
+  # readable and it is easier to tell whether the build is really moving.
+  MAVEN_ARGS=(-B -ntp clean package -Pdocker)
+  if [[ "$RUN_TESTS" != "true" ]]; then
+    MAVEN_ARGS+=(-DskipTests)
+  fi
+  ./mvnw "${MAVEN_ARGS[@]}"
+
+  step "Logging into ECR"
+  CURRENT_OPERATION="Logging into ECR"
+  aws_cli ecr get-login-password --region "$REGION" \
+    | docker login --username AWS --password-stdin "$REGISTRY_HOST"
+
+  step "Building Docker image"
+  CURRENT_OPERATION="Building Docker image"
+  docker build --platform linux/amd64 -t "$LOCAL_IMAGE_NAME" .
+
+  step "Tagging and pushing Docker image to ECR"
+  CURRENT_OPERATION="Pushing Docker image to ECR"
+  docker tag "$LOCAL_IMAGE_NAME" "$IMAGE_URI"
+  docker push "$IMAGE_URI"
+  popd >/dev/null
 fi
-
-REPOSITORY_NAME="${REPOSITORY_URI#*/}"
-IMAGE_URI="${REPOSITORY_URI}:${IMAGE_TAG}"
-LOCAL_IMAGE_NAME="careconnect-backend-local:${IMAGE_TAG}"
-REGISTRY_HOST="${REPOSITORY_URI%%/*}"
-
-step "Building backend jar"
-pushd "$BACKEND_DIR" >/dev/null
-CURRENT_OPERATION="Building backend jar"
-# Use batch mode and suppress Maven transfer-progress spam so CI logs stay
-# readable and it is easier to tell whether the build is really moving.
-MAVEN_ARGS=(-B -ntp clean package -Pdocker)
-if [[ "$RUN_TESTS" != "true" ]]; then
-  MAVEN_ARGS+=(-DskipTests)
-fi
-./mvnw "${MAVEN_ARGS[@]}"
-
-step "Logging into ECR"
-CURRENT_OPERATION="Logging into ECR"
-aws_cli ecr get-login-password --region "$REGION" \
-  | docker login --username AWS --password-stdin "$REGISTRY_HOST"
-
-step "Building Docker image"
-CURRENT_OPERATION="Building Docker image"
-docker build --platform linux/amd64 -t "$LOCAL_IMAGE_NAME" .
-
-step "Tagging and pushing Docker image to ECR"
-CURRENT_OPERATION="Pushing Docker image to ECR"
-docker tag "$LOCAL_IMAGE_NAME" "$IMAGE_URI"
-docker push "$IMAGE_URI"
-popd >/dev/null
 
 step "Deploying service stack: $SERVICE_STACK_NAME"
-deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "BackendImageUri=${IMAGE_URI}"
+SERVICE_OVERRIDES=("BackendImageUri=${IMAGE_URI}")
+if [[ -n "$AI_ENABLED" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectAiEnabled=${AI_ENABLED}")
+fi
+if [[ -n "$AI_MODEL" ]]; then
+  SERVICE_OVERRIDES+=("AiModel=${AI_MODEL}")
+fi
+if [[ -n "$FRONTEND_URL" ]]; then
+  SERVICE_OVERRIDES+=("FrontendBaseUrl=${FRONTEND_URL}")
+  SERVICE_OVERRIDES+=("CorsAllowedList=http://localhost:*,http://127.0.0.1:*,${FRONTEND_URL}")
+fi
+deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
 step "Reading final API endpoint"
 CURRENT_OPERATION="Reading final API endpoint"

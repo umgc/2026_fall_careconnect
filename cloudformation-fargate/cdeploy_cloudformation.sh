@@ -10,6 +10,12 @@ PROFILE="careconnect-sso"
 REGION="us-east-1"
 IMAGE_TAG=""
 RUN_TESTS="false"
+# Empty means "leave CareConnectAiEnabled as whatever parameters/{env}-service.json
+# already has committed" — only override when the caller explicitly asks.
+AI_ENABLED=""
+# Empty means "leave AiModel as whatever parameters/{env}-service.json already
+# has committed" — only override when the caller explicitly asks.
+AI_MODEL=""
 CURRENT_STACK_NAME=""
 CURRENT_OPERATION=""
 
@@ -35,6 +41,14 @@ while [[ $# -gt 0 ]]; do
       RUN_TESTS="true"
       shift
       ;;
+    -a|--ai-enabled)
+      AI_ENABLED="$2"
+      shift 2
+      ;;
+    -m|--ai-model)
+      AI_MODEL="$2"
+      shift 2
+      ;;
     -h|--help)
       cat <<'EOF'
 Usage: ./cdeploy_cloudformation.sh [options]
@@ -45,6 +59,12 @@ Options:
   -r, --region <region>      AWS region (default: us-east-1)
   -t, --image-tag <tag>      Docker/ECR image tag (default: same as environment)
       --run-tests            Run Maven tests during package build
+  -a, --ai-enabled <bool>    Override CareConnectAiEnabled (true/false) on the
+                              service stack; omit to leave the committed
+                              parameters/{env}-service.json value as-is
+  -m, --ai-model <model-id>  Override AiModel (Bedrock model ID) on the service
+                              stack; omit to leave the committed
+                              parameters/{env}-service.json value as-is
   -h, --help                 Show this help text
 EOF
       exit 0
@@ -75,6 +95,21 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR/templates"
 PARAMETER_DIR="$SCRIPT_DIR/parameters"
 BACKEND_DIR="$REPO_ROOT/backend/core"
+
+# Local, gitignored secret overrides — CARECONNECT_DATABASE_MASTER_PASSWORD and
+# CARECONNECT_JWT_SECRET, read below to override the committed parameter
+# files' REPLACE_ME_... placeholders. See .env.example. Never commit
+# .env.deploy itself; .gitignore's .env* pattern already excludes it.
+# (AWS_PROFILE/AWS_REGION are CLI flags here, not env-var driven — use
+# --profile/--region to override those, not this file.)
+ENV_DEPLOY_FILE="$SCRIPT_DIR/.env.deploy"
+if [[ -f "$ENV_DEPLOY_FILE" ]]; then
+  echo "Loading deploy secrets from $ENV_DEPLOY_FILE"
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_DEPLOY_FILE"
+  set +a
+fi
 
 IN_MSYS="false"
 case "$(uname -s)" in
@@ -830,7 +865,14 @@ popd >/dev/null
 
 # The service stack is deployed last because it needs the final image URI.
 step "Deploying service stack: $SERVICE_STACK_NAME"
-deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "BackendImageUri=${IMAGE_URI}"
+SERVICE_OVERRIDES=("BackendImageUri=${IMAGE_URI}")
+if [[ -n "$AI_ENABLED" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectAiEnabled=${AI_ENABLED}")
+fi
+if [[ -n "$AI_MODEL" ]]; then
+  SERVICE_OVERRIDES+=("AiModel=${AI_MODEL}")
+fi
+deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
 # Print the final API Gateway endpoint so the frontend or health checks can use it.
 step "Reading final API endpoint"

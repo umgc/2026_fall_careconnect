@@ -85,8 +85,6 @@ dependencies:
   
   # Platform detection
   platform: ^3.1.6
-  # my key storage
-  flutter_dotenv: ^6.0.0
   # Local storage for offline messaging
   # NOTE: drift, sqlite3, and sqlcipher are native-only packages incompatible with web
   # They are disabled to allow web builds to compile
@@ -221,7 +219,6 @@ flutter:
   generate: true  # enables gen-l10n on build
   uses-material-design: true
   assets:
-    - .env.example
     - assets/forms/
     - assets/images/banner.png
     - assets/images/app_icon.png
