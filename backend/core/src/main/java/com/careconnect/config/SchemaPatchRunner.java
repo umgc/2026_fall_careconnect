@@ -316,10 +316,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "H2 – drop legacy ai_held_item open unique",
             "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
         applyRequiredPatch(
+            "H2 – ai_held_item open unique key column",
+            "ALTER TABLE ai_held_item ADD COLUMN IF NOT EXISTS open_hold_dedupe_key VARCHAR(200) "
+                + "AS (CASE WHEN status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL "
+                + "THEN patient_id || ':' || source_surface || ':' || query_text_hash END)");
+        applyRequiredPatch(
             "H2 – ai_held_item open unique",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
-                + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
-                + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+                + "ON ai_held_item (open_hold_dedupe_key)");
         applyRequiredPatch(
             "H2 – user_files.extracted_text",
             "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
@@ -472,11 +476,19 @@ public class SchemaPatchRunner implements CommandLineRunner {
             "H2 – consent_grants lookup index",
             "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
                 + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
+        // H2 has no partial/filtered index support (no WHERE clause on CREATE INDEX), unlike the
+        // Postgres migration this mirrors. A generated column that is NULL outside the target
+        // condition emulates the same "unique only among ACTIVE grants" semantics, since NULLs
+        // are excluded from unique-index enforcement.
+        applyRequiredPatch(
+            "H2 – consent_grants active unique key column",
+            "ALTER TABLE consent_grants ADD COLUMN IF NOT EXISTS active_dedupe_key VARCHAR(200) "
+                + "AS (CASE WHEN status = 'ACTIVE' "
+                + "THEN patient_user_id || ':' || grantee_user_id || ':' || scope END)");
         applyRequiredPatch(
             "H2 – consent_grants active unique",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
-                + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
-                + "WHERE status = 'ACTIVE'");
+                + "ON consent_grants (active_dedupe_key)");
     }
 
     /** H2/integration-test parity for Ask AI conversation share receipts. */

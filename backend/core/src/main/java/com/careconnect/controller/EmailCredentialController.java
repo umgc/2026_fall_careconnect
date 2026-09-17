@@ -5,7 +5,6 @@ import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.dto.GmailConnectUrlResponse;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
-import com.careconnect.security.AuthRequestSupport;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
@@ -16,8 +15,6 @@ import com.careconnect.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -69,14 +66,14 @@ public class EmailCredentialController {
     }
 
     /**
-     * Structured patient-scoped Gmail connection status (JWT required).
+     * Structured patient-scoped Gmail connection status. Authentication is enforced by the
+     * security filter chain; patient-scope authorization happens in the service layer via
+     * {@link com.careconnect.util.SecurityUtil#resolveCurrentUser()}.
      */
     @GetMapping("/gmail/status")
     public ResponseEntity<EmailConnectionStatus> getGmailConnectionStatus(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
         String identifier = firstNonBlank(patientEmail, userId);
         return ResponseEntity.ok(emailCredentialService.getGmailConnectionStatus(identifier));
     }
@@ -100,30 +97,28 @@ public class EmailCredentialController {
     }
 
     /**
-     * Patient-scoped Gmail disconnect with best-effort token revoke (JWT required).
+     * Patient-scoped Gmail disconnect with best-effort token revoke. Authentication is enforced
+     * by the security filter chain; patient-scope authorization happens in the service layer.
      */
     @DeleteMapping("/gmail")
     public ResponseEntity<Void> disconnectGmail(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
         String identifier = firstNonBlank(patientEmail, userId);
         emailCredentialService.disconnectGmail(identifier);
         return ResponseEntity.noContent().build();
     }
 
     /**
-     * Issues a signed start URL for external-browser OAuth (JWT required).
+     * Issues a signed start URL for external-browser OAuth. Authentication is enforced by the
+     * security filter chain; patient-scope authorization happens in the service layer.
      */
     @GetMapping("/gmail/connect-url")
     public ResponseEntity<GmailConnectUrlResponse> getGmailConnectUrl(
-            @AuthenticationPrincipal Jwt jwt,
             HttpServletRequest request,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String returnUrl) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
         String identifier = firstNonBlank(patientEmail, userId);
         String startToken = emailCredentialService.createGmailOAuthStartToken(identifier, returnUrl);
         String url = ServletUriComponentsBuilder.fromContextPath(request)

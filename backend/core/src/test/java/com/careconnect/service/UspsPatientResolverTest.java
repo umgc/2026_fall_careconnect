@@ -29,6 +29,7 @@ class UspsPatientResolverTest {
     void setUp() {
         resolver = new UspsPatientResolver(userRepository);
         currentUser = org.mockito.Mockito.mock(User.class);
+        org.mockito.Mockito.lenient().when(currentUser.getId()).thenReturn(1L);
     }
 
     @Test
@@ -42,6 +43,7 @@ class UspsPatientResolverTest {
     @DisplayName("resolves patient by email")
     void resolvePatient_byEmail_returnsPatient() throws Exception {
         User patient = org.mockito.Mockito.mock(User.class);
+        when(patient.getId()).thenReturn(2L);
         when(patient.isPatient()).thenReturn(true);
         when(userRepository.findByEmail("patient@example.com")).thenReturn(Optional.of(patient));
 
@@ -53,6 +55,7 @@ class UspsPatientResolverTest {
     @DisplayName("resolves patient by numeric database id via legacy userId param")
     void resolvePatient_byNumericId_returnsPatient() throws Exception {
         User patient = org.mockito.Mockito.mock(User.class);
+        when(patient.getId()).thenReturn(2L);
         when(patient.isPatient()).thenReturn(true);
         when(userRepository.findByEmail("7")).thenReturn(Optional.empty());
         when(userRepository.findById(7L)).thenReturn(Optional.of(patient));
@@ -83,11 +86,21 @@ class UspsPatientResolverTest {
     @DisplayName("rejects explicit identifier that resolves to a non-patient role")
     void resolvePatient_nonPatientRole_throwsUnauthorized() {
         User caregiver = org.mockito.Mockito.mock(User.class);
+        when(caregiver.getId()).thenReturn(2L);
         when(caregiver.isPatient()).thenReturn(false);
         when(userRepository.findByEmail("caregiver@example.com")).thenReturn(Optional.of(caregiver));
 
         assertThatThrownBy(() -> resolver.resolvePatient("caregiver@example.com", null, currentUser))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("does not refer to a patient");
+    }
+
+    @Test
+    @DisplayName("allows an explicit identifier that resolves to the caller's own (non-patient) account")
+    void resolvePatient_selfReferencingNonPatientRole_isAllowed() throws Exception {
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(currentUser));
+
+        User resolved = resolver.resolvePatient("admin@example.com", null, currentUser);
+        assertThat(resolved).isEqualTo(currentUser);
     }
 }

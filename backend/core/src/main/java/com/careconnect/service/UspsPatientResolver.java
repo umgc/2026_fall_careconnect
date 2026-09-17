@@ -30,7 +30,11 @@ public class UspsPatientResolver {
                 .or(() -> parseNumericUserId(identifier).flatMap(userRepository::findById))
                 .orElseThrow(() -> new UnauthorizedException(
                         "No patient found for identifier: " + identifier));
-        if (!resolved.isPatient()) {
+        // An explicit self-referencing identifier is equivalent to omitting it: any authenticated
+        // caller (patient, caregiver, or admin) may manage their own Gmail link.
+        boolean isSelf = currentUser != null && currentUser.getId() != null
+                && currentUser.getId().equals(resolved.getId());
+        if (!isSelf && !resolved.isPatient()) {
             throw new UnauthorizedException(
                     "Identifier does not refer to a patient: " + identifier);
         }
