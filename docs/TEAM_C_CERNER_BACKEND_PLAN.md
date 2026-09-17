@@ -86,15 +86,36 @@ Suggested next review: Terence explains the mapping and tests; Tiffany checks th
 source rules and negative cases; Rashaad checks the client-to-mapper call boundary.
 This is a suggested review split, not an assignment made on their behalf.
 
-## Final focused quality review
-The configured Java analyzers ran against the backend. The new Cerner production
-classes have no Checkstyle, PMD quickstart, or SpotBugs findings after fixes.
-Repository-wide findings still exist; report generation succeeding is not a claim
-that the whole repository passes its merge policy. No scan rules were disabled.
+## Focused quality review — PR #148 follow-up
+CI run 126 reported 102 PMD findings in this mapper. The earlier local PMD
+quickstart result did not cover the broader CI rules. This follow-up uses PMD
+6.55.0 and the same bestpractices, errorprone, and codestyle rule sets as
+`.github/workflows/build-and-analyze.yml`.
 
-The latest inspected PR #79 remained open at 6161f846. Its GitHub quality-gate
-check reported SUCCESS, while the supplied historical artifact said BLOCKED.
-That mismatch is not resolved by this mapper PR and must not be treated as approval.
+The mapper now has zero findings with those rules. PMD exits successfully with
+no analysis errors. No rules or gate settings were changed. Changes include
+final variables, clear names, smaller validation helpers, and strict date parsing
+that keeps parser details out of errors. All participant entries are checked,
+even after a matching patient is found. Source dates keep their original precision;
+default month/day values are used only for validation and are never saved.
 
-The new branch is intended for a draft PR into team-c-develop. Required independent
-review, secure integration tests and final merge approval remain outstanding.
+Validation: all 57 mapper cases pass (the prior 48 plus nine date/period cases).
+The current Checkstyle report has zero findings for the production mapper.
+These are local results, not a claim that repository-wide CI is clean. The prior
+CI run scanned the whole repository and reported many findings outside this PR.
+Its SUCCESS check also conflicted with its BLOCKED report because the gate uses
+report-only mode. Independent review and merge approval remain outstanding.
+
+Repeat the CI-equivalent focused PMD check from the repository root:
+```bash
+bash quality/Local_Scans/tools/pmd-bin-6.55.0/bin/run.sh pmd \
+  -d backend/core/src/main/java/com/careconnect/service/cerner \
+  -R category/java/bestpractices.xml,category/java/errorprone.xml,category/java/codestyle.xml \
+  -f xml -r backend/core/target/cerner-pmd.xml
+```
+Use JDK 17. Tests can also run with Maven:
+```bash
+mvn -B -f backend/core/pom.xml -Dtest=CernerResourceMapperTest test
+```
+PR #148 remains a draft into `team-c-develop`. Secure integration tests, sandbox
+access, OAuth wiring, persistence, and independent review are still separate work.

@@ -4,17 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
+import java.text.ParsePosition;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.Year;
-import java.time.YearMonth;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoField;
+import java.time.temporal.TemporalAccessor;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 /** Pure, read-only FHIR R4 projection. Call only after server-side patient access checks. */
 public final class CernerResourceMapper {
@@ -30,9 +33,12 @@ public final class CernerResourceMapper {
           "entered-in-error",
           "checked-in",
           "waitlist");
+  private static final String BIRTH_DATE = "birthDate";
+  private static final String OLD_NAME = "old";
+  private static final Set<String> DOT_SEGMENTS = Set.of(".", "..");
   private final Clock clock;
 
-  public CernerResourceMapper(Clock clock) {
+  public CernerResourceMapper(final Clock clock) {
     this.clock = Objects.requireNonNull(clock);
   }
 
@@ -53,7 +59,7 @@ public final class CernerResourceMapper {
           || !sourceBase.normalize().equals(sourceBase)) {
         throw invalid("link.sourceBase");
       }
-      String base = sourceBase.toString();
+      final String base = sourceBase.toString();
       sourceBase = URI.create(base.endsWith("/") ? base : base + "/");
     }
 
@@ -65,14 +71,14 @@ public final class CernerResourceMapper {
 
   /** Source fields contain PHI. Do not log or expose them as an API response. */
   public static final class Projection {
-    private final ObjectNode fields;
+    private final ObjectNode projectionData;
 
-    private Projection(ObjectNode fields) {
-      this.fields = fields.deepCopy();
+    private Projection(final ObjectNode fields) {
+      this.projectionData = fields.deepCopy();
     }
 
     public ObjectNode fields() {
-      return fields.deepCopy();
+      return projectionData.deepCopy();
     }
 
     @Override
@@ -82,19 +88,19 @@ public final class CernerResourceMapper {
   }
 
   /** Maps a Patient without changing the local patient or account. */
-  public Projection patient(JsonNode resource, PatientLink link) {
+  public Projection patient(final JsonNode resource, final PatientLink link) {
     requireLink(link);
-    String id = resourceId(resource, "Patient");
-    if (!id.equals(link.externalPatientId())) {
+    final String logicalId = resourceId(resource, "Patient");
+    if (!logicalId.equals(link.externalPatientId())) {
       throw invalid("patient.linkMismatch");
     }
-    ObjectNode out = envelope(resource, link, "Patient", id);
+    final ObjectNode projectionNode = envelope(resource, link, "Patient", logicalId);
     copy(
         resource,
-        out,
+        projectionNode,
         "identifier",
         "name",
-        "birthDate",
+        BIRTH_DATE,
         "gender",
         "telecom",
         "address",
@@ -103,95 +109,84 @@ public final class CernerResourceMapper {
         "deceasedBoolean",
         "deceasedDateTime",
         "link");
-    ObjectNode display = out.putObject("display");
+
     JsonNode best = null;
-    for (JsonNode name : array(resource, "name")) {
-      if ("old".equals(text(name, "use")) || !current(name)) {
+    for (final JsonNode name : array(resource, "name")) {
+      if (OLD_NAME.equals(text(name, "use")) || !current(name)) {
         continue;
       }
       if (best == null || nameRank(name) < nameRank(best)) {
         best = name;
       }
     }
-    if (best != null) {
-      List<String> given = new ArrayList<>();
-      for (JsonNode part : array(best, "given")) {
-        if (!part.isTextual()) {
-          throw invalid("name.given");
-        }
-        given.add(part.textValue());
+    mapDisplayName(projectionNode.putObject("display"), best);
+    final String birth = text(resource, BIRTH_DATE);
+    if (birth != null) {
+      final String precision = birthPrecision(birth);
+      if (precision.isEmpty() || birth.startsWith("0000")) {
+        throw invalid(BIRTH_DATE);
       }
+      projectionNode.put("birthDatePrecision", precision);
+    }
+    return new Projection(projectionNode);
+  }
+
+  private static void mapDisplayName(final ObjectNode display, final JsonNode best) {
+    if (best != null) {
+      final List<String> given =
+          StreamSupport.stream(array(best, "given").spliterator(), false)
+              .map(CernerResourceMapper::givenPart)
+              .toList();
       if (!given.isEmpty()) {
         display.put("firstName", String.join(" ", given));
       }
       put(display, "lastName", text(best, "family"));
     }
-    String birth = text(resource, "birthDate");
-    if (birth != null && birth.startsWith("0000")) {
-      throw invalid("birthDate");
-    }
-    if (birth != null) {
-      String precision = birthPrecision(birth);
-      if (precision == null) {
-        throw invalid("birthDate");
-      }
-      out.put("birthDatePrecision", precision);
-    }
-
-    return new Projection(out);
   }
 
-  private static String birthPrecision(String birth) {
-    try {
-      if (birth.matches("[0-9]{4}")) {
-        Year.parse(birth);
-        return "YEAR";
-      }
-      if (birth.matches("[0-9]{4}-[0-9]{2}")) {
-        YearMonth.parse(birth);
-        return "MONTH";
-      }
-      if (birth.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
-        LocalDate.parse(birth);
-        return "DAY";
-      }
-    } catch (DateTimeParseException ex) {
-      // Return only validity; parser exceptions contain source data and must not escape.
-      return null;
+  private static String givenPart(final JsonNode part) {
+    if (!part.isTextual()) {
+      throw invalid("name.given");
     }
-    return null;
+    return part.textValue();
+  }
+
+  private static String birthPrecision(final String birth) {
+    final String pattern =
+        Map.of(4, "uuuu", 7, "uuuu-MM", 10, "uuuu-MM-dd").getOrDefault(birth.length(), "");
+    final String precision =
+        Map.of(4, "YEAR", 7, "MONTH", 10, "DAY").getOrDefault(birth.length(), "");
+    return !birth.matches("[0-9]{4}(-[0-9]{2}){0,2}")
+            || pattern.isEmpty()
+            || parseTemporal(
+                    birth,
+                    new DateTimeFormatterBuilder()
+                        .appendPattern(pattern)
+                        .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)
+                        .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)
+                        .toFormatter()
+                        .withResolverStyle(ResolverStyle.STRICT))
+                == null
+        ? ""
+        : precision;
   }
 
   /** Maps an Appointment only when it belongs to the trusted patient link. */
-  public Projection appointment(JsonNode resource, PatientLink link) {
+  public Projection appointment(final JsonNode resource, final PatientLink link) {
     requireLink(link);
-    final String id = resourceId(resource, "Appointment");
-    String status = text(resource, "status");
+    final String logicalId = resourceId(resource, "Appointment");
+    return mapAppointment(resource, link, logicalId);
+  }
+
+  private Projection mapAppointment(
+      final JsonNode resource, final PatientLink link, final String logicalId) {
+    final String status = text(resource, "status");
     if (status == null || !STATUSES.contains(status)) {
       throw invalid("appointment.status");
     }
-    String expected = "Patient/" + link.externalPatientId();
-    String absolute = link.sourceBase().resolve(expected).toString();
-    boolean matched = false;
-    for (JsonNode participant : array(resource, "participant")) {
-      if (!participant.isObject()) {
-        throw invalid("appointment.participant");
-      }
-      JsonNode actor = participant.path("actor");
-      String ref = text(actor, "reference");
-      if (expected.equals(ref) || absolute.equals(ref)) {
-        matched = true;
-      } else if (ref != null && (ref.startsWith("Patient/") || ref.contains("/Patient/"))) {
-        throw invalid("appointment.patientMismatch");
-      } else if ("Patient".equals(text(actor, "type"))) {
-        throw invalid("appointment.patientMismatch");
-      }
-    }
-    if (!matched) {
-      throw invalid("appointment.patientMissing");
-    }
-    Instant start = instant(resource, "start");
-    Instant end = instant(resource, "end");
+    requirePatientParticipants(resource, link);
+    final Instant start = instant(resource, "start");
+    final Instant end = instant(resource, "end");
     if ((start == null) != (end == null)) {
       throw invalid("appointment.timePair");
     }
@@ -201,7 +196,7 @@ public final class CernerResourceMapper {
     if (start != null && end.isBefore(start)) {
       throw invalid("appointment.timeOrder");
     }
-    JsonNode duration = resource.get("minutesDuration");
+    final JsonNode duration = resource.get("minutesDuration");
     if (duration != null
         && !duration.isNull()
         && (!duration.isIntegralNumber()
@@ -209,10 +204,10 @@ public final class CernerResourceMapper {
             || duration.intValue() <= 0)) {
       throw invalid("appointment.minutesDuration");
     }
-    ObjectNode out = envelope(resource, link, "Appointment", id);
+    final ObjectNode projectionNode = envelope(resource, link, "Appointment", logicalId);
     copy(
         resource,
-        out,
+        projectionNode,
         "status",
         "minutesDuration",
         "participant",
@@ -228,51 +223,82 @@ public final class CernerResourceMapper {
         "requestedPeriod",
         "created");
     if (start != null) {
-      out.put("startAt", start.toString());
-      out.put("endAt", end.toString());
+      projectionNode.put("startAt", start.toString());
+      projectionNode.put("endAt", end.toString());
     }
-    out.put("hiddenFromActiveList", "entered-in-error".equals(status));
-    return new Projection(out);
+    projectionNode.put("hiddenFromActiveList", "entered-in-error".equals(status));
+    return new Projection(projectionNode);
   }
 
-  private ObjectNode envelope(JsonNode resource, PatientLink link, String type, String id) {
-    ObjectNode out = JsonNodeFactory.instance.objectNode();
-    out.put("localPatientId", link.localPatientId());
-    out.put("sourceBase", link.sourceBase().toString());
-    out.put("resourceType", type);
-    out.put("externalId", id);
-    out.put("externalPatientId", link.externalPatientId());
-    out.put("sourceKey", link.sourceBase().resolve(type + "/" + id).toString());
-    out.put("fetchedAt", clock.instant().toString());
-    put(out, "sourceVersion", text(resource.path("meta"), "versionId"));
-    Instant updated = instant(resource.path("meta"), "lastUpdated");
+  private static void requirePatientParticipants(final JsonNode resource, final PatientLink link) {
+    // Materialize all results so a later mismatched patient is never skipped.
+    final List<Boolean> matches =
+        StreamSupport.stream(array(resource, "participant").spliterator(), false)
+            .map(participant -> matchesPatient(participant, link))
+            .toList();
+    if (!matches.contains(true)) {
+      throw invalid("appointment.patientMissing");
+    }
+  }
+
+  private static boolean matchesPatient(final JsonNode participant, final PatientLink link) {
+    if (!participant.isObject()) {
+      throw invalid("appointment.participant");
+    }
+    final JsonNode actor = participant.path("actor");
+    final String ref = text(actor, "reference");
+    final String expected = "Patient/" + link.externalPatientId();
+    final boolean matched =
+        expected.equals(ref) || link.sourceBase().resolve(expected).toString().equals(ref);
+    if (!matched
+        && (ref != null && (ref.startsWith("Patient/") || ref.contains("/Patient/"))
+            || "Patient".equals(text(actor, "type")))) {
+      throw invalid("appointment.patientMismatch");
+    }
+    return matched;
+  }
+
+  private ObjectNode envelope(
+      final JsonNode resource, final PatientLink link, final String type, final String logicalId) {
+    final ObjectNode projectionNode = JsonNodeFactory.instance.objectNode();
+    projectionNode.put("localPatientId", link.localPatientId());
+    projectionNode.put("sourceBase", link.sourceBase().toString());
+    projectionNode.put("resourceType", type);
+    projectionNode.put("externalId", logicalId);
+    projectionNode.put("externalPatientId", link.externalPatientId());
+    projectionNode.put("sourceKey", link.sourceBase().resolve(type + "/" + logicalId).toString());
+    projectionNode.put("fetchedAt", clock.instant().toString());
+    put(projectionNode, "sourceVersion", text(resource.path("meta"), "versionId"));
+    final Instant updated = instant(resource.path("meta"), "lastUpdated");
     if (updated != null) {
-      out.put("sourceUpdatedAt", updated.toString());
+      projectionNode.put("sourceUpdatedAt", updated.toString());
     }
-    return out;
+    return projectionNode;
   }
 
-  private boolean current(JsonNode name) {
-    // Partial or malformed periods are not safe evidence of a current name.
-    try {
-      Instant start = instant(name.path("period"), "start");
-      Instant end = instant(name.path("period"), "end");
-      return (start == null || !start.isAfter(clock.instant()))
-          && (end == null || !end.isBefore(clock.instant()));
-    } catch (IllegalArgumentException ex) {
-      return false;
-    }
+  private boolean current(final JsonNode name) {
+    final JsonNode period = name.path("period");
+    return (period.isObject() || period.isMissingNode() || period.isNull())
+        && currentBoundary(period.path("start"), true)
+        && currentBoundary(period.path("end"), false);
   }
 
-  private static int nameRank(JsonNode name) {
-    return switch (Objects.toString(text(name, "use"), "")) {
-      case "official" -> 0;
-      case "usual" -> 1;
-      default -> 2;
-    };
+  private boolean currentBoundary(final JsonNode boundary, final boolean startBoundary) {
+    final Instant parsed = boundary.isTextual() ? parseInstant(boundary.textValue()) : null;
+    return boundary.isMissingNode()
+        || boundary.isNull()
+        || parsed != null
+            && (startBoundary
+                ? !parsed.isAfter(clock.instant())
+                : !parsed.isBefore(clock.instant()));
   }
 
-  private static String resourceId(JsonNode node, String type) {
+  private static int nameRank(final JsonNode name) {
+    return Map.of("official", 0, "usual", 1)
+        .getOrDefault(Objects.toString(text(name, "use"), ""), 2);
+  }
+
+  private static String resourceId(final JsonNode node, final String type) {
     if (node == null || !node.isObject() || !type.equals(text(node, "resourceType"))) {
       throw invalid("resourceType");
     }
@@ -280,116 +306,115 @@ public final class CernerResourceMapper {
     if (node.hasNonNull("implicitRules")) {
       throw invalid("implicitRules");
     }
-    String id = text(node, "id");
-    requireId(id, "id");
-    return id;
+    final String logicalId = text(node, "id");
+    requireId(logicalId, "id");
+    return logicalId;
   }
 
-  private static void requireId(String id, String field) {
-    if (id == null || ".".equals(id) || "..".equals(id) || !id.matches("[A-Za-z0-9\\-.]{1,64}")) {
+  private static void requireId(final String logicalId, final String field) {
+    if (logicalId == null
+        || DOT_SEGMENTS.contains(logicalId)
+        || !logicalId.matches("[A-Za-z0-9\\-.]{1,64}")) {
       throw invalid(field);
     }
   }
 
-  private static String text(JsonNode node, String field) {
+  private static String text(final JsonNode node, final String field) {
     if (!node.isObject() && !node.isMissingNode() && !node.isNull()) {
       throw invalid(field);
     }
-    JsonNode value = node.get(field);
-    if (value == null || value.isNull()) {
-      return null;
-    }
-    if (!value.isTextual()) {
+    final JsonNode value = node.get(field);
+    if (value != null && !value.isNull() && !value.isTextual()) {
       throw invalid(field);
     }
-    return value.textValue();
+    return value == null || value.isNull() ? null : value.textValue();
   }
 
-  private static Iterable<JsonNode> array(JsonNode node, String field) {
+  private static Iterable<JsonNode> array(final JsonNode node, final String field) {
     if (!node.isObject() && !node.isMissingNode() && !node.isNull()) {
       throw invalid(field);
     }
-    JsonNode value = node.get(field);
-    if (value == null || value.isNull()) {
-      return List.of();
-    }
-    if (!value.isArray()) {
+    final JsonNode value = node.get(field);
+    if (value != null && !value.isNull() && !value.isArray()) {
       throw invalid(field);
     }
-    return value;
+    return value == null || value.isNull() ? List.of() : value;
   }
 
-  private static Instant instant(JsonNode node, String field) {
-    String raw = text(node, field);
-    if (raw == null) {
-      return null;
-    }
-    if (!raw.matches(
-        "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
-            + "(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})")) {
-      throw invalid(field);
-    }
-    Instant parsed = parseInstant(raw);
-    if (parsed == null) {
+  private static Instant instant(final JsonNode node, final String field) {
+    final String raw = text(node, field);
+    final Instant parsed = raw == null ? null : parseInstant(raw);
+    if (raw != null && parsed == null) {
       throw invalid(field);
     }
     return parsed;
   }
 
-  private static Instant parseInstant(String raw) {
-    try {
-      return OffsetDateTime.parse(raw).toInstant();
-    } catch (DateTimeParseException ex) {
-      // The caller emits a field-only error, without PHI-bearing parser details.
-      return null;
-    }
+  private static Instant parseInstant(final String raw) {
+    final TemporalAccessor parsed =
+        raw.matches(
+                "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+                    + "(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})")
+            ? parseTemporal(raw, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            : null;
+    return parsed == null ? null : OffsetDateTime.from(parsed).toInstant();
   }
 
-  private static void copy(JsonNode in, ObjectNode out, String... fields) {
-    ObjectNode source = out.putObject("source");
-    for (String field : fields) {
-      if (in.has(field)) {
-        source.set(field, in.get(field).deepCopy());
+  private static TemporalAccessor parseTemporal(
+      final String raw, final DateTimeFormatter formatter) {
+    final ParsePosition position = new ParsePosition(0);
+    final Object parsed = formatter.toFormat().parseObject(raw, position);
+    return position.getErrorIndex() >= 0 || position.getIndex() != raw.length()
+        ? null
+        : (TemporalAccessor) parsed;
+  }
+
+  private static void copy(
+      final JsonNode resource, final ObjectNode projectionNode, final String... fields) {
+    projectionNode.putObject("source");
+    for (final String field : fields) {
+      if (resource.has(field)) {
+        ((ObjectNode) projectionNode.get("source")).set(field, resource.get(field).deepCopy());
       }
     }
   }
 
-  private static void put(ObjectNode out, String field, String value) {
+  private static void put(final ObjectNode projectionNode, final String field, final String value) {
     if (value != null) {
-      out.put(field, value);
+      projectionNode.put(field, value);
     }
   }
 
-  private static void requireLink(PatientLink link) {
+  private static void requireLink(final PatientLink link) {
     if (link == null) {
       throw invalid("link");
     }
   }
 
   // Bound traversal before copying. HTTP callers must also bound bytes before JSON parsing.
-  private static void validateTree(JsonNode node, int depth, int[] count) {
+  private static void validateTree(final JsonNode node, final int depth, final int... count) {
     count[0]++;
-    if (depth > 32 || count[0] > 10000) {
+    if (depth > 32 || count[0] > 10_000) {
       throw invalid("resourceSize");
     }
-    if (node.isTextual() && node.textValue().length() > 100000) {
+    if (node.isTextual() && node.textValue().length() > 100_000) {
       throw invalid("fieldSize");
     }
     if (node.isObject()) {
-      JsonNode modifiers = node.get("modifierExtension");
+      final JsonNode modifiers = node.get("modifierExtension");
       if (modifiers != null
           && !modifiers.isNull()
           && (!modifiers.isArray() || !modifiers.isEmpty())) {
         throw invalid("modifierExtension");
       }
     }
-    for (JsonNode child : node) {
+    for (final JsonNode child : node) {
       validateTree(child, depth + 1, count);
     }
   }
 
-  private static IllegalArgumentException invalid(String field) {
-    // Never include source values or parser causes in errors.
+  private static IllegalArgumentException invalid(final String field) {
+    // Never include source values or parser causes resource errors.
     return new IllegalArgumentException("Invalid Cerner field: " + field);
   }
 }

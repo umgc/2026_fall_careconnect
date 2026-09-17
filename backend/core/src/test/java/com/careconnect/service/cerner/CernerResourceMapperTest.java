@@ -355,6 +355,44 @@ class CernerResourceMapperTest {
     assertThrows(IllegalArgumentException.class, () -> mapper.patient(deep, link));
   }
 
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "2026-02-30T12:00:00Z",
+        "2026-09-19T25:00:00Z",
+        "2026-09-19T12:00:00Zextra",
+        "2026-09-19T12:00:00+19:00"
+      })
+  void rejectsInvalidCalendarTimesWithoutParserDetails(String value) throws Exception {
+    var a = appointment();
+    a.put("start", value);
+    var error = assertThrows(IllegalArgumentException.class, () -> mapper.appointment(a, link));
+    assertEquals("Invalid Cerner field: start", error.getMessage());
+    assertNull(error.getCause());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"2026-09", "bad", "2026-02-30T00:00:00Z", "2030-01-01T00:00:00Z"})
+  void skipsNamesWithInvalidOrFuturePeriods(String value) throws Exception {
+    var p = patient();
+    var name = p.putArray("name").addObject();
+    name.put("use", "official");
+    name.putArray("given").add("Excluded");
+    name.putObject("period").put("start", value);
+    assertTrue(mapper.patient(p, link).fields().path("display").isEmpty());
+  }
+
+  @Test
+  void acceptsLeapDayAndFractionalSeconds() throws Exception {
+    var p = patient();
+    p.put("birthDate", "2024-02-29");
+    assertEquals("DAY", mapper.patient(p, link).fields().path("birthDatePrecision").asText());
+    var a = appointment();
+    a.put("start", "2026-09-19T13:00:00.123Z");
+    assertEquals(
+        "2026-09-19T13:00:00.123Z", mapper.appointment(a, link).fields().path("startAt").asText());
+  }
+
   @Test
   void linkStringDoesNotDisclosePatientId() {
     assertEquals("CernerPatientLink[redacted]", link.toString());
