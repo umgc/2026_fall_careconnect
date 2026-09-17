@@ -188,6 +188,12 @@ dependency_overrides:
   #     ref: main
   calendar_view: ^1.0.0
   accordion: ^2.6.0
+  # TEMP: objective_c 9.6.x's build hook references Architecture.arm64e, which
+  # only exists in code_assets 2.x — the Flutter toolchain supplies 1.x, so the
+  # hook fails to compile and breaks `flutter build web`. Reached transitively
+  # via path_provider -> path_provider_foundation (Darwin-only, unused on web).
+  # Remove once upstream ships a release that resolves its own constraint.
+  objective_c: 9.5.0
 
 dev_dependencies:
   flutter_test:

@@ -538,6 +538,7 @@ fi
 
 step "Deploying service stack: $SERVICE_STACK_NAME"
 SERVICE_OVERRIDES=("BackendImageUri=${IMAGE_URI}")
+# Flag-driven overrides (--ai-enabled / --ai-model / --frontend-url).
 if [[ -n "$AI_ENABLED" ]]; then
   SERVICE_OVERRIDES+=("CareConnectAiEnabled=${AI_ENABLED}")
 fi
@@ -547,6 +548,20 @@ fi
 if [[ -n "$FRONTEND_URL" ]]; then
   SERVICE_OVERRIDES+=("FrontendBaseUrl=${FRONTEND_URL}")
   SERVICE_OVERRIDES+=("CorsAllowedList=http://localhost:*,http://127.0.0.1:*,${FRONTEND_URL}")
+fi
+# Environment-driven overrides for values that differ per deployment target
+# (e.g. GitHub Actions repository variables) instead of being committed into
+# parameters/<env>-service.json. Listed after the flags so that when both are
+# supplied the environment wins — aws cloudformation deploy takes the last
+# value given for a repeated parameter key.
+if [[ -n "${CARECONNECT_CORS_ALLOWED_LIST-}" ]]; then
+  SERVICE_OVERRIDES+=("CorsAllowedList=${CARECONNECT_CORS_ALLOWED_LIST}")
+fi
+if [[ -n "${CARECONNECT_FRONTEND_BASE_URL-}" ]]; then
+  SERVICE_OVERRIDES+=("FrontendBaseUrl=${CARECONNECT_FRONTEND_BASE_URL}")
+fi
+if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
+  SERVICE_OVERRIDES+=("FromEmail=${CARECONNECT_FROM_EMAIL}")
 fi
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
