@@ -28,6 +28,38 @@ class EpicResourceChunkerTest {
     }
 
     @Test
+    void recordTypeFor_mapsEncounterToEpicEncounter() {
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_ENCOUNTER),
+                EpicResourceChunker.recordTypeFor("Encounter"));
+    }
+
+    @Test
+    void chunk_encounter_flattensTypeClassAndPeriod() {
+        EhrResource encounter = EhrResource.builder()
+                .userId(7L)
+                .source("EPIC")
+                .resourceType("Encounter")
+                .resourceFhirId("enc-1")
+                .title("Encounter: Office Visit")
+                .occurredAt("2026-02-01")
+                .contentHash("hash-enc")
+                .payloadJson("{\"resourceType\":\"Encounter\",\"status\":\"finished\","
+                        + "\"class\":{\"code\":\"AMB\",\"display\":\"ambulatory\"},"
+                        + "\"type\":[{\"text\":\"Office Visit\"}],"
+                        + "\"period\":{\"start\":\"2026-02-01\",\"end\":\"2026-02-01\"}}")
+                .build();
+
+        List<IndexingChunkDraft> drafts = chunker.chunk(encounter, "on_consent");
+        assertEquals(1, drafts.size());
+        IndexingChunkDraft draft = drafts.get(0);
+        assertEquals(RetrievalRecordType.EPIC_ENCOUNTER, draft.recordType());
+        assertEquals("Encounter", draft.metadata().get("fhirResourceType"));
+        assertTrue(draft.chunkText().contains("Office Visit"));
+        assertTrue(draft.chunkText().contains("ambulatory"));
+        assertTrue(draft.chunkText().contains("2026-02-01"));
+    }
+
+    @Test
     void recordTypeFor_nonIndexableIsEmpty() {
         assertTrue(EpicResourceChunker.recordTypeFor("Patient").isEmpty());
         assertTrue(EpicResourceChunker.recordTypeFor("Practitioner").isEmpty());

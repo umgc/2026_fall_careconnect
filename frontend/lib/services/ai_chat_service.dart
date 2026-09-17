@@ -34,6 +34,7 @@ const Set<String> _aiAskRecordTypes = {
   'EPIC_IMMUNIZATION',
   'EPIC_PROCEDURE',
   'EPIC_DOCUMENT',
+  'EPIC_ENCOUNTER',
 };
 final RegExp _aiAskCitationIdPattern = RegExp(r'^C[1-9][0-9]*$');
 final RegExp _aiAskUuidPattern = RegExp(

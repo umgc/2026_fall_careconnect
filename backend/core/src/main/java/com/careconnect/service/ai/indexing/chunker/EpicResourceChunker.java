@@ -48,6 +48,7 @@ public class EpicResourceChunker {
             case "Immunization" -> Optional.of(RetrievalRecordType.EPIC_IMMUNIZATION);
             case "Procedure" -> Optional.of(RetrievalRecordType.EPIC_PROCEDURE);
             case "DocumentReference" -> Optional.of(RetrievalRecordType.EPIC_DOCUMENT);
+            case "Encounter" -> Optional.of(RetrievalRecordType.EPIC_ENCOUNTER);
             default -> Optional.empty();
         };
     }
@@ -98,6 +99,11 @@ public class EpicResourceChunker {
             appendIfPresent(sb, "Medication", codeText(node.get("medicationCodeableConcept")));
             appendIfPresent(sb, "Substance", codeText(node.get("code")));
             appendIfPresent(sb, "Value", valueText(node));
+            // Encounter (visit): type + class + reason + period aren't captured by the fields above.
+            appendIfPresent(sb, "Type", codeText(node.get("type")));
+            appendIfPresent(sb, "Class", codeText(node.get("class")));
+            appendIfPresent(sb, "Reason", codeText(node.get("reasonCode")));
+            appendIfPresent(sb, "Period", periodText(node.get("period")));
             appendIfPresent(sb, "Date", firstText(node,
                     "effectiveDateTime", "onsetDateTime", "authoredOn", "recordedDate", "date"));
         }
@@ -148,7 +154,27 @@ public class EpicResourceChunker {
                 return first.get("code").asText();
             }
         }
+        // Bare Coding (e.g. Encounter.class = {system, code, display}, no text/coding wrapper).
+        if (target.hasNonNull("display")) {
+            return target.get("display").asText();
+        }
+        if (target.hasNonNull("code")) {
+            return target.get("code").asText();
+        }
         return null;
+    }
+
+    /** FHIR Period ({start, end}) → "start → end" (either bound may be absent). */
+    private static String periodText(final JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        final String start = node.hasNonNull("start") ? node.get("start").asText() : null;
+        final String end = node.hasNonNull("end") ? node.get("end").asText() : null;
+        if (start != null && end != null) {
+            return start + " → " + end;
+        }
+        return start != null ? start : end;
     }
 
     private static String valueText(final JsonNode node) {

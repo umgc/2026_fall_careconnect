@@ -42,7 +42,8 @@ public class EpicSyncService {
     /** Core clinical set fetched on connect (1_0 §5 #1–13, read-first). Typed fallback after {@code $everything}. */
     private static final List<String> SYNC_RESOURCE_TYPES = List.of(
             "AllergyIntolerance", "Condition", "MedicationRequest", "MedicationStatement",
-            "Observation", "DiagnosticReport", "Immunization", "Procedure", "DocumentReference");
+            "Observation", "DiagnosticReport", "Immunization", "Procedure", "DocumentReference",
+            "Encounter");
 
     /** Demographics resource, mirrored via a direct read (not a patient search). */
     private static final String PATIENT_TYPE = "Patient";
@@ -350,7 +351,10 @@ public class EpicSyncService {
     private static String buildTitle(final String resourceType, final JsonNode resource) {
         final String label = textOf(resource.get("code"));
         final String med = textOf(resource.get("medicationCodeableConcept"));
-        final String best = med != null ? med : label;
+        // Encounter (visit) has no code/medication — fall back to its type, then class.
+        final String visit = textOf(resource.get("type")) != null
+                ? textOf(resource.get("type")) : textOf(resource.get("class"));
+        final String best = med != null ? med : (label != null ? label : visit);
         return best != null ? resourceType + ": " + best : resourceType;
     }
 
@@ -358,12 +362,21 @@ public class EpicSyncService {
         if (node == null || node.isNull()) {
             return null;
         }
-        if (node.hasNonNull("text")) {
-            return node.get("text").asText();
+        // CodeableConcept may arrive as an array (e.g. Encounter.type) — use the first element.
+        final JsonNode target = node.isArray() ? (node.isEmpty() ? null : node.get(0)) : node;
+        if (target == null || target.isNull()) {
+            return null;
         }
-        final JsonNode coding = node.get("coding");
+        if (target.hasNonNull("text")) {
+            return target.get("text").asText();
+        }
+        final JsonNode coding = target.get("coding");
         if (coding != null && coding.isArray() && !coding.isEmpty() && coding.get(0).hasNonNull("display")) {
             return coding.get(0).get("display").asText();
+        }
+        // Bare Coding (e.g. Encounter.class = {system, code, display}).
+        if (target.hasNonNull("display")) {
+            return target.get("display").asText();
         }
         return null;
     }
@@ -375,6 +388,11 @@ public class EpicSyncService {
             if (v != null && v.isTextual()) {
                 return v.asText();
             }
+        }
+        // Encounter (visit) carries its date in the nested period, not a scalar field.
+        final JsonNode period = resource.get("period");
+        if (period != null && period.hasNonNull("start")) {
+            return period.get("start").asText();
         }
         return null;
     }

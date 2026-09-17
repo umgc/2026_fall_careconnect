@@ -71,7 +71,7 @@ final class CitationDeepLinkBuilder {
             case USPS_MAIL -> mailLink(chunk.sourceRecordId());
             case EPIC_CONDITION, EPIC_MEDICATION, EPIC_ALLERGY, EPIC_OBSERVATION,
                     EPIC_DIAGNOSTIC_REPORT, EPIC_IMMUNIZATION, EPIC_PROCEDURE,
-                    EPIC_DOCUMENT -> epicLink(chunk, metadata);
+                    EPIC_DOCUMENT, EPIC_ENCOUNTER -> epicLink(chunk, metadata);
             default -> null;
         };
     }
