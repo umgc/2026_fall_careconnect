@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../services/tts_engine.dart';
 import 'package:uuid/uuid.dart';
 
 // Message model for chat
@@ -128,6 +129,11 @@ class AIChat extends StatefulWidget {
   /// Max status polls while waiting for clinician release (default ~5 minutes).
   final int hitlMaxPollAttempts;
   final Duration hitlPollInterval;
+  /// Overrides the text-to-speech engine used to read answers aloud.
+  /// Exists so widget tests can inject a fake instead of a real platform
+  /// channel; production callers should never set this.
+  @visibleForTesting
+  final TtsEngine? ttsEngine;
 
   const AIChat({
     super.key,
@@ -139,6 +145,7 @@ class AIChat extends StatefulWidget {
     this.userId,
     this.hitlMaxPollAttempts = 60,
     this.hitlPollInterval = const Duration(seconds: 5),
+    this.ttsEngine,
   });
 
   @override
@@ -180,6 +187,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   bool _speechReady = false;
   bool _isListening = false;
   bool _sharingWithCaregivers = false;
+  late final TtsEngine _ttsEngine;
+  bool _ttsReady = false;
+  bool _isSpeaking = false;
 
   bool get _isGrounded => widget.mode == AiChatMode.groundedRecords;
 
@@ -195,8 +205,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     _checkAndLoadHistory();
 
     _startInactivityTimer(); // Start 15-minute inactivity timer
+    _ttsEngine = widget.ttsEngine ?? FlutterTtsEngine();
     if (_isGrounded) {
       unawaited(_initSpeech());
+      unawaited(_initTts());
     }
   }
 
@@ -217,6 +229,84 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       );
     } catch (_) {
       _speechReady = false;
+    }
+  }
+
+  Future<void> _initTts() async {
+    try {
+      await _ttsEngine.setLanguage('en-US');
+      await _ttsEngine.setSpeechRate(0.5);
+      await _ttsEngine.setVolume(1.0);
+      await _ttsEngine.setPitch(1.0);
+      try {
+        // Lets us await full playback in _speakAnswer instead of relying on
+        // completion callbacks; optional on platforms that don't support it.
+        await _ttsEngine.awaitSpeakCompletion(true);
+      } catch (_) {
+        // Optional on some platforms.
+      }
+      _ttsReady = true;
+    } catch (_) {
+      _ttsReady = false;
+    }
+  }
+
+  /// Reads an Ask AI answer aloud when the triggering question was spoken,
+  /// so a voice question gets a voice answer instead of silently expecting
+  /// the user to read the screen.
+  Future<void> _speakAnswer(String text) async {
+    if (!_isGrounded || !_ttsReady) return;
+    final utterance = _stripForSpeech(text);
+    if (utterance.isEmpty) return;
+    await _stopSpeaking();
+    if (!mounted) return;
+    setState(() => _isSpeaking = true);
+    try {
+      await _ttsEngine.speak(utterance);
+    } finally {
+      // Not gated on `_isSpeaking` still being true: on some platforms
+      // (observed: web) engine.stop() halts audio without ever resolving
+      // this awaited speak() future, so an explicit user-initiated stop
+      // must not depend on this finally block ever running to unstick the
+      // mic button — see _stopSpeaking, which resets state immediately.
+      if (mounted && _isSpeaking) setState(() => _isSpeaking = false);
+    }
+  }
+
+  /// Stops any in-progress speech and resets UI state immediately, rather
+  /// than waiting on _ttsEngine.speak()'s future to settle — that future is
+  /// not guaranteed to resolve just because stop() was called (observed:
+  /// web), which previously left the mic button stuck showing the
+  /// interrupt icon with no way back to a usable mic.
+  Future<void> _stopSpeaking() async {
+    await _ttsEngine.stop();
+    if (mounted) setState(() => _isSpeaking = false);
+  }
+
+  /// Removes markdown/citation punctuation an answer might carry so TTS
+  /// doesn't read out stray symbols (e.g. "asterisk asterisk").
+  String _stripForSpeech(String text) {
+    return text
+        .replaceAll(RegExp(r'[*_#`]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  /// Renders the backend's internal escalation reason (a snake_case code
+  /// like "tier1_auto_deliver") as patient/caregiver-facing copy instead of
+  /// showing that raw code directly.
+  String _escalationCopy(AiAskEscalation escalation) {
+    switch (escalation.reason.toLowerCase()) {
+      case 'tier1_auto_deliver':
+        return 'Reviewed automatically.';
+      case 'no_records':
+        return 'No matching records were reviewed for this question.';
+      case 'hitl_hold':
+        return 'This answer was held for clinician review.';
+      default:
+        return escalation.reviewRequired
+            ? 'This answer was flagged for clinician review.'
+            : 'Reviewed automatically.';
     }
   }
 
@@ -307,6 +397,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     _invalidatePendingRequests();
     if (_isListening) {
       unawaited(_speech.stop());
+    }
+    if (_isSpeaking) {
+      unawaited(_ttsEngine.stop());
     }
     _controller.dispose();
     _animationController.dispose();
@@ -910,6 +1003,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   Future<void> _toggleVoiceInput() async {
     if (!_isGrounded || _isLoading) return;
     _resetInactivityTimer();
+    if (_isSpeaking) {
+      await _stopSpeaking();
+    }
     if (_isListening) {
       await _speech.stop();
       if (mounted) setState(() => _isListening = false);
@@ -928,8 +1024,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     setState(() => _isListening = true);
     try {
       await _speech.listen(
-        listenFor: const Duration(seconds: 12),
-        pauseFor: const Duration(seconds: 2),
         onResult: (result) {
           if (!mounted) return;
           if (result.recognizedWords.isNotEmpty) {
@@ -955,6 +1049,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           cancelOnError: true,
           partialResults: true,
           listenMode: stt.ListenMode.dictation,
+          listenFor: const Duration(seconds: 12),
+          pauseFor: const Duration(seconds: 2),
         ),
       );
     } catch (_) {
@@ -1311,6 +1407,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
         _conversationId = response['conversationId'];
       }
+      final wasVoiceInput = _lastInputModality == 'VOICE';
       if (!_safeSetState(epoch, () {
         _messages.add(
           ChatMessage(
@@ -1337,6 +1434,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         _lastInputModality = 'TEXT';
       })) {
         return;
+      }
+      if (wasVoiceInput) {
+        unawaited(_speakAnswer(aiText));
       }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
@@ -1951,8 +2051,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                           if (msg.escalation != null) ...[
                             const SizedBox(height: 4),
                             Text(
-                              'Safety tier ${msg.escalation!.tier}: '
-                              '${msg.escalation!.reason}',
+                              _escalationCopy(msg.escalation!),
                               key: const Key('ask-ai-escalation'),
                               style: theme.textTheme.bodySmall,
                             ),
@@ -2141,13 +2240,21 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                   IconButton(
                     key: const Key('ask-ai-mic'),
                     icon: Icon(
-                      _isListening ? Icons.mic : Icons.mic_none,
-                      color: _isListening
+                      _isSpeaking
+                          ? Icons.volume_up
+                          : (_isListening ? Icons.mic : Icons.mic_none),
+                      color: _isListening || _isSpeaking
                           ? colorScheme.error
                           : colorScheme.primary,
                     ),
-                    onPressed: _isLoading ? null : () => unawaited(_toggleVoiceInput()),
-                    tooltip: _isListening ? 'Stop listening' : 'Voice input',
+                    onPressed: _isLoading
+                        ? null
+                        : () => unawaited(_isSpeaking
+                            ? _stopSpeaking()
+                            : _toggleVoiceInput()),
+                    tooltip: _isSpeaking
+                        ? 'Stop speaking'
+                        : (_isListening ? 'Stop listening' : 'Voice input'),
                   ),
                 Expanded(
                   child: TextField(
