@@ -72,6 +72,7 @@ __pycache__/
 web-deploy.zip
 frontend-build.zip
 .vscode/
+.kiro/
 frontend/web-build.zip
 ui-integration/mobile-app/dist/
 ui-integration/mobile-app/coverage/
