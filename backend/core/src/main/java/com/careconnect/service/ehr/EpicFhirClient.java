@@ -74,8 +74,10 @@ public class EpicFhirClient implements EhrApiClient {
             // Surface WHAT came back so an "OK but stored nothing" case (a bundle carrying only an
             // informational OperationOutcome, e.g. Epic warning a required search param is missing)
             // is visible rather than silent.
-            log.info("Epic fetch {} params={} -> {} entries, types={}",
-                    resourceType, params, out.size(), typeSummary(out));
+            final String ooText = operationOutcomeText(out);
+            log.info("Epic fetch {} params={} -> {} entries, types={}{}",
+                    resourceType, params, out.size(), typeSummary(out),
+                    ooText.isEmpty() ? "" : ", outcome=[" + ooText + "]");
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
                     resourceType, out.isEmpty()
                             ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
@@ -98,6 +100,31 @@ public class EpicFhirClient implements EhrApiClient {
                     resourceType, EhrAuditEvent.OUTCOME_ERROR);
             throw ex;
         }
+    }
+
+    /** Flatten any OperationOutcome issues in a result to "severity/code: diagnostics" (diagnostics). */
+    private static String operationOutcomeText(List<JsonNode> resources) {
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode r : resources) {
+            if (r == null || !"OperationOutcome".equals(r.path("resourceType").asText())) {
+                continue;
+            }
+            JsonNode issues = r.get("issue");
+            if (issues == null || !issues.isArray()) {
+                continue;
+            }
+            for (JsonNode is : issues) {
+                String diag = is.hasNonNull("diagnostics")
+                        ? is.get("diagnostics").asText()
+                        : is.path("details").path("text").asText("");
+                if (sb.length() > 0) {
+                    sb.append(" | ");
+                }
+                sb.append(is.path("severity").asText("")).append('/')
+                        .append(is.path("code").asText("")).append(": ").append(diag);
+            }
+        }
+        return sb.toString();
     }
 
     /** Compact tally of the resourceTypes present in a fetch result (for diagnostics/logging). */

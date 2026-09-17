@@ -189,18 +189,20 @@ public class EpicSyncService {
                 log.debug("Epic sync skipping {} for user {} (scope not granted)", resourceType, userId);
                 continue;
             }
-            try {
-                // One fetch per required-param set (Observation sweeps categories; most types get a
-                // single patient-only search). Epic 400s a bare Observation search, hence the sweep.
-                for (final Map<String, String> params : searchParamSets(resourceType)) {
+            // One fetch per required-param set (Observation sweeps categories; most types get a
+            // single patient-only search). Each param set is isolated: Epic rejects a category the
+            // app isn't authorized for with a 400 ("not valid for any authorized sub-resource"), and
+            // that must not abort the remaining categories/types.
+            for (final Map<String, String> params : searchParamSets(resourceType)) {
+                try {
                     for (final JsonNode resource : fhirClient.fetch(userId, resourceType, params)) {
                         mirror(userId, resourceType, resource, seen, tally);
                     }
+                } catch (final RuntimeException ex) {
+                    skipped++;
+                    log.warn("Epic sync skipped {} params={} for user {}: {}",
+                            resourceType, params, userId, ex.getClass().getSimpleName());
                 }
-            } catch (final RuntimeException ex) {
-                skipped++;
-                log.warn("Epic sync skipped resource type {} for user {}: {}",
-                        resourceType, userId, ex.getClass().getSimpleName());
             }
         }
 
