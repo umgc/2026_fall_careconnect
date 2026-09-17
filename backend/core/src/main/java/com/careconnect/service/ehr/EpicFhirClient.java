@@ -71,12 +71,65 @@ public class EpicFhirClient implements EhrApiClient {
                 url = nextLink(bundle);
                 pages++;
             }
+            // Surface WHAT came back so an "OK but stored nothing" case (a bundle carrying only an
+            // informational OperationOutcome, e.g. Epic warning a required search param is missing)
+            // is visible rather than silent.
+            log.info("Epic fetch {} params={} -> {} entries, types={}",
+                    resourceType, params, out.size(), typeSummary(out));
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
                     resourceType, out.isEmpty()
                             ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
             return out;
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            // Log Epic's actual OperationOutcome body (names the missing/invalid search parameter),
+            // which the default RestTemplate error otherwise hides as a bare "400 BAD_REQUEST".
+            // A 403 with an empty body carries its reason in WWW-Authenticate (Epic:
+            // insufficient_scope = "valid token, but not authorized for this service" → the API is
+            // not enabled on the app registration). Log that so the cause isn't a bare "403".
+            final String wwwAuth = ex.getResponseHeaders() != null
+                    ? ex.getResponseHeaders().getFirst("WWW-Authenticate") : null;
+            log.warn("Epic fetch {} params={} -> {} : body='{}' wwwAuthenticate={}", resourceType,
+                    params, ex.getStatusCode().value(), ex.getResponseBodyAsString(), wwwAuth);
+            audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
+                    resourceType, EhrAuditEvent.OUTCOME_ERROR);
+            throw ex;
         } catch (RuntimeException ex) {
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
+                    resourceType, EhrAuditEvent.OUTCOME_ERROR);
+            throw ex;
+        }
+    }
+
+    /** Compact tally of the resourceTypes present in a fetch result (for diagnostics/logging). */
+    private static String typeSummary(List<JsonNode> resources) {
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (JsonNode r : resources) {
+            String t = r != null && r.hasNonNull("resourceType") ? r.get("resourceType").asText() : "?";
+            counts.merge(t, 1, Integer::sum);
+        }
+        return counts.toString();
+    }
+
+    /**
+     * Single-resource read: {@code GET {base}/{type}/{id}} with NO {@code patient} search param.
+     * Used for demographics ({@code Patient/{patientFhirId}}), which is a read, not a search — the
+     * {@link #fetch} path always appends {@code ?patient=} and would 400 on a Patient search.
+     * Returns a singleton list (or empty) so callers share the mirror path with {@link #fetch}.
+     */
+    public List<JsonNode> read(Long userId, String resourceType, String fhirId) {
+        String token = oauth.validAccessToken(userId);
+        HttpEntity<Void> entity = new HttpEntity<>(bearerHeaders(token));
+        String url = cfg.getFhirBaseUrl() + "/" + resourceType + "/" + fhirId;
+        List<JsonNode> out = new ArrayList<>();
+        try {
+            ResponseEntity<JsonNode> resp = http.exchange(url, HttpMethod.GET, entity, JsonNode.class);
+            extractEntries(resp.getBody(), out);
+            audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_READ", resourceType,
+                    resourceType, out.isEmpty()
+                            ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
+            return out;
+        } catch (RuntimeException ex) {
+            audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_READ", resourceType,
                     resourceType, EhrAuditEvent.OUTCOME_ERROR);
             throw ex;
         }

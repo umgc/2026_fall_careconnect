@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -38,10 +39,43 @@ import java.util.concurrent.CompletableFuture;
 @ConditionalOnProperty(name = "careconnect.epic.enabled", havingValue = "true")
 public class EpicSyncService {
 
-    /** Core clinical set fetched on connect (1_0 §5 #1–13, read-first). */
+    /** Core clinical set fetched on connect (1_0 §5 #1–13, read-first). Typed fallback after {@code $everything}. */
     private static final List<String> SYNC_RESOURCE_TYPES = List.of(
             "AllergyIntolerance", "Condition", "MedicationRequest", "MedicationStatement",
             "Observation", "DiagnosticReport", "Immunization", "Procedure", "DocumentReference");
+
+    /** Demographics resource, mirrored via a direct read (not a patient search). */
+    private static final String PATIENT_TYPE = "Patient";
+
+    /** Types we mirror out of the {@code $everything} bundle (clinical set + demographics); everything else (Practitioner, Organization, …) is ignored. */
+    private static final Set<String> MIRRORABLE_TYPES;
+    static {
+        final var m = new java.util.HashSet<>(SYNC_RESOURCE_TYPES);
+        m.add(PATIENT_TYPE);
+        MIRRORABLE_TYPES = Set.copyOf(m);
+    }
+
+    /**
+     * Per-type required search parameters. Epic R4 rejects a bare {@code ?patient=} search for some
+     * types with HTTP 400 ("required search parameter missing"); each entry is a list of parameter
+     * sets and we issue one fetch per set, merging (deduped by fhir id). {@code Observation} requires
+     * a {@code category} (or {@code code}) — we sweep the standard US Core categories. Types absent
+     * here are fetched patient-only (a single empty set).
+     *
+     * <p>NOTE: if a type still 400s in your Epic environment, {@code GET /api/epic/resync} returns
+     * Epic's exact {@code responseBody} naming the missing parameter — add the fix here.
+     */
+    private static final Map<String, List<Map<String, String>>> REQUIRED_SEARCH_PARAMS = Map.of(
+            "Observation", List.of(
+                    Map.of("category", "laboratory"),
+                    Map.of("category", "vital-signs"),
+                    Map.of("category", "social-history"),
+                    Map.of("category", "core-characteristics")));
+
+    /** The param sets to try for a type: its required-param sweep, or a single patient-only search. */
+    private static List<Map<String, String>> searchParamSets(final String resourceType) {
+        return REQUIRED_SEARCH_PARAMS.getOrDefault(resourceType, List.of(Map.of()));
+    }
 
     private final EpicFhirClient fhirClient;
     private final EhrResourceRepository resourceRepo;
@@ -106,9 +140,48 @@ public class EpicSyncService {
                 .map(c -> parseScopes(c.getScopes()))
                 .orElseGet(Set::of);
 
-        int stored = 0;
+        // Dedupe across the $everything pass and the typed fallback: "<type>|<fhirId>".
+        final Set<String> seen = new java.util.HashSet<>();
+        final int[] tally = new int[2]; // [0] stored, [1] failed
+
+        // 1) PRIMARY — Patient/$everything: demographics + all compartment resources in one call.
+        // Sidesteps the per-type required-param quirks (below) and the demographics gap. Optional in
+        // some Epic environments (may 404/501 or be capped), so a failure is non-fatal: the typed
+        // fallback carries the sync.
+        try {
+            final List<JsonNode> everything = new java.util.ArrayList<>();
+            EpicFhirClient.extractEntries(fhirClient.everything(userId), everything);
+            for (final JsonNode resource : everything) {
+                final String type = resourceTypeOf(resource);
+                if (type == null || !MIRRORABLE_TYPES.contains(type)) {
+                    continue; // OperationOutcome, Practitioner, Organization, … — not mirrored.
+                }
+                mirror(userId, type, resource, seen, tally);
+            }
+        } catch (final RuntimeException ex) {
+            log.info("Epic $everything unavailable for user {}, falling back to typed fetch: {}",
+                    userId, ex.getClass().getSimpleName());
+        }
+
         int skipped = 0;
-        int failed = 0;
+
+        // 1b) Demographics as an explicit read if $everything did not already supply the Patient.
+        if (!seenType(seen, PATIENT_TYPE)
+                && (grantedScopes.isEmpty() || grantedScopes.contains("patient/Patient.read"))) {
+            try {
+                final String patientId = oauth.patientFhirId(userId);
+                if (patientId != null && !patientId.isBlank()) {
+                    for (final JsonNode resource : fhirClient.read(userId, PATIENT_TYPE, patientId)) {
+                        mirror(userId, PATIENT_TYPE, resource, seen, tally);
+                    }
+                }
+            } catch (final RuntimeException ex) {
+                skipped++;
+                log.warn("Epic Patient read failed for user {}: {}", userId, ex.getClass().getSimpleName());
+            }
+        }
+
+        // 2) FALLBACK — typed per-type fetch for anything $everything did not already mirror.
         for (final String resourceType : SYNC_RESOURCE_TYPES) {
             if (!grantedScopes.isEmpty()
                     && !grantedScopes.contains("patient/" + resourceType + ".read")) {
@@ -117,21 +190,11 @@ public class EpicSyncService {
                 continue;
             }
             try {
-                final List<JsonNode> resources = fhirClient.fetch(userId, resourceType, java.util.Map.of());
-                for (final JsonNode resource : resources) {
-                    if (!statusGate.isAllowed(resource)) {
-                        continue;
-                    }
-                    try {
-                        // Persist each resource in its OWN transaction (routed through the Spring
-                        // proxy) so a single failing row does not poison the whole sync.
-                        if (selfProvider.getObject().upsertAndEmit(userId, resourceType, resource)) {
-                            stored++;
-                        }
-                    } catch (final RuntimeException ex) {
-                        failed++;
-                        log.warn("Epic sync skipped one {} resource for user {}: {}",
-                                resourceType, userId, ex.getClass().getSimpleName());
+                // One fetch per required-param set (Observation sweeps categories; most types get a
+                // single patient-only search). Epic 400s a bare Observation search, hence the sweep.
+                for (final Map<String, String> params : searchParamSets(resourceType)) {
+                    for (final JsonNode resource : fhirClient.fetch(userId, resourceType, params)) {
+                        mirror(userId, resourceType, resource, seen, tally);
                     }
                 }
             } catch (final RuntimeException ex) {
@@ -140,11 +203,66 @@ public class EpicSyncService {
                         resourceType, userId, ex.getClass().getSimpleName());
             }
         }
+
+        final int stored = tally[0];
+        final int failed = tally[1];
         audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_SYNC", null,
                 String.valueOf(stored), EhrResourceOutcome.OK);
         log.info("Epic sync stored/updated {} resources for user {} ({} resource types skipped, "
                 + "{} individual resources failed)", stored, userId, skipped, failed);
         return stored;
+    }
+
+    /**
+     * Status-gate, dedupe, and mirror one fetched resource in its own transaction, updating the
+     * {@code tally} ([0]=stored, [1]=failed). Skips (silently) any entry whose {@code resourceType}
+     * does not match {@code expectedType} — this drops the informational {@code OperationOutcome}
+     * Epic includes in search bundles (and any {@code _include}d resource), which otherwise slips
+     * through with no {@code id} and stores nothing while masking the real result.
+     */
+    private void mirror(final Long userId, final String expectedType, final JsonNode resource,
+                        final Set<String> seen, final int[] tally) {
+        final String actualType = resourceTypeOf(resource);
+        if (actualType == null || !actualType.equals(expectedType)) {
+            return;
+        }
+        final String fhirId = resource.hasNonNull("id") ? resource.get("id").asText() : null;
+        if (fhirId == null || fhirId.isBlank()) {
+            return;
+        }
+        if (!seen.add(actualType + "|" + fhirId)) {
+            return; // already mirrored this run (e.g. from $everything, or a category overlap).
+        }
+        if (!statusGate.isAllowed(resource)) {
+            return;
+        }
+        try {
+            // Persist each resource in its OWN transaction (routed through the Spring proxy) so a
+            // single failing row does not poison the whole sync.
+            if (selfProvider.getObject().upsertAndEmit(userId, actualType, resource)) {
+                tally[0]++;
+            }
+        } catch (final RuntimeException ex) {
+            tally[1]++;
+            log.warn("Epic sync skipped one {} resource for user {}: {}",
+                    actualType, userId, ex.getClass().getSimpleName());
+        }
+    }
+
+    private static String resourceTypeOf(final JsonNode resource) {
+        return resource != null && resource.hasNonNull("resourceType")
+                ? resource.get("resourceType").asText() : null;
+    }
+
+    /** True if any resource of {@code type} was already mirrored this run. */
+    private static boolean seenType(final Set<String> seen, final String type) {
+        final String prefix = type + "|";
+        for (final String key : seen) {
+            if (key.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Split the space-delimited SMART scope string into a set for membership checks. */
