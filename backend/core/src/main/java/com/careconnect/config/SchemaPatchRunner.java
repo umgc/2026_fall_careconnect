@@ -1795,13 +1795,20 @@ public class SchemaPatchRunner implements CommandLineRunner {
     }
 
     /**
-     * Repair path: Hibernate ddl-auto creates {@code post_call_transcription_jobs} and
-     * {@code recording_compensation_outbox} from their entities during context refresh, before
-     * this {@code CommandLineRunner} executes, and neither entity maps the audit columns. The
-     * {@code CREATE TABLE IF NOT EXISTS} in {@code 2607191700_recording_state.sql} then no-ops
-     * while the ledger still records the patch as applied, so the columns never appear. Both
-     * workers set {@code updated_at} in their native claim/release statements, so without this
-     * a post-call transcription job can never leave READY and its transcript never arrives.
+     * Repair path: Hibernate ddl-auto creates {@code call_recordings},
+     * {@code post_call_transcription_jobs}, and {@code recording_compensation_outbox} from their
+     * entities during context refresh, before this {@code CommandLineRunner} executes, and the
+     * entities don't map every column {@code 2607191700_recording_state.sql} expects (audit
+     * columns on the two outbox tables; a {@code DEFAULT} on {@code call_recordings.attempt_count}
+     * — {@link com.careconnect.model.CallRecording#attemptCount} is only {@code nullable = false}).
+     * The {@code CREATE TABLE IF NOT EXISTS} / {@code ADD COLUMN IF NOT EXISTS} in that script then
+     * no-ops on the Hibernate-created column while the ledger still records the patch as applied,
+     * so the gap never closes. Both workers set {@code updated_at} in their native claim/release
+     * statements, so without the outbox columns a post-call transcription job can never leave
+     * READY and its transcript never arrives; without the default,
+     * {@link com.careconnect.repository.CallRecordingRepository#reserveActiveGeneration} — which
+     * omits {@code attempt_count} from its native INSERT column list — fails every recording start
+     * with a not-null constraint violation.
      */
     private void applyRecordingWorkerAuditColumnPatches() {
         applyRequiredPatch(
@@ -1819,6 +1826,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
                     + "NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                     + "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
                     + "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        );
+        applyRequiredPatch(
+            "V2607301000c – ensure call_recordings attempt_count default",
+            "ALTER TABLE IF EXISTS call_recordings "
+                    + "ALTER COLUMN attempt_count SET DEFAULT 0"
         );
     }
 

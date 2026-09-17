@@ -88,6 +88,13 @@ public class KvsPoolStreamDiscoveryService {
 
         final String poolRegion = kvsStreamPoolService.getStreamPoolRegion();
         if (poolRegion.isBlank()) {
+            if (log.isWarnEnabled()) {
+                log.warn(
+                        "KVS ingest is enabled but the configured stream-pool ARN has no region"
+                                + " segment; skipping stream discovery for callId={}. Check"
+                                + " careconnect.kvs.stream-pool-arn.",
+                        callId);
+            }
             return;
         }
 
@@ -326,16 +333,38 @@ public class KvsPoolStreamDiscoveryService {
                         || message.contains("Status Code: 403"));
     }
 
+    /** Data endpoint for {@code ListFragments} on {@code streamName}. Visible for unit tests. */
+    String listFragmentsEndpoint(final String streamName) {
+        return resolveDataEndpoint(streamName, APIName.LIST_FRAGMENTS);
+    }
+
+    /**
+     * Data endpoint for {@code GetMediaForFragmentList} on {@code streamName}. Visible for unit
+     * tests.
+     *
+     * <p>This must be {@link APIName#GET_MEDIA_FOR_FRAGMENT_LIST}. {@code GET_MEDIA} is a
+     * different API served from a different host ({@code s-*} rather than {@code b-*}), so
+     * requesting it here makes every archived-media fragment read fail — silently, because
+     * {@link #readRecentFragmentBytesList} treats the resulting exception as "no fragments" and
+     * attendee→stream discovery then never matches anything.
+     */
+    String fragmentMediaEndpoint(final String streamName) {
+        return resolveDataEndpoint(streamName, APIName.GET_MEDIA_FOR_FRAGMENT_LIST);
+    }
+
+    private String resolveDataEndpoint(final String streamName, final APIName apiName) {
+        return kinesisVideoClient
+                .getDataEndpoint(
+                        GetDataEndpointRequest.builder()
+                                .streamName(streamName)
+                                .apiName(apiName)
+                                .build())
+                .dataEndpoint();
+    }
+
     private List<byte[]> readRecentFragmentBytesList(final Region region, final String streamName) {
         try {
-            final String listEndpoint =
-                    kinesisVideoClient
-                            .getDataEndpoint(
-                                    GetDataEndpointRequest.builder()
-                                            .streamName(streamName)
-                                            .apiName(APIName.LIST_FRAGMENTS)
-                                            .build())
-                            .dataEndpoint();
+            final String listEndpoint = listFragmentsEndpoint(streamName);
 
             try (KinesisVideoArchivedMediaClient archivedClient =
                     KinesisVideoArchivedMediaClient.builder()
@@ -380,14 +409,7 @@ public class KvsPoolStreamDiscoveryService {
                     return List.of();
                 }
 
-                final String mediaEndpoint =
-                        kinesisVideoClient
-                                .getDataEndpoint(
-                                        GetDataEndpointRequest.builder()
-                                                .streamName(streamName)
-                                                .apiName(APIName.GET_MEDIA)
-                                                .build())
-                                .dataEndpoint();
+                final String mediaEndpoint = fragmentMediaEndpoint(streamName);
 
                 try (KinesisVideoArchivedMediaClient mediaClient =
                         KinesisVideoArchivedMediaClient.builder()
