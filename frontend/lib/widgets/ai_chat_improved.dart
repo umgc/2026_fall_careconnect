@@ -1049,8 +1049,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           cancelOnError: true,
           partialResults: true,
           listenMode: stt.ListenMode.dictation,
-          listenFor: const Duration(seconds: 12),
-          pauseFor: const Duration(seconds: 2),
+          listenFor: const Duration(seconds: 30),
+          pauseFor: const Duration(seconds: 5),
         ),
       );
     } catch (_) {
