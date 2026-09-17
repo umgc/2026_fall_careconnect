@@ -383,7 +383,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _startUnreadMessageBadgePolling() {
     _messageBadgeTimer?.cancel();
-    _messageBadgeTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _messageBadgeTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       _refreshUnreadMessageBadge();
     });
   }
