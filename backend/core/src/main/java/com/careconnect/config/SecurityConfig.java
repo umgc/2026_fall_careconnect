@@ -143,6 +143,7 @@ public class SecurityConfig {
                         .requestMatchers("/v2/api/tasks/**").authenticated()
                         .requestMatchers("/v1/api/messages/**").authenticated()
                         .requestMatchers("/v1/api/evv/**").authenticated()
+                        .requestMatchers("/v1/api/medicare/**").authenticated()
                         .requestMatchers("/v1/api/notifications/**").authenticated()
                         .requestMatchers("/v1/api/friends/**").authenticated()
                         .requestMatchers("/v1/api/connection-requests/**").authenticated()

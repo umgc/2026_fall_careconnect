@@ -1,0 +1,46 @@
+{
+  "resourceType": "Bundle",
+  "id": "a7f1d0c2-0000-4b00-9c00-000000000001",
+  "meta": { "lastUpdated": "2026-09-15T18:20:11.000-04:00" },
+  "type": "searchset",
+  "total": 1,
+  "entry": [
+    {
+      "fullUrl": "https://sandbox.bluebutton.cms.gov/v2/fhir/Patient/-20140000008325",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "-20140000008325",
+        "meta": {
+          "lastUpdated": "2026-09-15T18:20:11.000-04:00",
+          "profile": [ "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Patient" ]
+        },
+        "identifier": [
+          {
+            "system": "https://bluebutton.cms.gov/resources/variables/bene_id",
+            "value": "-20140000008325"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-mbi",
+            "value": "1S00E00AA00"
+          }
+        ],
+        "name": [
+          {
+            "use": "usual",
+            "family": "Doe",
+            "given": [ "Jane", "X" ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1940-06-01",
+        "address": [
+          {
+            "use": "home",
+            "state": "MD",
+            "postalCode": "21201"
+          }
+        ]
+      }
+    }
+  ]
+}
