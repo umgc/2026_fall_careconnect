@@ -59,7 +59,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * Covers the full OAuth lifecycle:
  *   GET connect-url → GET /oauth/google/start → GET /oauth/google/callback
- *   → GET /v1/api/email-credentials/status → DELETE /v1/api/email-credentials/gmail
+ *   → GET /v1/api/email-credentials/gmail/status → DELETE /v1/api/email-credentials/gmail
  *
  * Uses:
  *   - @SpringBootTest (full application context, H2 in-memory DB)
@@ -436,11 +436,11 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 4. GET /v1/api/email-credentials/status
+    // 4. GET /v1/api/email-credentials/gmail/status
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
-    @DisplayName("GET /v1/api/email-credentials/status")
+    @DisplayName("GET /v1/api/email-credentials/gmail/status")
     class ConnectionStatusTests {
 
         @Test
@@ -457,7 +457,7 @@ class EmailOAuthFlowE2ETest {
                     eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
@@ -473,7 +473,7 @@ class EmailOAuthFlowE2ETest {
                     eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.empty());
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
@@ -491,7 +491,7 @@ class EmailOAuthFlowE2ETest {
                     .thenReturn(Optional.of(cred));
             when(googleOAuthService.ensureFreshToken(cred)).thenReturn(null);
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
@@ -511,7 +511,7 @@ class EmailOAuthFlowE2ETest {
                     eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
@@ -522,7 +522,7 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("status_acceptsLegacyUserIdParam")
         void status_acceptsLegacyUserIdParam() throws Exception {
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("userId", String.valueOf(adminUser.getId()))
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
@@ -532,7 +532,7 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("status_whenUnauthenticated_returns401")
         void status_whenUnauthenticated_returns401() throws Exception {
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL))
                     .andExpect(status().isUnauthorized());
         }
@@ -553,7 +553,7 @@ class EmailOAuthFlowE2ETest {
                     eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.empty());
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .with(user(PATIENT_EMAIL).roles("PATIENT")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(false))
@@ -588,7 +588,7 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("patient_cannotAccessAnotherPatientsStatus")
         void patient_cannotAccessAnotherPatientsStatus() throws Exception {
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL)
                             .with(user(PATIENT_EMAIL).roles("PATIENT")))
                     .andExpect(status().isForbidden());
@@ -716,7 +716,7 @@ class EmailOAuthFlowE2ETest {
                     .thenReturn(Optional.of(storedCred));
             when(googleOAuthService.ensureFreshToken(storedCred)).thenReturn(storedCred);
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .param("patientEmail", ADMIN_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
