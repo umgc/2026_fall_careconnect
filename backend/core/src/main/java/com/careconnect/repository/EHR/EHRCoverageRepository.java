@@ -1,6 +1,6 @@
-package com.careconnect.repository;
+package com.careconnect.repository.EHR;
 
-import com.careconnect.model.EHRCoverage;
+import com.careconnect.model.EHR.EHRCoverage;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,8 +12,6 @@ import java.util.Optional;
 import java.util.List;
 
 public interface EHRCoverageRepository extends JpaRepository<EHRCoverage, Long> {
-    List<EHRCoverage> findByPatientIdOrderByCreatedAtDesc(Long patientId);
-
-    Optional<EHRCoverage> findTopByPatientIdOrderByCreatedAtDesc(Long patientId);
+    List<EHRCoverage> findByClientIdOrderByLastUpdatedDesc(Long patientId);
 
 }

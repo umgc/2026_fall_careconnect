@@ -1,4 +1,20 @@
-class EHRCoverage{
+package com.careconnect.model.EHR;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "ehr_coverage")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class EHRCoverage{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; // unique ID

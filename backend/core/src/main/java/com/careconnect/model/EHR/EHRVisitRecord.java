@@ -1,4 +1,4 @@
-package com.careconnect.model;
+package com.careconnect.model.EHR;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-class EHRVisitRecord{
+public class EHRVisitRecord{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -28,9 +28,6 @@ class EHRVisitRecord{
 
     @Column(name="source_id", nullable=false)
     private String sourceId; // Which EHR source produced this.
-
-    @Column(name = "last_updated", nullable = false)
-    private LocalDateTime lastUpdated;
 
     @Column(name="identifier")
     private String identifier;

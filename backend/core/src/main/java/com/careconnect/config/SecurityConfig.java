@@ -202,7 +202,7 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
                 .oauth2Login(
-                        oauth -> oauth.defaultSuccessful("/results")
+                        oauth -> oauth.defaultSuccessUrl("/results")
                 )
 
                 .build();

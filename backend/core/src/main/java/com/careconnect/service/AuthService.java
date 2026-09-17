@@ -109,6 +109,12 @@ public class AuthService {
     @Value("${spring.security.oauth2.client.provider.google.user-info-uri}")
     private String googleUserInfoUri;
 
+    @Value("${spring.security.oauth2.client.registration.bluebutton.client-id}")
+    private String blueButtonClientId;
+
+    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
+    private String blueButtonClientSecret;
+
     @Transactional
     public ResponseEntity<?> register(RegisterRequest request) {
         // 1. Lookup existing user by email & role

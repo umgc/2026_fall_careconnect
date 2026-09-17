@@ -1,6 +1,6 @@
-package com.careconnect.repository;
+package com.careconnect.repository.EHR;
 
-import com.careconnect.model.EHRVisitRecord;
+import com.careconnect.model.EHR.EHRVisitRecord;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,8 +12,6 @@ import java.util.Optional;
 import java.util.List;
 
 public interface EHRVisitRecordRepository extends JpaRepository<EHRVisitRecord, Long> {
-    List<EHRVisitRecord> findByPatientIdOrderByCreatedAtDesc(Long patientId);
-
-    Optional<EHRVisitRecord> findTopByPatientIdOrderByCreatedAtDesc(Long patientId);
+    List<EHRVisitRecord> findByClientIdOrderByLastUpdatedDesc(Long patientId);
 
 }

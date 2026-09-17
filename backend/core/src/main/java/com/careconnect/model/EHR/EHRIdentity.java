@@ -1,4 +1,4 @@
-package com.careconnect.model;
+package com.careconnect.model.EHR;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -7,8 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import org.hl7.fhir.r4.model.Patient;
-
 
 
 @Entity
@@ -17,7 +15,7 @@ import org.hl7.fhir.r4.model.Patient;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-class EHRIdentity{
+public class EHRIdentity{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; // unique ID
