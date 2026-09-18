@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -38,43 +39,47 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class InvoiceControllerTest {
 
+    @Mock private InvoiceService invoiceService;
+    @Mock private TextractService textractService;
+    @Mock private LlmExtractionService llmExtractionService;
+    @Mock private SecurityUtil securityUtil;
+    @Mock private AuthorizationService authorizationService;
+    @Mock private AIServiceFactory aiServiceFactory;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    @Mock
-    private InvoiceService invoiceService;
-    @Mock
-    private TextractService textractService;
-    @Mock
-    private LlmExtractionService llmExtractionService;
-    @Mock
-    private SecurityUtil securityUtil;
-    @Mock
-    private AuthorizationService authorizationService;
-    @Mock
-    private AIServiceFactory aiServiceFactory;
+
+    // Spring injects the LLM service through an ObjectProvider so the bean can be
+    // absent when careconnect.llm.enabled=false; mirror that here.
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<LlmExtractionService> llmProvider() {
+        ObjectProvider<LlmExtractionService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(llmExtractionService);
+        return provider;
+    }
 
     // Helper: controller with all services wired
     private InvoiceController controller() {
         return new InvoiceController(
-                invoiceService,
-                textractService,
-                llmExtractionService,
-                objectMapper,
-                securityUtil,
-                authorizationService,
-                aiServiceFactory
+            invoiceService, 
+            textractService,
+            llmProvider(),
+            objectMapper, 
+            securityUtil, 
+            authorizationService,
+            aiServiceFactory            
         );
     }
 
     // Helper: controller with textract=null (AWS disabled)
     private InvoiceController controllerNoTextract() {
         return new InvoiceController(
-                invoiceService,
-                textractService,
-                llmExtractionService,
-                objectMapper,
-                securityUtil,
-                authorizationService,
-                aiServiceFactory
+            invoiceService,
+            textractService,
+            llmProvider(),
+            objectMapper, 
+            securityUtil, 
+            authorizationService, 
+            aiServiceFactory           
         );
     }
 
@@ -99,7 +104,8 @@ class InvoiceControllerTest {
         assertThat(body.get("page")).isEqualTo(0);
         assertThat(body.get("pageSize")).isEqualTo(1);
         assertThat(body.get("totalPages")).isEqualTo(1);
-        @SuppressWarnings("unchecked") final List<InvoiceDto> items = (List<InvoiceDto>) body.get("items");
+        @SuppressWarnings("unchecked")
+        final List<InvoiceDto> items = (List<InvoiceDto>) body.get("items");
         assertThat(items).hasSize(1);
     }
 

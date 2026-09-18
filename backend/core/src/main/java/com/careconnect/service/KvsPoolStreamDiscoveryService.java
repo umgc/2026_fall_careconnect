@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,81 +69,6 @@ public class KvsPoolStreamDiscoveryService {
         this.kvsStreamPoolService = kvsStreamPoolService;
     }
 
-    private static List<StreamInfo> filterRecentStreams(
-            final List<StreamInfo> streams, final Instant notBefore) {
-        if (streams == null || streams.isEmpty()) {
-            return List.of();
-        }
-        return streams.stream()
-                .filter(
-                        stream ->
-                                stream.creationTime() != null
-                                        && !stream.creationTime().isBefore(notBefore))
-                .toList();
-    }
-
-    /**
-     * Prefer newest pool streams — stale ChimeSDK streams from prior calls accumulate in the account.
-     */
-    static List<StreamInfo> prioritizeRecentStreams(
-            final List<StreamInfo> streams, final int maxStreams) {
-        if (streams == null || streams.isEmpty() || maxStreams <= 0) {
-            return List.of();
-        }
-        return streams.stream()
-                .sorted(
-                        Comparator.comparing(
-                                StreamInfo::creationTime,
-                                Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(maxStreams)
-                .toList();
-    }
-
-    private static boolean isAccessDenied(final Exception e) {
-        final String message = e.getMessage();
-        return message != null
-                && (message.contains("not authorized")
-                || message.contains("AccessDenied")
-                || message.contains("Status Code: 403"));
-    }
-
-    private static byte[] readUpTo(final InputStream input, final int maxBytes) throws IOException {
-        if (input == null) {
-            return new byte[0];
-        }
-        try (input) {
-            final byte[] buffer = new byte[maxBytes];
-            int offset = 0;
-            int read;
-            while (offset < maxBytes && (read = input.read(buffer, offset, maxBytes - offset)) >= 0) {
-                offset += read;
-            }
-            if (offset == 0) {
-                return new byte[0];
-            }
-            final byte[] result = new byte[offset];
-            System.arraycopy(buffer, 0, result, 0, offset);
-            return result;
-        }
-    }
-
-    /**
-     * Visible for tests — KVS stream name from ARN.
-     */
-    static String streamNameFromArn(final String streamArn) {
-        if (streamArn == null || streamArn.isBlank()) {
-            return "";
-        }
-        final String marker = ":stream/";
-        final int idx = streamArn.indexOf(marker);
-        if (idx < 0) {
-            return "";
-        }
-        final String rest = streamArn.substring(idx + marker.length());
-        final int slash = rest.indexOf('/');
-        return slash >= 0 ? rest.substring(0, slash) : rest;
-    }
-
     /**
      * Lists KVS streams in the configured pool and registers attendee→stream mappings when fragment
      * metadata matches the active meeting and attendees.
@@ -164,6 +88,13 @@ public class KvsPoolStreamDiscoveryService {
 
         final String poolRegion = kvsStreamPoolService.getStreamPoolRegion();
         if (poolRegion.isBlank()) {
+            if (log.isWarnEnabled()) {
+                log.warn(
+                        "KVS ingest is enabled but the configured stream-pool ARN has no region"
+                                + " segment; skipping stream discovery for callId={}. Check"
+                                + " careconnect.kvs.stream-pool-arn.",
+                        callId);
+            }
             return;
         }
 
@@ -263,6 +194,8 @@ public class KvsPoolStreamDiscoveryService {
         }
     }
 
+    private record FragmentScanResult(int fragmentsRead, boolean meetingBytesSeen) {}
+
     private FragmentScanResult tryRegisterFromStreamFragments(
             final Region region,
             final String streamName,
@@ -316,6 +249,19 @@ public class KvsPoolStreamDiscoveryService {
         return listStreamsWithPrefix(CHIME_STREAM_PREFIX);
     }
 
+    private static List<StreamInfo> filterRecentStreams(
+            final List<StreamInfo> streams, final Instant notBefore) {
+        if (streams == null || streams.isEmpty()) {
+            return List.of();
+        }
+        return streams.stream()
+                .filter(
+                        stream ->
+                                stream.creationTime() != null
+                                        && !stream.creationTime().isBefore(notBefore))
+                .toList();
+    }
+
     private List<StreamInfo> rotateScanWindow(
             final String callId, final List<StreamInfo> streams, final int windowSize) {
         if (streams == null || streams.isEmpty() || windowSize <= 0) {
@@ -334,6 +280,21 @@ public class KvsPoolStreamDiscoveryService {
             rotated.add(streams.get((offset + i) % streams.size()));
         }
         return rotated;
+    }
+
+    /** Prefer newest pool streams — stale ChimeSDK streams from prior calls accumulate in the account. */
+    static List<StreamInfo> prioritizeRecentStreams(
+            final List<StreamInfo> streams, final int maxStreams) {
+        if (streams == null || streams.isEmpty() || maxStreams <= 0) {
+            return List.of();
+        }
+        return streams.stream()
+                .sorted(
+                        Comparator.comparing(
+                                StreamInfo::creationTime,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(maxStreams)
+                .toList();
     }
 
     private List<StreamInfo> listStreamsWithPrefix(final String prefix) {
@@ -364,24 +325,54 @@ public class KvsPoolStreamDiscoveryService {
         }
     }
 
+    private static boolean isAccessDenied(final Exception e) {
+        final String message = e.getMessage();
+        return message != null
+                && (message.contains("not authorized")
+                        || message.contains("AccessDenied")
+                        || message.contains("Status Code: 403"));
+    }
+
+    /** Data endpoint for {@code ListFragments} on {@code streamName}. Visible for unit tests. */
+    String listFragmentsEndpoint(final String streamName) {
+        return resolveDataEndpoint(streamName, APIName.LIST_FRAGMENTS);
+    }
+
+    /**
+     * Data endpoint for {@code GetMediaForFragmentList} on {@code streamName}. Visible for unit
+     * tests.
+     *
+     * <p>This must be {@link APIName#GET_MEDIA_FOR_FRAGMENT_LIST}. {@code GET_MEDIA} is a
+     * different API served from a different host ({@code s-*} rather than {@code b-*}), so
+     * requesting it here makes every archived-media fragment read fail — silently, because
+     * {@link #readRecentFragmentBytesList} treats the resulting exception as "no fragments" and
+     * attendee→stream discovery then never matches anything.
+     */
+    String fragmentMediaEndpoint(final String streamName) {
+        return resolveDataEndpoint(streamName, APIName.GET_MEDIA_FOR_FRAGMENT_LIST);
+    }
+
+    private String resolveDataEndpoint(final String streamName, final APIName apiName) {
+        return kinesisVideoClient
+                .getDataEndpoint(
+                        GetDataEndpointRequest.builder()
+                                .streamName(streamName)
+                                .apiName(apiName)
+                                .build())
+                .dataEndpoint();
+    }
+
     private List<byte[]> readRecentFragmentBytesList(final Region region, final String streamName) {
         try {
-            final String listEndpoint =
-                    kinesisVideoClient
-                            .getDataEndpoint(
-                                    GetDataEndpointRequest.builder()
-                                            .streamName(streamName)
-                                            .apiName(APIName.LIST_FRAGMENTS)
-                                            .build())
-                            .dataEndpoint();
+            final String listEndpoint = listFragmentsEndpoint(streamName);
 
             try (KinesisVideoArchivedMediaClient archivedClient =
-                         KinesisVideoArchivedMediaClient.builder()
-                                 .region(region)
-                                 .endpointOverride(URI.create(listEndpoint))
-                                 .credentialsProvider(kinesisVideoClient.serviceClientConfiguration()
-                                         .credentialsProvider())
-                                 .build()) {
+                    KinesisVideoArchivedMediaClient.builder()
+                            .region(region)
+                            .endpointOverride(URI.create(listEndpoint))
+                            .credentialsProvider(kinesisVideoClient.serviceClientConfiguration()
+                                    .credentialsProvider())
+                            .build()) {
 
                 final Instant end = Instant.now();
                 final Instant start = end.minusSeconds(FRAGMENT_LOOKBACK_SECONDS);
@@ -418,32 +409,25 @@ public class KvsPoolStreamDiscoveryService {
                     return List.of();
                 }
 
-                final String mediaEndpoint =
-                        kinesisVideoClient
-                                .getDataEndpoint(
-                                        GetDataEndpointRequest.builder()
-                                                .streamName(streamName)
-                                                .apiName(APIName.GET_MEDIA)
-                                                .build())
-                                .dataEndpoint();
+                final String mediaEndpoint = fragmentMediaEndpoint(streamName);
 
                 try (KinesisVideoArchivedMediaClient mediaClient =
-                             KinesisVideoArchivedMediaClient.builder()
-                                     .region(region)
-                                     .endpointOverride(URI.create(mediaEndpoint))
-                                     .credentialsProvider(
-                                             kinesisVideoClient.serviceClientConfiguration()
-                                                     .credentialsProvider())
-                                     .build()) {
+                        KinesisVideoArchivedMediaClient.builder()
+                                .region(region)
+                                .endpointOverride(URI.create(mediaEndpoint))
+                                .credentialsProvider(
+                                        kinesisVideoClient.serviceClientConfiguration()
+                                                .credentialsProvider())
+                                .build()) {
 
                     final List<byte[]> results = new ArrayList<>();
                     for (final String fragmentNumber : fragmentNumbers) {
                         try (ResponseInputStream<GetMediaForFragmentListResponse> media =
-                                     mediaClient.getMediaForFragmentList(
-                                             GetMediaForFragmentListRequest.builder()
-                                                     .streamName(streamName)
-                                                     .fragments(fragmentNumber)
-                                                     .build())) {
+                                mediaClient.getMediaForFragmentList(
+                                        GetMediaForFragmentListRequest.builder()
+                                                .streamName(streamName)
+                                                .fragments(fragmentNumber)
+                                                .build())) {
                             final byte[] bytes = readUpTo(media, MAX_FRAGMENT_BYTES);
                             if (bytes.length > 0) {
                                 results.add(bytes);
@@ -472,6 +456,38 @@ public class KvsPoolStreamDiscoveryService {
         }
     }
 
-    private record FragmentScanResult(int fragmentsRead, boolean meetingBytesSeen) {
+    private static byte[] readUpTo(final InputStream input, final int maxBytes) throws IOException {
+        if (input == null) {
+            return new byte[0];
+        }
+        try (input) {
+            final byte[] buffer = new byte[maxBytes];
+            int offset = 0;
+            int read;
+            while (offset < maxBytes && (read = input.read(buffer, offset, maxBytes - offset)) >= 0) {
+                offset += read;
+            }
+            if (offset == 0) {
+                return new byte[0];
+            }
+            final byte[] result = new byte[offset];
+            System.arraycopy(buffer, 0, result, 0, offset);
+            return result;
+        }
+    }
+
+    /** Visible for tests — KVS stream name from ARN. */
+    static String streamNameFromArn(final String streamArn) {
+        if (streamArn == null || streamArn.isBlank()) {
+            return "";
+        }
+        final String marker = ":stream/";
+        final int idx = streamArn.indexOf(marker);
+        if (idx < 0) {
+            return "";
+        }
+        final String rest = streamArn.substring(idx + marker.length());
+        final int slash = rest.indexOf('/');
+        return slash >= 0 ? rest.substring(0, slash) : rest;
     }
 }

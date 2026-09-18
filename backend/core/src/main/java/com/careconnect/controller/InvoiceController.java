@@ -18,6 +18,7 @@ import com.careconnect.util.JsonSanitizer;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.*;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -43,11 +44,10 @@ public class InvoiceController {
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
     private final AIServiceFactory aiServiceFactory;
-
     public InvoiceController(
             InvoiceService service,
             TextractService textractService,
-            LlmExtractionService llmExtractionService,
+            ObjectProvider<LlmExtractionService> llmExtractionServiceProvider,            
             ObjectMapper objectMapper,
             SecurityUtil securityUtil,
             AuthorizationService authorizationService,
@@ -56,7 +56,7 @@ public class InvoiceController {
 
         this.service = service;
         this.textractService = textractService;
-        this.llmExtractionService = llmExtractionService;
+        this.llmExtractionService = llmExtractionServiceProvider.getIfAvailable();
         this.objectMapper = objectMapper;
         this.securityUtil = securityUtil;
         this.authorizationService = authorizationService;
@@ -66,14 +66,6 @@ public class InvoiceController {
     // ==============================
     // Invoice CRUD
     // ==============================
-
-    private static OffsetDateTime parseDate(String s) {
-        return s == null || s.isBlank() ? null : OffsetDateTime.parse(s);
-    }
-
-    private static BigDecimal parseDecimal(String s) {
-        return s == null || s.isBlank() ? null : new BigDecimal(s);
-    }
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> list(
@@ -92,7 +84,7 @@ public class InvoiceController {
         // Bug fix (Issue #57 Gap #9): removed anonymous bypass - authentication required.
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-
+        
         Sort s = InvoiceService.resolveSort(sort);
         Pageable pageable = PageRequest.of(page, pageSize, s);
 
@@ -131,10 +123,6 @@ public class InvoiceController {
         return ResponseEntity.status(201).body(created);
     }
 
-    // ==============================
-    // Payments
-    // ==============================
-
     @PutMapping("/{id}")
     public ResponseEntity<InvoiceDto> update(@PathVariable String id, @RequestBody InvoiceDto dto) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
@@ -152,7 +140,7 @@ public class InvoiceController {
     }
 
     // ==============================
-    // LLM + Textract Extraction
+    // Payments
     // ==============================
 
     @PostMapping("/{id}/payments")
@@ -168,10 +156,6 @@ public class InvoiceController {
         return ResponseEntity.ok(updated);
     }
 
-    // ==============================
-    // Helpers
-    // ==============================
-
     @DeleteMapping("/{id}/payments/{paymentId}")
     public ResponseEntity<InvoiceDto> removePayment(
             @PathVariable String id,
@@ -183,15 +167,19 @@ public class InvoiceController {
         return ResponseEntity.ok(updated);
     }
 
+    // ==============================
+    // LLM + Textract Extraction
+    // ==============================
+
     @PostMapping(value = "/extract-llm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> extractWithLlm(@RequestParam("files") List<MultipartFile> files) throws UnauthorizedException {
-
+        
         // Bug fix (Issue #57 Gap #9): removed anonymous bypass - authentication is required.
         // Previous code wrapped resolveCurrentUser() in try/catch allowing unauthenticated
         // requests to trigger AWS Textract jobs and upload files to S3 at project expense.
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-
+        
         if (isFileListInvalid(files)) {
             return ResponseEntity.badRequest().body("Please provide at least one valid file.");
         }
@@ -259,9 +247,21 @@ public class InvoiceController {
         }
     }
 
+    // ==============================
+    // Helpers
+    // ==============================
+
     private boolean isFileListInvalid(List<MultipartFile> files) {
         return files == null
                 || files.isEmpty()
                 || files.stream().allMatch(MultipartFile::isEmpty);
+    }
+
+    private static OffsetDateTime parseDate(String s) {
+        return s == null || s.isBlank() ? null : OffsetDateTime.parse(s);
+    }
+
+    private static BigDecimal parseDecimal(String s) {
+        return s == null || s.isBlank() ? null : new BigDecimal(s);
     }
 }
