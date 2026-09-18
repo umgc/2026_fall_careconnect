@@ -30,6 +30,32 @@ public class ConfigController {
         this.userRepository = userRepository;
     }
 
+    private static int parseIntOrDefault(String raw, int def) {
+        if (raw == null) return def;
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    private static String defaultCompetencyLabel(int value) {
+        switch (value) {
+            case 1:
+                return "Total Assistance";
+            case 2:
+                return "Maximum Assistance";
+            case 3:
+                return "Moderate Assistance";
+            case 4:
+                return "Minimal Assistance";
+            case 5:
+                return "Independent";
+            default:
+                return "";
+        }
+    }
+
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return userRepository.findByEmail(auth.getName())
@@ -104,32 +130,6 @@ public class ConfigController {
             items.add(new CompetencyScaleDtos.CompetencyScaleItem(v, label));
         }
         return ResponseEntity.ok(new CompetencyScaleDtos.CompetencyScaleResponse(minReq, maxReq, labels, items));
-    }
-
-    private static int parseIntOrDefault(String raw, int def) {
-        if (raw == null) return def;
-        try {
-            return Integer.parseInt(raw.trim());
-        } catch (Exception e) {
-            return def;
-        }
-    }
-
-    private static String defaultCompetencyLabel(int value) {
-        switch (value) {
-            case 1:
-                return "Total Assistance";
-            case 2:
-                return "Maximum Assistance";
-            case 3:
-                return "Moderate Assistance";
-            case 4:
-                return "Minimal Assistance";
-            case 5:
-                return "Independent";
-            default:
-                return "";
-        }
     }
 }
 

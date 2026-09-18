@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -53,32 +54,50 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/v1/api/clients")
 public class ClientController {
 
+    private static final double STATUS_MARGIN = 0.2;
+    private static final Set<String> ADL_NAMES = Set.of(
+            "bathing", "dressing", "toileting", "transferring", "mobility/ambulation",
+            "eating", "personal hygiene & grooming");
+    private static final Set<String> IADL_NAMES = Set.of(
+            "meal preparation", "housekeeping", "laundry", "medication management",
+            "money management", "transportation", "communication", "community participation",
+            "shopping", "safety awareness");
+    private static final int PARTICIPATION_TREND_MARGIN = 1;
     @Autowired
     private PatientService patientService;
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private CaregiverPatientLinkService caregiverPatientLinkService;
-
     @Autowired
     private FamilyMemberService familyMemberService;
-
     @Autowired
     private CaregiverRepository caregiverRepository;
-
     @Autowired
     private BehavioralIncidentRepository behavioralIncidentRepository;
-
     @Autowired
     private IncidentReportRepository incidentReportRepository;
-
     @Autowired
     private ClientEventRepository clientEventRepository;
-
     @Autowired
     private ActivityLogRepository activityLogRepository;
+
+    private static String deriveCategory(String activityName) {
+        if (activityName == null || activityName.isBlank()) return "ADL";
+        String normalized = activityName.trim().toLowerCase();
+        if (ADL_NAMES.contains(normalized)) return "ADL";
+        if (IADL_NAMES.contains(normalized)) return "IADL";
+        return "ADL";
+    }
+
+    private static IncidentReport.IncidentType parseIncidentType(String raw) {
+        String normalized = raw.trim().toUpperCase().replace(' ', '_');
+        try {
+            return IncidentReport.IncidentType.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Unknown incident_type: " + raw);
+        }
+    }
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -198,7 +217,7 @@ public class ClientController {
     /**
      * Unified read-only audit log for this client, combining activity logs, behavioral incidents,
      * incident reports, and client events into a single chronological feed.
-     *
+     * <p>
      * Optional filters:
      * - startDate / endDate: inclusive LocalDate range, applied to createdAt.
      * - type: one of ACTIVITY_LOG, BEHAVIORAL_INCIDENT, INCIDENT_REPORT, CLIENT_EVENT (or null for all).
@@ -230,15 +249,23 @@ public class ClientController {
 
         java.util.Set<Long> userIds = new java.util.HashSet<>();
         java.util.Set<Long> caregiverIdsForEvents = new java.util.HashSet<>();
-        activityLogs.forEach(l -> { if (l.getCaregiverUserId() != null) userIds.add(l.getCaregiverUserId()); });
-        behavioralIncidents.forEach(b -> { if (b.getCreatedBy() != null) userIds.add(b.getCreatedBy()); });
-        incidentReports.forEach(r -> { if (r.getCreatedBy() != null) userIds.add(r.getCreatedBy()); });
-        clientEvents.forEach(e -> { if (e.getCaregiverId() != null) caregiverIdsForEvents.add(e.getCaregiverId()); });
+        activityLogs.forEach(l -> {
+            if (l.getCaregiverUserId() != null) userIds.add(l.getCaregiverUserId());
+        });
+        behavioralIncidents.forEach(b -> {
+            if (b.getCreatedBy() != null) userIds.add(b.getCreatedBy());
+        });
+        incidentReports.forEach(r -> {
+            if (r.getCreatedBy() != null) userIds.add(r.getCreatedBy());
+        });
+        clientEvents.forEach(e -> {
+            if (e.getCaregiverId() != null) caregiverIdsForEvents.add(e.getCaregiverId());
+        });
 
         Map<Long, Caregiver> caregiversById = caregiverIdsForEvents.isEmpty()
                 ? Collections.emptyMap()
                 : caregiverRepository.findAllById(caregiverIdsForEvents).stream()
-                    .collect(Collectors.toMap(Caregiver::getId, c -> c));
+                .collect(Collectors.toMap(Caregiver::getId, c -> c));
 
         caregiversById.values().forEach(c -> {
             if (c.getUser() != null && c.getUser().getId() != null) {
@@ -249,7 +276,7 @@ public class ClientController {
         Map<Long, User> creators = userIds.isEmpty()
                 ? Collections.emptyMap()
                 : userRepository.findAllById(userIds).stream()
-                    .collect(Collectors.toMap(User::getId, u -> u));
+                .collect(Collectors.toMap(User::getId, u -> u));
 
         List<AuditLogDtos.AuditLogItem> items = new ArrayList<>();
 
@@ -401,8 +428,6 @@ public class ClientController {
         return ResponseEntity.ok(new CompetencyTrendDtos.CompetencyTrendsResponse(status, weekLabels, activityTrends));
     }
 
-    private static final double STATUS_MARGIN = 0.2;
-
     private String computeCompetencyStatus(List<ActivityLog> logs, List<String> weekLabels) {
         if (weekLabels.size() < 4) return "STABLE";
         String lastWeek = weekLabels.get(weekLabels.size() - 1);
@@ -507,22 +532,6 @@ public class ClientController {
         return "STABLE";
     }
 
-    private static final Set<String> ADL_NAMES = Set.of(
-            "bathing", "dressing", "toileting", "transferring", "mobility/ambulation",
-            "eating", "personal hygiene & grooming");
-    private static final Set<String> IADL_NAMES = Set.of(
-            "meal preparation", "housekeeping", "laundry", "medication management",
-            "money management", "transportation", "communication", "community participation",
-            "shopping", "safety awareness");
-
-    private static String deriveCategory(String activityName) {
-        if (activityName == null || activityName.isBlank()) return "ADL";
-        String normalized = activityName.trim().toLowerCase();
-        if (ADL_NAMES.contains(normalized)) return "ADL";
-        if (IADL_NAMES.contains(normalized)) return "IADL";
-        return "ADL";
-    }
-
     /**
      * Get activity participation report: per-activity log counts and last logged, with no-recent-activity flag.
      * Optional query params: startDate, endDate (default: last 4 weeks).
@@ -594,8 +603,6 @@ public class ClientController {
         String status = computeParticipationStatus(countByWeek, sortedWeeks);
         return ResponseEntity.ok(new ParticipationDtos.ParticipationResponse(status, weeklyCounts, activities));
     }
-
-    private static final int PARTICIPATION_TREND_MARGIN = 1;
 
     private String computeParticipationStatus(Map<String, Integer> countByWeek, List<String> sortedWeeks) {
         if (sortedWeeks.size() < 4) return "STABLE";
@@ -808,15 +815,6 @@ public class ClientController {
             throw new AppException(HttpStatus.FORBIDDEN, "Incident does not belong to this client");
         }
         return ResponseEntity.ok(report);
-    }
-
-    private static IncidentReport.IncidentType parseIncidentType(String raw) {
-        String normalized = raw.trim().toUpperCase().replace(' ', '_');
-        try {
-            return IncidentReport.IncidentType.valueOf(normalized);
-        } catch (IllegalArgumentException ex) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Unknown incident_type: " + raw);
-        }
     }
 
     /**

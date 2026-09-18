@@ -23,6 +23,7 @@ import com.sendgrid.SendGrid;
 import com.sendgrid.helpers.mail.Mail;
 import com.sendgrid.helpers.mail.objects.Email;
 import com.sendgrid.helpers.mail.objects.Content;
+
 import java.io.IOException;
 
 import java.util.HashMap;
@@ -30,7 +31,7 @@ import java.util.Map;
 
 @Service
 public class EmailService {
-    
+
     @Value("${careconnect.email.provider:mailtrap}")
     private String emailProvider;
 
@@ -69,23 +70,23 @@ public class EmailService {
     @Autowired
     private RestTemplate restTemplate;
 
-        /**
+    /**
      * Send password setup email with backend-generated credentials
      */
     public void sendPasswordSetupEmailWithCredentials(String recipientEmail, String passwordSetupToken, String firstName, String username, String password) {
         String setupLink = frontendBaseUrl + "/setup-password?token=" + passwordSetupToken;
         String subject = "Welcome to CareConnect - Complete Your Registration";
-        
+
         boolean isTemporaryPassword = password.length() == 12 && password.matches(".*[A-Z].*[a-z].*[0-9].*[!@#$%^&*()_+\\-=].*");
         String htmlContent = buildWelcomeEmailHtml(firstName, setupLink, username, password, isTemporaryPassword);
-        
+
         String textContent = "Hello " + (firstName != null ? firstName : "") + ",\n\n" +
                 "Your CareConnect account has been created.\n" +
                 "Username: " + username + "\n" +
                 (isTemporaryPassword ? "Temporary Password: " : "Password: ") + password + "\n\n" +
                 "Please complete your registration by clicking this link: " + setupLink + "\n\n" +
                 (isTemporaryPassword ? "For security, please change your password after logging in." : "");
-        
+
         sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
 
@@ -121,7 +122,7 @@ public class EmailService {
         String subject = "CareConnect Email Verification";
         String htmlContent = buildVerificationEmailHtml(verificationLink);
         String textContent = "Please verify your email by clicking: " + verificationLink;
-        
+
         sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
 
@@ -130,7 +131,7 @@ public class EmailService {
         String subject = "CareConnect - Set Up Your Password";
         String htmlContent = buildPasswordSetupEmailHtml(firstName, passwordSetupLink);
         String textContent = "Set up your password by clicking: " + passwordSetupLink;
-        
+
         sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
 
@@ -138,7 +139,7 @@ public class EmailService {
         String subject = "CareConnect Password Reset";
         String htmlContent = buildPasswordResetEmailHtml(resetLink);
         String textContent = "Reset your password by clicking: " + resetLink;
-        
+
         sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
 
@@ -147,7 +148,7 @@ public class EmailService {
         String subject = "CareConnect - Family Member Invitation";
         String htmlContent = buildFamilyMemberInviteEmailHtml(firstName, passwordSetupLink, patientName);
         String textContent = "You've been invited to CareConnect. Set up your password: " + passwordSetupLink;
-        
+
         sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
 
@@ -159,7 +160,7 @@ public class EmailService {
                 "You have been granted access to a new patient in CareConnect: " + patientName + ".\n\n" +
                 "You can now log in to view their information: " + loginLink + "\n\n" +
                 "Best regards,\nThe CareConnect Team";
-        
+
         sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
 
@@ -213,7 +214,7 @@ public class EmailService {
         } catch (Exception e) {
             System.err.println("❌ Failed to send email via " + emailProvider + ": " + e.getMessage());
             e.printStackTrace();
-            
+
             // Fallback to console mode if email sending fails
             // BUT NOT for console or dev modes (they don't "fail")
             if (!"console".equals(emailProvider) && !"dev".equals(emailProvider)) {
@@ -227,13 +228,13 @@ public class EmailService {
      * Console/Development mode - log email to console
      */
     private void sendConsoleEmail(final String recipientEmail, final String subject, final String content) {
-         System.out.println("🔧 DEV MODE - Email logged to console:");
-         System.out.println("  Provider: " + emailProvider);
-         System.out.println("  To: " + recipientEmail);
-         System.out.println("  From: " + fromEmail);
-         System.out.println("  Subject: " + subject);
-         System.out.println("  Content: " + content);
-         System.out.println("  ===================================");
+        System.out.println("🔧 DEV MODE - Email logged to console:");
+        System.out.println("  Provider: " + emailProvider);
+        System.out.println("  To: " + recipientEmail);
+        System.out.println("  From: " + fromEmail);
+        System.out.println("  Subject: " + subject);
+        System.out.println("  Content: " + content);
+        System.out.println("  ===================================");
     }
 
     /**
@@ -246,7 +247,7 @@ public class EmailService {
 
         try {
             String url = "https://api.resend.com/emails";
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(resendApiKey);
@@ -274,22 +275,22 @@ public class EmailService {
      * Mailgun API - Simple API-based email service
      */
     private void sendMailgunEmail(String recipientEmail, String subject, String htmlContent) {
-        if (mailgunApiKey == null || mailgunApiKey.trim().isEmpty() || 
-            mailgunDomain == null || mailgunDomain.trim().isEmpty()) {
+        if (mailgunApiKey == null || mailgunApiKey.trim().isEmpty() ||
+                mailgunDomain == null || mailgunDomain.trim().isEmpty()) {
             throw new RuntimeException("Mailgun configuration incomplete. Set MAILGUN_API_KEY and MAILGUN_DOMAIN environment variables.");
         }
 
         try {
             String url = "https://api.mailgun.net/v3/" + mailgunDomain + "/messages";
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
             headers.setBasicAuth("api", mailgunApiKey);
 
-            String body = "from=" + fromEmail + 
-                         "&to=" + recipientEmail + 
-                         "&subject=" + subject + 
-                         "&html=" + htmlContent;
+            String body = "from=" + fromEmail +
+                    "&to=" + recipientEmail +
+                    "&subject=" + subject +
+                    "&html=" + htmlContent;
 
             HttpEntity<String> request = new HttpEntity<>(body, headers);
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, request, Map.class);
@@ -420,20 +421,20 @@ public class EmailService {
     }
 
     public void sendHtmlEmail(String recipientEmail, String subject, String htmlContent) {
-    // Use the same HTML content as text content for the fallback
-    // This isn't ideal for accessibility, but works as a simple solution
-    String textContent = htmlContent.replaceAll("<[^>]*>", "")
-                                   .replaceAll("\\s+", " ")
-                                   .trim();
-    
-    sendEmail(recipientEmail, subject, htmlContent, textContent);
+        // Use the same HTML content as text content for the fallback
+        // This isn't ideal for accessibility, but works as a simple solution
+        String textContent = htmlContent.replaceAll("<[^>]*>", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        sendEmail(recipientEmail, subject, htmlContent, textContent);
     }
-    
+
     // Overload for backward compatibility with code that includes content type
     public void sendHtmlEmail(String recipientEmail, String subject, String htmlContent, String contentType) {
         // Ignore the contentType parameter as we're always sending HTML
         sendHtmlEmail(recipientEmail, subject, htmlContent);
-}
+    }
 
     /**
      * HTML email templates
@@ -521,7 +522,7 @@ public class EmailService {
         config.put("providerInfo", getProviderInfo());
         config.put("fromEmail", fromEmail);
         config.put("frontendBaseUrl", frontendBaseUrl);
-        
+
         // Check provider-specific configuration
         switch (emailProvider.toLowerCase()) {
             case "resend":
@@ -544,7 +545,7 @@ public class EmailService {
                 config.put("alwaysAvailable", true);
                 break;
         }
-        
+
         return config;
     }
 }

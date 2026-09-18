@@ -37,8 +37,8 @@ public class FormPdfService {
      * Build a PDF document for the submitted form.
      *
      * @param plaintextValues the submitted values in clear text (the persisted
-     *     submission only holds ciphertext for sensitive fields); sensitive
-     *     fields are masked in the rendered PDF.
+     *                        submission only holds ciphertext for sensitive fields); sensitive
+     *                        fields are masked in the rendered PDF.
      */
     public byte[] generate(FormSchema schema, FormSubmission submission, Map<String, Object> plaintextValues) {
         Map<String, Object> values = plaintextValues == null ? Map.of() : plaintextValues;
@@ -75,8 +75,8 @@ public class FormPdfService {
                     "Submission #" + submission.getId()
                             + "  •  Status: " + submission.getStatus()
                             + (submission.getSubmittedAt() != null
-                                    ? "  •  Submitted: " + submission.getSubmittedAt().format(TS)
-                                    : "")
+                            ? "  •  Submitted: " + submission.getSubmittedAt().format(TS)
+                            : "")
                             + "  •  Filed by: " + submission.getOwnerType() + " #" + submission.getOwnerId(),
                     metaFont);
             subP.setSpacingAfter(10f);
@@ -155,7 +155,9 @@ public class FormPdfService {
         return optionLabel(field, v);
     }
 
-    /** Mask a sensitive value, revealing only the last 4 characters (e.g. ***-**-1234). */
+    /**
+     * Mask a sensitive value, revealing only the last 4 characters (e.g. ***-**-1234).
+     */
     private String mask(String s) {
         if (s == null || s.isEmpty()) {
             return "";

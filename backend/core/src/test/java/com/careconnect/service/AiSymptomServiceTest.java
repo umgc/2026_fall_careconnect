@@ -24,16 +24,13 @@ import static org.mockito.Mockito.when;
 
 class AiSymptomServiceTest {
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private BedrockStructuredAnalysisService bedrockAnalysisService;
-
     @Mock
     private DeepSeekContextBuilder contextBuilder;
-
     @InjectMocks
     private AiSymptomService aiSymptomService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws Exception {

@@ -28,7 +28,6 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "careconnect.aws.enabled", havingValue = "true", matchIfMissing = true)
 public class S3StorageService implements StorageService {
 
-    private static final Logger log = LoggerFactory.getLogger(S3StorageService.class);
     private final S3Client s3;
     private final S3Props props;
 

@@ -57,14 +57,13 @@ import static org.mockito.Mockito.when;
 @DisplayName("ChimeService Tests")
 class ChimeServiceTest {
 
+    private static final String CALL_ID = "call-chime-001";
+    private static final String USER_ID = "42";
+    private static final String MEETING_ID = "meeting-abc-123";
     @Mock
     private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
     @Mock
     private CallSessionRepository callSessionRepository;
-
-    private static final String CALL_ID = "call-chime-001";
-    private static final String USER_ID = "42";
-    private static final String MEETING_ID = "meeting-abc-123";
 
     // Helper to build a full Meeting with MediaPlacement
     private Meeting buildMeeting(String meetingId) {

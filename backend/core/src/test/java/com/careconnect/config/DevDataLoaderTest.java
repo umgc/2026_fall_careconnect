@@ -13,12 +13,12 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link DevDataLoader}.
- *
+ * <p>
  * DevDataLoader is a Spring {@code CommandLineRunner} that seeds the database with
  * development fixture data on startup. It is only active when a boolean "enabled" flag
  * is set to {@code true} (typically via a Spring profile or property), and it skips
  * seeding if users already exist in the database.
- *
+ * <p>
  * All JDBC interactions (DataSource, Connection, Statement, ResultSet) are mocked using
  * Mockito to avoid requiring a real database. This isolates the logic being tested —
  * the conditional seeding decisions — from infrastructure concerns.

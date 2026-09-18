@@ -7,10 +7,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.security.SecureRandom;
+
 import org.apache.commons.codec.digest.DigestUtils;
 import jakarta.mail.internet.MimeMessage;
 
@@ -22,16 +24,14 @@ import com.careconnect.repository.PasswordResetTokenRepo;
 @Service
 public class PasswordResetService {
 
+    private static final Duration TTL = Duration.ofHours(3);  // Increased to 3 hours
     private final UserRepository users;
     private final PasswordResetTokenRepo tokens;
     private final PasswordEncoder encoder;
-    
     @Autowired(required = false)
     private JavaMailSender mail;
-    
     @Value("${careconnect.email.provider:sendgrid}")
     private String emailProvider;
-    
     @Value("${careconnect.email.from:smpestest@gmail.com}")
     private String fromEmail;
 
@@ -40,8 +40,6 @@ public class PasswordResetService {
         this.tokens = tokens;
         this.encoder = encoder;
     }
-
-    private static final Duration TTL = Duration.ofHours(3);  // Increased to 3 hours
 
     /* Step 1 – request */
     // public void startReset(String email, String appUrl) {
@@ -69,39 +67,40 @@ public class PasswordResetService {
     // }
 
     /* Step 1 – request */
-public void startReset(String email, String appUrl) {
-    User user = users.findByEmail(email)
-                    .orElseThrow(() -> new IllegalArgumentException("Email not found"));
+    public void startReset(String email, String appUrl) {
+        User user = users.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Email not found"));
 
-    // SIMPLIFIED FLOW: Generate a base64 encoded user ID
-    String encodedUserId = Base64.getUrlEncoder().encodeToString(
-        user.getId().toString().getBytes());
-    
-    // SIMPLIFIED FLOW: Create the reset link using 'token' parameter for client compatibility
-    // but the value will actually be the encoded user ID
-    String link = appUrl + "/setup-password?token=" + encodedUserId;
-    sendPasswordResetEmail(user.getEmail(), link);
-}
-  /* Step 2 – confirmation */
-public void finalizeReset(String rawToken, String newPassword) {
-    try {
-        // SIMPLIFIED FLOW: Treat the rawToken as the encoded user ID
-        String userIdStr = new String(Base64.getUrlDecoder().decode(rawToken));
-        Long userId = Long.parseLong(userIdStr);
-        
-        User user = users.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or missing reset token"));
-        
-        String encodedPassword = encoder.encode(newPassword);
-        user.setPassword(encodedPassword);
-        users.save(user);
+        // SIMPLIFIED FLOW: Generate a base64 encoded user ID
+        String encodedUserId = Base64.getUrlEncoder().encodeToString(
+                user.getId().toString().getBytes());
 
-    } catch (IllegalArgumentException e) {
-        throw e;
-    } catch (Exception e) {
-        throw new IllegalArgumentException("Invalid or missing reset token");
+        // SIMPLIFIED FLOW: Create the reset link using 'token' parameter for client compatibility
+        // but the value will actually be the encoded user ID
+        String link = appUrl + "/setup-password?token=" + encodedUserId;
+        sendPasswordResetEmail(user.getEmail(), link);
     }
-}
+
+    /* Step 2 – confirmation */
+    public void finalizeReset(String rawToken, String newPassword) {
+        try {
+            // SIMPLIFIED FLOW: Treat the rawToken as the encoded user ID
+            String userIdStr = new String(Base64.getUrlDecoder().decode(rawToken));
+            Long userId = Long.parseLong(userIdStr);
+
+            User user = users.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid or missing reset token"));
+
+            String encodedPassword = encoder.encode(newPassword);
+            user.setPassword(encodedPassword);
+            users.save(user);
+
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid or missing reset token");
+        }
+    }
     /* Step 2 – confirmation */
     // public void finalizeReset(String rawToken, String newPassword) {
     //     String hash = hash(rawToken);
@@ -113,7 +112,7 @@ public void finalizeReset(String rawToken, String newPassword) {
     //     if (t.isUsed()) {
     //         throw new IllegalArgumentException("This reset token has already been used");
     //     }
-        
+
     //     if (t.getExpiresAt().isBefore(Instant.now())) {
     //         throw new IllegalArgumentException("This reset token has expired. Please request a new one");
     //     }
@@ -141,24 +140,24 @@ public void finalizeReset(String rawToken, String newPassword) {
     // }
 
     /**
- * Check if a user ID is valid
- */
-public boolean isTokenValid(String encodedUserId) {
-    // SIMPLIFIED FLOW: Just check if the user exists
-    try {
-        String userIdStr = new String(Base64.getUrlDecoder().decode(encodedUserId));
-        Long userId = Long.parseLong(userIdStr);
-        return users.findById(userId).isPresent();
-        
-        // SIMPLIFIED FLOW: Original token validation - not used anymore
+     * Check if a user ID is valid
+     */
+    public boolean isTokenValid(String encodedUserId) {
+        // SIMPLIFIED FLOW: Just check if the user exists
+        try {
+            String userIdStr = new String(Base64.getUrlDecoder().decode(encodedUserId));
+            Long userId = Long.parseLong(userIdStr);
+            return users.findById(userId).isPresent();
+
+            // SIMPLIFIED FLOW: Original token validation - not used anymore
         /*
         String hash = hash(rawToken);
         return tokens.findValid(hash, Instant.now()).isPresent();
         */
-    } catch (Exception e) {
-        return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
-}
 
     /* ---------- helpers ------------------------------------------------ */
     private String generateSecureRandomString(int len) {
@@ -166,11 +165,11 @@ public boolean isTokenValid(String encodedUserId) {
         new SecureRandom().nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
-    
+
     private String hash(String raw) {
         return DigestUtils.sha256Hex(raw);      // Apache commons-codec
     }
-    
+
     private void sendPasswordResetEmail(String to, String link) {
         if ("console".equals(emailProvider) || mail == null) {
             // Console mode disabled - password reset would be logged here
@@ -181,7 +180,7 @@ public boolean isTokenValid(String encodedUserId) {
             // System.out.println("  ===================================");
             return;
         }
-        
+
         try {
             MimeMessage message = mail.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
@@ -192,46 +191,46 @@ public boolean isTokenValid(String encodedUserId) {
             }
             helper.setFrom(fromEmail);
             helper.setSubject("CareConnect Password Reset");
-            
+
             String emailBody = String.format(
-                "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n" +
-                "    <h2 style=\"color: #2c3e50; text-align: center;\">CareConnect Password Reset</h2>\n" +
-                "    \n" +
-                "    <p style=\"font-size: 16px; line-height: 1.6; color: #333;\">\n" +
-                "        You requested a password reset for your CareConnect account.\n" +
-                "    </p>\n" +
-                "    \n" +
-                "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
-                "        <a href=\"%s\" \n" +
-                "           style=\"background-color: #3498db; \n" +
-                "                  color: white; \n" +
-                "                  padding: 12px 30px; \n" +
-                "                  text-decoration: none; \n" +
-                "                  border-radius: 5px; \n" +
-                "                  font-weight: bold; \n" +
-                "                  font-size: 16px;\n" +
-                "                  display: inline-block;\n" +
-                "                  border: 2px solid #3498db;\n" +
-                "                  transition: background-color 0.3s;\">\n" +
-                "            Reset Your Password\n" +
-                "        </a>\n" +
-                "    </div>\n" +
-                "    \n" +
-                "    <p style=\"font-size: 14px; color: #666; text-align: center; margin-top: 20px;\">\n" +
-                "        <strong>This link is valid for 20 minutes only and will expire automatically.</strong>\n" +
-                "    </p>\n" +
-                "    \n" +
-                "    <p style=\"font-size: 14px; color: #666; text-align: center;\">\n" +
-                "        If you didn't request this password reset, please ignore this email.\n" +
-                "    </p>\n" +
-                "    \n" +
-                "    <hr style=\"border: none; border-top: 1px solid #eee; margin: 30px 0;\">\n" +
-                "    \n" +
-                "    <p style=\"font-size: 12px; color: #999; text-align: center;\">\n" +
-                "        This is an automated message from CareConnect. Please do not reply to this email.\n" +
-                "    </p>\n" +
-                "</div>\n", link);
-            
+                    "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n" +
+                            "    <h2 style=\"color: #2c3e50; text-align: center;\">CareConnect Password Reset</h2>\n" +
+                            "    \n" +
+                            "    <p style=\"font-size: 16px; line-height: 1.6; color: #333;\">\n" +
+                            "        You requested a password reset for your CareConnect account.\n" +
+                            "    </p>\n" +
+                            "    \n" +
+                            "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
+                            "        <a href=\"%s\" \n" +
+                            "           style=\"background-color: #3498db; \n" +
+                            "                  color: white; \n" +
+                            "                  padding: 12px 30px; \n" +
+                            "                  text-decoration: none; \n" +
+                            "                  border-radius: 5px; \n" +
+                            "                  font-weight: bold; \n" +
+                            "                  font-size: 16px;\n" +
+                            "                  display: inline-block;\n" +
+                            "                  border: 2px solid #3498db;\n" +
+                            "                  transition: background-color 0.3s;\">\n" +
+                            "            Reset Your Password\n" +
+                            "        </a>\n" +
+                            "    </div>\n" +
+                            "    \n" +
+                            "    <p style=\"font-size: 14px; color: #666; text-align: center; margin-top: 20px;\">\n" +
+                            "        <strong>This link is valid for 20 minutes only and will expire automatically.</strong>\n" +
+                            "    </p>\n" +
+                            "    \n" +
+                            "    <p style=\"font-size: 14px; color: #666; text-align: center;\">\n" +
+                            "        If you didn't request this password reset, please ignore this email.\n" +
+                            "    </p>\n" +
+                            "    \n" +
+                            "    <hr style=\"border: none; border-top: 1px solid #eee; margin: 30px 0;\">\n" +
+                            "    \n" +
+                            "    <p style=\"font-size: 12px; color: #999; text-align: center;\">\n" +
+                            "        This is an automated message from CareConnect. Please do not reply to this email.\n" +
+                            "    </p>\n" +
+                            "</div>\n", link);
+
             helper.setText(emailBody, true);
             mail.send(message);
             // String providerInfo = getProviderInfo();
@@ -242,7 +241,7 @@ public boolean isTokenValid(String encodedUserId) {
             throw new RuntimeException("Failed to send password reset email", e);
         }
     }
-    
+
     private String getProviderInfo() {
         switch (emailProvider.toLowerCase()) {
             case "mailtrap":

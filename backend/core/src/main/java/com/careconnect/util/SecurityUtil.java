@@ -49,7 +49,7 @@ public class SecurityUtil {
 
         // Check for anonymous role safely
         boolean isAnonymous = auth.getAuthorities().stream()
-            .anyMatch(authority -> "ROLE_ANONYMOUS".equals(authority.getAuthority()));
+                .anyMatch(authority -> "ROLE_ANONYMOUS".equals(authority.getAuthority()));
 
         if (isAnonymous) {
             return null;
@@ -74,7 +74,7 @@ public class SecurityUtil {
 
             try {
                 return userRepository.findByEmailAndRole(email, Role.valueOf(roleName))
-                    .orElseThrow(() -> new RuntimeException("User not found: " + email));
+                        .orElseThrow(() -> new RuntimeException("User not found: " + email));
             } catch (IllegalArgumentException e) {
                 throw new RuntimeException("Invalid role: " + roleName);
             }
@@ -87,6 +87,7 @@ public class SecurityUtil {
     public static class UserInfo {
         public final String email;
         public final Role role;
+
         public UserInfo(String email, Role role) {
             this.email = email;
             this.role = role;

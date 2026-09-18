@@ -11,13 +11,10 @@ import java.util.List;
 import java.util.Set;
 
 public interface CheckInQuestionRepository extends JpaRepository<CheckInQuestion, CheckInQuestionId> {
-    interface CheckInQuestionCountProjection {
-        Long getCheckInId();
-        long getQuestionCount();
-    }
-
     List<CheckInQuestion> findByCheckIn_IdOrderByOrdinalAsc(Long checkInId);
+
     boolean existsByCheckIn_IdAndQuestion_Id(Long checkInId, Long questionId);
+
     long countByCheckIn_Id(Long checkInId);
 
     @Query("""
@@ -48,4 +45,10 @@ public interface CheckInQuestionRepository extends JpaRepository<CheckInQuestion
             ORDER BY ciq.ordinal ASC
             """)
     List<QuestionDTO> findSnapshotQuestionDtosByCheckInId(@Param("checkInId") Long checkInId);
+
+    interface CheckInQuestionCountProjection {
+        Long getCheckInId();
+
+        long getQuestionCount();
+    }
 }

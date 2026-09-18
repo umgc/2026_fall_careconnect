@@ -21,13 +21,12 @@ public class BedrockTestController {
 
     /**
      * Simple Get endpoint to test Bedrock
-     * 
+     * <p>
      * Example:
      * http://localhost:8081/api/bedrock/test?prompt=Hello
-     * 
-     * 
-     * @param prompt    The user input text
-     * @return          Raw JSON response from Bedrock
+     *
+     * @param prompt The user input text
+     * @return Raw JSON response from Bedrock
      */
 
     @GetMapping("/test")

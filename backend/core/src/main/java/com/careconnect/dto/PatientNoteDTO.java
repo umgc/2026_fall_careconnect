@@ -19,14 +19,16 @@ public class PatientNoteDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public PatientNoteDTO() {}
+    public PatientNoteDTO() {
+    }
+
     public PatientNoteDTO(
-        Long id,
-        Long patientId,
-        String note,
-        String aiSummary,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+            Long id,
+            Long patientId,
+            String note,
+            String aiSummary,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
     ) {
         this.id = id;
         this.patientId = patientId;
@@ -36,7 +38,7 @@ public class PatientNoteDTO {
         this.updatedAt = updatedAt;
     }
 
-    public  PatientNoteDTO(PatientNote patientNote) {
+    public PatientNoteDTO(PatientNote patientNote) {
         if (patientNote != null) {
             this.id = patientNote.getId();
             this.patientId = patientNote.getPatientId();
@@ -44,8 +46,7 @@ public class PatientNoteDTO {
             this.aiSummary = patientNote.getAiSummary();
             this.createdAt = patientNote.getCreatedAt();
             this.updatedAt = patientNote.getUpdatedAt();
-        }
-        else { 
+        } else {
             this.id = null;
             this.patientId = null;
             this.note = null;
@@ -57,13 +58,13 @@ public class PatientNoteDTO {
 
     public PatientNote toEntity() {
         return PatientNote.builder()
-            .id(this.id)
-            .patientId(this.patientId)
-            .note(this.note)
-            .aiSummary(this.aiSummary)
-            .createdAt(createdAt)
-            .updatedAt(updatedAt)
-            .build();
+                .id(this.id)
+                .patientId(this.patientId)
+                .note(this.note)
+                .aiSummary(this.aiSummary)
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
+                .build();
     }
 }
 

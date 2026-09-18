@@ -69,8 +69,8 @@ public class CallSummaryController {
      *
      * @param id database identifier of the summary row
      * @return 200 with the summary response map, 404 when not found,
-     *         403 when the caller is not admin / historical participant /
-     *         current patient relationship, or fails the on_consent gate
+     * 403 when the caller is not admin / historical participant /
+     * current patient relationship, or fails the on_consent gate
      */
     @PreAuthorize("hasAnyRole('CAREGIVER', 'PATIENT', 'ADMIN')")
     @GetMapping("/{id}")

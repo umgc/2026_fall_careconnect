@@ -31,15 +31,24 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class EmailCredentialLifecycleServiceTest {
 
-    @Mock private EmailCredentialRepository credentialRepository;
-    @Mock private NotificationService notificationService;
-    @Mock private EmailCredentialRepo uspsCredRepo;
-    @Mock private USPSDigestCacheRepo cacheRepo;
-    @Mock private GmailClient gmailClient;
-    @Mock private OutlookClient outlookClient;
-    @Mock private GmailParser gmailParser;
-    @Mock private OutlookParser outlookParser;
-    @Mock private GoogleOAuthService googleOAuthService;
+    @Mock
+    private EmailCredentialRepository credentialRepository;
+    @Mock
+    private NotificationService notificationService;
+    @Mock
+    private EmailCredentialRepo uspsCredRepo;
+    @Mock
+    private USPSDigestCacheRepo cacheRepo;
+    @Mock
+    private GmailClient gmailClient;
+    @Mock
+    private OutlookClient outlookClient;
+    @Mock
+    private GmailParser gmailParser;
+    @Mock
+    private OutlookParser outlookParser;
+    @Mock
+    private GoogleOAuthService googleOAuthService;
 
     private EmailCredentialLifecycleService lifecycle;
     private TokenCryptor cryptor;

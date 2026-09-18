@@ -15,6 +15,7 @@ import com.careconnect.service.ai.safety.SafetyOutcome;
 import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -68,12 +70,45 @@ public class CallSummaryItemConfirmService {
     private final HitlService hitlService;
     private final com.careconnect.service.ai.ask.AiAskConfirmationService askConfirmationService;
 
+    static String summaryItemCorrelationKey(final String callId, final String itemId) {
+        return "call-summary:" + callId + ":" + itemId;
+    }
+
+    private static String normalizeDecision(final String rawDecision) {
+        if (rawDecision == null) {
+            throw new IllegalArgumentException("decision is required");
+        }
+        final String normalized = rawDecision.trim().toLowerCase(Locale.ROOT);
+        if (!VALID_DECISIONS.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "decision must be one of " + VALID_DECISIONS + " but was '" + rawDecision + "'");
+        }
+        return normalized;
+    }
+
+    private static String mapCategoryToItemType(final String category) {
+        return switch (category) {
+            case CATEGORY_ACTION_ITEMS -> "action_item";
+            case CATEGORY_APPOINTMENTS -> "appointment";
+            case CATEGORY_CARE_INSTRUCTIONS -> "care_instruction";
+            default -> category;
+        };
+    }
+
+    private static String trimToNull(final String value) {
+        if (value == null) {
+            return null;
+        }
+        final String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     /**
      * Confirms or declines a single extracted item on the latest stored summary for a call.
      *
-     * @param callId call identifier whose latest summary contains the item
-     * @param itemId server-assigned identifier of the item within the summary payload
-     * @param actor  user recording the decision
+     * @param callId  call identifier whose latest summary contains the item
+     * @param itemId  server-assigned identifier of the item within the summary payload
+     * @param actor   user recording the decision
      * @param request decision, optional destination, and optional notes
      * @return the recorded decision, or a held response when the item required clinician review
      */
@@ -129,7 +164,7 @@ public class CallSummaryItemConfirmService {
         final boolean isMedicationInstruction =
                 CATEGORY_CARE_INSTRUCTIONS.equals(lookup.category())
                         && CARE_INSTRUCTION_TYPE_MEDICATION.equalsIgnoreCase(
-                                String.valueOf(lookup.item().get("type")));
+                        String.valueOf(lookup.item().get("type")));
 
         final boolean approveForSession = DECISION_APPROVE_FOR_SESSION.equals(decision);
         final boolean sessionApproved = askConfirmationService.hasCallSummarySessionApproval(
@@ -209,10 +244,6 @@ public class CallSummaryItemConfirmService {
         return new SummaryItemConfirmResponse(itemId, null, true, held.getId(), null);
     }
 
-    static String summaryItemCorrelationKey(final String callId, final String itemId) {
-        return "call-summary:" + callId + ":" + itemId;
-    }
-
     private SummaryItemConfirmResponse recordDecision(
             final CallSummary summary,
             final Map<String, Object> payload,
@@ -271,27 +302,6 @@ public class CallSummaryItemConfirmService {
         }
     }
 
-    private static String normalizeDecision(final String rawDecision) {
-        if (rawDecision == null) {
-            throw new IllegalArgumentException("decision is required");
-        }
-        final String normalized = rawDecision.trim().toLowerCase(Locale.ROOT);
-        if (!VALID_DECISIONS.contains(normalized)) {
-            throw new IllegalArgumentException(
-                    "decision must be one of " + VALID_DECISIONS + " but was '" + rawDecision + "'");
-        }
-        return normalized;
-    }
-
-    private static String mapCategoryToItemType(final String category) {
-        return switch (category) {
-            case CATEGORY_ACTION_ITEMS -> "action_item";
-            case CATEGORY_APPOINTMENTS -> "appointment";
-            case CATEGORY_CARE_INSTRUCTIONS -> "care_instruction";
-            default -> category;
-        };
-    }
-
     @SuppressWarnings("unchecked")
     private ItemLookup findItem(final Map<String, Object> payload, final String itemId) {
         for (final String category : ITEM_CATEGORIES) {
@@ -318,7 +328,8 @@ public class CallSummaryItemConfirmService {
         }
         try {
             return objectMapper.readValue(
-                    summaryJson, new TypeReference<LinkedHashMap<String, Object>>() { });
+                    summaryJson, new TypeReference<LinkedHashMap<String, Object>>() {
+                    });
         } catch (final Exception ex) {
             throw new IllegalStateException("Failed to parse stored summary payload", ex);
         }
@@ -330,14 +341,6 @@ public class CallSummaryItemConfirmService {
         } catch (final Exception ex) {
             throw new IllegalStateException("Failed to serialize call summary payload", ex);
         }
-    }
-
-    private static String trimToNull(final String value) {
-        if (value == null) {
-            return null;
-        }
-        final String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private record ItemLookup(String category, Map<String, Object> item) {

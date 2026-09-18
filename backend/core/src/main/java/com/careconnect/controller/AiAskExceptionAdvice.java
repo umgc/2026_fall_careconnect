@@ -14,9 +14,26 @@ import org.springframework.security.access.AccessDeniedException;
 
 import java.util.UUID;
 
-/** Keeps failures raised before {@link AiAskController#ask} on the Ask AI response contract. */
+/**
+ * Keeps failures raised before {@link AiAskController#ask} on the Ask AI response contract.
+ */
 @RestControllerAdvice(assignableTypes = AiAskController.class)
 public class AiAskExceptionAdvice {
+
+    private static ResponseEntity<AiAskResponse> withheld(
+            final HttpStatus status,
+            final UUID sessionId,
+            final String errorCode,
+            final String message) {
+        return ResponseEntity.status(status)
+                .body(AiAskService.withheld(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        sessionId,
+                        errorCode,
+                        message,
+                        null));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<AiAskResponse> handleValidation(
@@ -59,20 +76,5 @@ public class AiAskExceptionAdvice {
                 null,
                 "FORBIDDEN",
                 "Ask AI access is not permitted");
-    }
-
-    private static ResponseEntity<AiAskResponse> withheld(
-            final HttpStatus status,
-            final UUID sessionId,
-            final String errorCode,
-            final String message) {
-        return ResponseEntity.status(status)
-                .body(AiAskService.withheld(
-                        UUID.randomUUID(),
-                        UUID.randomUUID(),
-                        sessionId,
-                        errorCode,
-                        message,
-                        null));
     }
 }

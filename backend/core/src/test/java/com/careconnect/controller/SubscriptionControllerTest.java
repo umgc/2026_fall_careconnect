@@ -25,14 +25,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class SubscriptionControllerTest {
 
-    @Mock private SubscriptionEnrichmentService subscriptionEnrichmentService;
-    @Mock private PlanRepository planRepository;
-    @Mock private SubscriptionRepository subscriptionRepository;
-
+    private static final Long USER_ID = 1L;
+    @Mock
+    private SubscriptionEnrichmentService subscriptionEnrichmentService;
+    @Mock
+    private PlanRepository planRepository;
+    @Mock
+    private SubscriptionRepository subscriptionRepository;
     @InjectMocks
     private SubscriptionController controller;
-
-    private static final Long USER_ID = 1L;
 
     // ─── listPlans ────────────────────────────────────────────────────────────
 

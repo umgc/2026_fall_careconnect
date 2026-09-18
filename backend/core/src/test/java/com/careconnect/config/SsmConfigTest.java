@@ -15,18 +15,18 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link SsmConfig}.
- *
+ * <p>
  * SsmConfig is a Spring {@code @Configuration} class that exposes application secrets
  * (Stripe keys, JWT secret, OAuth credentials, database password, etc.) as named beans.
  * In production, values are fetched from AWS SSM Parameter Store via
  * {@link SsmParameterService}; when SSM is unavailable, the config falls back to
  * environment variables.
- *
+ * <p>
  * Because {@code SsmParameterService} is optionally injected (it may be null if AWS
  * is not configured), the private field is set via Java Reflection in the helper method
  * {@link #injectSsmService} — the same approach used when Spring's {@code @Autowired}
  * is optional and the field is not exposed through a constructor or setter.
- *
+ * <p>
  * {@code @ExtendWith(MockitoExtension.class)} is used instead of
  * {@code MockitoAnnotations.openMocks(this)} for cleaner lifecycle management.
  */

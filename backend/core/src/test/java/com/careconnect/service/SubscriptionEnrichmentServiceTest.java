@@ -67,7 +67,9 @@ class SubscriptionEnrichmentServiceTest {
 
     // ─── Object-building helpers ──────────────────────────────────────────────
 
-    /** Creates a User with the given ID. */
+    /**
+     * Creates a User with the given ID.
+     */
     private User buildUser(Long id) {
         return User.builder()
                 .id(id)
@@ -76,7 +78,9 @@ class SubscriptionEnrichmentServiceTest {
                 .build();
     }
 
-    /** Creates a Subscription with the given fields. */
+    /**
+     * Creates a Subscription with the given fields.
+     */
     private Subscription buildSubscription(
             Long id, User user, String stripeSubId, String status, String priceId) {
         final Subscription sub = new Subscription();
@@ -88,7 +92,9 @@ class SubscriptionEnrichmentServiceTest {
         return sub;
     }
 
-    /** Creates a Plan with the given fields. */
+    /**
+     * Creates a Plan with the given fields.
+     */
     private Plan buildPlan(Long id, String code, String name, Integer priceCents) {
         final Plan plan = new Plan();
         plan.setId(id);

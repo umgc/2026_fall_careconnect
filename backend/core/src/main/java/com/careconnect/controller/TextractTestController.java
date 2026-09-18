@@ -27,44 +27,44 @@ public class TextractTestController {
         String invoiceText = String.join("\n", lines);
 
         String prompt = """
-You are an invoice data extraction engine.
+                You are an invoice data extraction engine.
+                
+                Extract structured invoice data from the text below.
+                
+                Return ONLY valid JSON matching this schema:
+                
+                {
+                  "invoice_number": "",
+                  "invoice_date": "",
+                  "payment_due_date": "",
+                  "vendor_name": "",
+                  "vendor_email": "",
+                  "vendor_address": "",
+                  "bill_to_name": "",
+                  "bill_to_address": "",
+                  "line_items": [
+                    {
+                      "description": "",
+                      "quantity": "",
+                      "unit_cost": "",
+                      "amount": ""
+                    }
+                  ],
+                  "subtotal": "",
+                  "tax": "",
+                  "total": "",
+                  "amount_due": ""
+                }
+                
+                Rules:
+                - Return ONLY JSON
+                - No explanations
+                - No markdown
+                - No extra text
+                
+                Invoice Text:
+                """ + invoiceText;
 
-Extract structured invoice data from the text below.
-
-Return ONLY valid JSON matching this schema:
-
-{
-  "invoice_number": "",
-  "invoice_date": "",
-  "payment_due_date": "",
-  "vendor_name": "",
-  "vendor_email": "",
-  "vendor_address": "",
-  "bill_to_name": "",
-  "bill_to_address": "",
-  "line_items": [
-    {
-      "description": "",
-      "quantity": "",
-      "unit_cost": "",
-      "amount": ""
-    }
-  ],
-  "subtotal": "",
-  "tax": "",
-  "total": "",
-  "amount_due": ""
-}
-
-Rules:
-- Return ONLY JSON
-- No explanations
-- No markdown
-- No extra text
-
-Invoice Text:
-""" + invoiceText;
- 
         ChatRequest request = new ChatRequest();
         request.setMessage(prompt);
 

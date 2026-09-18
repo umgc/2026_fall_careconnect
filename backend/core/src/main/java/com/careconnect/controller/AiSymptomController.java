@@ -72,10 +72,10 @@ public class AiSymptomController {
 
             return ResponseEntity.ok(Map.of(
                     "data", Map.of(
-                            "symptomKey",   result.getSymptomKey(),
+                            "symptomKey", result.getSymptomKey(),
                             "symptomValue", result.getSymptomValue(),
-                            "severity",     result.getSeverity(),
-                            "notes",        result.getNotes()
+                            "severity", result.getSeverity(),
+                            "notes", result.getNotes()
                     )
             ));
         } catch (Exception e) {

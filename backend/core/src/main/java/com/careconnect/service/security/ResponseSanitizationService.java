@@ -3,6 +3,7 @@ package com.careconnect.service.security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
+
 import java.util.List;
 import java.util.ArrayList;
 import java.util.regex.Pattern;
@@ -11,30 +12,15 @@ import java.util.regex.Pattern;
 @Slf4j
 public class ResponseSanitizationService {
 
-    @Autowired
-    private SecurityAuditService securityAuditService;
-
     // Patterns for detecting sensitive information in AI responses
     private static final Pattern SYSTEM_INFO_PATTERN = Pattern.compile(
-        "(?i).*(system prompt|internal instructions|configuration|api key|database|server|localhost|127\\.0\\.0\\.1).*"
+            "(?i).*(system prompt|internal instructions|configuration|api key|database|server|localhost|127\\.0\\.0\\.1).*"
     );
-
     private static final Pattern SENSITIVE_DATA_PATTERN = Pattern.compile(
-        "(?i).*(password|secret|token|credential|ssn|social security|credit card).*"
+            "(?i).*(password|secret|token|credential|ssn|social security|credit card).*"
     );
-
-    public static class SanitizationResult {
-        private final String sanitizedContent;
-        private final List<String> sanitizedItems;
-
-        public SanitizationResult(String sanitizedContent, List<String> sanitizedItems) {
-            this.sanitizedContent = sanitizedContent;
-            this.sanitizedItems = sanitizedItems;
-        }
-
-        public String getSanitizedContent() { return sanitizedContent; }
-        public List<String> getSanitizedItems() { return sanitizedItems; }
-    }
+    @Autowired
+    private SecurityAuditService securityAuditService;
 
     public SanitizationResult sanitizeAIResponse(String response, Long userId, String conversationId, Long patientId) {
         if (response == null || response.trim().isEmpty()) {
@@ -78,14 +64,32 @@ public class ResponseSanitizationService {
 
         // Remove any remaining potentially harmful content
         sanitized = sanitized
-            .replaceAll("(?s)<script[^>]*>.*?</script>", "[Script content removed]")
-            .replaceAll("(?i)javascript:[^\\s]*", "[JavaScript removed]")
-            .trim();
+                .replaceAll("(?s)<script[^>]*>.*?</script>", "[Script content removed]")
+                .replaceAll("(?i)javascript:[^\\s]*", "[JavaScript removed]")
+                .trim();
 
         if (!sanitized.equals(response) && sanitizedItems.isEmpty()) {
             sanitizedItems.add("Potentially harmful content");
         }
 
         return new SanitizationResult(sanitized, sanitizedItems);
+    }
+
+    public static class SanitizationResult {
+        private final String sanitizedContent;
+        private final List<String> sanitizedItems;
+
+        public SanitizationResult(String sanitizedContent, List<String> sanitizedItems) {
+            this.sanitizedContent = sanitizedContent;
+            this.sanitizedItems = sanitizedItems;
+        }
+
+        public String getSanitizedContent() {
+            return sanitizedContent;
+        }
+
+        public List<String> getSanitizedItems() {
+            return sanitizedItems;
+        }
     }
 }

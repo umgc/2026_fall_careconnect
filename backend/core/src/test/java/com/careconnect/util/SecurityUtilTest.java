@@ -26,11 +26,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class SecurityUtilTest {
 
-    @Mock JwtTokenProvider jwtTokenProvider;
-    @Mock UserRepository userRepository;
-    @Mock HttpServletRequest request;
+    @Mock
+    JwtTokenProvider jwtTokenProvider;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    HttpServletRequest request;
 
-    @InjectMocks SecurityUtil securityUtil;
+    @InjectMocks
+    SecurityUtil securityUtil;
 
     @AfterEach
     void tearDown() {
@@ -95,7 +99,7 @@ class SecurityUtilTest {
     }
 
     @Test
-void resolveCurrentUser_withRoleAuthority_findsUserByEmailAndRole() {
+    void resolveCurrentUser_withRoleAuthority_findsUserByEmailAndRole() {
         final SecurityContext ctx = mock(SecurityContext.class);
         final Authentication auth = mock(Authentication.class);
         when(auth.getName()).thenReturn("admin@test.com");
@@ -115,7 +119,7 @@ void resolveCurrentUser_withRoleAuthority_findsUserByEmailAndRole() {
     }
 
     @Test
-void resolveCurrentUser_withRoleAuthority_userNotFound_throwsRuntimeException() {
+    void resolveCurrentUser_withRoleAuthority_userNotFound_throwsRuntimeException() {
         final SecurityContext ctx = mock(SecurityContext.class);
         final Authentication auth = mock(Authentication.class);
         when(auth.getName()).thenReturn("missing@test.com");
@@ -135,7 +139,7 @@ void resolveCurrentUser_withRoleAuthority_userNotFound_throwsRuntimeException() 
     }
 
     @Test
-void resolveCurrentUser_withoutRoleAuthority_findsUserByEmail() {
+    void resolveCurrentUser_withoutRoleAuthority_findsUserByEmail() {
         final SecurityContext ctx = mock(SecurityContext.class);
         final Authentication auth = mock(Authentication.class);
         when(auth.getName()).thenReturn("user@test.com");
@@ -155,7 +159,7 @@ void resolveCurrentUser_withoutRoleAuthority_findsUserByEmail() {
     }
 
     @Test
-void resolveCurrentUser_withoutRoleAuthority_userNotFound_throwsRuntimeException() {
+    void resolveCurrentUser_withoutRoleAuthority_userNotFound_throwsRuntimeException() {
         final SecurityContext ctx = mock(SecurityContext.class);
         final Authentication auth = mock(Authentication.class);
         when(auth.getName()).thenReturn("gone@test.com");

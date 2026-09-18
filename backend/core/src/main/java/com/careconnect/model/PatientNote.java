@@ -2,6 +2,7 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,9 +33,9 @@ public class PatientNote {
         this.createdAt = now;
         this.updatedAt = now;
     }
-    
+
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
-    }   
+    }
 }

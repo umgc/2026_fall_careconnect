@@ -19,9 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * database (the test JDBC URL maps the PostgreSQL `jsonb` domain to TEXT, so
  * the entity's JSON payload round-trips). Verifies the entity maps correctly
  * and the derived finders run against a real database.
- *
+ * <p>
  * NOTE: the DB-level immutability trigger (V44) is PostgreSQL-specific and is
  * not exercised here — Flyway is disabled in the test profile. The app-level
+ *
  * @PreUpdate / @PreRemove guards are covered in AiAuditLedgerServiceTest.
  */
 @DataJpaTest

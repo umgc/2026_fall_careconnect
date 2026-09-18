@@ -168,7 +168,7 @@ class AuthControllerTest {
                 .token("jwt-token")
                 .build();
 
-        when(authService.loginV2(any(),any()))
+        when(authService.loginV2(any(), any()))
                 .thenReturn(response);
 
         mockMvc.perform(post("/v1/api/auth/login")
@@ -339,7 +339,7 @@ class AuthControllerTest {
     void changePasswordShouldReturnUnauthorizedIfNoToken() throws Exception {
 
         final ChangePasswordRequest req =
-                new ChangePasswordRequest("old","new");
+                new ChangePasswordRequest("old", "new");
 
         mockMvc.perform(post("/v1/api/auth/password/change")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -428,7 +428,7 @@ class AuthControllerTest {
         when(reset.isTokenValid("abc")).thenReturn(true);
 
         mockMvc.perform(get("/v1/api/auth/password/reset")
-                        .param("token","abc"))
+                        .param("token", "abc"))
                 .andExpect(status().isOk());
     }
 
@@ -610,7 +610,7 @@ class AuthControllerTest {
         when(alexaCodeStore.generateCode("token")).thenReturn("test-alexa-code");
 
         mockMvc.perform(post("/v1/api/auth/sso/alexa/code")
-                        .cookie(new Cookie("AUTH","token")))
+                        .cookie(new Cookie("AUTH", "token")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").exists());
     }
@@ -649,13 +649,17 @@ class AuthControllerTest {
     // ALEXA TOKEN EXCHANGE — helpers
     // ==========================================
 
-    /** Returns a valid Basic Auth header using the test-configured client credentials. */
+    /**
+     * Returns a valid Basic Auth header using the test-configured client credentials.
+     */
     private String validBasicAuth() throws Exception {
         return "Basic " + Base64.getEncoder()
                 .encodeToString("test-client-id:test-client-secret".getBytes());
     }
 
-    /** Returns a Basic Auth header with wrong credentials. */
+    /**
+     * Returns a Basic Auth header with wrong credentials.
+     */
     private String wrongBasicAuth() throws Exception {
         return "Basic " + Base64.getEncoder()
                 .encodeToString("wrong-id:wrong-secret".getBytes());

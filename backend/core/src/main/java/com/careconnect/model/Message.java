@@ -1,6 +1,7 @@
 package com.careconnect.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -39,7 +40,8 @@ public class Message {
     private Long attachmentSize;
 
     // Constructors
-    public Message() {}
+    public Message() {
+    }
 
     public Message(Long senderId, Long receiverId, String content) {
         this.senderId = senderId;
@@ -94,15 +96,35 @@ public class Message {
         this.isRead = isRead;
     }
 
-    public Long getAttachmentId() { return attachmentId; }
-    public void setAttachmentId(Long attachmentId) { this.attachmentId = attachmentId; }
+    public Long getAttachmentId() {
+        return attachmentId;
+    }
 
-    public String getAttachmentName() { return attachmentName; }
-    public void setAttachmentName(String attachmentName) { this.attachmentName = attachmentName; }
+    public void setAttachmentId(Long attachmentId) {
+        this.attachmentId = attachmentId;
+    }
 
-    public String getAttachmentContentType() { return attachmentContentType; }
-    public void setAttachmentContentType(String attachmentContentType) { this.attachmentContentType = attachmentContentType; }
+    public String getAttachmentName() {
+        return attachmentName;
+    }
 
-    public Long getAttachmentSize() { return attachmentSize; }
-    public void setAttachmentSize(Long attachmentSize) { this.attachmentSize = attachmentSize; }
+    public void setAttachmentName(String attachmentName) {
+        this.attachmentName = attachmentName;
+    }
+
+    public String getAttachmentContentType() {
+        return attachmentContentType;
+    }
+
+    public void setAttachmentContentType(String attachmentContentType) {
+        this.attachmentContentType = attachmentContentType;
+    }
+
+    public Long getAttachmentSize() {
+        return attachmentSize;
+    }
+
+    public void setAttachmentSize(Long attachmentSize) {
+        this.attachmentSize = attachmentSize;
+    }
 }
