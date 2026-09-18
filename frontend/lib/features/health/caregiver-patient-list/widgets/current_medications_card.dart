@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'dart:async';
 import '../../../health/medication-tracker/models/medication-model.dart';
 import '../../../../services/api_service.dart';
 
+
 /// Patient Details → Health tab
-class CurrentMedicationsSection extends StatelessWidget {
+class CurrentMedicationsSection extends StatefulWidget {
   final List<Medication> entries;
   final String title; // defaults to 'Current Medications'
   final Function()? onMedicationUpdated; // Callback to refresh medications
@@ -19,15 +22,42 @@ class CurrentMedicationsSection extends StatelessWidget {
   });
 
   @override
+  State<CurrentMedicationsSection> createState() =>
+      _CurrentMedicationsSectionState();
+}
+
+class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Emitted once per mount, never from build(): build runs again on every
+    // layout change, which multiplies the view count.
+    unawaited(
+      Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'}),
+    );
+
+    if (widget.entries.any((m) => !m.isActive)) {
+      unawaited(
+        Telemetry.event('feature.medications.view_pending', {'feature': 'CurrentMedicationsSection'}),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final title = widget.title;
+    final onMedicationUpdated = widget.onMedicationUpdated;
+    final caregiverId = widget.caregiverId;
 
     // Active medications first, then alphabetical
-    final meds = List<Medication>.from(entries)
+    final meds = List<Medication>.from(widget.entries)
       ..sort((a, b) {
         if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
         return a.medicationName.toLowerCase().compareTo(b.medicationName.toLowerCase());
       });
+
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -146,6 +176,10 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.caregiverId!,
       );
 
+      unawaited(
+        Telemetry.event('feature.medications.delete_hard', {'statusCode': response.statusCode})
+      );
+
       if (response.statusCode == 200) {
         _showSnackBar('Medication deleted successfully');
         widget.onMedicationUpdated?.call();
@@ -183,6 +217,10 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.med.patientId!,
         widget.med.id!,
       );
+      unawaited(
+          Telemetry.event('feature.medications.approve', {'statusCode': response.statusCode})
+        );
+
 
       if (response.statusCode == 200) {
         _showSnackBar('Medication approved successfully');

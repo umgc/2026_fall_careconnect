@@ -28,7 +28,7 @@ public class RiskTypeController {
 
     @GetMapping
     @Operation(summary = "Get all risk types", description = "Returns the full predefined list of risk types (e.g. Aspiration Pneumonia, Elopement, Fall with Injury, Self-Harm, Seizures)")
-    @ApiResponses({ @ApiResponse(responseCode = "200", description = "List of risk types") })
+    @ApiResponses({@ApiResponse(responseCode = "200", description = "List of risk types")})
     public ResponseEntity<List<RiskType>> getAllRiskTypes() {
         return ResponseEntity.ok(patientRiskService.getAllRiskTypes());
     }

@@ -21,8 +21,6 @@ class Telemetry {
   // Keep this short so curl flips reflect quickly.
   static const Duration _backendCacheTtl = Duration(seconds: 1);
 
-  // One-time sync guard so we don't spam backend calls.
-  static bool _forcedBackendOffThisRun = false;
 
   // One session ID per app run
   static String? _sessionId;
@@ -61,16 +59,13 @@ class Telemetry {
     final local = await _enabledLocal();
     if (!local) {
       // Best-effort sync, but only once per app run.
-      if (!_forcedBackendOffThisRun) {
-        _forcedBackendOffThisRun = true;
-        await setBackendEnabled(false);
-      }
       return false;
     }
 
     final backend = await _enabledBackendCached();
     return backend;
   }
+
 
   // ---------------------------
   // Backend toggle helpers

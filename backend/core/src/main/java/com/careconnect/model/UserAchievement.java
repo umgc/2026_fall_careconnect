@@ -1,7 +1,9 @@
 package com.careconnect.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
+
 import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
@@ -28,13 +30,29 @@ public class UserAchievement {
 
     private LocalDateTime earnedAt = LocalDateTime.now();
 
-    // Explicit setters to ensure compilation works if Lombok isn't processing
-    public void setUserId(Long userId) { this.userId = userId; }
-    public void setAchievement(Achievement achievement) { this.achievement = achievement; }
-    public void setEarnedAt(LocalDateTime earnedAt) { this.earnedAt = earnedAt; }
-
     // Explicit getters to ensure compilation works if Lombok isn't processing
-    public Achievement getAchievement() { return achievement; }
-    public Long getUserId() { return userId; }
-    public LocalDateTime getEarnedAt() { return earnedAt; }
+    public Achievement getAchievement() {
+        return achievement;
+    }
+
+    public void setAchievement(Achievement achievement) {
+        this.achievement = achievement;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    // Explicit setters to ensure compilation works if Lombok isn't processing
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public LocalDateTime getEarnedAt() {
+        return earnedAt;
+    }
+
+    public void setEarnedAt(LocalDateTime earnedAt) {
+        this.earnedAt = earnedAt;
+    }
 }

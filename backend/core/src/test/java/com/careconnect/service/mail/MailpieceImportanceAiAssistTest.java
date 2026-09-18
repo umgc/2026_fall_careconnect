@@ -18,8 +18,7 @@ class MailpieceImportanceAiAssistTest {
 
     @BeforeEach
     void setUp() {
-        @SuppressWarnings("unchecked")
-        final ObjectProvider<AIServiceFactory> provider = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked") final ObjectProvider<AIServiceFactory> provider = mock(ObjectProvider.class);
         assist = new MailpieceImportanceAiAssist(
                 provider, new ObjectMapper(), "amazon.nova-lite-v1:0", true);
     }

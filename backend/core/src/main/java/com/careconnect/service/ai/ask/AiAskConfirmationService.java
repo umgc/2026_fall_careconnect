@@ -38,12 +38,10 @@ import java.util.UUID;
 @Service
 public class AiAskConfirmationService {
 
-    private static final Logger log = LoggerFactory.getLogger(AiAskConfirmationService.class);
-
     public static final String APPROVE_ONCE = "APPROVE_ONCE";
     public static final String APPROVE_SESSION = "APPROVE_SESSION";
     public static final String DECLINE = "DECLINE";
-
+    private static final Logger log = LoggerFactory.getLogger(AiAskConfirmationService.class);
     private static final Set<String> ALLOWED = Set.of(APPROVE_ONCE, APPROVE_SESSION, DECLINE);
     private static final Set<String> REQUEST_TERMINAL =
             Set.of(APPROVE_ONCE, APPROVE_SESSION, DECLINE);
@@ -57,13 +55,45 @@ public class AiAskConfirmationService {
             final AiAskConfirmationDecisionRepository decisionRepository,
             final AiAskAuditService askAuditService,
             final RetrievalScopeService retrievalScopeService,
-            @Value("${careconnect.ai.ask.confirmation.session-ttl-hours:12}")
-                    final long sessionTtlHours) {
+            @Value("${careconnect.ai.ask.confirmation.session-ttl-hours:12}") final long sessionTtlHours) {
         this.decisionRepository = decisionRepository;
         this.askAuditService = askAuditService;
         this.retrievalScopeService = retrievalScopeService;
         this.sessionApprovalTtl =
                 sessionTtlHours <= 0 ? Duration.ZERO : Duration.ofHours(sessionTtlHours);
+    }
+
+    /**
+     * Deterministic Ask session id for call-summary item confirmations so
+     * {@code approve-for-session} installs the same {@link #APPROVE_SESSION} suppression
+     * Ask AI uses. Call-scoped: one id per {@code callId}, no TTL (lifetime of that call's
+     * confirmation surface).
+     */
+    public static UUID callSummarySessionId(final String callId) {
+        if (callId == null || callId.isBlank()) {
+            throw new IllegalArgumentException("callId is required");
+        }
+        return UUID.nameUUIDFromBytes(
+                ("call-summary-session:" + callId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private static AiAskConfirmationDecision newDecision(
+            final User caller,
+            final AiAskConfirmationRequest request,
+            final String decision) {
+        return AiAskConfirmationDecision.builder()
+                .id(UUID.randomUUID())
+                .sessionId(request.sessionId())
+                .patientId(request.patientId())
+                .callerUserId(caller.getId())
+                .requestId(request.requestId())
+                .decision(decision)
+                .createdAt(Instant.now())
+                .build();
+    }
+
+    private static String normalizeDecision(final String raw) {
+        return raw.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
     }
 
     /**
@@ -82,20 +112,6 @@ public class AiAskConfirmationService {
             return false;
         }
         return !isAskSessionApprovalExpired(latest.get());
-    }
-
-    /**
-     * Deterministic Ask session id for call-summary item confirmations so
-     * {@code approve-for-session} installs the same {@link #APPROVE_SESSION} suppression
-     * Ask AI uses. Call-scoped: one id per {@code callId}, no TTL (lifetime of that call's
-     * confirmation surface).
-     */
-    public static UUID callSummarySessionId(final String callId) {
-        if (callId == null || callId.isBlank()) {
-            throw new IllegalArgumentException("callId is required");
-        }
-        return UUID.nameUUIDFromBytes(
-                ("call-summary-session:" + callId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**
@@ -233,24 +249,5 @@ public class AiAskConfirmationService {
             return false; // ttl-hours <= 0 disables expiry
         }
         return decision.getCreatedAt().isBefore(Instant.now().minus(sessionApprovalTtl));
-    }
-
-    private static AiAskConfirmationDecision newDecision(
-            final User caller,
-            final AiAskConfirmationRequest request,
-            final String decision) {
-        return AiAskConfirmationDecision.builder()
-                .id(UUID.randomUUID())
-                .sessionId(request.sessionId())
-                .patientId(request.patientId())
-                .callerUserId(caller.getId())
-                .requestId(request.requestId())
-                .decision(decision)
-                .createdAt(Instant.now())
-                .build();
-    }
-
-    private static String normalizeDecision(final String raw) {
-        return raw.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
     }
 }

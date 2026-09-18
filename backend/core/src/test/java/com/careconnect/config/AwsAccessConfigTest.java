@@ -14,10 +14,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link AwsAccessConfig}.
- *
+ * <p>
  * AwsAccessConfig is a Spring {@code @Configuration} class that creates AWS SDK client
  * beans (S3, SSM, Textract) and a credentials provider used throughout the application.
- *
+ * <p>
  * Rather than loading the full Spring context (which would attempt real AWS calls), these
  * tests instantiate {@code AwsAccessConfig} directly and set the {@code aws.region} system
  * property to satisfy {@code DefaultAwsRegionProviderChain} — the chain that the SDK uses

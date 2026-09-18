@@ -45,7 +45,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePermission(null, Permission.CREATE_TASKS));
+                    () -> authorizationService.requirePermission(null, Permission.CREATE_TASKS));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -55,7 +55,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.CREATE_TASKS)).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePermission(mockUser, Permission.CREATE_TASKS));
+                    () -> authorizationService.requirePermission(mockUser, Permission.CREATE_TASKS));
             assertTrue(ex.getMessage().contains("test@example.com"));
             assertTrue(ex.getMessage().contains("CREATE_TASKS"));
         }
@@ -66,7 +66,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.CREATE_TASKS)).thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requirePermission(mockUser, Permission.CREATE_TASKS));
+                    () -> authorizationService.requirePermission(mockUser, Permission.CREATE_TASKS));
         }
     }
 
@@ -80,7 +80,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAllPermissions(null, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
+                    () -> authorizationService.requireAllPermissions(null, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -91,7 +91,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_TASKS)).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAllPermissions(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
+                    () -> authorizationService.requireAllPermissions(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
             assertTrue(ex.getMessage().contains("VIEW_TASKS"));
         }
 
@@ -102,7 +102,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_TASKS)).thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requireAllPermissions(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
+                    () -> authorizationService.requireAllPermissions(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
         }
     }
 
@@ -116,7 +116,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAnyPermission(null, Permission.CREATE_TASKS));
+                    () -> authorizationService.requireAnyPermission(null, Permission.CREATE_TASKS));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -126,7 +126,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasAnyPermission(Permission.CREATE_TASKS)).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAnyPermission(mockUser, Permission.CREATE_TASKS));
+                    () -> authorizationService.requireAnyPermission(mockUser, Permission.CREATE_TASKS));
             assertTrue(ex.getMessage().contains("CREATE_TASKS"));
             assertFalse(ex.getMessage().contains(", "));
         }
@@ -137,7 +137,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasAnyPermission(Permission.CREATE_TASKS, Permission.VIEW_TASKS)).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAnyPermission(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
+                    () -> authorizationService.requireAnyPermission(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
             assertTrue(ex.getMessage().contains("CREATE_TASKS, VIEW_TASKS"));
         }
 
@@ -147,7 +147,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasAnyPermission(Permission.CREATE_TASKS, Permission.VIEW_TASKS)).thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requireAnyPermission(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
+                    () -> authorizationService.requireAnyPermission(mockUser, Permission.CREATE_TASKS, Permission.VIEW_TASKS));
         }
     }
 
@@ -161,7 +161,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAdmin(null));
+                    () -> authorizationService.requireAdmin(null));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -172,7 +172,7 @@ public class AuthorizationServiceTest {
             when(mockUser.getRole()).thenReturn(Role.CAREGIVER);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAdmin(mockUser));
+                    () -> authorizationService.requireAdmin(mockUser));
             assertTrue(ex.getMessage().contains("Admin access required"));
             assertTrue(ex.getMessage().contains("Caregiver"));
         }
@@ -196,7 +196,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireCaregiver(null));
+                    () -> authorizationService.requireCaregiver(null));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -206,7 +206,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isCaregiver()).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireCaregiver(mockUser));
+                    () -> authorizationService.requireCaregiver(mockUser));
             assertTrue(ex.getMessage().contains("Caregiver access required"));
         }
 
@@ -229,7 +229,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAdminOrCaregiver(null));
+                    () -> authorizationService.requireAdminOrCaregiver(null));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -240,7 +240,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isCaregiver()).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireAdminOrCaregiver(mockUser));
+                    () -> authorizationService.requireAdminOrCaregiver(mockUser));
             assertTrue(ex.getMessage().contains("Admin or Caregiver access required"));
         }
 
@@ -272,7 +272,7 @@ public class AuthorizationServiceTest {
         @DisplayName("requirePatientAccess_whenUserIsNull_throwsUnauthorized")
         void requirePatientAccess_whenUserIsNull_throwsUnauthorized() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(null, 1L));
+                    () -> authorizationService.requirePatientAccess(null, 1L));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -280,7 +280,7 @@ public class AuthorizationServiceTest {
         @DisplayName("requirePatientAccess_whenPatientIdIsNull_throwsIllegalArgument")
         void requirePatientAccess_whenPatientIdIsNull_throwsIllegalArgument() {
             assertThrows(IllegalArgumentException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, null));
+                    () -> authorizationService.requirePatientAccess(mockUser, null));
         }
 
         @Test
@@ -289,7 +289,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isAdmin()).thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requirePatientAccess(mockUser, 99L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 99L));
         }
 
         @Test
@@ -300,7 +300,7 @@ public class AuthorizationServiceTest {
             when(mockUser.getId()).thenReturn(1L);
 
             assertDoesNotThrow(
-                () -> authorizationService.requirePatientAccess(mockUser, 1L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 1L));
         }
 
         @Test
@@ -311,7 +311,7 @@ public class AuthorizationServiceTest {
             when(mockUser.getId()).thenReturn(1L);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 2L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 2L));
             assertTrue(ex.getMessage().contains("Patients can only access their own data"));
         }
 
@@ -324,7 +324,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
             assertTrue(ex.getMessage().contains("does not have permission to view patient data"));
         }
 
@@ -337,10 +337,10 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
             when(mockUser.getId()).thenReturn(10L);
             when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any(LocalDateTime.class)))
-                .thenReturn(true);
+                    .thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
         }
 
         @Test
@@ -352,10 +352,10 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_ASSIGNED_PATIENTS)).thenReturn(true);
             when(mockUser.getId()).thenReturn(10L);
             when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any(LocalDateTime.class)))
-                .thenReturn(false);
+                    .thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
             assertTrue(ex.getMessage().contains("not assigned to patient"));
         }
 
@@ -369,10 +369,10 @@ public class AuthorizationServiceTest {
             when(mockUser.getId()).thenReturn(10L);
             // Repository filters expired links; false simulates an expired or missing assignment.
             when(caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(10L), eq(5L), any(LocalDateTime.class)))
-                .thenReturn(false);
+                    .thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
             assertTrue(ex.getMessage().contains("not assigned to patient"));
         }
 
@@ -386,7 +386,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
             assertTrue(ex.getMessage().contains("does not have permission to view patient data"));
         }
 
@@ -400,10 +400,10 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
             when(mockUser.getId()).thenReturn(20L);
             when(familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(20L), eq(5L), any(LocalDateTime.class)))
-                .thenReturn(true);
+                    .thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
         }
 
         @Test
@@ -416,10 +416,10 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.VIEW_HEALTH_DATA)).thenReturn(true);
             when(mockUser.getId()).thenReturn(20L);
             when(familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(eq(20L), eq(5L), any(LocalDateTime.class)))
-                .thenReturn(false);
+                    .thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
             assertTrue(ex.getMessage().contains("not linked to patient"));
         }
 
@@ -432,7 +432,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isFamilyMember()).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requirePatientAccess(mockUser, 5L));
+                    () -> authorizationService.requirePatientAccess(mockUser, 5L));
             assertTrue(ex.getMessage().contains("is not authorized to access patient"));
         }
     }
@@ -447,7 +447,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when user is null")
         void shouldThrowWhenUserIsNull() {
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireSelfOrAdmin(null, 1L));
+                    () -> authorizationService.requireSelfOrAdmin(null, 1L));
             assertEquals("User is not authenticated", ex.getMessage());
         }
 
@@ -455,7 +455,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should throw when targetUserId is null")
         void shouldThrowWhenTargetUserIdIsNull() {
             assertThrows(IllegalArgumentException.class,
-                () -> authorizationService.requireSelfOrAdmin(mockUser, null));
+                    () -> authorizationService.requireSelfOrAdmin(mockUser, null));
         }
 
         @Test
@@ -464,7 +464,7 @@ public class AuthorizationServiceTest {
             when(mockUser.getId()).thenReturn(1L);
 
             assertDoesNotThrow(
-                () -> authorizationService.requireSelfOrAdmin(mockUser, 1L));
+                    () -> authorizationService.requireSelfOrAdmin(mockUser, 1L));
         }
 
         @Test
@@ -474,7 +474,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isAdmin()).thenReturn(true);
 
             assertDoesNotThrow(
-                () -> authorizationService.requireSelfOrAdmin(mockUser, 99L));
+                    () -> authorizationService.requireSelfOrAdmin(mockUser, 99L));
         }
 
         @Test
@@ -484,7 +484,7 @@ public class AuthorizationServiceTest {
             when(mockUser.isAdmin()).thenReturn(false);
 
             UnauthorizedException ex = assertThrows(UnauthorizedException.class,
-                () -> authorizationService.requireSelfOrAdmin(mockUser, 99L));
+                    () -> authorizationService.requireSelfOrAdmin(mockUser, 99L));
             assertTrue(ex.getMessage().contains("You can only access your own data"));
         }
     }
@@ -582,7 +582,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Should return deny when user is null")
         void shouldReturnDenyWhenUserIsNull() {
             AuthorizationService.AuthorizationResult result =
-                authorizationService.checkPermission(null, Permission.CREATE_TASKS);
+                    authorizationService.checkPermission(null, Permission.CREATE_TASKS);
             assertFalse(result.isAuthorized());
             assertEquals("User is not authenticated", result.getReason());
         }
@@ -593,7 +593,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.CREATE_TASKS)).thenReturn(false);
 
             AuthorizationService.AuthorizationResult result =
-                authorizationService.checkPermission(mockUser, Permission.CREATE_TASKS);
+                    authorizationService.checkPermission(mockUser, Permission.CREATE_TASKS);
             assertFalse(result.isAuthorized());
             assertTrue(result.getReason().contains("CREATE_TASKS"));
         }
@@ -604,7 +604,7 @@ public class AuthorizationServiceTest {
             when(mockUser.hasPermission(Permission.CREATE_TASKS)).thenReturn(true);
 
             AuthorizationService.AuthorizationResult result =
-                authorizationService.checkPermission(mockUser, Permission.CREATE_TASKS);
+                    authorizationService.checkPermission(mockUser, Permission.CREATE_TASKS);
             assertTrue(result.isAuthorized());
             assertEquals("Authorized", result.getReason());
         }
@@ -628,7 +628,7 @@ public class AuthorizationServiceTest {
         @DisplayName("deny() should create unauthorized result with reason")
         void denyShouldCreateUnauthorizedResult() {
             AuthorizationService.AuthorizationResult result =
-                AuthorizationService.AuthorizationResult.deny("Not allowed");
+                    AuthorizationService.AuthorizationResult.deny("Not allowed");
             assertFalse(result.isAuthorized());
             assertEquals("Not allowed", result.getReason());
         }
@@ -637,7 +637,7 @@ public class AuthorizationServiceTest {
         @DisplayName("Constructor should set fields correctly")
         void constructorShouldSetFields() {
             AuthorizationService.AuthorizationResult result =
-                new AuthorizationService.AuthorizationResult(true, "Custom reason");
+                    new AuthorizationService.AuthorizationResult(true, "Custom reason");
             assertTrue(result.isAuthorized());
             assertEquals("Custom reason", result.getReason());
         }

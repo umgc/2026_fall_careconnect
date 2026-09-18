@@ -12,120 +12,122 @@ import static org.mockito.Mockito.when;
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.CallSummary;
 import com.careconnect.repository.CallSummaryRepository;
+
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+
 import org.junit.jupiter.api.Test;
 
 class CallSummaryPersistenceServiceTest {
 
-  @Test
-  void concurrentDuplicateGeneration_persistsAndEmitsOnce() {
-    final CallSummaryRepository repository = mock(CallSummaryRepository.class);
-    final IndexingEventEmitter emitter = mock(IndexingEventEmitter.class);
-    final CallSummaryPersistenceService service =
-        new CallSummaryPersistenceService(repository, emitter);
-    final ReentrantLock databaseLock = new ReentrantLock();
-    final AtomicReference<CallSummary> stored = new AtomicReference<>();
+    private static CallSummary summary() {
+        final CallSummary summary = new CallSummary();
+        summary.setCallId("call-1");
+        summary.setPatientId(42L);
+        summary.setStatus("SUCCESS");
+        summary.setSummaryJson("{\"headline\":\"Stable\"}");
+        summary.setGeneratedAt(LocalDateTime.now());
+        summary.setTranscriptSegmentCount(2);
+        summary.setTranscriptSnapshotVersion("sha256:snapshot");
+        summary.setModelConfigVersion("model:config-v2");
+        return summary;
+    }
 
-    doAnswer(
-            invocation -> {
-              databaseLock.lock();
-              return null;
-            })
-        .when(repository)
-        .acquireGenerationLock(any());
-    when(repository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
-            any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              final CallSummary existing = stored.get();
-              if (existing != null) {
-                databaseLock.unlock();
-              }
-              return Optional.ofNullable(existing);
-            });
-    when(repository.save(any(CallSummary.class)))
-        .thenAnswer(
-            invocation -> {
-              final CallSummary saved = invocation.getArgument(0);
-              saved.setId(101L);
-              stored.set(saved);
-              databaseLock.unlock();
-              return saved;
-            });
+    @Test
+    void concurrentDuplicateGeneration_persistsAndEmitsOnce() {
+        final CallSummaryRepository repository = mock(CallSummaryRepository.class);
+        final IndexingEventEmitter emitter = mock(IndexingEventEmitter.class);
+        final CallSummaryPersistenceService service =
+                new CallSummaryPersistenceService(repository, emitter);
+        final ReentrantLock databaseLock = new ReentrantLock();
+        final AtomicReference<CallSummary> stored = new AtomicReference<>();
 
-    final CompletableFuture<CallSummary> first =
-        CompletableFuture.supplyAsync(() -> service.persist(summary()));
-    final CompletableFuture<CallSummary> second =
-        CompletableFuture.supplyAsync(() -> service.persist(summary()));
+        doAnswer(
+                invocation -> {
+                    databaseLock.lock();
+                    return null;
+                })
+                .when(repository)
+                .acquireGenerationLock(any());
+        when(repository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+                any(), any(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            final CallSummary existing = stored.get();
+                            if (existing != null) {
+                                databaseLock.unlock();
+                            }
+                            return Optional.ofNullable(existing);
+                        });
+        when(repository.save(any(CallSummary.class)))
+                .thenAnswer(
+                        invocation -> {
+                            final CallSummary saved = invocation.getArgument(0);
+                            saved.setId(101L);
+                            stored.set(saved);
+                            databaseLock.unlock();
+                            return saved;
+                        });
 
-    assertThat(first.join().getId()).isEqualTo(101L);
-    assertThat(second.join().getId()).isEqualTo(101L);
-    verify(repository, times(1)).save(any(CallSummary.class));
-    verify(emitter, times(1)).emitSummaryCreated(any());
-  }
+        final CompletableFuture<CallSummary> first =
+                CompletableFuture.supplyAsync(() -> service.persist(summary()));
+        final CompletableFuture<CallSummary> second =
+                CompletableFuture.supplyAsync(() -> service.persist(summary()));
 
-  @Test
-  void errorRetry_recoversSameRowToSuccessAndEmitsOnce() {
-    final CallSummaryRepository repository = mock(CallSummaryRepository.class);
-    final IndexingEventEmitter emitter = mock(IndexingEventEmitter.class);
-    final CallSummaryPersistenceService service =
-        new CallSummaryPersistenceService(repository, emitter);
-    final CallSummary failed = summary();
-    failed.setId(101L);
-    failed.setStatus("ERROR");
-    failed.setErrorMessage("timeout");
-    when(repository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
-            any(), any(), any()))
-        .thenReturn(Optional.of(failed));
-    when(repository.save(failed)).thenAnswer(invocation -> invocation.getArgument(0));
+        assertThat(first.join().getId()).isEqualTo(101L);
+        assertThat(second.join().getId()).isEqualTo(101L);
+        verify(repository, times(1)).save(any(CallSummary.class));
+        verify(emitter, times(1)).emitSummaryCreated(any());
+    }
 
-    final CallSummary recovered = service.persist(summary());
+    @Test
+    void errorRetry_recoversSameRowToSuccessAndEmitsOnce() {
+        final CallSummaryRepository repository = mock(CallSummaryRepository.class);
+        final IndexingEventEmitter emitter = mock(IndexingEventEmitter.class);
+        final CallSummaryPersistenceService service =
+                new CallSummaryPersistenceService(repository, emitter);
+        final CallSummary failed = summary();
+        failed.setId(101L);
+        failed.setStatus("ERROR");
+        failed.setErrorMessage("timeout");
+        when(repository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+                any(), any(), any()))
+                .thenReturn(Optional.of(failed));
+        when(repository.save(failed)).thenAnswer(invocation -> invocation.getArgument(0));
 
-    assertThat(recovered.getId()).isEqualTo(101L);
-    assertThat(recovered.getStatus()).isEqualTo("SUCCESS");
-    assertThat(recovered.getErrorMessage()).isNull();
-    verify(repository).acquireGenerationLock(any());
-    verify(repository).save(failed);
-    verify(emitter).emitSummaryCreated(any());
-  }
+        final CallSummary recovered = service.persist(summary());
 
-  @Test
-  void lateErrorCannotOverwriteConcurrentSuccessOrEmitAgain() {
-    final CallSummaryRepository repository = mock(CallSummaryRepository.class);
-    final IndexingEventEmitter emitter = mock(IndexingEventEmitter.class);
-    final CallSummaryPersistenceService service =
-        new CallSummaryPersistenceService(repository, emitter);
-    final CallSummary successful = summary();
-    successful.setId(101L);
-    when(repository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
-            any(), any(), any()))
-        .thenReturn(Optional.of(successful));
-    final CallSummary lateFailure = summary();
-    lateFailure.setStatus("ERROR");
-    lateFailure.setErrorMessage("timeout");
+        assertThat(recovered.getId()).isEqualTo(101L);
+        assertThat(recovered.getStatus()).isEqualTo("SUCCESS");
+        assertThat(recovered.getErrorMessage()).isNull();
+        verify(repository).acquireGenerationLock(any());
+        verify(repository).save(failed);
+        verify(emitter).emitSummaryCreated(any());
+    }
 
-    final CallSummary result = service.persist(lateFailure);
+    @Test
+    void lateErrorCannotOverwriteConcurrentSuccessOrEmitAgain() {
+        final CallSummaryRepository repository = mock(CallSummaryRepository.class);
+        final IndexingEventEmitter emitter = mock(IndexingEventEmitter.class);
+        final CallSummaryPersistenceService service =
+                new CallSummaryPersistenceService(repository, emitter);
+        final CallSummary successful = summary();
+        successful.setId(101L);
+        when(repository.findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersion(
+                any(), any(), any()))
+                .thenReturn(Optional.of(successful));
+        final CallSummary lateFailure = summary();
+        lateFailure.setStatus("ERROR");
+        lateFailure.setErrorMessage("timeout");
 
-    assertThat(result).isSameAs(successful);
-    assertThat(result.getStatus()).isEqualTo("SUCCESS");
-    verify(repository, never()).save(any());
-    verify(emitter, never()).emitSummaryCreated(any());
-  }
+        final CallSummary result = service.persist(lateFailure);
 
-  private static CallSummary summary() {
-    final CallSummary summary = new CallSummary();
-    summary.setCallId("call-1");
-    summary.setPatientId(42L);
-    summary.setStatus("SUCCESS");
-    summary.setSummaryJson("{\"headline\":\"Stable\"}");
-    summary.setGeneratedAt(LocalDateTime.now());
-    summary.setTranscriptSegmentCount(2);
-    summary.setTranscriptSnapshotVersion("sha256:snapshot");
-    summary.setModelConfigVersion("model:config-v2");
-    return summary;
-  }
+        assertThat(result).isSameAs(successful);
+        assertThat(result.getStatus()).isEqualTo("SUCCESS");
+        verify(repository, never()).save(any());
+        verify(emitter, never()).emitSummaryCreated(any());
+    }
 }

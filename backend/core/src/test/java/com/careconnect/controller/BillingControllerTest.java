@@ -36,12 +36,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BillingControllerTest {
 
-    @Mock private AppleBillingService appleBillingService;
-    @Mock private GoogleBillingService googleBillingService;
-    @Mock private PaymentService paymentService;
-    @Mock private SubscriptionRepository subscriptionRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private JwtTokenProvider jwtTokenProvider;
+    @Mock
+    private AppleBillingService appleBillingService;
+    @Mock
+    private GoogleBillingService googleBillingService;
+    @Mock
+    private PaymentService paymentService;
+    @Mock
+    private SubscriptionRepository subscriptionRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private JwtTokenProvider jwtTokenProvider;
 
     @InjectMocks
     private BillingController controller;

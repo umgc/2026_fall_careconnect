@@ -5,6 +5,7 @@ import java.util.List;
 import io.micrometer.common.lang.Nullable;
 import jakarta.persistence.*;
 import lombok.*;
+
 @Entity
 @Table(name = "templates")
 @Data

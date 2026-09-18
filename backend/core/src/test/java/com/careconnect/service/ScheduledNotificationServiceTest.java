@@ -29,7 +29,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link ScheduledNotificationService}.
- *
+ * <p>
  * All dependencies (repositories, SES/SNS services) are mocked.
  */
 @ExtendWith(MockitoExtension.class)

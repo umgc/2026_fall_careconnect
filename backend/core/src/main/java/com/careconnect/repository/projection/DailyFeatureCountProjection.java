@@ -1,9 +1,11 @@
 package com.careconnect.repository.projection;
 
-/** Native-query projection for daily feature_use counts. */
+/**
+ * Native-query projection for daily feature_use counts.
+ */
 public interface DailyFeatureCountProjection {
 
-  String getDay();
+    String getDay();
 
-  Number getCount();
+    Number getCount();
 }

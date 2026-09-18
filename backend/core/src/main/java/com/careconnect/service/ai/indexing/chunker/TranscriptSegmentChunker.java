@@ -18,11 +18,23 @@ import java.util.Map;
 @Component
 public class TranscriptSegmentChunker {
 
+    private static String formatSegmentText(final CallTranscriptSegment segment) {
+        final String speaker = segment.getSpeakerLabel();
+        if (speaker == null || speaker.isBlank()) {
+            return segment.getText().trim();
+        }
+        return speaker.trim() + ": " + segment.getText().trim();
+    }
+
+    private static boolean isBlank(final String value) {
+        return value == null || value.isBlank();
+    }
+
     /**
      * Builds drafts for the given segments.
      *
-     * @param callId  call identifier used in metadata
-     * @param source  ignored legacy event field; source comes from each persisted segment
+     * @param callId   call identifier used in metadata
+     * @param source   ignored legacy event field; source comes from each persisted segment
      * @param segments ordered transcript segments
      * @return chunk drafts (empty segments skipped)
      */
@@ -62,17 +74,5 @@ public class TranscriptSegmentChunker {
                     null));
         }
         return drafts;
-    }
-
-    private static String formatSegmentText(final CallTranscriptSegment segment) {
-        final String speaker = segment.getSpeakerLabel();
-        if (speaker == null || speaker.isBlank()) {
-            return segment.getText().trim();
-        }
-        return speaker.trim() + ": " + segment.getText().trim();
-    }
-
-    private static boolean isBlank(final String value) {
-        return value == null || value.isBlank();
     }
 }

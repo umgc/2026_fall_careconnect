@@ -32,6 +32,15 @@ class FullTextSearchServiceTest {
 
     private FullTextSearchService service;
 
+    private static RetrievalIndexChunk chunk(final String recordType, final String text) {
+        return RetrievalIndexChunk.builder()
+                .patientId(42L)
+                .recordType(recordType)
+                .sourceRecordId("src-1")
+                .chunkText(text)
+                .build();
+    }
+
     @BeforeEach
     void setUp() {
         service = new FullTextSearchService(chunkRepository);
@@ -92,7 +101,7 @@ class FullTextSearchServiceTest {
     @DisplayName("search pushes allowed record types into SQL before LIMIT")
     void search_filtersRecordTypesInSql() {
         when(chunkRepository.searchByPatientIdFullTextAndRecordTypes(
-                        eq(42L), eq("dose"), anyCollection(), eq(10)))
+                eq(42L), eq("dose"), anyCollection(), eq(10)))
                 .thenReturn(List.of(
                         chunk("CALL_SUMMARY", "dose change"),
                         chunk("TRANSCRIPT_SEGMENT", "dose mentioned")));
@@ -104,8 +113,7 @@ class FullTextSearchServiceTest {
                 10);
 
         assertThat(hits).hasSize(2);
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<java.util.Collection<String>> typesCaptor =
+        @SuppressWarnings("unchecked") final ArgumentCaptor<java.util.Collection<String>> typesCaptor =
                 ArgumentCaptor.forClass(java.util.Collection.class);
         verify(chunkRepository).searchByPatientIdFullTextAndRecordTypes(
                 eq(42L), eq("dose"), typesCaptor.capture(), eq(10));
@@ -119,14 +127,5 @@ class FullTextSearchServiceTest {
     void countMissing_delegates() {
         when(chunkRepository.countMissingSearchVector()).thenReturn(3L);
         assertThat(service.countChunksMissingSearchVector()).isEqualTo(3L);
-    }
-
-    private static RetrievalIndexChunk chunk(final String recordType, final String text) {
-        return RetrievalIndexChunk.builder()
-                .patientId(42L)
-                .recordType(recordType)
-                .sourceRecordId("src-1")
-                .chunkText(text)
-                .build();
     }
 }

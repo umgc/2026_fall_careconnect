@@ -16,8 +16,7 @@ class MailEnvelopeTtsService {
 
   static MailEnvelopeTts? _instance;
 
-  static MailEnvelopeTts get instance =>
-      _instance ??= FlutterMailEnvelopeTts();
+  static MailEnvelopeTts get instance => _instance ??= FlutterMailEnvelopeTts();
 
   @visibleForTesting
   static void debugSetInstance(MailEnvelopeTts tts) {

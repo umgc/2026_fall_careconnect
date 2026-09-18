@@ -25,12 +25,11 @@ import static org.mockito.Mockito.*;
 
 class DatabaseChatMemoryTest {
 
+    private static final int MAX_MESSAGES = 10;
     @Mock
     private ChatMessageRepository chatMessageRepository;
-
     private ChatConversation conversation;
     private DatabaseChatMemory chatMemory;
-    private static final int MAX_MESSAGES = 10;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -169,8 +168,7 @@ class DatabaseChatMemoryTest {
         chatMemory.add(message);
 
         // Verify deleteAll was called with the oldest 3 messages
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<com.careconnect.model.ChatMessage>> deleteCaptor =
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<com.careconnect.model.ChatMessage>> deleteCaptor =
                 ArgumentCaptor.forClass(List.class);
         verify(chatMessageRepository).deleteAll(deleteCaptor.capture());
         assertEquals(3, deleteCaptor.getValue().size());
@@ -459,8 +457,7 @@ class DatabaseChatMemoryTest {
 
         chatMemory.add(message);
 
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<List<com.careconnect.model.ChatMessage>> deleteCaptor =
+        @SuppressWarnings("unchecked") final ArgumentCaptor<List<com.careconnect.model.ChatMessage>> deleteCaptor =
                 ArgumentCaptor.forClass(List.class);
         verify(chatMessageRepository).deleteAll(deleteCaptor.capture());
         assertEquals(1, deleteCaptor.getValue().size());

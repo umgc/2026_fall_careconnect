@@ -1,7 +1,9 @@
 package com.careconnect.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,7 +17,7 @@ import lombok.Setter;
 @AllArgsConstructor
 @Table(name = "caregiver_patient_link")
 public class CaregiverPatientLink {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -52,15 +54,6 @@ public class CaregiverPatientLink {
     @Column(name = "notes")
     private String notes;
 
-    public enum LinkStatus {
-        PENDING, ACTIVE, SUSPENDED, REVOKED, EXPIRED, REJECTED
-    }
-    
-
-    public enum LinkType {
-        PERMANENT, TEMPORARY, EMERGENCY
-    }
-
     // Constructor for creating caregiver-patient links
     public CaregiverPatientLink(User caregiverUser, User patientUser, User createdBy, LinkType linkType) {
         this.caregiverUser = caregiverUser;
@@ -84,49 +77,104 @@ public class CaregiverPatientLink {
         return expiresAt != null && LocalDateTime.now().isAfter(expiresAt);
     }
 
-        
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }
-    
+
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 
     // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public User getCaregiverUser() { return caregiverUser; }
-    public void setCaregiverUser(User caregiverUser) { this.caregiverUser = caregiverUser; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public User getPatientUser() { return patientUser; }
-    public void setPatientUser(User patientUser) { this.patientUser = patientUser; }
+    public User getCaregiverUser() {
+        return caregiverUser;
+    }
 
-    public User getCreatedBy() { return createdBy; }
-    public void setCreatedBy(User createdBy) { this.createdBy = createdBy; }
+    public void setCaregiverUser(User caregiverUser) {
+        this.caregiverUser = caregiverUser;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public User getPatientUser() {
+        return patientUser;
+    }
 
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public void setPatientUser(User patientUser) {
+        this.patientUser = patientUser;
+    }
 
-    public LinkStatus getStatus() { return status; }
-    public void setStatus(LinkStatus status) { 
-        this.status = status; 
+    public User getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(User createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public LinkStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(LinkStatus status) {
+        this.status = status;
         this.updatedAt = LocalDateTime.now();
     }
 
-    public LinkType getLinkType() { return linkType; }
-    public void setLinkType(LinkType linkType) { this.linkType = linkType; }
+    public LinkType getLinkType() {
+        return linkType;
+    }
 
-    public LocalDateTime getExpiresAt() { return expiresAt; }
-    public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+    public void setLinkType(LinkType linkType) {
+        this.linkType = linkType;
+    }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public enum LinkStatus {
+        PENDING, ACTIVE, SUSPENDED, REVOKED, EXPIRED, REJECTED
+    }
+
+    public enum LinkType {
+        PERMANENT, TEMPORARY, EMERGENCY
+    }
 }

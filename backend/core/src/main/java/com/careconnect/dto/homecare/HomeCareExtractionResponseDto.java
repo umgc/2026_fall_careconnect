@@ -19,7 +19,9 @@ public class HomeCareExtractionResponseDto {
     public String status;
     public String message;
 
-    /** S3 key of the uploaded source document, when the upload succeeded. */
+    /**
+     * S3 key of the uploaded source document, when the upload succeeded.
+     */
     public String documentLink;
 
     public List<ExtractedFieldDto> fields = new ArrayList<>();

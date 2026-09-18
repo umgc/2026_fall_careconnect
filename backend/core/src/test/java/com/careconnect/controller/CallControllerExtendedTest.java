@@ -71,33 +71,46 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("CallController Extended Tests")
 class CallControllerExtendedTest {
 
+    private static final String CALL_ID = "call-123";
+    private static final String BASE_URL = "/api/v3/calls";
     @Autowired
     private MockMvc mockMvc;
-
-    @MockitoBean private ChimeService chimeService;
-    @MockitoBean private BedrockSentimentService sentimentService;
-    @MockitoBean private CallTelemetryService callTelemetryService;
-    @MockitoBean private CallTranscriptService callTranscriptService;
-    @MockitoBean private CallSummaryService callSummaryService;
-    @MockitoBean private CallRecordingService callRecordingService;
-    @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
-    @MockitoBean private com.careconnect.service.consent.CaregiverVisibilityService caregiverVisibilityService;
-    @MockitoBean private com.careconnect.service.CallAttendeeService callAttendeeService;
-    @MockitoBean private FamilyMemberService familyMemberService;
-    @MockitoBean private UserRepository userRepository;
-    @MockitoBean private CallNotificationHandler callNotificationHandler;
-    @MockitoBean private SnsService snsService;
-    @MockitoBean private CallSessionService callSessionService;
-    @MockitoBean private CallTerminationExecutor callTerminationExecutor;
-    @MockitoBean private CallSummaryItemConfirmService callSummaryItemConfirmService;
-
+    @MockitoBean
+    private ChimeService chimeService;
+    @MockitoBean
+    private BedrockSentimentService sentimentService;
+    @MockitoBean
+    private CallTelemetryService callTelemetryService;
+    @MockitoBean
+    private CallTranscriptService callTranscriptService;
+    @MockitoBean
+    private CallSummaryService callSummaryService;
+    @MockitoBean
+    private CallRecordingService callRecordingService;
+    @MockitoBean
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @MockitoBean
+    private com.careconnect.service.consent.CaregiverVisibilityService caregiverVisibilityService;
+    @MockitoBean
+    private com.careconnect.service.CallAttendeeService callAttendeeService;
+    @MockitoBean
+    private FamilyMemberService familyMemberService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private CallNotificationHandler callNotificationHandler;
+    @MockitoBean
+    private SnsService snsService;
+    @MockitoBean
+    private CallSessionService callSessionService;
+    @MockitoBean
+    private CallTerminationExecutor callTerminationExecutor;
+    @MockitoBean
+    private CallSummaryItemConfirmService callSummaryItemConfirmService;
     private ObjectMapper objectMapper;
     private User patientUser;
     private User caregiverUser;
     private User adminUser;
-
-    private static final String CALL_ID = "call-123";
-    private static final String BASE_URL = "/api/v3/calls";
 
     @BeforeEach
     void setUp() {
@@ -198,14 +211,18 @@ class CallControllerExtendedTest {
         return new SentimentResult(0.8, "POSITIVE", "", "TEXT", CALL_ID, System.currentTimeMillis(), false);
     }
 
-    /** Returns a telemetry event list where patient (id=1) is the actor — grants participant access. */
+    /**
+     * Returns a telemetry event list where patient (id=1) is the actor — grants participant access.
+     */
     private List<CallTelemetryEvent> patientParticipantEvents() {
         CallTelemetryEvent event = new CallTelemetryEvent();
         event.setActorUserId(1L);
         return List.of(event);
     }
 
-    /** Returns a telemetry event list where admin (id=3) is the actor. */
+    /**
+     * Returns a telemetry event list where admin (id=3) is the actor.
+     */
     private List<CallTelemetryEvent> adminParticipantEvents() {
         CallTelemetryEvent event = new CallTelemetryEvent();
         event.setActorUserId(3L);

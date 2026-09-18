@@ -5,7 +5,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** Shared, versioned content-hash contract for indexing event publishers and consumers. */
+/**
+ * Shared, versioned content-hash contract for indexing event publishers and consumers.
+ */
 public final class ContentHashUtil {
 
     private static final String SHA_256_PREFIX = "sha256:";

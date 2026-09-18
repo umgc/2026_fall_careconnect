@@ -1,3 +1,4 @@
 package com.careconnect.dto;
 
-public record SetupPasswordRequest(String username, String verificationToken, String newPassword) {}
+public record SetupPasswordRequest(String username, String verificationToken, String newPassword) {
+}

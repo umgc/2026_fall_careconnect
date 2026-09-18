@@ -39,6 +39,15 @@ class KvsStreamPoolServiceTest {
     }
 
     @Test
+    @DisplayName("SPEAKER-048: streamNameFromArn extracts stream name segment")
+    void streamNameFromArn_parses() {
+        assertThat(
+                KvsPoolStreamDiscoveryService.streamNameFromArn(
+                        "arn:aws:kinesisvideo:us-east-1:123:stream/ChimeSDKPool_abc/12345"))
+                .isEqualTo("ChimeSDKPool_abc");
+    }
+
+    @Test
     @DisplayName("isIngestMode is false when disabled, even with a well-formed ARN")
     void isIngestMode_disabled_isFalse() {
         final KvsStreamPoolService service = KvsStreamPoolService.forTest(false, VALID_ARN);

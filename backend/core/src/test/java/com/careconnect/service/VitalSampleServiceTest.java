@@ -63,15 +63,15 @@ class VitalSampleServiceTest {
 
         VitalAlertThresholdProperties thresholdProperties = new VitalAlertThresholdProperties();
         vitalSampleService = new VitalSampleService(
-            vitalSampleRepository,
-            patientRepository,
-            wearableMetricRepository,
-            caregiverService,
-            notificationService,
-            patientCaregiverRepository,
-            familyMemberLinkRepository,
-            vitalAlertEventRepository,
-            thresholdProperties
+                vitalSampleRepository,
+                patientRepository,
+                wearableMetricRepository,
+                caregiverService,
+                notificationService,
+                patientCaregiverRepository,
+                familyMemberLinkRepository,
+                vitalAlertEventRepository,
+                thresholdProperties
         );
 
         User user = User.builder().id(101L).name("John Doe").build();
@@ -98,7 +98,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(80.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(80.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(80.0).build()
         );
 
         verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
@@ -110,7 +110,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(55.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(55.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(55.0).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -123,7 +123,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(110.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(110.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(110.0).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -136,7 +136,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(130.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(130.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(130.0).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -150,21 +150,21 @@ class VitalSampleServiceTest {
         thresholdProperties.getHeartRate().setHighMin(90.0);
         thresholdProperties.getHeartRate().setCriticalMin(100.0);
         vitalSampleService = new VitalSampleService(
-            vitalSampleRepository,
-            patientRepository,
-            wearableMetricRepository,
-            caregiverService,
-            notificationService,
-            patientCaregiverRepository,
-            familyMemberLinkRepository,
-            vitalAlertEventRepository,
-            thresholdProperties
+                vitalSampleRepository,
+                patientRepository,
+                wearableMetricRepository,
+                caregiverService,
+                notificationService,
+                patientCaregiverRepository,
+                familyMemberLinkRepository,
+                vitalAlertEventRepository,
+                thresholdProperties
         );
 
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(105.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(105.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(105.0).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -177,7 +177,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).spo2(97.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(97.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(97.0).build()
         );
 
         verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
@@ -189,7 +189,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).spo2(92.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(92.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(92.0).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -202,7 +202,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).spo2(85.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(85.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).spo2(85.0).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -215,7 +215,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).systolic(120).diastolic(80).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(120).diastolic(80).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(120).diastolic(80).build()
         );
 
         verify(notificationService, never()).sendVitalAlertToRecipient(any(), any(), any(), any(), any());
@@ -227,7 +227,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).systolic(85).diastolic(55).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(85).diastolic(55).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(85).diastolic(55).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -240,7 +240,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).systolic(150).diastolic(95).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(150).diastolic(95).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(150).diastolic(95).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -253,7 +253,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).systolic(190).diastolic(115).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(190).diastolic(115).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).systolic(190).diastolic(115).build()
         );
 
         verify(notificationService, timeout(1000))
@@ -266,7 +266,7 @@ class VitalSampleServiceTest {
         mockCreateFlow(VitalSample.builder().patient(patient).heartRate(125.0).build());
 
         vitalSampleService.createVitalSample(
-            VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(125.0).build()
+                VitalSampleDTO.builder().patientId(1L).timestamp(Instant.now()).heartRate(125.0).build()
         );
 
         ArgumentCaptor<String> metricTypeCaptor = ArgumentCaptor.forClass(String.class);
@@ -274,11 +274,11 @@ class VitalSampleServiceTest {
         ArgumentCaptor<String> severityCaptor = ArgumentCaptor.forClass(String.class);
 
         verify(notificationService, timeout(1000)).sendVitalAlertToRecipient(
-            eq(201L),
-            eq("John Doe"),
-            metricTypeCaptor.capture(),
-            valueCaptor.capture(),
-            severityCaptor.capture()
+                eq(201L),
+                eq("John Doe"),
+                metricTypeCaptor.capture(),
+                valueCaptor.capture(),
+                severityCaptor.capture()
         );
 
         assertNotNull(metricTypeCaptor.getValue());
@@ -292,8 +292,8 @@ class VitalSampleServiceTest {
         when(patientRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(
-            IllegalArgumentException.class,
-            () -> vitalSampleService.createVitalSample(VitalSampleDTO.builder().patientId(999L).build())
+                IllegalArgumentException.class,
+                () -> vitalSampleService.createVitalSample(VitalSampleDTO.builder().patientId(999L).build())
         );
     }
 
@@ -314,17 +314,17 @@ class VitalSampleServiceTest {
 
     private void mockCreateFlow(VitalSample returnedSample) {
         VitalSample sample = VitalSample.builder()
-            .id(10L)
-            .patient(patient)
-            .timestamp(returnedSample.getTimestamp() == null ? Instant.now() : returnedSample.getTimestamp())
-            .heartRate(returnedSample.getHeartRate())
-            .spo2(returnedSample.getSpo2())
-            .systolic(returnedSample.getSystolic())
-            .diastolic(returnedSample.getDiastolic())
-            .weight(returnedSample.getWeight())
-            .moodValue(returnedSample.getMoodValue())
-            .painValue(returnedSample.getPainValue())
-            .build();
+                .id(10L)
+                .patient(patient)
+                .timestamp(returnedSample.getTimestamp() == null ? Instant.now() : returnedSample.getTimestamp())
+                .heartRate(returnedSample.getHeartRate())
+                .spo2(returnedSample.getSpo2())
+                .systolic(returnedSample.getSystolic())
+                .diastolic(returnedSample.getDiastolic())
+                .weight(returnedSample.getWeight())
+                .moodValue(returnedSample.getMoodValue())
+                .painValue(returnedSample.getPainValue())
+                .build();
         when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
         when(vitalSampleRepository.save(any(VitalSample.class))).thenReturn(sample);
     }

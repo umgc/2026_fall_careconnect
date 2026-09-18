@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ScheduledVisitSummary {
-    
+
     private long overdue;
     private long ready;
     private long upcoming;

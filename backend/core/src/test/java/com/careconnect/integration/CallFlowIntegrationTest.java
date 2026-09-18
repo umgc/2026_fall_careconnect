@@ -74,16 +74,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * E2E / Integration tests for the video call flow.
- *
+ * <p>
  * Covers the full call lifecycle:
- *   CALL JOIN → SENTIMENT SUBMISSION → CALL END → TELEMETRY VERIFICATION
- *
+ * CALL JOIN → SENTIMENT SUBMISSION → CALL END → TELEMETRY VERIFICATION
+ * <p>
  * Uses:
- *   - @SpringBootTest (full application context)
- *   - H2 in-memory database (application-test.properties)
- *   - Mocked AWS SDK clients (ChimeSdkMeetingsClient, BedrockRuntimeClient, etc.)
- *   - MockMvc for HTTP calls
- *
+ * - @SpringBootTest (full application context)
+ * - H2 in-memory database (application-test.properties)
+ * - Mocked AWS SDK clients (ChimeSdkMeetingsClient, BedrockRuntimeClient, etc.)
+ * - MockMvc for HTTP calls
+ * <p>
  * TDD IDs covered: CALL-001, CALL-018, CHIME-001..006, CHIME-009, SENT-001, SENT-004, SENT-006, SENT-007
  */
 @SpringBootTest(
@@ -120,111 +120,78 @@ class CallFlowIntegrationTest {
 
     // ── AWS SDK mocks (required so context loads without real credentials) ──────
 
+    private static final String CALL_ID = "integration-call-test-001";
     @MockitoBean
     private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
-
     @MockitoBean
     private ChimeSdkMediaPipelinesClient chimeSdkMediaPipelinesClient;
-
     @MockitoBean
     private BedrockRuntimeClient bedrockRuntimeClient;
-
     @MockitoBean
     private S3Client s3Client;
-
     @MockitoBean
     private S3Presigner s3Presigner;
-
     // Conditional services that are disabled in test profile but required by injected dependents
     @MockitoBean
     private OpenRouterService openRouterService;
-
     @MockitoBean
     private dev.langchain4j.model.chat.ChatModel chatModel;
-
     @MockitoBean(name = "mockAIChatService")
     private com.careconnect.service.AIChatService aiChatService;
-
     // Conditional services whose @ConditionalOnProperty excludes them under test profile,
     // but unconditional controllers still require injection.
     @MockitoBean
     private com.careconnect.service.invoice.TextractService textractService;
-
     @MockitoBean
     private com.careconnect.service.invoice.LlmExtractionService llmExtractionService;
-
     @MockitoBean
     private com.careconnect.service.StripeService stripeService;
-
     @MockitoBean
     private com.careconnect.service.SubscriptionService subscriptionService;
-
     @MockitoBean
     private com.careconnect.service.DeepSeekService deepSeekService;
-
     @MockitoBean
     private com.careconnect.service.AiSymptomService aiSymptomService;
-
     @MockitoBean
     private com.careconnect.service.AiAllergyService aiAllergyService;
-
     @MockitoBean
     private com.careconnect.service.S3StorageService s3StorageService;
-
     @MockitoBean
     private com.careconnect.service.ParameterStoreService parameterStoreService;
-
     @MockitoBean
     private software.amazon.awssdk.services.textract.TextractClient textractClient;
-
     @MockitoBean
     private software.amazon.awssdk.services.ssm.SsmClient ssmClient;
-
     @MockitoBean
     private software.amazon.awssdk.services.sts.StsClient stsClient;
 
+    // ── Spring-managed beans ─────────────────────────────────────────────────────
     @MockitoBean
     private software.amazon.awssdk.services.iam.IamClient iamClient;
-
-    // ── Spring-managed beans ─────────────────────────────────────────────────────
-
     @MockitoSpyBean
     private ChimeService chimeService;
-
     @Autowired
     private MockMvc mockMvc;
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private CallTelemetryEventRepository callTelemetryEventRepository;
-
     @Autowired
     private CallAttendeeRepository callAttendeeRepository;
-
     @Autowired
     private FamilyMemberLinkRepository familyMemberLinkRepository;
-
     @Autowired
     private CallParticipantRepository callParticipantRepository;
-
     @Autowired
     private CallSessionRepository callSessionRepository;
-
     @Autowired
     private PatientRepository patientRepository;
-
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    // ── Test fixtures ───────────────────────────────────────────────────────────
     @Autowired
     private ObjectMapper objectMapper;
-
-    // ── Test fixtures ───────────────────────────────────────────────────────────
-
-    private static final String CALL_ID = "integration-call-test-001";
-
     private User patientUser;
     private User caregiverUser;
 
@@ -309,9 +276,9 @@ class CallFlowIntegrationTest {
         if (patientRepository.findByUserId(patientUser.getId()).isEmpty()) {
             jdbcTemplate.update(
                     """
-                    INSERT INTO patient (first_name, last_name, email, user_id)
-                    VALUES (?, ?, ?, ?)
-                    """,
+                            INSERT INTO patient (first_name, last_name, email, user_id)
+                            VALUES (?, ?, ?, ?)
+                            """,
                     "Integration",
                     "Patient",
                     patientUser.getEmail(),
@@ -337,6 +304,19 @@ class CallFlowIntegrationTest {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CHIME-001 / CHIME-002 / CHIME-004 / CALL-001: JOIN CALL
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private void joinCall(final String callId, final User joiningUser) throws Exception {
+        mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
+                        .with(user(joiningUser.getEmail()).roles(joiningUser.getRole().name()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CHIME-012: CONFERENCE INVITE
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -486,7 +466,7 @@ class CallFlowIntegrationTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CHIME-012: CONFERENCE INVITE
+    // SENT-001 / SENT-006 / SENT-007: SENTIMENT ANALYSIS
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -713,7 +693,7 @@ class CallFlowIntegrationTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SENT-001 / SENT-006 / SENT-007: SENTIMENT ANALYSIS
+    // CHIME-006 / SENT-004: CALL END
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -850,7 +830,7 @@ class CallFlowIntegrationTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CHIME-006 / SENT-004: CALL END
+    // FULL CALL FLOW: JOIN → SENTIMENT → END → VERIFY
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -903,10 +883,6 @@ class CallFlowIntegrationTest {
             assertThat(events).anyMatch(e -> "CALL_END".equals(e.getEventType()));
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // FULL CALL FLOW: JOIN → SENTIMENT → END → VERIFY
-    // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Full Call Flow — Join → Sentiment → End")
@@ -1003,15 +979,6 @@ class CallFlowIntegrationTest {
                             .with(user(patientUser.getEmail()).roles("PATIENT")))
                     .andExpect(status().isOk());
         }
-    }
-
-    private void joinCall(final String callId, final User joiningUser) throws Exception {
-        mockMvc.perform(post("/api/v3/calls/{callId}/join", callId)
-                        .with(user(joiningUser.getEmail()).roles(joiningUser.getRole().name()))
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isOk());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

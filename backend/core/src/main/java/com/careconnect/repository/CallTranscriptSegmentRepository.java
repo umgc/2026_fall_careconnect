@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.util.UUID;
+
 import org.springframework.data.jpa.repository.Modifying;
 
 public interface CallTranscriptSegmentRepository
@@ -21,7 +22,7 @@ public interface CallTranscriptSegmentRepository
      * @return matching segments in ascending timeline order
      */
     List<CallTranscriptSegment>
-            findByCallIdOrderByStartMsAscOccurredAtAsc(String callId);
+    findByCallIdOrderByStartMsAscOccurredAtAsc(String callId);
 
     /**
      * Counts transcript segments for a call.
@@ -34,7 +35,7 @@ public interface CallTranscriptSegmentRepository
     /**
      * Returns whether a user has transcript segments for a call.
      *
-     * @param callId call identifier
+     * @param callId      call identifier
      * @param actorUserId actor user identifier
      * @return {@code true} when a matching transcript segment exists
      */
@@ -91,7 +92,7 @@ public interface CallTranscriptSegmentRepository
      * Deletes only rows included in a successfully verified archive.
      *
      * @param callId call identifier
-     * @param ids captured segment identifiers
+     * @param ids    captured segment identifiers
      * @return number of deleted rows
      */
     long deleteByCallIdAndIdIn(String callId, Collection<Long> ids);

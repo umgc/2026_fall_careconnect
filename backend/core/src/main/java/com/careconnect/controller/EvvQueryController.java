@@ -11,9 +11,12 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
-@RestController @RequestMapping("/v1/api/evv/records") @RequiredArgsConstructor
+@RestController
+@RequestMapping("/v1/api/evv/records")
+@RequiredArgsConstructor
 public class EvvQueryController {
     private final EvvRecordRepository evvRecordRepository;
     private final SecurityUtil securityUtil;
@@ -26,7 +29,8 @@ public class EvvQueryController {
     public List<EvvRecord> list(@RequestParam(required = false) String status, @RequestParam(required = false) Long caregiverId) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireAdminOrCaregiver(currentUser);
-        if (status != null && caregiverId != null) return evvRecordRepository.findByCaregiverIdAndStatus(caregiverId, status);
+        if (status != null && caregiverId != null)
+            return evvRecordRepository.findByCaregiverIdAndStatus(caregiverId, status);
         if (status != null) return evvRecordRepository.findByStatus(status);
         return evvRecordRepository.findAll();
     }

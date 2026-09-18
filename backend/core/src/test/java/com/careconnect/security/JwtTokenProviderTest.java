@@ -9,9 +9,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class JwtTokenProviderTest {
 
-    private JwtTokenProvider jwtTokenProvider;
     private final String testSecret = "dGVzdC1zZWNyZXQtZm9yLWp3dC10b2tlbi1wcm92aWRlci10ZXN0aW5nMTIzNDU2Nzg5MDEyMzQ1Njc4OTA="; // base64 encoded 256-bit key
     private final long testExpirationMs = 3600000; // 1 hour
+    private JwtTokenProvider jwtTokenProvider;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -201,11 +201,11 @@ class JwtTokenProviderTest {
 
         // The refreshed token should have a later expiration
         assertTrue(refreshedClaims.getExpiration().after(originalClaims.getExpiration()),
-            "Refreshed token should have a later expiration than the original token");
+                "Refreshed token should have a later expiration than the original token");
 
         // Token string should now differ
         assertNotEquals(originalToken, refreshedToken,
-            "Refreshed token should be a new token");
+                "Refreshed token should be a new token");
 
 
     }

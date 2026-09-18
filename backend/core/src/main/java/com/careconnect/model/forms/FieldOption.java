@@ -6,7 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** A single allowed choice for RADIO / SELECT / MULTISELECT fields. */
+/**
+ * A single allowed choice for RADIO / SELECT / MULTISELECT fields.
+ */
 @Data
 @Builder
 @NoArgsConstructor

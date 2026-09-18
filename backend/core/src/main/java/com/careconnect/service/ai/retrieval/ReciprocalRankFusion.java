@@ -116,12 +116,6 @@ final class ReciprocalRankFusion {
         return "source:" + sourceRecordId;
     }
 
-    private enum Arm {
-        FTS,
-        VECTOR,
-        STRUCTURED
-    }
-
     private static void accumulate(
             final Map<UUID, MergedHit> byId,
             final List<RetrievalIndexChunk> hits,
@@ -161,6 +155,12 @@ final class ReciprocalRankFusion {
                                         : existing.structuredRank()));
             }
         }
+    }
+
+    private enum Arm {
+        FTS,
+        VECTOR,
+        STRUCTURED
     }
 
     /**
