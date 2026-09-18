@@ -1,0 +1,72 @@
+# staging-merge-ci.yml
+# CareConnect — Develop -> Staging Merge CI Pipeline (PLACEHOLDER)
+#
+# Runs on every PR from `develop` into `staging`. By this stage, every
+# unit/widget test and full-suite regression check has already run and
+# passed at earlier stages:
+#   feature/*          -> team-*-develop : team-merge-ci.yml   (diff-scoped)
+#   team-*-develop      -> develop        : develop-merge-ci.yml (full suite)
+# So this stage's ONLY job is E2E and integration tests -- nothing else
+# is re-checked here (no build, no unit tests, no coverage gate).
+#
+# STATUS: placeholder. Team A owns E2E/integration testing and has not
+# added any tests here yet, so both jobs below currently just print a
+# notice and exit 0 -- they never block a PR. When Team A adds real
+# tests, replace the placeholder `run:` step in the matching job with
+# the actual test invocation; nothing else about this workflow (name,
+# trigger, job names) needs to change.
+#
+# Note: there is existing, currently-unwired E2E scaffolding elsewhere
+# in the repo (frontend/integration_test/*.dart, scripts/run-e2e-emulator.sh,
+# left over from a prior team-b-ci.yml). This placeholder intentionally
+# does not call into any of that -- Team A decides whether to reuse,
+# rewrite, or replace it when they fill this in.
+#
+# Triggers:
+#   PR -> staging (in practice, only from `develop`; branch-source-gate.yml
+#   does not currently enforce this -- see the team's earlier discussion
+#   about extending that gate to cover `staging`)
+
+name: Staging Merge CI
+
+on:
+  pull_request:
+    branches:
+      - staging
+
+concurrency:
+  group: staging-merge-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (placeholder)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # TODO(team-a): replace this step with the real E2E test run once
+      # it exists (e.g. `flutter test integration_test/` on an emulator,
+      # or `flutter drive` against the deployed staging environment).
+      - name: E2E tests (not implemented yet)
+        run: |
+          echo "No E2E test suite wired up yet -- placeholder, nothing to run."
+          exit 0
+
+  integration-tests:
+    name: Integration Tests (placeholder)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # TODO(team-a): replace this step with the real integration test run
+      # once it exists (e.g. API-level tests against a staging deployment,
+      # or Maven failsafe `*IT.java` tests via `mvn verify -Pintegration`).
+      - name: Integration tests (not implemented yet)
+        run: |
+          echo "No integration test suite wired up yet -- placeholder, nothing to run."
+          exit 0
