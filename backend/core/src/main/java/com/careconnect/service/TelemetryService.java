@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TelemetryService {
 
     /* A list of all known telemetry events */
-    private static final List<String> allowedEvents = List.of("privacy_telemetry_toggle", "screen_view", "button_tap", "error_network", "error_timeout", "offline_toggled", "feature_use", "sync_started", "sync_completed", "sync_failed", "session_start", "session_end",
+    private static final List<String> allowedEvents = List.of("privacy_telemetry_toggle", "screen_view", "button_tap", "error_network", "error_timeout", "offline_toggled", "feature_use", "sync_started", "sync_completed", "sync_failed", "session_start", "session_end", "dev_emit",
             // Feature analytics (anonymous)
             "feature.medications.view_all", "feature.medications.view_active", "feature.medications.view_pending", "feature.medications.add", "feature.medications.approve", "feature.medications.delete_soft", "feature.medications.delete_hard");
     

@@ -20,6 +20,7 @@ import com.careconnect.dto.ChatResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
@@ -36,12 +37,19 @@ public class BedrockAIChatService implements AIService {
     private final String defaultModelId;
 
     @Autowired
-    public BedrockAIChatService(@Value("${careconnect.ai.model:amazon.nova-lite-v1:0}") String defaultModelId) {
+    public BedrockAIChatService(
+            // Temporary default while the intended Claude inference-profile path is
+            // unavailable under the account regional guardrail. Override with
+            // BEDROCK_MODEL_ID when a validated, approved replacement is available.
+            @Value("${careconnect.ai.model:amazon.nova-lite-v1:0}") String defaultModelId,
+            @Value("${aws.region:us-east-1}") String bedrockRegion) {
         this(
-                BedrockRuntimeClient.builder().region(Region.US_EAST_1).build(),
+                BedrockRuntimeClient.builder()
+                        .region(Region.of(bedrockRegion))
+                        .credentialsProvider(DefaultCredentialsProvider.create())
+                        .build(),
                 defaultModelId,
-                new ObjectMapper()
-        );
+                new ObjectMapper());
     }
 
     BedrockAIChatService(BedrockRuntimeClient client, String defaultModelId, ObjectMapper objectMapper) {
@@ -53,9 +61,8 @@ public class BedrockAIChatService implements AIService {
     @Override
     public ChatResponse processChat(ChatRequest request) {
 
-        log.info("Using Bedrock AI provider");
-
         String modelId = BedrockModelSupport.resolveModelId(request.getPreferredModel(), defaultModelId);
+        log.info("Invoking Bedrock model {}", modelId);
         String safePrompt = request.getMessage() == null ? "" : request.getMessage();
         String payload = BedrockModelSupport.buildInvokePayload(
                 modelId,
@@ -63,8 +70,7 @@ public class BedrockAIChatService implements AIService {
                 500,
                 0.5,
                 0.9,
-                objectMapper
-        );
+                objectMapper);
 
         InvokeModelRequest invokeRequest = InvokeModelRequest.builder()
                 .modelId(modelId)

@@ -3,6 +3,7 @@ package com.careconnect.service.ai.ask;
 import com.careconnect.ai.bedrock.BedrockModelSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,52 +77,11 @@ public class GroundedAskLlmService {
         this(bedrockRuntimeClient, objectMapper, defaultModelId, awsEnabled, 1024, 0.2d, 0.9d);
     }
 
-    private static GroundedProviderException classifyProviderFailure(
-            final String errorCode, final BedrockRuntimeException cause) {
-        if (CONFIGURATION_ERROR_CODES.contains(errorCode)) {
-            return new GroundedProviderException(
-                    GroundedProviderException.Kind.CONFIGURATION,
-                    false,
-                    "Grounded model configuration is unavailable",
-                    cause);
-        }
-        return new GroundedProviderException(
-                GroundedProviderException.Kind.PROVIDER,
-                TRANSIENT_PROVIDER_ERROR_CODES.contains(errorCode),
-                "Grounded model provider invocation failed",
-                cause);
-    }
-
-    private static String unwrapJson(final String text) {
-        String candidate = text;
-        if (candidate.startsWith("```")) {
-            final int firstNl = candidate.indexOf('\n');
-            final int lastFence = candidate.lastIndexOf("```");
-            if (firstNl > 0 && lastFence > firstNl) {
-                candidate = candidate.substring(firstNl + 1, lastFence).trim();
-            }
-        }
-        final int start = candidate.indexOf('{');
-        final int end = candidate.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return candidate.substring(start, end + 1);
-        }
-        return candidate;
-    }
-
-    private static String textOrEmpty(final JsonNode root, final String field) {
-        final JsonNode node = root.get(field);
-        if (node == null || node.isNull()) {
-            return "";
-        }
-        return node.asText("");
-    }
-
     /**
      * Invokes Bedrock with grounded system/user prompts and parses structured JSON.
      *
      * @return the validated grounded result
-     * @throws GroundedProviderException         when configuration or provider invocation fails
+     * @throws GroundedProviderException when configuration or provider invocation fails
      * @throws GroundedOutputValidationException when Bedrock responds with invalid output
      */
     public Optional<GroundedLlmResult> generate(final String systemPrompt, final String userPrompt) {
@@ -156,8 +116,10 @@ public class GroundedAskLlmService {
                 final String raw = response.body().asUtf8String();
                 text = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
             } catch (final RuntimeException ex) {
+                log.warn("Grounded Ask AI Bedrock response payload was malformed");
                 throw new GroundedOutputValidationException(
-                        "Bedrock response payload was malformed", ex);
+                        "Bedrock response payload was malformed",
+                        GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
             }
             return parseStructured(text, modelId);
         } catch (final BedrockRuntimeException ex) {
@@ -189,18 +151,59 @@ public class GroundedAskLlmService {
         return awsEnabled && bedrockRuntimeClient != null;
     }
 
+    private static GroundedProviderException classifyProviderFailure(
+            final String errorCode, final BedrockRuntimeException cause) {
+        if (CONFIGURATION_ERROR_CODES.contains(errorCode)) {
+            return new GroundedProviderException(
+                    GroundedProviderException.Kind.CONFIGURATION,
+                    false,
+                    "Grounded model configuration is unavailable",
+                    cause);
+        }
+        return new GroundedProviderException(
+                GroundedProviderException.Kind.PROVIDER,
+                TRANSIENT_PROVIDER_ERROR_CODES.contains(errorCode),
+                "Grounded model provider invocation failed",
+                cause);
+    }
+
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {
         if (text == null || text.isBlank()) {
+            log.warn("Grounded model returned an empty response");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was empty");
+                    "Grounded model response was empty",
+                    GroundedOutputValidationException.Kind.EMPTY_RESPONSE);
         }
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
-            final JsonNode claimsNode = root.get("claims");
+            // Nova has been observed returning claims in three different shapes:
+            // (a) {"claims": [...]} — the documented contract
+            // (b) [...claim objects directly...] — top-level array of claims
+            // (c) [{"claims": [...]}, {"claims": [...]}, ...] — one wrapper object
+            //     per source, most common when citing multiple retrieved chunks
+            // Flatten (c) into (b) by unwrapping any array element that itself
+            // carries a "claims" array, so a claim's actual text/citations fields
+            // are never mistaken for a missing claim.
+            final JsonNode claimsNode;
+            if (root.isArray()) {
+                final ArrayNode flattened = objectMapper.createArrayNode();
+                for (final JsonNode element : root) {
+                    if (element.has("claims") && element.get("claims").isArray()) {
+                        flattened.addAll((ArrayNode) element.get("claims"));
+                    } else {
+                        flattened.add(element);
+                    }
+                }
+                claimsNode = flattened;
+            } else {
+                claimsNode = root.get("claims");
+            }
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
+                log.warn("Grounded model response did not contain a claims array");
                 throw new GroundedOutputValidationException(
-                        "Grounded model response did not contain claims");
+                        "Grounded model response did not contain claims",
+                        GroundedOutputValidationException.Kind.MISSING_CLAIMS);
             }
             final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
@@ -224,8 +227,10 @@ public class GroundedAskLlmService {
                     }
                 }
                 if (claimText.isBlank() || claimRefs.isEmpty()) {
+                    log.warn("Grounded model claim was missing text or evidence");
                     throw new GroundedOutputValidationException(
-                            "Each grounded claim requires text and extractive evidence");
+                            "Each grounded claim requires text and extractive evidence",
+                            GroundedOutputValidationException.Kind.INCOMPLETE_CLAIM);
                 }
                 claims.add(new GroundedClaim(
                         claimText,
@@ -244,8 +249,41 @@ public class GroundedAskLlmService {
         } catch (final Exception ex) {
             log.warn("Unable to parse grounded Ask AI JSON");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was malformed", ex);
+                    "Grounded model response was malformed",
+                    GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
         }
+    }
+
+    private static String unwrapJson(final String text) {
+        String candidate = text;
+        if (candidate.startsWith("```")) {
+            final int firstNl = candidate.indexOf('\n');
+            final int lastFence = candidate.lastIndexOf("```");
+            if (firstNl > 0 && lastFence > firstNl) {
+                candidate = candidate.substring(firstNl + 1, lastFence).trim();
+            }
+        }
+        // Whichever bracket type appears first is the true outer container —
+        // slicing to a hardcoded '{'/'}' pair silently strips a bare array's
+        // own brackets (turning `[{"a":1}]` into `{"a":1}`) when a model
+        // (observed: Nova) returns claims as a top-level array.
+        final int firstBrace = candidate.indexOf('{');
+        final int firstBracket = candidate.indexOf('[');
+        final boolean isArray = firstBracket >= 0 && (firstBrace < 0 || firstBracket < firstBrace);
+        final int start = isArray ? firstBracket : firstBrace;
+        final int end = isArray ? candidate.lastIndexOf(']') : candidate.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return candidate.substring(start, end + 1);
+        }
+        return candidate;
+    }
+
+    private static String textOrEmpty(final JsonNode root, final String field) {
+        final JsonNode node = root.get(field);
+        if (node == null || node.isNull()) {
+            return "";
+        }
+        return node.asText("");
     }
 
     public record GroundedClaim(

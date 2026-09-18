@@ -1,0 +1,45 @@
+# .github/actions/setup-frontend/action.yml
+#
+# Shared frontend toolchain setup, used by any workflow that builds or
+# tests the Flutter frontend (team-merge-ci.yml, develop-merge-ci.yml, ...).
+# Does NOT check out the repository -- callers already do that as their
+# own first step, since some jobs need both this and setup-backend in
+# the same job and checkout must only happen once.
+
+name: 'Setup Frontend Toolchain'
+description: 'Sets up Flutter and runs pub get for CareConnect frontend builds.'
+
+inputs:
+  flutter-version:
+    description: 'Flutter version to install'
+    required: false
+    default: '3.x'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ inputs.flutter-version }}
+        channel: stable
+        cache: true
+
+    # flutter-action's own `cache: true` only caches the SDK download,
+    # not resolved pub packages. Cache those separately keyed on
+    # pubspec.lock so `pub get` doesn't re-fetch ~150+ packages cold
+    # on every run.
+    - name: Cache pub packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.pub-cache
+        key: ${{ runner.os }}-pub-${{ hashFiles('frontend/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
+
+    - name: Flutter pub get
+      shell: bash
+      working-directory: frontend
+      run: |
+        cp .env.example .env 2>/dev/null || touch .env
+        flutter pub get

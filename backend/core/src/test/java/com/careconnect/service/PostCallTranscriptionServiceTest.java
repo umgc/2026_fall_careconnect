@@ -210,6 +210,48 @@ class PostCallTranscriptionServiceTest {
     }
 
     @Test
+    @DisplayName("F7: KVS attendee path labels segments with the attendee's role, not a generic ordinal")
+    void transcribeAndCleanup_kvsStreamMapping_labelsSegmentsWithRole() throws Exception {
+        final CallRecording recording = recording();
+        final CallAttendee attendee = attendee();
+        final Path raw = Files.createTempFile("kvs-role-test", ".mkv");
+        final Path wav = Files.createTempFile("kvs-role-test", ".wav");
+        when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
+        when(kvsArchivedMediaExportService.exportAttendeeRange(
+                        any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                .thenReturn(raw);
+        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
+                .thenReturn(StartTranscriptionJobResponse.builder().build());
+        when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
+                .thenReturn(completedJob());
+        when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
+        when(callTranscriptService.recordSegments(
+                        any(String.class),
+                        any(Long.class),
+                        org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                .thenReturn(1);
+        when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
+
+        runExecuteTranscription(recording);
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<TranscriptSegmentInput>> segmentsCaptor =
+                ArgumentCaptor.forClass(List.class);
+        verify(callTranscriptService).recordSegments(eq(CALL_ID), eq(2L), segmentsCaptor.capture());
+        assertThat(segmentsCaptor.getValue())
+                .isNotEmpty()
+                .extracting(TranscriptSegmentInput::speakerLabel)
+                .containsOnly("Caregiver")
+                .noneMatch(label -> label.startsWith("Speaker "));
+
+        Files.deleteIfExists(raw);
+        Files.deleteIfExists(wav);
+    }
+
+    @Test
     @DisplayName("falls back to MP4 diarization when no KVS stream mapping exists")
     void transcribeAndCleanup_noKvsMapping_usesMp4Fallback() throws Exception {
         final CallRecording recording = recording();
