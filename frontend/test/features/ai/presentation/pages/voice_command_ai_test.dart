@@ -48,6 +48,10 @@ Widget _buildVoiceRouterApp({String localestring = 'en', bool singleShot = false
         path: '/symptoms',
         builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
       ),
+      GoRoute(
+        path: '/medication',
+        builder: (_, __) => const Scaffold(body: Text('Medication Page')),
+      ),
     ],
   );
   return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale(localestring), routerConfig: router);
@@ -1602,6 +1606,34 @@ void main() {
 
       await _flush(tester);
     });
+
+    for (final command in [
+      ('open calendar', 'Calendar Page'),
+      ('open symptoms', 'Symptoms Page'),
+      ('open medications', 'Medication Page'),
+      ('open my medications', 'Medication Page'),
+    ]) {
+      testWidgets('"${command.$1}" confirms before navigating', (tester) async {
+        await tester.pumpWidget(_buildVoiceRouterApp());
+        await tester.pump(const Duration(milliseconds: 100));
+
+        await tester.tap(find.byType(FloatingActionButton));
+        await tester.pump(const Duration(milliseconds: 200));
+
+        await _sendSpeechResult(tester, command.$1, isFinal: true);
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text(command.$2), findsOneWidget);
+
+        await _flush(tester);
+      });
+    }
 
     testWidgets('tapping cancel returns to idle without navigation - English',
         (tester) async {
