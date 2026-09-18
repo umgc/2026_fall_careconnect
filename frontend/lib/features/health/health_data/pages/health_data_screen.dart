@@ -35,11 +35,10 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         _loading = false;
       });
     } catch (_) {
-      setState(() => _loading = false); // fall back to samples only
+      setState(() => _loading = false);
     }
   }
 
-  // Sample records for the other sources (until their endpoints are wired).
   List<HealthRecord> get _samples => [
         HealthRecord.single(
           id: 'epic-med-1',
@@ -136,6 +135,19 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
+  Color _sourceColor(RecordSource s) {
+    switch (s) {
+      case RecordSource.epic:
+        return const Color(0xFF2563EB);
+      case RecordSource.cerner:
+        return const Color(0xFF10B981);
+      case RecordSource.athena:
+        return const Color(0xFFF59E0B);
+      case RecordSource.medicare:
+        return const Color(0xFF00A7C8);
+    }
+  }
+
   Widget _recordCard(HealthRecord r) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -201,20 +213,21 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 style: const TextStyle(
                     fontSize: 12, color: _teal, fontWeight: FontWeight.w600)),
           ),
-        ...r.sources.map((s) => Container(
-              margin: const EdgeInsets.only(right: 6, bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: _border),
-              ),
-              child: Text(s.badge,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: _muted,
-                      fontWeight: FontWeight.w600)),
-            )),
+        ...r.sources.map((s) {
+          final c = _sourceColor(s);
+          return Container(
+            margin: const EdgeInsets.only(right: 6, bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: c.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: c.withValues(alpha: 0.4)),
+            ),
+            child: Text(s.badge,
+                style: TextStyle(
+                    fontSize: 12, color: c, fontWeight: FontWeight.w600)),
+          );
+        }),
       ],
     );
   }
