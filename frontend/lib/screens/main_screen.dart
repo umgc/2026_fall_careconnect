@@ -384,7 +384,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _startUnreadMessageBadgePolling() {
     _messageBadgeTimer?.cancel();
-    _messageBadgeTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _messageBadgeTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       _refreshUnreadMessageBadge();
     });
   }
@@ -402,7 +402,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final user = Provider.of<UserProvider>(context, listen: false).user;
     if (user == null) return;
 
-    final hasMessagesTab = _navItems.any((item) => item.routeName == 'messages');
+    final hasMessagesTab =
+        _navItems.any((item) => item.routeName == 'messages');
     if (!hasMessagesTab) return;
 
     try {
@@ -443,7 +444,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             decoration: BoxDecoration(
               color: Colors.red.shade700,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 1.5),
+              border: Border.all(
+                  color: Theme.of(context).scaffoldBackgroundColor, width: 1.5),
             ),
             child: Center(
               child: Text(
@@ -479,7 +481,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String _trimmed(dynamic value) => (value ?? '').toString().trim();
 
   String _fullName(String first, String last, String fallback) {
-    final name = [first.trim(), last.trim()].where((e) => e.isNotEmpty).join(' ').trim();
+    final name =
+        [first.trim(), last.trim()].where((e) => e.isNotEmpty).join(' ').trim();
     if (name.isNotEmpty) return name;
     return fallback;
   }
@@ -494,26 +497,35 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final role = user.role.trim().toUpperCase();
     if (role == 'PATIENT') {
       final links = await ApiService.getPatientLinkedCaregiverLinks(user.id);
-      return links.where((link) {
-        final enabledRaw = link['patientVideoCallsEnabled'];
-        return enabledRaw is bool ? enabledRaw : '$enabledRaw'.toLowerCase() != 'false';
-      }).map((link) {
-        final caregiverUserId = _toInt(link['caregiverUserId']);
-        if (caregiverUserId == null || caregiverUserId <= 0) {
-          return null;
-        }
-        final caregiverName = _trimmed(link['caregiverName']);
-        final caregiverEmail = _trimmed(link['caregiverEmail']);
-        return _QuickCallTarget(
-          userId: caregiverUserId,
-          role: 'CAREGIVER',
-          title: caregiverName.isNotEmpty ? caregiverName : '${t.signup_caregiver} $caregiverUserId',
-          subtitle: t.mainscreen_cgCallEnabled,
-          email: caregiverEmail,
-          phone: null,
-        );
-      }).whereType<_QuickCallTarget>().toList()
-        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      return links
+          .where((link) {
+            final enabledRaw = link['patientVideoCallsEnabled'];
+            return enabledRaw is bool
+                ? enabledRaw
+                : '$enabledRaw'.toLowerCase() != 'false';
+          })
+          .map((link) {
+            final caregiverUserId = _toInt(link['caregiverUserId']);
+            if (caregiverUserId == null || caregiverUserId <= 0) {
+              return null;
+            }
+            final caregiverName = _trimmed(link['caregiverName']);
+            final caregiverEmail = _trimmed(link['caregiverEmail']);
+            return _QuickCallTarget(
+              userId: caregiverUserId,
+              role: 'CAREGIVER',
+              title: caregiverName.isNotEmpty
+                  ? caregiverName
+                  : '${t.signup_caregiver} $caregiverUserId',
+              subtitle: t.mainscreen_cgCallEnabled,
+              email: caregiverEmail,
+              phone: null,
+            );
+          })
+          .whereType<_QuickCallTarget>()
+          .toList()
+        ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     }
 
     if (role != 'CAREGIVER') {
@@ -544,11 +556,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (item is! Map<String, dynamic>) continue;
       final link = item['link'];
       final patient = item['patient'];
-      final linkMap = link is Map<String, dynamic> ? link : const <String, dynamic>{};
-      final patientMap = patient is Map<String, dynamic> ? patient : const <String, dynamic>{};
+      final linkMap =
+          link is Map<String, dynamic> ? link : const <String, dynamic>{};
+      final patientMap =
+          patient is Map<String, dynamic> ? patient : const <String, dynamic>{};
 
-      final patientUserId = _toInt(linkMap['patientUserId']) ?? _toInt(patientMap['userId']);
-      if (patientUserId == null || patientUserId <= 0 || patientUserIds.contains(patientUserId)) {
+      final patientUserId =
+          _toInt(linkMap['patientUserId']) ?? _toInt(patientMap['userId']);
+      if (patientUserId == null ||
+          patientUserId <= 0 ||
+          patientUserIds.contains(patientUserId)) {
         continue;
       }
       patientUserIds.add(patientUserId);
@@ -578,10 +595,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
 
     for (final patientTarget in patientTargets) {
-      final links = await ApiService.getPatientLinkedCaregiverLinks(patientTarget.userId);
+      final links =
+          await ApiService.getPatientLinkedCaregiverLinks(patientTarget.userId);
       for (final link in links) {
         final caregiverUserId = _toInt(link['caregiverUserId']);
-        if (caregiverUserId == null || caregiverUserId <= 0 || caregiverUserId == currentUserId) {
+        if (caregiverUserId == null ||
+            caregiverUserId <= 0 ||
+            caregiverUserId == currentUserId) {
           continue;
         }
         final caregiverName = _trimmed(link['caregiverName']);
@@ -590,7 +610,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           caregiverUserId,
           () => _CareTeamAggregate(
             userId: caregiverUserId,
-            name: caregiverName.isNotEmpty ? caregiverName : '${t.signup_caregiver} $caregiverUserId',
+            name: caregiverName.isNotEmpty
+                ? caregiverName
+                : '${t.signup_caregiver} $caregiverUserId',
             email: caregiverEmail.isNotEmpty ? caregiverEmail : null,
           ),
         );
@@ -604,7 +626,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     final careTeamTargets = careTeamByUserId.values.map((entry) {
       final context = entry.patientNames.toList()..sort();
-      final summary = context.isEmpty ? t.mainscreen_careTeam : '${t.mainscreen_careTeamFor}: ${context.join(', ')}';
+      final summary = context.isEmpty
+          ? t.mainscreen_careTeam
+          : '${t.mainscreen_careTeamFor}: ${context.join(', ')}';
       return _QuickCallTarget(
         userId: entry.userId,
         role: 'CAREGIVER',
@@ -617,7 +641,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }).toList()
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
-    patientTargets.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    patientTargets
+        .sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     return [...patientTargets, ...careTeamTargets];
   }
 
@@ -743,7 +768,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, index) {
                           final target = targets[index];
-                          final roleBadge = target.role == 'PATIENT' ? 'PATIENT' : 'CAREGIVER';
+                          final roleBadge = target.role == 'PATIENT'
+                              ? 'PATIENT'
+                              : 'CAREGIVER';
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
