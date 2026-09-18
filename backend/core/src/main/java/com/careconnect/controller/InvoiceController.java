@@ -18,6 +18,7 @@ import com.careconnect.util.JsonSanitizer;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.*;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -46,7 +47,7 @@ public class InvoiceController {
     public InvoiceController(
             InvoiceService service,
             TextractService textractService,
-            LlmExtractionService llmExtractionService,            
+            ObjectProvider<LlmExtractionService> llmExtractionServiceProvider,            
             ObjectMapper objectMapper,
             SecurityUtil securityUtil,
             AuthorizationService authorizationService,
@@ -55,7 +56,7 @@ public class InvoiceController {
 
         this.service = service;
         this.textractService = textractService;
-        this.llmExtractionService = llmExtractionService;
+        this.llmExtractionService = llmExtractionServiceProvider.getIfAvailable();
         this.objectMapper = objectMapper;
         this.securityUtil = securityUtil;
         this.authorizationService = authorizationService;

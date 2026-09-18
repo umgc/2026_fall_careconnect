@@ -132,7 +132,8 @@ class VoiceCommandWebSpeechController {
               continue;
             }
             final transcript =
-                js_util.getProperty(alternative, 'transcript')?.toString() ?? '';
+                js_util.getProperty(alternative, 'transcript')?.toString() ??
+                    '';
 
             if (transcript.trim().isEmpty) {
               continue;
