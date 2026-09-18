@@ -1,15 +1,46 @@
 import 'package:flutter/material.dart';
 import '../models/health_record.dart';
+import '../services/medicare_data_service.dart';
 
-class HealthDataScreen extends StatelessWidget {
+class HealthDataScreen extends StatefulWidget {
   const HealthDataScreen({super.key});
 
+  @override
+  State<HealthDataScreen> createState() => _HealthDataScreenState();
+}
+
+class _HealthDataScreenState extends State<HealthDataScreen> {
   static const _teal = Color(0xFF00A7C8);
   static const _text = Color(0xFF0F172A);
   static const _muted = Color(0xFF6B7280);
   static const _border = Color(0xFFE5E7EB);
+  static const _warning = Color(0xFFF59E0B);
 
-  List<HealthRecord> get _sample => [
+  bool _loading = true;
+  bool _synthetic = false;
+  List<HealthRecord> _medicare = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final result = await MedicareDataService().fetchRecords();
+      setState(() {
+        _medicare = result.records;
+        _synthetic = result.synthetic;
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false); // fall back to samples only
+    }
+  }
+
+  // Sample records for the other sources (until their endpoints are wired).
+  List<HealthRecord> get _samples => [
         HealthRecord.single(
           id: 'epic-med-1',
           source: RecordSource.epic,
@@ -20,15 +51,6 @@ class HealthDataScreen extends StatelessWidget {
             RecordDetail('Route', 'Oral'),
             RecordDetail('Prescriber', 'Dr. Sarah Mitchell'),
           ],
-        ),
-        HealthRecord.single(
-          id: 'epic-cond-1',
-          source: RecordSource.epic,
-          type: RecordType.condition,
-          title: 'Hypertension',
-          status: 'Active',
-          date: DateTime(2021, 3, 15),
-          details: const [RecordDetail('Diagnosed', 'Mar 15, 2021')],
         ),
         HealthRecord.single(
           id: 'cerner-appt-1',
@@ -49,32 +71,11 @@ class HealthDataScreen extends StatelessWidget {
           date: DateTime(2026, 8, 22),
           details: const [RecordDetail('Provider', 'Dr. James Carter')],
         ),
-        HealthRecord.single(
-          id: 'medicare-eob-1',
-          source: RecordSource.medicare,
-          type: RecordType.claimService,
-          title: 'Primary Care Office Visit',
-          status: 'Processed',
-          date: DateTime(2026, 3, 12),
-          details: const [
-            RecordDetail('Provider', 'Dr. Rivera, Internal Medicine'),
-            RecordDetail('Amount', '\$120.00'),
-            RecordDetail('Claim #', 'MC-2026-0312'),
-          ],
-        ),
-        const HealthRecord(
-          id: 'multi-appt-1',
-          sources: [RecordSource.epic, RecordSource.cerner],
-          type: RecordType.appointment,
-          title: 'Primary Care Follow-Up',
-          details: [RecordDetail('Provider', 'Dr. Sarah Mitchell')],
-          status: 'Scheduled',
-        ),
       ];
 
   @override
   Widget build(BuildContext context) {
-    final records = _sample;
+    final records = [..._medicare, ..._samples];
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
@@ -85,13 +86,51 @@ class HealthDataScreen extends StatelessWidget {
             style: TextStyle(
                 color: _text, fontSize: 20, fontWeight: FontWeight.bold)),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: _loading
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: _teal),
+                  SizedBox(height: 16),
+                  Text('Loading your health data…',
+                      style: TextStyle(color: _muted)),
+                ],
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (_synthetic) _syntheticBanner(),
+                const Text(
+                    'View your health information from connected sources.',
+                    style: TextStyle(color: _muted)),
+                const SizedBox(height: 16),
+                ...records.map(_recordCard),
+              ],
+            ),
+    );
+  }
+
+  Widget _syntheticBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _warning.withValues(alpha: 0.5)),
+      ),
+      child: const Row(
         children: [
-          const Text('View your health information from connected sources.',
-              style: TextStyle(color: _muted)),
-          const SizedBox(height: 16),
-          ...records.map(_recordCard),
+          Icon(Icons.warning_amber_rounded, size: 18, color: _warning),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Demo data: showing synthetic Medicare records, not a live account.',
+              style: TextStyle(color: _text, fontSize: 13),
+            ),
+          ),
         ],
       ),
     );
@@ -153,22 +192,18 @@ class HealthDataScreen extends StatelessWidget {
         if (r.isMultiSource)
           Container(
             margin: const EdgeInsets.only(right: 6, bottom: 4),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: _teal.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text('Found in ${r.sources.length} sources',
                 style: const TextStyle(
-                    fontSize: 12,
-                    color: _teal,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 12, color: _teal, fontWeight: FontWeight.w600)),
           ),
         ...r.sources.map((s) => Container(
               margin: const EdgeInsets.only(right: 6, bottom: 4),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(6),
