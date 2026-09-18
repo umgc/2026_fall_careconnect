@@ -951,6 +951,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _pendingIntent = null;
       _ambiguousMatches = [];
       _reset();
+      _navigateTo(destination);
     } else if (intentDef != null && intentDef.handler != null) { 
       //if the intent is defined and has a handler, call the handler
       await intentDef.handler!({}); // Calls the handler for the intent
