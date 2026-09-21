@@ -1,5 +1,5 @@
 # run-local-bedrock.ps1
-# Launch the CareConnect backend locally with AWS Bedrock (Nova Lite) enabled via an IAM user.
+# Launch the CareConnect backend locally with AWS Bedrock (Nova Pro) enabled via an IAM user.
 #
 # Prerequisites (one-time): store your IAM user's access keys in the 'careconnect' profile:
 #   aws configure --profile careconnect     # region us-east-1, output json
@@ -58,5 +58,5 @@ if (Test-Path "$env:USERPROFILE\.aws\careconnect-truststore.jks") {
     $env:JAVA_TOOL_OPTIONS = "-Djavax.net.ssl.trustStore=$env:USERPROFILE\.aws\careconnect-truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"
 }
 
-Write-Host "Starting backend on :8081 with Bedrock provider (model amazon.nova-lite-v1:0, region us-east-1, profile careconnect)..."
+Write-Host "Starting backend on :8081 with Bedrock provider (model $env:BEDROCK_MODEL_ID, region us-east-1, profile careconnect)..."
 .\mvnw.cmd spring-boot:run
