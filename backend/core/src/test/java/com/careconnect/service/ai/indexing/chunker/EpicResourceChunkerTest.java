@@ -60,6 +60,75 @@ class EpicResourceChunkerTest {
     }
 
     @Test
+    void recordTypeFor_mapsAddedCarePlanningTypes() {
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_CARE_PLAN),
+                EpicResourceChunker.recordTypeFor("CarePlan"));
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_GOAL),
+                EpicResourceChunker.recordTypeFor("Goal"));
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_CARE_TEAM),
+                EpicResourceChunker.recordTypeFor("CareTeam"));
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_FAMILY_HISTORY),
+                EpicResourceChunker.recordTypeFor("FamilyMemberHistory"));
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_COVERAGE),
+                EpicResourceChunker.recordTypeFor("Coverage"));
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_DEVICE),
+                EpicResourceChunker.recordTypeFor("Device"));
+    }
+
+    @Test
+    void chunk_goal_flattensLifecycleStatusAndDescription() {
+        EhrResource goal = EhrResource.builder()
+                .userId(7L).source("EPIC").resourceType("Goal").resourceFhirId("goal-1")
+                .title("Goal: Lower A1c below 7%")
+                .contentHash("hash-goal")
+                .payloadJson("{\"resourceType\":\"Goal\",\"lifecycleStatus\":\"active\","
+                        + "\"description\":{\"text\":\"Lower A1c below 7%\"},"
+                        + "\"startDate\":\"2026-03-01\"}")
+                .build();
+
+        List<IndexingChunkDraft> drafts = chunker.chunk(goal, "on_consent");
+        assertEquals(1, drafts.size());
+        IndexingChunkDraft draft = drafts.get(0);
+        assertEquals(RetrievalRecordType.EPIC_GOAL, draft.recordType());
+        assertTrue(draft.chunkText().contains("active"));
+        assertTrue(draft.chunkText().contains("Lower A1c below 7%"));
+        assertTrue(draft.chunkText().contains("2026-03-01"));
+    }
+
+    @Test
+    void chunk_familyHistory_flattensRelationship() {
+        EhrResource fmh = EhrResource.builder()
+                .userId(7L).source("EPIC").resourceType("FamilyMemberHistory").resourceFhirId("fmh-1")
+                .title("FamilyMemberHistory: Mother")
+                .contentHash("hash-fmh")
+                .payloadJson("{\"resourceType\":\"FamilyMemberHistory\",\"status\":\"completed\","
+                        + "\"relationship\":{\"text\":\"Mother\"}}")
+                .build();
+
+        List<IndexingChunkDraft> drafts = chunker.chunk(fmh, "on_consent");
+        assertEquals(1, drafts.size());
+        assertEquals(RetrievalRecordType.EPIC_FAMILY_HISTORY, drafts.get(0).recordType());
+        assertTrue(drafts.get(0).chunkText().contains("Mother"));
+    }
+
+    @Test
+    void chunk_coverage_flattensPayorDisplay() {
+        EhrResource coverage = EhrResource.builder()
+                .userId(7L).source("EPIC").resourceType("Coverage").resourceFhirId("cov-1")
+                .title("Coverage: PPO")
+                .contentHash("hash-cov")
+                .payloadJson("{\"resourceType\":\"Coverage\",\"status\":\"active\","
+                        + "\"type\":{\"text\":\"PPO\"},"
+                        + "\"payor\":[{\"display\":\"Acme Health Plan\"}]}")
+                .build();
+
+        List<IndexingChunkDraft> drafts = chunker.chunk(coverage, "on_consent");
+        assertEquals(1, drafts.size());
+        assertEquals(RetrievalRecordType.EPIC_COVERAGE, drafts.get(0).recordType());
+        assertTrue(drafts.get(0).chunkText().contains("Acme Health Plan"));
+    }
+
+    @Test
     void recordTypeFor_nonIndexableIsEmpty() {
         assertTrue(EpicResourceChunker.recordTypeFor("Patient").isEmpty());
         assertTrue(EpicResourceChunker.recordTypeFor("Practitioner").isEmpty());

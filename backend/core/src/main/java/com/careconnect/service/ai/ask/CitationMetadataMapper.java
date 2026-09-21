@@ -125,6 +125,12 @@ final class CitationMetadataMapper {
             case EPIC_PROCEDURE -> "Epic procedure";
             case EPIC_DOCUMENT -> "Epic document";
             case EPIC_ENCOUNTER -> "Epic visit";
+            case EPIC_CARE_PLAN -> "Epic care plan";
+            case EPIC_GOAL -> "Epic goal";
+            case EPIC_CARE_TEAM -> "Epic care team";
+            case EPIC_FAMILY_HISTORY -> "Epic family history";
+            case EPIC_COVERAGE -> "Epic coverage";
+            case EPIC_DEVICE -> "Epic device";
         };
         return occurredAt == null ? label : label + " — " + occurredAt.toString().substring(0, 10);
     }

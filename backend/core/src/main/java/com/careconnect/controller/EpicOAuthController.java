@@ -125,15 +125,22 @@ public class EpicOAuthController {
      * sync runs async on connect and only records "ERROR" in the audit; this surfaces the cause.
      */
     @GetMapping("/resync")
-    public ResponseEntity<Map<String, Object>> resync() {
+    public ResponseEntity<Map<String, Object>> resync(
+            @RequestParam(name = "mode", defaultValue = "auto") String mode) {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        // auto = incremental when we already hold Epic data for this user, else a full import;
+        // full/delta force the mode (delta itself degrades to full when no watermark exists).
+        final EpicSyncService.SyncMode syncMode = "full".equalsIgnoreCase(mode)
+                ? EpicSyncService.SyncMode.FULL
+                : EpicSyncService.SyncMode.DELTA;
         Map<String, Object> out = new HashMap<>();
         try {
-            int stored = syncService.syncNow(me.getId());
+            int stored = syncService.syncNow(me.getId(), syncMode);
             out.put("stored", stored);
+            out.put("mode", syncMode.name());
             out.put("ok", true);
             return ResponseEntity.ok(out);
         } catch (Exception ex) {

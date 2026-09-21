@@ -3,6 +3,8 @@ package com.careconnect.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+
 /**
  * Epic SMART-on-FHIR configuration (Phase 0, Task 5.3 / doc 1_8).
  *
@@ -46,6 +48,14 @@ public class EpicProperties {
     @Value("${epic.oauth.web-return-url:http://localhost:3000/#/epic-linked}")
     private String webReturnUrl;
 
+    /**
+     * Hours a DELTA re-sync back-dates its {@code _lastUpdated} cursor from the last-synced
+     * watermark, to absorb clock skew between our clock and Epic's resource {@code meta.lastUpdated}.
+     * Default 24h; a re-fetch of a few unchanged rows is cheap (the content-hash guard no-ops them).
+     */
+    @Value("${epic.sync.delta-safety-margin-hours:24}")
+    private long deltaSafetyMarginHours;
+
     /** Discriminator stored on credentials, chunks (source_kind) and audit rows. */
     public static final String SOURCE_EPIC = "EPIC";
 
@@ -57,6 +67,7 @@ public class EpicProperties {
     public String getScopes() { return scopes; }
     public String getAppReturnDeepLink() { return appReturnDeepLink; }
     public String getWebReturnUrl() { return webReturnUrl; }
+    public Duration getDeltaSafetyMargin() { return Duration.ofHours(deltaSafetyMarginHours); }
 
     public boolean isConfidentialClient() {
         return clientSecret != null && !clientSecret.isBlank();

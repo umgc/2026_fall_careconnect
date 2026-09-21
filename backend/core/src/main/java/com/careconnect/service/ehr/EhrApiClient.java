@@ -28,6 +28,11 @@ public interface EhrApiClient {
      */
     List<JsonNode> fetch(Long userId, String resourceType, Map<String, String> params);
 
-    /** {@code Patient/$everything} bundle for the fastest first-connect RAG backfill. */
-    JsonNode everything(Long userId);
+    /**
+     * {@code Patient/$everything} for the fastest first-connect RAG backfill, following Bundle
+     * paging.
+     *
+     * @return the {@code Bundle.entry[].resource} nodes across all pages (never a bare Bundle)
+     */
+    List<JsonNode> everything(Long userId);
 }

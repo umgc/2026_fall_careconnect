@@ -163,16 +163,28 @@ public class EpicFhirClient implements EhrApiClient {
     }
 
     @Override
-    public JsonNode everything(Long userId) {
+    public List<JsonNode> everything(Long userId) {
         String token = oauth.validAccessToken(userId);
         String patientId = oauth.patientFhirId(userId);
         HttpEntity<Void> entity = new HttpEntity<>(bearerHeaders(token));
         String url = cfg.getFhirBaseUrl() + "/Patient/" + patientId + "/$everything";
+        List<JsonNode> out = new ArrayList<>();
         try {
-            ResponseEntity<JsonNode> resp = http.exchange(url, HttpMethod.GET, entity, JsonNode.class);
+            // Follow Bundle paging (capped at MAX_PAGES) exactly like fetch() — a first-page-only
+            // read silently truncates $everything for patients with a large compartment.
+            int pages = 0;
+            while (url != null && pages < MAX_PAGES) {
+                ResponseEntity<JsonNode> resp =
+                        http.exchange(url, HttpMethod.GET, entity, JsonNode.class);
+                JsonNode bundle = resp.getBody();
+                extractEntries(bundle, out);
+                url = nextLink(bundle);
+                pages++;
+            }
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_EVERYTHING", "Patient",
-                    "$everything", EhrAuditEvent.OUTCOME_OK);
-            return resp.getBody();
+                    "$everything", out.isEmpty()
+                            ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
+            return out;
         } catch (RuntimeException ex) {
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_EVERYTHING", "Patient",
                     "$everything", EhrAuditEvent.OUTCOME_ERROR);

@@ -49,6 +49,12 @@ public class EpicResourceChunker {
             case "Procedure" -> Optional.of(RetrievalRecordType.EPIC_PROCEDURE);
             case "DocumentReference" -> Optional.of(RetrievalRecordType.EPIC_DOCUMENT);
             case "Encounter" -> Optional.of(RetrievalRecordType.EPIC_ENCOUNTER);
+            case "CarePlan" -> Optional.of(RetrievalRecordType.EPIC_CARE_PLAN);
+            case "Goal" -> Optional.of(RetrievalRecordType.EPIC_GOAL);
+            case "CareTeam" -> Optional.of(RetrievalRecordType.EPIC_CARE_TEAM);
+            case "FamilyMemberHistory" -> Optional.of(RetrievalRecordType.EPIC_FAMILY_HISTORY);
+            case "Coverage" -> Optional.of(RetrievalRecordType.EPIC_COVERAGE);
+            case "Device" -> Optional.of(RetrievalRecordType.EPIC_DEVICE);
             default -> Optional.empty();
         };
     }
@@ -93,7 +99,8 @@ public class EpicResourceChunker {
         }
         final JsonNode node = parse(resource.getPayloadJson());
         if (node != null) {
-            appendIfPresent(sb, "Status", firstText(node, "clinicalStatus", "status"));
+            appendIfPresent(sb, "Status", firstText(node,
+                    "clinicalStatus", "status", "lifecycleStatus", "achievementStatus"));
             appendIfPresent(sb, "Code", codeText(node.get("code")));
             appendIfPresent(sb, "Category", codeText(node.get("category")));
             appendIfPresent(sb, "Medication", codeText(node.get("medicationCodeableConcept")));
@@ -103,9 +110,17 @@ public class EpicResourceChunker {
             appendIfPresent(sb, "Type", codeText(node.get("type")));
             appendIfPresent(sb, "Class", codeText(node.get("class")));
             appendIfPresent(sb, "Reason", codeText(node.get("reasonCode")));
+            // CarePlan.description (string) / Goal.description (CodeableConcept); CareTeam.name;
+            // FamilyMemberHistory.relationship; Coverage.payor; Device.manufacturer.
+            appendIfPresent(sb, "Description", stringOrCodeText(node.get("description")));
+            appendIfPresent(sb, "Name", stringText(node.get("name")));
+            appendIfPresent(sb, "Relationship", codeText(node.get("relationship")));
+            appendIfPresent(sb, "Payor", referenceDisplay(node.get("payor")));
+            appendIfPresent(sb, "Manufacturer", stringText(node.get("manufacturer")));
             appendIfPresent(sb, "Period", periodText(node.get("period")));
             appendIfPresent(sb, "Date", firstText(node,
-                    "effectiveDateTime", "onsetDateTime", "authoredOn", "recordedDate", "date"));
+                    "effectiveDateTime", "onsetDateTime", "authoredOn", "recordedDate", "date",
+                    "startDate", "created"));
         }
         String text = sb.toString().trim();
         if (text.length() > MAX_CHUNK_CHARS) {
@@ -162,6 +177,26 @@ public class EpicResourceChunker {
             return target.get("code").asText();
         }
         return null;
+    }
+
+    /** A plain textual field (e.g. CareTeam.name, Device.manufacturer), or null. */
+    private static String stringText(final JsonNode node) {
+        return node != null && node.isTextual() && !node.asText().isBlank() ? node.asText() : null;
+    }
+
+    /** A field that may be a plain string (CarePlan.description) or a CodeableConcept (Goal.description). */
+    private static String stringOrCodeText(final JsonNode node) {
+        final String s = stringText(node);
+        return s != null ? s : codeText(node);
+    }
+
+    /** First display from a Reference or array of References (e.g. Coverage.payor[].display). */
+    private static String referenceDisplay(final JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        final JsonNode target = node.isArray() && !node.isEmpty() ? node.get(0) : node;
+        return target != null && target.hasNonNull("display") ? target.get("display").asText() : null;
     }
 
     /** FHIR Period ({start, end}) → "start → end" (either bound may be absent). */

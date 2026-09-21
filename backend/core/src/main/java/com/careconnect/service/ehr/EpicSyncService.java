@@ -17,6 +17,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,7 +45,10 @@ public class EpicSyncService {
     private static final List<String> SYNC_RESOURCE_TYPES = List.of(
             "AllergyIntolerance", "Condition", "MedicationRequest", "MedicationStatement",
             "Observation", "DiagnosticReport", "Immunization", "Procedure", "DocumentReference",
-            "Encounter");
+            "Encounter",
+            // Care-planning + longitudinal context (US Core). Patient-only search except where a
+            // required param is listed in REQUIRED_SEARCH_PARAMS below.
+            "CarePlan", "Goal", "CareTeam", "FamilyMemberHistory", "Coverage", "Device");
 
     /** Demographics resource, mirrored via a direct read (not a patient search). */
     private static final String PATIENT_TYPE = "Patient";
@@ -71,11 +76,28 @@ public class EpicSyncService {
                     Map.of("category", "laboratory"),
                     Map.of("category", "vital-signs"),
                     Map.of("category", "social-history"),
-                    Map.of("category", "core-characteristics")));
+                    Map.of("category", "core-characteristics")),
+            // US Core CarePlan search requires a category; "assess-plan" is the US Core value.
+            "CarePlan", List.of(Map.of("category", "assess-plan")));
 
     /** The param sets to try for a type: its required-param sweep, or a single patient-only search. */
     private static List<Map<String, String>> searchParamSets(final String resourceType) {
         return REQUIRED_SEARCH_PARAMS.getOrDefault(resourceType, List.of(Map.of()));
+    }
+
+    /**
+     * Return {@code base} with a {@code _lastUpdated} filter added (DELTA mode), or {@code base}
+     * unchanged when {@code lastUpdatedFilter} is null (FULL mode). Never mutates the shared,
+     * immutable param maps declared in {@link #REQUIRED_SEARCH_PARAMS}.
+     */
+    private static Map<String, String> withLastUpdated(final Map<String, String> base,
+                                                       final String lastUpdatedFilter) {
+        if (lastUpdatedFilter == null) {
+            return base;
+        }
+        final Map<String, String> merged = new java.util.LinkedHashMap<>(base);
+        merged.put("_lastUpdated", lastUpdatedFilter);
+        return merged;
     }
 
     private final EpicFhirClient fhirClient;
@@ -88,6 +110,7 @@ public class EpicSyncService {
     private final ObjectMapper objectMapper;
     private final ObjectProvider<EpicSyncService> selfProvider;
     private final EpicOAuthService oauth;
+    private final EpicProperties epicProperties;
 
     public EpicSyncService(EpicFhirClient fhirClient,
                            EhrResourceRepository resourceRepo,
@@ -98,7 +121,8 @@ public class EpicSyncService {
                            EhrAuditService audit,
                            ObjectMapper objectMapper,
                            ObjectProvider<EpicSyncService> selfProvider,
-                           EpicOAuthService oauth) {
+                           EpicOAuthService oauth,
+                           EpicProperties epicProperties) {
         this.fhirClient = fhirClient;
         this.resourceRepo = resourceRepo;
         this.statusGate = statusGate;
@@ -109,16 +133,30 @@ public class EpicSyncService {
         this.objectMapper = objectMapper;
         this.selfProvider = selfProvider;
         this.oauth = oauth;
+        this.epicProperties = epicProperties;
+    }
+
+    /** How much of the patient record a sync pass pulls. */
+    public enum SyncMode {
+        /** Full import: {@code $everything} + demographics read + the typed per-type sweep. */
+        FULL,
+        /**
+         * Incremental: typed sweep only, filtered with {@code _lastUpdated=gt<watermark>} so Epic
+         * returns just the resources changed since the last sync. Falls back to {@link #FULL} when
+         * no prior sync watermark exists.
+         */
+        DELTA
     }
 
     /**
      * Kick off the initial sync off the request thread (the OAuth callback returns immediately).
-     * Routes through the Spring proxy so {@link #syncNow(Long)} runs in its own transaction.
+     * Routes through the Spring proxy so {@link #syncNow(Long)} runs in its own transaction. The
+     * first connect is always a {@link SyncMode#FULL} import.
      */
     public void enqueueInitialSync(final Long userId) {
         CompletableFuture.runAsync(() -> {
             try {
-                selfProvider.getObject().syncNow(userId);
+                selfProvider.getObject().syncNow(userId, SyncMode.FULL);
             } catch (RuntimeException ex) {
                 log.warn("Epic initial sync failed for user {}: {}", userId, ex.getClass().getSimpleName());
                 audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_SYNC", EhrResourceOutcome.ERROR);
@@ -126,13 +164,39 @@ public class EpicSyncService {
         });
     }
 
+    /** Full sync (back-compat entry point). */
+    public int syncNow(final Long userId) {
+        return syncNow(userId, SyncMode.FULL);
+    }
+
     /**
      * Fetch → status-gate → mirror → emit index events. NOT wrapped in a single transaction:
      * each resource is persisted in its own transaction (see {@link #upsertAndEmit}) so one bad row
      * (e.g. a column-constraint violation) rolls back only that resource instead of marking the
      * whole sync rollback-only and aborting every import.
+     *
+     * <p>In {@link SyncMode#DELTA} the {@code $everything} pass and the demographics read are
+     * skipped and each typed search carries {@code _lastUpdated=gt<watermark>}, so only resources
+     * changed since the last sync are fetched (the {@code contentHash} guard in {@link #upsertAndEmit}
+     * already no-ops unchanged rows). With no prior watermark, DELTA degrades to a FULL import.
      */
-    public int syncNow(final Long userId) {
+    public int syncNow(final Long userId, final SyncMode mode) {
+        // Resolve the effective mode: DELTA needs a watermark (the newest last_synced_at we hold for
+        // this user's Epic rows). Without one there is nothing to be incremental against, so do FULL.
+        final Instant watermark = mode == SyncMode.DELTA
+                ? resourceRepo.findMaxLastSyncedAt(userId, EpicProperties.SOURCE_EPIC)
+                : null;
+        final SyncMode effectiveMode = (mode == SyncMode.DELTA && watermark != null)
+                ? SyncMode.DELTA : SyncMode.FULL;
+        // Back-date the cursor by a safety margin to absorb clock skew between our clock and Epic's
+        // resource meta.lastUpdated (a re-fetch of a few unchanged rows is cheap; a miss is not).
+        final String lastUpdatedFilter = effectiveMode == SyncMode.DELTA
+                ? "gt" + DateTimeFormatter.ISO_INSTANT.format(
+                        watermark.minus(epicProperties.getDeltaSafetyMargin()))
+                : null;
+        log.info("Epic sync mode={} (requested={}) for user {}{}", effectiveMode, mode, userId,
+                lastUpdatedFilter != null ? " since " + lastUpdatedFilter : "");
+
         // Epic grants only the scopes enabled on the app registration, which can be a subset of
         // what we request. Attempting a resource type whose read scope was not granted returns a
         // guaranteed 403; skip those. And a failure on any single type (403 or transient) must not
@@ -148,26 +212,29 @@ public class EpicSyncService {
         // 1) PRIMARY — Patient/$everything: demographics + all compartment resources in one call.
         // Sidesteps the per-type required-param quirks (below) and the demographics gap. Optional in
         // some Epic environments (may 404/501 or be capped), so a failure is non-fatal: the typed
-        // fallback carries the sync.
-        try {
-            final List<JsonNode> everything = new java.util.ArrayList<>();
-            EpicFhirClient.extractEntries(fhirClient.everything(userId), everything);
-            for (final JsonNode resource : everything) {
-                final String type = resourceTypeOf(resource);
-                if (type == null || !MIRRORABLE_TYPES.contains(type)) {
-                    continue; // OperationOutcome, Practitioner, Organization, … — not mirrored.
+        // fallback carries the sync. Skipped in DELTA (it has no _lastUpdated filter and would refetch
+        // the whole compartment).
+        if (effectiveMode == SyncMode.FULL) {
+            try {
+                for (final JsonNode resource : fhirClient.everything(userId)) {
+                    final String type = resourceTypeOf(resource);
+                    if (type == null || !MIRRORABLE_TYPES.contains(type)) {
+                        continue; // OperationOutcome, Practitioner, Organization, … — not mirrored.
+                    }
+                    mirror(userId, type, resource, seen, tally);
                 }
-                mirror(userId, type, resource, seen, tally);
+            } catch (final RuntimeException ex) {
+                log.info("Epic $everything unavailable for user {}, falling back to typed fetch: {}",
+                        userId, ex.getClass().getSimpleName());
             }
-        } catch (final RuntimeException ex) {
-            log.info("Epic $everything unavailable for user {}, falling back to typed fetch: {}",
-                    userId, ex.getClass().getSimpleName());
         }
 
         int skipped = 0;
 
         // 1b) Demographics as an explicit read if $everything did not already supply the Patient.
-        if (!seenType(seen, PATIENT_TYPE)
+        // Skipped in DELTA — demographics rarely change and there is no cheap changed-since read.
+        if (effectiveMode == SyncMode.FULL
+                && !seenType(seen, PATIENT_TYPE)
                 && (grantedScopes.isEmpty() || grantedScopes.contains("patient/Patient.read"))) {
             try {
                 final String patientId = oauth.patientFhirId(userId);
@@ -182,7 +249,8 @@ public class EpicSyncService {
             }
         }
 
-        // 2) FALLBACK — typed per-type fetch for anything $everything did not already mirror.
+        // 2) FALLBACK — typed per-type fetch for anything $everything did not already mirror (and the
+        // sole fetch path in DELTA, where each search is filtered by _lastUpdated).
         for (final String resourceType : SYNC_RESOURCE_TYPES) {
             if (!grantedScopes.isEmpty()
                     && !grantedScopes.contains("patient/" + resourceType + ".read")) {
@@ -194,7 +262,8 @@ public class EpicSyncService {
             // single patient-only search). Each param set is isolated: Epic rejects a category the
             // app isn't authorized for with a 400 ("not valid for any authorized sub-resource"), and
             // that must not abort the remaining categories/types.
-            for (final Map<String, String> params : searchParamSets(resourceType)) {
+            for (final Map<String, String> baseParams : searchParamSets(resourceType)) {
+                final Map<String, String> params = withLastUpdated(baseParams, lastUpdatedFilter);
                 try {
                     for (final JsonNode resource : fhirClient.fetch(userId, resourceType, params)) {
                         mirror(userId, resourceType, resource, seen, tally);
@@ -349,13 +418,34 @@ public class EpicSyncService {
     }
 
     private static String buildTitle(final String resourceType, final JsonNode resource) {
-        final String label = textOf(resource.get("code"));
         final String med = textOf(resource.get("medicationCodeableConcept"));
+        final String label = textOf(resource.get("code"));
+        // CarePlan.title / CareTeam.name are plain strings; Goal.description /
+        // FamilyMemberHistory.relationship are CodeableConcepts.
+        final String named = stringOf(resource.get("title")) != null
+                ? stringOf(resource.get("title")) : stringOf(resource.get("name"));
+        final String described = textOf(resource.get("description"));
+        final String relationship = textOf(resource.get("relationship"));
         // Encounter (visit) has no code/medication — fall back to its type, then class.
         final String visit = textOf(resource.get("type")) != null
                 ? textOf(resource.get("type")) : textOf(resource.get("class"));
-        final String best = med != null ? med : (label != null ? label : visit);
+        final String best = firstNonNull(med, label, named, described, relationship, visit);
         return best != null ? resourceType + ": " + best : resourceType;
+    }
+
+    /** A plain textual JSON field (e.g. CarePlan.title, CareTeam.name), or null. */
+    private static String stringOf(final JsonNode node) {
+        return node != null && node.isTextual() && !node.asText().isBlank() ? node.asText() : null;
+    }
+
+    @SafeVarargs
+    private static <T> T firstNonNull(final T... values) {
+        for (final T v : values) {
+            if (v != null) {
+                return v;
+            }
+        }
+        return null;
     }
 
     private static String textOf(final JsonNode node) {
@@ -383,7 +473,8 @@ public class EpicSyncService {
 
     private static String occurredAt(final JsonNode resource) {
         for (final String field : new String[]{
-                "effectiveDateTime", "onsetDateTime", "authoredOn", "recordedDate", "date", "issued"}) {
+                "effectiveDateTime", "onsetDateTime", "authoredOn", "recordedDate", "date", "issued",
+                "startDate", "created"}) {
             final JsonNode v = resource.get(field);
             if (v != null && v.isTextual()) {
                 return v.asText();
