@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../pages/epic_webview_login_page.dart';
 import '../services/epic_service.dart';
 
 /// Drop-in "Connect to Epic (MyChart)" tile for the integrations / settings area (Epic Phase 0).
@@ -57,7 +59,23 @@ class _EpicConnectTileState extends State<EpicConnectTile> with WidgetsBindingOb
   Future<void> _connect() async {
     setState(() => _busy = true);
     try {
-      await EpicService.connect();
+      if (kIsWeb) {
+        // Web has no embedded WebView backend — keep the full-page OAuth redirect.
+        await EpicService.connect();
+      } else {
+        // Mobile: sign in inside an in-app WebView so the patient never leaves the app.
+        final authUrl = await EpicService.authorizeUrl();
+        if (!mounted) return;
+        final connected = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => EpicWebViewLoginPage(authUrl: authUrl),
+          ),
+        );
+        if (connected == true) {
+          _snack('Epic connected.');
+        }
+        await _refresh();
+      }
     } catch (e) {
       _snack('Could not start Epic connection: $e');
     } finally {

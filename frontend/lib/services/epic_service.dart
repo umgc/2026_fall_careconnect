@@ -34,6 +34,18 @@ class EpicService {
     );
   }
 
+  /// Fetch the Epic authorize URL without opening it, for the in-app WebView connect flow
+  /// (mobile). The default (no `returnMode`) makes the backend callback redirect to the
+  /// `careconnect://epic/linked` deep link, which the WebView page intercepts. Throws on non-200.
+  static Future<String> authorizeUrl() async {
+    final headers = await ApiService.getAuthHeaders();
+    final resp = await http.get(Uri.parse('$_base/authorize'), headers: headers);
+    if (resp.statusCode != 200) {
+      throw Exception('Epic authorize failed (${resp.statusCode})');
+    }
+    return (jsonDecode(resp.body) as Map)['authUrl'] as String;
+  }
+
   /// Returns the current Epic connection status: `{connected: bool, status?, connectedAt?}`.
   static Future<Map<String, dynamic>> status() async {
     final headers = await ApiService.getAuthHeaders();
