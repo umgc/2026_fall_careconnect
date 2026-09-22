@@ -60,7 +60,8 @@ class _EpicConnectTileState extends State<EpicConnectTile> with WidgetsBindingOb
     setState(() => _busy = true);
     try {
       if (kIsWeb) {
-        // Web has no embedded WebView backend — keep the full-page OAuth redirect.
+        // Web: navigate this tab to Epic (full-page). The backend redirects the same tab back to
+        // the /epic-linked route on completion, which returns to Settings and re-polls status.
         await EpicService.connect();
       } else {
         // Mobile: sign in inside an in-app WebView so the patient never leaves the app.

@@ -27,6 +27,8 @@ class _EpicWebViewLoginPageState extends State<EpicWebViewLoginPage> {
   bool _loading = true;
   // Guards against a double pop if the return URL fires more than one navigation event.
   bool _completed = false;
+  // Set when the main frame fails to load, so the page shows the reason instead of a blank body.
+  String? _error;
 
   @override
   void initState() {
@@ -53,6 +55,15 @@ class _EpicWebViewLoginPageState extends State<EpicWebViewLoginPage> {
           },
           onPageFinished: (_) {
             if (mounted) setState(() => _loading = false);
+          },
+          onWebResourceError: (error) {
+            // Only surface main-frame failures (subresource errors are noisy and non-fatal).
+            if (error.isForMainFrame != true || !mounted) return;
+            setState(() {
+              _loading = false;
+              _error = 'Could not load the Epic sign-in page.\n'
+                  '${error.description} (code ${error.errorCode})';
+            });
           },
         ),
       )
@@ -99,7 +110,32 @@ class _EpicWebViewLoginPageState extends State<EpicWebViewLoginPage> {
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_loading) const LinearProgressIndicator(),
+          if (_loading && _error == null) const LinearProgressIndicator(),
+          if (_error != null)
+            Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off_outlined, size: 48, color: Colors.orange),
+                  const SizedBox(height: 12),
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () {
+                      setState(() {
+                        _error = null;
+                        _loading = true;
+                      });
+                      _controller.reload();
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

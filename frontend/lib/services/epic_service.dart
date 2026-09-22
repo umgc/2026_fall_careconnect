@@ -30,6 +30,11 @@ class EpicService {
     await launchUrl(
       Uri.parse(authUrl),
       mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      // On web, navigate the app tab itself ('_self') to Epic so the backend can redirect the
+      // SAME tab back to the /epic-linked web route on completion (returnMode=web). A separate
+      // '_blank' tab does not return the user to the app, so full-page navigation is preferred.
+      // Epic's login cannot be embedded in an iframe (X-Frame-Options); the fully in-app WebView
+      // is the Android/iOS flow (EpicWebViewLoginPage).
       webOnlyWindowName: kIsWeb ? '_self' : null,
     );
   }

@@ -8,4 +8,20 @@
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
     </domain-config>
+
+    <!-- DEBUG-ONLY: on dev machines where an antivirus/proxy (e.g. Norton Web/Mail Shield)
+         intercepts TLS, the emulator/device does not trust the interception root, so the
+         in-app WebView (Epic SMART-on-FHIR login) and other HTTPS calls fail with
+         ERR_CERT_AUTHORITY_INVALID. Trust the bundled interception root here IN ADDITION to
+         the system/user stores. debug-overrides applies ONLY to debuggable builds
+         (`flutter run` / debug) — it is ignored entirely in release, so production trust is
+         unaffected. res/raw/dev_proxy_ca.pem is the Norton root; swap it for your proxy's root
+         if different, or delete this block on a machine without TLS interception. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+            <certificates src="@raw/dev_proxy_ca" />
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>
