@@ -37,6 +37,35 @@ public class FullTextSearchService {
         this.chunkRepository = chunkRepository;
     }
 
+    private static Set<String> normalizeRecordTypes(final Set<String> allowedRecordTypes) {
+        if (allowedRecordTypes == null || allowedRecordTypes.isEmpty()) {
+            return Set.of();
+        }
+        return allowedRecordTypes.stream()
+                .filter(Objects::nonNull)
+                .map(t -> t.trim().toUpperCase(Locale.ROOT))
+                .filter(t -> !t.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static String normalizeQuery(final String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        final String trimmed = query.trim();
+        if (trimmed.length() > RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH) {
+            return trimmed.substring(0, RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH);
+        }
+        return trimmed;
+    }
+
+    private static int clampLimit(final int limit) {
+        if (limit <= 0) {
+            return DEFAULT_LIMIT;
+        }
+        return Math.min(limit, MAX_LIMIT);
+    }
+
     /**
      * Runs English {@code plainto_tsquery} FTS for a single patient, ranked by
      * {@code ts_rank_cd}. Always scopes by {@code patient_id} (FR-AI-1).
@@ -83,38 +112,9 @@ public class FullTextSearchService {
 
     /**
      * @return count of chunks still missing {@code search_vector} (should be 0 after
-     *         Task 4.2 backfill + trigger); useful for ops / readiness checks
+     * Task 4.2 backfill + trigger); useful for ops / readiness checks
      */
     public long countChunksMissingSearchVector() {
         return chunkRepository.countMissingSearchVector();
-    }
-
-    private static Set<String> normalizeRecordTypes(final Set<String> allowedRecordTypes) {
-        if (allowedRecordTypes == null || allowedRecordTypes.isEmpty()) {
-            return Set.of();
-        }
-        return allowedRecordTypes.stream()
-                .filter(Objects::nonNull)
-                .map(t -> t.trim().toUpperCase(Locale.ROOT))
-                .filter(t -> !t.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    private static String normalizeQuery(final String query) {
-        if (query == null || query.isBlank()) {
-            return null;
-        }
-        final String trimmed = query.trim();
-        if (trimmed.length() > RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH) {
-            return trimmed.substring(0, RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH);
-        }
-        return trimmed;
-    }
-
-    private static int clampLimit(final int limit) {
-        if (limit <= 0) {
-            return DEFAULT_LIMIT;
-        }
-        return Math.min(limit, MAX_LIMIT);
     }
 }

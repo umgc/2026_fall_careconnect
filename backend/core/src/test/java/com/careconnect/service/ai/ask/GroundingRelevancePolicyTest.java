@@ -10,6 +10,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class GroundingRelevancePolicyTest {
 
+    private static RankedChunk strongChunk(final String text) {
+        return new RankedChunk(
+                UUID.randomUUID(),
+                42L,
+                RetrievalRecordType.CALL_SUMMARY,
+                "99",
+                text,
+                null,
+                "auto",
+                0.03d,
+                1,
+                1,
+                "C1");
+    }
+
     @Test
     void specificMedicationDoesNotAcceptDifferentMedicationFromStrongHit() {
         final String evidence = "Insulin was increased to ten units nightly.";
@@ -53,6 +68,18 @@ class GroundingRelevancePolicyTest {
 
         assertThat(GroundingRelevancePolicy.isRelevant(
                 "What is the metformin dose?", evidence, evidence, strongChunk(evidence)))
+                .isTrue();
+    }
+
+    @Test
+    void dosageFigureIsAcceptedAsMedicationEvidenceForDrugsNotOnTheHardcodedList() {
+        // Lisinopril isn't in CONCEPTS' hardcoded medication word list — an
+        // exhaustive drug-name list can't be maintained, so a dosage figure like
+        // "10mg" must stand on its own as evidence the span is medication-related.
+        final String evidence = "Patient reports taking Lisinopril 10mg once daily each morning.";
+
+        assertThat(GroundingRelevancePolicy.isRelevant(
+                "What medication is the patient taking?", evidence, evidence, strongChunk(evidence)))
                 .isTrue();
     }
 
@@ -143,20 +170,5 @@ class GroundingRelevancePolicyTest {
         assertThat(GroundingRelevancePolicy.isRelevant(
                 "What happened with metformin?", evidence, evidence, strongChunk(evidence)))
                 .isFalse();
-    }
-
-    private static RankedChunk strongChunk(final String text) {
-        return new RankedChunk(
-                UUID.randomUUID(),
-                42L,
-                RetrievalRecordType.CALL_SUMMARY,
-                "99",
-                text,
-                null,
-                "auto",
-                0.03d,
-                1,
-                1,
-                "C1");
     }
 }

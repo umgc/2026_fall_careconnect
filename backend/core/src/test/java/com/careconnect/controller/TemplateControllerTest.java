@@ -21,18 +21,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class TemplateControllerTest {
 
+    private static final Long TEMPLATE_ID = 1L;
     @Mock
     private TemplateService templateService;
-
     @Mock
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
-
     @InjectMocks
     private TemplateController controller;
-
-    private static final Long TEMPLATE_ID = 1L;
 
     private Template template(String name) {
         return Template.builder().id(TEMPLATE_ID).name(name).icon(0).build();

@@ -29,11 +29,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class SymptomEntryControllerTest {
 
-    @Mock private SymptomEntryService symptomEntryService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
+    @Mock
+    private SymptomEntryService symptomEntryService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
 
-    @InjectMocks private SymptomEntryController controller;
+    @InjectMocks
+    private SymptomEntryController controller;
 
     private User adminUser;
     private SymptomEntryDTO sampleDto;

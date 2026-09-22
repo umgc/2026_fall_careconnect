@@ -68,44 +68,48 @@ public class BillingController {
     private String mapProductIdToPlanCode(String productId) {
         if (productId == null) return null;
         switch (productId) {
-            case "standard_monthly": return "plan_standard_monthly";
-            case "premium_monthly": return "plan_premium_monthly";
-            case "free_monthly": return "plan_free";
-            default: return productId;
+            case "standard_monthly":
+                return "plan_standard_monthly";
+            case "premium_monthly":
+                return "plan_premium_monthly";
+            case "free_monthly":
+                return "plan_free";
+            default:
+                return productId;
         }
     }
 
     private void cancelOtherActiveSubscriptions(com.careconnect.model.User user, String externalSubscriptionId) {
         subscriptionRepository.findByUserAndStatus(user, "ACTIVE").stream()
-            .filter(s -> s.getExternalSubscriptionId() == null ||
+                .filter(s -> s.getExternalSubscriptionId() == null ||
                         !s.getExternalSubscriptionId().equals(externalSubscriptionId))
-            .forEach(s -> {
-                // Cancel on Google Play if this was a Google subscription
-                if (com.careconnect.model.BillingPlatform.GOOGLE.equals(s.getPlatform())
-                        && s.getPriceId() != null
-                        && s.getPaymentSubscriptionId() != null) {
-                    googleBillingService.cancelSubscription(s.getPriceId(), s.getPaymentSubscriptionId());
-                }
-                s.setStatus("CANCELLED");
-                subscriptionRepository.save(s);
-            });
+                .forEach(s -> {
+                    // Cancel on Google Play if this was a Google subscription
+                    if (com.careconnect.model.BillingPlatform.GOOGLE.equals(s.getPlatform())
+                            && s.getPriceId() != null
+                            && s.getPaymentSubscriptionId() != null) {
+                        googleBillingService.cancelSubscription(s.getPriceId(), s.getPaymentSubscriptionId());
+                    }
+                    s.setStatus("CANCELLED");
+                    subscriptionRepository.save(s);
+                });
     }
 
     private com.careconnect.model.Subscription findOrCreateSubscription(String externalSubscriptionId) {
         if (externalSubscriptionId != null) {
             return subscriptionRepository.findAll().stream()
-                .filter(s -> externalSubscriptionId.equals(s.getExternalSubscriptionId()))
-                .findFirst()
-                .orElse(new com.careconnect.model.Subscription());
+                    .filter(s -> externalSubscriptionId.equals(s.getExternalSubscriptionId()))
+                    .findFirst()
+                    .orElse(new com.careconnect.model.Subscription());
         }
         return new com.careconnect.model.Subscription();
     }
 
     private void saveSubscription(com.careconnect.model.User user,
-                                   com.careconnect.model.BillingPlatform platform,
-                                   BillingVerifyRequest request,
-                                   BillingVerifyResponse resp,
-                                   com.careconnect.model.Payment payment) {
+                                  com.careconnect.model.BillingPlatform platform,
+                                  BillingVerifyRequest request,
+                                  BillingVerifyResponse resp,
+                                  com.careconnect.model.Payment payment) {
         cancelOtherActiveSubscriptions(user, resp.getExternalSubscriptionId());
         com.careconnect.model.Subscription sub = findOrCreateSubscription(resp.getExternalSubscriptionId());
         String planCode = mapProductIdToPlanCode(request.getProductId());
@@ -114,7 +118,7 @@ public class BillingController {
         sub.setPlatform(platform);
         sub.setExternalSubscriptionId(resp.getExternalSubscriptionId());
         sub.setPaymentSubscriptionId(resp.getExternalSubscriptionId() != null ?
-            resp.getExternalSubscriptionId() : platform.name().toLowerCase() + "_" + System.currentTimeMillis());
+                resp.getExternalSubscriptionId() : platform.name().toLowerCase() + "_" + System.currentTimeMillis());
         sub.setPriceId(planCode);
         sub.setPlan(plan);
         sub.setStatus(resp.getStatus());
@@ -127,17 +131,17 @@ public class BillingController {
     }
 
     private com.careconnect.model.Payment buildPayment(com.careconnect.model.BillingPlatform platform,
-                                                        BillingVerifyRequest request,
-                                                        BillingVerifyResponse resp) {
+                                                       BillingVerifyRequest request,
+                                                       BillingVerifyResponse resp) {
         return com.careconnect.model.Payment.builder()
-            .platform(platform)
-            .platformPurchaseToken(request.getReceipt())
-            .platformPayerId(resp.getExternalTransactionId())
-            .externalTransactionId(resp.getExternalTransactionId())
-            .status(resp.isSuccess() ? "SUCCEEDED" : "FAILED")
-            .amountCents(null)
-            .attemptedAt(resp.getPurchaseDate())
-            .build();
+                .platform(platform)
+                .platformPurchaseToken(request.getReceipt())
+                .platformPayerId(resp.getExternalTransactionId())
+                .externalTransactionId(resp.getExternalTransactionId())
+                .status(resp.isSuccess() ? "SUCCEEDED" : "FAILED")
+                .amountCents(null)
+                .attemptedAt(resp.getPurchaseDate())
+                .build();
     }
 
     @PostMapping("/verify/apple")

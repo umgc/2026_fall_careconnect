@@ -21,12 +21,17 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EvvSubmissionServiceTest {
 
-    @Mock EvvIntegrationClient  client1;
-    @Mock EvvOutboxService      outbox;
-    @Mock EvvRecordRepository   evvRecordRepository;
-    @Mock AuditLogger           audit;
+    @Mock
+    EvvIntegrationClient client1;
+    @Mock
+    EvvOutboxService outbox;
+    @Mock
+    EvvRecordRepository evvRecordRepository;
+    @Mock
+    AuditLogger audit;
 
-    @InjectMocks EvvSubmissionService service;
+    @InjectMocks
+    EvvSubmissionService service;
 
     // The @InjectMocks injects `clients` as a List via field injection.
     // We need to set it explicitly since Spring normally auto-collects them.
@@ -99,8 +104,7 @@ class EvvSubmissionServiceTest {
         final EvvSubmissionService svc = serviceWithClients();
         svc.submitRecord(record, 5L);
 
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(audit).log(eq(record), eq(5L), eq("SUBMITTED"), captor.capture());
         assertThat(captor.getValue()).containsEntry("destination", "dc-sandata");
         assertThat(captor.getValue()).containsEntry("success", true);

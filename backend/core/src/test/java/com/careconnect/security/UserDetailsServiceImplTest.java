@@ -100,7 +100,7 @@ class UserDetailsServiceImplTest {
         verify(userRepository).findByEmail("test@example.com");
     }
 
-    @SuppressWarnings({ "unchecked", "deprecation" })
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     void extractUserProfile_ShouldReturnOAuth2UserProfile_WhenPrincipalIsOAuth2User() throws Exception {
         // Arrange

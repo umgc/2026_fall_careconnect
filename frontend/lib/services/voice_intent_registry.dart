@@ -111,8 +111,7 @@ class VoiceIntentRegistry {
   }
 
   /// All registered intent definitions.
-  List<IntentDefinition> get allIntents =>
-      List.unmodifiable(_intents.values);
+  List<IntentDefinition> get allIntents => List.unmodifiable(_intents.values);
 
   /// All registered navigation destinations.
   List<NavigationDestination> get allDestinations =>
@@ -147,7 +146,7 @@ void registerDefaultVoiceIntents() {
 
 // --- Intent definitions (verbs) ---
 
-const _defaultIntents = [
+final _defaultIntents = [
   IntentDefinition(
     intentName: 'navigate',
     displayLabel: 'Navigate',
@@ -174,6 +173,23 @@ const _defaultIntents = [
     displayLabel: 'SOS Emergency Alert',
     riskLevel: IntentRiskLevel.high,
     requiresConfirmation: true,
+    handler: (Map<String, String> entities) async {
+      // Builds the emergency payload
+      final payload = {
+        'patientId':
+            'patient-123', // Stub: will eventually be current logged-in patient ID
+        'eventType': 'EMERGENCY_SOS',
+        'timestamp': DateTime.now()
+            .toUtc()
+            .toIso8601String(), // Precise UTC ISO-8601 timestamp
+        'location': entities['location'] ??
+            <String, dynamic>{}, // Fallback coordinates container
+        'isUrgent': true,
+      };
+
+      // Output proof of execution
+      print('SOS HANDLER EXECUTED: Dispatched emergency payload -> $payload');
+    },
   ),
   IntentDefinition(
     intentName: 'start_video_call',
@@ -215,65 +231,154 @@ const _defaultIntents = [
 
 const _defaultDestinations = [
   // Core
-  NavigationDestination(name: 'home', route: '/dashboard', displayLabel: 'Home'),
-  NavigationDestination(name: 'dashboard', route: '/dashboard', displayLabel: 'Dashboard'),
-  NavigationDestination(name: 'calendar', route: '/calendar', displayLabel: 'Calendar'),
-  NavigationDestination(name: 'messages', route: '/dashboard?tab=messages', displayLabel: 'Messages'),
-  NavigationDestination(name: 'profile', route: '/profile', displayLabel: 'Profile'),
-  NavigationDestination(name: 'settings', route: '/settings', displayLabel: 'Settings'),
-  NavigationDestination(name: 'menu', route: '/dashboard?tab=menu', displayLabel: 'Menu'),
+  NavigationDestination(
+      name: 'home', route: '/dashboard', displayLabel: 'Home'),
+  NavigationDestination(
+      name: 'dashboard', route: '/dashboard', displayLabel: 'Dashboard'),
+  NavigationDestination(
+      name: 'calendar', route: '/calendar', displayLabel: 'Calendar'),
+  NavigationDestination(
+      name: 'messages',
+      route: '/dashboard?tab=messages',
+      displayLabel: 'Messages'),
+  NavigationDestination(
+      name: 'profile', route: '/profile', displayLabel: 'Profile'),
+  NavigationDestination(
+      name: 'settings', route: '/settings', displayLabel: 'Settings'),
+  NavigationDestination(
+      name: 'menu', route: '/dashboard?tab=menu', displayLabel: 'Menu'),
 
   // Health & Wellness
-  NavigationDestination(name: 'symptoms', route: '/symptoms', displayLabel: 'Symptom Tracker'),
-  NavigationDestination(name: 'symptom tracker', route: '/symptoms', displayLabel: 'Symptom Tracker'),
-  NavigationDestination(name: 'medication', route: '/medication', displayLabel: 'Medication Tracker'),
-  NavigationDestination(name: 'medications', route: '/medication', displayLabel: 'Medication Tracker'),
-  NavigationDestination(name: 'medication tracker', route: '/medication', displayLabel: 'Medication Tracker'),
-  NavigationDestination(name: 'virtual check-in', route: '/virtual-checkin', displayLabel: 'Virtual Check-In'),
-  NavigationDestination(name: 'virtual checkin', route: '/virtual-checkin', displayLabel: 'Virtual Check-In'),
-  NavigationDestination(name: 'check-in', route: '/virtual-checkin', displayLabel: 'Virtual Check-In'),
+  NavigationDestination(
+      name: 'symptoms', route: '/symptoms', displayLabel: 'Symptom Tracker'),
+  NavigationDestination(
+      name: 'symptom tracker',
+      route: '/symptoms',
+      displayLabel: 'Symptom Tracker'),
+  NavigationDestination(
+      name: 'medication',
+      route: '/medication',
+      displayLabel: 'Medication Tracker'),
+  NavigationDestination(
+      name: 'medications',
+      route: '/medication',
+      displayLabel: 'Medication Tracker'),
+  NavigationDestination(
+      name: 'medication tracker',
+      route: '/medication',
+      displayLabel: 'Medication Tracker'),
+  NavigationDestination(
+      name: 'virtual check-in',
+      route: '/virtual-checkin',
+      displayLabel: 'Virtual Check-In'),
+  NavigationDestination(
+      name: 'virtual checkin',
+      route: '/virtual-checkin',
+      displayLabel: 'Virtual Check-In'),
+  NavigationDestination(
+      name: 'check-in',
+      route: '/virtual-checkin',
+      displayLabel: 'Virtual Check-In'),
 
   // Integrations & Devices
-  NavigationDestination(name: 'wearables', route: '/wearables', displayLabel: 'Wearables'),
-  NavigationDestination(name: 'smart devices', route: '/smart-devices', displayLabel: 'Smart Devices'),
-  NavigationDestination(name: 'home monitoring', route: '/home-monitoring', displayLabel: 'Home Monitoring'),
+  NavigationDestination(
+      name: 'wearables', route: '/wearables', displayLabel: 'Wearables'),
+  NavigationDestination(
+      name: 'smart devices',
+      route: '/smart-devices',
+      displayLabel: 'Smart Devices'),
+  NavigationDestination(
+      name: 'home monitoring',
+      route: '/home-monitoring',
+      displayLabel: 'Home Monitoring'),
 
   // Social
-  NavigationDestination(name: 'social feed', route: '/social-feed', displayLabel: 'Social Feed'),
-  NavigationDestination(name: 'social', route: '/social-feed', displayLabel: 'Social Feed'),
+  NavigationDestination(
+      name: 'social feed', route: '/social-feed', displayLabel: 'Social Feed'),
+  NavigationDestination(
+      name: 'social', route: '/social-feed', displayLabel: 'Social Feed'),
 
   // Caregiver
-  NavigationDestination(name: 'patient list', route: '/tasks', displayLabel: 'Patient List'),
-  NavigationDestination(name: 'patients', route: '/tasks', displayLabel: 'Patient List'),
-  NavigationDestination(name: 'evv', route: '/evv', displayLabel: 'EVV Dashboard'),
-  NavigationDestination(name: 'evv dashboard', route: '/evv', displayLabel: 'EVV Dashboard'),
-  NavigationDestination(name: 'notetaker', route: '/notetaker-search', displayLabel: 'Medical Notetaker'),
-  NavigationDestination(name: 'medical notetaker', route: '/notetaker-search', displayLabel: 'Medical Notetaker'),
-  NavigationDestination(name: 'invoice', route: '/invoice-assistant', displayLabel: 'Invoice Assistant'),
-  NavigationDestination(name: 'invoice assistant', route: '/invoice-assistant', displayLabel: 'Invoice Assistant'),
+  NavigationDestination(
+      name: 'patient list', route: '/tasks', displayLabel: 'Patient List'),
+  NavigationDestination(
+      name: 'patients', route: '/tasks', displayLabel: 'Patient List'),
+  NavigationDestination(
+      name: 'evv', route: '/evv', displayLabel: 'EVV Dashboard'),
+  NavigationDestination(
+      name: 'evv dashboard', route: '/evv', displayLabel: 'EVV Dashboard'),
+  NavigationDestination(
+      name: 'notetaker',
+      route: '/notetaker-search',
+      displayLabel: 'Medical Notetaker'),
+  NavigationDestination(
+      name: 'medical notetaker',
+      route: '/notetaker-search',
+      displayLabel: 'Medical Notetaker'),
+  NavigationDestination(
+      name: 'invoice',
+      route: '/invoice-assistant',
+      displayLabel: 'Invoice Assistant'),
+  NavigationDestination(
+      name: 'invoice assistant',
+      route: '/invoice-assistant',
+      displayLabel: 'Invoice Assistant'),
 
   // Files & Documents
-  NavigationDestination(name: 'files', route: '/file-management', displayLabel: 'File Management'),
-  NavigationDestination(name: 'file management', route: '/file-management', displayLabel: 'File Management'),
-  NavigationDestination(name: 'informed delivery', route: '/informed-delivery', displayLabel: 'Informed Delivery'),
-  NavigationDestination(name: 'mail', route: '/informed-delivery', displayLabel: 'Informed Delivery'),
+  NavigationDestination(
+      name: 'files',
+      route: '/file-management',
+      displayLabel: 'File Management'),
+  NavigationDestination(
+      name: 'file management',
+      route: '/file-management',
+      displayLabel: 'File Management'),
+  NavigationDestination(
+      name: 'informed delivery',
+      route: '/informed-delivery',
+      displayLabel: 'Informed Delivery'),
+  NavigationDestination(
+      name: 'mail',
+      route: '/informed-delivery',
+      displayLabel: 'Informed Delivery'),
 
   // Gamification
-  NavigationDestination(name: 'gamification', route: '/gamification', displayLabel: 'Gamification'),
-  NavigationDestination(name: 'achievements', route: '/gamification', displayLabel: 'Gamification'),
+  NavigationDestination(
+      name: 'gamification',
+      route: '/gamification',
+      displayLabel: 'Gamification'),
+  NavigationDestination(
+      name: 'achievements',
+      route: '/gamification',
+      displayLabel: 'Gamification'),
 
   // Configuration
-  NavigationDestination(name: 'ai configuration', route: '/ai-configuration', displayLabel: 'AI Configuration'),
-  NavigationDestination(name: 'ai config', route: '/ai-configuration', displayLabel: 'AI Configuration'),
-  NavigationDestination(name: 'notetaker configuration', route: '/notetaker-configuration', displayLabel: 'Notetaker Configuration'),
+  NavigationDestination(
+      name: 'ai configuration',
+      route: '/ai-configuration',
+      displayLabel: 'AI Configuration'),
+  NavigationDestination(
+      name: 'ai config',
+      route: '/ai-configuration',
+      displayLabel: 'AI Configuration'),
+  NavigationDestination(
+      name: 'notetaker configuration',
+      route: '/notetaker-configuration',
+      displayLabel: 'Notetaker Configuration'),
 
   // Payments
-  NavigationDestination(name: 'subscription', route: '/subscription', displayLabel: 'Subscription'),
+  NavigationDestination(
+      name: 'subscription',
+      route: '/subscription',
+      displayLabel: 'Subscription'),
 
   // Search
-  NavigationDestination(name: 'search', route: '/search', displayLabel: 'Search'),
+  NavigationDestination(
+      name: 'search', route: '/search', displayLabel: 'Search'),
 
   // Voice
-  NavigationDestination(name: 'voice', route: '/voice', displayLabel: 'Voice Commands'),
-  NavigationDestination(name: 'voice commands', route: '/voice', displayLabel: 'Voice Commands'),
+  NavigationDestination(
+      name: 'voice', route: '/voice', displayLabel: 'Voice Commands'),
+  NavigationDestination(
+      name: 'voice commands', route: '/voice', displayLabel: 'Voice Commands'),
 ];

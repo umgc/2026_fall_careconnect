@@ -22,10 +22,12 @@ import com.careconnect.service.ai.hitl.HitlService;
 import com.careconnect.service.ai.safety.SafetyOutcome;
 import com.careconnect.service.ai.safety.SafetyPipeline;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,25 +42,29 @@ class CallSummaryItemConfirmServiceTest {
 
     private static final String CALL_ID = "call-42";
     private static final Long PATIENT_ID = 7L;
-
+    private final ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private CallSummaryRepository callSummaryRepository;
-
     @Mock
     private CallSummaryItemDecisionRepository decisionRepository;
-
     @Mock
     private SafetyPipeline safetyPipeline;
-
     @Mock
     private HitlService hitlService;
-
     @Mock
     private com.careconnect.service.ai.ask.AiAskConfirmationService askConfirmationService;
-
     private CallSummaryItemConfirmService service;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static String actionItemPayload(final String itemId) {
+        return "{\"actionItems\":[{\"itemId\":\"" + itemId + "\",\"text\":\"Schedule follow-up\","
+                + "\"needsConfirmation\":true}],\"appointments\":[],\"careInstructions\":[]}";
+    }
+
+    private static String medicationInstructionPayload(final String itemId, final String text) {
+        return "{\"actionItems\":[],\"appointments\":[],\"careInstructions\":["
+                + "{\"itemId\":\"" + itemId + "\",\"type\":\"medication\",\"text\":\""
+                + text + "\",\"needsConfirmation\":true}]}";
+    }
 
     @BeforeEach
     void setUp() {
@@ -84,17 +90,6 @@ class CallSummaryItemConfirmServiceTest {
         summary.setPatientId(PATIENT_ID);
         summary.setSummaryJson(summaryJson);
         return summary;
-    }
-
-    private static String actionItemPayload(final String itemId) {
-        return "{\"actionItems\":[{\"itemId\":\"" + itemId + "\",\"text\":\"Schedule follow-up\","
-                + "\"needsConfirmation\":true}],\"appointments\":[],\"careInstructions\":[]}";
-    }
-
-    private static String medicationInstructionPayload(final String itemId, final String text) {
-        return "{\"actionItems\":[],\"appointments\":[],\"careInstructions\":["
-                + "{\"itemId\":\"" + itemId + "\",\"type\":\"medication\",\"text\":\""
-                + text + "\",\"needsConfirmation\":true}]}";
     }
 
     @Test
@@ -263,7 +258,7 @@ class CallSummaryItemConfirmServiceTest {
         verify(decisionRepository).save(any(CallSummaryItemDecision.class));
     }
 
-  @Test
+    @Test
     @DisplayName("returns existing decision when item already confirmed")
     void confirm_alreadyConfirmed_returnsPriorDecisionWithoutInsert() {
         final CallSummary summary = summaryWithItems(

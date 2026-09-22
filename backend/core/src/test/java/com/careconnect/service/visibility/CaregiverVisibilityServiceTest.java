@@ -35,22 +35,28 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CaregiverVisibilityServiceTest {
 
-    @Mock CaregiverSummaryVisibilityRepository repository;
-    @Mock ConfirmationService confirmationService;
-    @Mock AiAuditLedgerService auditLedgerService;
-    @Mock UserRepository userRepository;
-    @Mock CaregiverPatientLinkRepository caregiverPatientLinkRepository;
-
-    @InjectMocks CaregiverVisibilityService service;
-
     private static final Long CG = 5L, PT = 9L, REVIEWER = 1L;
+    @Mock
+    CaregiverSummaryVisibilityRepository repository;
+    @Mock
+    ConfirmationService confirmationService;
+    @Mock
+    AiAuditLedgerService auditLedgerService;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    CaregiverPatientLinkRepository caregiverPatientLinkRepository;
+    @InjectMocks
+    CaregiverVisibilityService service;
 
     private CaregiverSummaryVisibility record(VisibilityStatus status) {
         return CaregiverSummaryVisibility.builder()
                 .id(100L).caregiverUserId(CG).patientUserId(PT).status(status).build();
     }
 
-    /** Stubs an active caregiver-patient link so submitForReview passes the relationship gate. */
+    /**
+     * Stubs an active caregiver-patient link so submitForReview passes the relationship gate.
+     */
     private void stubActiveLink() {
         User cg = new User();
         cg.setId(CG);

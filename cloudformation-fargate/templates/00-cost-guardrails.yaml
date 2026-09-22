@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Account-level CareConnect cost guardrails: monthly budget alerts and daily
+  service-cost anomaly notifications. Deploy once per AWS account, not once per
+  application environment.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: careconnect
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: Use lowercase letters, numbers, and hyphens only.
+
+  NotificationEmail:
+    Type: String
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    ConstraintDescription: Provide a valid email address for cost alerts.
+
+  SecondaryNotificationEmail:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    ConstraintDescription: Leave blank or provide a second valid email address for cost alerts.
+
+  MonthlyBudgetUsd:
+    Type: Number
+    MinValue: 1
+    ConstraintDescription: Provide a positive monthly account budget in USD.
+
+  AnomalyAlertUsd:
+    Type: Number
+    MinValue: 1
+    ConstraintDescription: Provide a positive service-cost anomaly threshold in USD.
+
+Conditions:
+  HasSecondaryNotificationEmail: !Not
+    - !Equals
+      - !Ref SecondaryNotificationEmail
+      - ''
+
+Resources:
+  MonthlyAccountCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${ProjectName}-monthly-account-cost'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+            - !If
+              - HasSecondaryNotificationEmail
+              - SubscriptionType: EMAIL
+                Address: !Ref SecondaryNotificationEmail
+              - !Ref AWS::NoValue
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+            - !If
+              - HasSecondaryNotificationEmail
+              - SubscriptionType: EMAIL
+                Address: !Ref SecondaryNotificationEmail
+              - !Ref AWS::NoValue
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+            - !If
+              - HasSecondaryNotificationEmail
+              - SubscriptionType: EMAIL
+                Address: !Ref SecondaryNotificationEmail
+              - !Ref AWS::NoValue
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: FORECASTED
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+            - !If
+              - HasSecondaryNotificationEmail
+              - SubscriptionType: EMAIL
+                Address: !Ref SecondaryNotificationEmail
+              - !Ref AWS::NoValue
+
+  ServiceCostAnomalyMonitor:
+    Type: AWS::CE::AnomalyMonitor
+    Properties:
+      MonitorName: !Sub '${ProjectName}-service-cost-anomalies'
+      MonitorType: DIMENSIONAL
+      MonitorDimension: SERVICE
+
+  ServiceCostAnomalySubscription:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: !Sub '${ProjectName}-daily-service-cost-anomalies'
+      Frequency: DAILY
+      MonitorArnList:
+        - !Ref ServiceCostAnomalyMonitor
+      Subscribers:
+        - Type: EMAIL
+          Address: !Ref NotificationEmail
+        - !If
+          - HasSecondaryNotificationEmail
+          - Type: EMAIL
+            Address: !Ref SecondaryNotificationEmail
+          - !Ref AWS::NoValue
+      ThresholdExpression: !Sub >-
+        {"Dimensions":{"Key":"ANOMALY_TOTAL_IMPACT_ABSOLUTE","Values":["${AnomalyAlertUsd}"],"MatchOptions":["GREATER_THAN_OR_EQUAL"]}}
+
+Outputs:
+  BudgetName:
+    Description: Name of the account-level monthly cost budget.
+    Value: !Ref MonthlyAccountCostBudget
+
+  AnomalyMonitorArn:
+    Description: ARN of the service-cost anomaly monitor.
+    Value: !Ref ServiceCostAnomalyMonitor
+
+  AnomalySubscriptionArn:
+    Description: ARN of the daily service-cost anomaly subscription.
+    Value: !Ref ServiceCostAnomalySubscription

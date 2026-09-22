@@ -37,28 +37,33 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CaregiverControllerTest {
 
+    private static final Long CAREGIVER_ID = 1L;
+    private static final Long PATIENT_ID = 2L;
+    private static final Long CG_USER_ID = 10L;
+    private static final Long PT_USER_ID = 20L;
+    private static final String PATIENT_EMAIL = "patient@example.com";
     // Two mocks of the same type – Mockito matches by field name to inject into
     // the controller's `caregiverService` and `auth` fields respectively.
-    @Mock private CaregiverService caregiverService;
-    @Mock private CaregiverService auth;
-    @Mock private CaregiverPatientLinkService caregiverPatientLinkService;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private CaregiverRepository caregiverRepository;
-
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
-    @InjectMocks
-    private CaregiverController controller;
+    @Mock
+    private CaregiverService caregiverService;
+    @Mock
+    private CaregiverService auth;
+    @Mock
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @Mock
+    private UserRepository userRepository;
 
     // ── shared constants ──────────────────────────────────────────────────────
-
-    private static final Long CAREGIVER_ID    = 1L;
-    private static final Long PATIENT_ID      = 2L;
-    private static final Long CG_USER_ID      = 10L;
-    private static final Long PT_USER_ID      = 20L;
-    private static final String PATIENT_EMAIL = "patient@example.com";
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private CaregiverRepository caregiverRepository;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
+    @InjectMocks
+    private CaregiverController controller;
 
     // ── shared helpers ────────────────────────────────────────────────────────
 
@@ -77,12 +82,21 @@ class CaregiverControllerTest {
         return c;
     }
 
-    /** Builds a request body map containing only an email entry. */
+    /**
+     * Builds a request body map containing only an email entry.
+     */
     private Map<String, String> emailBody(String email) {
         return Map.of("email", email);
     }
 
     // ── GET /{caregiverId}/patients ───────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> bodyMap(ResponseEntity<?> response) {
+        return (Map<String, Object>) response.getBody();
+    }
+
+    // ── GET /{caregiverId} ────────────────────────────────────────────────────
 
     @Nested
     class GetPatientsByCaregiver {
@@ -111,7 +125,7 @@ class CaregiverControllerTest {
         }
     }
 
-    // ── GET /{caregiverId} ────────────────────────────────────────────────────
+    // ── POST / ───────────────────────────────────────────────────────────────
 
     @Nested
     class GetCaregiver {
@@ -129,7 +143,7 @@ class CaregiverControllerTest {
         }
     }
 
-    // ── POST / ───────────────────────────────────────────────────────────────
+    // ── PUT /{caregiverId} ────────────────────────────────────────────────────
 
     @Nested
     class RegisterCaregiver {
@@ -147,7 +161,7 @@ class CaregiverControllerTest {
         }
     }
 
-    // ── PUT /{caregiverId} ────────────────────────────────────────────────────
+    // ── POST /{caregiverId}/patients ──────────────────────────────────────────
 
     @Nested
     class UpdateCaregiver {
@@ -155,7 +169,7 @@ class CaregiverControllerTest {
         @Test
         void returnsUpdatedCaregiver() throws Exception {
             final Caregiver incoming = new Caregiver();
-            final Caregiver saved    = new Caregiver();
+            final Caregiver saved = new Caregiver();
             when(caregiverService.updateCaregiver(CAREGIVER_ID, incoming)).thenReturn(saved);
 
             final ResponseEntity<Caregiver> response = controller.updateCaregiver(CAREGIVER_ID, incoming);
@@ -165,7 +179,7 @@ class CaregiverControllerTest {
         }
     }
 
-    // ── POST /{caregiverId}/patients ──────────────────────────────────────────
+    // ── POST /{caregiverId}/patients/add ──────────────────────────────────────
 
     @Nested
     class RegisterPatient {
@@ -185,7 +199,7 @@ class CaregiverControllerTest {
         }
     }
 
-    // ── POST /{caregiverId}/patients/add ──────────────────────────────────────
+    // ── GET /{caregiverId}/patients/{patientId} ───────────────────────────────
 
     @Nested
     class AddPatient {
@@ -244,8 +258,8 @@ class CaregiverControllerTest {
         @Test
         void throwsBadRequestWhenLinkAlreadyExists() throws Exception {
             final User caregiverUser = makeUser(CG_USER_ID, Role.CAREGIVER);
-            final User patientUser   = makeUser(PT_USER_ID, Role.PATIENT);
-            final Patient patient    = mock(Patient.class);
+            final User patientUser = makeUser(PT_USER_ID, Role.PATIENT);
+            final Patient patient = mock(Patient.class);
             when(caregiverRepository.findById(CAREGIVER_ID))
                     .thenReturn(Optional.of(makeCaregiver(CAREGIVER_ID, caregiverUser)));
             when(userRepository.findByEmailAndRole(PATIENT_EMAIL, Role.PATIENT))
@@ -261,8 +275,8 @@ class CaregiverControllerTest {
         @Test
         void returnsOkAndCreatesLinkWhenSuccessful() throws Exception {
             final User caregiverUser = makeUser(CG_USER_ID, Role.CAREGIVER);
-            final User patientUser   = makeUser(PT_USER_ID, Role.PATIENT);
-            final Patient patient    = mock(Patient.class);
+            final User patientUser = makeUser(PT_USER_ID, Role.PATIENT);
+            final Patient patient = mock(Patient.class);
             when(patient.getId()).thenReturn(PATIENT_ID);
             when(patient.getFirstName()).thenReturn("Jane");
             when(patient.getLastName()).thenReturn("Smith");
@@ -286,7 +300,7 @@ class CaregiverControllerTest {
         }
     }
 
-    // ── GET /{caregiverId}/patients/{patientId} ───────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
     @Nested
     class GetPatientForCaregiver {
@@ -329,12 +343,5 @@ class CaregiverControllerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isSameAs(dto);
         }
-    }
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> bodyMap(ResponseEntity<?> response) {
-        return (Map<String, Object>) response.getBody();
     }
 }

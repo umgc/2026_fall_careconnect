@@ -12,5 +12,5 @@ public class S3Props {
     private String region = "us-east-1";
     private String accessKey;
     private String secretKey;
-    private String baseUrl; 
+    private String baseUrl;
 }

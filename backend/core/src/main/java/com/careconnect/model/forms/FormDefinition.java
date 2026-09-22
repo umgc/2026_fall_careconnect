@@ -24,9 +24,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(
-    name = "form_definitions",
-    uniqueConstraints = @UniqueConstraint(name = "uk_form_definition_type_version",
-                                          columnNames = {"form_type", "version"})
+        name = "form_definitions",
+        uniqueConstraints = @UniqueConstraint(name = "uk_form_definition_type_version",
+                columnNames = {"form_type", "version"})
 )
 @Data
 @Builder
@@ -59,11 +59,15 @@ public class FormDefinition {
     @Builder.Default
     private FormStatus status = FormStatus.DRAFT;
 
-    /** Official source form number, e.g. "W-4", "I-9". */
+    /**
+     * Official source form number, e.g. "W-4", "I-9".
+     */
     @Column(name = "source_form_number")
     private String sourceFormNumber;
 
-    /** Official source edition label, e.g. "2026", "01/20/2025". */
+    /**
+     * Official source edition label, e.g. "2026", "01/20/2025".
+     */
     @Column(name = "source_edition")
     private String sourceEdition;
 
@@ -74,7 +78,9 @@ public class FormDefinition {
     @Column(name = "file_category", nullable = false)
     private String fileCategory;
 
-    /** Full structured schema (sections/fields/validation/source mappings). */
+    /**
+     * Full structured schema (sections/fields/validation/source mappings).
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "schema_json", nullable = false, columnDefinition = "jsonb")
     private FormSchema schemaJson;
@@ -100,7 +106,9 @@ public class FormDefinition {
         this.updatedAt = LocalDateTime.now();
     }
 
-    /** Lifecycle state of a form definition version. */
+    /**
+     * Lifecycle state of a form definition version.
+     */
     public enum FormStatus {
         DRAFT,
         ACTIVE,

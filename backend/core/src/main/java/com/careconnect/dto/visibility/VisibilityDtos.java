@@ -7,13 +7,21 @@ import java.time.LocalDateTime;
 
 public class VisibilityDtos {
 
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class VisibilityRequest {
-        @NotNull private Long caregiverUserId;
-        @NotNull private Long patientUserId;
+        @NotNull
+        private Long caregiverUserId;
+        @NotNull
+        private Long patientUserId;
     }
 
-    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class VisibilityResponse {
         private Long id;
         private Long caregiverUserId;

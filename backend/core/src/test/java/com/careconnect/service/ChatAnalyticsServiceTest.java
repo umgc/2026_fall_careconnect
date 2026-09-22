@@ -187,8 +187,7 @@ class ChatAnalyticsServiceTest {
         assertEquals(List.of(), result.get("peakUsageHours"));
         assertEquals(0.0, result.get("userSatisfactionScore"));
 
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> systemPerformance = (Map<String, Object>) result.get("systemPerformance");
+        @SuppressWarnings("unchecked") final Map<String, Object> systemPerformance = (Map<String, Object>) result.get("systemPerformance");
         assertNotNull(systemPerformance);
         assertEquals(0, systemPerformance.get("averageResponseTime"));
         assertEquals(0.0, systemPerformance.get("errorRate"));

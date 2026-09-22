@@ -22,7 +22,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for AchievementInitializer.
- *
+ * <p>
  * Validates achievement initialization logic during application startup,
  * including creation of default achievements, duplicate prevention,
  * and error handling to ensure application stability.

@@ -7,11 +7,16 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-@Slf4j @Component @RequiredArgsConstructor
+@Slf4j
+@Component
+@RequiredArgsConstructor
 public class DcSandataAltEvvClient implements EvvIntegrationClient {
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Override public String destination() { return "dc-sandata"; }
+    @Override
+    public String destination() {
+        return "dc-sandata";
+    }
 
     @Override
     public void submit(EvvRecord record) throws Exception {
@@ -27,5 +32,5 @@ public class DcSandataAltEvvClient implements EvvIntegrationClient {
             throw new RuntimeException("Sandata submission failed: " + resp.getStatusCode());
         }
         log.info("[DC] Sandata submitted record {}", record.getId());
-      }
-  }
+    }
+}

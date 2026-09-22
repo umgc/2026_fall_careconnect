@@ -2,10 +2,12 @@ package com.careconnect.service.ai.indexing.chunker;
 
 import com.careconnect.service.ai.indexing.IndexingChunkDraft;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,47 +23,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class DocumentChunker {
 
-    /** Soft max characters per retrieval chunk (approx. mid-size embedding window). */
+    /**
+     * Soft max characters per retrieval chunk (approx. mid-size embedding window).
+     */
     static final int MAX_CHUNK_CHARS = 2500;
 
-    /** Overlap between consecutive windows to preserve boundary context. */
+    /**
+     * Overlap between consecutive windows to preserve boundary context.
+     */
     static final int OVERLAP_CHARS = 200;
-
-    public List<IndexingChunkDraft> chunk(
-            final String textExcerpt,
-            final String fileCategory,
-            final String contentHash,
-            final String consentScope) {
-        final List<IndexingChunkDraft> drafts = new ArrayList<>();
-        final String chunkText = textExcerpt == null ? "" : textExcerpt.trim();
-        if (chunkText.isBlank()) {
-            return drafts;
-        }
-
-        final List<String> windows = splitIntoWindows(chunkText, MAX_CHUNK_CHARS, OVERLAP_CHARS);
-        int chunkIndex = 0;
-        for (final String window : windows) {
-            if (window == null || window.isBlank()) {
-                continue;
-            }
-            final Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("section", "uploaded_document");
-            metadata.put("chunkIndex", chunkIndex++);
-            if (fileCategory != null && !fileCategory.isBlank()) {
-                metadata.put("fileCategory", fileCategory);
-            }
-            if (contentHash != null && !contentHash.isBlank()) {
-                metadata.put("contentHash", contentHash);
-            }
-
-            drafts.add(new IndexingChunkDraft(
-                    RetrievalRecordType.UPLOADED_DOCUMENT,
-                    window,
-                    metadata,
-                    consentScope));
-        }
-        return drafts;
-    }
 
     /**
      * Splits {@code text} into windows of at most {@code maxChars}, preferring paragraph
@@ -105,7 +75,9 @@ public class DocumentChunker {
         return windows.stream().filter(w -> w != null && !w.isBlank()).toList();
     }
 
-    /** Prefer breaking on paragraph, then newline, then whitespace near {@code end}. */
+    /**
+     * Prefer breaking on paragraph, then newline, then whitespace near {@code end}.
+     */
     private static int preferBreak(final String text, final int start, final int end) {
         final int windowStart = Math.max(start, end - Math.min(400, (end - start) / 2));
         final int paragraph = text.lastIndexOf("\n\n", end - 1);
@@ -121,5 +93,41 @@ public class DocumentChunker {
             return space + 1;
         }
         return end;
+    }
+
+    public List<IndexingChunkDraft> chunk(
+            final String textExcerpt,
+            final String fileCategory,
+            final String contentHash,
+            final String consentScope) {
+        final List<IndexingChunkDraft> drafts = new ArrayList<>();
+        final String chunkText = textExcerpt == null ? "" : textExcerpt.trim();
+        if (chunkText.isBlank()) {
+            return drafts;
+        }
+
+        final List<String> windows = splitIntoWindows(chunkText, MAX_CHUNK_CHARS, OVERLAP_CHARS);
+        int chunkIndex = 0;
+        for (final String window : windows) {
+            if (window == null || window.isBlank()) {
+                continue;
+            }
+            final Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("section", "uploaded_document");
+            metadata.put("chunkIndex", chunkIndex++);
+            if (fileCategory != null && !fileCategory.isBlank()) {
+                metadata.put("fileCategory", fileCategory);
+            }
+            if (contentHash != null && !contentHash.isBlank()) {
+                metadata.put("contentHash", contentHash);
+            }
+
+            drafts.add(new IndexingChunkDraft(
+                    RetrievalRecordType.UPLOADED_DOCUMENT,
+                    window,
+                    metadata,
+                    consentScope));
+        }
+        return drafts;
     }
 }

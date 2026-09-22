@@ -26,14 +26,27 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OpenRouterServiceTest {
 
+    /**
+     * Minimal valid JSON that Jackson can deserialize into OpenRouterResponse.
+     * Uses camelCase keys because the ObjectMapper created in the service has no
+     * snake-case naming strategy configured.
+     */
+    private static final String VALID_JSON =
+            "{\"id\":\"r1\",\"object\":\"chat.completion\",\"created\":1000000," +
+                    "\"model\":\"test-model\"," +
+                    "\"choices\":[{\"index\":0," +
+                    "  \"message\":{\"role\":\"assistant\",\"content\":\"Hi\"}," +
+                    "  \"finishReason\":\"stop\"}]," +
+                    "\"usage\":{\"promptTokens\":5,\"completionTokens\":3,\"totalTokens\":8," +
+                    "\"promptCacheHitTokens\":1,\"promptCacheMissTokens\":4}}";
     private OpenRouterService service;
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     @BeforeEach
     void setUp() throws Exception {
         service = new OpenRouterService();
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void setApiKey(String key) {
         ReflectionTestUtils.setField(service, "apiKey", key);
@@ -51,18 +64,6 @@ class OpenRouterServiceTest {
                 100
         );
     }
-
-    /** Minimal valid JSON that Jackson can deserialize into OpenRouterResponse.
-     *  Uses camelCase keys because the ObjectMapper created in the service has no
-     *  snake-case naming strategy configured. */
-    private static final String VALID_JSON =
-            "{\"id\":\"r1\",\"object\":\"chat.completion\",\"created\":1000000," +
-            "\"model\":\"test-model\"," +
-            "\"choices\":[{\"index\":0," +
-            "  \"message\":{\"role\":\"assistant\",\"content\":\"Hi\"}," +
-            "  \"finishReason\":\"stop\"}]," +
-            "\"usage\":{\"promptTokens\":5,\"completionTokens\":3,\"totalTokens\":8," +
-            "\"promptCacheHitTokens\":1,\"promptCacheMissTokens\":4}}";
 
     // ═════════════════════════════════════════════════════════════════════════
     // API key validation

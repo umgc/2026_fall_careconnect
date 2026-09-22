@@ -9,7 +9,7 @@ import java.util.Optional;
  * Textract + LLM pipeline. Each type carries its own field schema so that
  * extraction output is restricted to exactly the fields allowed for that
  * document type.
- *
+ * <p>
  * The enum names intentionally match the frontend FileCategory values so a
  * confirmed digitized form can be stored under the matching category.
  */
@@ -62,6 +62,25 @@ public enum HomeCareDocumentType {
         this.fieldSchema = fieldSchema;
     }
 
+    public static Optional<HomeCareDocumentType> fromString(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(valueOf(value.trim().toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Map<String, String> schema(String... keyLabelPairs) {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (int i = 0; i < keyLabelPairs.length; i += 2) {
+            map.put(keyLabelPairs[i], keyLabelPairs[i + 1]);
+        }
+        return java.util.Collections.unmodifiableMap(map);
+    }
+
     public String getDisplayName() {
         return displayName;
     }
@@ -88,24 +107,5 @@ public enum HomeCareDocumentType {
             sb.append('\n');
         }
         return sb.append('}').toString();
-    }
-
-    public static Optional<HomeCareDocumentType> fromString(String value) {
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(valueOf(value.trim().toUpperCase()));
-        } catch (IllegalArgumentException e) {
-            return Optional.empty();
-        }
-    }
-
-    private static Map<String, String> schema(String... keyLabelPairs) {
-        Map<String, String> map = new LinkedHashMap<>();
-        for (int i = 0; i < keyLabelPairs.length; i += 2) {
-            map.put(keyLabelPairs[i], keyLabelPairs[i + 1]);
-        }
-        return java.util.Collections.unmodifiableMap(map);
     }
 }

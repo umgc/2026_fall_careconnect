@@ -55,24 +55,24 @@ public class LinkManagementController {
     @PostMapping("/caregiver-patient/temporary")
     public ResponseEntity<CaregiverPatientLinkResponse> createTemporaryCaregiverPatientLink(
             @RequestBody CreateTemporaryLinkRequest request) {
-        
+
         User currentUser = getCurrentUser();
-        
+
         // Only caregivers and admins can create temporary links
         if (currentUser.getRole() != Role.CAREGIVER && currentUser.getRole() != Role.ADMIN) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         CreateLinkRequest linkRequest = new CreateLinkRequest(
                 request.targetUserId(),
                 "TEMPORARY",
                 request.expiresAt(),
                 request.notes()
         );
-        
+
         CaregiverPatientLinkResponse response = caregiverPatientLinkService.createLink(
                 currentUser.getId(), linkRequest, currentUser.getId());
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -84,14 +84,14 @@ public class LinkManagementController {
     @PostMapping("/family-member/temporary")
     public ResponseEntity<FamilyMemberLinkResponse> createTemporaryFamilyMemberLink(
             @RequestBody CreateTemporaryFamilyLinkRequest request) {
-        
+
         User currentUser = getCurrentUser();
-        
+
         // Only patients and caregivers can create temporary family links
         if (currentUser.getRole() == Role.FAMILY_MEMBER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         FamilyMemberLinkResponse response = familyMemberService.createTemporaryLink(
                 request.familyUserId(),
                 request.patientUserId(),
@@ -100,7 +100,7 @@ public class LinkManagementController {
                 request.notes(),
                 currentUser.getId()
         );
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -113,14 +113,14 @@ public class LinkManagementController {
     public ResponseEntity<Map<String, Object>> extendLinkExpiration(
             @PathVariable Long linkId,
             @RequestBody ExtendExpirationRequest request) {
-        
+
         User currentUser = getCurrentUser();
-        
+
         // Only admins and caregivers can extend link expiration
         if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.CAREGIVER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         try {
             // For caregiver-patient links
             if (request.linkType().equalsIgnoreCase("CAREGIVER_PATIENT")) {
@@ -137,8 +137,7 @@ public class LinkManagementController {
                 FamilyMemberLinkResponse response = familyMemberService.updateFamilyMemberLink(
                         linkId, updateRequest, currentUser.getId());
                 return ResponseEntity.ok(Map.of("success", true, "link", response));
-            }
-            else {
+            } else {
                 return ResponseEntity.badRequest().body(Map.of("error", "Invalid link type"));
             }
         } catch (Exception e) {
@@ -154,31 +153,31 @@ public class LinkManagementController {
     @GetMapping("/expiring-soon")
     public ResponseEntity<Map<String, Object>> getExpiringSoonLinks() {
         User currentUser = getCurrentUser();
-        
+
         // Only admins and caregivers can view expiring links
         if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.CAREGIVER) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         LocalDateTime tomorrow = LocalDateTime.now().plusDays(1);
-        
+
         // Get caregiver-patient links for current user or all if admin
         List<CaregiverPatientLinkResponse> caregiverPatientLinks;
         if (currentUser.getRole() == Role.ADMIN) {
             caregiverPatientLinks = caregiverPatientLinkService.getAllLinks().stream()
-                    .filter(link -> link.expiresAt() != null && 
+                    .filter(link -> link.expiresAt() != null &&
                             link.expiresAt().isBefore(tomorrow) &&
                             link.status().equals("ACTIVE"))
                     .toList();
         } else {
             caregiverPatientLinks = caregiverPatientLinkService.getPatientsByCaregiver(currentUser.getId())
                     .stream()
-                    .filter(link -> link.expiresAt() != null && 
+                    .filter(link -> link.expiresAt() != null &&
                             link.expiresAt().isBefore(tomorrow) &&
                             link.status().equals("ACTIVE"))
                     .toList();
         }
-        
+
         return ResponseEntity.ok(Map.of(
                 "caregiverPatientLinks", caregiverPatientLinks,
                 "totalExpiring", caregiverPatientLinks.size()
@@ -193,16 +192,16 @@ public class LinkManagementController {
     @PostMapping("/cleanup-expired")
     public ResponseEntity<Map<String, Object>> cleanupExpiredLinks() {
         User currentUser = getCurrentUser();
-        
+
         // Only admins can perform bulk cleanup
         if (currentUser.getRole() != Role.ADMIN) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         try {
             caregiverPatientLinkService.cleanupExpiredLinks();
             familyMemberService.cleanupExpiredFamilyMemberLinks();
-            
+
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Expired links cleaned up successfully"
@@ -220,14 +219,14 @@ public class LinkManagementController {
     @GetMapping("/summary")
     public ResponseEntity<Map<String, Object>> getLinkSummary() {
         User currentUser = getCurrentUser();
-        
+
         Map<String, Object> summary = Map.of(
                 "userId", currentUser.getId(),
                 "userRole", currentUser.getRole().name(),
                 "caregiverPatientLinks", getCaregiverPatientLinksForUser(currentUser),
                 "familyMemberLinks", getFamilyMemberLinksForUser(currentUser)
         );
-        
+
         return ResponseEntity.ok(summary);
     }
 
@@ -264,7 +263,8 @@ public class LinkManagementController {
             Long targetUserId,
             LocalDateTime expiresAt,
             String notes
-    ) {}
+    ) {
+    }
 
     public record CreateTemporaryFamilyLinkRequest(
             Long familyUserId,
@@ -272,10 +272,12 @@ public class LinkManagementController {
             String relationship,
             LocalDateTime expiresAt,
             String notes
-    ) {}
+    ) {
+    }
 
     public record ExtendExpirationRequest(
             String linkType, // "CAREGIVER_PATIENT" or "FAMILY_MEMBER"
             LocalDateTime newExpiresAt
-    ) {}
+    ) {
+    }
 }

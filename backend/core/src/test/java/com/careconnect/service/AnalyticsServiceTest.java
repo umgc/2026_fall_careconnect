@@ -32,32 +32,24 @@ import static org.mockito.Mockito.*;
 
 class AnalyticsServiceTest {
 
+    private static final Long PATIENT_USER_ID = 1L;
     @Mock
     private SymptomEntryRepository symptomRepo;
-
     @Mock
     private WearableMetricRepository wearableRepo;
-
     @Mock
     private SummaryMetricRepository summaryRepo;
-
     @Mock
     private MoodPainLogRepository moodPainLogRepo;
-
     @Mock
     private PatientRepository patientRepo;
-
     @Mock
     private UserRepository userRepo;
-
     @Mock
     private ExportSigner exportSigner;
-
     @InjectMocks
     private AnalyticsService analyticsService;
-
     private Patient testPatient;
-    private static final Long PATIENT_USER_ID = 1L;
     private User testUser;
 
     @BeforeEach

@@ -27,9 +27,9 @@ public class UserDetailsServiceImpl implements org.springframework.security.core
     public UserDetails loadUserByEmailAndRole(String email, String role) throws UsernameNotFoundException {
         User user = users.findByEmailAndRole(email, Role.valueOf(role.toUpperCase()))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email + " and role: " + role));
-        
+
         return new org.springframework.security.core.userdetails.User(
-                user.getEmail(), 
+                user.getEmail(),
                 user.getPassword(),
                 List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
         );
@@ -48,16 +48,16 @@ public class UserDetailsServiceImpl implements org.springframework.security.core
     public ResponseEntity<?> extractUserProfile(Object principal) {
         if (principal instanceof OAuth2User oAuth2User) {
             return ResponseEntity.ok(Map.of(
-                "email", oAuth2User.getAttribute("email"),
-                "name", oAuth2User.getAttribute("name"),
-                "role", oAuth2User.getAuthorities().stream()
-                        .findFirst().map(Object::toString).orElse("UNKNOWN")
+                    "email", oAuth2User.getAttribute("email"),
+                    "name", oAuth2User.getAttribute("name"),
+                    "role", oAuth2User.getAuthorities().stream()
+                            .findFirst().map(Object::toString).orElse("UNKNOWN")
             ));
         } else if (principal instanceof UserDetails user) {
             return ResponseEntity.ok(Map.of(
-                "email", user.getUsername(),
-                "role", user.getAuthorities().stream()
-                        .findFirst().map(Object::toString).orElse("UNKNOWN")
+                    "email", user.getUsername(),
+                    "role", user.getAuthorities().stream()
+                            .findFirst().map(Object::toString).orElse("UNKNOWN")
             ));
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

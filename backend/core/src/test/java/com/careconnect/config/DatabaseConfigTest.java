@@ -14,7 +14,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link DatabaseConfig}.
- *
+ * <p>
  * DatabaseConfig retrieves database credentials (JDBC URL, username, password) from
  * AWS SSM Parameter Store via {@link ParameterStoreService} and builds a HikariCP
  * connection pool. Tests use a Mockito mock for {@code ParameterStoreService} to avoid

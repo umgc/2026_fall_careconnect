@@ -45,32 +45,33 @@ import static org.mockito.Mockito.when;
 @DisplayName("CallTranscriptArchiveService Tests")
 class CallTranscriptArchiveServiceTest {
 
+    private static final String CALL_ID = "call-abc-123";
     @Mock
     private CallTranscriptArchiveRepository archiveRepository;
-
     @Mock
     private CallTranscriptSegmentRepository segmentRepository;
-
     @Mock(lenient = true)
     private CallRecordingRepository callRecordingRepository;
-
     @Mock
     private ObjectMapper objectMapper;
-
     @Mock
     private S3StorageService s3StorageService;
-
     @Mock
     private TranscriptArchiveLifecycleRepository lifecycleRepository;
-
     @Mock
     private DatabaseLockService databaseLockService;
-
     private CallTranscriptArchiveService service;
-
     private TrackingTransactionManager transactionManager;
 
-    private static final String CALL_ID = "call-abc-123";
+    private static String sha256(byte[] bytes) throws Exception {
+        StringBuilder value = new StringBuilder();
+        for (byte item : MessageDigest.getInstance("SHA-256").digest(bytes)) {
+            value.append(String.format("%02x", item));
+        }
+        return value.toString();
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
 
     @BeforeEach
     void setUp() {
@@ -91,8 +92,6 @@ class CallTranscriptArchiveServiceTest {
         ReflectionTestUtils.setField(service, "minArchiveChars", 120000);
         ReflectionTestUtils.setField(service, "deleteDbRows", true);
     }
-
-    // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private CallTranscriptSegment buildSegment(String text, Long actorUserId) {
         CallTranscriptSegment segment = new CallTranscriptSegment();
@@ -128,7 +127,7 @@ class CallTranscriptArchiveServiceTest {
     }
 
     private CallTranscriptArchive buildArchive(String callId, String storageKey,
-                                                String participantUserIds) {
+                                               String participantUserIds) {
         CallTranscriptArchive archive = new CallTranscriptArchive();
         archive.setCallId(callId);
         archive.setStorageProvider("S3");
@@ -140,16 +139,38 @@ class CallTranscriptArchiveServiceTest {
         return archive;
     }
 
-    private static String sha256(byte[] bytes) throws Exception {
-        StringBuilder value = new StringBuilder();
-        for (byte item : MessageDigest.getInstance("SHA-256").digest(bytes)) {
-            value.append(String.format("%02x", item));
+    // ════════════════════════════════════════════════════════════════════════
+    //  isArchived
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static final class TrackingTransactionManager
+            implements PlatformTransactionManager {
+        private boolean active;
+
+        boolean isActive() {
+            return active;
         }
-        return value.toString();
+
+        @Override
+        public TransactionStatus getTransaction(final TransactionDefinition definition)
+                throws TransactionException {
+            active = true;
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(final TransactionStatus status) throws TransactionException {
+            active = false;
+        }
+
+        @Override
+        public void rollback(final TransactionStatus status) throws TransactionException {
+            active = false;
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  isArchived
+    //  hasArchivedTranscriptAccess
     // ════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -201,7 +222,7 @@ class CallTranscriptArchiveServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  hasArchivedTranscriptAccess
+    //  getArchivedSegmentCount
     // ════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -271,7 +292,7 @@ class CallTranscriptArchiveServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  getArchivedSegmentCount
+    //  getArchivedSegments
     // ════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -312,7 +333,7 @@ class CallTranscriptArchiveServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  getArchivedSegments
+    //  archiveIfEligible
     // ════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -428,7 +449,7 @@ class CallTranscriptArchiveServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  archiveIfEligible
+    //  purgeArchiveForCall
     // ════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -741,10 +762,6 @@ class CallTranscriptArchiveServiceTest {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    //  purgeArchiveForCall
-    // ════════════════════════════════════════════════════════════════════════
-
     @Nested
     @DisplayName("purgeArchiveForCall Tests")
     class PurgeArchiveTests {
@@ -887,32 +904,6 @@ class CallTranscriptArchiveServiceTest {
             verify(segmentRepository, never()).deleteByCallIdAndIdIn(anyString(), any());
             verify(lifecycleRepository).enqueueDeletion(anyString());
             verify(s3StorageService, never()).deleteFile(anyString());
-        }
-    }
-
-    private static final class TrackingTransactionManager
-            implements PlatformTransactionManager {
-        private boolean active;
-
-        boolean isActive() {
-            return active;
-        }
-
-        @Override
-        public TransactionStatus getTransaction(final TransactionDefinition definition)
-                throws TransactionException {
-            active = true;
-            return new SimpleTransactionStatus();
-        }
-
-        @Override
-        public void commit(final TransactionStatus status) throws TransactionException {
-            active = false;
-        }
-
-        @Override
-        public void rollback(final TransactionStatus status) throws TransactionException {
-            active = false;
         }
     }
 }

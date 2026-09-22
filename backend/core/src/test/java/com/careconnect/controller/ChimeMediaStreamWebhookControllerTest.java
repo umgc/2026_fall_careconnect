@@ -23,7 +23,8 @@ class ChimeMediaStreamWebhookControllerTest {
 
     private static final String SECRET = "careconnect-dev-kvs-discovery";
 
-    @Mock private ChimeMediaStreamEventService chimeMediaStreamEventService;
+    @Mock
+    private ChimeMediaStreamEventService chimeMediaStreamEventService;
 
     private MockMvc mockMvc;
 

@@ -16,8 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class BedrockModelSupport {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BedrockModelSupport.class);
-
     public static final Set<String> APPROVED_MODEL_IDS = Set.of(
             "amazon.nova-lite-v1:0",
             "amazon.nova-pro-v1:0",
@@ -30,7 +28,7 @@ public final class BedrockModelSupport {
             "us.anthropic.claude-sonnet-4-20250514-v1:0",
             "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     );
-
+    private static final Logger LOG = LoggerFactory.getLogger(BedrockModelSupport.class);
     private static final String NOVA_PREFIX = "amazon.nova";
     private static final String CLAUDE_PREFIX = "anthropic.claude";
     private static final String CLAUDE_PROFILE_SEGMENT = ".anthropic.claude";
@@ -38,7 +36,7 @@ public final class BedrockModelSupport {
     private static final Map<String, String> CLAUDE_MODEL_TO_PROFILE_ID = Map.of(
             "anthropic.claude-sonnet-4-20250514-v1:0", "us.anthropic.claude-sonnet-4-20250514-v1:0",
             "anthropic.claude-sonnet-4-5-20250929-v1:0", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-        );
+    );
 
     private BedrockModelSupport() {
     }

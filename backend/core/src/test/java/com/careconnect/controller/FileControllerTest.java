@@ -39,23 +39,30 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class FileControllerTest {
 
-    @Mock private S3StorageService s3StorageService;
-    @Mock private FileManagementService fileManagementService;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private MessageRepository messageRepository;
-    @Mock private CaregiverService caregiverService;
-    @Mock private PatientService patientService;
-    @Mock private Authentication authentication;
-    @Mock private SecurityContext securityContext;
-
+    private static final String USER_EMAIL = "user@example.com";
+    private static final Long USER_ID = 1L;
+    private static final Long PATIENT_ID = 2L;
+    private static final Long FILE_ID = 10L;
+    @Mock
+    private S3StorageService s3StorageService;
+    @Mock
+    private FileManagementService fileManagementService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private MessageRepository messageRepository;
+    @Mock
+    private CaregiverService caregiverService;
+    @Mock
+    private PatientService patientService;
+    @Mock
+    private Authentication authentication;
+    @Mock
+    private SecurityContext securityContext;
     @InjectMocks
     private FileController controller;
-
-    private static final String USER_EMAIL = "user@example.com";
-    private static final Long   USER_ID    = 1L;
-    private static final Long   PATIENT_ID = 2L;
-    private static final Long   FILE_ID    = 10L;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -106,8 +113,7 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.uploadFile(makeFile(), "OTHER_DOCUMENT", null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsKey("data");
         assertThat(body.get("message")).isEqualTo("File uploaded successfully");
     }
@@ -323,8 +329,7 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.listMyFiles(null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body.get("message")).isEqualTo("Files retrieved successfully");
     }
 
@@ -507,8 +512,7 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.getProfileImage();
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body.get("data")).isSameAs(dto);
     }
 
@@ -541,8 +545,7 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.uploadFileLegacy(USER_ID, file, "documents");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body.get("message")).isEqualTo("File uploaded successfully");
     }
 
@@ -710,8 +713,7 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.listUserFiles(USER_ID, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body.get("category")).isEqualTo("all");
     }
 
@@ -728,10 +730,8 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.listUserFiles(USER_ID, "documents");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
-        @SuppressWarnings("unchecked")
-        final List<UserFileDTO> files = (List<UserFileDTO>) body.get("files");
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final List<UserFileDTO> files = (List<UserFileDTO>) body.get("files");
         assertThat(files).hasSize(1);
     }
 
@@ -748,10 +748,8 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.listUserFiles(USER_ID, "prescriptions");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
-        @SuppressWarnings("unchecked")
-        final List<UserFileDTO> files = (List<UserFileDTO>) body.get("files");
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final List<UserFileDTO> files = (List<UserFileDTO>) body.get("files");
         assertThat(files).isEmpty();
     }
 
@@ -776,10 +774,8 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.getValidCategories(USER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
-        @SuppressWarnings("unchecked")
-        final List<String> categories = (List<String>) body.get("categories");
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final List<String> categories = (List<String>) body.get("categories");
         assertThat(categories).contains("profile", "documents", "medical-records");
     }
 
@@ -793,10 +789,8 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.getValidCategories(USER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
-        @SuppressWarnings("unchecked")
-        final List<String> categories = (List<String>) body.get("categories");
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final List<String> categories = (List<String>) body.get("categories");
         assertThat(categories).contains("certifications");
     }
 
@@ -810,10 +804,8 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.getValidCategories(USER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
-        @SuppressWarnings("unchecked")
-        final List<String> categories = (List<String>) body.get("categories");
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final List<String> categories = (List<String>) body.get("categories");
         assertThat(categories).contains("authorization");
     }
 
@@ -827,10 +819,8 @@ class FileControllerTest {
         final ResponseEntity<?> response = controller.getValidCategories(USER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
-        @SuppressWarnings("unchecked")
-        final List<String> categories = (List<String>) body.get("categories");
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final List<String> categories = (List<String>) body.get("categories");
         assertThat(categories).containsExactly("documents");
     }
 

@@ -11,6 +11,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ReciprocalRankFusionTest {
 
+    private static RetrievalIndexChunk chunk(final UUID id) {
+        return chunk(id, "s1");
+    }
+
+    private static RetrievalIndexChunk chunk(final UUID id, final String sourceRecordId) {
+        return RetrievalIndexChunk.builder()
+                .id(id)
+                .patientId(1L)
+                .recordType("CALL_SUMMARY")
+                .sourceRecordId(sourceRecordId)
+                .chunkText("text")
+                .build();
+    }
+
     @Test
     @DisplayName("RRF scores chunks that appear in both lists higher")
     void merge_prefersIntersection() {
@@ -68,19 +82,5 @@ class ReciprocalRankFusionTest {
         assertThat(merged)
                 .extracting(hit -> hit.chunk().getSourceRecordId())
                 .containsExactly("source-a", "source-b");
-    }
-
-    private static RetrievalIndexChunk chunk(final UUID id) {
-        return chunk(id, "s1");
-    }
-
-    private static RetrievalIndexChunk chunk(final UUID id, final String sourceRecordId) {
-        return RetrievalIndexChunk.builder()
-                .id(id)
-                .patientId(1L)
-                .recordType("CALL_SUMMARY")
-                .sourceRecordId(sourceRecordId)
-                .chunkText("text")
-                .build();
     }
 }

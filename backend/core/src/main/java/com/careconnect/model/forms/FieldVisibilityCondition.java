@@ -7,7 +7,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Simple field dependency: show the element only when {@code fieldId} equals a value. */
+/**
+ * Simple field dependency: show the element only when {@code fieldId} equals a value.
+ */
 @Data
 @Builder
 @NoArgsConstructor

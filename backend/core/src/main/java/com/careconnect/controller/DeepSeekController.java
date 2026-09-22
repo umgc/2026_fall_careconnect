@@ -72,9 +72,11 @@ public class DeepSeekController {
         private String model;                      // e.g. "deepseek-chat" / "deepseek-reasoner"
         @NotEmpty
         private List<Message> messages;           // [{role:"system|user|assistant", content:"..."}]
-        @Min(0) @Max(2)
+        @Min(0)
+        @Max(2)
         private Double temperature = 0.7;         // optional
-        @Min(1) @Max(4096)
+        @Min(1)
+        @Max(4096)
         private Integer maxTokens = 512;          // optional
     }
 

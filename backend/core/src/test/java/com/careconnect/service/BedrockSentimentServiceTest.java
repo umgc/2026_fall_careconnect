@@ -25,11 +25,12 @@ import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for BedrockSentimentService.
- *
+ * <p>
  * All tests use awsEnabled=false (local/fallback mode) so no AWS calls are made.
  * This keeps tests fast, deterministic, and network-free.
  */
@@ -37,10 +38,17 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DisplayName("BedrockSentimentService Tests")
 class BedrockSentimentServiceTest {
 
+    private static final String CALL_ID = "call-1";
     // Service is created manually so we can control awsEnabled
     private BedrockSentimentService service;
 
-    private static final String CALL_ID = "call-1";
+    @SuppressWarnings("unchecked")
+    private static List<Object> asList(final Object value) {
+        if (value instanceof List<?> rawList) {
+            return (List<Object>) rawList;
+        }
+        throw new AssertionError("Expected a list but found: " + value);
+    }
 
     @BeforeEach
     void setUp() {
@@ -58,13 +66,15 @@ class BedrockSentimentServiceTest {
         return new BedrockSentimentService(client, new ObjectMapper(), true);
     }
 
+    //  TEXT SENTIMENT (heuristic / local mode)
+
     private BedrockSentimentService awsBackedServiceThrowing(RuntimeException error) {
         BedrockRuntimeClient client = mock(BedrockRuntimeClient.class);
         when(client.invokeModel(any(InvokeModelRequest.class))).thenThrow(error);
         return new BedrockSentimentService(client, new ObjectMapper(), true);
     }
 
-    //  TEXT SENTIMENT (heuristic / local mode)
+    //  VOICE SENTIMENT (Chime metrics)
 
     @Nested
     @DisplayName("Text Sentiment Analysis")
@@ -137,7 +147,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    //  VOICE SENTIMENT (Chime metrics)
+    //  VIDEO SENTIMENT (disabled in local mode)
 
     @Nested
     @DisplayName("Voice Sentiment Analysis")
@@ -191,7 +201,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    //  VIDEO SENTIMENT (disabled in local mode)
+    //  COMBINED SENTIMENT
 
     @Nested
     @DisplayName("Video Sentiment Analysis")
@@ -209,7 +219,7 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    //  COMBINED SENTIMENT
+    //  scoreToLabel / voiceActivityLabel thresholds
 
     @Nested
     @DisplayName("Combined Sentiment")
@@ -289,19 +299,17 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    //  scoreToLabel / voiceActivityLabel thresholds
-
     @Nested
     @DisplayName("Label Threshold Tests")
     class LabelThresholdTests {
 
         /**
          * voiceActivityLabel thresholds (in BedrockSentimentService):
-         *   score >= 0.75 → VERY_HIGH_ACTIVITY
-         *   score >= 0.55 → HIGH_ACTIVITY
-         *   score >= 0.30 → MODERATE_ACTIVITY
-         *   else          → LOW_ACTIVITY
-         *
+         * score >= 0.75 → VERY_HIGH_ACTIVITY
+         * score >= 0.55 → HIGH_ACTIVITY
+         * score >= 0.30 → MODERATE_ACTIVITY
+         * else          → LOW_ACTIVITY
+         * <p>
          * We test via analyzeVoiceFromChimeMetrics where score = clamp(speechRatio, 0, 1).
          */
 
@@ -335,10 +343,10 @@ class BedrockSentimentServiceTest {
 
         /**
          * scoreToLabel thresholds (text sentiment heuristic):
-         *   score >= 0.60 → CALM
-         *   score >= 0.35 → ANXIOUS
-         *   else          → DISTRESSED
-         *
+         * score >= 0.60 → CALM
+         * score >= 0.35 → ANXIOUS
+         * else          → DISTRESSED
+         * <p>
          * We test via analyzeText with carefully chosen inputs. Since heuristic starts at 0.5
          * and amplifies, we pick inputs that reliably produce each range.
          */
@@ -525,14 +533,6 @@ class BedrockSentimentServiceTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<Object> asList(final Object value) {
-        if (value instanceof List<?> rawList) {
-            return (List<Object>) rawList;
-        }
-        throw new AssertionError("Expected a list but found: " + value);
-    }
-
     @Nested
     @DisplayName("Helper Coverage Paths")
     class HelperCoveragePathsTests {
@@ -709,7 +709,7 @@ class BedrockSentimentServiceTest {
             assertThat(asList(result.get("actionItems"))).isEmpty();
             assertThat(asList(result.get("appointments"))).isEmpty();
             assertThat(asList(result.get("careInstructions"))).isEmpty();
-        }        
+        }
 
         @Test
         @DisplayName("Combined v1+v2 response populates all fields with no cross-contamination")
@@ -806,7 +806,7 @@ class BedrockSentimentServiceTest {
             BedrockSentimentService svc =
                     new BedrockSentimentService(client, new ObjectMapper(), true);
             ReflectionTestUtils.setField(svc, "medicalDataAnonymizer", new MedicalDataAnonymizer());
-            return new Object[] { svc, client };
+            return new Object[]{svc, client};
         }
 
         @Test
@@ -954,8 +954,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_modelSuppliedItemId_isReplacedWithServerUuid() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"itemId": "attacker-controlled-id", "text": "action A"}]
-                    """);
+                            [{"itemId": "attacker-controlled-id", "text": "action A"}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(item.get("itemId"))
@@ -971,8 +971,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_modelSuppliedNeedsConfirmationFalse_isForcedToTrue() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "needsConfirmation": false}]
-                    """);
+                            [{"text": "action A", "needsConfirmation": false}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(item.get("needsConfirmation"))
@@ -985,8 +985,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_missingConfidence_getsDefault() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "sourceTurnId": "transcript"}]
-                    """);
+                            [{"text": "action A", "sourceTurnId": "transcript"}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.5);
@@ -997,8 +997,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_missingSourceTurnId_getsTranscriptDefault() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": 0.9}]
-                    """);
+                            [{"text": "action A", "confidence": 0.9}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(item.get("sourceTurnId")).isEqualTo("transcript");
@@ -1009,8 +1009,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_blankSourceTurnId_getsTranscriptDefault() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "sourceTurnId": "   ", "confidence": 0.9}]
-                    """);
+                            [{"text": "action A", "sourceTurnId": "   ", "confidence": 0.9}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(item.get("sourceTurnId")).isEqualTo("transcript");
@@ -1021,8 +1021,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_confidenceAboveRange_clampedToOne() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": 1.5, "sourceTurnId": "transcript"}]
-                    """);
+                            [{"text": "action A", "confidence": 1.5, "sourceTurnId": "transcript"}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(1.0);
@@ -1033,8 +1033,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_confidenceBelowRange_clampedToZero() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": -0.5, "sourceTurnId": "transcript"}]
-                    """);
+                            [{"text": "action A", "confidence": -0.5, "sourceTurnId": "transcript"}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(((Number) item.get("confidence")).doubleValue()).isEqualTo(0.0);
@@ -1045,19 +1045,19 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_arrayExceedsLimit_truncatedToSix() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [
-                      {"text": "a1", "sourceTurnId": "transcript"},
-                      {"text": "a2", "sourceTurnId": "transcript"},
-                      {"text": "a3", "sourceTurnId": "transcript"},
-                      {"text": "a4", "sourceTurnId": "transcript"},
-                      {"text": "a5", "sourceTurnId": "transcript"},
-                      {"text": "a6", "sourceTurnId": "transcript"},
-                      {"text": "a7", "sourceTurnId": "transcript"},
-                      {"text": "a8", "sourceTurnId": "transcript"},
-                      {"text": "a9", "sourceTurnId": "transcript"},
-                      {"text": "a10", "sourceTurnId": "transcript"}
-                    ]
-                    """);
+                            [
+                              {"text": "a1", "sourceTurnId": "transcript"},
+                              {"text": "a2", "sourceTurnId": "transcript"},
+                              {"text": "a3", "sourceTurnId": "transcript"},
+                              {"text": "a4", "sourceTurnId": "transcript"},
+                              {"text": "a5", "sourceTurnId": "transcript"},
+                              {"text": "a6", "sourceTurnId": "transcript"},
+                              {"text": "a7", "sourceTurnId": "transcript"},
+                              {"text": "a8", "sourceTurnId": "transcript"},
+                              {"text": "a9", "sourceTurnId": "transcript"},
+                              {"text": "a10", "sourceTurnId": "transcript"}
+                            ]
+                            """);
 
             List<Object> items = asList(result.get("actionItems"));
             assertThat(items).hasSize(6);
@@ -1068,8 +1068,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_nonObjectEntry_isSkipped() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    ["not-an-object", {"text": "valid item", "sourceTurnId": "transcript"}]
-                    """);
+                            ["not-an-object", {"text": "valid item", "sourceTurnId": "transcript"}]
+                            """);
 
             List<Object> items = asList(result.get("actionItems"));
             assertThat(items).hasSize(1);
@@ -1083,8 +1083,8 @@ class BedrockSentimentServiceTest {
         void extractTypedItems_wellFormedItem_hasAllSafetyFields() {
             Map<String, Object> result = summarizeWithActionItems(
                     """
-                    [{"text": "action A", "confidence": 0.85, "sourceTurnId": "transcript"}]
-                    """);
+                            [{"text": "action A", "confidence": 0.85, "sourceTurnId": "transcript"}]
+                            """);
             Map<String, Object> item = firstItem(result);
 
             assertThat(item)
@@ -1191,7 +1191,7 @@ class BedrockSentimentServiceTest {
                     .isEqualTo(2L);
         }
 
-            @Test
+        @Test
         @DisplayName("Counter accumulates across summarizeTranscript calls on same service instance (per YgPadawan PR #322 review)")
         void extractTypedItems_counterAccumulatesAcrossCalls() {
             // Verifies the lifetime-aggregate semantics called out in the
@@ -1411,9 +1411,9 @@ class BedrockSentimentServiceTest {
             service = awsBackedServiceThrowing(new RuntimeException("Bedrock 503"));
 
             assertThatThrownBy(() -> service.summarizeTranscript(
-                            CALL_ID,
-                            "Transcript available.",
-                            calmChannelResults()))
+                    CALL_ID,
+                    "Transcript available.",
+                    calmChannelResults()))
                     .isInstanceOf(ModelInferenceException.class)
                     .hasMessageContaining("Bedrock transcript summary failed")
                     .hasRootCauseMessage("Bedrock 503");

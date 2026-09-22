@@ -79,7 +79,51 @@ public class DocumentComplianceService {
 
     // ==================== CHECKLIST ====================
 
-    /** Required-document checklist for a single employee or care circle. */
+    /**
+     * Strictly resolve a client-supplied document type to a {@link UserFile.FileCategory}.
+     * Case- and separator-insensitive; unknown values throw so callers can surface a 400.
+     */
+    public static UserFile.FileCategory parseDocumentType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("documentType is required");
+        }
+        String key = raw.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+        try {
+            return UserFile.FileCategory.valueOf(key);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid documentType '" + raw + "'");
+        }
+    }
+
+    // ==================== DASHBOARD ====================
+
+    private static String patientDisplayName(Patient patient) {
+        String name = ((patient.getFirstName() != null ? patient.getFirstName() : "") + " "
+                + (patient.getLastName() != null ? patient.getLastName() : "")).trim();
+        return name.isEmpty() ? "Care circle #" + patient.getId() : name;
+    }
+
+    // ==================== MISSING FORMS REPORT ====================
+
+    private static <T> Map<Long, List<T>> groupBy(List<T> items, Function<T, Long> key) {
+        return items.stream().collect(Collectors.groupingBy(key));
+    }
+
+    private static String csvCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return '"' + value.replace("\"", "\"\"") + '"';
+        }
+        return value;
+    }
+
+    // ==================== STATUS TRANSITIONS ====================
+
+    /**
+     * Required-document checklist for a single employee or care circle.
+     */
     @Transactional(readOnly = true)
     public DocumentChecklistDTO getChecklist(SubjectType subjectType, Long subjectId) {
         Set<UserFile.FileCategory> required = requiredFor(subjectType);
@@ -102,8 +146,6 @@ public class DocumentComplianceService {
                 records, files, entries);
     }
 
-    // ==================== DASHBOARD ====================
-
     /**
      * Compliance summary rows for every subject of the given type ({@code null}
      * for both employees and care circles), least-complete first so onboarding
@@ -119,8 +161,6 @@ public class DocumentComplianceService {
                 .thenComparing(r -> r.getSubjectName() != null ? r.getSubjectName() : ""));
         return rows;
     }
-
-    // ==================== MISSING FORMS REPORT ====================
 
     /**
      * Every outstanding required form (MISSING or REJECTED) across subjects,
@@ -158,7 +198,11 @@ public class DocumentComplianceService {
         return out;
     }
 
-    /** The missing-forms report rendered as CSV for export. */
+    // ==================== AUDIT TRAIL ====================
+
+    /**
+     * The missing-forms report rendered as CSV for export.
+     */
     @Transactional(readOnly = true)
     public String exportMissingDocumentsCsv(SubjectType subjectTypeFilter,
                                             UserFile.FileCategory documentTypeFilter) {
@@ -166,18 +210,18 @@ public class DocumentComplianceService {
                 "Subject Type,Subject ID,Subject Name,Document Type,Status,Notes,Last Updated\n");
         for (MissingDocumentDTO row : listMissingDocuments(subjectTypeFilter, documentTypeFilter)) {
             csv.append(csvCell(row.getSubjectType())).append(',')
-               .append(row.getSubjectId()).append(',')
-               .append(csvCell(row.getSubjectName())).append(',')
-               .append(csvCell(row.getDocumentType())).append(',')
-               .append(csvCell(row.getStatus())).append(',')
-               .append(csvCell(row.getNotes())).append(',')
-               .append(csvCell(row.getUpdatedAt() != null ? CSV_TS.format(row.getUpdatedAt()) : ""))
-               .append('\n');
+                    .append(row.getSubjectId()).append(',')
+                    .append(csvCell(row.getSubjectName())).append(',')
+                    .append(csvCell(row.getDocumentType())).append(',')
+                    .append(csvCell(row.getStatus())).append(',')
+                    .append(csvCell(row.getNotes())).append(',')
+                    .append(csvCell(row.getUpdatedAt() != null ? CSV_TS.format(row.getUpdatedAt()) : ""))
+                    .append('\n');
         }
         return csv.toString();
     }
 
-    // ==================== STATUS TRANSITIONS ====================
+    // ==================== INTERNALS ====================
 
     /**
      * Manually transition a required document's status (e.g. a coordinator
@@ -244,7 +288,7 @@ public class DocumentComplianceService {
         UserFile.FileCategory category = entry.getDocumentType();
         String reason = "Structured record digitized"
                 + (file != null && file.getOriginalFilename() != null
-                        ? " from " + file.getOriginalFilename() : "");
+                ? " from " + file.getOriginalFilename() : "");
 
         if (entry.getEmployeeUserId() != null
                 && requiredFor(SubjectType.EMPLOYEE).contains(category)) {
@@ -258,17 +302,17 @@ public class DocumentComplianceService {
         }
     }
 
-    // ==================== AUDIT TRAIL ====================
-
-    /** Status-transition history for a subject, optionally scoped to one document type. */
+    /**
+     * Status-transition history for a subject, optionally scoped to one document type.
+     */
     @Transactional(readOnly = true)
     public List<DocumentStatusHistoryDTO> getHistory(SubjectType subjectType, Long subjectId,
                                                      UserFile.FileCategory documentType) {
         List<DocumentStatusHistory> history = documentType != null
                 ? historyRepository.findBySubjectTypeAndSubjectIdAndDocumentTypeOrderByChangedAtDesc(
-                        subjectType, subjectId, documentType)
+                subjectType, subjectId, documentType)
                 : historyRepository.findBySubjectTypeAndSubjectIdOrderByChangedAtDesc(
-                        subjectType, subjectId);
+                subjectType, subjectId);
 
         // Resolve actor names in one query
         Set<Long> actorIds = history.stream()
@@ -294,24 +338,6 @@ public class DocumentComplianceService {
                 .collect(Collectors.toList());
     }
 
-    // ==================== INTERNALS ====================
-
-    /**
-     * Strictly resolve a client-supplied document type to a {@link UserFile.FileCategory}.
-     * Case- and separator-insensitive; unknown values throw so callers can surface a 400.
-     */
-    public static UserFile.FileCategory parseDocumentType(String raw) {
-        if (raw == null || raw.isBlank()) {
-            throw new IllegalArgumentException("documentType is required");
-        }
-        String key = raw.trim().toUpperCase().replace('-', '_').replace(' ', '_');
-        try {
-            return UserFile.FileCategory.valueOf(key);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid documentType '" + raw + "'");
-        }
-    }
-
     private Set<UserFile.FileCategory> requiredFor(SubjectType subjectType) {
         return DocumentRequirementStatus.REQUIRED_DOCUMENTS.get(subjectType);
     }
@@ -334,12 +360,6 @@ public class DocumentComplianceService {
         return patientRepository.findById(subjectId)
                 .map(DocumentComplianceService::patientDisplayName)
                 .orElse("Care circle #" + subjectId);
-    }
-
-    private static String patientDisplayName(Patient patient) {
-        String name = ((patient.getFirstName() != null ? patient.getFirstName() : "") + " "
-                + (patient.getLastName() != null ? patient.getLastName() : "")).trim();
-        return name.isEmpty() ? "Care circle #" + patient.getId() : name;
     }
 
     /**
@@ -477,10 +497,6 @@ public class DocumentComplianceService {
         return out;
     }
 
-    private static <T> Map<Long, List<T>> groupBy(List<T> items, Function<T, Long> key) {
-        return items.stream().collect(Collectors.groupingBy(key));
-    }
-
     private DocumentChecklistDTO buildChecklist(SubjectType subjectType, Long subjectId,
                                                 String subjectName,
                                                 List<DocumentRequirementStatus> records,
@@ -579,15 +595,5 @@ public class DocumentComplianceService {
                 .percentComplete(checklist.getPercentComplete())
                 .blocked(checklist.getMissingCount() + checklist.getRejectedCount() > 0)
                 .build();
-    }
-
-    private static String csvCell(String value) {
-        if (value == null) {
-            return "";
-        }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return '"' + value.replace("\"", "\"\"") + '"';
-        }
-        return value;
     }
 }

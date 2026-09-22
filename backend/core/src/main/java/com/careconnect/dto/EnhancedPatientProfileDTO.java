@@ -1,6 +1,7 @@
 package com.careconnect.dto;
 
 import lombok.Builder;
+
 import java.util.List;
 
 /**
@@ -20,17 +21,18 @@ public record EnhancedPatientProfileDTO(
         com.careconnect.model.Gender gender,
         AddressDto address,
         String relationship,
-        
+
         // Medical information
         List<AllergyDTO> allergies,
         List<MedicationDTO> activeMedications,
         LatestVitalsDTO latestVitals,
         LatestMoodPainDTO latestMoodPain,
-        
+
         // Summary statistics for quick overview
         MedicalSummaryDTO medicalSummary,
-        
+
         // Relationship information
         Long caregiverId,
         Long familyMemberId
-) {}
+) {
+}
