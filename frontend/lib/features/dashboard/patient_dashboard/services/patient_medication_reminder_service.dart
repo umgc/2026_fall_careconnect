@@ -125,6 +125,47 @@ class PatientMedicationReminderService {
     _localLastTakenOverrideByMedicationId.remove(medicationId);
   }
 
+  List<MedicationReminderItem> applyLocalOverrides({
+    required List<MedicationReminderItem> reminders,
+    required AppLocalizations t,
+  }) {
+    final now = DateTime.now();
+    final next = reminders.map((reminder) {
+      if (!_localLastTakenOverrideByMedicationId.containsKey(
+        reminder.medicationId,
+      )) {
+        return reminder;
+      }
+
+      final localLastTaken =
+          _localLastTakenOverrideByMedicationId[reminder.medicationId];
+      final nextDueAt = localLastTaken == null
+          ? now
+          : localLastTaken.toLocal().add(
+                _frequencyInterval(reminder.frequency, t),
+              );
+
+      return MedicationReminderItem(
+        medicationId: reminder.medicationId,
+        medicationName: reminder.medicationName,
+        dosage: reminder.dosage,
+        frequency: reminder.frequency,
+        nextDueAt: nextDueAt,
+        isTakenForCurrentWindow:
+            localLastTaken != null && nextDueAt.isAfter(now),
+      );
+    }).toList();
+
+    next.sort((a, b) {
+      if (a.isTakenForCurrentWindow != b.isTakenForCurrentWindow) {
+        return a.isTakenForCurrentWindow ? 1 : -1;
+      }
+      return a.nextDueAt.compareTo(b.nextDueAt);
+    });
+
+    return next;
+  }
+
   bool hasPendingUntaken(List<MedicationReminderItem> reminders) {
     return reminders.any((item) => !item.isTakenForCurrentWindow);
   }

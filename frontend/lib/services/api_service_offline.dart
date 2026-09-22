@@ -135,6 +135,12 @@ class ApiServiceOffline {
           'failed': 0,
         }));
       } else {
+        unawaited(Telemetry.event('sync_completed', {
+          'scope': 'single',
+          'attempted': 1,
+          'succeeded': 0,
+          'failed': 1,
+        }));
         unawaited(Telemetry.event('sync_failed', {
           'scope': 'single',
           'attempted': 1,
@@ -144,6 +150,12 @@ class ApiServiceOffline {
 
       return ok;
     } catch (_) {
+      unawaited(Telemetry.event('sync_completed', {
+        'scope': 'single',
+        'attempted': 1,
+        'succeeded': 0,
+        'failed': 1,
+      }));
       unawaited(Telemetry.event('sync_failed', {
         'scope': 'single',
         'attempted': 1,
