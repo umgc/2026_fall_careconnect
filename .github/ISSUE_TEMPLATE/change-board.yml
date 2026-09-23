@@ -1,0 +1,143 @@
+name: CareConnect Scope Change Request
+description: Submit a proposed project scope change for affected Team Lead review.
+title: "[CR] "
+labels:
+  - change-board
+  - scope-change
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to request a CareConnect project scope change. This board controls scope decisions only; execution work should be tracked separately after a change is approved.
+
+        Affected Team Leads own review and disposition for their areas. Each team selected under Affected Teams must record its review outcome, conditions, and required baseline or document updates in the Review / Resolution Record before the change request can proceed.
+
+  - type: input
+    id: short-change-name
+    attributes:
+      label: Short change name
+      description: Provide a concise name for the requested change.
+      placeholder: Add provider search filter
+    validations:
+      required: true
+
+  - type: dropdown
+    id: technical-category
+    attributes:
+      label: Technical Category
+      description: Select the best one or two categories. Use only categories that clearly fit the request.
+      multiple: true
+      options:
+        - Accessibility
+        - AI
+        - Care coordination
+        - Clinical
+        - Data
+        - Infrastructure
+        - Integration
+        - Interoperability
+        - Partnerships
+        - Patient experience
+        - Platform
+        - Security
+        - UX
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected_teams
+    attributes:
+      label: Affected Teams
+      description: Select every team that may be affected by this change request.
+      multiple: true
+      options:
+        - Team Alpha - Software Test Plan / Test Report
+        - Team Bravo - Programmer Guide / Deployment & Operations Guide
+        - Team Charlie - User Guide
+        - Team Delta - Technical Design Document (TDD) / VPAT-ACR
+        - Team Echo - Software Requirements Specification (SRS)
+    validations:
+      required: true
+
+  - type: textarea
+    id: change-requested
+    attributes:
+      label: Change Requested
+      description: Briefly describe what should be added, removed, or changed.
+      placeholder: Describe the proposed scope change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason-for-change
+    attributes:
+      label: Reason for Change
+      description: Explain why this change is needed and what problem, risk, or opportunity it addresses.
+      placeholder: Explain the driver for this scope change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-impact
+    attributes:
+      label: Expected Impact
+      description: Summarize expected impacts to scope, schedule, deliverables, users, quality, compliance, security, or operations.
+      placeholder: Describe the expected impact of approving this change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impacted-baselines-documents
+    attributes:
+      label: Impacted Baselines / Documents
+      description: List any known baselines, controlled documents, or project artifacts that may need updates.
+      placeholder: Identify affected baselines, requirements, designs, test artifacts, guides, or other controlled documents.
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies-risks
+    attributes:
+      label: Dependencies / Risks
+      description: List known dependencies, blockers, assumptions, or risks that should be considered during review.
+      placeholder: Note cross-team dependencies, external constraints, technical risks, or open questions.
+    validations:
+      required: false
+
+  - type: textarea
+    id: review-resolution-record
+    attributes:
+      label: Review / Resolution Record
+      description: Affected Team Leads should record review outcomes, approval conditions, required baseline or document updates, cross-team dependencies, and any escalation notes here.
+      placeholder: |
+        Team Alpha:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
+
+        Team Bravo:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
+
+        Team Charlie:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
+
+        Team Delta:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
+
+        Team Echo:
+        - Disposition:
+        - Conditions:
+        - Required baseline/document updates:
+        - Dependencies or escalation:
+    validations:
+      required: false
