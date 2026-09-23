@@ -114,6 +114,32 @@ void main() {
       expect(m.medicationType, MedicationType.SUPPLEMENT);
     });
 
+    test('medicationType is HERBAL when specified', () {
+      // KI-05: HERBAL added to match backend Medication.MedicationType.
+      final m = Medication.fromJson({
+        'medicationName': 'Turmeric',
+        'dosage': '500mg',
+        'frequency': 'daily',
+        'route': 'Oral',
+        'medicationType': 'HERBAL',
+        'isActive': true,
+      });
+      expect(m.medicationType, MedicationType.HERBAL);
+    });
+
+    test('medicationType is EMERGENCY when specified', () {
+      // KI-05: EMERGENCY added to match backend Medication.MedicationType.
+      final m = Medication.fromJson({
+        'medicationName': 'Epinephrine',
+        'dosage': '0.3mg',
+        'frequency': 'As needed',
+        'route': 'IM',
+        'medicationType': 'EMERGENCY',
+        'isActive': true,
+      });
+      expect(m.medicationType, MedicationType.EMERGENCY);
+    });
+
     test('_calculateNextDose returns Today for daily frequency', () {
       // Verifies that "daily" in frequency triggers "Today" next dose.
       final m = Medication.fromJson({
