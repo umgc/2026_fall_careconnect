@@ -110,7 +110,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _CommandMatch(phrase: 'open subscription', intent: 'navigate', entity: 'subscription'),
     _CommandMatch(phrase: 'open ai configuration', intent: 'navigate', entity: 'ai configuration'),
     //emergency
-    _CommandMatch(phrase: 'Emergency', intent: 'sos', entity: 'emergency'),
+    _CommandMatch(phrase: 'emergency', intent: 'sos', entity: 'emergency'),
   ];
 
   @override
@@ -937,6 +937,62 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
     final intent = _pendingIntent ?? 'navigate';
     final intentDef = VoiceIntentRegistry().resolveIntent(intent);
+
+// Check if the intent is high-risk and requires explicit confirmation
+// If so, show a pop-up confirmation dialog to the user 
+// and wait for their response before proceeding
+// If the user cancels or dismisses the dialog, abort the action 
+// and reset the state
+
+if (intentDef?.riskLevel == IntentRiskLevel.high) {
+    final titleLabel = intentDef?.displayLabel ?? 'High-Risk Action';
+
+    final bool? userConfirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // Forces an explicit button tap
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Confirm $titleLabel'),
+          content: Text(
+            'Are you sure you want to trigger "$titleLabel"? '
+            'This action is marked as high-risk and requires explicit confirmation.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text('Confirm $titleLabel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // If widget unmounted while waiting for user interaction, stop
+    if (!mounted) return;
+
+    // Abort if cancelled or dismissed
+    if (userConfirmed != true) {
+      _setStatus(
+        status: _VoiceStatus.idle,
+        detail: '$titleLabel cancelled.',
+      );
+      _pendingDestination = null;
+      _pendingDetail = null;
+      _pendingIntent = null;
+      _ambiguousMatches = [];
+      _resetAfterDelay();
+      return; // Stops execution: handler will NOT run
+    }
+  }
+
+  //end popup confirmation logic
+
+  if (!mounted) return;
 
     if (_pendingDestination != null) {
       final destination = _pendingDestination!;
