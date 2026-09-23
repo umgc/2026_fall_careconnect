@@ -170,8 +170,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         intent: 'navigate',
         entity: 'ai configuration'),
     //emergency
-    _CommandMatch(phrase: 'help', intent: 'sos', entity: 'emergency'),
-    _CommandMatch(phrase: 'SOS', intent: 'sos', entity: 'emergency'),
+    _CommandMatch(phrase: 'Emergency', intent: 'sos', entity: 'emergency'),
   ];
 
   @override
