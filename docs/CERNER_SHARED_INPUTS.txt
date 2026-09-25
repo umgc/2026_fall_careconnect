@@ -1,0 +1,18 @@
+Unchanged shared Java inputs from 75b5f75505f6cb4e8c73070efe9d85ec41d7699b
+backend/core/src/main/java/com/careconnect/model/ehr/EhrAppointmentRecord.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrConflictResolver.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrConflictStatus.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrIdentityConflict.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrPatientCrosswalk.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrRawPayload.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrSource.java
+backend/core/src/main/java/com/careconnect/model/ehr/EhrSourceIdentity.java
+backend/core/src/main/java/com/careconnect/repository/ehr/EhrAppointmentRecordRepository.java
+backend/core/src/main/java/com/careconnect/repository/ehr/EhrIdentityConflictRepository.java
+backend/core/src/main/java/com/careconnect/repository/ehr/EhrPatientCrosswalkRepository.java
+backend/core/src/main/java/com/careconnect/repository/ehr/EhrRawPayloadRepository.java
+backend/core/src/main/java/com/careconnect/repository/ehr/EhrSourceIdentityRepository.java
+backend/core/src/main/java/com/careconnect/repository/ehr/EhrSourceRepository.java
+backend/core/src/main/java/com/careconnect/service/ehr/EhrAppointmentMapper.java
+backend/core/src/main/java/com/careconnect/service/ehr/EhrAppointmentSyncService.java
+backend/core/src/main/java/com/careconnect/client/ehr/EhrApiClient.java
