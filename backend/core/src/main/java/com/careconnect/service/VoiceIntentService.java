@@ -66,7 +66,7 @@ public class VoiceIntentService {
 
             return parseAIResponse(chatResponse.getAiResponse());
         } catch (Exception e) {
-            log.error("Voice intent extraction failed: {}", e.getMessage(), e);
+            log.error("Voice intent extraction failed: {}", e.getClass().getSimpleName());
             return VoiceIntentResponse.error("Voice intent service is temporarily unavailable.");
         }
     }
@@ -88,7 +88,7 @@ public class VoiceIntentService {
 
             return buildResponse(intent, entities, confidence);
         } catch (Exception e) {
-            log.warn("Failed to parse AI response as JSON: {}", aiResponse, e);
+            log.warn("Failed to parse AI response as JSON: {}", e.getClass().getSimpleName());
             return VoiceIntentResponse.unknown();
         }
     }
